@@ -1,4 +1,4 @@
-/* eslint-disable no-untranslated-jsx-literal */
+/* eslint-disable no-untranslated-jsx-literal -- pre-existing file-level disable */
 import { useState } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  AlertCircle
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -517,6 +518,7 @@ function StatusBadge({
   ok,
   okLabel,
   failLabel,
+  isOptional,
 }: {
   ok: boolean;
   okLabel: string;
@@ -533,7 +535,11 @@ function StatusBadge({
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-foreground">
-      <AlertTriangle className="h-3 w-3" />
+      {isOptional ? (
+        <AlertCircle className="h-3 w-3 text-muted-foreground" />
+      ) : (
+        <AlertTriangle className="h-3 w-3 text-destructive" />
+      )}
       {failLabel}
     </span>
   );
@@ -542,6 +548,7 @@ function StatusBadge({
 function ConfigDiagnosticsChecklist() {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const [isOpen, setIsOpen] = useState(false);
+  const t = useTranslations();
 
   const aiAvailability = useQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
@@ -573,32 +580,36 @@ function ConfigDiagnosticsChecklist() {
   const checks: CheckItem[] = [
     {
       icon: <Sparkles className="h-4 w-4" />,
-      label: "AI API Keys",
-      description: isAiOk ? "Configured & Active" : "Instance/BYOK key missing",
+      label: t("settings.organization.diagnostics.checkAiKeysLabel"),
+      description: isAiOk 
+        ? t("settings.organization.diagnostics.checkAiKeysDescActive") 
+        : t("settings.organization.diagnostics.checkAiKeysDescMissing"),
       ok: isAiOk,
-      okLabel: "Ready",
-      failLabel: "Action Required",
+      okLabel: t("settings.organization.diagnostics.statusReady"),
+      failLabel: t("settings.organization.diagnostics.statusActionRequired"),
       configureHref: "/settings/organization/ai",
     },
     {
       icon: <Languages className="h-4 w-4" />,
-      label: "DeepL Translation",
-      description: isDeepLOk ? "Configured & Active" : "Translation key missing",
+      label: t("settings.organization.diagnostics.checkDeepLLabel"),
+      description: isDeepLOk 
+        ? t("settings.organization.diagnostics.checkDeepLDescActive") 
+        : t("settings.organization.diagnostics.checkDeepLDescMissing"),
       ok: isDeepLOk,
-      okLabel: "Ready",
-      failLabel: "Optional",
+      okLabel: t("settings.organization.diagnostics.statusReady"),
+      failLabel: t("settings.organization.diagnostics.statusOptional"),
       isOptional: true,
       configureHref: "/settings/organization/ai",
     },
     {
       icon: <Map className="h-4 w-4" />,
-      label: "Jurisdiction Selected",
+      label: t("settings.organization.diagnostics.checkJurisdictionLabel"),
       description: isJurisdictionsOk
-        ? "Jurisdictions selected"
-        : "No jurisdictions set",
+        ? t("settings.organization.diagnostics.checkJurisdictionDescActive")
+        : t("settings.organization.diagnostics.checkJurisdictionDescMissing"),
       ok: isJurisdictionsOk,
-      okLabel: "Ready",
-      failLabel: "Action Required",
+      okLabel: t("settings.organization.diagnostics.statusReady"),
+      failLabel: t("settings.organization.diagnostics.statusActionRequired"),
       configureHref: "/settings/organization/members",
     },
   ];
@@ -619,14 +630,15 @@ function ConfigDiagnosticsChecklist() {
             <div>
               <h4 className="text-sm font-semibold text-foreground">
                 {isFullyConfigured
-                  ? "All Core Integrations Verified"
-                  : "Configuration Diagnostics Checklist"}
+                  ? t("settings.organization.diagnostics.checklistTitleVerified")
+                  : t("settings.organization.diagnostics.checklistTitle")}
               </h4>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground tabular-nums">
-                  {passedChecksCount}/{totalChecks}
-                </span>{" "}
-                critical configuration elements configured.
+                {t.rich("settings.organization.diagnostics.checklistProgress", {
+                  passed: String(passedChecksCount),
+                  total: String(totalChecks),
+                  passedSpan: (chunks: React.ReactNode) => <span className="font-semibold text-foreground tabular-nums">{chunks}</span>
+                })}
               </p>
             </div>
           </div>
@@ -638,11 +650,11 @@ function ConfigDiagnosticsChecklist() {
           >
             {isOpen ? (
               <>
-                Hide Details <ChevronUp className="h-3.5 w-3.5" />
+                {t("settings.organization.diagnostics.hideDetails")} <ChevronUp className="h-3.5 w-3.5" />
               </>
             ) : (
               <>
-                Show Details <ChevronDown className="h-3.5 w-3.5" />
+                {t("settings.organization.diagnostics.showDetails")} <ChevronDown className="h-3.5 w-3.5" />
               </>
             )}
           </Button>
@@ -661,12 +673,12 @@ function ConfigDiagnosticsChecklist() {
                     {check.icon}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground">
-                      {check.label}
-                    </p>
-                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                      {check.description}
-                    </p>
+                     <p className="text-xs font-semibold text-foreground">
+                       {check.label}
+                     </p>
+                     <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                       {check.description}
+                     </p>
                   </div>
                 </div>
 
@@ -675,14 +687,15 @@ function ConfigDiagnosticsChecklist() {
                     ok={check.ok}
                     okLabel={check.okLabel}
                     failLabel={check.failLabel}
-                    isOptional={check.isOptional}
+                    isOptional={check.isOptional ?? false}
                   />
                   {!check.ok && (
                     <Link
                       to={check.configureHref}
+                      {...{ strict: false }}
                       className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary transition-opacity hover:opacity-70"
                     >
-                      Configure <ArrowRight className="h-3 w-3" />
+                      {t("settings.organization.diagnostics.configureAction")} <ArrowRight className="h-3 w-3" />
                     </Link>
                   )}
                 </div>

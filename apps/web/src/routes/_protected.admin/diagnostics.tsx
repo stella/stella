@@ -40,9 +40,30 @@ import {
 } from "@/routes/_protected.settings/-queries/audit-logs";
 import { toAuditLogDateRange } from "@/routes/_protected.settings/-queries/audit-log-date-range";
 
+import { redirect } from "@tanstack/react-router";
+import { ensureRouteQueryData } from "@/lib/react-query";
+import { loadAuthContext } from "@/routes/-auth-context";
+import { roleOptions } from "@/routes/-queries";
+import { authClient } from "@/lib/auth";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/admin/diagnostics")({
+  beforeLoad: async ({ context }) => {
+    const authContext = await loadAuthContext(context.queryClient);
+    if (!authContext.user || !authContext.user.isSystemAdmin) {
+      throw redirect({ to: "/", replace: true });
+    }
+
+    const role = await ensureRouteQueryData(context.queryClient, roleOptions);
+    const hasPermission = authClient.organization.checkRolePermission({
+      role,
+      permissions: { admin: ["read"] },
+    });
+
+    if (!hasPermission) {
+      throw redirect({ to: "/", replace: true });
+    }
+  },
   component: AdminDiagnosticsPage,
 });
 
@@ -85,7 +106,8 @@ function AdminDiagnosticsPage() {
       }
       return response.data;
     },
-    refetchInterval: 30000, // Auto-refresh health every 30s
+    enabled: activeTab === "health",
+    refetchInterval: activeTab === "health" ? 30000 : false, // Auto-refresh health every 30s only when active
   });
 
   const auditLogsQuery = useQuery({
@@ -161,184 +183,197 @@ function AdminDiagnosticsPage() {
       </div>
 
       {activeTab === "health" ? (
-        <div className="flex flex-col gap-8">
-          <section className="flex flex-col gap-2">
-            <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-              Core System Services
-            </h2>
-            <Frame>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[280px]">Service</TableHead>
-                    <TableHead>Type / Description</TableHead>
-                    <TableHead>Current Metric / Configuration</TableHead>
-                    <TableHead className="w-[140px] text-end">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {/* Database */}
-                  <TableRow>
-                    <TableCell className="font-medium text-foreground">
-                      <div className="flex items-center gap-2">
-                        <DatabaseIcon className="h-4 w-4 text-muted-foreground" />
-                        Database
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      PostgreSQL Relational Store
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      Latency: {diagnosticsQuery.data?.db.latencyMs ?? "-"} ms
-                    </TableCell>
-                    <TableCell className="text-end">
-                      {diagnosticsQuery.data?.db.status === "ok" ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Healthy
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
-                          <AlertCircle className="h-3.5 w-3.5" /> Outage
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Redis Queue */}
-                  <TableRow>
-                    <TableCell className="font-medium text-foreground">
-                      <div className="flex items-center gap-2">
-                        <RedisIcon className="h-4 w-4 text-muted-foreground" />
-                        Redis Queue
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      BullMQ Job Broker & Cache
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      Backlog Jobs: {diagnosticsQuery.data?.redis.backlogJobsCount ?? 0}
-                    </TableCell>
-                    <TableCell className="text-end">
-                      {diagnosticsQuery.data?.redis.status === "ok" ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Connected
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
-                          <AlertCircle className="h-3.5 w-3.5" /> Unreachable
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-
-                  {/* S3 Storage */}
-                  <TableRow>
-                    <TableCell className="font-medium text-foreground">
-                      <div className="flex items-center gap-2">
-                        <S3Icon className="h-4 w-4 text-muted-foreground" />
-                        S3 Storage
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      Document & Artifact Object Bucket
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[250px]" title={diagnosticsQuery.data?.s3.bucketName}>
-                      Bucket: {diagnosticsQuery.data?.s3.bucketName ?? "-"}
-                    </TableCell>
-                    <TableCell className="text-end">
-                      {diagnosticsQuery.data?.s3.status === "ok" ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Verified
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
-                          <AlertCircle className="h-3.5 w-3.5" /> Error
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Search Index */}
-                  <TableRow>
-                    <TableCell className="font-medium text-foreground">
-                      <div className="flex items-center gap-2">
-                        <SearchIcon className="h-4 w-4 text-muted-foreground" />
-                        Search Index
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      Full-text Document Search Engine
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      Engine: {diagnosticsQuery.data?.searchProvider.provider ?? "-"}
-                    </TableCell>
-                    <TableCell className="text-end">
-                      {diagnosticsQuery.data?.searchProvider.status === "ok" ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Online
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
-                          <AlertCircle className="h-3.5 w-3.5" /> Offline
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </Frame>
-          </section>
-
-          {/* AI Providers Connectivity Details */}
-          <section className="flex flex-col gap-2">
-            <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-              AI BYOK Integration Checks
-            </h2>
-            <Frame>
-              <FramePanel className="p-0">
+        diagnosticsQuery.isPending ? (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
+            <Clock className="h-6 w-6 animate-spin" />
+            <span className="text-sm font-medium">Loading system health diagnostics...</span>
+          </div>
+        ) : diagnosticsQuery.isError ? (
+          <div className="flex flex-col items-center justify-center py-20 text-destructive gap-2">
+            <AlertCircle className="h-6 w-6" />
+            <span className="text-sm font-semibold">Diagnostics Unavailable</span>
+            <span className="text-xs text-muted-foreground">Could not connect to the diagnostics service.</span>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-8">
+            <section className="flex flex-col gap-2">
+              <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+                Core System Services
+              </h2>
+              <Frame>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <th className="p-3 text-muted-foreground text-xs font-medium">Provider Name</th>
-                      <th className="p-3 text-muted-foreground text-xs font-medium text-end">Connection Status</th>
+                      <TableHead className="w-[280px]">Service</TableHead>
+                      <TableHead>Type / Description</TableHead>
+                      <TableHead>Current Metric / Configuration</TableHead>
+                      <TableHead className="w-[140px] text-end">Status</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <tbody className="divide-y divide-border">
-                    {diagnosticsQuery.data?.aiAvailability.providerStatus.map((item) => (
-                      <tr key={item.provider} className="hover:bg-muted/10">
-                        <td className="p-3 font-semibold capitalize text-sm">{item.provider}</td>
-                        <td className="p-3 text-end">
-                          {item.status === "reachable" && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Reachable
-                            </span>
-                          )}
-                          {item.status === "unreachable" && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
-                              <AlertCircle className="h-3.5 w-3.5" /> Key Invalid or Blocked
-                            </span>
-                          )}
-                          {item.status === "not_tested" && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                              Not Configured
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {!diagnosticsQuery.data?.aiAvailability.configured && (
-                      <tr>
-                        <td colSpan={2} className="p-4 text-center text-muted-foreground text-xs">
-                          No instance level AI provider credentials configured in settings.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
+                  <TableBody>
+                    {/* Database */}
+                    <TableRow>
+                      <TableCell className="font-medium text-foreground">
+                        <div className="flex items-center gap-2">
+                          <DatabaseIcon className="h-4 w-4 text-muted-foreground" />
+                          Database
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        PostgreSQL Relational Store
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        Latency: {diagnosticsQuery.data?.db.latencyMs ?? "-"} ms
+                      </TableCell>
+                      <TableCell className="text-end">
+                        {diagnosticsQuery.data?.db.status === "ok" ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Healthy
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
+                            <AlertCircle className="h-3.5 w-3.5" /> Outage
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Redis Queue */}
+                    <TableRow>
+                      <TableCell className="font-medium text-foreground">
+                        <div className="flex items-center gap-2">
+                          <RedisIcon className="h-4 w-4 text-muted-foreground" />
+                          Redis Queue
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        BullMQ Job Broker & Cache
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        Backlog Jobs: {diagnosticsQuery.data?.redis.backlogJobsCount ?? 0}
+                      </TableCell>
+                      <TableCell className="text-end">
+                        {diagnosticsQuery.data?.redis.status === "ok" ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Connected
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
+                            <AlertCircle className="h-3.5 w-3.5" /> Unreachable
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+
+                    {/* S3 Storage */}
+                    <TableRow>
+                      <TableCell className="font-medium text-foreground">
+                        <div className="flex items-center gap-2">
+                          <S3Icon className="h-4 w-4 text-muted-foreground" />
+                          S3 Storage
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        Document & Artifact Object Bucket
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground truncate max-w-[250px]" title={diagnosticsQuery.data?.s3.bucketName}>
+                        Bucket: {diagnosticsQuery.data?.s3.bucketName ?? "-"}
+                      </TableCell>
+                      <TableCell className="text-end">
+                        {diagnosticsQuery.data?.s3.status === "ok" ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Verified
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
+                            <AlertCircle className="h-3.5 w-3.5" /> Error
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Search Index */}
+                    <TableRow>
+                      <TableCell className="font-medium text-foreground">
+                        <div className="flex items-center gap-2">
+                          <SearchIcon className="h-4 w-4 text-muted-foreground" />
+                          Search Index
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        Full-text Document Search Engine
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        Engine: {diagnosticsQuery.data?.searchProvider.provider ?? "-"}
+                      </TableCell>
+                      <TableCell className="text-end">
+                        {diagnosticsQuery.data?.searchProvider.status === "ok" ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Online
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
+                            <AlertCircle className="h-3.5 w-3.5" /> Offline
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
                 </Table>
-              </FramePanel>
-            </Frame>
-          </section>
-        </div>
+              </Frame>
+            </section>
+
+            {/* AI Providers Connectivity Details */}
+            <section className="flex flex-col gap-2">
+              <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+                AI BYOK Integration Checks
+              </h2>
+              <Frame>
+                <FramePanel className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <th className="p-3 text-muted-foreground text-xs font-medium">Provider Name</th>
+                        <th className="p-3 text-muted-foreground text-xs font-medium text-end">Connection Status</th>
+                      </TableRow>
+                    </TableHeader>
+                    <tbody className="divide-y divide-border">
+                      {diagnosticsQuery.data?.aiAvailability.providerStatus.map((item) => (
+                        <tr key={item.provider} className="hover:bg-muted/10">
+                          <td className="p-3 font-semibold capitalize text-sm">{item.provider}</td>
+                          <td className="p-3 text-end">
+                            {item.status === "reachable" && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Reachable
+                              </span>
+                            )}
+                            {item.status === "unreachable" && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
+                                <AlertCircle className="h-3.5 w-3.5" /> Key Invalid or Blocked
+                              </span>
+                            )}
+                            {item.status === "not_tested" && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                                Not Configured
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {!diagnosticsQuery.data?.aiAvailability.configured && (
+                        <tr>
+                          <td colSpan={2} className="p-4 text-center text-muted-foreground text-xs">
+                            No instance level AI provider credentials configured in settings.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </Table>
+                </FramePanel>
+              </Frame>
+            </section>
+          </div>
+        )
       ) : (
         <Frame>
           <FramePanel className="p-6">

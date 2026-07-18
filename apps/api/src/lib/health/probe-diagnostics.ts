@@ -19,13 +19,22 @@ export type DiagnosticsResult = {
   s3: { status: "ok" | "error"; bucketName: string };
 };
 
+const withTimeout = <T>(promise: Promise<T>, timeoutMs = 5000): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout")), timeoutMs)
+    ),
+  ]);
+};
+
 export const probeDiagnostics = async (): Promise<DiagnosticsResult> => {
   // 1. DB Probe & Latency
   let dbStatus: "ok" | "error";
   let dbLatency = 0;
   try {
     const start = performance.now();
-    await probeDatabase();
+    await withTimeout(probeDatabase());
     dbLatency = Math.round(performance.now() - start);
     dbStatus = "ok";
   } catch {
@@ -37,20 +46,22 @@ export const probeDiagnostics = async (): Promise<DiagnosticsResult> => {
   let backlogJobsCount = 0;
   let redisClient: ReturnType<typeof createRedisClient> | null = null;
   let bullConnection: ReturnType<typeof createBullMqConnection> | null = null;
+  let workflowQueue: Queue | null = null;
+  let fileDerivativesQueue: Queue | null = null;
 
   try {
     redisClient = createRedisClient();
-    await redisClient.ping();
+    await withTimeout(redisClient.ping());
     redisStatus = "ok";
 
     bullConnection = createBullMqConnection();
-    const workflowQueue = new Queue("workflows", { connection: bullConnection });
-    const fileDerivativesQueue = new Queue("file-derivatives", { connection: bullConnection });
+    workflowQueue = new Queue("workflows", { connection: bullConnection });
+    fileDerivativesQueue = new Queue("file-derivatives", { connection: bullConnection });
 
-    const [workflowCounts, fileCounts] = await Promise.all([
+    const [workflowCounts, fileCounts] = await withTimeout(Promise.all([
       workflowQueue.getJobCounts("wait", "active", "delayed", "paused"),
       fileDerivativesQueue.getJobCounts("wait", "active", "delayed", "paused"),
-    ]);
+    ]));
 
     backlogJobsCount =
       (workflowCounts["wait"] ?? 0) +
@@ -61,11 +72,23 @@ export const probeDiagnostics = async (): Promise<DiagnosticsResult> => {
       (fileCounts["active"] ?? 0) +
       (fileCounts["delayed"] ?? 0) +
       (fileCounts["paused"] ?? 0);
-
-    await Promise.all([workflowQueue.close(), fileDerivativesQueue.close()]);
   } catch {
     redisStatus = "error";
   } finally {
+    const cleanupPromises = [];
+    if (workflowQueue) {
+      cleanupPromises.push(workflowQueue.close());
+    }
+    if (fileDerivativesQueue) {
+      cleanupPromises.push(fileDerivativesQueue.close());
+    }
+    if (cleanupPromises.length > 0) {
+      try {
+        await Promise.allSettled(cleanupPromises);
+      } catch {
+        // Ignore close errors
+      }
+    }
     if (redisClient) {
       try {
         redisClient.close();
@@ -87,12 +110,24 @@ export const probeDiagnostics = async (): Promise<DiagnosticsResult> => {
   const searchProviderName = env.LEGAL_SEARCH_PROVIDER ?? "pg-fts";
   try {
     // If pg-fts is configured and DB probe succeeded, search is ok.
-    if (searchProviderName === "pg-fts" && dbStatus === "ok") {
-      searchStatus = "ok";
+    if (searchProviderName === "pg-fts") {
+      if (dbStatus === "ok") {
+        searchStatus = "ok";
+      } else {
+        searchStatus = "error";
+      }
     } else {
       // For any other/custom search providers, check their availability via getSearchProvider() or basic ping
       const sp = getSearchProvider();
       if (sp) {
+        await withTimeout(
+          sp.search({
+            query: "health-check-ping-test",
+            organizationId: "org_000000000000000000000000" as any,
+            workspaceIds: [],
+            limit: 1,
+          })
+        );
         searchStatus = "ok";
       } else {
         searchStatus = "error";
@@ -108,7 +143,7 @@ export const probeDiagnostics = async (): Promise<DiagnosticsResult> => {
   try {
     const s3Client = getS3();
     // Test connectivity via cheap metadata HEAD check
-    await s3Client.exists("health-check-probe-temp");
+    await withTimeout(s3Client.exists("health-check-probe-temp"));
     s3Status = "ok";
   } catch {
     s3Status = "error";
@@ -130,11 +165,11 @@ export const probeDiagnostics = async (): Promise<DiagnosticsResult> => {
   const probePromises = aiProviders.map(async (provider) => {
     if (provider.key) {
       try {
-        const probe = await probeProvider(
+        const probe = await withTimeout(probeProvider(
           provider.name as ProviderProbeValue,
           provider.key,
           provider.endpoint
-        );
+        ));
         return {
           provider: provider.name,
           status: probe.valid ? ("reachable" as const) : ("unreachable" as const),

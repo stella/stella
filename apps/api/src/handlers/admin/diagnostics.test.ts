@@ -14,6 +14,23 @@ const mockDiagnosticsResult = {
   s3: { status: "ok" as const, bucketName: "stella-dev-bucket" },
 };
 
+let mockIsSystemAdmin = false;
+
+mock.module("@/api/db/root", () => ({
+  rootDb: {
+    query: {
+      user: {
+        findFirst: async () => {
+          if (mockIsSystemAdmin) {
+            return { id: "user_test123", isSystemAdmin: true };
+          }
+          return { id: "user_test123", isSystemAdmin: false };
+        },
+      },
+    },
+  },
+}));
+
 mock.module("@/api/lib/health/probe-diagnostics", () => ({
   probeDiagnostics: async () => mockDiagnosticsResult,
 }));
@@ -36,6 +53,7 @@ const createContext = (isSystemAdmin: boolean): DiagnosticsCtx =>
 
 describe("adminDiagnostics handler", () => {
   test("returns 403 Forbidden if user is not system admin", async () => {
+    mockIsSystemAdmin = false;
     const result = await adminDiagnostics.handler(createContext(false));
     expect(result).toEqual({
       code: 403,
@@ -46,6 +64,7 @@ describe("adminDiagnostics handler", () => {
   });
 
   test("returns diagnostics outcome if user is system admin", async () => {
+    mockIsSystemAdmin = true;
     const result = await adminDiagnostics.handler(createContext(true));
     expect(result).toEqual(mockDiagnosticsResult);
   });
