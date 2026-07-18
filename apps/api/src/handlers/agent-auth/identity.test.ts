@@ -17,7 +17,10 @@ import {
 } from "@/api/handlers/agent-auth/routes";
 import { getAuth } from "@/api/lib/auth";
 import { popDevOtp } from "@/api/lib/dev-otp-store";
-import { getMcpResourceUrl } from "@/api/mcp/constants";
+import {
+  getMcpResourceUrl,
+  MCP_ANONYMIZED_RESOURCE_SCOPES,
+} from "@/api/mcp/constants";
 
 // These tests drive the agent-auth slice end to end against the same
 // better-auth instance and database the API uses at runtime, so the token
@@ -261,11 +264,11 @@ describe("agent-auth anonymous flow", () => {
     expect(typeof body["claim_token"]).toBe("string");
     expect(body["token_type"]).toBe("Bearer");
 
+    // Anonymous agents receive exactly the canonical anonymized resource
+    // scopes (AGENT_AUTH_ANONYMOUS_SCOPES aliases this set); assert against it
+    // so a scope added to the set does not silently drift from this check.
     const scopes = String(body["scope"]).split(" ").sort();
-    expect(scopes).toEqual([
-      "stella:read_anonymized",
-      "stella:search_anonymized",
-    ]);
+    expect(scopes).toEqual([...MCP_ANONYMIZED_RESOURCE_SCOPES].sort());
 
     const accessToken = String(body["access_token"]);
     expect(accessToken.split(".")).toHaveLength(3);
