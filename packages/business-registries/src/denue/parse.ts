@@ -10,13 +10,15 @@ import type {
 const DENUE_WEB_BASE = "https://www.inegi.org.mx/app/mapa/denue/default.aspx";
 const MEXICO_COUNTRY = "MX" as const;
 
-// DENUE emits "0" as an absent-value sentinel for the postal code (there
-// is no CP 00000), so we collapse it to null. This is deliberately NOT
-// applied to the general string fields: a blanket `=== "0"` rule used to
-// discard legitimate "0" address atoms (a house or local number can be
-// "0"). Every other field uses plain `trimToNull`, matching the GCIS
-// adapter and the shared helper.
-const postalCodeToNull = (input: string | undefined): string | null => {
+// DENUE emits "0" as an absent-value sentinel for the numeric address
+// atoms (Num_Exterior, Num_Interior, NumLocal) and the postal code, not a
+// real value: the committed fixture __fixtures__/search-marriott.json has
+// a MARRIOTT GUADALAJARA record with Num_Interior: "0" and no interior
+// unit in reality, which used to render as "Int. 0" in the formatted
+// address. This is deliberately NOT applied to the general string fields
+// (names, denominations, streets, etc.), which use plain `trimToNull` and
+// let a literal "0" survive.
+const zeroSentinelToNull = (input: string | undefined): string | null => {
   const trimmed = trimToNull(input);
   return trimmed === "0" ? null : trimmed;
 };
@@ -72,10 +74,10 @@ const parseCoordinates = (raw: DenueRawEstablishment): DenueCoordinates => ({
 const parseAddress = (raw: DenueRawEstablishment): DenueAddress | null => {
   const streetType = trimToNull(raw.Tipo_vialidad);
   const street = trimToNull(raw.Calle);
-  const exterior = trimToNull(raw.Num_Exterior);
-  const interior = trimToNull(raw.Num_Interior);
+  const exterior = zeroSentinelToNull(raw.Num_Exterior);
+  const interior = zeroSentinelToNull(raw.Num_Interior);
   const neighborhood = trimToNull(raw.Colonia);
-  const postalCode = postalCodeToNull(raw.CP);
+  const postalCode = zeroSentinelToNull(raw.CP);
   const location = parseLocation(raw.Ubicacion);
 
   const line1 = [streetType, street, exterior].filter(Boolean).join(" ");
@@ -125,7 +127,7 @@ export const parseEstablishment = (
     website: trimToNull(raw.Sitio_internet),
     shoppingCenter: trimToNull(raw.CentroComercial),
     shoppingCenterType: trimToNull(raw.TipoCentroComercial),
-    unitNumber: trimToNull(raw.NumLocal),
+    unitNumber: zeroSentinelToNull(raw.NumLocal),
     registryUrl: buildRegistryUrl(id),
   };
 };

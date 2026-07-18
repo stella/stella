@@ -3,6 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { parseEstablishment, parseSearchEntry } from "./parse.js";
 import type { DenueRawEstablishment } from "./types.js";
 
+const FIXTURE_DIR = new URL("__fixtures__/", import.meta.url);
+const readFixture = async (name: string): Promise<DenueRawEstablishment[]> => {
+  const value: unknown = await Bun.file(new URL(name, FIXTURE_DIR)).json();
+  // SAFETY: fixtures are committed JSON payloads shaped like DENUE search
+  // responses.
+  // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+  return value as DenueRawEstablishment[];
+};
+
 const raw: DenueRawEstablishment = {
   CLEE: "09015721110000111001000000U1",
   Id: "6281106",
@@ -74,20 +83,41 @@ describe("parseEstablishment", () => {
     expect(establishment.address).toBeNull();
   });
 
-  test("preserves a literal '0' exterior/local number", () => {
-    // A house or local number of "0" is a real address atom; only the
-    // postal code treats "0" as an absent-value sentinel.
+  test("treats a '0' exterior/interior/local number as absent", () => {
+    // DENUE uses "0" as an absent-value sentinel for Num_Exterior,
+    // Num_Interior, and NumLocal, the same way it does for the postal
+    // code (see __fixtures__/search-marriott.json, where the MARRIOTT
+    // GUADALAJARA record has Num_Interior: "0" for an establishment with
+    // no interior unit).
     const establishment = parseEstablishment({
       Id: "34185",
       Nombre: "TIENDA CENTRO",
       Tipo_vialidad: "CALLE",
       Calle: "HIDALGO",
       Num_Exterior: "0",
+      Num_Interior: "0",
       NumLocal: "0",
     });
 
-    expect(establishment.address?.line1).toBe("CALLE HIDALGO 0");
-    expect(establishment.unitNumber).toBe("0");
+    expect(establishment.address?.line1).toBe("CALLE HIDALGO");
+    expect(establishment.address?.line2).toBeNull();
+    expect(establishment.unitNumber).toBeNull();
+  });
+
+  test("preserves a literal '0' in non-sentinel text fields", () => {
+    // The zero-sentinel handling is scoped to the four numeric address
+    // atoms; every other field keeps plain trimToNull semantics, where a
+    // literal "0" is a legitimate value.
+    const establishment = parseEstablishment({
+      Id: "34185",
+      Nombre: "0",
+      Razon_social: "0",
+      Estrato: "0",
+    });
+
+    expect(establishment.name).toBe("0");
+    expect(establishment.legalName).toBe("0");
+    expect(establishment.employeeStratum).toBe("0");
   });
 
   test("parses two-part location as municipality and state", () => {
@@ -142,5 +172,27 @@ describe("parseSearchEntry", () => {
       registryUrl:
         "https://www.inegi.org.mx/app/mapa/denue/default.aspx?idee=6281106",
     });
+  });
+});
+
+describe("zero-sentinel fixture guard", () => {
+  test("does not leak a zero-sentinel interior number from real DENUE data", async () => {
+    // CLASS GUARD: search-marriott.json's MARRIOTT GUADALAJARA record has
+    // Num_Interior: "0" for an establishment with no interior unit. This
+    // asserts against the fixture directly (not a synthetic example) so a
+    // future tolerance regression on the sentinel fields is caught by real
+    // upstream data.
+    const [, guadalajara] = await readFixture("search-marriott.json");
+    if (!guadalajara) {
+      throw new Error("expected the Guadalajara fixture record");
+    }
+    expect(guadalajara.Num_Interior).toBe("0");
+
+    const establishment = parseEstablishment(guadalajara);
+    const searchEntry = parseSearchEntry(guadalajara);
+
+    expect(establishment.address?.line2).not.toContain("Int. 0");
+    expect(establishment.address?.textAddress).not.toContain("Int. 0");
+    expect(searchEntry.address).not.toContain("Int. 0");
   });
 });
