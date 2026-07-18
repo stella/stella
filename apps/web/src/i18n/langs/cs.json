@@ -1198,6 +1198,17 @@
     "emptyDescription": "Vytvořte kontakty jednou a pak je používejte napříč spisy, stranami a fakturačními údaji.",
     "emptyTitle": "Vytvořte první kontakt",
     "emptyVideoLabel": "Přehled kontaktů",
+    "extractProcuracao": {
+      "chooseFile": "Nahrát plnou moc (.docx)",
+      "dialogDescription": "Nahrajte plnou moc (.docx) a Stella se pokusí identifikovat zmocnitele a jejich údaje.",
+      "dialogTitle": "Extrahovat z plné moci",
+      "extractOption": "Extrahovat z plné moci (.docx)",
+      "fileHint": "Stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",
+      "invalidFileType": "Vyberte prosím soubor .docx.",
+      "manualEntryOption": "Zadat ručně",
+      "noOutorganteFound": "V tomto dokumentu se nepodařilo identifikovat žádného zmocnitele.",
+      "parseErrorGeneric": "Z tohoto dokumentu se nepodařilo extrahovat kontakty."
+    },
     "fields": {
       "bankAccountBankName": "Název banky",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Organizace",
     "filterPersons": "Osoby",
+    "import": {
+      "action": "Importovat kontakty",
+      "chooseFile": "Vybrat soubor .txt",
+      "confirmAction": "Potvrdit import",
+      "dialogDescription": "Nahrajte soubor .txt s jedním klientem na blok (oddělené prázdným řádkem) a vytvořte více kontaktů najednou.",
+      "dialogTitle": "Importovat kontakty",
+      "errors": {
+        "duplicateTaxIdInFile": "Duplicitní daňové identifikační číslo v tomto souboru (poprvé na řádku {line})",
+        "invalidEmailFormat": "Neplatná e-mailová adresa",
+        "invalidTaxIdLength": "Neplatné daňové identifikační číslo (musí mít 11 nebo 14 číslic)",
+        "recommendedMissing": "Doporučené pole je prázdné",
+        "unrecognizedLabel": "Nerozpoznaný popisek: {label}"
+      },
+      "fields": {
+        "estadoCivil": "Rodinný stav",
+        "nacionalidade": "Národnost",
+        "profissao": "Povolání",
+        "rg": "Číslo dokladu totožnosti",
+        "uniaoEstavel": "Registrované partnerství"
+      },
+      "fileHint": "Každý klient je blok řádků „Popisek: hodnota“ oddělený prázdným řádkem.",
+      "parseErrorGeneric": "V tomto souboru nebyly nalezeny žádné bloky klientů.",
+      "previewSummary": "{valid} připraveno, {invalid} s chybou",
+      "resultsSummary": "{created} vytvořeno, {skipped} přeskočeno",
+      "rowLabel": "Klient {index}",
+      "skippedDuplicateTaxId": "Přeskočeno: duplicitní daňové identifikační číslo",
+      "skippedInvalidTaxId": "Přeskočeno: neplatné daňové identifikační číslo",
+      "skippedLimitReached": "Přeskočeno: dosažen limit kontaktů"
+    },
     "mattersAsClient": "Spisy jako klient",
     "newContact": "Nový kontakt",
     "noContactsDescription": "Vytvořte první kontakt a začněte ho přiřazovat ke spisům.",

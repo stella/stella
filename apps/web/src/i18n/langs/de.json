@@ -1198,6 +1198,17 @@
     "emptyDescription": "Erstellen Sie Kontakte einmal und verwenden Sie sie anschließend in Akten, Parteien und Abrechnungsdaten.",
     "emptyTitle": "Ersten Kontakt erstellen",
     "emptyVideoLabel": "Kontaktübersicht",
+    "extractProcuracao": {
+      "chooseFile": "Vollmacht hochladen (.docx)",
+      "dialogDescription": "Laden Sie eine Vollmacht (.docx) hoch, und Stella versucht, den/die Vollmachtgeber und deren Angaben zu erkennen.",
+      "dialogTitle": "Aus Vollmacht extrahieren",
+      "extractOption": "Aus Vollmacht extrahieren (.docx)",
+      "fileHint": "Stella liest das Dokument und findet automatisch den/die Vollmachtgeber (nicht den Anwalt). Prüfen Sie das Ergebnis, bevor Sie bestätigen.",
+      "invalidFileType": "Bitte wählen Sie eine .docx-Datei aus.",
+      "manualEntryOption": "Manuell eingeben",
+      "noOutorganteFound": "In diesem Dokument konnte kein Vollmachtgeber erkannt werden.",
+      "parseErrorGeneric": "Aus diesem Dokument konnten keine Kontakte extrahiert werden."
+    },
     "fields": {
       "bankAccountBankName": "Bankname",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Organisationen",
     "filterPersons": "Personen",
+    "import": {
+      "action": "Kontakte importieren",
+      "chooseFile": ".txt-Datei auswählen",
+      "confirmAction": "Import bestätigen",
+      "dialogDescription": "Laden Sie eine .txt-Datei mit einem Mandanten pro Block (durch eine Leerzeile getrennt) hoch, um mehrere Kontakte auf einmal anzulegen.",
+      "dialogTitle": "Kontakte importieren",
+      "errors": {
+        "duplicateTaxIdInFile": "Doppelte Steuernummer in dieser Datei (zuerst in Zeile {line} gesehen)",
+        "invalidEmailFormat": "Ungültige E-Mail-Adresse",
+        "invalidTaxIdLength": "Ungültige Steuernummer (muss 11 oder 14 Ziffern haben)",
+        "recommendedMissing": "Empfohlenes Feld ist leer",
+        "unrecognizedLabel": "Unbekannte Bezeichnung: {label}"
+      },
+      "fields": {
+        "estadoCivil": "Familienstand",
+        "nacionalidade": "Staatsangehörigkeit",
+        "profissao": "Beruf",
+        "rg": "Ausweisnummer",
+        "uniaoEstavel": "Eingetragene Lebenspartnerschaft"
+      },
+      "fileHint": "Jeder Mandant ist ein Block aus Zeilen im Format „Bezeichnung: Wert“, getrennt durch eine Leerzeile.",
+      "parseErrorGeneric": "In dieser Datei wurden keine Mandantenblöcke gefunden.",
+      "previewSummary": "{valid} bereit, {invalid} mit Fehlern",
+      "resultsSummary": "{created} erstellt, {skipped} übersprungen",
+      "rowLabel": "Mandant {index}",
+      "skippedDuplicateTaxId": "Übersprungen: doppelte Steuernummer",
+      "skippedInvalidTaxId": "Übersprungen: ungültige Steuernummer",
+      "skippedLimitReached": "Übersprungen: Kontaktlimit erreicht"
+    },
     "mattersAsClient": "Akten als Klient",
     "newContact": "Neuer Klient",
     "noContactsDescription": "Erstellen Sie Ihren ersten Klienten, um ihn mit Akten zu verknüpfen.",

@@ -41,7 +41,6 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-  DialogTrigger,
 } from "@stll/ui/components/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
@@ -83,6 +82,8 @@ import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
 import { toFormErrors } from "@/lib/schema";
+import { ExtractProcuracaoDialog } from "@/routes/_protected.contacts/-extract-procuracao-dialog";
+import { ImportContactsDialog } from "@/routes/_protected.contacts/-import-dialog";
 
 const ARES_NATIVE_TOOL_SLUG = "ares";
 
@@ -103,6 +104,8 @@ function ContactsPage() {
   const tContacts = useTranslations("contacts");
   const canCreateContact = usePermissions({ contact: ["create"] });
   const [createContactOpen, setCreateContactOpen] = useState(false);
+  const [importContactsOpen, setImportContactsOpen] = useState(false);
+  const [extractProcuracaoOpen, setExtractProcuracaoOpen] = useState(false);
   const [filter, setFilter] = useState<ContactFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -174,10 +177,34 @@ function ContactsPage() {
           />
         </div>
         {canCreateContact && (
-          <CreateContactDialog
-            onOpenChange={setCreateContactOpen}
-            open={createContactOpen}
-          />
+          <>
+            <ImportContactsDialog
+              onOpenChange={setImportContactsOpen}
+              open={importContactsOpen}
+            />
+            <Menu>
+              <MenuTrigger render={<Button size="sm" />}>
+                <PlusIcon />
+                {t("contacts.newContact")}
+              </MenuTrigger>
+              <MenuPopup>
+                <MenuItem onClick={() => setCreateContactOpen(true)}>
+                  {t("contacts.extractProcuracao.manualEntryOption")}
+                </MenuItem>
+                <MenuItem onClick={() => setExtractProcuracaoOpen(true)}>
+                  {t("contacts.extractProcuracao.extractOption")}
+                </MenuItem>
+              </MenuPopup>
+            </Menu>
+            <CreateContactDialog
+              onOpenChange={setCreateContactOpen}
+              open={createContactOpen}
+            />
+            <ExtractProcuracaoDialog
+              onOpenChange={setExtractProcuracaoOpen}
+              open={extractProcuracaoOpen}
+            />
+          </>
         )}
       </div>
 
@@ -791,10 +818,6 @@ const CreateContactDialog = ({
       }}
       open={open}
     >
-      <DialogTrigger render={<Button size="sm" />}>
-        <PlusIcon />
-        {t("contacts.newContact")}
-      </DialogTrigger>
       <DialogPopup>
         <Form
           className="gap-0"

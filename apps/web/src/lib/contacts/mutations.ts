@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import type { SafeId } from "@/lib/safe-id";
+import type { ImportContactRowVars } from "@/routes/_protected.contacts/-parse-import";
 
 type BankAccount = {
   iban?: string;
@@ -123,6 +124,29 @@ export type ContactUpdateFields = {
 };
 
 export type ContactUpdate = NonEmptyPatch<ContactUpdateFields>;
+
+type ImportContactsVars = {
+  rows: ImportContactRowVars[];
+};
+
+export const useImportContacts = () => {
+  const analytics = useAnalytics();
+
+  return useMutation({
+    mutationFn: async ({ rows }: ImportContactsVars) => {
+      const response = await api.contacts.import.put({ rows });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data.results;
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};
 
 type UpdateContactVars = {
   contactId: SafeId<"contact">;

@@ -1198,6 +1198,17 @@
     "emptyDescription": "Crie contatos uma vez e reutilize-os em casos, partes e detalhes de cobrança.",
     "emptyTitle": "Crie seu primeiro contato",
     "emptyVideoLabel": "Visão geral dos contatos",
+    "extractProcuracao": {
+      "chooseFile": "Enviar procuração (.docx)",
+      "dialogDescription": "Envie uma procuração (.docx) e a Stella vai tentar identificar o(s) outorgante(s) e seus dados.",
+      "dialogTitle": "Extrair de procuração",
+      "extractOption": "Extrair de procuração (.docx)",
+      "fileHint": "A Stella lê o documento e localiza o(s) outorgante(s) (quem concede a procuração, não o advogado) automaticamente. Revise o resultado antes de confirmar.",
+      "invalidFileType": "Selecione um arquivo .docx.",
+      "manualEntryOption": "Preencher manualmente",
+      "noOutorganteFound": "Não foi possível identificar nenhum outorgante neste documento.",
+      "parseErrorGeneric": "Não foi possível extrair contatos deste documento."
+    },
     "fields": {
       "bankAccountBankName": "Nome do banco",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Organizações",
     "filterPersons": "Pessoas",
+    "import": {
+      "action": "Importar contatos",
+      "chooseFile": "Selecionar arquivo .txt",
+      "confirmAction": "Confirmar importação",
+      "dialogDescription": "Envie um arquivo .txt com um cliente por bloco (separados por linha em branco) para criar vários contatos de uma vez.",
+      "dialogTitle": "Importar contatos",
+      "errors": {
+        "duplicateTaxIdInFile": "CPF/CNPJ duplicado neste arquivo (visto primeiro na linha {line})",
+        "invalidEmailFormat": "E-mail inválido",
+        "invalidTaxIdLength": "CPF/CNPJ inválido (deve ter 11 ou 14 dígitos)",
+        "recommendedMissing": "Campo recomendado está vazio",
+        "unrecognizedLabel": "Rótulo não reconhecido: {label}"
+      },
+      "fields": {
+        "estadoCivil": "Estado civil",
+        "nacionalidade": "Nacionalidade",
+        "profissao": "Profissão",
+        "rg": "RG",
+        "uniaoEstavel": "União estável"
+      },
+      "fileHint": "Cada cliente é um bloco de linhas \"Rótulo: valor\", separado por uma linha em branco.",
+      "parseErrorGeneric": "Nenhum bloco de cliente foi encontrado neste arquivo.",
+      "previewSummary": "{valid} prontos, {invalid} com erro",
+      "resultsSummary": "{created} criados, {skipped} ignorados",
+      "rowLabel": "Cliente {index}",
+      "skippedDuplicateTaxId": "Ignorado: CPF/CNPJ duplicado",
+      "skippedInvalidTaxId": "Ignorado: CPF/CNPJ inválido",
+      "skippedLimitReached": "Ignorado: limite de contatos atingido"
+    },
     "mattersAsClient": "Casos como cliente",
     "newContact": "Novo contato",
     "noContactsDescription": "Crie seu primeiro contato para começar a vinculá-los aos casos.",

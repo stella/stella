@@ -1198,6 +1198,17 @@
     "emptyDescription": "Hozzon létre névjegyeket egyszer, majd használja őket újra ügyekben, feleknél és számlázási adatokban.",
     "emptyTitle": "Hozza létre az első kapcsolatot",
     "emptyVideoLabel": "Kapcsolatok áttekintése",
+    "extractProcuracao": {
+      "chooseFile": "Meghatalmazás feltöltése (.docx)",
+      "dialogDescription": "Töltsön fel egy meghatalmazást (.docx), és a Stella megpróbálja azonosítani a meghatalmazó(ka)t és adataikat.",
+      "dialogTitle": "Kinyerés meghatalmazásból",
+      "extractOption": "Kinyerés meghatalmazásból (.docx)",
+      "fileHint": "A Stella beolvassa a dokumentumot, és automatikusan megkeresi a meghatalmazót (aki a meghatalmazást adja, nem az ügyvédet). Megerősítés előtt ellenőrizze az eredményt.",
+      "invalidFileType": "Válasszon egy .docx fájlt.",
+      "manualEntryOption": "Kézi kitöltés",
+      "noOutorganteFound": "Ebben a dokumentumban nem sikerült meghatalmazót azonosítani.",
+      "parseErrorGeneric": "Ebből a dokumentumból nem sikerült kapcsolatokat kinyerni."
+    },
     "fields": {
       "bankAccountBankName": "Bank neve",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Szervezetek",
     "filterPersons": "Személyek",
+    "import": {
+      "action": "Kapcsolatok importálása",
+      "chooseFile": ".txt fájl kiválasztása",
+      "confirmAction": "Importálás megerősítése",
+      "dialogDescription": "Töltsön fel egy .txt fájlt, amelyben ügyfelenként egy blokk található (üres sorral elválasztva), hogy egyszerre több kapcsolatot hozzon létre.",
+      "dialogTitle": "Kapcsolatok importálása",
+      "errors": {
+        "duplicateTaxIdInFile": "Duplikált adóazonosító ebben a fájlban (először a(z) {line}. sorban)",
+        "invalidEmailFormat": "Érvénytelen e-mail-cím",
+        "invalidTaxIdLength": "Érvénytelen adóazonosító (11 vagy 14 számjegyűnek kell lennie)",
+        "recommendedMissing": "Az ajánlott mező üres",
+        "unrecognizedLabel": "Ismeretlen címke: {label}"
+      },
+      "fields": {
+        "estadoCivil": "Családi állapot",
+        "nacionalidade": "Állampolgárság",
+        "profissao": "Foglalkozás",
+        "rg": "Személyazonosító okmány száma",
+        "uniaoEstavel": "Bejegyzett élettársi kapcsolat"
+      },
+      "fileHint": "Minden ügyfél „Címke: érték” sorokból álló blokk, üres sorral elválasztva.",
+      "parseErrorGeneric": "Ebben a fájlban nem található ügyfélblokk.",
+      "previewSummary": "{valid} kész, {invalid} hibás",
+      "resultsSummary": "{created} létrehozva, {skipped} kihagyva",
+      "rowLabel": "Ügyfél {index}",
+      "skippedDuplicateTaxId": "Kihagyva: duplikált adóazonosító",
+      "skippedInvalidTaxId": "Kihagyva: érvénytelen adóazonosító",
+      "skippedLimitReached": "Kihagyva: elérte a kapcsolatlimitet"
+    },
     "mattersAsClient": "Ügyek ügyfélként",
     "newContact": "Új ügyfél",
     "noContactsDescription": "Hozza létre első ügyfelét, hogy ügyekhez rendelhesse.",

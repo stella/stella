@@ -1198,6 +1198,17 @@
     "emptyDescription": "أنشئ جهات الاتصال مرة واحدة، ثم أعد استخدامها عبر الملفات القانونية والأطراف وتفاصيل الفوترة.",
     "emptyTitle": "أنشئ أول جهة اتصال لك",
     "emptyVideoLabel": "نظرة عامة على جهات الاتصال",
+    "extractProcuracao": {
+      "chooseFile": "تحميل التوكيل (.docx)",
+      "dialogDescription": "قم بتحميل توكيل (.docx) وستحاول Stella تحديد الموكل (الموكلين) وبياناتهم.",
+      "dialogTitle": "استخراج من توكيل",
+      "extractOption": "استخراج من توكيل (.docx)",
+      "fileHint": "تقرأ Stella المستند وتحدد الموكل تلقائيًا (الشخص الذي يمنح التوكيل، وليس المحامي). راجع النتيجة قبل التأكيد.",
+      "invalidFileType": "الرجاء اختيار ملف .docx.",
+      "manualEntryOption": "تعبئة يدوية",
+      "noOutorganteFound": "تعذر التعرف على أي موكل في هذا المستند.",
+      "parseErrorGeneric": "تعذر استخراج جهات الاتصال من هذا المستند."
+    },
     "fields": {
       "bankAccountBankName": "اسم المصرف",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "المؤسسات",
     "filterPersons": "الأشخاص",
+    "import": {
+      "action": "استيراد جهات الاتصال",
+      "chooseFile": "اختر ملف .txt",
+      "confirmAction": "تأكيد الاستيراد",
+      "dialogDescription": "قم بتحميل ملف .txt يحتوي على عميل واحد لكل كتلة (مفصولة بسطر فارغ) لإنشاء عدة جهات اتصال دفعة واحدة.",
+      "dialogTitle": "استيراد جهات الاتصال",
+      "errors": {
+        "duplicateTaxIdInFile": "رقم ضريبي مكرر في هذا الملف (شوهد أولاً في السطر {line})",
+        "invalidEmailFormat": "البريد الإلكتروني غير صالح",
+        "invalidTaxIdLength": "الرقم الضريبي غير صالح (يجب أن يتكون من 11 أو 14 رقمًا)",
+        "recommendedMissing": "الحقل الموصى به فارغ",
+        "unrecognizedLabel": "تسمية غير معروفة: {label}"
+      },
+      "fields": {
+        "estadoCivil": "الحالة الاجتماعية",
+        "nacionalidade": "الجنسية",
+        "profissao": "المهنة",
+        "rg": "رقم بطاقة الهوية",
+        "uniaoEstavel": "شراكة مسجلة"
+      },
+      "fileHint": "كل عميل عبارة عن كتلة من الأسطر بصيغة \"التسمية: القيمة\"، مفصولة بسطر فارغ.",
+      "parseErrorGeneric": "لم يتم العثور على أي كتل عملاء في هذا الملف.",
+      "previewSummary": "{valid} جاهز، {invalid} به أخطاء",
+      "resultsSummary": "تم إنشاء {created}، تم تخطي {skipped}",
+      "rowLabel": "العميل {index}",
+      "skippedDuplicateTaxId": "تم التخطي: رقم ضريبي مكرر",
+      "skippedInvalidTaxId": "تم التخطي: رقم ضريبي غير صالح",
+      "skippedLimitReached": "تم التخطي: تم الوصول للحد الأقصى لجهات الاتصال"
+    },
     "mattersAsClient": "الملفات القانونية بصفة عميل",
     "newContact": "جهة اتصال جديدة",
     "noContactsDescription": "أنشئ أول جهة اتصال لك للبدء بربطها بالملفات القانونية.",

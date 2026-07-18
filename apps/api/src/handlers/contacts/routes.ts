@@ -3,6 +3,8 @@ import Elysia from "elysia";
 import businessRegistriesLookup from "@/api/handlers/contacts/business-registries-lookup";
 import createContact from "@/api/handlers/contacts/create";
 import deleteContactById from "@/api/handlers/contacts/delete";
+import extractProcuracao from "@/api/handlers/contacts/extract-procuracao";
+import importContacts from "@/api/handlers/contacts/import";
 import readContactById from "@/api/handlers/contacts/get";
 import readContacts from "@/api/handlers/contacts/list";
 import searchContacts from "@/api/handlers/contacts/search";
@@ -32,6 +34,14 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
   .put("/", createContact.handler, {
     body: createContact.config.body,
     permissions: createContact.config.permissions,
+  })
+  .put("/import", importContacts.handler, {
+    body: importContacts.config.body,
+    permissions: importContacts.config.permissions,
+  })
+  .post("/extract-from-procuracao", extractProcuracao.handler, {
+    body: extractProcuracao.config.body,
+    permissions: extractProcuracao.config.permissions,
   })
   .group(
     "/:contactId",

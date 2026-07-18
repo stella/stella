@@ -1198,6 +1198,17 @@
     "emptyDescription": "Cree contactos una vez y reutilícelos en asuntos, partes y datos de facturación.",
     "emptyTitle": "Cree su primer contacto",
     "emptyVideoLabel": "Vista general de contactos",
+    "extractProcuracao": {
+      "chooseFile": "Subir poder notarial (.docx)",
+      "dialogDescription": "Sube un poder notarial (.docx) y Stella intentará identificar al otorgante o los otorgantes y sus datos.",
+      "dialogTitle": "Extraer de un poder notarial",
+      "extractOption": "Extraer de un poder notarial (.docx)",
+      "fileHint": "Stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
+      "invalidFileType": "Selecciona un archivo .docx.",
+      "manualEntryOption": "Completar manualmente",
+      "noOutorganteFound": "No se pudo identificar ningún otorgante en este documento.",
+      "parseErrorGeneric": "No se pudieron extraer contactos de este documento."
+    },
     "fields": {
       "bankAccountBankName": "Nombre del banco",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Organizaciones",
     "filterPersons": "Personas",
+    "import": {
+      "action": "Importar contactos",
+      "chooseFile": "Seleccionar archivo .txt",
+      "confirmAction": "Confirmar importación",
+      "dialogDescription": "Sube un archivo .txt con un cliente por bloque (separados por una línea en blanco) para crear varios contactos a la vez.",
+      "dialogTitle": "Importar contactos",
+      "errors": {
+        "duplicateTaxIdInFile": "Identificación fiscal duplicada en este archivo (vista primero en la fila {line})",
+        "invalidEmailFormat": "Correo electrónico no válido",
+        "invalidTaxIdLength": "Identificación fiscal no válida (debe tener 11 o 14 dígitos)",
+        "recommendedMissing": "El campo recomendado está vacío",
+        "unrecognizedLabel": "Etiqueta no reconocida: {label}"
+      },
+      "fields": {
+        "estadoCivil": "Estado civil",
+        "nacionalidade": "Nacionalidad",
+        "profissao": "Profesión",
+        "rg": "Número de identificación",
+        "uniaoEstavel": "Unión civil"
+      },
+      "fileHint": "Cada cliente es un bloque de líneas \"Etiqueta: valor\", separado por una línea en blanco.",
+      "parseErrorGeneric": "No se encontraron bloques de clientes en este archivo.",
+      "previewSummary": "{valid} listos, {invalid} con errores",
+      "resultsSummary": "{created} creados, {skipped} omitidos",
+      "rowLabel": "Cliente {index}",
+      "skippedDuplicateTaxId": "Omitido: identificación fiscal duplicada",
+      "skippedInvalidTaxId": "Omitido: identificación fiscal no válida",
+      "skippedLimitReached": "Omitido: se alcanzó el límite de contactos"
+    },
     "mattersAsClient": "Asuntos como cliente",
     "newContact": "Nuevo cliente",
     "noContactsDescription": "Cree su primer cliente para empezar a vincularlo con asuntos.",

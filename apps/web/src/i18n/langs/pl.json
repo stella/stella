@@ -1198,6 +1198,17 @@
     "emptyDescription": "Utwórz kontakty raz, a potem używaj ich ponownie w sprawach, stronach i danych rozliczeniowych.",
     "emptyTitle": "Utwórz pierwszy kontakt",
     "emptyVideoLabel": "Przegląd kontaktów",
+    "extractProcuracao": {
+      "chooseFile": "Prześlij pełnomocnictwo (.docx)",
+      "dialogDescription": "Prześlij pełnomocnictwo (.docx), a Stella spróbuje zidentyfikować mocodawcę (mocodawców) i ich dane.",
+      "dialogTitle": "Wyodrębnij z pełnomocnictwa",
+      "extractOption": "Wyodrębnij z pełnomocnictwa (.docx)",
+      "fileHint": "Stella odczytuje dokument i automatycznie odnajduje mocodawcę (osobę udzielającą pełnomocnictwa, nie prawnika). Przed potwierdzeniem sprawdź wynik.",
+      "invalidFileType": "Wybierz plik .docx.",
+      "manualEntryOption": "Wypełnij ręcznie",
+      "noOutorganteFound": "Nie udało się zidentyfikować żadnego mocodawcy w tym dokumencie.",
+      "parseErrorGeneric": "Nie udało się wyodrębnić kontaktów z tego dokumentu."
+    },
     "fields": {
       "bankAccountBankName": "Nazwa banku",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Organizacje",
     "filterPersons": "Osoby",
+    "import": {
+      "action": "Importuj kontakty",
+      "chooseFile": "Wybierz plik .txt",
+      "confirmAction": "Potwierdź import",
+      "dialogDescription": "Prześlij plik .txt z jednym klientem na blok (oddzielone pustą linią), aby utworzyć wiele kontaktów naraz.",
+      "dialogTitle": "Importuj kontakty",
+      "errors": {
+        "duplicateTaxIdInFile": "Zduplikowany NIP w tym pliku (pierwszy raz w wierszu {line})",
+        "invalidEmailFormat": "Nieprawidłowy adres e-mail",
+        "invalidTaxIdLength": "Nieprawidłowy NIP (musi mieć 11 lub 14 cyfr)",
+        "recommendedMissing": "Zalecane pole jest puste",
+        "unrecognizedLabel": "Nierozpoznana etykieta: {label}"
+      },
+      "fields": {
+        "estadoCivil": "Stan cywilny",
+        "nacionalidade": "Narodowość",
+        "profissao": "Zawód",
+        "rg": "Numer dokumentu tożsamości",
+        "uniaoEstavel": "Związek partnerski"
+      },
+      "fileHint": "Każdy klient to blok linii „Etykieta: wartość” oddzielony pustą linią.",
+      "parseErrorGeneric": "W tym pliku nie znaleziono żadnych bloków klientów.",
+      "previewSummary": "{valid} gotowych, {invalid} z błędami",
+      "resultsSummary": "{created} utworzono, {skipped} pominięto",
+      "rowLabel": "Klient {index}",
+      "skippedDuplicateTaxId": "Pominięto: zduplikowany NIP",
+      "skippedInvalidTaxId": "Pominięto: nieprawidłowy NIP",
+      "skippedLimitReached": "Pominięto: osiągnięto limit kontaktów"
+    },
     "mattersAsClient": "Sprawy jako klient",
     "newContact": "Nowy klient",
     "noContactsDescription": "Utwórz pierwszego klienta, aby zacząć przypisywać go do spraw.",

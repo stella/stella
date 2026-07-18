@@ -1198,6 +1198,17 @@
     "emptyDescription": "Izveidojiet kontaktpersonas vienreiz un atkārtoti izmantojiet tās lietās, pusēs un norēķinu datos.",
     "emptyTitle": "Izveidojiet pirmo kontaktpersonu",
     "emptyVideoLabel": "Kontaktpersonu pārskats",
+    "extractProcuracao": {
+      "chooseFile": "Augšupielādēt pilnvaru (.docx)",
+      "dialogDescription": "Augšupielādējiet pilnvaru (.docx), un Stella mēģinās noteikt pilnvaras devēju(-us) un viņu datus.",
+      "dialogTitle": "Iegūt no pilnvaras",
+      "extractOption": "Iegūt no pilnvaras (.docx)",
+      "fileHint": "Stella izlasa dokumentu un automātiski atrod pilnvaras devēju (personu, kas piešķir pilnvaru, nevis juristu). Pirms apstiprināšanas pārbaudiet rezultātu.",
+      "invalidFileType": "Lūdzu, izvēlieties .docx failu.",
+      "manualEntryOption": "Aizpildīt manuāli",
+      "noOutorganteFound": "Šajā dokumentā neizdevās identificēt nevienu pilnvaras devēju.",
+      "parseErrorGeneric": "No šī dokumenta neizdevās iegūt kontaktus."
+    },
     "fields": {
       "bankAccountBankName": "Bankas nosaukums",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Organizācijas",
     "filterPersons": "Personas",
+    "import": {
+      "action": "Importēt kontaktus",
+      "chooseFile": "Izvēlēties .txt failu",
+      "confirmAction": "Apstiprināt importu",
+      "dialogDescription": "Augšupielādējiet .txt failu ar vienu klientu katrā blokā (bloki atdalīti ar tukšu rindu), lai vienlaikus izveidotu vairākus kontaktus.",
+      "dialogTitle": "Importēt kontaktus",
+      "errors": {
+        "duplicateTaxIdInFile": "Dublēts nodokļu maksātāja numurs šajā failā (pirmoreiz rindā {line})",
+        "invalidEmailFormat": "Nederīga e-pasta adrese",
+        "invalidTaxIdLength": "Nederīgs nodokļu maksātāja numurs (jābūt 11 vai 14 cipariem)",
+        "recommendedMissing": "Ieteicamais lauks ir tukšs",
+        "unrecognizedLabel": "Neatpazīta etiķete: {label}"
+      },
+      "fields": {
+        "estadoCivil": "Ģimenes stāvoklis",
+        "nacionalidade": "Pilsonība",
+        "profissao": "Profesija",
+        "rg": "Personu apliecinoša dokumenta numurs",
+        "uniaoEstavel": "Reģistrētas partnerattiecības"
+      },
+      "fileHint": "Katrs klients ir rindu „Etiķete: vērtība” bloks, kas atdalīts ar tukšu rindu.",
+      "parseErrorGeneric": "Šajā failā netika atrasts neviens klienta bloks.",
+      "previewSummary": "{valid} gatavi, {invalid} ar kļūdām",
+      "resultsSummary": "{created} izveidoti, {skipped} izlaisti",
+      "rowLabel": "Klients {index}",
+      "skippedDuplicateTaxId": "Izlaists: dublēts nodokļu maksātāja numurs",
+      "skippedInvalidTaxId": "Izlaists: nederīgs nodokļu maksātāja numurs",
+      "skippedLimitReached": "Izlaists: sasniegts kontaktu limits"
+    },
     "mattersAsClient": "Lietas kā klients",
     "newContact": "Jauns klients",
     "noContactsDescription": "Izveidojiet savu pirmo klientu, lai sāktu tos saistīt ar lietām.",

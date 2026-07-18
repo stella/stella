@@ -1198,6 +1198,17 @@
     "emptyDescription": "Créez les contacts une fois, puis réutilisez-les dans les dossiers, les parties et les informations de facturation.",
     "emptyTitle": "Créer votre premier contact",
     "emptyVideoLabel": "Vue d’ensemble des contacts",
+    "extractProcuracao": {
+      "chooseFile": "Téléverser une procuration (.docx)",
+      "dialogDescription": "Téléversez une procuration (.docx) et Stella tentera d'identifier le(s) mandant(s) et leurs informations.",
+      "dialogTitle": "Extraire d'une procuration",
+      "extractOption": "Extraire d'une procuration (.docx)",
+      "fileHint": "Stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",
+      "invalidFileType": "Veuillez choisir un fichier .docx.",
+      "manualEntryOption": "Saisir manuellement",
+      "noOutorganteFound": "Aucun mandant n'a pu être identifié dans ce document.",
+      "parseErrorGeneric": "Impossible d'extraire des contacts de ce document."
+    },
     "fields": {
       "bankAccountBankName": "Nom de la banque",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Organisations",
     "filterPersons": "Personnes",
+    "import": {
+      "action": "Importer des contacts",
+      "chooseFile": "Choisir un fichier .txt",
+      "confirmAction": "Confirmer l'importation",
+      "dialogDescription": "Téléversez un fichier .txt avec un client par bloc (séparés par une ligne vide) pour créer plusieurs contacts à la fois.",
+      "dialogTitle": "Importer des contacts",
+      "errors": {
+        "duplicateTaxIdInFile": "Numéro fiscal en double dans ce fichier (vu pour la première fois à la ligne {line})",
+        "invalidEmailFormat": "Adresse e-mail invalide",
+        "invalidTaxIdLength": "Numéro fiscal invalide (doit comporter 11 ou 14 chiffres)",
+        "recommendedMissing": "Le champ recommandé est vide",
+        "unrecognizedLabel": "Étiquette non reconnue : {label}"
+      },
+      "fields": {
+        "estadoCivil": "État civil",
+        "nacionalidade": "Nationalité",
+        "profissao": "Profession",
+        "rg": "Numéro d'identité",
+        "uniaoEstavel": "Union civile"
+      },
+      "fileHint": "Chaque client est un bloc de lignes « Étiquette : valeur », séparé par une ligne vide.",
+      "parseErrorGeneric": "Aucun bloc de client trouvé dans ce fichier.",
+      "previewSummary": "{valid} prêts, {invalid} en erreur",
+      "resultsSummary": "{created} créés, {skipped} ignorés",
+      "rowLabel": "Client n° {index}",
+      "skippedDuplicateTaxId": "Ignoré : numéro fiscal en double",
+      "skippedInvalidTaxId": "Ignoré : numéro fiscal invalide",
+      "skippedLimitReached": "Ignoré : limite de contacts atteinte"
+    },
     "mattersAsClient": "Dossiers en tant que client",
     "newContact": "Nouveau client",
     "noContactsDescription": "Créez votre premier client pour commencer à les associer aux dossiers.",

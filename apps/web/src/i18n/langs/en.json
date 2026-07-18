@@ -1198,6 +1198,17 @@
     "emptyDescription": "Create contacts once, then reuse them across matters, parties, and billing details.",
     "emptyTitle": "Create your first contact",
     "emptyVideoLabel": "Contacts overview",
+    "extractProcuracao": {
+      "chooseFile": "Upload power of attorney (.docx)",
+      "dialogDescription": "Upload a power-of-attorney document (.docx) and Stella will try to identify the grantor(s) and their details.",
+      "dialogTitle": "Extract from power of attorney",
+      "extractOption": "Extract from power of attorney (.docx)",
+      "fileHint": "Stella reads the document and finds the grantor(s) — not the lawyer — automatically. Review the results before confirming.",
+      "invalidFileType": "Please choose a .docx file.",
+      "manualEntryOption": "Fill in manually",
+      "noOutorganteFound": "No grantor could be identified in this document.",
+      "parseErrorGeneric": "Could not extract contacts from this document."
+    },
     "fields": {
       "bankAccountBankName": "Bank name",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Organizations",
     "filterPersons": "Persons",
+    "import": {
+      "action": "Import contacts",
+      "chooseFile": "Choose .txt file",
+      "confirmAction": "Confirm import",
+      "dialogDescription": "Upload a .txt file with one client per block (blank line separated) to create multiple contacts at once.",
+      "dialogTitle": "Import contacts",
+      "errors": {
+        "duplicateTaxIdInFile": "Duplicate tax ID in this file (first seen in row {line})",
+        "invalidEmailFormat": "Invalid email address",
+        "invalidTaxIdLength": "Invalid tax ID (must be 11 or 14 digits)",
+        "recommendedMissing": "Recommended field is empty",
+        "unrecognizedLabel": "Unrecognized label: {label}"
+      },
+      "fields": {
+        "estadoCivil": "Marital status",
+        "nacionalidade": "Nationality",
+        "profissao": "Occupation",
+        "rg": "ID number",
+        "uniaoEstavel": "Civil union"
+      },
+      "fileHint": "Each client is a block of \"Label: value\" lines, separated by a blank line.",
+      "parseErrorGeneric": "No client blocks were found in this file.",
+      "previewSummary": "{valid} ready, {invalid} with errors",
+      "resultsSummary": "{created} created, {skipped} skipped",
+      "rowLabel": "Client {index}",
+      "skippedDuplicateTaxId": "Skipped: duplicate tax ID",
+      "skippedInvalidTaxId": "Skipped: invalid tax ID",
+      "skippedLimitReached": "Skipped: contacts limit reached"
+    },
     "mattersAsClient": "Matters as client",
     "newContact": "New contact",
     "noContactsDescription": "Create your first contact to start linking them to matters.",

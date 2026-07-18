@@ -1198,6 +1198,17 @@
     "emptyDescription": "Looge kontaktid üks kord ja kasutage neid seejärel asjades, osapooltes ja arveldusandmetes.",
     "emptyTitle": "Looge esimene kontakt",
     "emptyVideoLabel": "Kontaktide ülevaade",
+    "extractProcuracao": {
+      "chooseFile": "Laadi üles volikiri (.docx)",
+      "dialogDescription": "Laadige üles volikiri (.docx) ja Stella proovib tuvastada volitaja(d) ja nende andmed.",
+      "dialogTitle": "Tuvasta volikirjast",
+      "extractOption": "Tuvasta volikirjast (.docx)",
+      "fileHint": "Stella loeb dokumendi läbi ja leiab automaatselt volitaja (isiku, kes annab volituse, mitte advokaadi). Enne kinnitamist kontrollige tulemust.",
+      "invalidFileType": "Palun valige .docx-fail.",
+      "manualEntryOption": "Täida käsitsi",
+      "noOutorganteFound": "Selles dokumendis ei õnnestunud ühtegi volitajat tuvastada.",
+      "parseErrorGeneric": "Sellest dokumendist ei õnnestunud kontakte tuvastada."
+    },
     "fields": {
       "bankAccountBankName": "Panga nimi",
       "bankAccountBic": "BIC/SWIFT",
@@ -1223,6 +1234,35 @@
     },
     "filterOrganizations": "Organisatsioonid",
     "filterPersons": "Isikud",
+    "import": {
+      "action": "Impordi kontaktid",
+      "chooseFile": "Vali .txt-fail",
+      "confirmAction": "Kinnita import",
+      "dialogDescription": "Laadige üles .txt-fail, kus iga klient on eraldi plokk (eraldatud tühja reaga), et luua korraga mitu kontakti.",
+      "dialogTitle": "Impordi kontaktid",
+      "errors": {
+        "duplicateTaxIdInFile": "Korduv maksukohustuslasena registreerimise number selles failis (esimest korda real {line})",
+        "invalidEmailFormat": "Vale e-posti aadress",
+        "invalidTaxIdLength": "Vale maksukohustuslasena registreerimise number (peab olema 11 või 14 numbrit)",
+        "recommendedMissing": "Soovitatud väli on tühi",
+        "unrecognizedLabel": "Tundmatu silt: {label}"
+      },
+      "fields": {
+        "estadoCivil": "Perekonnaseis",
+        "nacionalidade": "Kodakondsus",
+        "profissao": "Amet",
+        "rg": "Isikutunnistuse number",
+        "uniaoEstavel": "Registreeritud kooselu"
+      },
+      "fileHint": "Iga klient on ridade „Silt: väärtus” plokk, mis on eraldatud tühja reaga.",
+      "parseErrorGeneric": "Sellest failist ei leitud ühtegi kliendiplokki.",
+      "previewSummary": "{valid} valmis, {invalid} veaga",
+      "resultsSummary": "{created} loodud, {skipped} vahele jäetud",
+      "rowLabel": "Klient {index}",
+      "skippedDuplicateTaxId": "Vahele jäetud: korduv maksukohustuslasena registreerimise number",
+      "skippedInvalidTaxId": "Vahele jäetud: vale maksukohustuslasena registreerimise number",
+      "skippedLimitReached": "Vahele jäetud: kontaktide piirmäär täis"
+    },
     "mattersAsClient": "Toimikud kliendina",
     "newContact": "Uus klient",
     "noContactsDescription": "Looge oma esimene klient, et hakata neid toimikutega siduma.",
