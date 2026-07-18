@@ -46,6 +46,9 @@ const AUTH_TABLES_SQL = [
   "oauth_consent",
   "two_factor",
   "agent_registration",
+  "agent_trusted_issuer",
+  "agent_delegation",
+  "agent_assertion_replay",
 ]
   .map(quoteSqlIdentifier)
   .join(", ");

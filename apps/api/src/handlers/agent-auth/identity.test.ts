@@ -156,7 +156,7 @@ describe("agent-auth service_auth flow", () => {
     const real = await createHumanSession();
     const realHintRes = await postIdentity({
       type: "service_auth",
-      login_hint: `known-${real.userId}@stella.dev`,
+      login_hint: real.email,
     });
     const unknownHintRes = await postIdentity({
       type: "service_auth",
@@ -172,6 +172,16 @@ describe("agent-auth service_auth flow", () => {
     );
     expect(realBody["registration_type"]).toBe("service_auth");
     expect(unknownBody["registration_type"]).toBe("service_auth");
+  });
+
+  test("a non-email login_hint is rejected", async () => {
+    // The hint gates confirmation against an account email; an arbitrary string
+    // would make a permanently unclaimable ceremony, so it is rejected upfront.
+    const res = await postIdentity({
+      type: "service_auth",
+      login_hint: "not-an-email",
+    });
+    expect(res.status).toBe(422);
   });
 
   test("poll is authorization_pending before confirm", async () => {
@@ -228,6 +238,8 @@ describe("agent-auth service_auth flow", () => {
       claim_token: claimToken,
     });
     expect(tokenRes.status).toBe(200);
+    // OAuth §5.1: the bearer-token response must not be cached.
+    expect(tokenRes.headers.get("cache-control")).toBe("no-store");
     const tokenBody = await readJson(tokenRes);
     expect(tokenBody["token_type"]).toBe("Bearer");
     expect(tokenBody["expires_in"]).toBeGreaterThan(0);

@@ -27,7 +27,10 @@ const config = {
   body: t.Union([
     t.Object({
       type: t.Literal("service_auth"),
-      login_hint: t.Optional(t.String({ maxLength: 320 })),
+      // The hint gates confirmation against the human's account email, so an
+      // arbitrary string would create a permanently unclaimable ceremony;
+      // require a valid address (same as the claim endpoint).
+      login_hint: t.Optional(t.String({ format: "email", maxLength: 320 })),
     }),
     t.Object({
       type: t.Literal("anonymous"),

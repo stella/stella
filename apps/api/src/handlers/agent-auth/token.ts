@@ -82,7 +82,11 @@ const exchangeJwtBearer = async (
 ): Promise<Result<TokenResponseShape, HandlerError>> => {
   if (!env.FEATURE_AGENT_ID_JAG) {
     return Result.err(
-      new HandlerError({ status: 400, message: "invalid_grant" }),
+      new HandlerError({
+        status: 400,
+        error: "invalid_grant",
+        message: "invalid_grant",
+      }),
     );
   }
 
@@ -107,7 +111,12 @@ const exchangeJwtBearer = async (
 
 const agentTokenHandler = createSafePublicHandler(
   config,
-  async function* ({ body }) {
+  async function* ({ body, set }) {
+    // OAuth 2.0 §5.1: token responses carry bearer credentials and must not be
+    // cached by browsers or intermediaries.
+    set.headers["cache-control"] = "no-store";
+    set.headers.pragma = "no-cache";
+
     const result =
       body.grant_type === AGENT_AUTH_JWT_BEARER_GRANT_TYPE
         ? await exchangeJwtBearer(body.assertion)
