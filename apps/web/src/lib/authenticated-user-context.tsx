@@ -8,6 +8,7 @@ export type AuthenticatedUser = {
   email: string;
   id: string;
   image: string | null | undefined;
+  isSystemAdmin: boolean;
   name: string | undefined;
   preferredName: string | null | undefined;
   timezoneId: string;

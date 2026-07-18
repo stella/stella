@@ -6,6 +6,7 @@ import { rateLimit } from "elysia-rate-limit";
 import { env } from "@/api/env";
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
+import { adminRoute } from "@/api/handlers/admin/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
 import {
   authCapabilitiesRoute,
@@ -476,6 +477,7 @@ const api = new Elysia()
       .use(legislationRoute)
       .use(legislationCorpusRoute)
       .use(searchRoute)
+      .use(adminRoute)
       .use(auditLogsRoute)
       .use(caseLawRoute)
       .use(chatRoute)

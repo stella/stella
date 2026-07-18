@@ -30,6 +30,7 @@ export const user = pgTable(
     preferredName: text("preferred_name"),
     wordEditShortcut: text("word_edit_shortcut"),
     twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+    isSystemAdmin: boolean("is_system_admin").default(false).notNull(),
     deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -61,6 +62,7 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   preferredName: "preferred_name",
   wordEditShortcut: "word_edit_shortcut",
   twoFactorEnabled: "two_factor_enabled",
+  isSystemAdmin: "is_system_admin",
   deletedAt: "deleted_at",
   createdAt: "created_at",
   updatedAt: "updated_at",

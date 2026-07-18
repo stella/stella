@@ -38,6 +38,7 @@ export const useClientAuthStatus = (): ClientAuthStatus => {
       email: sessionData.user.email,
       id: sessionData.session.userId,
       image: sessionData.user.image,
+      isSystemAdmin: sessionData.user.isSystemAdmin ?? false,
       name: sessionData.user.name || undefined,
       preferredName: sessionData.user.preferredName,
       timezoneId: sessionData.user.timezoneId,

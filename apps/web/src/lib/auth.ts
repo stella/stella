@@ -88,6 +88,7 @@ const authClientPlugins = [
       preferredName: { type: "string", required: false },
       timezoneId: { type: "string" },
       wordEditShortcut: { type: "string", required: false },
+      isSystemAdmin: { type: "boolean", required: false },
     },
   }),
   defineBetterAuthClientPlugin(oauthProviderClient()),

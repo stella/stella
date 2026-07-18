@@ -1,8 +1,21 @@
+/* eslint-disable no-untranslated-jsx-literal */
 import { useState } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Result } from "better-result";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Languages,
+  Map,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -32,6 +45,10 @@ import { api } from "@/lib/api";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
+import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
+import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { toAuditLogDateRange } from "@/routes/_protected.settings/-queries/audit-log-date-range";
 import {
@@ -178,6 +195,8 @@ function AuditLogsPage() {
 
   return (
     <>
+      <ConfigDiagnosticsChecklist />
+
       <div className="mb-6 flex items-center justify-between">
         <SettingsPageHeader
           description={t("settings.organization.auditLogsDescription")}
@@ -477,4 +496,192 @@ function AuditActionLabel({ action }: { action: string }) {
   }
 
   return <bdi>{action}</bdi>;
+}
+
+// ---------------------------------------------------------------------------
+// Configuration Diagnostics Checklist — self-service troubleshooting banner
+// ---------------------------------------------------------------------------
+
+type CheckItem = {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  ok: boolean;
+  okLabel: string;
+  failLabel: string;
+  isOptional?: boolean;
+  configureHref: string;
+};
+
+function StatusBadge({
+  ok,
+  okLabel,
+  failLabel,
+}: {
+  ok: boolean;
+  okLabel: string;
+  failLabel: string;
+  isOptional?: boolean;
+}) {
+  if (ok) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <CheckCircle2 className="h-3 w-3" />
+        {okLabel}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-foreground">
+      <AlertTriangle className="h-3 w-3" />
+      {failLabel}
+    </span>
+  );
+}
+
+function ConfigDiagnosticsChecklist() {
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const [isOpen, setIsOpen] = useState(false);
+
+  const aiAvailability = useQuery(
+    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+  );
+  const deepLAvailability = useQuery(
+    deepLAvailabilityOptions({ organizationId: activeOrganizationId }),
+  );
+  const settings = useQuery(organizationSettingsOptions(activeOrganizationId));
+
+  const isAiOk = aiAvailability.data?.available ?? false;
+  const isDeepLOk = deepLAvailability.data?.configured ?? false;
+  const isJurisdictionsOk =
+    (settings.data?.practiceJurisdictions ?? []).length > 0;
+
+  const totalChecks = 3;
+  const passedChecksCount =
+    (isAiOk ? 1 : 0) + (isDeepLOk ? 1 : 0) + (isJurisdictionsOk ? 1 : 0);
+  const isFullyConfigured = passedChecksCount === totalChecks;
+
+  const checks: CheckItem[] = [
+    {
+      icon: <Sparkles className="h-4 w-4" />,
+      label: "AI API Keys",
+      description: isAiOk ? "Configured & Active" : "Instance/BYOK key missing",
+      ok: isAiOk,
+      okLabel: "Ready",
+      failLabel: "Action Required",
+      configureHref: "/settings/organization/ai",
+    },
+    {
+      icon: <Languages className="h-4 w-4" />,
+      label: "DeepL Translation",
+      description: isDeepLOk ? "Configured & Active" : "Translation key missing",
+      ok: isDeepLOk,
+      okLabel: "Ready",
+      failLabel: "Optional",
+      isOptional: true,
+      configureHref: "/settings/organization/ai",
+    },
+    {
+      icon: <Map className="h-4 w-4" />,
+      label: "Jurisdiction Selected",
+      description: isJurisdictionsOk
+        ? "Jurisdictions selected"
+        : "No jurisdictions set",
+      ok: isJurisdictionsOk,
+      okLabel: "Ready",
+      failLabel: "Action Required",
+      configureHref: "/settings/organization/members",
+    },
+  ];
+
+  return (
+    <div className="relative mb-6 overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="p-5">
+        {/* Header row */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              {isFullyConfigured ? (
+                <ShieldCheck className="h-5 w-5" />
+              ) : (
+                <ShieldAlert className="h-5 w-5" />
+              )}
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">
+                {isFullyConfigured
+                  ? "All Core Integrations Verified"
+                  : "Configuration Diagnostics Checklist"}
+              </h4>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground tabular-nums">
+                  {passedChecksCount}/{totalChecks}
+                </span>{" "}
+                critical configuration elements configured.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsOpen(!isOpen)}
+            className="h-8 gap-1.5 self-start text-xs font-medium text-muted-foreground hover:text-foreground sm:self-auto"
+          >
+            {isOpen ? (
+              <>
+                Hide Details <ChevronUp className="h-3.5 w-3.5" />
+              </>
+            ) : (
+              <>
+                Show Details <ChevronDown className="h-3.5 w-3.5" />
+              </>
+            )}
+          </Button>
+        </div>
+
+        {/* Expanded check cards */}
+        {isOpen && (
+          <div className="mt-4 grid grid-cols-1 gap-3 border-t border-border pt-4 sm:grid-cols-3">
+            {checks.map((check) => (
+              <div
+                key={check.label}
+                className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-4"
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className="shrink-0 rounded-md bg-muted p-1.5 text-muted-foreground">
+                    {check.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground">
+                      {check.label}
+                    </p>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                      {check.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <StatusBadge
+                    ok={check.ok}
+                    okLabel={check.okLabel}
+                    failLabel={check.failLabel}
+                    isOptional={check.isOptional}
+                  />
+                  {!check.ok && (
+                    <Link
+                      to={check.configureHref}
+                      className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary transition-opacity hover:opacity-70"
+                    >
+                      Configure <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
