@@ -584,6 +584,34 @@ describe("InfoSoudClient", () => {
     expect(requestCount).toBe(2);
   });
 
+  test("buildCourtMap does not queue the district-court load after the courts load fails", async () => {
+    let fetchCount = 0;
+
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async () => {
+        fetchCount += 1;
+        throw new TypeError("network unreachable");
+      },
+    });
+
+    // resolveCourtCode delegates straight to buildCourtMap, so exercising
+    // buildCourtMap here also pins resolveCourtCode's callers.
+    let buildError: unknown;
+    try {
+      await client.buildCourtMap();
+    } catch (error) {
+      buildError = error;
+    }
+
+    expect(buildError).toBeInstanceOf(InfoSoudRequestError);
+    // Sequential awaits short-circuit on the first rejection: the
+    // district-court call is never issued, so only one fetch ever fires.
+    // Reintroducing Promise.all here would enqueue it regardless of the
+    // first call's outcome, bumping this to 2.
+    expect(fetchCount).toBe(1);
+  });
+
   test("serializes concurrent requests on one instance with the politeness gap", async () => {
     const delayMs = 40;
     const fetchStartedAt: number[] = [];

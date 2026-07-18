@@ -752,10 +752,14 @@ export class InfoSoudClient {
       cacheTtlMs: this.#cacheConfig.derivedCourtMapTtlMs,
       deserialize: parseCourtMap,
       load: async () => {
-        const [courts, districtCourts] = await Promise.all([
-          this.getCourts({ signal }),
-          this.getDistrictCourts({ signal }),
-        ]);
+        // Sequential, not Promise.all: this instance serializes every call
+        // through one politeness throttle, so both loads never run
+        // concurrently anyway. Promise.all would still enqueue the district
+        // load immediately, so a failure on the courts load left the
+        // district load queued and running against InfoSoud after this
+        // call had already rejected.
+        const courts = await this.getCourts({ signal });
+        const districtCourts = await this.getDistrictCourts({ signal });
 
         return buildCourtMapFromEntries([...courts, ...districtCourts]);
       },
