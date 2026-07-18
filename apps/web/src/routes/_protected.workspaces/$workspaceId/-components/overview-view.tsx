@@ -176,10 +176,15 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
   // Views — find view IDs by layout type for stat card navigation
   const { data: views } = useQuery(viewsOptions(workspaceId));
-  // Active workflow runs (non-terminal) surfaced as a matter-scoped entry
-  // point into the Workflows area. The list query self-stops polling once
-  // everything is terminal.
-  const { data: flowRunsData } = useQuery(flowRunsOptions({ workspaceId }));
+  // The Workflows tab owns the runs fetch; this matter-overview entry point only
+  // reads that cache (`enabled: false`) so the general matter shell never fires
+  // GET /flows/runs for a feature most matters never open. The count reflects
+  // active runs once the Workflows surface has populated the cache, and stays 0
+  // (never a loading variant) until then.
+  const { data: flowRunsData } = useQuery({
+    ...flowRunsOptions({ workspaceId }),
+    enabled: false,
+  });
   const activeFlowRunCount =
     flowRunsData && "items" in flowRunsData
       ? flowRunsData.items.filter((run) => !isTerminalFlowRunStatus(run.status))
