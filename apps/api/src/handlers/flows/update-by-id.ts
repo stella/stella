@@ -15,7 +15,7 @@ import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trig
 
 const config = {
   permissions: { flow: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowDefinitionParamsSchema,
   body: flowDefinitionBodySchema,
 } satisfies HandlerConfig;

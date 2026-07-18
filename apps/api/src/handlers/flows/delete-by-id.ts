@@ -11,7 +11,7 @@ import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trig
 
 const config = {
   permissions: { flow: ["delete"] },
-  mcp: { type: "pending" },
+  mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowDefinitionParamsSchema,
 } satisfies HandlerConfig;
 

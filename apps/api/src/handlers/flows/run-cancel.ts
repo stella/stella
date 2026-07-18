@@ -8,7 +8,7 @@ import { cancelFlowRun } from "@/api/lib/flows/flow-executor";
 
 const config = {
   permissions: { flow: ["run"] },
-  mcp: { type: "pending" },
+  mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowRunParamsSchema,
 } satisfies HandlerConfig;
 

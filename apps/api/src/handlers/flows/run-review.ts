@@ -11,7 +11,7 @@ import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 
 const config = {
   permissions: { flow: ["review"] },
-  mcp: { type: "pending" },
+  mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowRunParamsSchema,
   body: reviewFlowRunBodySchema,
 } satisfies HandlerConfig;

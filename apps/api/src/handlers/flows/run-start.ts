@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { SafeDbError } from "@/api/db";
+import type { SafeDbError } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import {
   flowRunsWorkspaceParamsSchema,
@@ -18,7 +18,7 @@ import {
 
 const config = {
   permissions: { flow: ["run"] },
-  mcp: { type: "pending" },
+  mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowRunsWorkspaceParamsSchema,
   body: startFlowRunBodySchema,
 } satisfies HandlerConfig;

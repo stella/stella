@@ -14,7 +14,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { flow: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "capability", reason: "workflow_orchestration" },
   body: flowDefinitionBodySchema,
 } satisfies HandlerConfig;
 

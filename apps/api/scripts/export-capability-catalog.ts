@@ -163,6 +163,10 @@ const DOMAIN_SCOPE: Record<string, string> = {
   entities: "stella:matters_write",
   expenses: "stella:billing_write",
   fields: "stella:matters_write",
+  // Workflow (flow) definition CRUD plus run start/cancel/review: org-scoped
+  // automations that read and write workspace matter content, so they reuse the
+  // workspace write bucket rather than a dedicated read scope.
+  flows: "stella:matters_write",
   // Now carries invoice create/delete/transition capabilities, not just the
   // read tool, so it reuses the billing write bucket.
   invoices: "stella:billing_write",
@@ -312,6 +316,12 @@ const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
  *   pure count read used before running a workflow.
  */
 const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
+  // `flow:["run"]` / `flow:["review"]` gate run lifecycle mutations (start a
+  // run, cancel an in-progress run, submit a review-gate decision). All are
+  // non-destructive writes: they change run state, they do not delete data.
+  "flows.run-start": { access: "write", destructive: false },
+  "flows.run-cancel": { access: "write", destructive: false },
+  "flows.run-review": { access: "write", destructive: false },
   "playbooks.run": { access: "write", destructive: false },
   "playbooks.auto-run": { access: "write", destructive: false },
   "playbooks.approve": { access: "write", destructive: false },

@@ -5,7 +5,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowRunParamsSchema,
 } satisfies HandlerConfig;
 
