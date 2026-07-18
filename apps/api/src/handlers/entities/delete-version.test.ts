@@ -368,4 +368,77 @@ describe("delete-version chain-of-custody guard", () => {
     expect(readVersionTarget).toContain("innerJoin(entityVersions");
     expect(readVersionTarget).toContain("isNull(entityVersions.deletedAt)");
   });
+
+  test("restore-version re-checks source liveness under the entity lock", () => {
+    // Write-side tombstone race. Restore clones a source version into a new
+    // live version; if a concurrent delete tombstones the source mid-restore,
+    // the clone would resurrect withdrawn content. The mutation transaction
+    // must lock the entity row (serializing with delete-version) and re-verify
+    // the source is still live before cloning.
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "restore-version.ts"),
+      "utf-8",
+    );
+
+    const txStart = source.indexOf("safeDb(async (tx) =>");
+    expect(txStart).toBeGreaterThan(-1);
+    // The lock and the liveness recheck both live inside the mutation tx.
+    expect(source.indexOf('.for("update")')).toBeGreaterThan(txStart);
+    expect(source.indexOf("isNull(entityVersions.deletedAt)")).toBeGreaterThan(
+      txStart,
+    );
+  });
+
+  test("every entityVersions UPDATE gates on deletedAt or is a reviewed write", () => {
+    // Write-side variant of the tombstone class: an UPDATE keyed by a version id
+    // whose WHERE lacks a deletedAt predicate can land on a version tombstoned
+    // between a pre-read and the write (label/description annotations were this
+    // shape). Every `.update(entityVersions)` must carry a deletedAt predicate,
+    // or set deletedAt (the tombstone writer itself), or be a reviewed
+    // exception. The Class-1 sweep covered content READS; this covers writes.
+    const UPDATE_WINDOW = 15;
+    const REVIEWED_EXCEPTIONS: Record<
+      string,
+      { anchor: string; reason: string }
+    > = {
+      "handlers/entities/compute-version-diff.ts": {
+        anchor: "diffWordsAdded",
+        reason:
+          "Derived diff-stats cache write on a freshly-finalized version; landing on a concurrently-tombstoned row is harmless because tombstoned versions are never read.",
+      },
+    };
+
+    const offenders: string[] = [];
+    const matchedExceptions = new Set<string>();
+    for (const file of collectSourceFiles(API_SRC)) {
+      const lines = readFileSync(file, "utf-8").split("\n");
+      const rel = nodePath
+        .relative(API_SRC, file)
+        .split(nodePath.sep)
+        .join("/");
+      for (const [index, line] of lines.entries()) {
+        if (!line.includes(".update(entityVersions)")) {
+          continue;
+        }
+        const window = lines.slice(index, index + UPDATE_WINDOW + 1).join("\n");
+        // `deletedAt` in the window covers both a WHERE predicate (gated write)
+        // and the tombstone writer's own `set({ deletedAt: ... })`.
+        if (window.includes("deletedAt")) {
+          continue;
+        }
+        const exception = REVIEWED_EXCEPTIONS[rel];
+        if (exception && window.includes(exception.anchor)) {
+          matchedExceptions.add(rel);
+          continue;
+        }
+        offenders.push(`${rel}:${index + 1}`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+    const stale = Object.keys(REVIEWED_EXCEPTIONS).filter(
+      (rel) => !matchedExceptions.has(rel),
+    );
+    expect(stale).toEqual([]);
+  });
 });

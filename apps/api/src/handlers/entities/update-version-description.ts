@@ -66,6 +66,11 @@ export const updateVersionDescriptionHandler = async function* ({
         return [];
       }
 
+      // Gate the write on liveness too, not just the pre-read: a delete-version
+      // tombstoning this version between the SELECT and this UPDATE would
+      // otherwise still let the annotation land on a withdrawn version. With the
+      // predicate in the WHERE, the update affects zero rows in that race and
+      // the handler returns 404.
       const updated = await tx
         .update(entityVersions)
         .set({ description: body.description })
@@ -74,6 +79,7 @@ export const updateVersionDescriptionHandler = async function* ({
             eq(entityVersions.id, params.versionId),
             eq(entityVersions.entityId, params.entityId),
             eq(entityVersions.workspaceId, workspaceId),
+            isNull(entityVersions.deletedAt),
           ),
         )
         .returning({ id: entityVersions.id });
