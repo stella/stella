@@ -20,7 +20,11 @@ import { env } from "@/env";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
+import {
+  authClient,
+  HTTP_TOO_MANY_REQUESTS,
+  isTwoFactorRedirect,
+} from "@/lib/auth";
 import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -358,7 +362,7 @@ function PasswordSignInForm({
       if (!parseResult.success) {
         return;
       }
-      const { error } = await authClient.signIn.email({
+      const { data, error } = await authClient.signIn.email({
         email: parseResult.output.email,
         password: parseResult.output.password,
         callbackURL: getOrganizationCallbackUrl(redirectTo),
@@ -375,6 +379,17 @@ function PasswordSignInForm({
             type: "error",
           });
         }
+        return;
+      }
+
+      // An enrolled user's password is correct but the session is still
+      // pending a second factor; send them to the same challenge page the
+      // email-OTP flow uses instead of treating this as a completed sign-in.
+      if (isTwoFactorRedirect(data)) {
+        await navigate({
+          to: "/auth/two-factor",
+          search: { redirectTo },
+        });
         return;
       }
 
