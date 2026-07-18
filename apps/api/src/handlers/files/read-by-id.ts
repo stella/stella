@@ -377,18 +377,20 @@ export const printPdfHandler = async ({
     return status(400);
   }
 
-  // Record the access before any document bytes leave the server: this
-  // endpoint streams full content, so it needs the same DOWNLOAD audit row
-  // the presigned-download path emits (GDPR Art. 30 / SOC 2 access record).
-  await scopedDb(
-    async (tx) =>
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.DOWNLOAD,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: row.entityId,
-        metadata: { format: "pdf" },
-      }),
-  );
+  // Record the DOWNLOAD access only once the response bytes are in hand: this
+  // endpoint streams full content, so it needs the same audit row the
+  // presigned-download path emits (GDPR Art. 30 / SOC 2 access record), but a
+  // failed S3 fetch or conversion must not leave a spurious download record.
+  const recordDownload = async () =>
+    await scopedDb(
+      async (tx) =>
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DOWNLOAD,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: row.entityId,
+          metadata: { format: "pdf" },
+        }),
+    );
 
   if (content.mimeType === PDF_MIME_TYPE || content.pdfFileId) {
     const fileKey = createFileKey({
@@ -403,6 +405,7 @@ export const printPdfHandler = async ({
       return status(502);
     }
 
+    await recordDownload();
     return streamedPdfResponse(response, outputName);
   }
 
@@ -437,6 +440,7 @@ export const printPdfHandler = async ({
     return status(502);
   }
 
+  await recordDownload();
   return pdfResponse(conversionResult.value.buffer, outputName);
 };
 
@@ -475,18 +479,6 @@ export const stampedDownloadHandler = async ({
     return status(400);
   }
 
-  // Record the access before the stamped document leaves the server, matching
-  // the presigned-download path's DOWNLOAD audit row.
-  await scopedDb(
-    async (tx) =>
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.DOWNLOAD,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: row.entityId,
-        metadata: { format: "docx", stamped: true },
-      }),
-  );
-
   const fileKey = createFileKey({
     organizationId,
     workspaceId,
@@ -511,6 +503,19 @@ export const stampedDownloadHandler = async ({
     row.versionStamp,
     row.verificationCode,
     BASE_URL,
+  );
+
+  // Record the access only once the stamped bytes exist, matching the
+  // presigned-download path's DOWNLOAD audit row. A failed S3 fetch or stamp
+  // injection must not leave a spurious download record.
+  await scopedDb(
+    async (tx) =>
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DOWNLOAD,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: row.entityId,
+        metadata: { format: "docx", stamped: true },
+      }),
   );
 
   return new Response(stamped, {
