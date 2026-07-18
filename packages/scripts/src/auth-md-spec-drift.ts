@@ -34,7 +34,22 @@ const RAW_BASE = `https://raw.githubusercontent.com/${REPO}`;
 const COMMITS_API = `https://api.github.com/repos/${REPO}/commits/main`;
 const FETCH_TIMEOUT_MS = 15_000;
 
-const LOCKFILE_URL = new URL("./auth-md-spec.lock.json", import.meta.url);
+const LOCKFILE_URL = new URL("auth-md-spec.lock.json", import.meta.url);
+
+/**
+ * Exact-origin check for the GitHub REST API. The auth token must only ever
+ * be attached to a real `api.github.com` request, so match the parsed URL's
+ * origin rather than a substring/prefix: a `startsWith` check would also pass
+ * a look-alike host such as `https://api.github.com.evil.test/…` and leak the
+ * token to it.
+ */
+const isGitHubApiUrl = (rawUrl: string): boolean => {
+  try {
+    return new URL(rawUrl).origin === "https://api.github.com";
+  } catch {
+    return false;
+  }
+};
 
 /**
  * The curated spec surface we track. The protocol ships no machine
@@ -87,7 +102,7 @@ const fetchText = async (url: string): Promise<FetchResult> => {
   try {
     const headers: Record<string, string> = {};
     const token = process.env["GITHUB_TOKEN"];
-    if (token && url.startsWith("https://api.github.com")) {
+    if (token && isGitHubApiUrl(url)) {
       headers["authorization"] = `Bearer ${token}`;
     }
     const response = await fetch(url, {
@@ -103,9 +118,29 @@ const fetchText = async (url: string): Promise<FetchResult> => {
   }
 };
 
+const CHANGELOG_VERSION_RE = /^##\s+v(\d+\.\d+\.\d+)/mu;
+
 /** First `## vX.Y.Z (...)` heading in the upstream changelog. */
 const parseChangelogVersion = (changelog: string): string | null =>
-  changelog.match(/^##\s+v(\d+\.\d+\.\d+)/mu)?.[1] ?? null;
+  CHANGELOG_VERSION_RE.exec(changelog)?.[1] ?? null;
+
+/** `sha` field of a GitHub commit API response, or "unknown" when absent. */
+const parseCommitSha = (json: string): string => {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "sha" in parsed &&
+      typeof parsed.sha === "string"
+    ) {
+      return parsed.sha;
+    }
+  } catch {
+    // Malformed JSON falls through to the "unknown" provenance marker.
+  }
+  return "unknown";
+};
 
 const rawUrl = (path: string): string => `${RAW_BASE}/main/${path}`;
 
@@ -114,6 +149,7 @@ const readLockfile = async (): Promise<Lockfile | null> => {
   if (!(await file.exists())) {
     return null;
   }
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- repo-owned lockfile JSON, written only by this script's --update path
   return (await file.json()) as Lockfile;
 };
 
@@ -121,13 +157,19 @@ const update = async (): Promise<void> => {
   console.log(`Re-pinning auth.md spec from ${REPO}@main…`);
 
   const commit = await fetchText(COMMITS_API);
-  const commitSha = commit.ok
-    ? (JSON.parse(commit.text)["sha"] as string)
-    : "unknown";
+  const commitSha = commit.ok ? parseCommitSha(commit.text) : "unknown";
+
+  // Fetch all pinned files concurrently, then process in declared order so the
+  // log stays deterministic (avoids a serial await-in-loop round-trip chain).
+  const fetched = await Promise.all(
+    PINNED_FILES.map(async (path) => ({
+      path,
+      result: await fetchText(rawUrl(path)),
+    })),
+  );
 
   const files: Record<string, string> = {};
-  for (const path of PINNED_FILES) {
-    const result = await fetchText(rawUrl(path));
+  for (const { path, result } of fetched) {
     if (!result.ok) {
       console.error(`  ✗ ${path}: ${result.reason}`);
       process.exit(1);
@@ -138,9 +180,7 @@ const update = async (): Promise<void> => {
 
   const changelog = await fetchText(rawUrl("CHANGELOG.md"));
   const version =
-    changelog.ok && parseChangelogVersion(changelog.text) !== null
-      ? (parseChangelogVersion(changelog.text) as string)
-      : "unknown";
+    (changelog.ok ? parseChangelogVersion(changelog.text) : null) ?? "unknown";
 
   const lockfile: Lockfile = {
     version,
@@ -187,8 +227,13 @@ const check = async (): Promise<void> => {
     });
   }
 
-  for (const path of PINNED_FILES) {
-    const result = await fetchText(rawUrl(path));
+  const fetched = await Promise.all(
+    PINNED_FILES.map(async (path) => ({
+      path,
+      result: await fetchText(rawUrl(path)),
+    })),
+  );
+  for (const { path, result } of fetched) {
     if (!result.ok) {
       console.warn(`  ⚠ ${path}: unreachable (${result.reason})`);
       unreachable += 1;
@@ -234,7 +279,6 @@ const check = async (): Promise<void> => {
   const actionable = drifts.filter(({ key, drift }) => {
     // ACKNOWLEDGED is intentionally empty by default — it's the set
     // maintainers use to park a reviewed-but-unreconciled change.
-    // eslint-disable-next-line sonarjs/no-empty-collection -- maintainer-populated extension point, empty by design
     if (ACKNOWLEDGED.has(key)) {
       console.log(`  · acknowledged ${drift.kind} (${key}): ${drift.detail}`);
       return false;
