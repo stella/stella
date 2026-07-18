@@ -35,7 +35,7 @@ const collectSourceFiles = (dir: string, acc: string[] = []): string[] => {
 describe("delete-version chain-of-custody guard", () => {
   test("no production code hard-deletes an entity version", () => {
     const offenders = collectSourceFiles(API_SRC).filter((file) =>
-      readFileSync(file, "utf8").includes("delete(entityVersions)"),
+      readFileSync(file, "utf-8").includes("delete(entityVersions)"),
     );
 
     expect(offenders).toEqual([]);
@@ -44,7 +44,7 @@ describe("delete-version chain-of-custody guard", () => {
   test("delete-version tombstones the row instead of deleting it", () => {
     const source = readFileSync(
       nodePath.join(import.meta.dir, "delete-version.ts"),
-      "utf8",
+      "utf-8",
     );
 
     expect(source).not.toContain("delete(entityVersions)");
@@ -77,7 +77,7 @@ describe("delete-version chain-of-custody guard", () => {
 
     const missing = guardedReadPaths.filter(
       (rel) =>
-        !readFileSync(nodePath.join(API_SRC, rel), "utf8").includes(
+        !readFileSync(nodePath.join(API_SRC, rel), "utf-8").includes(
           "deletedAt",
         ),
     );

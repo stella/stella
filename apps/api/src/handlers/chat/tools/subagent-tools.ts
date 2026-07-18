@@ -2,11 +2,72 @@ import type {
   ChatTool,
   ChatToolMap,
 } from "@/api/handlers/chat/tools/chat-tool-types";
-import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
+import {
+  createSubagentProposalBuffer,
+  SPAWN_SUBAGENTS_TOOL_NAME,
+  type SubagentProposalBuffer,
+  type SubagentProposalSink,
+  type SubagentWriteProposal,
+} from "@/api/handlers/chat/tools/subagent-tool-shared";
 import {
   copyChatToolPolicy,
   getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
+
+// Re-exported for callers that only need the proposal-buffer primitives
+// (`spawn-subagents-tool.ts`, tests); the canonical definitions live in
+// `subagent-tool-shared.ts` so this module and `spawn-subagents-tool.ts`
+// don't have to import each other.
+export {
+  createSubagentProposalBuffer,
+  type SubagentProposalBuffer,
+  type SubagentProposalSink,
+  type SubagentWriteProposal,
+};
+
+const hasServerExecute = (tool: ChatTool): boolean =>
+  typeof tool.execute === "function";
+
+const cloneWithoutApprovalGate = (tool: ChatTool): ChatTool => {
+  const clone = { ...tool };
+  delete clone.needsApproval;
+  // Spreading gives the clone a new identity the policy WeakMap wouldn't
+  // recognize; preserve the original policy so anonymization still treats
+  // public tools as public (no input de-anon to an external provider).
+  copyChatToolPolicy(tool, clone);
+  return clone;
+};
+
+const buildQueuedResultMessage = (toolName: string): string =>
+  `Queued "${toolName}" for user approval. It was NOT executed and had no ` +
+  `effect. The proposed action is returned to the top-level assistant, which ` +
+  `will re-issue it so the user can approve it. Do not retry it and do not ` +
+  `assume it completed.`;
+
+/**
+ * Wraps an approval-requiring tool as a non-executing proposal: same
+ * name/description/inputSchema, but `execute` records the proposed call and
+ * returns a synthetic acknowledgement instead of running the side effect.
+ * The `outputSchema` is dropped so TanStack does not validate the synthetic
+ * acknowledgement against the real write's output contract (it validates
+ * server results against `outputSchema` when it is a Standard Schema).
+ */
+const buildProposalWrapper = (
+  tool: ChatTool,
+  proposalSink: SubagentProposalSink,
+): ChatTool => {
+  const wrapper = { ...tool };
+  delete wrapper.needsApproval;
+  delete wrapper.outputSchema;
+  wrapper.execute = (args) => {
+    proposalSink.record({ toolName: tool.name, args });
+    return buildQueuedResultMessage(tool.name);
+  };
+  // Keep the original policy so anonymization/consent classification stays
+  // consistent, even though the wrapper itself performs no third-party call.
+  copyChatToolPolicy(tool, wrapper);
+  return wrapper;
+};
 
 /**
  * Projects the full chat tool map down to the subset a subagent's
@@ -49,81 +110,6 @@ import {
  * tool" structurally impossible: an approval-requiring tool can only ever
  * enter the projection as a non-executing wrapper.
  */
-export type SubagentWriteProposal = {
-  toolName: string;
-  args: unknown;
-};
-
-export type SubagentProposalSink = {
-  record: (proposal: SubagentWriteProposal) => void;
-};
-
-export type SubagentProposalBuffer = {
-  sink: SubagentProposalSink;
-  list: () => readonly SubagentWriteProposal[];
-};
-
-/**
- * A per-subagent-run buffer of writes the subagent proposed but did not
- * execute. Created fresh for each `runSubagent` call so a subagent's
- * result carries only its own proposed writes (see `spawn-subagents-tool.ts`).
- */
-export const createSubagentProposalBuffer = (): SubagentProposalBuffer => {
-  const proposals: SubagentWriteProposal[] = [];
-  return {
-    sink: {
-      record: (proposal) => {
-        proposals.push(proposal);
-      },
-    },
-    list: () => proposals,
-  };
-};
-
-const hasServerExecute = (tool: ChatTool): boolean =>
-  typeof tool.execute === "function";
-
-const cloneWithoutApprovalGate = (tool: ChatTool): ChatTool => {
-  const clone = { ...tool };
-  delete clone.needsApproval;
-  // Spreading gives the clone a new identity the policy WeakMap wouldn't
-  // recognize; preserve the original policy so anonymization still treats
-  // public tools as public (no input de-anon to an external provider).
-  copyChatToolPolicy(tool, clone);
-  return clone;
-};
-
-const buildQueuedResultMessage = (toolName: string): string =>
-  `Queued "${toolName}" for user approval. It was NOT executed and had no ` +
-  `effect. The proposed action is returned to the top-level assistant, which ` +
-  `will re-issue it so the user can approve it. Do not retry it and do not ` +
-  `assume it completed.`;
-
-/**
- * Wraps an approval-requiring tool as a non-executing proposal: same
- * name/description/inputSchema, but `execute` records the proposed call and
- * returns a synthetic acknowledgement instead of running the side effect.
- * The `outputSchema` is dropped so TanStack does not validate the synthetic
- * acknowledgement against the real write's output contract (it validates
- * server results against `outputSchema` when it is a Standard Schema).
- */
-const buildProposalWrapper = (
-  tool: ChatTool,
-  proposalSink: SubagentProposalSink,
-): ChatTool => {
-  const wrapper = { ...tool };
-  delete wrapper.needsApproval;
-  delete wrapper.outputSchema;
-  wrapper.execute = async (args) => {
-    proposalSink.record({ toolName: tool.name, args });
-    return buildQueuedResultMessage(tool.name);
-  };
-  // Keep the original policy so anonymization/consent classification stays
-  // consistent, even though the wrapper itself performs no third-party call.
-  copyChatToolPolicy(tool, wrapper);
-  return wrapper;
-};
-
 export const projectToolMapForSubagent = (
   tools: ChatToolMap,
   proposalSink: SubagentProposalSink,

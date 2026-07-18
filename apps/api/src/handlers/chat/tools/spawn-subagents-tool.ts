@@ -9,9 +9,10 @@ import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-bou
 import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import {
   createSubagentProposalBuffer,
+  SPAWN_SUBAGENTS_TOOL_NAME,
   type SubagentProposalSink,
   type SubagentWriteProposal,
-} from "@/api/handlers/chat/tools/subagent-tools";
+} from "@/api/handlers/chat/tools/subagent-tool-shared";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -25,7 +26,10 @@ import {
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 
-export const SPAWN_SUBAGENTS_TOOL_NAME = "spawn_subagents";
+// Re-exported for callers that only need the tool name (`send-message.ts`,
+// `chat-tools.ts`); the canonical definition lives in `subagent-tool-shared.ts`
+// so this module and `subagent-tools.ts` don't have to import each other.
+export { SPAWN_SUBAGENTS_TOOL_NAME };
 
 /**
  * Nested delegation is one level deep: a top-level turn (depth 0) may
