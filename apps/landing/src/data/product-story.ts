@@ -108,7 +108,7 @@ export const productStoryThumbnails = {
   cli: {
     src: "/media/products/story-workspace.png",
     darkSrc: "/media/products/story-workspace-dark.png",
-    alt: "Stella workspace connected to the CLI and MCP",
+    alt: "stella workspace connected to the CLI and MCP",
   },
 } as const satisfies Record<
   ProductStorySceneId,

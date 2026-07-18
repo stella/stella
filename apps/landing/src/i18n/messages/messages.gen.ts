@@ -39,7 +39,7 @@ type Messages = {
   "footer": {
     "agent": "AI agent";
     "anonymization": "Anonymization";
-    "clarity": "Clarity for every case.";
+    "clarity": "Clarity for every matter.";
     "connect": "Connect";
     "contact": "Contact us";
     "documentation": "Documentation";

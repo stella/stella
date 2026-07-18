@@ -7,7 +7,7 @@ export const anonymization: Product = {
   eyebrow: "Anonymization",
   title: "Prepare material for AI without exposing identifying details.",
   summary:
-    "WASM-backed anonymization for legal AI workflows. Prepare material without exposing names, entities, or identifying details, directly from chat and document review.",
+    "Rust-powered anonymization for legal AI workflows, compiled to WebAssembly. Prepare material without exposing names, entities, or identifying details, directly from chat and document review.",
   hero: {
     type: "image",
     src: "/media/products/anonymization.png",
@@ -18,32 +18,24 @@ export const anonymization: Product = {
   quickAnswer: {
     question: "What is anonymization in stella?",
     answer:
-      "WASM-backed tooling that prepares material for AI workflows without exposing names, entities, or identifying details. It is integrated directly into chat and document review.",
+      "A Rust anonymization engine, compiled to WebAssembly, that prepares material for AI workflows without exposing names, entities, or identifying details. It is integrated directly into chat and document review.",
   },
   capabilities: [
     {
-      title: "Built for legal AI workflows",
-      body: "Helps prepare material before it reaches an AI step.",
-    },
-    {
       title: "Keeps identifying details out",
-      body: "Removes names, entities, and identifying details before material reaches AI.",
+      body: "Removes names, entities, and identifying details before material reaches an AI step.",
     },
     {
-      title: "WASM-backed",
-      body: "Runs on WASM-backed anonymization tooling.",
+      title: "Works in chat and review",
+      body: "Runs directly in the chat composer and in document review, not in a separate tool.",
     },
     {
-      title: "Works in chat",
-      body: "Integrated through chat, so it fits the flow you already use.",
-    },
-    {
-      title: "Works in review",
-      body: "Integrated through document review alongside your files.",
+      title: "A Rust engine in the browser",
+      body: "Built on stella's own anonymization engine, written in Rust and compiled to WebAssembly.",
     },
     {
       title: "Reviewable output",
-      body: "Shows the redacted document in context before it moves into the next workflow step.",
+      body: "Shows the redacted document in context, so you confirm what leaves the matter.",
     },
   ],
   sections: [
@@ -60,11 +52,11 @@ export const anonymization: Product = {
       },
     },
     {
-      heading: "Integrated where you already work",
+      heading: "Part of the workspace, not a separate tool",
       bullets: [
-        "Reaches you through chat and document review",
-        "Fits the existing workspace rather than a separate tool",
-        "Built on WASM-backed anonymization tooling",
+        "Available from chat and document review",
+        "No copy-pasting into an external redaction tool",
+        "Built on stella's own Rust anonymization engine, compiled to WebAssembly",
       ],
       media: {
         type: "image",
@@ -79,7 +71,7 @@ export const anonymization: Product = {
     {
       question: "Is anonymization available now?",
       answer:
-        "Yes. The WASM-backed anonymization pipeline is available through chat and document review.",
+        "Yes. Anonymization is available today, integrated in chat and document review.",
     },
     {
       question: "What does it help with?",
@@ -128,7 +120,7 @@ export const anonymization: Product = {
     },
   ],
   cta: {
-    heading: "Prepare sensitive material before it reaches AI.",
+    heading: "Keep identifying details out of your AI workflows.",
     href: "https://my.stll.app",
     label: "Start free",
   },

@@ -36,7 +36,7 @@ export const editor: Product = {
   ],
   sections: [
     {
-      heading: "A document editor, not a marketing imitation",
+      heading: "The .docx stays a .docx",
       bullets: [
         "Open a .docx directly from a matter",
         "Edit the document with familiar page and formatting controls",

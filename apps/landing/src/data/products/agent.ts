@@ -73,7 +73,7 @@ export const agent: Product = {
     {
       heading: "Extend it with skills and connectors",
       bullets: [
-        "Skills are reusable prompts and tool definitions you can reuse across matters",
+        "Skills are prompts and tool definitions you can reuse across matters",
         "External connectors are MCP-compatible, so the agent reaches more tools",
         "Add capabilities without changing how the chat works",
       ],
@@ -135,7 +135,7 @@ export const agent: Product = {
     },
   ],
   cta: {
-    heading: "Put the agent to work on your next matter.",
+    heading: "Hand the agent a real matter.",
     href: "https://my.stll.app",
     label: "Start free",
   },

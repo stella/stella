@@ -9,7 +9,7 @@ export const templates: Product = {
   eyebrow: "Templates",
   title: "Build reusable templates, and let AI fill them in.",
   summary:
-    "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. Produce a document into the matter and keep editing it. Repeat work starts from a known-good base instead of a blank page.",
+    "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. Produce a document into the matter and keep editing it.",
   hero: {
     type: "image",
     src: "/media/products/templates.png",
@@ -25,7 +25,7 @@ export const templates: Product = {
   capabilities: [
     {
       title: "Reusable templates",
-      body: "Start repeat documents from a template instead of a blank page or a copied file.",
+      body: "Start repeat documents from a known-good base instead of a copied file.",
     },
     {
       title: "Fields and placeholders",
@@ -132,7 +132,7 @@ export const templates: Product = {
     { type: "capability", id: "playbooks.run" },
   ],
   cta: {
-    heading: "Assemble your next document in stella.",
+    heading: "Start from a template, not a blank page.",
     href: "https://my.stll.app",
     label: "Start free",
   },
