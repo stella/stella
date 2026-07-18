@@ -136,6 +136,7 @@ type IdJagOverrides = {
   jti?: string;
   authTime?: number;
   emailVerified?: boolean;
+  phoneVerified?: boolean;
   iss?: string;
   aud?: string;
   amr?: string[];
@@ -147,6 +148,9 @@ const mintIdJag = async (overrides: IdJagOverrides = {}): Promise<string> => {
     client_id: CLIENT_ID,
     email: overrides.email ?? `idjag-${Bun.randomUUIDv7()}@external.test`,
     email_verified: overrides.emailVerified ?? true,
+    ...(overrides.phoneVerified === undefined
+      ? {}
+      : { phone_number_verified: overrides.phoneVerified }),
     auth_time: overrides.authTime ?? now - 30,
     ...(overrides.amr ? { amr: overrides.amr } : {}),
   })
@@ -348,6 +352,21 @@ describe("agent-auth ID-JAG replay + freshness", () => {
     enableFeature();
     await trustIssuer();
     const assertion = await mintIdJag({ emailVerified: false });
+    const res = await postIdentity(identityAssertionBody(assertion));
+    expect(res.status).toBe(401);
+    expect((await readJson(res))["error"]).toBe("invalid_assertion");
+  });
+
+  test("a verified phone does not vouch for an unverified email", async () => {
+    enableFeature();
+    await trustIssuer();
+    // We resolve/provision by the email claim, so a verified phone alongside
+    // an unverified email must NOT pass — otherwise an issuer could bind an
+    // email it never verified.
+    const assertion = await mintIdJag({
+      emailVerified: false,
+      phoneVerified: true,
+    });
     const res = await postIdentity(identityAssertionBody(assertion));
     expect(res.status).toBe(401);
     expect((await readJson(res))["error"]).toBe("invalid_assertion");

@@ -43,8 +43,9 @@ export class IdJagValidationError {
 
 /**
  * The trusted, verified facts an ID-JAG yields once every check passes.
- * `email` is always verified (one of `email_verified` /
- * `phone_number_verified` was true) before this is produced.
+ * `email` is always the account key AND carries `email_verified === true`
+ * before this is produced (a verified phone alone does not vouch for the
+ * email we match/provision on).
  */
 export type ValidatedIdJag = {
   iss: string;
@@ -180,9 +181,12 @@ const requiredAmrSatisfied = (
   );
 };
 
+// We always resolve/auto-provision by the `email` claim, so that specific
+// claim must be verified. A `phone_number_verified` that leaves `email_verified`
+// false or absent would otherwise let an issuer bind an unverified email — an
+// account-takeover primitive. The account key drives the verification check.
 const isVerifiedIdentity = (payload: JWTPayload): boolean =>
-  payload["email_verified"] === true ||
-  payload["phone_number_verified"] === true;
+  payload["email_verified"] === true;
 
 /**
  * Validate an inbound ID-JAG end to end: trusted-issuer allow-list, JWKS
