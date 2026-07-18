@@ -169,6 +169,63 @@ describe("parseExtract (ESET)", () => {
   });
 });
 
+describe("parseExtract live-entity temporal fallback", () => {
+  // A live entity whose temporal rows carry no `current: true` flag must
+  // resolve name, legal form / address / equity, and acting clause from
+  // the SAME array end. The upstream orders each array newest-first, so
+  // every picker must fall back to index 0. Appending an older (stale)
+  // row at the end and clearing every `current` flag proves all pickers
+  // read the newest (index-0) record rather than the trailing one.
+  test("all pickers fall back to the newest (index 0) record", async () => {
+    const raw = await readFixture<OrsrRawExtractResponse>("extract-eset.json");
+    const body = raw.legalPerson?.corporateBody;
+    if (!body) {
+      throw new Error("Expected corporate body in ORSR fixture");
+    }
+
+    const currentName = body.corporateBodyFullName?.at(0)?.value;
+    const currentClause = body.authorizationToExecute?.at(0)?.value;
+    const currentLegalFormName =
+      body.legalForm?.at(0)?.item?.codelistItem?.itemName;
+    expect(currentName).toBeTruthy();
+    expect(currentClause).toBeTruthy();
+    expect(currentLegalFormName).toBeTruthy();
+
+    // Keep the newest record at index 0, drop every `current` flag in
+    // place, then append an older row at the end so only the array-end
+    // convention decides which row each picker returns.
+    for (const row of body.corporateBodyFullName ?? []) {
+      row.current = false;
+    }
+    for (const row of body.authorizationToExecute ?? []) {
+      row.current = false;
+    }
+    for (const row of body.legalForm ?? []) {
+      row.current = false;
+    }
+    body.corporateBodyFullName?.push({
+      value: "STALE NAME s.r.o.",
+      current: false,
+    });
+    body.authorizationToExecute?.push({
+      value: "Stale acting clause",
+      current: false,
+    });
+    body.legalForm?.push({
+      item: { codelistItem: { itemName: "Stale legal form" } },
+      current: false,
+    });
+
+    const company = parseExtract(raw);
+    expect(company).not.toBeNull();
+    // Name (pickPrimaryName), legal form (pickActiveRecord), and acting
+    // clause (pickActingClause) all read index 0, not the trailing row.
+    expect(company?.name).toBe(currentName);
+    expect(company?.legalForm).toBe(currentLegalFormName);
+    expect(company?.actingClause).toBe(currentClause);
+  });
+});
+
 describe("parseExtract status branches", () => {
   test("surfaces termination as terminated status", async () => {
     const raw = await readFixture<OrsrRawExtractResponse>("extract-eset.json");

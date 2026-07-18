@@ -92,6 +92,17 @@ const pickCurrent = <T extends OrsrRawTemporal>(
   return records.find((record) => record.current === true) ?? null;
 };
 
+// Single source of truth for "which array end is the latest record".
+// Every temporal array the upstream returns is ordered newest-first, so
+// index 0 is the most recent entry (the same convention the search client
+// uses when it sorts hits descending and takes `.at(0)`). Every temporal
+// picker funnels its fallback through here so name / legal form / address /
+// equity / acting clause can never resolve to opposite ends of the same
+// array.
+const pickLatestRaw = <T extends OrsrRawTemporal>(
+  raws: T[] | undefined,
+): T | null => raws?.at(0) ?? null;
+
 const unwrapCodelist = (
   wrapped: OrsrRawWrappedCodelist | undefined,
 ): OrsrRawCodelistItem | null => {
@@ -247,48 +258,28 @@ const normalizeName = (raw: string | null | undefined): string | null => {
   return collapsed.replaceAll(/^"|"$/gu, "");
 };
 
-const pickPrimaryName = (
-  raws: OrsrRawValueTemporal[] | undefined,
-  terminated: boolean,
-): string | null => {
-  if (!raws || raws.length === 0) {
-    return null;
-  }
-  // Terminated entities have no `current` record; use the latest
-  // historical name (the entry the registry kept on file).
-  const picked = terminated ? raws.at(0) : (pickCurrent(raws) ?? raws.at(0));
-  return normalizeName(picked?.value ?? null);
-};
-
-// Pick the in-force record for an entity. Terminated entities have
-// every history entry flipped to `current: false`, so the canonical
-// "current" pick falls through to the latest historical version
-// instead.
+// Pick the in-force record for an entity. Live entities use the row
+// flagged `current: true`; when none is flagged — terminated entities
+// have every `current` flag wiped, and some live entities never carry
+// one — fall back to the latest historical record. Both branches resolve
+// the latest end via the shared `pickLatestRaw` helper so every temporal
+// picker agrees on which end is newest.
 const pickActiveRecord = <T extends OrsrRawTemporal>(
   raws: T[] | undefined,
   terminated: boolean,
-): T | null => {
-  if (!raws || raws.length === 0) {
-    return null;
-  }
-  if (terminated) {
-    return raws.at(0) ?? null;
-  }
-  return pickCurrent(raws) ?? raws.at(-1) ?? null;
-};
+): T | null =>
+  terminated ? pickLatestRaw(raws) : (pickCurrent(raws) ?? pickLatestRaw(raws));
+
+const pickPrimaryName = (
+  raws: OrsrRawValueTemporal[] | undefined,
+  terminated: boolean,
+): string | null =>
+  normalizeName(pickActiveRecord(raws, terminated)?.value ?? null);
 
 const pickActingClause = (
   raws: OrsrRawValueTemporal[] | undefined,
   terminated: boolean,
-): string | null => {
-  if (!raws || raws.length === 0) {
-    return null;
-  }
-  if (terminated) {
-    return raws.at(0)?.value ?? null;
-  }
-  return pickCurrent(raws)?.value ?? null;
-};
+): string | null => pickActiveRecord(raws, terminated)?.value ?? null;
 
 const pickPersonName = (
   member: OrsrRawStatutoryBodyMember | OrsrRawStakeholderMember,
