@@ -1,4 +1,6 @@
-import { panic, Result } from "better-result";
+import { randomInt } from "node:crypto";
+
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -22,16 +24,11 @@ const confirmationOtpIdentifier = (
 
 /**
  * Generates a cryptographically secure 6-digit numeric code (as a string).
+ * `randomInt` draws uniformly over `[100_000, 1_000_000)` (rejection sampling
+ * under the hood), so unlike `Uint32 % 900_000` it has no modulo bias.
  */
-export const generateSixDigitOtp = (): string => {
-  const array = new Uint32Array(1);
-  crypto.getRandomValues(array);
-  const [val] = array;
-  if (val === undefined) {
-    panic("Failed to generate random value");
-  }
-  return (100_000 + (val % 900_000)).toString();
-};
+export const generateSixDigitOtp = (): string =>
+  randomInt(100_000, 1_000_000).toString();
 
 type CreateConfirmationOtpParams = {
   purpose: ConfirmationOtpPurpose;
