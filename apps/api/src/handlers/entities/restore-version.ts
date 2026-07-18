@@ -1,8 +1,11 @@
 import { Result } from "better-result";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import { buildVersionStamp } from "@/api/handlers/entities/version-utils";
+import {
+  buildVersionStamp,
+  nextEntityVersionNumber,
+} from "@/api/handlers/entities/version-utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -51,24 +54,6 @@ export default createSafeHandler(
       );
     }
 
-    // Get the current highest version number
-    const latestVersion = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ versionNumber: entityVersions.versionNumber })
-          .from(entityVersions)
-          .where(
-            and(
-              eq(entityVersions.entityId, params.entityId),
-              eq(entityVersions.workspaceId, workspaceId),
-            ),
-          )
-          .orderBy(desc(entityVersions.versionNumber))
-          .limit(1),
-      ),
-    );
-
-    const nextVersionNumber = (latestVersion.at(0)?.versionNumber ?? 0) + 1;
     const nextVersionId = createSafeId<"entityVersion">();
 
     // Get entity info for stamp
@@ -102,12 +87,6 @@ export default createSafeHandler(
         }),
       ),
     );
-
-    const nextVersionStamp = buildVersionStamp({
-      docSequence: entity?.docSequence ?? null,
-      versionNumber: nextVersionNumber,
-      workspaceReference: workspace?.reference ?? null,
-    });
 
     // Create a new version (copy-to-top) with all fields from the source version
     const restoreOutcome = yield* Result.await(
@@ -144,6 +123,19 @@ export default createSafeHandler(
         if (sourceLive.length === 0) {
           return { restored: false as const };
         }
+
+        // Allocate from MAX over all versions (incl. tombstoned) under the
+        // entity lock, not source/current + 1, and inside the mutation tx so
+        // concurrent restores serialize instead of racing to the same number.
+        const nextVersionNumber = await nextEntityVersionNumber(tx, {
+          entityId: params.entityId,
+          workspaceId,
+        });
+        const nextVersionStamp = buildVersionStamp({
+          docSequence: entity?.docSequence ?? null,
+          versionNumber: nextVersionNumber,
+          workspaceReference: workspace?.reference ?? null,
+        });
 
         await tx.insert(entityVersions).values({
           createdBy: userId,
@@ -217,7 +209,7 @@ export default createSafeHandler(
           },
         ]);
 
-        return { restored: true as const };
+        return { restored: true as const, versionNumber: nextVersionNumber };
       }),
     );
 
@@ -234,7 +226,7 @@ export default createSafeHandler(
 
     return Result.ok({
       versionId: nextVersionId,
-      versionNumber: nextVersionNumber,
+      versionNumber: restoreOutcome.versionNumber,
     });
   },
 );

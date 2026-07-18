@@ -233,11 +233,11 @@ describe("delete-version chain-of-custody guard", () => {
             "Workspace-deletion GC: a workspace-wide file-ref sweep that must include tombstoned versions so their bytes are also cleaned up.",
         },
       ],
-      "handlers/entities/restore-version.ts": [
+      "handlers/entities/version-utils.ts": [
         {
-          anchor: "nextVersionNumber = (latestVersion",
+          anchor: "max(entityVersions.versionNumber)",
           reason:
-            "Version-number allocation: MAX(versionNumber) deliberately spans tombstones so a restore never reuses a withdrawn version's number; reads versionNumber only.",
+            "Version-number allocator (nextEntityVersionNumber): MAX(versionNumber) deliberately spans tombstones so a new version never reuses a withdrawn number; reads versionNumber only, no content.",
         },
       ],
       "handlers/entities/upload-version.ts": [
@@ -440,5 +440,32 @@ describe("delete-version chain-of-custody guard", () => {
       (rel) => !matchedExceptions.has(rel),
     );
     expect(stale).toEqual([]);
+  });
+
+  test("version writers allocate via MAX(all), never a backward-movable pointer", () => {
+    // Class guard: "allocator derived from a pointer that can move backwards".
+    // Deriving the next number from current/base version + 1 reuses a
+    // tombstoned latest version's number after a delete promotes
+    // currentVersionId backward (no unique index on (entityId, versionNumber),
+    // so the collision is a silent duplicate). Every writer must allocate via
+    // nextEntityVersionNumber (MAX over ALL versions, including tombstoned).
+    const utils = readFileSync(
+      nodePath.join(API_SRC, "handlers/entities/version-utils.ts"),
+      "utf-8",
+    );
+    const allocator = utils.slice(
+      utils.indexOf("export const nextEntityVersionNumber"),
+      utils.indexOf("export const buildVersionStamp"),
+    );
+    // The allocator counts tombstoned versions: MAX(versionNumber) with no
+    // deletedAt predicate.
+    expect(allocator).toContain("max(entityVersions.versionNumber)");
+    expect(allocator).not.toContain("deletedAt");
+
+    // No production code allocates a version number from a movable pointer + 1.
+    const offenders = collectSourceFiles(API_SRC).filter((file) =>
+      readFileSync(file, "utf-8").includes("versionNumber + 1"),
+    );
+    expect(offenders).toEqual([]);
   });
 });

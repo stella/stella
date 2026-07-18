@@ -17,6 +17,7 @@ import { validateDocxBuffer } from "@/api/handlers/entities/validate-docx-buffer
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
+  nextEntityVersionNumber,
 } from "@/api/handlers/entities/version-utils";
 import {
   allocateFileObject,
@@ -385,7 +386,14 @@ export const finalizeDesktopEditSessionHandler = async ({
         } as const;
       }
 
-      const nextVersionNumber = baseVersion.versionNumber + 1;
+      // MAX over all versions (incl. tombstoned) under the session + entity
+      // locks, not baseVersion + 1: after a delete tombstones the latest version
+      // and promotes currentVersionId backward, base + 1 would reuse the
+      // withdrawn number. See nextEntityVersionNumber.
+      const nextVersionNumber = await nextEntityVersionNumber(tx, {
+        entityId: editSession.entityId,
+        workspaceId: authorizedSession.value.workspaceId,
+      });
 
       const workspace = await tx.query.workspaces.findFirst({
         where: {
