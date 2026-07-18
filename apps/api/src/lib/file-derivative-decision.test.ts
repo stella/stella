@@ -36,7 +36,7 @@ describe("decidePdfDerivativeAction", () => {
   });
 
   it("generates for a fresh convertible file with no pdf yet", () => {
-    const content = fileContent({ pdfFileId: null, pdfDerivative: undefined });
+    const content = fileContent({ pdfFileId: null });
     expect(decidePdfDerivativeAction(content)).toEqual({
       type: "generate",
       content,
@@ -96,7 +96,7 @@ describe("decidePdfDerivativeAction", () => {
   // derivative to `ready` (generate), and the retry re-runs extraction to
   // completion (extract-only). Both invocations act, so indexing is not lost.
   it("progresses generate -> extract-only across a transient-failure retry", () => {
-    const first = fileContent({ pdfFileId: null, pdfDerivative: undefined });
+    const first = fileContent({ pdfFileId: null });
     expect(decidePdfDerivativeAction(first).type).toBe("generate");
 
     const afterReadyFlip = fileContent({
