@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, entityVersions, fields } from "@/api/db/schema";
+import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -81,26 +81,24 @@ export const readCurrentDocxTarget = async ({
   tx: DatabaseTransaction;
   workspaceId: SafeId<"workspace">;
 }) => {
-  // Lock the owning entity row before reading the current version to open a NEW
-  // session against. delete-version takes the same `entities` FOR UPDATE, so
-  // this serializes a new-session open with a concurrent version tombstone: the
-  // open either runs before the delete (and anchors to the pre-delete current
-  // version, which the delete's session-cancel sweep then withdraws) or after
-  // it (and anchors to the promoted, live current version). Without the lock a
-  // fresh session could anchor to the very version being tombstoned.
+  // Read (not lock) the entity's current version to open a NEW session against.
+  // An earlier revision took `entities` FOR UPDATE here to serialize a
+  // new-session open with a concurrent version tombstone, but that held the
+  // entity row lock across the rest of the open transaction — including the S3
+  // presign at the end (a lock held across an external await). The race it
+  // closed is byte-safe without the lock, so it is deliberately dropped:
   //
-  // Canonical docx-edit lock order (issue #1139): docx-edit advisory lock ->
-  // desktop_edit_session rows -> entities row. This read is the entity step and
-  // always follows the advisory + session steps in both open handlers, matching
-  // finalize-desktop-edit-session and delete-version.
-  await tx
-    .select({ id: entities.id })
-    .from(entities)
-    .where(
-      and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
-    )
-    .for("update");
-
+  //   - Resume chokepoint: readVersionDocxTarget (the only path that serves a
+  //     base version's bytes to a resuming session) requires deletedAt IS NULL,
+  //     so a session anchored to a tombstoned version can never re-download it.
+  //   - Finalize divergence check: finalize refuses a base whose version is no
+  //     longer current (currentVersionId !== baseVersionId), which a tombstone
+  //     always makes true (delete-version promotes currentVersionId off the
+  //     withdrawn row first), so a stranded session can never finalize.
+  //
+  // The only residual is a harmless stranded session row that those two guards
+  // neutralize; delete-version's cancel sweep withdraws it whenever it observes
+  // it. See issue #1139 for the lock-hierarchy discussion.
   const entity = await tx.query.entities.findFirst({
     where: {
       id: { eq: entityId },
