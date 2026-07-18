@@ -274,8 +274,8 @@ test.describe
         failures.push(error);
       }
     }
-    await context?.close();
-    await apiRequest?.dispose();
+    await context.close();
+    await apiRequest.dispose();
     if (failures.length > 0) {
       throw new AggregateError(
         failures,
