@@ -293,26 +293,29 @@ export const verifyAndDeleteUser = async (
       const deletionRequestId = createSafeId<"accountDeletionRequest">();
       const s3KeysToDelete: string[] = [];
 
+      // Burn the confirmation OTP *before* opening the deletion transaction.
+      // The consume runs on its own root connection and commits independently,
+      // so a wrong/expired code (or any later abort of the destructive work
+      // below) can never restore the row and reopen it to replay/guessing.
+      // The atomic DELETE ... RETURNING also serializes concurrent verifies on
+      // its own, so this no longer needs the user-row lock to gate it. The
+      // purpose-specific error codes keep the frontend's localized
+      // invalid/expired messaging working.
+      const otpResult = await verifyConfirmationOtp({
+        purpose: "delete-account",
+        email,
+        code,
+        errorCode: {
+          invalid: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
+          expired: ACCOUNT_DELETION_ERROR_CODE.otpExpired,
+        },
+      });
+      if (Result.isError(otpResult)) {
+        throw otpResult.error;
+      }
+
       await rootDb.transaction(async (tx) => {
         await lockUserRowForDeletion(tx, currentUserId);
-
-        // Consumed inside this same transaction (and after the row lock
-        // above) so the OTP check and the deletion it gates stay atomic. The
-        // purpose-specific error codes keep the frontend's localized
-        // invalid/expired messaging working.
-        const otpResult = await verifyConfirmationOtp({
-          purpose: "delete-account",
-          email,
-          code,
-          db: tx,
-          errorCode: {
-            invalid: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
-            expired: ACCOUNT_DELETION_ERROR_CODE.otpExpired,
-          },
-        });
-        if (Result.isError(otpResult)) {
-          throw otpResult.error;
-        }
 
         // 2. Perform ownership check with SELECT FOR UPDATE locks inside transaction
         await assertUserIsNotSoleOrgOwner(tx, currentUserId);

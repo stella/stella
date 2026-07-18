@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { user, verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -19,9 +19,6 @@ const confirmationOtpIdentifier = (
   purpose: ConfirmationOtpPurpose,
   email: string,
 ): string => `${purpose}:${email}`;
-
-/** Query surface both `rootDb` and a `rootDb.transaction` callback expose. */
-type ConfirmationOtpDb = typeof rootDb | Transaction;
 
 /**
  * Generates a cryptographically secure 6-digit numeric code (as a string).
@@ -105,31 +102,40 @@ type VerifyConfirmationOtpParams = {
   purpose: ConfirmationOtpPurpose;
   email: string;
   code: string;
-  /**
-   * Database handle to run the atomic consume against. Defaults to `rootDb`;
-   * pass an in-flight transaction so the consume participates in a caller's
-   * existing lock/atomicity guarantees (e.g. account deletion, which consumes
-   * the code inside the same transaction that holds the user row lock).
-   */
-  db?: ConfirmationOtpDb;
   errorCode?: ConfirmationOtpErrorCodes;
 };
 
+type ConfirmationOtpRow = typeof verification.$inferSelect;
+
 /**
- * Verifies and consumes a confirmation OTP for the given purpose. A single
- * `DELETE ... RETURNING` claims the row atomically, so two concurrent requests
- * can never both succeed on the same code (closing the check-then-delete
- * replay window). The row is removed whether the code is correct, wrong
- * (burn-on-first-attempt), or expired; the branches below only decide which
- * error, if any, to surface.
+ * Minimal root-database surface the atomic consume needs: a single
+ * `DELETE ... RETURNING` on the verification table. Written structurally (not
+ * `Pick<typeof rootDb, "delete">`, whose driver-specific result types reject a
+ * PGlite test instance, and without importing a test-only type) so both the
+ * bun-sql `rootDb` pool and a test database satisfy it. Deliberately not the
+ * full `rootDb` type and, crucially, not a caller `Transaction` — see the
+ * class note on `verifyConfirmationOtp` for why the burn must never run on a
+ * caller's transaction.
  */
-export const verifyConfirmationOtp = async ({
-  purpose,
-  email,
-  code,
-  db = rootDb,
-  errorCode,
-}: VerifyConfirmationOtpParams): Promise<Result<void, HandlerError>> =>
+type ConfirmationOtpConsumeDb = {
+  delete: (table: typeof verification) => {
+    where: (condition: SQL) => {
+      returning: () => PromiseLike<ConfirmationOtpRow[]>;
+    };
+  };
+};
+
+/**
+ * Test-only seam for {@link verifyConfirmationOtp}. Runs the atomic
+ * consume-and-verify against the supplied *root* database handle so a test can
+ * inject its PGlite instance. Production code must call
+ * `verifyConfirmationOtp`, which binds this to the module-level `rootDb` pool;
+ * do not call this with a caller transaction (see the class note below).
+ */
+export const consumeConfirmationOtp = async (
+  db: ConfirmationOtpConsumeDb,
+  { purpose, email, code, errorCode }: VerifyConfirmationOtpParams,
+): Promise<Result<void, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
       const identifier = confirmationOtpIdentifier(purpose, email);
@@ -164,3 +170,26 @@ export const verifyConfirmationOtp = async ({
             cause: err,
           }),
   });
+
+/**
+ * Verifies and consumes a confirmation OTP for the given purpose. A single
+ * `DELETE ... RETURNING` claims the row atomically, so two concurrent requests
+ * can never both succeed on the same code (closing the check-then-delete
+ * replay window). The row is removed whether the code is correct, wrong
+ * (burn-on-first-attempt), or expired; the returned result only decides which
+ * error, if any, to surface.
+ *
+ * Class: a state change that must survive an enclosing rollback. The burn has
+ * to commit even when the caller's own business transaction aborts — otherwise
+ * a wrong/expired guess that makes the caller roll back (e.g. account deletion
+ * hitting a sole-owner check, or any failed verification) would restore the
+ * row and reopen the code to replay/guessing. This function therefore takes no
+ * caller database or transaction: the consume always runs on the module-level
+ * `rootDb` pool, on its own connection, committing independently. Callers must
+ * run their destructive work in a *separate* transaction, only after a
+ * successful verify, so an abort there can never un-burn a consumed code.
+ */
+export const verifyConfirmationOtp = async (
+  params: VerifyConfirmationOtpParams,
+): Promise<Result<void, HandlerError>> =>
+  await consumeConfirmationOtp(rootDb, params);
