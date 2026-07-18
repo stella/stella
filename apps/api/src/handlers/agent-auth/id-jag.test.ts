@@ -371,6 +371,17 @@ describe("agent-auth ID-JAG replay + freshness", () => {
     expect(res.status).toBe(401);
     expect((await readJson(res))["error"]).toBe("invalid_assertion");
   });
+
+  test("a malformed email claim is rejected before account resolution", async () => {
+    enableFeature();
+    await trustIssuer();
+    // `email_verified: true` does not prove the value is a valid address; a
+    // malformed claim must not reach user lookup / auto-provisioning.
+    const assertion = await mintIdJag({ email: "not-an-email" });
+    const res = await postIdentity(identityAssertionBody(assertion));
+    expect(res.status).toBe(401);
+    expect((await readJson(res))["error"]).toBe("invalid_assertion");
+  });
 });
 
 describe("agent-auth ID-JAG existing email (step-up, no silent bind)", () => {
@@ -418,6 +429,22 @@ describe("agent-auth ID-JAG existing email (step-up, no silent bind)", () => {
     expect(after.length).toBe(1);
     expect(after.at(0)?.userId).toBe(human.userId);
     expect(after.at(0)?.organizationId).toBe(human.organizationId);
+  });
+
+  test("an existing user is matched despite email casing", async () => {
+    enableFeature();
+    await trustIssuer();
+    const email = `idjag-case-${Bun.randomUUIDv7()}@stella.dev`;
+    const sub = `sub-case-${Bun.randomUUIDv7()}`;
+    await createHumanSession(email);
+
+    // The issuer sends the same mailbox in a different case; canonicalisation
+    // must still resolve the existing account (step-up), not auto-provision a
+    // duplicate — a mismatch here would return `ready`, not the 401 step-up.
+    const assertion = await mintIdJag({ email: email.toUpperCase(), sub });
+    const res = await postIdentity(identityAssertionBody(assertion));
+    expect(res.status).toBe(401);
+    expect((await readJson(res))["error"]).toBe("interaction_required");
   });
 });
 

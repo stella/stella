@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
 import type { FetchImplementation, JWTPayload, JWTVerifyGetKey } from "jose";
+import * as v from "valibot";
 
 import {
   AGENT_AUTH_ID_JAG_ALLOWED_ALGS,
@@ -188,6 +189,21 @@ const requiredAmrSatisfied = (
 const isVerifiedIdentity = (payload: JWTPayload): boolean =>
   payload["email_verified"] === true;
 
+// `email_verified` does not prove the value is a syntactically valid, canonical
+// address, and this email is the account lookup/provisioning key. Validate the
+// format and canonicalise (trim + lowercase) so a malformed claim cannot create
+// an unreachable user and a case-variant claim still matches an existing one.
+const idJagEmailSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.toLowerCase(),
+  v.email(),
+);
+const canonicalIdJagEmail = (value: unknown): string | null => {
+  const result = v.safeParse(idJagEmailSchema, value);
+  return result.success ? result.output : null;
+};
+
 /**
  * Validate an inbound ID-JAG end to end: trusted-issuer allow-list, JWKS
  * signature (asymmetric algs only, `typ` checked), audience, freshness,
@@ -242,7 +258,7 @@ export const validateIdJag = async (
 
   const sub = payload.sub;
   const jti = payload.jti;
-  const email = payload["email"];
+  const email = canonicalIdJagEmail(payload["email"]);
   const authTime = payload["auth_time"];
   const iat = payload.iat;
   const exp = payload.exp;
@@ -257,9 +273,12 @@ export const validateIdJag = async (
       new IdJagValidationError("invalid_assertion", "Missing jti."),
     );
   }
-  if (typeof email !== "string" || email.length === 0) {
+  if (email === null) {
     return Result.err(
-      new IdJagValidationError("invalid_assertion", "Missing email."),
+      new IdJagValidationError(
+        "invalid_assertion",
+        "Missing or malformed email.",
+      ),
     );
   }
   if (typeof exp !== "number") {
