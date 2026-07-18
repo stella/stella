@@ -6,6 +6,10 @@ type FakeRedisClient = {
   subscribe: ReturnType<typeof mock>;
   publish: ReturnType<typeof mock>;
   close: ReturnType<typeof mock>;
+  // Bun's RedisClient exposes a live `connected` flag; sse.ts reads it to
+  // decide whether a published event will loop back. Defaults true once the
+  // fake "attaches"; tests flip it to model the socket dropping/reconnecting.
+  connected: boolean;
 };
 
 const createdClients: FakeRedisClient[] = [];
@@ -28,6 +32,9 @@ const makeFakeRedisClient = (): FakeRedisClient => {
     }),
     publish: mock(async () => undefined),
     close: mock(() => undefined),
+    // A freshly attached subscriber is connected; a real Bun client reports
+    // the same once subscribe() resolves.
+    connected: true,
   };
   createdClients.push(client);
   return client;
@@ -254,6 +261,87 @@ describe("broadcast: local delivery without an attached subscriber", () => {
     expect(text).toContain("local-only");
 
     controller.abort();
+    await flushMicrotasks();
+  });
+});
+
+describe("broadcast: delivery tracks the subscriber's live connection", () => {
+  test("a broadcast is not delivered inline while the subscriber is connected, and is once it drops", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+    const client = createdClients.at(-1);
+    expect(client).toBeDefined();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // Subscriber attached and connected: this event rides the Redis loopback,
+    // so it must NOT be delivered inline (delivering both would double up).
+    broadcast(workspaceId, { type: "while-connected", data: null });
+
+    // The subscriber's Redis connection drops. Bun keeps the client object,
+    // so the old `Boolean(subscriber)` check would still report "attached"
+    // and keep skipping inline delivery, losing events for this instance.
+    if (client) {
+      client.connected = false;
+    }
+
+    // Disconnected: no loopback arrives, so this one MUST be delivered inline.
+    broadcast(workspaceId, { type: "after-disconnect", data: null });
+
+    // The first chunk the local stream sees is the post-disconnect event:
+    // proves the connected broadcast was not inline-delivered (no double
+    // delivery) and the disconnect restored inline delivery (no miss).
+    const { value } = await reader.read();
+    const text = new TextDecoder().decode(value);
+    expect(text).toContain("after-disconnect");
+    expect(text).not.toContain("while-connected");
+
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("reconnecting restores loopback-only delivery, then a second drop restores inline", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+    const client = createdClients.at(-1);
+    expect(client).toBeDefined();
+
+    if (client) {
+      client.connected = false; // down → inline
+      client.connected = true; // back up → loopback only
+    }
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // Reconnected: back to loopback-only, so this is NOT delivered inline.
+    broadcast(workspaceId, { type: "after-reconnect", data: null });
+
+    if (client) {
+      client.connected = false; // down again → inline
+    }
+
+    broadcast(workspaceId, { type: "after-second-drop", data: null });
+
+    const { value } = await reader.read();
+    const text = new TextDecoder().decode(value);
+    expect(text).toContain("after-second-drop");
+    expect(text).not.toContain("after-reconnect");
+
+    controller.abort();
+    stopSse();
     await flushMicrotasks();
   });
 });

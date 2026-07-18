@@ -324,14 +324,21 @@ type SseLifecycle = {
 let activeLifecycle: SseLifecycle | null = null;
 
 /**
- * Whether this instance currently has a Redis subscriber attached. Used
+ * Whether this instance currently has a live Redis subscriber attached. Used
  * by `broadcast`/`broadcastToOrganization` to decide whether they must
- * deliver locally inline: without an attached subscriber, a published
- * event never loops back to this instance, so local clients would be
- * missed even when the (independent) publisher connection is healthy.
+ * deliver locally inline: without a connected subscriber, a published event
+ * never loops back to this instance, so local clients would be missed even
+ * when the (independent) publisher connection is healthy.
+ *
+ * Reads the client's own live `connected` flag rather than a mirrored bit, so
+ * a subscriber that Bun has auto-reconnected away from (transient drop) counts
+ * as not attached for as long as it is down — during which `broadcast` falls
+ * back to inline local delivery — and counts as attached again the instant its
+ * connection (and Bun's re-subscribe) is restored. A stale flag could drift
+ * out of step with the socket; the property cannot.
  */
 const hasAttachedSubscriber = (): boolean =>
-  Boolean(activeLifecycle?.subscriber);
+  Boolean(activeLifecycle?.subscriber?.connected);
 
 /**
  * Bounded backoff for retrying the subscriber attach. A transient Redis
@@ -340,6 +347,58 @@ const hasAttachedSubscriber = (): boolean =>
  * short capped backoff before logging a persistent failure.
  */
 const SUBSCRIBER_ATTACH_RETRY_DELAYS_MS = [200, 500, 1000, 2000, 5000];
+
+/**
+ * Attach the cross-instance Redis subscriber for `lifecycle`, retrying with a
+ * bounded backoff on failure. Written as recursion rather than a for-loop so
+ * each attempt still observes success/failure sequentially without awaiting
+ * inside a loop. Bails whenever `lifecycle` is no longer the active one, so a
+ * stop (or stop+restart) during a connect or a backoff never attaches a stale
+ * subscriber to a lifecycle that is no longer current.
+ */
+const attachSubscriber = async (
+  lifecycle: SseLifecycle,
+  attempt: number,
+): Promise<void> => {
+  if (activeLifecycle !== lifecycle) {
+    // stopSse (and possibly a subsequent startSse) ran while we were waiting
+    // between retries; abandon this attach loop.
+    return;
+  }
+
+  // The client is constructed inside the try so a throwing constructor hits
+  // the fail-soft catch below instead of escaping as an unhandled rejection.
+  let subscriber: ReturnType<typeof createRedisClient> | undefined;
+  try {
+    subscriber = createRedisClient();
+    await subscriber.subscribe(REDIS_CHANNEL, (message) => {
+      handleMessage(message);
+    });
+    if (activeLifecycle !== lifecycle) {
+      // stopSse (and possibly a subsequent startSse) ran while the connection
+      // was still being established; do not attach a stale subscriber to a
+      // lifecycle that is no longer the active one.
+      subscriber.close();
+      return;
+    }
+    lifecycle.subscriber = subscriber;
+    logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
+  } catch (error: unknown) {
+    subscriber?.close();
+    const delayMs = SUBSCRIBER_ATTACH_RETRY_DELAYS_MS[attempt];
+    if (delayMs === undefined || activeLifecycle !== lifecycle) {
+      // Retries exhausted (or the lifecycle was torn down): surface a
+      // persistent failure. Local delivery still works because
+      // `broadcast`/`broadcastToOrganization` deliver inline while no
+      // subscriber is attached.
+      logger.error("sse.redis_connection_failed", connectionErrorFields(error));
+      return;
+    }
+    logger.warn("sse.redis_subscribe_retry", connectionErrorFields(error));
+    await Bun.sleep(delayMs);
+    await attachSubscriber(lifecycle, attempt + 1);
+  }
+};
 
 /**
  * Start the SSE keep-alive heartbeat and the cross-instance Redis
@@ -372,54 +431,7 @@ export const startSse = (): void => {
   lifecycle.keepAliveTimer.unref();
   activeLifecycle = lifecycle;
 
-  void (async () => {
-    for (let attempt = 0; ; attempt += 1) {
-      if (activeLifecycle !== lifecycle) {
-        // stopSse (and possibly a subsequent startSse) ran while we were
-        // waiting between retries; abandon this attach loop.
-        return;
-      }
-
-      // The client is constructed inside the try so a throwing constructor
-      // hits the fail-soft catch below instead of escaping this detached
-      // IIFE as an unhandled rejection.
-      let subscriber: ReturnType<typeof createRedisClient> | undefined;
-      try {
-        subscriber = createRedisClient();
-        // oxlint-disable-next-line no-await-in-loop -- each attach attempt must observe success/failure before deciding to retry
-        await subscriber.subscribe(REDIS_CHANNEL, (message) => {
-          handleMessage(message);
-        });
-        if (activeLifecycle !== lifecycle) {
-          // stopSse (and possibly a subsequent startSse) ran while the
-          // connection was still being established; do not attach a stale
-          // subscriber to a lifecycle that is no longer the active one.
-          subscriber.close();
-          return;
-        }
-        lifecycle.subscriber = subscriber;
-        logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
-        return;
-      } catch (error: unknown) {
-        subscriber?.close();
-        const delayMs = SUBSCRIBER_ATTACH_RETRY_DELAYS_MS[attempt];
-        if (delayMs === undefined || activeLifecycle !== lifecycle) {
-          // Retries exhausted (or the lifecycle was torn down): surface a
-          // persistent failure. Local delivery still works because
-          // `broadcast`/`broadcastToOrganization` deliver inline while no
-          // subscriber is attached.
-          logger.error(
-            "sse.redis_connection_failed",
-            connectionErrorFields(error),
-          );
-          return;
-        }
-        logger.warn("sse.redis_subscribe_retry", connectionErrorFields(error));
-        // oxlint-disable-next-line no-await-in-loop -- sequential backoff between retries, not parallel work
-        await Bun.sleep(delayMs);
-      }
-    }
-  })();
+  void attachSubscriber(lifecycle, 0);
 
   logger.info("sse.initialized", {
     keepAliveIntervalMs: KEEP_ALIVE_INTERVAL_MS,
