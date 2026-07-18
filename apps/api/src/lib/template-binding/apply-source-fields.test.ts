@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { FieldMeta, FieldSource } from "@/api/handlers/docx/types";
+
 import {
   applySourceFields,
   type BindingContext,
@@ -13,7 +15,6 @@ import {
   resolveMatterField,
   type UserSourceRecord,
 } from "./apply-source-fields";
-import type { FieldMeta, FieldSource } from "./types";
 
 const contact = (
   overrides: Partial<ContactSourceRecord> = {},

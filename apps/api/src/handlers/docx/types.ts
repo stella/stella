@@ -9,11 +9,13 @@ import {
 } from "@stll/template-conditions";
 
 import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
+import {
+  type FieldSource,
+  isFieldSource,
+} from "@/api/lib/template-binding/binding-sources";
 
-import { type FieldSource, isFieldSource } from "./binding-sources";
-
-export type { FieldSource } from "./binding-sources";
-export { isFieldSource } from "./binding-sources";
+export type { FieldSource } from "@/api/lib/template-binding/binding-sources";
+export { isFieldSource } from "@/api/lib/template-binding/binding-sources";
 
 // ── Common ────────────────────────────────────────────────
 

@@ -24,14 +24,14 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
+import { replaceResolvedValue } from "@/api/handlers/docx/composite-fields";
+import type { FieldMeta } from "@/api/handlers/docx/types";
 
 import type {
   AttorneyRef,
   FieldSource,
   WorkspaceContactRole,
 } from "./binding-sources";
-import { replaceResolvedValue } from "./composite-fields";
-import type { FieldMeta } from "./types";
 
 /** The subset of contact columns a contact/party-sourced field resolves from. */
 export type ContactSourceRecord = {

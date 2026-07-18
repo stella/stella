@@ -15,7 +15,6 @@ import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/handlers/docx/adapt-ai-fields";
-import { buildBindingContext } from "@/api/handlers/docx/build-binding-context";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import {
@@ -46,6 +45,7 @@ import { isTemplateData } from "@/api/handlers/docx/types";
 import { recordTemplateUse } from "@/api/handlers/templates/record-use";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getS3 } from "@/api/lib/s3";
+import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 
 // Data a template is filled with: open-ended field-path → value map (paths come
 // from the template's manifest/markers, not a fixed entity), patched in place

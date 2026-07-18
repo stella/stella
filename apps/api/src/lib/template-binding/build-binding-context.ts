@@ -21,7 +21,9 @@ import type {
   ContactPersistedMetadata,
   ContactPhone,
 } from "@/api/db/schema-validators";
+import type { FieldMeta } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 
 import type {
   BindingContext,
@@ -31,7 +33,6 @@ import type {
 } from "./apply-source-fields";
 import { EMPTY_BINDING_CONTEXT } from "./apply-source-fields";
 import type { AttorneyRef, WorkspaceContactRole } from "./binding-sources";
-import type { FieldMeta } from "./types";
 
 /** The contact columns mapped into a {@link ContactSourceRecord}; shared by the
  *  client and party projections. */
@@ -238,32 +239,33 @@ const fetchParties = async ({
   workspaceId: SafeId<"workspace">;
   roles: ReadonlySet<WorkspaceContactRole>;
 }): Promise<Partial<Record<WorkspaceContactRole, ContactSourceRecord>>> => {
-  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- parallel fan-out (Promise.all) bounded by the WORKSPACE_CONTACT_ROLES enum (<=9), not tenant row volume; one small read per referenced role
-  const entries = await Promise.all(
-    [...roles].map(async (role) => {
-      // Different contacts can share a role; the primary (else earliest) one is
-      // the deterministic pick for a scalar party binding.
-      const link = await scopedDb((tx) =>
-        tx.query.workspaceContacts.findFirst({
-          where: { workspaceId: { eq: workspaceId }, role: { eq: role } },
-          orderBy: { isPrimary: "desc", createdAt: "asc" },
-          columns: {},
-          with: { contact: { columns: CONTACT_SOURCE_COLUMNS } },
-        }),
-      );
-      const contact = link?.contact;
-      return contact === undefined || contact === null
-        ? null
-        : ([role, toContactSourceRecord(contact)] as const);
+  // One read for every referenced role: `role IN (...)` filtered by workspace,
+  // ordered so each role's primary (else earliest) link sorts first. Different
+  // contacts can share a role, so the rows are grouped by role in JS and the
+  // first link per role is kept — the deterministic scalar pick a party binding
+  // resolves to. A global stable sort by (isPrimary desc, createdAt asc)
+  // restricted to one role yields that same per-role order.
+  const links = await scopedDb((tx) =>
+    tx.query.workspaceContacts.findMany({
+      where: { workspaceId: { eq: workspaceId }, role: { in: [...roles] } },
+      orderBy: { isPrimary: "desc", createdAt: "asc" },
+      limit: LIMITS.workspaceContactsCount,
+      columns: { role: true },
+      with: { contact: { columns: CONTACT_SOURCE_COLUMNS } },
     }),
   );
 
   const parties: Partial<Record<WorkspaceContactRole, ContactSourceRecord>> =
     {};
-  for (const entry of entries) {
-    if (entry !== null) {
-      parties[entry[0]] = entry[1];
+  for (const link of links) {
+    if (parties[link.role] !== undefined) {
+      continue;
     }
+    const { contact } = link;
+    if (contact === null) {
+      continue;
+    }
+    parties[link.role] = toContactSourceRecord(contact);
   }
   return parties;
 };

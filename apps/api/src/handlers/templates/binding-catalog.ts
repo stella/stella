@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 
-import { buildBindingCatalog } from "@/api/handlers/docx/binding-catalog";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { buildBindingCatalog } from "@/api/lib/template-binding/binding-catalog";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -17,12 +17,12 @@ const config = {
  */
 const getBindingCatalog = createSafeRootHandler(
   config,
-  // The catalog is static (built from the binding-sources taxonomy), so this
-  // safe handler has no failable IO to await; the generator form is kept for
-  // endpoint-handler consistency.
-  // eslint-disable-next-line require-yield -- static catalog, nothing to await
+  // The catalog is static (built from the binding-sources taxonomy), so there
+  // is no failable IO; yielding the already-built catalog through `Result.ok`
+  // keeps the generator form consistent with every other endpoint handler.
   async function* () {
-    return Result.ok(buildBindingCatalog());
+    const catalog = yield* Result.ok(buildBindingCatalog());
+    return Result.ok(catalog);
   },
 );
 

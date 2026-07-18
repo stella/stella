@@ -19,11 +19,12 @@
 
 import { resolvePath } from "@stll/template-conditions";
 
-import type { BindingContext } from "./apply-source-fields";
+import type { BindingContext } from "@/api/lib/template-binding/apply-source-fields";
 import {
   applySourceFields,
   EMPTY_BINDING_CONTEXT,
-} from "./apply-source-fields";
+} from "@/api/lib/template-binding/apply-source-fields";
+
 import { checkArrayBounds } from "./array-bounds";
 import { CONDITION_RAW_VALUES } from "./block-directives";
 import { applyCompositeFields } from "./composite-fields";

@@ -106,7 +106,7 @@ type PartInputType = (typeof PART_INPUT_TYPES)[number];
  *  time (the matter's client, a party in a given role, the matter itself, an
  *  attorney by ref, or the firm). A derived value source, mutually exclusive
  *  with the input sources (lookup/formula/parts/aiPrompt/condition). Mirrors
- *  the backend `FieldSource` (apps/api/src/handlers/docx/binding-sources.ts);
+ *  the backend `FieldSource` (apps/api/src/lib/template-binding/binding-sources.ts);
  *  the `role`/`ref`/`field` keys are validated against the binding catalog
  *  server-side, so they are plain strings here. */
 export type FieldSource =
