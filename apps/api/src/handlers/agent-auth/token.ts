@@ -39,6 +39,7 @@ const config = {
       assertion: t.String({ minLength: 1, maxLength: 8192 }),
     }),
   ]),
+  mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies PublicHandlerConfig;
 
 const ERROR_STATUS_BY_CODE: Record<AgentTokenErrorCode, 400 | 403> = {

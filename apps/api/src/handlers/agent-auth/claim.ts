@@ -11,6 +11,7 @@ const config = {
     claim_token: t.String({ minLength: 1, maxLength: 256 }),
     email: t.String({ format: "email", maxLength: 320 }),
   }),
+  mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies PublicHandlerConfig;
 
 const agentClaimHandler = createSafePublicHandler(

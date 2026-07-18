@@ -38,6 +38,7 @@ const config = {
       assertion: t.String({ minLength: 1, maxLength: 8192 }),
     }),
   ]),
+  mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies PublicHandlerConfig;
 
 type AgentIdentityResponse =

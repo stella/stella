@@ -21,6 +21,7 @@ const config = {
   // agent inherits the confirming user's least-privilege scopes, not the
   // org's. `workspace: ["read"]` is the lightest "is a member" gate.
   permissions: { workspace: ["read"] },
+  mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies HandlerConfig;
 
 const agentConfirmHandler = createSafeRootHandler(

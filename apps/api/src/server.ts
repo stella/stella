@@ -390,8 +390,10 @@ const api = new Elysia()
           scoping: "scoped",
           duration: API_RATE_LIMITS.agentAuth.duration,
           max: API_RATE_LIMITS.agentAuth.max,
-          generator: scopedGenerator("agent-auth"),
-          context: new InMemoryRateLimitContext(),
+          ...createRedisRateLimit({
+            failurePolicy: "fail_open_local",
+            scope: "agent-auth",
+          }),
         }),
       )
       .use(agentAuthRoute),
