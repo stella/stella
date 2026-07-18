@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
@@ -28,8 +29,8 @@ const MIN_LEASE_MS = 3 * DEFAULT_POLL_INTERVAL_MS;
 // resolves would block the sequential runner AND keep the lease fresh forever,
 // defeating the self-heal the lease exists for. Set to one lease period: a job
 // that has not finished within a full lease is treated as hung. A JS promise
-// cannot be cancelled, so the ceiling stops the heartbeat and releases the job
-// rather than truly aborting the task.
+// cannot be force-cancelled, so on expiry the ceiling aborts the task's signal
+// (cooperative tasks unwind), stops the heartbeat, and releases the job.
 const DEFAULT_MAX_RUNTIME_MS = DEFAULT_LEASE_MS;
 
 // The scheduler owns the postgres-role `rootDb`; tests inject a structurally
@@ -510,12 +511,15 @@ const runJob = async ({
       });
     }
 
-    // Bound the task's runtime. A JS promise cannot be cancelled, so on timeout
-    // the losing task promise keeps running as a "zombie". We never chain a
-    // completion write onto it, and the guarded completion writes below reject
-    // a late write anyway, so a zombie can never overwrite the timed-out state.
+    // Bound the task's runtime. A JS promise cannot be force-cancelled, so on
+    // expiry we abort the task's signal FIRST, giving a cooperative task a
+    // chance to stop before its lease is released; a task that ignores the
+    // signal keeps running as a "zombie". We never chain a completion write onto
+    // it, and the guarded completion writes below reject a late write anyway, so
+    // a zombie can never overwrite the timed-out state.
     const timeout = new Promise<never>((_resolve, reject) => {
       timeoutTimer = setTimeout(() => {
+        controller.abort();
         reject(
           new SchedulerJobTimeoutError({
             jobId: job.id,
@@ -541,11 +545,9 @@ const runJob = async ({
     await finishRunSuccess({ db, job, runId, runnerId, startedAt });
     return "success";
   } catch (error: unknown) {
-    if (controller.signal.aborted) {
-      await finishRunSkipped({ db, job, runId, runnerId, startedAt });
-      return "skipped";
-    }
-
+    // The timeout branch aborts `controller` before rejecting, so it must be
+    // checked before the abort branch below: otherwise a ceiling expiry would
+    // be misclassified as a cooperatively-skipped run.
     if (error instanceof SchedulerJobTimeoutError) {
       // Stop heartbeating first so the released lease cannot be re-extended,
       // then release the job and mark the run timed out. Another runner can
@@ -565,6 +567,11 @@ const runJob = async ({
       });
       await finishRunFailure({ db, error, job, runId, runnerId, startedAt });
       return "failed";
+    }
+
+    if (controller.signal.aborted) {
+      await finishRunSkipped({ db, job, runId, runnerId, startedAt });
+      return "skipped";
     }
 
     captureError(error, {
@@ -629,10 +636,55 @@ type FinishRunOptions = {
   startedAt: Date;
 };
 
-// A run terminates exactly once. Guarding the run-row write on
-// `status = "running"` (a generation check) plus the job-row write on
-// `lockedBy = runnerId` (a lease-token check) means a late zombie completion
-// can never overwrite a timed-out or reclaimed job with a stale success.
+type CompleteRunOptions = {
+  db: SchedulerDb;
+  jobId: string;
+  runId: SafeId<"schedulerJobRun">;
+  runnerId: string;
+  runValues: PgUpdateSetSource<typeof schedulerJobRuns>;
+  jobValues: PgUpdateSetSource<typeof schedulerJobs>;
+};
+
+// A run terminates exactly once. Every completion path (success, skipped,
+// failure) funnels through this single guarded writer so a future path cannot
+// forget the guard. Two layers reject a late zombie completion:
+//   1. run-row write is conditioned on `status = "running"` (a generation
+//      check) and only counts if it actually updated a row;
+//   2. the job-row write runs only when (1) won AND `lockedBy = runnerId` (a
+//      lease-token check) still matches.
+// Together they mean a zombie cannot overwrite a timed-out or reclaimed job,
+// even if the same runner has since re-acquired the job under a fresh run.
+const completeRun = async ({
+  db,
+  jobId,
+  jobValues,
+  runId,
+  runnerId,
+  runValues,
+}: CompleteRunOptions): Promise<void> => {
+  const [updatedRun] = await db
+    .update(schedulerJobRuns)
+    .set(runValues)
+    .where(
+      and(
+        eq(schedulerJobRuns.id, runId),
+        eq(schedulerJobRuns.status, "running"),
+      ),
+    )
+    .returning({ id: schedulerJobRuns.id });
+
+  if (!updatedRun) {
+    return;
+  }
+
+  await db
+    .update(schedulerJobs)
+    .set(jobValues)
+    .where(
+      and(eq(schedulerJobs.id, jobId), eq(schedulerJobs.lockedBy, runnerId)),
+    );
+};
+
 export const finishRunSuccess = async ({
   db,
   job,
@@ -642,23 +694,10 @@ export const finishRunSuccess = async ({
 }: FinishRunOptions): Promise<void> => {
   const finishedAt = new Date();
 
-  await db
-    .update(schedulerJobRuns)
-    .set({
-      durationMs: durationMs(startedAt, finishedAt),
-      finishedAt,
-      status: "success",
-    })
-    .where(
-      and(
-        eq(schedulerJobRuns.id, runId),
-        eq(schedulerJobRuns.status, "running"),
-      ),
-    );
-
-  await db
-    .update(schedulerJobs)
-    .set({
+  await completeRun({
+    db,
+    jobId: job.id,
+    jobValues: {
       lastError: null,
       lastRunAt: startedAt,
       lastSuccessAt: finishedAt,
@@ -666,13 +705,18 @@ export const finishRunSuccess = async ({
       lockedBy: null,
       lockedUntil: null,
       nextRunAt: computeNextRunAt(job.schedule, finishedAt),
-    })
-    .where(
-      and(eq(schedulerJobs.id, job.id), eq(schedulerJobs.lockedBy, runnerId)),
-    );
+    },
+    runId,
+    runnerId,
+    runValues: {
+      durationMs: durationMs(startedAt, finishedAt),
+      finishedAt,
+      status: "success",
+    },
+  });
 };
 
-const finishRunSkipped = async ({
+export const finishRunSkipped = async ({
   db,
   job,
   runId,
@@ -681,38 +725,30 @@ const finishRunSkipped = async ({
 }: FinishRunOptions): Promise<void> => {
   const finishedAt = new Date();
 
-  await db
-    .update(schedulerJobRuns)
-    .set({
+  await completeRun({
+    db,
+    jobId: job.id,
+    jobValues: {
+      lockedAt: null,
+      lockedBy: null,
+      lockedUntil: null,
+    },
+    runId,
+    runnerId,
+    runValues: {
       durationMs: durationMs(startedAt, finishedAt),
       error: "SchedulerAborted",
       finishedAt,
       status: "skipped",
-    })
-    .where(
-      and(
-        eq(schedulerJobRuns.id, runId),
-        eq(schedulerJobRuns.status, "running"),
-      ),
-    );
-
-  await db
-    .update(schedulerJobs)
-    .set({
-      lockedAt: null,
-      lockedBy: null,
-      lockedUntil: null,
-    })
-    .where(
-      and(eq(schedulerJobs.id, job.id), eq(schedulerJobs.lockedBy, runnerId)),
-    );
+    },
+  });
 };
 
 type FinishRunFailureOptions = FinishRunOptions & {
   error: unknown;
 };
 
-const finishRunFailure = async ({
+export const finishRunFailure = async ({
   db,
   error,
   job,
@@ -723,24 +759,10 @@ const finishRunFailure = async ({
   const finishedAt = new Date();
   const sanitizedError = errorTag(error);
 
-  await db
-    .update(schedulerJobRuns)
-    .set({
-      durationMs: durationMs(startedAt, finishedAt),
-      error: sanitizedError,
-      finishedAt,
-      status: "failed",
-    })
-    .where(
-      and(
-        eq(schedulerJobRuns.id, runId),
-        eq(schedulerJobRuns.status, "running"),
-      ),
-    );
-
-  await db
-    .update(schedulerJobs)
-    .set({
+  await completeRun({
+    db,
+    jobId: job.id,
+    jobValues: {
       lastError: sanitizedError,
       lastFailureAt: finishedAt,
       lastRunAt: startedAt,
@@ -748,10 +770,16 @@ const finishRunFailure = async ({
       lockedBy: null,
       lockedUntil: null,
       nextRunAt: computeNextRunAt(job.schedule, finishedAt),
-    })
-    .where(
-      and(eq(schedulerJobs.id, job.id), eq(schedulerJobs.lockedBy, runnerId)),
-    );
+    },
+    runId,
+    runnerId,
+    runValues: {
+      durationMs: durationMs(startedAt, finishedAt),
+      error: sanitizedError,
+      finishedAt,
+      status: "failed",
+    },
+  });
 };
 
 const durationMs = (startedAt: Date, finishedAt: Date): number =>

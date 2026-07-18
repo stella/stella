@@ -16,6 +16,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import {
   acquireDueJobs,
+  finishRunFailure,
+  finishRunSkipped,
   finishRunSuccess,
   runSchedulerOnce,
   type SchedulerDb,
@@ -208,12 +210,15 @@ describe("per-job runtime ceiling", () => {
     const hangingTask = new Promise<void>((resolve) => {
       releaseHangingTask = resolve;
     });
-    const registry = registryOf("test.hangs", ({ job }) => {
-      if (job.id === "hanging.job") {
-        return hangingTask;
-      }
-      return undefined;
-    });
+    const registry = registryOf(
+      "test.hangs",
+      ({ job }): Promise<void> | undefined => {
+        if (job.id === "hanging.job") {
+          return hangingTask;
+        }
+        return undefined;
+      },
+    );
 
     const result = await runSchedulerOnce({
       db,
@@ -255,5 +260,130 @@ describe("per-job runtime ceiling", () => {
     const runAfterZombie = await readLatestRun("hanging.job");
     expect(runAfterZombie.status).toBe("failed");
     expect(runAfterZombie.error).toBe("SchedulerJobTimeoutError");
+  });
+
+  test("aborts the task's signal on timeout so a cooperative task can stop", async () => {
+    await seedJob({ id: "cooperative.job", task: "test.cooperative" });
+
+    let signalAborted = false;
+    // The task hangs past the ceiling; a cooperative task observes the abort on
+    // its signal instead of running blind past its lease release. The promise
+    // stays pending so the timeout (not a synchronous resolve) settles the race.
+    const registry = registryOf("test.cooperative", async ({ signal }) => {
+      signal.addEventListener("abort", () => {
+        signalAborted = true;
+      });
+      await new Promise<void>(() => {});
+    });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      maxRuntimeMs: 25,
+      registry,
+      runnerId: "runner-a",
+    });
+
+    expect(result).toMatchObject({ acquired: 1, failed: 1 });
+    expect(signalAborted).toBe(true);
+
+    // A ceiling expiry is still accounted as a failure, not a cooperative skip,
+    // even though aborting the controller also flips `signal.aborted`.
+    const run = await readLatestRun("cooperative.job");
+    expect(run.status).toBe("failed");
+    expect(run.error).toBe("SchedulerJobTimeoutError");
+  });
+});
+
+// The two-layer zombie guard (run-status precondition + lease-token check) is
+// funnelled through one writer, so every completion path must reject a late
+// write once its run row has already reached a terminal state, even if the same
+// runner has re-acquired the job under a fresh lease.
+describe("zombie completion guard holds on every write path", () => {
+  // Keep the run duration inside the int32 `duration_ms` column; the job's
+  // nextRunAt still uses PAST (seedJob default) to prove it is left untouched.
+  const RUN_STARTED_AT = new Date(Date.now() - 1000);
+
+  const seedReacquiredJobWithTerminalRun = async () => {
+    const freshLease = new Date(Date.now() + LEASE_MS);
+    await seedJob({
+      id: "zombie.job",
+      lockedBy: "runner-a",
+      lockedUntil: freshLease,
+    });
+    const [terminalRun] = await testDb
+      .insert(schedulerJobRuns)
+      .values({
+        error: "SchedulerJobTimeoutError",
+        finishedAt: new Date(),
+        jobId: "zombie.job",
+        runnerId: "runner-a",
+        startedAt: RUN_STARTED_AT,
+        status: "failed",
+        task: "test.noop",
+      })
+      .returning();
+    if (!terminalRun) {
+      throw new Error("Expected terminal run row to be seeded");
+    }
+    return terminalRun;
+  };
+
+  const expectJobAndRunUntouched = async () => {
+    const job = await readJob("zombie.job");
+    // The re-acquired lease token survives: the zombie never cleared the lock.
+    expect(job.lockedBy).toBe("runner-a");
+    expect(job.nextRunAt.getTime()).toBe(PAST.getTime());
+    expect(job.lastSuccessAt).toBeNull();
+
+    const run = await readLatestRun("zombie.job");
+    expect(run.status).toBe("failed");
+    expect(run.error).toBe("SchedulerJobTimeoutError");
+  };
+
+  test("finishRunSuccess", async () => {
+    const terminalRun = await seedReacquiredJobWithTerminalRun();
+    const job = await readJob("zombie.job");
+
+    await finishRunSuccess({
+      db,
+      job,
+      runId: terminalRun.id,
+      runnerId: "runner-a",
+      startedAt: RUN_STARTED_AT,
+    });
+
+    await expectJobAndRunUntouched();
+  });
+
+  test("finishRunSkipped", async () => {
+    const terminalRun = await seedReacquiredJobWithTerminalRun();
+    const job = await readJob("zombie.job");
+
+    await finishRunSkipped({
+      db,
+      job,
+      runId: terminalRun.id,
+      runnerId: "runner-a",
+      startedAt: RUN_STARTED_AT,
+    });
+
+    await expectJobAndRunUntouched();
+  });
+
+  test("finishRunFailure", async () => {
+    const terminalRun = await seedReacquiredJobWithTerminalRun();
+    const job = await readJob("zombie.job");
+
+    await finishRunFailure({
+      db,
+      error: new Error("late zombie failure"),
+      job,
+      runId: terminalRun.id,
+      runnerId: "runner-a",
+      startedAt: RUN_STARTED_AT,
+    });
+
+    await expectJobAndRunUntouched();
   });
 });
