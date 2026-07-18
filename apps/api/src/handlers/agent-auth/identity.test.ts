@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -21,6 +21,10 @@ import {
   getMcpResourceUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
+import {
+  initAgentAuthTestDb,
+  releaseAgentAuthTestDb,
+} from "@/api/tests/helpers/mock-agent-auth-db";
 
 // These tests drive the agent-auth slice end to end against the same
 // better-auth instance and database the API uses at runtime, so the token
@@ -69,6 +73,14 @@ const decodeJwt = (jwt: string): Json => {
   }
   return JSON.parse(Buffer.from(segment, "base64url").toString());
 };
+
+beforeAll(async () => {
+  await initAgentAuthTestDb();
+});
+
+afterAll(async () => {
+  await releaseAgentAuthTestDb();
+});
 
 /** Create a verified user, an org, and an active session cookie. */
 const createHumanSession = async () => {

@@ -34,6 +34,10 @@ import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { popDevOtp } from "@/api/lib/dev-otp-store";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
+import {
+  initAgentAuthTestDb,
+  releaseAgentAuthTestDb,
+} from "@/api/tests/helpers/mock-agent-auth-db";
 
 // These tests drive the ID-JAG path end to end against the same
 // better-auth instance + database the API uses at runtime. The external
@@ -69,6 +73,7 @@ const disableFeature = () => {
 };
 
 beforeAll(async () => {
+  await initAgentAuthTestDb();
   const { privateKey, publicKey } = await generateKeyPair("ES256", {
     extractable: true,
   });
@@ -100,9 +105,10 @@ beforeAll(async () => {
   globalThis.fetch = fetchStub as typeof fetch;
 });
 
-afterAll(() => {
+afterAll(async () => {
   globalThis.fetch = realFetch;
   disableFeature();
+  await releaseAgentAuthTestDb();
 });
 
 afterEach(async () => {
