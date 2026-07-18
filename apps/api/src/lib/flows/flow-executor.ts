@@ -44,7 +44,6 @@ import {
   brandPersistedFlowRunId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -479,7 +478,12 @@ const runCreateDocumentStep = async ({
     userId: actorUserId,
     recordAuditEvent,
     buffer: compiled.buffer,
-    fileName: sanitizeFilename(`${stepDef.documentTitle}.docx`),
+    // Pass the raw title: `createEntityFromBuffer` sanitizes with
+    // `sanitizeFilenamePreservingExtension`, which truncates the base name
+    // rather than the extension. Pre-sanitizing with the plain
+    // `sanitizeFilename` here would drop the `.docx` for near-max-length titles
+    // before the extension-preserving pass could protect it.
+    fileName: `${stepDef.documentTitle}.docx`,
     mimeType: DOCX_MIME_TYPE,
   });
 
@@ -785,6 +789,27 @@ export const resolveFlowReviewGate = async ({
               : { finishedAt: now }),
           })
           .where(eq(flowRuns.id, runId));
+
+        // A rejected gate makes the run terminal without advancing, so any
+        // later step rows stay `pending` and no worker ever enqueues them.
+        // Mirror `cancelFlowRun`: mark the abandoned non-terminal steps
+        // `skipped` so the run history reflects what actually happened. The
+        // just-resolved gate is already `completed` above, so it is excluded.
+        if (resolution.kind !== "advance") {
+          await tx
+            .update(flowRunSteps)
+            .set({ status: "skipped", finishedAt: now })
+            .where(
+              and(
+                eq(flowRunSteps.runId, runId),
+                inArray(flowRunSteps.status, [
+                  "pending",
+                  "running",
+                  "awaiting_review",
+                ]),
+              ),
+            );
+        }
 
         return {
           nextStatus,
