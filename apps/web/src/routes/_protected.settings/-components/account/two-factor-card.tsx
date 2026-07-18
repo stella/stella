@@ -249,8 +249,10 @@ const EnableTwoFactorDialog = ({
   });
 
   const verifyMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await authClient.twoFactor.verifyTotp({ code });
+    mutationFn: async (submittedCode: string) => {
+      const { error } = await authClient.twoFactor.verifyTotp({
+        code: submittedCode,
+      });
 
       if (error) {
         setCode("");
@@ -353,7 +355,7 @@ const EnableTwoFactorDialog = ({
                 onChange={setCode}
                 onComplete={(nextCode: string) => {
                   setCode(nextCode);
-                  verifyMutation.mutate();
+                  verifyMutation.mutate(nextCode);
                 }}
                 value={code}
               >
@@ -394,7 +396,7 @@ const EnableTwoFactorDialog = ({
             <Button
               disabled={code.length !== TOTP_LENGTH || verifyMutation.isPending}
               loading={verifyMutation.isPending}
-              onClick={() => verifyMutation.mutate()}
+              onClick={() => verifyMutation.mutate(code)}
             >
               {t("common.verify")}
             </Button>
@@ -462,14 +464,14 @@ const DisableTwoFactorDialog = ({
   });
 
   const disableMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (submittedCode: string) => {
       // `authClient.twoFactor.disable`'s typed body has no `otp` field (the
       // server's `before` hook validates it separately from the plugin's own
       // schema — see `requireTwoFactorManageOtp` in apps/api/src/lib/auth.ts),
       // so this calls the underlying `$fetch` directly with the raw path.
       const { error } = await authClient.$fetch("/two-factor/disable", {
         method: "POST",
-        body: { otp: code },
+        body: { otp: submittedCode },
       });
 
       if (error) {
@@ -517,7 +519,7 @@ const DisableTwoFactorDialog = ({
               onChange={setCode}
               onComplete={(nextCode: string) => {
                 setCode(nextCode);
-                disableMutation.mutate();
+                disableMutation.mutate(nextCode);
               }}
               value={code}
             >
@@ -551,7 +553,7 @@ const DisableTwoFactorDialog = ({
                 code.length !== TOTP_LENGTH || disableMutation.isPending
               }
               loading={disableMutation.isPending}
-              onClick={() => disableMutation.mutate()}
+              onClick={() => disableMutation.mutate(code)}
               variant="destructive"
             >
               {t("common.verify")}
@@ -611,7 +613,7 @@ const RegenerateBackupCodesDialog = ({
   });
 
   const regenerateMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (submittedCode: string) => {
       // `authClient.twoFactor.generateBackupCodes`'s typed body has no `otp`
       // field (the server's `before` hook validates it separately from the
       // plugin's own schema — see `requireTwoFactorManageOtp` in
@@ -621,7 +623,7 @@ const RegenerateBackupCodesDialog = ({
         "/two-factor/generate-backup-codes",
         {
           method: "POST",
-          body: { otp: code },
+          body: { otp: submittedCode },
         },
       );
 
@@ -672,7 +674,7 @@ const RegenerateBackupCodesDialog = ({
               onChange={setCode}
               onComplete={(nextCode: string) => {
                 setCode(nextCode);
-                regenerateMutation.mutate();
+                regenerateMutation.mutate(nextCode);
               }}
               value={code}
             >
@@ -717,7 +719,7 @@ const RegenerateBackupCodesDialog = ({
                     code.length !== TOTP_LENGTH || regenerateMutation.isPending
                   }
                   loading={regenerateMutation.isPending}
-                  onClick={() => regenerateMutation.mutate()}
+                  onClick={() => regenerateMutation.mutate(code)}
                   variant="destructive"
                 >
                   {t("common.verify")}
