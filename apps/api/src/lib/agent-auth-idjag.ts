@@ -402,7 +402,13 @@ export const resolveIdJagIdentity = async (
     };
   }
   await writeDelegation({ iss, sub, ...provisioned.value });
-  return await finishReady(provisioned.value);
+  // `writeDelegation` is insert-on-conflict-do-nothing: if a concurrent
+  // first-time request for the same (iss, sub) won the unique-index race, our
+  // just-provisioned principal is NOT the durable one. Re-read the delegation
+  // and mint the token for whichever principal is now authoritative, so the
+  // agent's token can never disagree with the delegation future requests use.
+  const durable = await findDelegation(iss, sub);
+  return await finishReady(durable ?? provisioned.value);
 };
 
 /**
