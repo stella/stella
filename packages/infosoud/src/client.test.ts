@@ -46,6 +46,40 @@ const getRequestPath = (input: URL | Request | string): string => {
   return new URL(input.url).pathname;
 };
 
+/**
+ * Wraps a real AbortSignal's addEventListener/removeEventListener with
+ * counters, so tests can assert the throttle's abortable delay balances every
+ * listener it registers with a matching removal instead of leaking one per
+ * successful wait on a long-lived, reused signal.
+ */
+const patchSignalListenerCounts = (
+  signal: AbortSignal,
+): { addCount: () => number; removeCount: () => number } => {
+  let adds = 0;
+  let removes = 0;
+  const originalAdd = signal.addEventListener.bind(signal);
+  const originalRemove = signal.removeEventListener.bind(signal);
+
+  signal.addEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: AddEventListenerOptions | boolean,
+  ): void => {
+    adds += 1;
+    originalAdd(type, listener, options);
+  };
+  signal.removeEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: EventListenerOptions | boolean,
+  ): void => {
+    removes += 1;
+    originalRemove(type, listener, options);
+  };
+
+  return { addCount: () => adds, removeCount: () => removes };
+};
+
 const createCaseSearchResponse = (overrides: Record<string, unknown> = {}) => ({
   bcVec: 64,
   cislo: 1,
@@ -695,6 +729,41 @@ describe("InfoSoudClient", () => {
 
     expect(result.bcVec).toBe(64);
     expect(fetchCount).toBe(1);
+  });
+
+  test("successful throttled waits do not accumulate abort listeners on a shared signal", async () => {
+    // Mirrors syncInfoSoudTrackedCases, which threads one long-lived scheduler
+    // AbortSignal through a whole tracked-case sweep: every throttled call
+    // that actually waits must remove its abort listener once the wait
+    // settles, or the listener count on the shared signal grows without bound.
+    const delayMs = 5;
+    const callCount = 5;
+
+    const client = new InfoSoudClient({
+      cache: false,
+      delayMs,
+      fetch: async () => jsonResponse(createCaseSearchResponse()),
+    });
+
+    const abortController = new AbortController();
+    const { addCount, removeCount } = patchSignalListenerCounts(
+      abortController.signal,
+    );
+
+    for (let index = 0; index < callCount; index += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential calls are required to actually exercise the politeness wait (and its listener) on each pass
+      await client.searchCase({
+        courtCode: "OSSCEDC",
+        signal: abortController.signal,
+        spisZn: `${index + 1} T 64/2024`,
+      });
+    }
+
+    // At least the calls after the first register a listener for their
+    // politeness wait (the first call has no prior request to be paced
+    // against, so it never waits and never registers one).
+    expect(addCount()).toBeGreaterThan(0);
+    expect(removeCount()).toBe(addCount());
   });
 
   test("raises a typed Prague resolution error when no district matches", async () => {

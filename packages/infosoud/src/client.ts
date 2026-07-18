@@ -378,19 +378,22 @@ const delay = async (ms: number, signal?: AbortSignal): Promise<void> => {
     // chain for the full politeness gap; the throttle re-checks the signal
     // once this resolves and rejects the caller. The timer and the abort
     // listener are mutually exclusive (abort clears the timer), so the wait
-    // settles exactly once.
+    // settles exactly once. Both settlement paths remove the abort listener:
+    // `{ once: true }` drops it as part of dispatching the abort event, and
+    // the timer path removes it explicitly. Without the explicit removal, a
+    // long-lived signal reused across many *successful* waits (e.g. a
+    // scheduler sweep threading one AbortSignal through hundreds of throttled
+    // calls) would accumulate one stale listener per call.
     const finish = (): void => {
+      signal?.removeEventListener("abort", onAbort);
       resolve();
     };
     const timer = setTimeout(finish, ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        finish();
-      },
-      { once: true },
-    );
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      finish();
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 };
 
