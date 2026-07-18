@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/account-deletion-cleanup-queue";
 import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
 import {
+  ACCOUNT_DELETION_ERROR_CODE,
   assertUserIsNotSoleOrgOwner,
   clearWorkspaceLeadRole,
   collectUserOrganizationAndWorkspaceIds,
@@ -41,7 +42,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
-export { ACCOUNT_DELETION_ERROR_CODE } from "@/api/lib/account-deletion-steps";
+export { ACCOUNT_DELETION_ERROR_CODE };
 
 /**
  * Fetches the user email by ID.
@@ -295,13 +296,19 @@ export const verifyAndDeleteUser = async (
       await rootDb.transaction(async (tx) => {
         await lockUserRowForDeletion(tx, currentUserId);
 
-        // Verified inside this same transaction (and after the row lock
-        // above) so the OTP check and the deletion it gates stay atomic.
+        // Consumed inside this same transaction (and after the row lock
+        // above) so the OTP check and the deletion it gates stay atomic. The
+        // purpose-specific error codes keep the frontend's localized
+        // invalid/expired messaging working.
         const otpResult = await verifyConfirmationOtp({
           purpose: "delete-account",
           email,
           code,
           db: tx,
+          errorCode: {
+            invalid: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
+            expired: ACCOUNT_DELETION_ERROR_CODE.otpExpired,
+          },
         });
         if (Result.isError(otpResult)) {
           throw otpResult.error;

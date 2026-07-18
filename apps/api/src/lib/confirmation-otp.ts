@@ -90,74 +90,70 @@ export const createConfirmationOtp = async ({
       }),
   });
 
+/**
+ * Purpose-specific error codes. Threaded in by callers whose frontend maps
+ * codes to localized messages (e.g. account deletion) so this generic helper
+ * surfaces that catalog's codes without depending on any one flow's error
+ * module.
+ */
+type ConfirmationOtpErrorCodes = {
+  invalid: string;
+  expired: string;
+};
+
 type VerifyConfirmationOtpParams = {
   purpose: ConfirmationOtpPurpose;
   email: string;
   code: string;
   /**
-   * Database handle to run the lookup/delete against. Defaults to `rootDb`;
-   * pass an in-flight transaction so the check participates in a caller's
-   * existing lock/atomicity guarantees (e.g. account deletion, which checks
+   * Database handle to run the atomic consume against. Defaults to `rootDb`;
+   * pass an in-flight transaction so the consume participates in a caller's
+   * existing lock/atomicity guarantees (e.g. account deletion, which consumes
    * the code inside the same transaction that holds the user row lock).
    */
   db?: ConfirmationOtpDb;
+  errorCode?: ConfirmationOtpErrorCodes;
 };
 
 /**
- * Verifies a confirmation OTP for the given purpose. The verification row is
- * deleted on the first wrong attempt (preventing brute force) and on
- * success (making the code single-use); an expired code is also deleted.
+ * Verifies and consumes a confirmation OTP for the given purpose. A single
+ * `DELETE ... RETURNING` claims the row atomically, so two concurrent requests
+ * can never both succeed on the same code (closing the check-then-delete
+ * replay window). The row is removed whether the code is correct, wrong
+ * (burn-on-first-attempt), or expired; the branches below only decide which
+ * error, if any, to surface.
  */
 export const verifyConfirmationOtp = async ({
   purpose,
   email,
   code,
   db = rootDb,
+  errorCode,
 }: VerifyConfirmationOtpParams): Promise<Result<void, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
       const identifier = confirmationOtpIdentifier(purpose, email);
 
-      const verificationRow = await db
-        .select()
-        .from(verification)
+      const [consumed] = await db
+        .delete(verification)
         .where(eq(verification.identifier, identifier))
-        .limit(1)
-        .then((rows) => rows[0]);
+        .returning();
 
-      if (!verificationRow) {
+      if (!consumed || consumed.value !== code) {
         throw new HandlerError({
+          ...(errorCode ? { code: errorCode.invalid } : {}),
           status: 400,
           message: "Invalid verification code",
         });
       }
 
-      if (verificationRow.value !== code) {
-        // Prevent brute force by deleting the OTP on the first incorrect attempt
-        await db
-          .delete(verification)
-          .where(eq(verification.identifier, identifier));
-
+      if (consumed.expiresAt.getTime() < Date.now()) {
         throw new HandlerError({
-          status: 400,
-          message: "Invalid verification code",
-        });
-      }
-
-      if (verificationRow.expiresAt.getTime() < Date.now()) {
-        await db
-          .delete(verification)
-          .where(eq(verification.identifier, identifier));
-
-        throw new HandlerError({
+          ...(errorCode ? { code: errorCode.expired } : {}),
           status: 400,
           message: "Verification code has expired",
         });
       }
-
-      await db
-        .delete(verification)
-        .where(eq(verification.id, verificationRow.id));
     },
     catch: (err) =>
       err instanceof HandlerError
