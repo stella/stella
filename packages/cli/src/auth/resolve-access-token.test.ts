@@ -19,10 +19,12 @@ import { resolveAccessToken } from "./resolve-access-token.js";
  * `onDiscovery`, when given, runs while the `.well-known` request is being
  * answered — a hook for simulating a concurrent `stella` process (e.g. a
  * parallel `auth login`) that writes to `credentials.json` during the window
- * `resolveAccessToken` spends awaiting metadata discovery.
+ * `resolveAccessToken` spends awaiting metadata discovery. `handleTokenRequest`
+ * may itself be async for the equivalent simulation around the token-endpoint
+ * exchange.
  */
 const startMockProvider = (
-  handleTokenRequest: (body: URLSearchParams) => Response,
+  handleTokenRequest: (body: URLSearchParams) => Response | Promise<Response>,
   onDiscovery?: () => Promise<void>,
 ) => {
   let requestCount = 0;
@@ -44,7 +46,9 @@ const startMockProvider = (
         });
       }
       if (url.pathname === "/oauth2/token") {
-        return handleTokenRequest(new URLSearchParams(await request.text()));
+        return await handleTokenRequest(
+          new URLSearchParams(await request.text()),
+        );
       }
       return new Response("not found", { status: 404 });
     },
@@ -301,6 +305,71 @@ describe("resolveAccessToken", () => {
           (stored) => stored.serverUrl === otherServerUrl,
         )?.accessToken,
       ).toBe("other-server-token");
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("does not clobber a credential a concurrent process writes during the token-endpoint exchange", async () => {
+    const otherServerUrl = "https://other-exchange.example";
+    let tokenRequestCount = 0;
+    const provider = startMockProvider(async (body) => {
+      tokenRequestCount += 1;
+      if (
+        body.get("grant_type") !== "refresh_token" ||
+        body.get("refresh_token") !== "old-refresh-token"
+      ) {
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      }
+      // Simulate a concurrent `stella` process (e.g. `auth login` to a
+      // different server) finishing a write to `credentials.json` while the
+      // token-endpoint exchange itself — not just metadata discovery — is
+      // still in flight.
+      const concurrent = await readCredentialFile(configDir);
+      await writeCredentialFile(
+        configDir,
+        upsertCredential(
+          concurrent,
+          buildCredential(otherServerUrl, {
+            accessToken: "other-exchange-token",
+          }),
+        ),
+      );
+      return Response.json({
+        access_token: "new-access-token",
+        expires_in: 900,
+        refresh_token: "new-refresh-token",
+        scope: "openid stella:read",
+        token_type: "Bearer",
+      });
+    });
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      expect(result.status).toBe("ok");
+      if (result.status === "ok") {
+        expect(result.token).toBe("new-access-token");
+      }
+      expect(tokenRequestCount).toBe(1);
+
+      // The concurrently-written credential for the other server must
+      // survive `ensureFreshCredential`'s write-back rather than being
+      // silently dropped by a snapshot taken before the token exchange.
+      const persisted = await readCredentialFile(configDir);
+      expect(
+        persisted.credentials.find(
+          (stored) => stored.serverUrl === otherServerUrl,
+        )?.accessToken,
+      ).toBe("other-exchange-token");
     } finally {
       provider.close();
     }

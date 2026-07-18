@@ -3,8 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { readCredentialFile, upsertCredential } from "./credential-store.js";
-import type { CredentialFile, StoredCredential } from "./credential-store.js";
+import { readCredentialFile } from "./credential-store.js";
+import type { StoredCredential } from "./credential-store.js";
 import { ensureFreshCredential } from "./ensure-fresh-credential.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 
@@ -56,13 +56,11 @@ const startMockProvider = (
 
 describe("ensureFreshCredential", () => {
   let configDir: string;
-  let credentialFile: CredentialFile;
 
   beforeEach(async () => {
     configDir = await mkdtemp(
       path.join(os.tmpdir(), "stella-cli-refresh-test-"),
     );
-    credentialFile = { credentials: [], defaultOrgByServer: {}, version: 1 };
   });
 
   afterEach(async () => {
@@ -78,7 +76,6 @@ describe("ensureFreshCredential", () => {
       const result = await ensureFreshCredential({
         configDir,
         credential,
-        credentialFile,
         metadata: provider.metadata,
       });
 
@@ -118,7 +115,6 @@ describe("ensureFreshCredential", () => {
       const result = await ensureFreshCredential({
         configDir,
         credential,
-        credentialFile: upsertCredential(credentialFile, credential),
         metadata: provider.metadata,
         now,
       });
@@ -152,7 +148,6 @@ describe("ensureFreshCredential", () => {
       const result = await ensureFreshCredential({
         configDir,
         credential,
-        credentialFile: upsertCredential(credentialFile, credential),
         metadata: provider.metadata,
       });
 
@@ -178,7 +173,6 @@ describe("ensureFreshCredential", () => {
       const result = await ensureFreshCredential({
         configDir,
         credential,
-        credentialFile: upsertCredential(credentialFile, credential),
         metadata: provider.metadata,
       });
 

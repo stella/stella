@@ -12,8 +12,12 @@
 import { Result } from "better-result";
 
 import { getMcpResourceUrl } from "./constants.js";
-import { upsertCredential, writeCredentialFile } from "./credential-store.js";
-import type { CredentialFile, StoredCredential } from "./credential-store.js";
+import {
+  readCredentialFile,
+  upsertCredential,
+  writeCredentialFile,
+} from "./credential-store.js";
+import type { StoredCredential } from "./credential-store.js";
 import { NoRefreshTokenError } from "./errors.js";
 import type { CliAuthError } from "./errors.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
@@ -44,7 +48,6 @@ export const credentialNeedsRefresh = (
 export type EnsureFreshCredentialInput = {
   readonly configDir: string;
   readonly credential: StoredCredential;
-  readonly credentialFile: CredentialFile;
   readonly metadata: AuthorizationServerMetadata;
   readonly now?: number;
 };
@@ -90,9 +93,18 @@ export const ensureFreshCredential = async (
     updatedAt: now,
   };
 
+  // Re-read right before the write rather than trusting any snapshot the
+  // caller took earlier: `refreshAccessToken` above is a network round trip,
+  // during which another `stella` process (a concurrent command, or `auth
+  // login`/`logout` for a different server) may have written to
+  // `credentials.json`. Merging into the file as it stands right now — not
+  // as it stood before the exchange — keeps that window as small as this
+  // process can make it without a lock (full read-modify-write atomicity is
+  // a separate, tracked follow-up).
+  const latestCredentialFile = await readCredentialFile(input.configDir);
   await writeCredentialFile(
     input.configDir,
-    upsertCredential(input.credentialFile, updated),
+    upsertCredential(latestCredentialFile, updated),
   );
 
   return Result.ok(updated);
