@@ -152,6 +152,22 @@ const broadcastLocalToOrganization = (
 // local SSE connections. Publishing lives in sse-broadcast.ts so the
 // scheduler can publish without importing this connection registry.
 
+/**
+ * Whether a looped-back workspace/organization payload is one THIS instance
+ * already delivered inline during a subscriber attach/reattach window (when
+ * `subscriptionLive` was false at broadcast time but Redis had already accepted
+ * our SUBSCRIBE, so the event both delivered inline and comes back on the
+ * loopback). Dropping only that duplicate copy keeps own events exactly-once
+ * without affecting other instances' events, which never carry our origin id
+ * and must still deliver via loopback. Absent fields (older-format publisher on
+ * a rolling deploy) never match, so such messages always deliver.
+ */
+const isOwnInlineDelivery = (payload: {
+  originInstanceId?: string | undefined;
+  deliveredInline?: boolean | undefined;
+}): boolean =>
+  payload.deliveredInline === true && payload.originInstanceId === INSTANCE_ID;
+
 const handleMessage = (message: string) => {
   try {
     const parsed = parseRedisPayload(message);
@@ -159,8 +175,14 @@ const handleMessage = (message: string) => {
       return;
     }
     if (parsed.scope === "workspace") {
+      if (isOwnInlineDelivery(parsed)) {
+        return;
+      }
       broadcastLocal(brandPersistedWorkspaceId(parsed.id), parsed.event);
     } else if (parsed.scope === "organization") {
+      if (isOwnInlineDelivery(parsed)) {
+        return;
+      }
       broadcastLocalToOrganization(
         brandPersistedOrganizationId(parsed.id),
         parsed.event,
@@ -196,13 +218,19 @@ export const broadcast = (
   // otherwise reach no local client. When a subscriber IS attached, the
   // loopback (handleMessage → broadcastLocal) delivers locally, so
   // delivering inline as well would double-deliver — hence the guard on
-  // the attach state evaluated here, at broadcast time.
+  // the attach state evaluated here, at broadcast time. During an attach
+  // window the guard can read "not attached" while Redis has already accepted
+  // our SUBSCRIBE, so the event both delivers inline AND loops back; the
+  // origin metadata below lets handleMessage drop that duplicate loopback copy.
   const deliveredLocally = !hasAttachedSubscriber();
   if (deliveredLocally) {
     broadcastLocal(workspaceId, event);
   }
 
-  publishWorkspaceEvent(workspaceId, event).catch((error: unknown) => {
+  publishWorkspaceEvent(workspaceId, event, {
+    originInstanceId: INSTANCE_ID,
+    deliveredInline: deliveredLocally,
+  }).catch((error: unknown) => {
     logger.warn("sse.redis_publish_failed", {
       "error.type": errorTag(error),
     });
@@ -224,7 +252,10 @@ export const broadcastToOrganization = (
     broadcastLocalToOrganization(organizationId, event);
   }
 
-  publishOrganizationEvent(organizationId, event).catch((error: unknown) => {
+  publishOrganizationEvent(organizationId, event, {
+    originInstanceId: INSTANCE_ID,
+    deliveredInline: deliveredLocally,
+  }).catch((error: unknown) => {
     logger.warn("sse.redis_publish_failed", {
       "error.type": errorTag(error),
     });
@@ -353,12 +384,24 @@ const hasAttachedSubscriber = (): boolean =>
   );
 
 /**
- * Bounded backoff for retrying the subscriber attach. A transient Redis
- * blip at boot must not leave this instance permanently deaf (publisher
- * healthy, subscriber never attached); retry a handful of times with a
- * short capped backoff before logging a persistent failure.
+ * Backoff ramp for retrying the subscriber attach. A transient Redis blip at
+ * boot must not leave this instance permanently deaf (publisher healthy,
+ * subscriber never attached), and — since inline local delivery only covers
+ * this instance's own events — a longer outage must self-heal on recovery
+ * rather than miss every other replica's events until the process restarts.
+ * So after this ramp, retries continue forever at the steady capped interval.
  */
 const SUBSCRIBER_ATTACH_RETRY_DELAYS_MS = [200, 500, 1000, 2000, 5000];
+
+/** Capped interval every retry uses once the ramp above is exhausted. */
+const SUBSCRIBER_ATTACH_STEADY_DELAY_MS = 5000;
+
+/**
+ * When retrying at the steady interval, escalate to a single error log the
+ * moment the ramp is exhausted, then warn only every Nth steady attempt so a
+ * prolonged outage does not spam the logs (≈ once per minute at 5s).
+ */
+const SUBSCRIBER_ATTACH_STEADY_LOG_EVERY = 12;
 
 /**
  * Attach the cross-instance Redis subscriber for `lifecycle`, retrying with a
@@ -420,16 +463,31 @@ const attachSubscriber = async (
     logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
   } catch (error: unknown) {
     subscriber?.close();
-    const delayMs = SUBSCRIBER_ATTACH_RETRY_DELAYS_MS[attempt];
-    if (delayMs === undefined || activeLifecycle !== lifecycle) {
-      // Retries exhausted (or the lifecycle was torn down): surface a
-      // persistent failure. Local delivery still works because
-      // `broadcast`/`broadcastToOrganization` deliver inline while no
-      // subscriber is attached.
-      logger.error("sse.redis_connection_failed", connectionErrorFields(error));
+    if (activeLifecycle !== lifecycle) {
+      // The lifecycle was torn down (stop, or stop+restart) during the
+      // attempt; abandon this attach loop quietly.
       return;
     }
-    logger.warn("sse.redis_subscribe_retry", connectionErrorFields(error));
+    const rampDelay = SUBSCRIBER_ATTACH_RETRY_DELAYS_MS[attempt];
+    const delayMs = rampDelay ?? SUBSCRIBER_ATTACH_STEADY_DELAY_MS;
+    if (rampDelay !== undefined) {
+      // Still ramping up after a transient blip.
+      logger.warn("sse.redis_subscribe_retry", connectionErrorFields(error));
+    } else {
+      const steadyAttempt = attempt - SUBSCRIBER_ATTACH_RETRY_DELAYS_MS.length;
+      if (steadyAttempt === 0) {
+        // Ramp exhausted: escalate once to surface a persistent outage. Retries
+        // continue at the steady interval so the instance self-heals whenever
+        // Redis recovers; inline local delivery covers this instance's own
+        // events meanwhile, but other replicas' events need the subscriber.
+        logger.error(
+          "sse.redis_connection_failed",
+          connectionErrorFields(error),
+        );
+      } else if (steadyAttempt % SUBSCRIBER_ATTACH_STEADY_LOG_EVERY === 0) {
+        logger.warn("sse.redis_subscribe_retry", connectionErrorFields(error));
+      }
+    }
     await Bun.sleep(delayMs);
     await attachSubscriber(lifecycle, attempt + 1);
   }

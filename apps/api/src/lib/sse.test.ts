@@ -423,6 +423,86 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
     stopSse();
     await flushMicrotasks();
   });
+
+  test("an own event broadcast during the attach window is delivered exactly once (loopback copy dropped)", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+    const original = createdClients.at(-1);
+    expect(original).toBeDefined();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // Enter the attach window: the replacement client's SUBSCRIBE is accepted
+    // (subscribedLive), so the server loops events back, but sse.ts has not yet
+    // set subscriptionLive, so hasAttachedSubscriber() is false. Do NOT flush.
+    if (original) {
+      simulateDeafReconnect(original);
+    }
+    const replacement = createdClients.at(-1);
+    expect(replacement).not.toBe(original);
+    expect(replacement?.subscribedLive).toBe(true);
+
+    // Broadcast our own event in the window: delivered inline AND published with
+    // our origin id + deliveredInline=true, so the copy that loops back through
+    // the already-live subscription must be suppressed.
+    broadcast(workspaceId, { type: "own-in-window", data: null });
+
+    // Exactly one copy (the inline one). Attaching the replacement and then
+    // broadcasting a steady event that rides loopback only; reading it second
+    // proves the windowed event was not delivered twice.
+    expect(decode((await reader.read()).value)).toContain("own-in-window");
+    await flushMicrotasks();
+    broadcast(workspaceId, { type: "after-window", data: null });
+    expect(decode((await reader.read()).value)).toContain("after-window");
+
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("a remote event received during the attach window is delivered via loopback", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+    const original = createdClients.at(-1);
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    if (original) {
+      simulateDeafReconnect(original);
+    }
+    const replacement = createdClients.at(-1);
+    expect(replacement?.messageHandler).toBeTruthy();
+
+    // Another instance's event arrives on our subscription during the window.
+    // Inline delivery never covers remote events, and origin suppression only
+    // drops OUR own inline-delivered events, so this must deliver via loopback.
+    const remotePayload = JSON.stringify({
+      scope: "workspace",
+      id: workspaceId,
+      event: { type: "remote-in-window", data: null },
+      originInstanceId: "some-other-instance",
+      deliveredInline: false,
+    });
+    replacement?.messageHandler?.(remotePayload);
+
+    expect(decode((await reader.read()).value)).toContain("remote-in-window");
+
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
 });
 
 describe("startSse: subscriber attach retry", () => {
@@ -454,5 +534,40 @@ describe("startSse: subscriber attach retry", () => {
 
     await flushMicrotasks();
     subscribeFailuresRemaining = 0;
+  });
+
+  test("keeps retrying at the capped interval and recovers after a prolonged outage", async () => {
+    createdClients.length = 0;
+    subscribeBehavior = "resolve";
+    // Fail the whole 5-step ramp plus one steady attempt (6 failures), then
+    // attach: proves retries continue past the ramp instead of giving up, so an
+    // outage longer than the ramp still self-heals when Redis recovers.
+    subscribeFailuresRemaining = 6;
+    const sleepSpy = spyOn(Bun, "sleep").mockImplementation(async () => {});
+
+    startSse();
+    // Bun.sleep is instant here, so the whole retry chain drains within
+    // microtasks; a macrotask tick lets every attempt run to the eventual
+    // success. A few ticks give margin.
+    const tick = async (): Promise<void> => {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    };
+    await tick();
+    await tick();
+    await tick();
+
+    // 7 clients: 6 failed attach attempts + the one that finally subscribed.
+    expect(createdClients).toHaveLength(7);
+    const attached = createdClients.at(-1);
+    expect(attached?.subscribedLive).toBe(true);
+    expect(attached?.subscribe).toHaveBeenCalledTimes(1);
+    expect(attached?.close).not.toHaveBeenCalled();
+
+    sleepSpy.mockRestore();
+    subscribeFailuresRemaining = 0;
+    stopSse();
+    await flushMicrotasks();
   });
 });
