@@ -63,23 +63,62 @@ const ghsaId = (advisory: Record<string, unknown>): string => {
   );
 };
 
-// Runs `bun audit --json` in the repo root and returns the distinct gated
-// (high/critical) advisories. `bun audit` groups advisories by package name.
-const collectGatedAdvisories = async (): Promise<Advisory[]> => {
-  const proc = Bun.spawn(["bun", "audit", "--json"], {
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const stdout = await new Response(proc.stdout).text();
-  await proc.exited;
+// Raised when `bun audit` itself fails (crash, network, unparseable output)
+// rather than reporting a clean lockfile. The gate must fail closed on this:
+// an external-tool failure must never be conflated with "no advisories".
+class AuditCommandError extends Error {
+  override readonly name = "AuditCommandError";
+}
 
-  if (stdout.trim().length === 0) {
-    // No advisories at all: `bun audit --json` prints nothing.
-    return [];
+type AuditProcessResult = {
+  exitCode: number;
+  stderr: string;
+  stdout: string;
+};
+
+const safeJsonParse = (text: string): Record<string, unknown> | null => {
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+};
+
+// Interpret a raw `bun audit --json` result into gated advisories, or throw
+// AuditCommandError when the audit did not actually run to completion. Pure and
+// synchronous so the self-test can exercise the fail-closed contract directly.
+//
+// `bun audit` contract:
+//   exit 0    + empty stdout  -> clean lockfile (no advisories)
+//   exit 0/!0 + advisory JSON -> advisories found (nonzero when it finds any)
+//   nonzero   + no/garbage out -> the audit tool failed; DO NOT treat as clean
+const gatedAdvisoriesFromAuditResult = ({
+  exitCode,
+  stderr,
+  stdout,
+}: AuditProcessResult): Advisory[] => {
+  const trimmed = stdout.trim();
+
+  if (trimmed.length === 0) {
+    if (exitCode === 0) {
+      // Clean: `bun audit --json` prints nothing and exits 0.
+      return [];
+    }
+    const detail = stderr.trim();
+    throw new AuditCommandError(
+      `bun audit exited ${exitCode} without producing audit JSON; the audit itself failed and cannot be treated as clean.${
+        detail ? `\n${detail}` : ""
+      }`,
+    );
   }
 
-  const parsed = JSON.parse(stdout) as Record<string, unknown>;
+  const parsed = safeJsonParse(trimmed);
+  if (parsed === null) {
+    throw new AuditCommandError(
+      `bun audit (exit ${exitCode}) produced output that is not valid JSON; refusing to treat an unparseable audit as clean.`,
+    );
+  }
+
   const advisories = (parsed["advisories"] ?? parsed) as Record<
     string,
     unknown
@@ -106,6 +145,23 @@ const collectGatedAdvisories = async (): Promise<Advisory[]> => {
     }
   }
   return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+};
+
+// Runs `bun audit --json` in the repo root and returns the distinct gated
+// (high/critical) advisories. `bun audit` groups advisories by package name.
+const collectGatedAdvisories = async (): Promise<Advisory[]> => {
+  const proc = Bun.spawn(["bun", "audit", "--json"], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+
+  return gatedAdvisoriesFromAuditResult({ exitCode, stderr, stdout });
 };
 
 const formatAdvisory = (advisory: Advisory): string =>
@@ -189,7 +245,8 @@ const check = async (advisories: Advisory[]): Promise<number> => {
 };
 
 // Prove the gate fires without waiting for a real new advisory: inject a
-// synthetic advisory that is absent from the baseline and assert it is caught.
+// synthetic advisory that is absent from the baseline and assert it is caught,
+// and prove a failed audit command fails closed rather than reading as clean.
 const selfTest = async (): Promise<number> => {
   const baseline = await readBaseline();
   const synthetic: Advisory = {
@@ -199,12 +256,34 @@ const selfTest = async (): Promise<number> => {
     title: "synthetic advisory",
   };
   const { newlyIntroduced } = diffAgainstBaseline([synthetic], baseline);
-  if (newlyIntroduced.some((a) => a.id === synthetic.id)) {
-    console.info("Self-test passed: a new advisory is detected by --check.");
-    return 0;
+  if (!newlyIntroduced.some((a) => a.id === synthetic.id)) {
+    console.error("Self-test FAILED: synthetic advisory was not detected.");
+    return 1;
   }
-  console.error("Self-test FAILED: synthetic advisory was not detected.");
-  return 1;
+
+  // A failing `bun audit` (nonzero exit, no parseable JSON) must be surfaced as
+  // an error, not silently accepted as a clean lockfile.
+  let auditFailureFailedClosed = false;
+  try {
+    gatedAdvisoriesFromAuditResult({
+      exitCode: 1,
+      stderr: "error: failed to reach the advisory database",
+      stdout: "",
+    });
+  } catch (error) {
+    auditFailureFailedClosed = error instanceof AuditCommandError;
+  }
+  if (!auditFailureFailedClosed) {
+    console.error(
+      "Self-test FAILED: a failing audit command was treated as clean.",
+    );
+    return 1;
+  }
+
+  console.info(
+    "Self-test passed: a new advisory is detected by --check and a failed audit fails closed.",
+  );
+  return 0;
 };
 
 const main = async (): Promise<void> => {
@@ -228,4 +307,14 @@ const main = async (): Promise<void> => {
   report(advisories);
 };
 
-await main();
+try {
+  await main();
+} catch (error) {
+  if (error instanceof AuditCommandError) {
+    // Fail closed: the audit tool itself failed, so we cannot assert the
+    // lockfile is clean. Surface the reason and exit nonzero to block the gate.
+    console.error(error.message);
+    process.exit(1);
+  }
+  throw error;
+}
