@@ -2675,6 +2675,13 @@ type Messages = {
     "aiAdaptHint": "AI adapts this wording to fit each place it appears in the document.";
     "allTemplates": "All templates";
     "backToList": "Back to templates";
+    "binding": {
+      "attorneyLead": "Lead attorney";
+      "fieldBillingReference": "Billing reference";
+      "sourceAttorney": "Attorney";
+      "sourceFirm": "Firm";
+      "sourceParty": "Other party";
+    };
     "browseFiles": "Browse files";
     "categoryDeleteConfirm": "This will remove the category. Templates in this category will become uncategorized.";
     "categoryDeleteFailed": "Failed to delete category";
@@ -2954,6 +2961,9 @@ type Messages = {
       "slashGroupInsert": "Insert";
       "slashGroupReuse": "Reuse";
       "slashHint": "Type to filter or name a new field";
+      "sourceEnable": "Fill from a matter record";
+      "sourceHint": "The value is filled from the matter (its client, a party, the matter itself, or an attorney) when the document is generated.";
+      "sourcePickSource": "Data source";
       "textPlusAi": "Person + AI";
       "useExisting": "Use existing {name}";
       "whoFills": "Who fills this field later?";

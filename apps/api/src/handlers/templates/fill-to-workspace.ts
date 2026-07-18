@@ -185,6 +185,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             values: parsed,
             scopedDb,
             organizationId,
+            workspaceId,
             clauseOverrides: body.clauseOverrides,
             assertUsageAvailable,
             generateAiValue: buildAiFieldGenerator({

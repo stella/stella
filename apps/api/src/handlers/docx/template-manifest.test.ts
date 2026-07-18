@@ -158,6 +158,49 @@ describe("readManifest", () => {
     expect(field?.condition).toBe('client_type == "company"');
   });
 
+  test("round-trips a contact-sourced field's binding", async () => {
+    const docx = await createMinimalDocx();
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "client_name",
+          source: { kind: "contact", field: "displayName" },
+        },
+      ],
+    };
+    const withManifest = await writeManifest(docx, manifest);
+    const result = await readManifest(withManifest);
+
+    const field = result?.fields.find((f) => f.path === "client_name");
+    expect(field?.source).toEqual({
+      kind: "contact",
+      field: "displayName",
+    });
+  });
+
+  test("round-trips a party-sourced field's binding (role + field)", async () => {
+    const docx = await createMinimalDocx();
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "opposing_email",
+          source: { kind: "party", role: "opposing_party", field: "email" },
+        },
+      ],
+    };
+    const withManifest = await writeManifest(docx, manifest);
+    const result = await readManifest(withManifest);
+
+    const field = result?.fields.find((f) => f.path === "opposing_email");
+    expect(field?.source).toEqual({
+      kind: "party",
+      role: "opposing_party",
+      field: "email",
+    });
+  });
+
   test("migrates a legacy <st:conditions> section into boolean condition-fields", async () => {
     const { manifestNamedConditions } = await import("./manifest-conditions");
 

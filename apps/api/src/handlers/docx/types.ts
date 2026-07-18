@@ -10,6 +10,11 @@ import {
 
 import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
 
+import { type FieldSource, isFieldSource } from "./binding-sources";
+
+export type { FieldSource } from "./binding-sources";
+export { isFieldSource } from "./binding-sources";
+
 // ── Common ────────────────────────────────────────────────
 
 export type TextFormat = {
@@ -379,6 +384,13 @@ export type FieldMeta = {
    */
   lookup?: FieldLookup | undefined;
   /**
+   * Contact-sourced field: the value is resolved from a contact record (the
+   * matter's client) at fill time, not user-entered. A derived value source,
+   * mutually exclusive with the others ({@link formula}, {@link aiPrompt},
+   * {@link aiAdapt}, {@link lookup}, {@link parts}, {@link condition}).
+   */
+  source?: FieldSource | undefined;
+  /**
    * Formula field: the value is derived from other fields via an arithmetic
    * expression (evaluated by `evaluateNumericExpression`) at fill time, e.g.
    * `min(rent * (1 + index / 100), rent * 1.05)`. Derived, never
@@ -534,6 +546,21 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
     return false;
   }
 
+  // A contact-sourced field's value is resolved from a contact record at fill
+  // time, never user-entered, so it cannot coexist with another value source.
+  if (
+    value["source"] !== undefined &&
+    (value["formula"] !== undefined ||
+      value["aiPrompt"] !== undefined ||
+      value["aiAdapt"] !== undefined ||
+      value["lookup"] !== undefined ||
+      value["parts"] !== undefined ||
+      value["condition"] !== undefined ||
+      value["conditionAst"] !== undefined)
+  ) {
+    return false;
+  }
+
   return (
     (value["label"] === undefined || typeof value["label"] === "string") &&
     (value["hint"] === undefined || typeof value["hint"] === "string") &&
@@ -565,7 +592,8 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
     (value["conditionAst"] === undefined ||
       v.is(conditionNodeSchema, value["conditionAst"])) &&
     (value["dateFormat"] === undefined ||
-      isFieldDateFormat(value["dateFormat"]))
+      isFieldDateFormat(value["dateFormat"])) &&
+    (value["source"] === undefined || isFieldSource(value["source"]))
   );
 };
 
@@ -662,6 +690,9 @@ export type ResolvedField = {
   /** Mirrors {@link FieldMeta.lookup}: the fill form shows a registry-lookup
    *  hint and checks the registry-number format before submit. */
   lookup?: FieldLookup | undefined;
+  /** Mirrors {@link FieldMeta.source}: the value is resolved from a contact
+   *  record at fill time, so the fill form renders no input for the field. */
+  source?: FieldSource | undefined;
   /** Mirrors {@link FieldMeta.formula}: the value is derived at fill time, so
    *  the fill form renders no input for the field. */
   formula?: string | undefined;

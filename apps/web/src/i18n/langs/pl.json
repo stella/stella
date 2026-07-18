@@ -2672,6 +2672,13 @@
     "aiAdaptHint": "AI dostosuje to sformułowanie do każdego miejsca w dokumencie, w którym się pojawia.",
     "allTemplates": "Wszystkie szablony",
     "backToList": "Powrót do szablonów",
+    "binding": {
+      "attorneyLead": "Prawnik wiodący",
+      "fieldBillingReference": "Numer referencyjny rozliczenia",
+      "sourceAttorney": "Prawnik",
+      "sourceFirm": "Kancelaria",
+      "sourceParty": "Inna strona"
+    },
     "browseFiles": "Przeglądaj pliki",
     "categoryDeleteConfirm": "Spowoduje to usunięcie kategorii. Szablony w tej kategorii staną się niekategoryzowane.",
     "categoryDeleteFailed": "Nie udało się usunąć kategorii",
@@ -2951,6 +2958,9 @@
       "slashGroupInsert": "Wstaw",
       "slashGroupReuse": "Użyj ponownie",
       "slashHint": "Wpisz, aby filtrować pola lub nazwać nowe",
+      "sourceEnable": "Wypełnij ze sprawy",
+      "sourceHint": "Wartość jest wypełniana ze sprawy (jej klienta, strony, samej sprawy lub prawnika) podczas generowania dokumentu.",
+      "sourcePickSource": "Źródło danych",
       "textPlusAi": "Osoba + AI",
       "useExisting": "Użyj istniejącego pola {name}",
       "whoFills": "Kto później wypełni to pole?"

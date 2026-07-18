@@ -2672,6 +2672,13 @@
     "aiAdaptHint": "MI pielāgos šo formulējumu katrai dokumenta vietai, kur tas parādās.",
     "allTemplates": "Visas veidnes",
     "backToList": "Atpakaļ pie veidnēm",
+    "binding": {
+      "attorneyLead": "Vadošais advokāts",
+      "fieldBillingReference": "Norēķinu atsauce",
+      "sourceAttorney": "Advokāts",
+      "sourceFirm": "Birojs",
+      "sourceParty": "Cita puse"
+    },
     "browseFiles": "Pārlūkot failus",
     "categoryDeleteConfirm": "Kategorija tiks noņemta. Veidnes šajā kategorijā kļūs nekategorizētas.",
     "categoryDeleteFailed": "Neizdevās dzēst kategoriju",
@@ -2951,6 +2958,9 @@
       "slashGroupInsert": "Ievietot",
       "slashGroupReuse": "Izmantot atkārtoti",
       "slashHint": "Rakstiet, lai filtrētu laukus vai nosauktu jaunu",
+      "sourceEnable": "Aizpildīt no lietas",
+      "sourceHint": "Vērtība tiek aizpildīta no lietas (tās klienta, puses, pašas lietas vai advokāta) dokumenta ģenerēšanas brīdī.",
+      "sourcePickSource": "Datu avots",
       "textPlusAi": "Persona + MI",
       "useExisting": "Izmantot esošo lauku {name}",
       "whoFills": "Kas vēlāk aizpildīs šo lauku?"

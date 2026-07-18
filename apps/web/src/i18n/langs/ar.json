@@ -2672,6 +2672,13 @@
     "aiAdaptHint": "يكيّف الذكاء الاصطناعي هذه الصياغة لتلائم كل موضع تظهر فيه داخل المستند.",
     "allTemplates": "جميع القوالب",
     "backToList": "العودة إلى القوالب",
+    "binding": {
+      "attorneyLead": "المحامي الرئيسي",
+      "fieldBillingReference": "مرجع الفوترة",
+      "sourceAttorney": "المحامي",
+      "sourceFirm": "مكتب المحاماة",
+      "sourceParty": "طرف آخر"
+    },
     "browseFiles": "تصفّح الملفات",
     "categoryDeleteConfirm": "سيؤدي هذا إلى إزالة الفئة. ستصبح القوالب الموجودة في هذه الفئة غير مصنّفة.",
     "categoryDeleteFailed": "تعذّر حذف الفئة",
@@ -2951,6 +2958,9 @@
       "slashGroupInsert": "إدراج",
       "slashGroupReuse": "إعادة الاستخدام",
       "slashHint": "اكتب لتصفية الحقول أو لتسمية حقل جديد",
+      "sourceEnable": "التعبئة من الملف",
+      "sourceHint": "تُؤخَذ القيمة من الملف (عميله أو طرف أو الملف نفسه أو محامٍ) عند إنشاء المستند.",
+      "sourcePickSource": "مصدر البيانات",
       "textPlusAi": "شخص + الذكاء الاصطناعي",
       "useExisting": "استخدام {name} الموجود",
       "whoFills": "مَن يعبّئ هذا الحقل لاحقًا؟"

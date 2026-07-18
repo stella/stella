@@ -2672,6 +2672,13 @@
     "aiAdaptHint": "DI pritaikys šią formuluotę kiekvienai dokumento vietai, kurioje ji pasirodo.",
     "allTemplates": "Visi šablonai",
     "backToList": "Grįžti prie šablonų",
+    "binding": {
+      "attorneyLead": "Vadovaujantis advokatas",
+      "fieldBillingReference": "Atsiskaitymo nuoroda",
+      "sourceAttorney": "Advokatas",
+      "sourceFirm": "Kontora",
+      "sourceParty": "Kita šalis"
+    },
     "browseFiles": "Naršyti failus",
     "categoryDeleteConfirm": "Kategorija bus pašalinta. Šablonai šioje kategorijoje taps nekategorizuoti.",
     "categoryDeleteFailed": "Nepavyko ištrinti kategorijos",
@@ -2951,6 +2958,9 @@
       "slashGroupInsert": "Įterpti",
       "slashGroupReuse": "Naudoti pakartotinai",
       "slashHint": "Rašykite, kad filtruotumėte laukus arba pavadintumėte naują",
+      "sourceEnable": "Užpildyti iš bylos",
+      "sourceHint": "Reikšmė generuojant dokumentą užpildoma iš bylos (jos kliento, šalies, pačios bylos arba advokato).",
+      "sourcePickSource": "Duomenų šaltinis",
       "textPlusAi": "Asmuo + DI",
       "useExisting": "Naudoti esamą lauką {name}",
       "whoFills": "Kas vėliau užpildys šį lauką?"

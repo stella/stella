@@ -1546,8 +1546,9 @@ export const TemplateForm = ({
   // Formula fields are derived server-side at fill time, never user-entered:
   // the form renders no input for them and submits no value.
   // Derived fields never render as inputs: formulas compute from other
-  // values, and AI-drafted fields (aiPrompt) are written by the model at
-  // fill time. Fields whose marker appears nowhere (count 0) are asked only
+  // values, AI-drafted fields (aiPrompt) are written by the model at fill
+  // time, and contact-sourced fields are resolved from the matter's client
+  // contact. Fields whose marker appears nowhere (count 0) are asked only
   // when something still consumes the answer: condition questions
   // (booleans), paths referenced by a named condition, or sources another
   // field derives from (formula, optionsFrom).
@@ -1576,6 +1577,7 @@ export const TemplateForm = ({
       f.aiPrompt === undefined &&
       f.condition === undefined &&
       f.conditionAst === undefined &&
+      f.source === undefined &&
       (f.count > 0 || f.inputType === "boolean" || referencedPaths.has(f.path)),
   );
   const [values, setValues] = useState<FormValues>(() => ({

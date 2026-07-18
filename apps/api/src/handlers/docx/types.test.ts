@@ -204,6 +204,59 @@ describe("isFieldMeta", () => {
     );
   });
 
+  test("accepts a contact-sourced field", () => {
+    expect(
+      isFieldMeta({
+        path: "client_name",
+        source: { kind: "contact", field: "displayName" },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a malformed or unknown data binding", () => {
+    // Unknown field key for the kind.
+    expect(
+      isFieldMeta({ path: "x", source: { kind: "contact", field: "ssn" } }),
+    ).toBe(false);
+    // Unknown source kind.
+    expect(
+      isFieldMeta({
+        path: "x",
+        source: { kind: "unknown", field: "displayName" },
+      }),
+    ).toBe(false);
+    // A party source with an invalid role.
+    expect(
+      isFieldMeta({
+        path: "x",
+        source: { kind: "party", role: "not_a_role", field: "email" },
+      }),
+    ).toBe(false);
+    // A party source missing its role.
+    expect(
+      isFieldMeta({ path: "x", source: { kind: "party", field: "email" } }),
+    ).toBe(false);
+    // A non-object source.
+    expect(isFieldMeta({ path: "x", source: "displayName" })).toBe(false);
+  });
+
+  test("rejects a data binding combined with another value source", () => {
+    const source = { kind: "contact", field: "displayName" } as const;
+    expect(isFieldMeta({ path: "x", source, formula: "rent * 12" })).toBe(
+      false,
+    );
+    expect(isFieldMeta({ path: "x", source, aiPrompt: "draft it" })).toBe(
+      false,
+    );
+    expect(
+      isFieldMeta({ path: "x", source, lookup: { registry: "krs" } }),
+    ).toBe(false);
+    expect(
+      isFieldMeta({ path: "x", source, condition: 'client_type == "company"' }),
+    ).toBe(false);
+    expect(isFieldMeta({ ...compositeField, source })).toBe(false);
+  });
+
   test("accepts a boolean field with a condition rule", () => {
     expect(
       isFieldMeta({
