@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
 import type { FetchImplementation, JWTPayload, JWTVerifyGetKey } from "jose";
@@ -18,6 +18,7 @@ import {
 } from "@/api/db/agent-auth-schema";
 import { rootDb } from "@/api/db/root";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 
 /**
  * The error vocabulary the ID-JAG path maps onto HTTP. `issuer_not_enabled`
@@ -75,10 +76,15 @@ const jwksByIssuer = new Map<string, JWTVerifyGetKey>();
  * to be HTTPS, so this is belt-and-braces).
  */
 const httpsOnlyFetch: FetchImplementation = async (url, options) => {
+  // The issuer is already required to be HTTPS before we reach here, so a
+  // non-HTTPS JWKS URL is an impossible invariant, not a runtime condition.
   if (!isHttpsUrl(url)) {
-    throw new Error("JWKS must be served over HTTPS.");
+    panic("JWKS must be served over HTTPS.");
   }
-  return await fetch(url, options);
+  return await fetchWithTimeout(url, {
+    ...options,
+    timeoutMs: AGENT_AUTH_JWKS_FETCH_TIMEOUT_MS,
+  });
 };
 
 const getJwksFor = (issuer: string): JWTVerifyGetKey => {
@@ -327,7 +333,9 @@ export const validateIdJag = async (
   return Result.ok({ iss: trusted.issuer, sub, email, jti, expiresAt });
 };
 
-class ReplayError {}
+class ReplayError extends Error {
+  override name = "ReplayError";
+}
 
 /**
  * Insert the jti one-time, failing closed on a duplicate (the unique PK

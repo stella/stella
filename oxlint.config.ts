@@ -1668,6 +1668,7 @@ export default defineConfig({
       // Explicit route-boundary exceptions: public/protocol/auth/dev/SSE
       // surfaces do not fit the normal safe-handler endpoint shape.
       files: [
+        "apps/api/src/handlers/agent-auth/routes.ts",
         "apps/api/src/handlers/ai-config/routes.ts",
         "apps/api/src/handlers/auth/routes.ts",
         "apps/api/src/handlers/auth/ui-routes.ts",

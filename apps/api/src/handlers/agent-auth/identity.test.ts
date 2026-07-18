@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   AGENT_AUTH_CLAIM_GRANT_TYPE,
@@ -23,6 +24,11 @@ import { getMcpResourceUrl } from "@/api/mcp/constants";
 // mint exercises the real authorization-code + JWT path.
 
 type Json = Record<string, unknown>;
+
+const jsonObjectSchema = v.record(v.string(), v.unknown());
+/** Read a JSON response body as an object without an unsafe `any` assertion. */
+const readJson = async (res: Response): Promise<Json> =>
+  v.parse(jsonObjectSchema, await res.json());
 
 const BASE = "http://localhost";
 
@@ -85,9 +91,6 @@ const createHumanSession = async () => {
     body: { name: "Agent Test Org", slug: `agent-test-${Bun.randomUUIDv7()}` },
     headers,
   });
-  if (!org) {
-    throw new Error("failed to create org");
-  }
   await auth.api.setActiveOrganization({
     body: { organizationId: org.id },
     headers,
@@ -107,7 +110,7 @@ describe("agent-auth service_auth flow", () => {
   test("registration returns an RFC 8628 ceremony shape", async () => {
     const response = await postIdentity({ type: "service_auth" });
     expect(response.status).toBe(200);
-    const body = (await response.json()) as Json;
+    const body = await readJson(response);
 
     expect(body["registration_type"]).toBe("service_auth");
     expect(typeof body["registration_id"]).toBe("string");
@@ -134,8 +137,8 @@ describe("agent-auth service_auth flow", () => {
       login_hint: `nobody-${Bun.randomUUIDv7()}@stella.dev`,
     });
 
-    const realBody = (await realHintRes.json()) as Json;
-    const unknownBody = (await unknownHintRes.json()) as Json;
+    const realBody = await readJson(realHintRes);
+    const unknownBody = await readJson(unknownHintRes);
 
     // Identical response shape (same keys) regardless of account existence.
     expect(Object.keys(realBody).sort()).toEqual(
@@ -147,21 +150,21 @@ describe("agent-auth service_auth flow", () => {
 
   test("poll is authorization_pending before confirm", async () => {
     const regRes = await postIdentity({ type: "service_auth" });
-    const reg = (await regRes.json()) as Json;
+    const reg = await readJson(regRes);
 
     const pendingRes = await postToken({
       grant_type: AGENT_AUTH_CLAIM_GRANT_TYPE,
       claim_token: String(reg["claim_token"]),
     });
     expect(pendingRes.status).toBe(400);
-    expect(((await pendingRes.json()) as Json)["message"]).toBe(
+    expect((await readJson(pendingRes))["message"]).toBe(
       "authorization_pending",
     );
   });
 
   test("second poll inside the interval is throttled with slow_down", async () => {
     const regRes = await postIdentity({ type: "service_auth" });
-    const claimToken = String(((await regRes.json()) as Json)["claim_token"]);
+    const claimToken = String((await readJson(regRes))["claim_token"]);
 
     await postToken({
       grant_type: AGENT_AUTH_CLAIM_GRANT_TYPE,
@@ -172,14 +175,14 @@ describe("agent-auth service_auth flow", () => {
       claim_token: claimToken,
     });
     expect(throttledRes.status).toBe(400);
-    expect(((await throttledRes.json()) as Json)["message"]).toBe("slow_down");
+    expect((await readJson(throttledRes))["message"]).toBe("slow_down");
   });
 
   test("confirm binds the human + org and the poll mints a matching JWT", async () => {
     const human = await createHumanSession();
 
     const regRes = await postIdentity({ type: "service_auth" });
-    const reg = (await regRes.json()) as Json;
+    const reg = await readJson(regRes);
     const claimToken = String(reg["claim_token"]);
     const userCode = String(reg["user_code"]);
 
@@ -190,7 +193,7 @@ describe("agent-auth service_auth flow", () => {
       human.cookieHeader,
     );
     expect(confirmRes.status).toBe(200);
-    expect(((await confirmRes.json()) as Json)["status"]).toBe("claimed");
+    expect((await readJson(confirmRes))["status"]).toBe("claimed");
 
     // After confirm: poll mints a JWT bound to the human + org.
     const tokenRes = await postToken({
@@ -198,7 +201,7 @@ describe("agent-auth service_auth flow", () => {
       claim_token: claimToken,
     });
     expect(tokenRes.status).toBe(200);
-    const tokenBody = (await tokenRes.json()) as Json;
+    const tokenBody = await readJson(tokenRes);
     expect(tokenBody["token_type"]).toBe("Bearer");
     expect(tokenBody["expires_in"]).toBeGreaterThan(0);
     expect(String(tokenBody["scope"]).split(" ").sort()).toEqual([
@@ -230,7 +233,7 @@ describe("agent-auth service_auth flow", () => {
 
   test("confirm without a session is rejected", async () => {
     const regRes = await postIdentity({ type: "service_auth" });
-    const reg = (await regRes.json()) as Json;
+    const reg = await readJson(regRes);
     const confirmRes = await postConfirm(
       { user_code: String(reg["user_code"]) },
       "",
@@ -252,7 +255,7 @@ describe("agent-auth anonymous flow", () => {
   test("anonymous registration mints a reduced-scope token immediately", async () => {
     const response = await postIdentity({ type: "anonymous" });
     expect(response.status).toBe(200);
-    const body = (await response.json()) as Json;
+    const body = await readJson(response);
 
     expect(body["registration_type"]).toBe("anonymous");
     expect(typeof body["claim_token"]).toBe("string");
@@ -287,7 +290,7 @@ describe("agent-auth events receiver", () => {
       }),
     );
     expect(response.status).toBe(202);
-    expect(((await response.json()) as Json)["accepted"]).toBe(true);
+    expect((await readJson(response))["accepted"]).toBe(true);
   });
 });
 

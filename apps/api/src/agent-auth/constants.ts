@@ -1,3 +1,4 @@
+import { DAY_IN_MS } from "@/api/lib/time";
 import {
   getMcpBaseUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
@@ -132,7 +133,7 @@ export const AGENT_AUTH_ASSERTION_TTL_SECONDS = 5 * 60;
 
 /** Bounded JWKS cache window for `createRemoteJWKSet`. */
 export const AGENT_AUTH_JWKS_CACHE_MIN_MS = 10 * 60 * 1000;
-export const AGENT_AUTH_JWKS_CACHE_MAX_MS = 24 * 60 * 60 * 1000;
+export const AGENT_AUTH_JWKS_CACHE_MAX_MS = DAY_IN_MS;
 
 /** Timeout for the issuer JWKS fetch. */
 export const AGENT_AUTH_JWKS_FETCH_TIMEOUT_MS = 10_000;
@@ -151,10 +152,24 @@ const USER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const USER_CODE_LENGTH = 8;
 
 export const generateUserCode = (): string => {
-  const bytes = crypto.getRandomValues(new Uint8Array(USER_CODE_LENGTH));
+  const { length } = USER_CODE_ALPHABET;
+  // Largest multiple of the alphabet length that fits in a byte. Rejection
+  // sampling discards bytes at or above it so the modulo maps the remaining
+  // values onto the alphabet uniformly — without this, the leftover partial
+  // block (when 256 is not an exact multiple of the length) would bias the
+  // low glyphs. The current 32-glyph alphabet divides 256 evenly, so nothing
+  // is ever rejected; the guard keeps the code unbiased if the set changes.
+  const unbiasedCeiling = 256 - (256 % length);
   let code = "";
-  for (const byte of bytes) {
-    code += USER_CODE_ALPHABET[byte % USER_CODE_ALPHABET.length];
+  while (code.length < USER_CODE_LENGTH) {
+    // Uint8Array iteration yields a definite `number` (unlike indexed access
+    // under noUncheckedIndexedAccess); draw one byte per glyph and skip the
+    // biased tail before mapping it through the modulo.
+    for (const byte of crypto.getRandomValues(new Uint8Array(1))) {
+      if (byte < unbiasedCeiling) {
+        code += USER_CODE_ALPHABET[byte % length];
+      }
+    }
   }
   return `${code.slice(0, 4)}-${code.slice(4)}`;
 };

@@ -64,10 +64,10 @@ export const agentAuthRoute = new Elysia()
   )
   .post(
     AGENT_AUTH_EVENTS_PATH,
-    (ctx) => {
+    async (ctx) => {
       // RFC 8935: a SET receiver acknowledges with 202 Accepted.
       ctx.set.status = 202;
-      return agentEventsHandler.handler(ctx);
+      return await agentEventsHandler.handler(ctx);
     },
     agentEventsHandler.config,
   );

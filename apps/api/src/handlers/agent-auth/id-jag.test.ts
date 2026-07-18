@@ -9,6 +9,7 @@ import {
 import { eq } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { CryptoKey, JWK } from "jose";
+import * as v from "valibot";
 
 import {
   AGENT_AUTH_CONFIRM_PATH,
@@ -43,6 +44,13 @@ import { getMcpResourceUrl } from "@/api/mcp/constants";
 
 type Json = Record<string, unknown>;
 
+const jsonObjectSchema = v.record(v.string(), v.unknown());
+/** Read a JSON response body as an object without an unsafe `any` assertion. */
+const readJson = async (res: Response): Promise<Json> =>
+  v.parse(jsonObjectSchema, await res.json());
+/** Narrow an already-parsed JSON value to an object. */
+const asJson = (value: unknown): Json => v.parse(jsonObjectSchema, value);
+
 const BASE = "http://localhost";
 const ISSUER = "https://idp.test.stella.dev";
 const JWKS_URL = `${ISSUER}/.well-known/jwks.json`;
@@ -69,11 +77,17 @@ beforeAll(async () => {
   issuerPublicJwk = { ...(await exportJWK(publicKey)), kid: issuerKid };
 
   // Stub only the issuer JWKS URL; everything else hits the real fetch.
-  globalThis.fetch = (async (
+  const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
+    if (typeof input === "string") {
+      return input;
+    }
+    return input instanceof URL ? input.href : input.url;
+  };
+  const fetchStub = async (
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
   ): Promise<Response> => {
-    const url = typeof input === "string" ? input : input.toString();
+    const url = resolveUrl(input);
     if (url === JWKS_URL) {
       return new Response(JSON.stringify({ keys: [issuerPublicJwk] }), {
         status: 200,
@@ -81,7 +95,9 @@ beforeAll(async () => {
       });
     }
     return await realFetch(input, init);
-  }) as typeof fetch;
+  };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test stub: the call signature matches, but `typeof fetch` also carries a `preconnect` static this stub does not need
+  globalThis.fetch = fetchStub as typeof fetch;
 });
 
 afterAll(() => {
@@ -205,9 +221,6 @@ const createHumanSession = async (email: string) => {
     body: { name: "Existing Org", slug: `existing-${Bun.randomUUIDv7()}` },
     headers,
   });
-  if (!org) {
-    throw new Error("failed to create org");
-  }
   await auth.api.setActiveOrganization({
     body: { organizationId: org.id },
     headers,
@@ -230,7 +243,7 @@ describe("agent-auth ID-JAG dark-launch gate", () => {
     const assertion = await mintIdJag();
     const res = await postIdentity(identityAssertionBody(assertion));
     expect(res.status).toBe(403);
-    expect(((await res.json()) as Json)["error"]).toBe("issuer_not_enabled");
+    expect((await readJson(res))["error"]).toBe("issuer_not_enabled");
   });
 });
 
@@ -241,7 +254,7 @@ describe("agent-auth ID-JAG trusted-issuer allow-list", () => {
     const assertion = await mintIdJag();
     const res = await postIdentity(identityAssertionBody(assertion));
     expect(res.status).toBe(403);
-    expect(((await res.json()) as Json)["error"]).toBe("issuer_not_enabled");
+    expect((await readJson(res))["error"]).toBe("issuer_not_enabled");
   });
 
   test("a disabled trusted-issuer row is rejected", async () => {
@@ -254,7 +267,7 @@ describe("agent-auth ID-JAG trusted-issuer allow-list", () => {
     const assertion = await mintIdJag();
     const res = await postIdentity(identityAssertionBody(assertion));
     expect(res.status).toBe(403);
-    expect(((await res.json()) as Json)["error"]).toBe("issuer_not_enabled");
+    expect((await readJson(res))["error"]).toBe("issuer_not_enabled");
   });
 });
 
@@ -268,11 +281,11 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
 
     const res = await postIdentity(identityAssertionBody(assertion));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Json;
+    const body = await readJson(res);
     expect(body["registration_type"]).toBe("identity_assertion");
     expect(typeof body["identity_assertion"]).toBe("string");
     expect(body["assertion_expires"]).toBeGreaterThan(0);
-    expect((body["scopes"] as string[]).sort()).toEqual([
+    expect(v.parse(v.array(v.string()), body["scopes"]).sort()).toEqual([
       "stella:read",
       "stella:search",
     ]);
@@ -312,9 +325,7 @@ describe("agent-auth ID-JAG replay + freshness", () => {
 
     const secondRes = await postIdentity(identityAssertionBody(second));
     expect(secondRes.status).toBe(401);
-    expect(((await secondRes.json()) as Json)["error"]).toBe(
-      "invalid_assertion",
-    );
+    expect((await readJson(secondRes))["error"]).toBe("invalid_assertion");
   });
 
   test("a stale auth_time returns 401 login_required", async () => {
@@ -324,7 +335,7 @@ describe("agent-auth ID-JAG replay + freshness", () => {
     const assertion = await mintIdJag({ authTime: staleAuthTime });
     const res = await postIdentity(identityAssertionBody(assertion));
     expect(res.status).toBe(401);
-    expect(((await res.json()) as Json)["error"]).toBe("login_required");
+    expect((await readJson(res))["error"]).toBe("login_required");
   });
 
   test("an unverified email is rejected", async () => {
@@ -333,7 +344,7 @@ describe("agent-auth ID-JAG replay + freshness", () => {
     const assertion = await mintIdJag({ emailVerified: false });
     const res = await postIdentity(identityAssertionBody(assertion));
     expect(res.status).toBe(401);
-    expect(((await res.json()) as Json)["error"]).toBe("invalid_assertion");
+    expect((await readJson(res))["error"]).toBe("invalid_assertion");
   });
 });
 
@@ -348,14 +359,13 @@ describe("agent-auth ID-JAG existing email (step-up, no silent bind)", () => {
     const assertion = await mintIdJag({ email, sub });
     const res = await postIdentity(identityAssertionBody(assertion));
     expect(res.status).toBe(401);
-    const body = (await res.json()) as Json;
+    const body = await readJson(res);
     expect(body["error"]).toBe("interaction_required");
 
-    const claim = body["claim"] as Json | undefined;
-    expect(claim).toBeDefined();
-    expect(typeof claim?.["user_code"]).toBe("string");
-    expect(typeof claim?.["claim_token"]).toBe("string");
-    expect(String(claim?.["verification_uri"])).toContain("/agent-claim");
+    const claim = asJson(body["claim"]);
+    expect(typeof claim["user_code"]).toBe("string");
+    expect(typeof claim["claim_token"]).toBe("string");
+    expect(String(claim["verification_uri"])).toContain("/agent-claim");
 
     // No silent bind: no delegation exists yet for this exact identity.
     const before = await rootDb
@@ -367,7 +377,7 @@ describe("agent-auth ID-JAG existing email (step-up, no silent bind)", () => {
     // The human completes the step-up ceremony; only then is the
     // (iss, sub) delegation written, bound to the confirming user + org.
     const confirmRes = await postConfirm(
-      { user_code: String(claim?.["user_code"]) },
+      { user_code: String(claim["user_code"]) },
       human.cookieHeader,
     );
     expect(confirmRes.status).toBe(200);
@@ -396,7 +406,7 @@ describe("agent-auth ID-JAG full exchange", () => {
 
     const idRes = await postIdentity(identityAssertionBody(assertion));
     expect(idRes.status).toBe(200);
-    const idBody = (await idRes.json()) as Json;
+    const idBody = await readJson(idRes);
     const serviceAssertion = String(idBody["identity_assertion"]);
 
     const tokenRes = await postToken({
@@ -404,7 +414,7 @@ describe("agent-auth ID-JAG full exchange", () => {
       assertion: serviceAssertion,
     });
     expect(tokenRes.status).toBe(200);
-    const tokenBody = (await tokenRes.json()) as Json;
+    const tokenBody = await readJson(tokenRes);
     expect(tokenBody["token_type"]).toBe("Bearer");
     expect(String(tokenBody["scope"]).split(" ").sort()).toEqual([
       "stella:read",
@@ -455,7 +465,7 @@ describe("agent-auth ID-JAG full exchange", () => {
       identityAssertionBody(await mintIdJag({ email, sub })),
     );
     expect(second.status).toBe(200);
-    expect(((await second.json()) as Json)["registration_type"]).toBe(
+    expect((await readJson(second))["registration_type"]).toBe(
       "identity_assertion",
     );
   });

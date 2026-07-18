@@ -3,13 +3,13 @@ import {
   boolean,
   index,
   integer,
-  jsonb,
   pgTable,
   text,
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { jsonb } from "@/api/db/columns";
 import { denyStellaAccessPolicies } from "@/api/db/rls";
 
 /**

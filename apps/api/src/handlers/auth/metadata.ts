@@ -71,7 +71,8 @@ export const handleOAuthAuthorizationServerMetadataRequest = async (
   // better-auth's oauthProvider exposes no metadata-customization hook, so
   // we merge the auth.md `agent_auth` profile block onto the generated
   // RFC 8414 document here.
-  const metadata = (await upstream.json()) as Record<string, unknown>;
+  const parsed: unknown = await upstream.json();
+  const metadata = typeof parsed === "object" && parsed !== null ? parsed : {};
   const body = JSON.stringify({
     ...metadata,
     agent_auth: getAgentAuthMetadataBlock(),

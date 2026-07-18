@@ -32,7 +32,8 @@ import {
 import type { ServiceAuthCeremony } from "@/api/lib/agent-auth";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Service-issued ES256 signing key for the intermediate
@@ -91,7 +92,10 @@ export type IdJagIdentityOutcome =
   | { kind: "interaction_required"; ceremony: ServiceAuthCeremony }
   | { kind: "rejected"; error: IdJagValidationError };
 
-type ResolvedPrincipal = { userId: string; organizationId: string };
+type ResolvedPrincipal = {
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
+};
 
 const findDelegation = async (
   iss: string,
@@ -105,7 +109,16 @@ const findDelegation = async (
     .from(agentDelegation)
     .where(and(eq(agentDelegation.iss, iss), eq(agentDelegation.sub, sub)))
     .limit(1);
-  return rows.at(0);
+  const row = rows.at(0);
+  if (!row) {
+    return undefined;
+  }
+  // Stored delegation IDs were branded when written; re-brand on read so the
+  // resolved principal carries proof of ownership through the type system.
+  return brandActorSessionIdentity({
+    organizationId: row.organizationId,
+    userId: row.userId,
+  });
 };
 
 const findUserByEmail = async (
@@ -119,7 +132,9 @@ const findUserByEmail = async (
   return rows.at(0);
 };
 
-class ProvisionError {}
+class ProvisionError extends Error {
+  override name = "ProvisionError";
+}
 
 /**
  * Auto-provision a brand-new identity: create a better-auth user from the
@@ -156,11 +171,14 @@ const autoProvision = async (
           },
         }),
     );
-    if (Result.isError(orgResult) || !orgResult.value) {
+    if (Result.isError(orgResult)) {
       await rootDb.delete(user).where(eq(user.id, createdUser.id));
       throw new ProvisionError();
     }
-    return { userId: createdUser.id, organizationId: orgResult.value.id };
+    return brandActorSessionIdentity({
+      organizationId: orgResult.value.id,
+      userId: createdUser.id,
+    });
   });
 
   if (Result.isError(provisioned)) {
@@ -177,8 +195,8 @@ const writeDelegation = async ({
 }: {
   iss: string;
   sub: string;
-  userId: string;
-  organizationId: string;
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
 }): Promise<void> => {
   await rootDb
     .insert(agentDelegation)
@@ -399,8 +417,8 @@ export const confirmIdJagDelegation = async ({
   organizationId,
 }: {
   registrationId: string;
-  userId: string;
-  organizationId: string;
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
 }): Promise<void> => {
   const rows = await rootDb
     .select({

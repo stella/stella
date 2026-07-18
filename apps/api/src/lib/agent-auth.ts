@@ -18,7 +18,7 @@ import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
 
@@ -45,7 +45,7 @@ const sha256Hex = (value: string): string =>
  * a confidential agent client by inserting the row directly (the admin
  * create-client endpoint requires an interactive session we do not have
  * at registration time). Kept in lockstep with `defaultHasher` in
- * @better-auth/oauth-provider.
+ * `@better-auth/oauth-provider`.
  */
 const hashClientSecret = (secret: string): string =>
   new Bun.CryptoHasher("sha256").update(secret).digest("base64url");
@@ -375,8 +375,8 @@ export const confirmServiceAuthRegistration = async ({
   sessionCookieHeader,
 }: {
   userCode: string;
-  userId: string;
-  organizationId: string;
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
   sessionCookieHeader: string;
 }): Promise<ConfirmRegistrationResult> => {
   const rows = await rootDb
@@ -430,7 +430,9 @@ export const confirmServiceAuthRegistration = async ({
   return { status: "confirmed", registrationId: registration.id };
 };
 
-export class AuthorizeCodeError extends Error {}
+export class AuthorizeCodeError extends Error {
+  override name = "AuthorizeCodeError";
+}
 
 /** better-auth's session-token cookie name, mirroring its cookie getter. */
 const getSessionCookieName = (): string => {
@@ -455,8 +457,8 @@ export const mintInternalSessionCookieHeader = async ({
   userId,
   organizationId,
 }: {
-  userId: string;
-  organizationId: string;
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
 }): Promise<string> => {
   const now = new Date();
   const token = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`.replaceAll(
