@@ -51,8 +51,10 @@ export const meRoute = new Elysia({ prefix: "/me" })
           scoping: "scoped",
           duration: API_RATE_LIMITS.twoFactorManageOtp.duration,
           max: API_RATE_LIMITS.twoFactorManageOtp.max,
-          generator: scopedGenerator("two-factor-manage-otp"),
-          context: new InMemoryRateLimitContext(),
+          ...createRedisRateLimit({
+            failurePolicy: "fail_open_local",
+            scope: "two-factor-manage-otp",
+          }),
           skip: (req) =>
             !isTwoFactorManageOtpSendPath(new URL(req.url).pathname),
         }),

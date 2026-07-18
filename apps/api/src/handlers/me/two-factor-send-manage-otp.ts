@@ -5,7 +5,7 @@ import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
-import { sendOTPEmail } from "@/api/lib/email";
+import { sendOTPEmail } from "@/api/lib/email/email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { getUserEmailAndTwoFactorEnabled } from "@/api/lib/two-factor";
