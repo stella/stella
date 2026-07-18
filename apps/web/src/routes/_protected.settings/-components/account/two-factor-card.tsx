@@ -67,6 +67,7 @@ export const TwoFactorCard = () => {
   // have no credential account and need no password. Detect it per-user so the
   // dialogs below collect the password only when the plugin will demand it,
   // while keeping the fresh-email-OTP step-up as the gate.
+  const isAnyDialogOpen = isEnableOpen || isDisableOpen || isRegenerateOpen;
   const accountsQuery = useQuery({
     queryKey: ACCOUNTS_QUERY_KEY,
     queryFn: async () => {
@@ -77,10 +78,18 @@ export const TwoFactorCard = () => {
       return data;
     },
     staleTime: 5 * 60 * 1000,
+    // Account-type detection is only needed once a management dialog opens;
+    // fetching lazily keeps the settings routes' network manifest unchanged.
+    enabled: isAnyDialogOpen,
   });
-  const requiresPassword = (accountsQuery.data ?? []).some(
-    (account) => account.providerId === "credential",
-  );
+  // `undefined` while the lazily-fetched account list is still unresolved (a
+  // dialog was just opened). The three dialogs below must treat "unknown"
+  // as distinct from "no password needed": starting a password-gated action
+  // before the account type is known could otherwise fire the plugin call
+  // without a password for a credential account.
+  const requiresPassword = accountsQuery.data
+    ? accountsQuery.data.some((account) => account.providerId === "credential")
+    : undefined;
 
   return (
     <Frame>
@@ -269,7 +278,10 @@ const EnableTwoFactorDialog = ({
 }: {
   onOpenChange: (open: boolean) => void;
   open: boolean;
-  requiresPassword: boolean;
+  // `undefined` until the account-type lookup resolves; enrollment must not
+  // start until it is known whether a password is required (see the parent's
+  // comment on `requiresPassword`).
+  requiresPassword: boolean | undefined;
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -312,8 +324,14 @@ const EnableTwoFactorDialog = ({
       return data;
     },
     // Passwordless users generate the QR as soon as the dialog opens; credential
-    // users only after they submit their password.
-    enabled: open && (!requiresPassword || passwordSubmitted),
+    // users only after they submit their password. Neither can happen until
+    // the account type itself is known (`requiresPassword !== undefined`),
+    // otherwise a credential account's enrollment could fire without a
+    // password before the lazy account-type lookup resolves.
+    enabled:
+      open &&
+      requiresPassword !== undefined &&
+      (!requiresPassword || passwordSubmitted),
     // `enable` rotates the TOTP secret server-side, so an automatic refetch
     // (e.g. on window focus while the user is copying the code from their
     // authenticator app) would invalidate the QR they just scanned. Pin the
@@ -365,7 +383,7 @@ const EnableTwoFactorDialog = ({
   const qrSvg = totpURI ? renderSVG(totpURI, { pixelSize: 6 }) : null;
 
   // Show the password gate (credential users only) until enrollment succeeds.
-  const showPasswordGate = requiresPassword && !enableQuery.data;
+  const showPasswordGate = requiresPassword === true && !enableQuery.data;
 
   const submitPassword = () => {
     if (!passwordSubmitted) {
@@ -515,7 +533,7 @@ const EnableTwoFactorDialog = ({
           )}
           {step === "setup" && !showPasswordGate && (
             <Button
-              disabled={!qrSvg}
+              disabled={!qrSvg || requiresPassword === undefined}
               onClick={() => setStep("verify")}
               variant="default"
             >
@@ -556,7 +574,9 @@ const DisableTwoFactorDialog = ({
 }: {
   onOpenChange: (open: boolean) => void;
   open: boolean;
-  requiresPassword: boolean;
+  // `undefined` until the account-type lookup resolves; see the parent's
+  // comment on `requiresPassword`.
+  requiresPassword: boolean | undefined;
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -654,7 +674,7 @@ const DisableTwoFactorDialog = ({
               : t("settings.account.twoFactor.disableOtpDescription")}
           </DialogDescription>
         </DialogHeader>
-        {step === "confirm" && requiresPassword && (
+        {step === "confirm" && requiresPassword === true && (
           <div className="flex flex-col gap-2 px-6 pb-2">
             <Input
               autoComplete="current-password"
@@ -695,7 +715,10 @@ const DisableTwoFactorDialog = ({
           </DialogClose>
           {step === "confirm" && (
             <Button
-              disabled={requiresPassword && password.length === 0}
+              disabled={
+                requiresPassword === undefined ||
+                (requiresPassword && password.length === 0)
+              }
               loading={sendDisableOtpMutation.isPending}
               onClick={() => sendDisableOtpMutation.mutate()}
               variant="destructive"
@@ -730,7 +753,9 @@ const RegenerateBackupCodesDialog = ({
 }: {
   onOpenChange: (open: boolean) => void;
   open: boolean;
-  requiresPassword: boolean;
+  // `undefined` until the account-type lookup resolves; see the parent's
+  // comment on `requiresPassword`.
+  requiresPassword: boolean | undefined;
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -836,7 +861,7 @@ const RegenerateBackupCodesDialog = ({
             </DialogDescription>
           )}
         </DialogHeader>
-        {step === "confirm" && requiresPassword && (
+        {step === "confirm" && requiresPassword === true && (
           <div className="flex flex-col gap-2 px-6 pb-2">
             <Input
               autoComplete="current-password"
@@ -888,7 +913,10 @@ const RegenerateBackupCodesDialog = ({
               </DialogClose>
               {step === "confirm" && (
                 <Button
-                  disabled={requiresPassword && password.length === 0}
+                  disabled={
+                    requiresPassword === undefined ||
+                    (requiresPassword && password.length === 0)
+                  }
                   loading={sendOtpMutation.isPending}
                   onClick={() => sendOtpMutation.mutate()}
                   variant="destructive"
