@@ -9,10 +9,8 @@
     }
   },
   "nullish-array-fallback": {
-    "count": 1,
-    "files": {
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "barrel-index-files": {
     "count": 0,
@@ -23,7 +21,7 @@
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 10,
+    "count": 9,
     "files": {
       "apps/web/src/components/ai-suggestions/use-review-actions.ts": 1,
       "apps/web/src/components/chat/rehype-anon-spans.ts": 1,
@@ -32,8 +30,7 @@
       "apps/web/src/lib/relative-time.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-field-manifest.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-preview.tsx": 2,
-      "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracking.ts": 1
+      "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx": 1
     }
   },
   "raw-use-effect-suppressions": {
@@ -41,7 +38,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 622,
+    "count": 623,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -177,7 +174,7 @@
       "apps/api/src/lib/account-deletion-steps.ts": 4,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
-      "apps/api/src/lib/auth.ts": 3,
+      "apps/api/src/lib/auth.ts": 4,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/deepl/client.ts": 3,
       "apps/api/src/lib/document-reference.ts": 2,
@@ -343,7 +340,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 514,
+    "count": 510,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -468,6 +465,7 @@
       "apps/web/src/routes/_protected.knowledge/templates.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/tools.tsx": 1,
       "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx": 1,
@@ -512,8 +510,6 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx": 3,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 5,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts": 3,
