@@ -38,8 +38,16 @@ const RunsSkeleton = () => (
 );
 
 function WorkflowsPage() {
-  const t = useTranslations();
   const workspaceId = Route.useParams({ select: (p) => p.workspaceId });
+  // Key on the matter so navigating directly between two matters' Workflows
+  // pages remounts the view: TanStack reuses this route instance across a
+  // param change, which would otherwise keep the previous matter's run-detail
+  // state (a `runId` from matter A requested under matter B → load failure).
+  return <WorkflowsView key={workspaceId} workspaceId={workspaceId} />;
+}
+
+function WorkflowsView({ workspaceId }: { workspaceId: string }) {
+  const t = useTranslations();
   const organizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
