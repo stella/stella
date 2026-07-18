@@ -263,6 +263,16 @@ const newStep = (kind: FlowStepKind): FlowStep => {
   return { kind: "create-document", name: "", documentTitle: "" };
 };
 
+// Steps carry a stable client-only `_id` so the reorderable/removable list
+// keys on identity rather than array position. It is stripped before the body
+// is sent to the API (the server schema only knows `FlowStep`).
+type EditableStep = FlowStep & { _id: string };
+
+const withStepId = (step: FlowStep): EditableStep => ({
+  ...step,
+  _id: crypto.randomUUID(),
+});
+
 // ── Editor form ───────────────────────────────────────
 
 type FlowEditorFormProps = {
@@ -302,7 +312,9 @@ const FlowEditorForm = ({
   const [trigger, setTrigger] = useState<TriggerDraft>(() =>
     deriveTriggerDraft(initialTrigger),
   );
-  const [steps, setSteps] = useState<FlowStep[]>(initialSteps);
+  const [steps, setSteps] = useState<EditableStep[]>(() =>
+    initialSteps.map(withStepId),
+  );
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -312,7 +324,9 @@ const FlowEditorForm = ({
   const workspaces = workspacesData?.workspaces ?? [];
 
   const updateStep = (index: number, next: FlowStep) => {
-    setSteps((prev) => prev.map((step, i) => (i === index ? next : step)));
+    setSteps((prev) =>
+      prev.map((step, i) => (i === index ? { ...next, _id: step._id } : step)),
+    );
   };
 
   const removeStep = (index: number) => {
@@ -339,7 +353,9 @@ const FlowEditorForm = ({
 
   const addStep = (kind: FlowStepKind) => {
     setSteps((prev) =>
-      prev.length >= MAX_FLOW_STEPS ? prev : [...prev, newStep(kind)],
+      prev.length >= MAX_FLOW_STEPS
+        ? prev
+        : [...prev, withStepId(newStep(kind))],
     );
   };
 
@@ -388,7 +404,7 @@ const FlowEditorForm = ({
     const body: FlowDefinitionBody = {
       name: trimmedName,
       description: trimmedDescription === "" ? null : trimmedDescription,
-      steps,
+      steps: steps.map(({ _id, ...step }) => step),
       trigger: buildTrigger(trigger),
       enabled,
     };
@@ -890,7 +906,7 @@ const StepsSection = ({
   onMove,
   onAdd,
 }: {
-  steps: FlowStep[];
+  steps: EditableStep[];
   onUpdate: (index: number, next: FlowStep) => void;
   onRemove: (index: number) => void;
   onMove: (index: number, direction: "up" | "down") => void;
@@ -917,7 +933,7 @@ const StepsSection = ({
           {steps.map((step, index) => (
             <FlowStepEditor
               index={index}
-              key={index}
+              key={step._id}
               onMoveDown={() => onMove(index, "down")}
               onMoveUp={() => onMove(index, "up")}
               onRemove={() => onRemove(index)}
