@@ -94,6 +94,37 @@ const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
 
 /**
+ * Better Auth handles every social provider (`/callback/google`,
+ * `/callback/microsoft`, ...) through the `/callback/:id` endpoint. The MCP
+ * OAuth provider plugin uses `/oauth2/*` paths instead, so this prefix
+ * matches only social sign-in callbacks.
+ */
+const isSocialSignInCallbackPath = (path: string | undefined): boolean =>
+  path?.startsWith("/callback/") ?? false;
+
+const isStellaTwoFactorSignInGatePath = (path: string | undefined): boolean =>
+  path === SIGN_IN_EMAIL_OTP_PATH || isSocialSignInCallbackPath(path);
+
+/**
+ * Frontend route that presents the second-factor challenge (mirrors the path
+ * the email-OTP sign-in step navigates to on `twoFactorRedirect`). Its search
+ * schema defaults `redirectTo`, so no query string is required here.
+ */
+const TWO_FACTOR_CHALLENGE_PATH = "/auth/two-factor";
+
+/**
+ * True when a sign-in endpoint's response body is the two-factor plugin's
+ * "challenge pending" marker (`{ twoFactorRedirect: true }`). Narrowed
+ * structurally because the marker is injected by the plugin's after-hook and
+ * is not part of any endpoint's declared response type.
+ */
+export const isTwoFactorRedirectResponse = (value: unknown): boolean =>
+  typeof value === "object" &&
+  value !== null &&
+  "twoFactorRedirect" in value &&
+  value.twoFactorRedirect === true;
+
+/**
  * The two-factor plugin's own management endpoints only require an active
  * (fresh) session — see node_modules/better-auth/dist/plugins/two-factor/index.mjs
  * (enable, disable) and its totp/backup-codes sub-plugins (get-totp-uri,
@@ -353,25 +384,29 @@ const getNewDeviceLoginDateTimeFormat = (lang: string): Intl.DateTimeFormat => {
 };
 
 /**
- * Extends every `hooks.after` matcher on a plugin so it also fires for
- * Stella's passwordless email-OTP sign-in path, in addition to whatever
- * paths the plugin already matches.
+ * Extends every `hooks.after` matcher on a plugin so it also fires for the
+ * sign-in paths Stella supports that better-auth's two-factor plugin does not
+ * gate out of the box, in addition to whatever paths the plugin already
+ * matches.
  *
  * better-auth's two-factor plugin only gates the credential sign-in paths
  * (`/sign-in/email`, `/sign-in/username`, `/sign-in/phone-number` — see
- * node_modules/better-auth/dist/plugins/two-factor/index.mjs). Stella signs
- * in via passwordless email-OTP (`/sign-in/email-otp`), which the plugin's
- * matcher never sees, so its after-hook would never challenge for a second
- * factor. The handler itself is path-agnostic — it reads
+ * node_modules/better-auth/dist/plugins/two-factor/index.mjs). Stella also
+ * signs users in via passwordless email-OTP (`/sign-in/email-otp`) and social
+ * providers (the `/callback/:id` OAuth callback), neither of which the
+ * plugin's matcher sees, so its after-hook would never challenge for a second
+ * factor on those flows. The handler itself is path-agnostic — it reads
  * `ctx.context.newSession`, honors the trust-device cookie, deletes the
- * pending session, and sets the two-factor challenge cookie — so extending
- * the matcher is sufficient; no handler changes are needed.
+ * pending session, and sets the two-factor challenge cookie — so extending the
+ * matcher makes it do its security work on these paths too. The social
+ * callback additionally needs the JSON response turned into a browser redirect
+ * (see `socialSignInTwoFactorRedirectPlugin`).
  *
  * Generic over `T` (rather than hardcoded to the two-factor plugin's
  * concrete return type) so it stays independently unit-testable with a
  * minimal stub instead of a fully constructed better-auth plugin.
  */
-export const withEmailOtpSignInGate = <
+export const withStellaTwoFactorSignInGate = <
   T extends {
     hooks: { after: { matcher: (ctx: HookEndpointContext) => boolean }[] };
   },
@@ -384,10 +419,47 @@ export const withEmailOtpSignInGate = <
     after: plugin.hooks.after.map((hook) => ({
       ...hook,
       matcher: (ctx: HookEndpointContext) =>
-        hook.matcher(ctx) || ctx.path === SIGN_IN_EMAIL_OTP_PATH,
+        hook.matcher(ctx) || isStellaTwoFactorSignInGatePath(ctx.path),
     })),
   },
 });
+
+/**
+ * Turns the two-factor plugin's pending-challenge JSON response into a 302
+ * redirect for the social sign-in callback.
+ *
+ * The two-factor after-hook (now matching `/callback/:id` via
+ * `withStellaTwoFactorSignInGate`) does the security work on an enrolled
+ * user's social sign-in: it deletes the freshly created session and sets the
+ * two-factor challenge cookie, then returns `{ twoFactorRedirect: true }`. For
+ * credential / email-OTP sign-in that JSON body is read by the client fetch,
+ * but the social callback is a top-level browser navigation, so the browser
+ * would render raw JSON instead of continuing to the challenge. This plugin's
+ * after-hook runs after the two-factor hook (it is registered later in the
+ * `plugins` array) and, only when a challenge is now pending, replaces the
+ * response with a redirect to the frontend two-factor page. The challenge
+ * cookie the two-factor hook set is accumulated on the shared response headers,
+ * so it rides along on the redirect. When no challenge is pending the original
+ * OAuth redirect is left untouched.
+ */
+const socialSignInTwoFactorRedirectPlugin = {
+  id: "stella-social-two-factor-redirect",
+  hooks: {
+    after: [
+      {
+        matcher: (ctx: HookEndpointContext) =>
+          isSocialSignInCallbackPath(ctx.path),
+        // eslint-disable-next-line require-await -- createAuthMiddleware's handler type is `(ctx) => Promise<...>`; this one only reads a synchronous flag and throws a redirect, with no work to await.
+        handler: createAuthMiddleware(async (ctx) => {
+          if (!isTwoFactorRedirectResponse(ctx.context.returned)) {
+            return;
+          }
+          throw ctx.redirect(`${env.FRONTEND_URL}${TWO_FACTOR_CHALLENGE_PATH}`);
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
 
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
@@ -401,7 +473,7 @@ const createAuth = () => {
     issuer: TWO_FACTOR_ISSUER,
   });
 
-  const twoFactorWithEmailOtpGate = withEmailOtpSignInGate(
+  const twoFactorWithSignInGate = withStellaTwoFactorSignInGate(
     twoFactorPlugin,
   ) satisfies BetterAuthPlugin;
 
@@ -558,7 +630,10 @@ const createAuth = () => {
           await sendOTPEmail({ email, otp, type, lang });
         },
       }),
-      twoFactorWithEmailOtpGate,
+      twoFactorWithSignInGate,
+      // Must be registered after `twoFactorWithSignInGate` so its after-hook
+      // runs after the two-factor hook has set the pending-challenge response.
+      socialSignInTwoFactorRedirectPlugin,
       organization({
         ac,
         roles,

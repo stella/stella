@@ -12,9 +12,10 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   isSixDigitOtpBody,
+  isTwoFactorRedirectResponse,
   resolveMemberAuthorization,
   TWO_FACTOR_MANAGE_PATHS,
-  withEmailOtpSignInGate,
+  withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -245,7 +246,7 @@ describe("resolveMemberAuthorization", () => {
 // eslint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
 const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
 
-describe("withEmailOtpSignInGate", () => {
+describe("withStellaTwoFactorSignInGate", () => {
   test("keeps the after-hook (and its original handler) instead of dropping it", () => {
     const handler = () => undefined;
     const plugin = {
@@ -254,7 +255,7 @@ describe("withEmailOtpSignInGate", () => {
       },
     };
 
-    const wrapped = withEmailOtpSignInGate(plugin);
+    const wrapped = withStellaTwoFactorSignInGate(plugin);
 
     // Guards against a future better-auth upgrade restructuring `hooks`
     // (e.g. renaming/removing `after`) without this call site noticing.
@@ -274,9 +275,27 @@ describe("withEmailOtpSignInGate", () => {
       },
     };
 
-    const [wrappedHook] = withEmailOtpSignInGate(plugin).hooks.after;
+    const [wrappedHook] = withStellaTwoFactorSignInGate(plugin).hooks.after;
 
     expect(wrappedHook?.matcher(fakeCtx("/sign-in/email-otp"))).toBe(true);
+  });
+
+  test("matches the social sign-in callback so enrolled users are challenged", () => {
+    const plugin = {
+      hooks: {
+        after: [
+          {
+            matcher: (_ctx: HookEndpointContext) => false,
+            handler: () => undefined,
+          },
+        ],
+      },
+    };
+
+    const [wrappedHook] = withStellaTwoFactorSignInGate(plugin).hooks.after;
+
+    expect(wrappedHook?.matcher(fakeCtx("/callback/google"))).toBe(true);
+    expect(wrappedHook?.matcher(fakeCtx("/callback/microsoft"))).toBe(true);
   });
 
   test("still matches whatever the original matcher already matched", () => {
@@ -292,7 +311,7 @@ describe("withEmailOtpSignInGate", () => {
       },
     };
 
-    const [wrappedHook] = withEmailOtpSignInGate(plugin).hooks.after;
+    const [wrappedHook] = withStellaTwoFactorSignInGate(plugin).hooks.after;
 
     expect(wrappedHook?.matcher(fakeCtx("/sign-in/email"))).toBe(true);
   });
@@ -310,9 +329,31 @@ describe("withEmailOtpSignInGate", () => {
       },
     };
 
-    const [wrappedHook] = withEmailOtpSignInGate(plugin).hooks.after;
+    const [wrappedHook] = withStellaTwoFactorSignInGate(plugin).hooks.after;
 
     expect(wrappedHook?.matcher(fakeCtx("/two-factor/enable"))).toBe(false);
+    // The MCP OAuth provider plugin lives under /oauth2, not /callback.
+    expect(wrappedHook?.matcher(fakeCtx("/oauth2/callback"))).toBe(false);
+  });
+});
+
+describe("isTwoFactorRedirectResponse", () => {
+  test("detects the two-factor plugin's pending-challenge marker", () => {
+    expect(
+      isTwoFactorRedirectResponse({
+        twoFactorRedirect: true,
+        twoFactorMethods: ["totp"],
+      }),
+    ).toBe(true);
+  });
+
+  test("ignores an ordinary sign-in / OAuth-redirect response", () => {
+    expect(isTwoFactorRedirectResponse({ twoFactorRedirect: false })).toBe(
+      false,
+    );
+    expect(isTwoFactorRedirectResponse({ token: "abc" })).toBe(false);
+    expect(isTwoFactorRedirectResponse(null)).toBe(false);
+    expect(isTwoFactorRedirectResponse(undefined)).toBe(false);
   });
 });
 
