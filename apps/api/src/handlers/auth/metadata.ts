@@ -1,6 +1,7 @@
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 import { panic } from "better-result";
 
+import { getAgentAuthMetadataBlock } from "@/api/agent-auth/metadata";
 import { getAuth } from "@/api/lib/auth";
 
 type AuthWithOAuthServerConfig = ReturnType<typeof getAuth> & {
@@ -62,7 +63,33 @@ export const handleOAuthAuthorizationServerMetadataRequest = async (
     panic("OAuth provider metadata endpoint is unavailable");
   }
 
-  return withAuthMetadataHeaders(
-    await oauthProviderAuthServerMetadata(auth)(request),
-  );
+  const upstream = await oauthProviderAuthServerMetadata(auth)(request);
+  if (!upstream.ok) {
+    return withAuthMetadataHeaders(upstream);
+  }
+
+  // better-auth's oauthProvider exposes no metadata-customization hook, so
+  // we merge the auth.md `agent_auth` profile block onto the generated
+  // RFC 8414 document here.
+  const parsed: unknown = await upstream.json();
+  const metadata = typeof parsed === "object" && parsed !== null ? parsed : {};
+  const body = JSON.stringify({
+    ...metadata,
+    agent_auth: getAgentAuthMetadataBlock(),
+  });
+
+  const headers = new Headers(upstream.headers);
+  for (const [key, value] of createAuthMetadataHeaders()) {
+    if (!headers.has(key)) {
+      headers.set(key, value);
+    }
+  }
+  headers.set("Content-Type", "application/json");
+  headers.delete("Content-Length");
+
+  return new Response(body, {
+    headers,
+    status: upstream.status,
+    statusText: upstream.statusText,
+  });
 };

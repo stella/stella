@@ -1,6 +1,7 @@
 import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 
+import { agentAuthRelationsPart } from "@/api/db/agent-auth-schema";
 import { authRelationsPart } from "@/api/db/auth-schema";
 import { relations } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
@@ -8,7 +9,11 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 
-const databaseRelations = { ...relations, ...authRelationsPart };
+const databaseRelations = {
+  ...relations,
+  ...authRelationsPart,
+  ...agentAuthRelationsPart,
+};
 
 // Per-request query counter feeds the `x-db-queries` response header for the
 // N+1 e2e guard. Local/CI only: deployed environments pass no logger at all,

@@ -12,6 +12,21 @@
       "unknownDevice": "Ismeretlen eszköz"
     }
   },
+  "agentClaim": {
+    "access": "Megkapott hozzáférés",
+    "accessReadSearch": "Olvasási és keresési hozzáférés",
+    "approve": "Jóváhagyás",
+    "codeLabel": "Adja meg az ügynöke által megjelenített kódot",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Visszatérhet az ügynökéhez.",
+    "connectedTitle": "Az ügynök csatlakoztatva",
+    "description": "Egy MI-ügynök az Ön nevében hozzáférést kér a stella munkaterületéhez. Csak akkor hagyja jóvá, ha Ön kezdeményezte.",
+    "error": "Valami hiba történt. Kérjük, próbálja újra.",
+    "errorExpired": "Ez a kérés lejárt. Indítsa újra a csatlakozást az ügynökéből.",
+    "errorInvalid": "Ez a kód nem tűnik helyesnek. Ellenőrizze, és próbálja újra.",
+    "errorNotFound": "Nem találtunk függőben lévő kérést ehhez a kódhoz. Ellenőrizze a kódot, és próbálja újra.",
+    "title": "Csatlakoztassa ügynökét"
+  },
   "ai": {
     "analyzeWithAI": "Elemzés AI-val",
     "editWithAI": "Szerkesztés AI-val",

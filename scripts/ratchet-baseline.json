@@ -9,10 +9,8 @@
     }
   },
   "nullish-array-fallback": {
-    "count": 1,
-    "files": {
-      "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "barrel-index-files": {
     "count": 0,
@@ -40,7 +38,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 624,
+    "count": 616,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -104,16 +102,11 @@
       "apps/api/src/handlers/docx/resolve-ai-conditions.ts": 1,
       "apps/api/src/handlers/docx/resolve-ai-fields.ts": 3,
       "apps/api/src/handlers/docx/resolve-clause-slots.ts": 3,
-      "apps/api/src/handlers/entities/compute-version-diff.ts": 2,
       "apps/api/src/handlers/entities/copy-to-workspace.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 6,
-      "apps/api/src/handlers/entities/delete-version.ts": 1,
       "apps/api/src/handlers/entities/delete.ts": 1,
       "apps/api/src/handlers/entities/query-entities.ts": 1,
-      "apps/api/src/handlers/entities/read-by-id.ts": 1,
-      "apps/api/src/handlers/entities/read-version-by-id.ts": 1,
       "apps/api/src/handlers/entities/read-versions.ts": 1,
-      "apps/api/src/handlers/entities/version-diff-sources.ts": 2,
       "apps/api/src/handlers/entities/zip-archive.ts": 1,
       "apps/api/src/handlers/external-preview/preview.ts": 2,
       "apps/api/src/handlers/fields/mark-column-flag.ts": 1,
@@ -207,7 +200,6 @@
       "apps/api/src/lib/workflow/streaming-answer.ts": 1,
       "apps/api/src/lib/workflow/verdict-engine.ts": 1,
       "apps/api/src/mcp/capability-tools.ts": 1,
-      "apps/api/src/mcp/document-tools.ts": 1,
       "apps/api/src/mcp/egress.ts": 1,
       "apps/api/src/mcp/gateway/skills.ts": 1,
       "apps/api/src/mcp/server-core.ts": 1,
@@ -343,7 +335,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 511,
+    "count": 512,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -531,6 +523,7 @@
       "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/-mutations.ts": 1,
       "apps/web/src/routes/_protected.workspaces/index.tsx": 2,
+      "apps/web/src/routes/agent-claim.tsx": 1,
       "apps/web/src/routes/auth/error.tsx": 1,
       "apps/web/src/routes/auth/organization.tsx": 1,
       "apps/web/src/routes/auth/otp.tsx": 1,
@@ -549,7 +542,7 @@
     }
   },
   "cross-handler-imports": {
-    "count": 255,
+    "count": 253,
     "files": {
       "apps/api/src/handlers/catalogue/bundled-skill-resources.ts": 1,
       "apps/api/src/handlers/catalogue/install-skill.ts": 1,
@@ -587,7 +580,6 @@
       "apps/api/src/handlers/entities/create-from-buffer.ts": 4,
       "apps/api/src/handlers/entities/create-from-legal-source.ts": 1,
       "apps/api/src/handlers/entities/create.ts": 1,
-      "apps/api/src/handlers/entities/delete-version.ts": 2,
       "apps/api/src/handlers/entities/delete.ts": 2,
       "apps/api/src/handlers/entities/desktop-edit-session-utils.ts": 1,
       "apps/api/src/handlers/entities/download-zip.ts": 1,

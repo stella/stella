@@ -1,3 +1,14 @@
+import { setDefaultTimeout } from "bun:test";
+
+// DB-backed suites rebuild the shared PGlite schema in their `beforeAll`
+// (getTestDb / getRlsFixture): a full drizzle push of the whole schema plus
+// the RLS grants/policies. On a loaded CI runner that push takes several
+// seconds — past Bun's 5s default hook timeout — so the setup was reported as
+// a flaky "(unnamed) hook timed out" failure rather than a real assertion.
+// Give every hook and test enough headroom for the legitimate schema build
+// (a genuinely hung hook still fails within this window).
+setDefaultTimeout(30_000);
+
 process.env["DATABASE_URL"] ??=
   "postgres://postgres:postgres@localhost:5432/stella";
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";

@@ -1,0 +1,12 @@
+{
+  "version": "0.6.0",
+  "commit": "9d7ffe638694beccc1bc7a5803fecfd45df4f47d",
+  "capturedAt": "2026-06-21",
+  "files": {
+    "CHANGELOG.md": "a087d76fc7f94c92066883e732d54fe27b17bff544ab45ede8992a97df3a1116",
+    "AUTH.md": "be3f78258861f8f175782a28844eebe66139723cf218cae66e03786d036c43b9",
+    "README.md": "035167b7fbf9a5b6dea943bc14882deadeab8629a40139139c49f7bf1dfe58f5",
+    "agent-services/README.md": "9076374896f0f7f7bba17e512f869dc99dfb914ac9907a1d403f0670a8ec0755",
+    "agent-providers/README.md": "8d27fd0faff48748c6821e0e9a935dc5e9067f9a094585d2bc71a0afe42b9020"
+  }
+}
