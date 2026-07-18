@@ -88,13 +88,13 @@ describe("loadInputDocuments", () => {
         id: extractedEntityId,
         workspaceId,
         name: "Available doc",
-        createdByUserId: userId,
+        createdBy: userId,
       },
       {
         id: pendingEntityId,
         workspaceId,
         name: "Pending doc",
-        createdByUserId: userId,
+        createdBy: userId,
       },
     ]);
     // Only the first entity has extracted content; the second is still pending.
