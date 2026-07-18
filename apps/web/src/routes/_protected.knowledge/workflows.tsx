@@ -120,10 +120,17 @@ function RouteComponent() {
     setTogglingId(flow.id);
     const flowId = toSafeId<"flowDefinition">(flow.id);
 
-    // The update endpoint takes the full definition; fetch (cached) detail,
-    // then PUT it back with the flipped `enabled` flag.
+    // The update endpoint takes the full definition, so read it back and PUT it
+    // with the flipped `enabled` flag. Force a fresh read (`staleTime: 0`): the
+    // cached detail can be up to five minutes old, so replaying it would clobber
+    // another user's concurrent edits to name/description/steps/trigger. A
+    // dedicated enabled-only mutation (see the PR follow-ups) would remove the
+    // full-body replay entirely; this closes the stale-cache window.
     const detail = await queryClient
-      .fetchQuery(flowDetailOptions(organizationId, flow.id))
+      .fetchQuery({
+        ...flowDetailOptions(organizationId, flow.id),
+        staleTime: 0,
+      })
       .catch(() => null);
 
     if (!detail || !("steps" in detail)) {
