@@ -1,8 +1,7 @@
-import { randomInt } from "node:crypto";
-
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { randomInt } from "node:crypto";
 
 import { user, verification } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
