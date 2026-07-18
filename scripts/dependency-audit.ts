@@ -51,6 +51,10 @@ const readBaseline = async (): Promise<Baseline> => {
   if (!(await file.exists())) {
     return { note: "", auditLevel: "high", accepted: [] };
   }
+  // SAFETY: the baseline is a repo-committed file this script owns, not external
+  // input. A hand-edit that breaks the shape surfaces as a thrown TypeError the
+  // first time `.accepted` is iterated (in diffAgainstBaseline / writeBaseline),
+  // which fails the gate closed rather than silently accepting advisories.
   return (await file.json()) as Baseline;
 };
 
@@ -78,6 +82,12 @@ type AuditProcessResult = {
 
 const safeJsonParse = (text: string): Record<string, unknown> | null => {
   try {
+    // SAFETY: `bun audit --json` output is untrusted shape-wise, so the cast is
+    // only a starting assumption, not a guarantee. Every downstream read goes
+    // through bracket access coerced with `String(... ?? "")` / `Array.isArray`,
+    // so a non-object (primitive/array) yields no gated advisories rather than a
+    // crash; a syntactically invalid payload is caught here and returned as null,
+    // which the caller treats as a failed audit (fail-closed).
     return JSON.parse(text) as Record<string, unknown>;
   } catch {
     return null;
@@ -119,6 +129,10 @@ const gatedAdvisoriesFromAuditResult = ({
     );
   }
 
+  // SAFETY: `bun audit` groups advisories by package under an `advisories` key
+  // (older shape: at the top level). Either way this is untrusted shape; the
+  // cast just lets us enumerate it. `Object.entries` on a non-object yields no
+  // keys, so a wrong shape produces zero advisories, never a throw.
   const advisories = (parsed["advisories"] ?? parsed) as Record<
     string,
     unknown
@@ -128,6 +142,11 @@ const gatedAdvisoriesFromAuditResult = ({
   for (const [pkg, value] of Object.entries(advisories)) {
     const list = Array.isArray(value) ? value : [value];
     for (const raw of list) {
+      // SAFETY: each advisory entry is untrusted; the cast only enables the
+      // bracket reads below. `severity`, `title`, and the id are all pulled with
+      // `String(... ?? "")` / the `ghsaId` fallback, so a missing or wrong-typed
+      // field degrades to an empty/"unknown" value and the severity gate skips
+      // anything that is not exactly "high"/"critical".
       const advisory = raw as Record<string, unknown>;
       const severity = String(advisory["severity"] ?? "");
       if (!GATED_SEVERITIES.has(severity)) {
