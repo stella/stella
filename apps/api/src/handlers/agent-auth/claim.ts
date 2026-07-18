@@ -16,7 +16,6 @@ const config = {
 
 const agentClaimHandler = createSafePublicHandler(
   config,
-  // eslint-disable-next-line require-yield -- control-plane writes go through rootDb (RLS-bypassing), so there is no safeDb to Result.await
   async function* ({ body: { claim_token, email } }) {
     const result = await startAnonymousUpgrade({
       claimToken: claim_token,

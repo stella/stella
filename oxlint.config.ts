@@ -1689,6 +1689,16 @@ export default defineConfig({
       },
     },
     {
+      // Agent-auth control-plane handlers write through rootDb (which bypasses
+      // RLS), so their safe-handler generators have no safeDb Result to
+      // `yield*`. They stay `async function*` to satisfy the
+      // createSafeRootHandler contract, so require-yield does not apply.
+      files: ["apps/api/src/handlers/agent-auth/**/*.ts"],
+      rules: {
+        "require-yield": "off",
+      },
+    },
+    {
       files: ["apps/api/src/handlers/search/search.ts"],
       rules: { "no-body-ownership-ids/no-body-ownership-ids": "off" },
     },

@@ -100,7 +100,6 @@ const exchangeJwtBearer = async (
 
 const agentTokenHandler = createSafePublicHandler(
   config,
-  // eslint-disable-next-line require-yield -- control-plane writes go through rootDb (RLS-bypassing), so there is no safeDb to Result.await
   async function* ({ body }) {
     const result =
       body.grant_type === AGENT_AUTH_JWT_BEARER_GRANT_TYPE

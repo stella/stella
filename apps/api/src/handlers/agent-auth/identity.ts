@@ -136,7 +136,6 @@ const mapIdJagOutcome = (
 
 const agentIdentityHandler = createSafePublicHandler(
   config,
-  // eslint-disable-next-line require-yield -- control-plane writes go through rootDb (RLS-bypassing), so there is no safeDb to Result.await
   async function* ({ body }) {
     if (body.type === "identity_assertion") {
       // Dark-launch gate: even when on, the trusted-issuer allow-list

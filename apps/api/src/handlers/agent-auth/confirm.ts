@@ -26,7 +26,6 @@ const config = {
 
 const agentConfirmHandler = createSafeRootHandler(
   config,
-  // eslint-disable-next-line require-yield -- control-plane writes go through rootDb (RLS-bypassing), so there is no safeDb to Result.await
   async function* ({ body: { user_code }, request, user, session }) {
     const cookieHeader = request.headers.get("cookie") ?? "";
 
