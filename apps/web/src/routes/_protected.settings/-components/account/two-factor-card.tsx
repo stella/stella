@@ -27,6 +27,7 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/components/frame";
+import { Input } from "@stll/ui/components/input";
 import {
   InputOTP,
   InputOTPGroup,
@@ -49,6 +50,7 @@ const TOTP_LENGTH = 6;
 const HTTP_BAD_REQUEST = 400;
 const BACKUP_CODES_FILE_NAME = "stella-backup-codes.txt";
 const ENABLE_TWO_FACTOR_QUERY_KEY = ["auth", "two-factor", "enable"] as const;
+const ACCOUNTS_QUERY_KEY = ["auth", "accounts"] as const;
 
 export const TwoFactorCard = () => {
   const t = useTranslations();
@@ -57,6 +59,28 @@ export const TwoFactorCard = () => {
   const [isEnableOpen, setIsEnableOpen] = useState(false);
   const [isDisableOpen, setIsDisableOpen] = useState(false);
   const [isRegenerateOpen, setIsRegenerateOpen] = useState(false);
+
+  // Better Auth still requires the account password on 2FA enable/disable/
+  // backup-code management for users who have a credential (password) account
+  // — `allowPasswordless` only waives it for users with no password. In this
+  // app that is the self-host bootstrap admin; passwordless email-OTP users
+  // have no credential account and need no password. Detect it per-user so the
+  // dialogs below collect the password only when the plugin will demand it,
+  // while keeping the fresh-email-OTP step-up as the gate.
+  const accountsQuery = useQuery({
+    queryKey: ACCOUNTS_QUERY_KEY,
+    queryFn: async () => {
+      const { data, error } = await authClient.listAccounts();
+      if (error) {
+        throw toAuthClientError(error);
+      }
+      return data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const requiresPassword = (accountsQuery.data ?? []).some(
+    (account) => account.providerId === "credential",
+  );
 
   return (
     <Frame>
@@ -111,14 +135,17 @@ export const TwoFactorCard = () => {
       <EnableTwoFactorDialog
         onOpenChange={setIsEnableOpen}
         open={isEnableOpen}
+        requiresPassword={requiresPassword}
       />
       <DisableTwoFactorDialog
         onOpenChange={setIsDisableOpen}
         open={isDisableOpen}
+        requiresPassword={requiresPassword}
       />
       <RegenerateBackupCodesDialog
         onOpenChange={setIsRegenerateOpen}
         open={isRegenerateOpen}
+        requiresPassword={requiresPassword}
       />
     </Frame>
   );
@@ -238,21 +265,29 @@ type EnableStep = "setup" | "verify" | "codes";
 const EnableTwoFactorDialog = ({
   onOpenChange,
   open,
+  requiresPassword,
 }: {
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  requiresPassword: boolean;
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<EnableStep>("setup");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  // Credential users must submit their password before the enable call runs,
+  // so the TOTP secret/QR is not generated until they do.
+  const [passwordSubmitted, setPasswordSubmitted] = useState(false);
 
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setStep("setup");
       setCode("");
+      setPassword("");
+      setPasswordSubmitted(false);
       // Drop the enrollment secret once the dialog closes so the next
       // "Enable" click always starts a fresh enrollment instead of resuming
       // (or displaying) a stale one.
@@ -260,10 +295,15 @@ const EnableTwoFactorDialog = ({
     }
   };
 
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- requiresPassword/password intentionally excluded from the key: enrollment must stay pinned to one cache entry per dialog lifetime (see staleTime below), and putting the password in the cache key would leak it into the query cache/devtools. Re-runs are driven explicitly by `enabled` and `submitPassword`'s `refetch()`, not by key identity.
   const enableQuery = useQuery({
     queryKey: ENABLE_TWO_FACTOR_QUERY_KEY,
     queryFn: async () => {
-      const { data, error } = await authClient.twoFactor.enable({});
+      // Better Auth requires the password for credential accounts; omit it for
+      // passwordless users (sending an empty one would be rejected).
+      const { data, error } = await authClient.twoFactor.enable(
+        requiresPassword ? { password } : {},
+      );
 
       if (error) {
         throw toAuthClientError(error);
@@ -271,7 +311,9 @@ const EnableTwoFactorDialog = ({
 
       return data;
     },
-    enabled: open,
+    // Passwordless users generate the QR as soon as the dialog opens; credential
+    // users only after they submit their password.
+    enabled: open && (!requiresPassword || passwordSubmitted),
     // `enable` rotates the TOTP secret server-side, so an automatic refetch
     // (e.g. on window focus while the user is copying the code from their
     // authenticator app) would invalidate the QR they just scanned. Pin the
@@ -322,6 +364,19 @@ const EnableTwoFactorDialog = ({
   const secret = totpURI ? getTotpSecret(totpURI) : null;
   const qrSvg = totpURI ? renderSVG(totpURI, { pixelSize: 6 }) : null;
 
+  // Show the password gate (credential users only) until enrollment succeeds.
+  const showPasswordGate = requiresPassword && !enableQuery.data;
+
+  const submitPassword = () => {
+    if (!passwordSubmitted) {
+      // First submit enables the query, which auto-runs with the password.
+      setPasswordSubmitted(true);
+      return;
+    }
+    // A later submit (e.g. after a wrong password) re-runs with the new value.
+    void enableQuery.refetch();
+  };
+
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
@@ -338,7 +393,30 @@ const EnableTwoFactorDialog = ({
           )}
         </DialogHeader>
         <div className="flex flex-col gap-4 px-6 pb-6">
-          {step === "setup" && qrSvg && (
+          {step === "setup" && showPasswordGate && !enableQuery.isFetching && (
+            <div className="flex flex-col gap-2">
+              <Input
+                autoComplete="current-password"
+                autoFocus
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && password.length > 0) {
+                    e.preventDefault();
+                    submitPassword();
+                  }
+                }}
+                placeholder={t("auth.password")}
+                type="password"
+                value={password}
+              />
+              {enableQuery.isError && (
+                <p className="text-destructive-foreground text-sm">
+                  {t("errors.actionFailed")}
+                </p>
+              )}
+            </div>
+          )}
+          {step === "setup" && !showPasswordGate && qrSvg && (
             <div className="flex flex-col items-center gap-3">
               {/* `qrSvg` is rendered locally by `renderSVG` (uqr) from the
                  `totpURI` our own backend just returned; it is never
@@ -362,27 +440,33 @@ const EnableTwoFactorDialog = ({
               )}
             </div>
           )}
-          {step === "setup" && !qrSvg && enableQuery.isError && (
-            <div className="flex flex-col items-center gap-3 py-2">
-              <p className="text-destructive-foreground text-sm">
-                {t("errors.actionFailed")}
-              </p>
-              <Button
-                loading={enableQuery.isFetching}
-                onClick={() => {
-                  void enableQuery.refetch();
-                }}
-                variant="outline"
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
-          {step === "setup" && !qrSvg && !enableQuery.isError && (
-            <div className="flex justify-center py-4">
-              <span className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
-            </div>
-          )}
+          {step === "setup" &&
+            !showPasswordGate &&
+            !qrSvg &&
+            !enableQuery.isFetching &&
+            enableQuery.isError && (
+              <div className="flex flex-col items-center gap-3 py-2">
+                <p className="text-destructive-foreground text-sm">
+                  {t("errors.actionFailed")}
+                </p>
+                <Button
+                  loading={enableQuery.isFetching}
+                  onClick={() => {
+                    void enableQuery.refetch();
+                  }}
+                  variant="outline"
+                >
+                  {t("common.retry")}
+                </Button>
+              </div>
+            )}
+          {step === "setup" &&
+            (enableQuery.isFetching ||
+              (!showPasswordGate && !qrSvg && !enableQuery.isError)) && (
+              <div className="flex justify-center py-4">
+                <span className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+              </div>
+            )}
           {step === "verify" && (
             <div className="mx-auto flex w-fit flex-col items-stretch gap-2">
               <InputOTP
@@ -419,7 +503,17 @@ const EnableTwoFactorDialog = ({
           )}
         </div>
         <DialogFooter>
-          {step === "setup" && (
+          {step === "setup" && showPasswordGate && (
+            <Button
+              disabled={password.length === 0 || enableQuery.isFetching}
+              loading={enableQuery.isFetching}
+              onClick={submitPassword}
+              variant="default"
+            >
+              {t("common.next")}
+            </Button>
+          )}
+          {step === "setup" && !showPasswordGate && (
             <Button
               disabled={!qrSvg}
               onClick={() => setStep("verify")}
@@ -458,21 +552,25 @@ type DisableStep = "confirm" | "code";
 const DisableTwoFactorDialog = ({
   onOpenChange,
   open,
+  requiresPassword,
 }: {
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  requiresPassword: boolean;
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<DisableStep>("confirm");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     if (!nextOpen) {
       setStep("confirm");
       setCode("");
+      setPassword("");
     }
   };
 
@@ -500,14 +598,26 @@ const DisableTwoFactorDialog = ({
   });
 
   const disableMutation = useMutation({
-    mutationFn: async (submittedCode: string) => {
+    mutationFn: async ({
+      code: submittedCode,
+      password: submittedPassword,
+    }: {
+      code: string;
+      password: string;
+    }) => {
       // `authClient.twoFactor.disable`'s typed body has no `otp` field (the
       // server's `before` hook validates it separately from the plugin's own
       // schema — see `requireTwoFactorManageOtp` in apps/api/src/lib/auth.ts),
       // so this calls the underlying `$fetch` directly with the raw path.
+      // Better Auth's own `disable` endpoint additionally requires the
+      // account password for credential accounts (see `shouldRequirePassword`
+      // in node_modules/better-auth/dist/utils/password.mjs); omit it for
+      // passwordless users, mirroring the enable dialog.
       const { error } = await authClient.$fetch("/two-factor/disable", {
         method: "POST",
-        body: { otp: submittedCode },
+        body: requiresPassword
+          ? { otp: submittedCode, password: submittedPassword }
+          : { otp: submittedCode },
       });
 
       if (error) {
@@ -544,6 +654,18 @@ const DisableTwoFactorDialog = ({
               : t("settings.account.twoFactor.disableOtpDescription")}
           </DialogDescription>
         </DialogHeader>
+        {step === "confirm" && requiresPassword && (
+          <div className="flex flex-col gap-2 px-6 pb-2">
+            <Input
+              autoComplete="current-password"
+              autoFocus
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("auth.password")}
+              type="password"
+              value={password}
+            />
+          </div>
+        )}
         {step === "code" && (
           <div className="mx-auto flex w-fit flex-col items-stretch gap-2 px-6 pb-2">
             <InputOTP
@@ -552,7 +674,7 @@ const DisableTwoFactorDialog = ({
               onChange={setCode}
               onComplete={(nextCode: string) => {
                 setCode(nextCode);
-                disableMutation.mutate(nextCode);
+                disableMutation.mutate({ code: nextCode, password });
               }}
               value={code}
             >
@@ -573,6 +695,7 @@ const DisableTwoFactorDialog = ({
           </DialogClose>
           {step === "confirm" && (
             <Button
+              disabled={requiresPassword && password.length === 0}
               loading={sendDisableOtpMutation.isPending}
               onClick={() => sendDisableOtpMutation.mutate()}
               variant="destructive"
@@ -586,7 +709,7 @@ const DisableTwoFactorDialog = ({
                 code.length !== TOTP_LENGTH || disableMutation.isPending
               }
               loading={disableMutation.isPending}
-              onClick={() => disableMutation.mutate(code)}
+              onClick={() => disableMutation.mutate({ code, password })}
               variant="destructive"
             >
               {t("common.verify")}
@@ -603,14 +726,17 @@ type RegenerateStep = "confirm" | "code" | "codes";
 const RegenerateBackupCodesDialog = ({
   onOpenChange,
   open,
+  requiresPassword,
 }: {
   onOpenChange: (open: boolean) => void;
   open: boolean;
+  requiresPassword: boolean;
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const [step, setStep] = useState<RegenerateStep>("confirm");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [codes, setCodes] = useState<string[] | null>(null);
 
   const handleOpenChange = (nextOpen: boolean) => {
@@ -618,6 +744,7 @@ const RegenerateBackupCodesDialog = ({
     if (!nextOpen) {
       setStep("confirm");
       setCode("");
+      setPassword("");
       setCodes(null);
     }
   };
@@ -646,17 +773,30 @@ const RegenerateBackupCodesDialog = ({
   });
 
   const regenerateMutation = useMutation({
-    mutationFn: async (submittedCode: string) => {
+    mutationFn: async ({
+      code: submittedCode,
+      password: submittedPassword,
+    }: {
+      code: string;
+      password: string;
+    }) => {
       // `authClient.twoFactor.generateBackupCodes`'s typed body has no `otp`
       // field (the server's `before` hook validates it separately from the
       // plugin's own schema — see `requireTwoFactorManageOtp` in
       // apps/api/src/lib/auth.ts), so this calls the underlying `$fetch`
       // directly with the raw path and narrows the response structurally.
+      // Better Auth's own `generate-backup-codes` endpoint additionally
+      // requires the account password for credential accounts (see
+      // `shouldRequirePassword` in
+      // node_modules/better-auth/dist/utils/password.mjs); omit it for
+      // passwordless users, mirroring the enable and disable dialogs.
       const { data, error } = await authClient.$fetch(
         "/two-factor/generate-backup-codes",
         {
           method: "POST",
-          body: { otp: submittedCode },
+          body: requiresPassword
+            ? { otp: submittedCode, password: submittedPassword }
+            : { otp: submittedCode },
         },
       );
 
@@ -696,6 +836,18 @@ const RegenerateBackupCodesDialog = ({
             </DialogDescription>
           )}
         </DialogHeader>
+        {step === "confirm" && requiresPassword && (
+          <div className="flex flex-col gap-2 px-6 pb-2">
+            <Input
+              autoComplete="current-password"
+              autoFocus
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("auth.password")}
+              type="password"
+              value={password}
+            />
+          </div>
+        )}
         {step === "code" && (
           <div className="mx-auto flex w-fit flex-col items-stretch gap-2 px-6 pb-2">
             <InputOTP
@@ -704,7 +856,7 @@ const RegenerateBackupCodesDialog = ({
               onChange={setCode}
               onComplete={(nextCode: string) => {
                 setCode(nextCode);
-                regenerateMutation.mutate(nextCode);
+                regenerateMutation.mutate({ code: nextCode, password });
               }}
               value={code}
             >
@@ -736,6 +888,7 @@ const RegenerateBackupCodesDialog = ({
               </DialogClose>
               {step === "confirm" && (
                 <Button
+                  disabled={requiresPassword && password.length === 0}
                   loading={sendOtpMutation.isPending}
                   onClick={() => sendOtpMutation.mutate()}
                   variant="destructive"
@@ -749,7 +902,7 @@ const RegenerateBackupCodesDialog = ({
                     code.length !== TOTP_LENGTH || regenerateMutation.isPending
                   }
                   loading={regenerateMutation.isPending}
-                  onClick={() => regenerateMutation.mutate(code)}
+                  onClick={() => regenerateMutation.mutate({ code, password })}
                   variant="destructive"
                 >
                   {t("common.verify")}
