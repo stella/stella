@@ -160,7 +160,6 @@ export const twoFactor = pgTable(
     verified: boolean("verified").default(true).notNull(),
   },
   (table) => [
-    index("two_factor_secret_idx").on(table.secret),
     index("two_factor_user_id_idx").on(table.userId),
     ...denyStellaAccessPolicies(),
   ],
