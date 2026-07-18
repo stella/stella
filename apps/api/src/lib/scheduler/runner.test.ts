@@ -113,6 +113,30 @@ const registryOf = (task: string, fn: SchedulerTask): SchedulerTaskRegistry =>
 
 const noopRegistry = registryOf("test.noop", () => {});
 
+// Wraps a db handle so inserting a scheduler run row fires a side effect. Used to
+// abort a parent signal exactly while runJob awaits createRun(), reproducing an
+// abort that a listener attached after that await would miss.
+const abortSignalWhenRunInserted = (
+  base: SchedulerDb,
+  onRunInsert: () => void,
+): SchedulerDb =>
+  new Proxy(base, {
+    get(target, prop) {
+      if (prop === "insert") {
+        return (table: Parameters<SchedulerDb["insert"]>[0]) => {
+          if (table === schedulerJobRuns) {
+            onRunInsert();
+          }
+          return target.insert(table);
+        };
+      }
+      // Bind delegated methods to the real handle so drizzle's query builders
+      // run with `this` pointing at the underlying db, not the proxy.
+      const value = Reflect.get(target, prop);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+
 describe("acquireDueJobs claim exclusivity", () => {
   test("two interleaved passes never claim the same job", async () => {
     await seedJob();
@@ -134,7 +158,10 @@ describe("acquireDueJobs claim exclusivity", () => {
     expect(second).toEqual([]);
 
     const job = await readJob("test.job");
-    expect(job.lockedBy).toBe("runner-a");
+    // lockedBy carries the per-acquisition lease token (runnerId prefix plus a
+    // unique suffix), not the bare runnerId.
+    expect(job.lockedBy).toMatch(/^runner-a#/u);
+    expect(first.at(0)?.lockedBy).toBe(job.lockedBy);
   });
 });
 
@@ -248,8 +275,8 @@ describe("per-job runtime ceiling", () => {
     await finishRunSuccess({
       db,
       job: timedOutJob,
+      leaseToken: "runner-a",
       runId: timedOutRun.id,
-      runnerId: "runner-a",
       startedAt: timedOutRun.startedAt,
     });
 
@@ -292,6 +319,81 @@ describe("per-job runtime ceiling", () => {
     const run = await readLatestRun("cooperative.job");
     expect(run.status).toBe("failed");
     expect(run.error).toBe("SchedulerJobTimeoutError");
+  });
+
+  test("a task rejecting from its own abort handler at the ceiling is still a timeout failure", async () => {
+    await seedJob({ id: "abort-reject.job", task: "test.abort-reject" });
+
+    // Emulates a resource bound to the signal (e.g. an aborted fetch): when the
+    // ceiling aborts the signal, the task rejects with an AbortError that can win
+    // the race ahead of our own timeout rejection.
+    const registry = registryOf("test.abort-reject", async ({ signal }) => {
+      await new Promise<void>((_resolve, reject) => {
+        signal.addEventListener("abort", () => {
+          reject(new DOMException("The operation was aborted", "AbortError"));
+        });
+      });
+    });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      maxRuntimeMs: 25,
+      registry,
+      runnerId: "runner-a",
+    });
+
+    // Classified as a timeout failure (rescheduled), not a cooperative skip that
+    // would leave the over-ceiling job due and retried every poll.
+    expect(result).toMatchObject({ acquired: 1, failed: 1, skipped: 0 });
+
+    const job = await readJob("abort-reject.job");
+    expect(job.lastError).toBe("SchedulerJobTimeoutError");
+    expect(job.lockedBy).toBeNull();
+    expect(job.nextRunAt.getTime()).toBeGreaterThan(PAST.getTime());
+
+    const run = await readLatestRun("abort-reject.job");
+    expect(run.status).toBe("failed");
+    expect(run.error).toBe("SchedulerJobTimeoutError");
+  });
+
+  test("a parent abort during run creation skips the job without starting the task", async () => {
+    await seedJob({ id: "abort-on-create.job", task: "test.tracked" });
+
+    let taskRan = false;
+    const registry = registryOf("test.tracked", () => {
+      taskRan = true;
+    });
+
+    // Abort the parent signal at the instant the run row is inserted, i.e. while
+    // runJob awaits createRun(); a listener attached after that await misses it.
+    const controller = new AbortController();
+    const abortingDb = abortSignalWhenRunInserted(db, () => {
+      controller.abort();
+    });
+
+    const result = await runSchedulerOnce({
+      db: abortingDb,
+      leaseMs: LEASE_MS,
+      registry,
+      runnerId: "runner-a",
+      signal: controller.signal,
+    });
+
+    expect(result).toMatchObject({
+      acquired: 1,
+      failed: 0,
+      skipped: 1,
+      succeeded: 0,
+    });
+    // The task never started, and the lease was released cleanly.
+    expect(taskRan).toBe(false);
+
+    const job = await readJob("abort-on-create.job");
+    expect(job.lockedBy).toBeNull();
+
+    const run = await readLatestRun("abort-on-create.job");
+    expect(run.status).toBe("skipped");
   });
 });
 
@@ -349,7 +451,7 @@ describe("zombie completion guard holds on every write path", () => {
       db,
       job,
       runId: terminalRun.id,
-      runnerId: "runner-a",
+      leaseToken: "runner-a",
       startedAt: RUN_STARTED_AT,
     });
 
@@ -364,7 +466,7 @@ describe("zombie completion guard holds on every write path", () => {
       db,
       job,
       runId: terminalRun.id,
-      runnerId: "runner-a",
+      leaseToken: "runner-a",
       startedAt: RUN_STARTED_AT,
     });
 
@@ -380,10 +482,100 @@ describe("zombie completion guard holds on every write path", () => {
       error: new Error("late zombie failure"),
       job,
       runId: terminalRun.id,
-      runnerId: "runner-a",
+      leaseToken: "runner-a",
       startedAt: RUN_STARTED_AT,
     });
 
     await expectJobAndRunUntouched();
+  });
+});
+
+// The lease token is unique per acquisition: when the same runner re-acquires a
+// job while a prior execution is still running, a stale completion arriving with
+// the OLD token must leave the fresh lease untouched, even though its run row is
+// still `running` (so the generation check alone would let it through).
+describe("stale-token completion preserves a same-runner re-acquired lease", () => {
+  const RUN_STARTED_AT = new Date(Date.now() - 1000);
+  const FRESH_TOKEN = "runner-a#fresh";
+  const STALE_TOKEN = "runner-a#stale";
+
+  const seedReacquiredJobWithStaleRunningRun = async () => {
+    const freshLease = new Date(Date.now() + LEASE_MS);
+    await seedJob({
+      id: "reacquired.job",
+      lockedBy: FRESH_TOKEN,
+      lockedUntil: freshLease,
+    });
+    const [staleRun] = await testDb
+      .insert(schedulerJobRuns)
+      .values({
+        jobId: "reacquired.job",
+        runnerId: "runner-a",
+        startedAt: RUN_STARTED_AT,
+        status: "running",
+        task: "test.noop",
+      })
+      .returning();
+    if (!staleRun) {
+      throw new Error("Expected stale running run row to be seeded");
+    }
+    return { freshLease, staleRun };
+  };
+
+  const expectFreshLeaseIntact = async (freshLease: Date) => {
+    const job = await readJob("reacquired.job");
+    expect(job.lockedBy).toBe(FRESH_TOKEN);
+    expect(job.lockedUntil?.getTime()).toBe(freshLease.getTime());
+    expect(job.nextRunAt.getTime()).toBe(PAST.getTime());
+    expect(job.lastSuccessAt).toBeNull();
+  };
+
+  test("finishRunSuccess", async () => {
+    const { freshLease, staleRun } =
+      await seedReacquiredJobWithStaleRunningRun();
+    const job = await readJob("reacquired.job");
+
+    await finishRunSuccess({
+      db,
+      job,
+      leaseToken: STALE_TOKEN,
+      runId: staleRun.id,
+      startedAt: RUN_STARTED_AT,
+    });
+
+    await expectFreshLeaseIntact(freshLease);
+  });
+
+  test("finishRunSkipped", async () => {
+    const { freshLease, staleRun } =
+      await seedReacquiredJobWithStaleRunningRun();
+    const job = await readJob("reacquired.job");
+
+    await finishRunSkipped({
+      db,
+      job,
+      leaseToken: STALE_TOKEN,
+      runId: staleRun.id,
+      startedAt: RUN_STARTED_AT,
+    });
+
+    await expectFreshLeaseIntact(freshLease);
+  });
+
+  test("finishRunFailure", async () => {
+    const { freshLease, staleRun } =
+      await seedReacquiredJobWithStaleRunningRun();
+    const job = await readJob("reacquired.job");
+
+    await finishRunFailure({
+      db,
+      error: new Error("late zombie failure"),
+      job,
+      leaseToken: STALE_TOKEN,
+      runId: staleRun.id,
+      startedAt: RUN_STARTED_AT,
+    });
+
+    await expectFreshLeaseIntact(freshLease);
   });
 });

@@ -89,11 +89,11 @@ export const runSchedulerOnce = async ({
     return result;
   }
 
-  const unstartedJobIds = new Set(jobs.map((job) => job.id));
+  const unstartedTokens = new Set(jobs.map(leaseTokenOf));
   const unstartedHeartbeat = startUnstartedJobsHeartbeat({
     db,
-    jobIds: unstartedJobIds,
     leaseMs,
+    leaseTokens: unstartedTokens,
     runnerId,
     signal,
   });
@@ -106,7 +106,6 @@ export const runSchedulerOnce = async ({
         await releaseUnstartedJobs({
           db,
           jobs: unstartedJobs,
-          runnerId,
         });
         result.skipped += unstartedJobs.length;
         break;
@@ -117,9 +116,8 @@ export const runSchedulerOnce = async ({
         db,
         job,
         leaseMs,
-        runnerId,
       });
-      unstartedJobIds.delete(job.id);
+      unstartedTokens.delete(leaseTokenOf(job));
       if (!leasedJob) {
         result.skipped += 1;
         continue;
@@ -270,12 +268,13 @@ export const acquireDueJobs = async ({
   const acquired: SchedulerJob[] = [];
 
   for (const candidate of candidates) {
+    const leaseToken = acquireLeaseToken(runnerId);
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential conditional locking preserves due-order acquisition
     const [job] = await db
       .update(schedulerJobs)
       .set({
         lockedAt: now,
-        lockedBy: runnerId,
+        lockedBy: leaseToken,
         lockedUntil: leaseExpiresAt,
       })
       .where(and(eq(schedulerJobs.id, candidate.id), dueJobPredicate(now)))
@@ -292,18 +291,18 @@ export const acquireDueJobs = async ({
 type ReleaseUnstartedJobsOptions = {
   db: SchedulerDb;
   jobs: SchedulerJob[];
-  runnerId: string;
 };
 
 const releaseUnstartedJobs = async ({
   db,
   jobs,
-  runnerId,
 }: ReleaseUnstartedJobsOptions): Promise<void> => {
   if (jobs.length === 0) {
     return;
   }
 
+  // Lease tokens are globally unique, so matching the acquired token set targets
+  // exactly the rows this pass still holds.
   await db
     .update(schedulerJobs)
     .set({
@@ -311,40 +310,30 @@ const releaseUnstartedJobs = async ({
       lockedBy: null,
       lockedUntil: null,
     })
-    .where(
-      and(
-        eq(schedulerJobs.lockedBy, runnerId),
-        inArray(
-          schedulerJobs.id,
-          jobs.map((job) => job.id),
-        ),
-      ),
-    );
+    .where(inArray(schedulerJobs.lockedBy, jobs.map(leaseTokenOf)));
 };
 
 type RenewJobLeaseBeforeStartOptions = {
   db: SchedulerDb;
   job: SchedulerJob;
   leaseMs: number;
-  runnerId: string;
 };
 
 const renewJobLeaseBeforeStart = async ({
   db,
   job,
   leaseMs,
-  runnerId,
 }: RenewJobLeaseBeforeStartOptions): Promise<SchedulerJob | null> => {
+  const leaseToken = leaseTokenOf(job);
   const now = new Date();
   const [leasedJob] = await db
     .update(schedulerJobs)
     .set({
       lockedAt: now,
-      lockedBy: runnerId,
       lockedUntil: new Date(now.getTime() + leaseMs),
     })
     .where(
-      and(eq(schedulerJobs.id, job.id), eq(schedulerJobs.lockedBy, runnerId)),
+      and(eq(schedulerJobs.id, job.id), eq(schedulerJobs.lockedBy, leaseToken)),
     )
     .returning();
 
@@ -353,16 +342,16 @@ const renewJobLeaseBeforeStart = async ({
 
 type StartUnstartedJobsHeartbeatOptions = {
   db: SchedulerDb;
-  jobIds: Set<string>;
   leaseMs: number;
+  leaseTokens: Set<string>;
   runnerId: string;
   signal: AbortSignal | undefined;
 };
 
 const startUnstartedJobsHeartbeat = ({
   db,
-  jobIds,
   leaseMs,
+  leaseTokens,
   runnerId,
   signal,
 }: StartUnstartedJobsHeartbeatOptions): LeaseHeartbeat => {
@@ -372,7 +361,7 @@ const startUnstartedJobsHeartbeat = ({
   );
 
   const renew = async () => {
-    if (signal?.aborted || jobIds.size === 0) {
+    if (signal?.aborted || leaseTokens.size === 0) {
       return;
     }
 
@@ -381,12 +370,7 @@ const startUnstartedJobsHeartbeat = ({
       .set({
         lockedUntil: new Date(Date.now() + leaseMs),
       })
-      .where(
-        and(
-          eq(schedulerJobs.lockedBy, runnerId),
-          inArray(schedulerJobs.id, [...jobIds]),
-        ),
-      );
+      .where(inArray(schedulerJobs.lockedBy, [...leaseTokens]));
   };
 
   const timer = setInterval(() => {
@@ -420,6 +404,7 @@ type StartLeaseHeartbeatOptions = {
   db: SchedulerDb;
   jobId: string;
   leaseMs: number;
+  leaseToken: string;
   runnerId: string;
   signal: AbortSignal;
 };
@@ -428,6 +413,7 @@ const startLeaseHeartbeat = ({
   db,
   jobId,
   leaseMs,
+  leaseToken,
   runnerId,
   signal,
 }: StartLeaseHeartbeatOptions): LeaseHeartbeat => {
@@ -447,7 +433,10 @@ const startLeaseHeartbeat = ({
         lockedUntil: new Date(Date.now() + leaseMs),
       })
       .where(
-        and(eq(schedulerJobs.id, jobId), eq(schedulerJobs.lockedBy, runnerId)),
+        and(
+          eq(schedulerJobs.id, jobId),
+          eq(schedulerJobs.lockedBy, leaseToken),
+        ),
       );
   };
 
@@ -489,20 +478,38 @@ const runJob = async ({
   runnerId,
   signal,
 }: RunJobOptions): Promise<RunJobStatus> => {
+  const leaseToken = leaseTokenOf(job);
   const startedAt = new Date();
   const runId = await createRun({ db, job, runnerId, startedAt });
   const controller = new AbortController();
   const abortListener = () => controller.abort();
   signal?.addEventListener("abort", abortListener, { once: true });
+
+  // A parent abort that fired while createRun() was awaited would not replay
+  // through the listener attached above. Re-check synchronously and bail before
+  // any task or heartbeat starts, releasing the lease cleanly.
+  if (signal?.aborted) {
+    controller.abort();
+    signal.removeEventListener("abort", abortListener);
+    await finishRunSkipped({ db, job, leaseToken, runId, startedAt });
+    return "skipped";
+  }
+
   const heartbeat = startLeaseHeartbeat({
     db,
     jobId: job.id,
     leaseMs,
+    leaseToken,
     runnerId,
     signal: controller.signal,
   });
   const task = registry.get(job.task);
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  // Set the instant the ceiling fires, before the abort is broadcast. The run is
+  // classified on this flag, not on which rejection wins the race: a task whose
+  // own abort handler rejects (e.g. an aborted fetch) must still be recorded as
+  // a timeout failure, never as a cooperative skip.
+  let timeoutError: SchedulerJobTimeoutError | undefined;
 
   try {
     if (!task) {
@@ -512,21 +519,21 @@ const runJob = async ({
     }
 
     // Bound the task's runtime. A JS promise cannot be force-cancelled, so on
-    // expiry we abort the task's signal FIRST, giving a cooperative task a
-    // chance to stop before its lease is released; a task that ignores the
-    // signal keeps running as a "zombie". We never chain a completion write onto
-    // it, and the guarded completion writes below reject a late write anyway, so
-    // a zombie can never overwrite the timed-out state.
+    // expiry we abort the task's signal, giving a cooperative task a chance to
+    // stop before its lease is released; a task that ignores the signal keeps
+    // running as a "zombie". We never chain a completion write onto it, and the
+    // guarded completion writes below reject a late write anyway, so a zombie
+    // can never overwrite the timed-out state.
     const timeout = new Promise<never>((_resolve, reject) => {
       timeoutTimer = setTimeout(() => {
+        const ceilingError = new SchedulerJobTimeoutError({
+          jobId: job.id,
+          message: `Scheduler job ${job.id} exceeded its ${maxRuntimeMs}ms runtime ceiling`,
+          timeoutMs: maxRuntimeMs,
+        });
+        timeoutError = ceilingError;
         controller.abort();
-        reject(
-          new SchedulerJobTimeoutError({
-            jobId: job.id,
-            message: `Scheduler job ${job.id} exceeded its ${maxRuntimeMs}ms runtime ceiling`,
-            timeoutMs: maxRuntimeMs,
-          }),
-        );
+        reject(ceilingError);
       }, maxRuntimeMs);
     });
 
@@ -542,18 +549,23 @@ const runJob = async ({
       ),
       timeout,
     ]);
-    await finishRunSuccess({ db, job, runId, runnerId, startedAt });
+    // Stop heartbeating before finalizing: the lease must not be renewed while
+    // we release it, and the completion transaction must not race a renewal on
+    // the same connection.
+    heartbeat.stop();
+    await finishRunSuccess({ db, job, leaseToken, runId, startedAt });
     return "success";
   } catch (error: unknown) {
-    // The timeout branch aborts `controller` before rejecting, so it must be
-    // checked before the abort branch below: otherwise a ceiling expiry would
-    // be misclassified as a cooperatively-skipped run.
-    if (error instanceof SchedulerJobTimeoutError) {
-      // Stop heartbeating first so the released lease cannot be re-extended,
-      // then release the job and mark the run timed out. Another runner can
-      // now reclaim it once the (already-released) lease is past.
-      heartbeat.stop();
-      captureError(error, {
+    // Stop heartbeating before any completion write: the lease must not be
+    // re-extended while we release it, and the write itself runs a transaction
+    // that must not race a renewal on the same connection.
+    heartbeat.stop();
+    // Classify on whether the ceiling fired, not on which rejection surfaced:
+    // aborting the task can make it reject with its own AbortError before our
+    // timeout rejection is observed. A ceiling expiry is always a timeout
+    // failure (rescheduled), never a cooperative skip (left due).
+    if (timeoutError) {
+      captureError(timeoutError, {
         schedulerJobId: job.id,
         schedulerRunId: runId,
         schedulerTask: job.task,
@@ -565,12 +577,19 @@ const runJob = async ({
         "scheduler.task": job.task,
         "scheduler.timeout_ms": maxRuntimeMs,
       });
-      await finishRunFailure({ db, error, job, runId, runnerId, startedAt });
+      await finishRunFailure({
+        db,
+        error: timeoutError,
+        job,
+        leaseToken,
+        runId,
+        startedAt,
+      });
       return "failed";
     }
 
     if (controller.signal.aborted) {
-      await finishRunSkipped({ db, job, runId, runnerId, startedAt });
+      await finishRunSkipped({ db, job, leaseToken, runId, startedAt });
       return "skipped";
     }
 
@@ -586,7 +605,7 @@ const runJob = async ({
       "scheduler.task": job.task,
       "error.type": errorTag(error),
     });
-    await finishRunFailure({ db, error, job, runId, runnerId, startedAt });
+    await finishRunFailure({ db, error, job, leaseToken, runId, startedAt });
     return "failed";
   } finally {
     if (timeoutTimer) {
@@ -631,65 +650,73 @@ const createRun = async ({
 type FinishRunOptions = {
   db: SchedulerDb;
   job: SchedulerJob;
+  leaseToken: string;
   runId: SafeId<"schedulerJobRun">;
-  runnerId: string;
   startedAt: Date;
 };
 
 type CompleteRunOptions = {
   db: SchedulerDb;
   jobId: string;
+  leaseToken: string;
   runId: SafeId<"schedulerJobRun">;
-  runnerId: string;
   runValues: PgUpdateSetSource<typeof schedulerJobRuns>;
   jobValues: PgUpdateSetSource<typeof schedulerJobs>;
 };
 
 // A run terminates exactly once. Every completion path (success, skipped,
-// failure) funnels through this single guarded writer so a future path cannot
-// forget the guard. Two layers reject a late zombie completion:
-//   1. run-row write is conditioned on `status = "running"` (a generation
+// failure) funnels through this single guarded, atomic writer so a future path
+// cannot forget the guard. Inside one transaction, two layers reject a late
+// completion:
+//   1. the run-row write is conditioned on `status = "running"` (a generation
 //      check) and only counts if it actually updated a row;
-//   2. the job-row write runs only when (1) won AND `lockedBy = runnerId` (a
-//      lease-token check) still matches.
-// Together they mean a zombie cannot overwrite a timed-out or reclaimed job,
-// even if the same runner has since re-acquired the job under a fresh run.
+//   2. the job-row write runs only when (1) won AND `lockedBy` still equals the
+//      exact lease token this execution acquired (a unique-lease check).
+// Because the lease token is unique per acquisition, a stale still-running
+// execution cannot complete the job after it has been re-acquired -- even by the
+// same runner process -- and the transaction stops the run write from committing
+// without the lease check.
 const completeRun = async ({
   db,
   jobId,
   jobValues,
+  leaseToken,
   runId,
-  runnerId,
   runValues,
 }: CompleteRunOptions): Promise<void> => {
-  const [updatedRun] = await db
-    .update(schedulerJobRuns)
-    .set(runValues)
-    .where(
-      and(
-        eq(schedulerJobRuns.id, runId),
-        eq(schedulerJobRuns.status, "running"),
-      ),
-    )
-    .returning({ id: schedulerJobRuns.id });
+  await db.transaction(async (tx) => {
+    const [updatedRun] = await tx
+      .update(schedulerJobRuns)
+      .set(runValues)
+      .where(
+        and(
+          eq(schedulerJobRuns.id, runId),
+          eq(schedulerJobRuns.status, "running"),
+        ),
+      )
+      .returning({ id: schedulerJobRuns.id });
 
-  if (!updatedRun) {
-    return;
-  }
+    if (!updatedRun) {
+      return;
+    }
 
-  await db
-    .update(schedulerJobs)
-    .set(jobValues)
-    .where(
-      and(eq(schedulerJobs.id, jobId), eq(schedulerJobs.lockedBy, runnerId)),
-    );
+    await tx
+      .update(schedulerJobs)
+      .set(jobValues)
+      .where(
+        and(
+          eq(schedulerJobs.id, jobId),
+          eq(schedulerJobs.lockedBy, leaseToken),
+        ),
+      );
+  });
 };
 
 export const finishRunSuccess = async ({
   db,
   job,
+  leaseToken,
   runId,
-  runnerId,
   startedAt,
 }: FinishRunOptions): Promise<void> => {
   const finishedAt = new Date();
@@ -706,8 +733,8 @@ export const finishRunSuccess = async ({
       lockedUntil: null,
       nextRunAt: computeNextRunAt(job.schedule, finishedAt),
     },
+    leaseToken,
     runId,
-    runnerId,
     runValues: {
       durationMs: durationMs(startedAt, finishedAt),
       finishedAt,
@@ -719,8 +746,8 @@ export const finishRunSuccess = async ({
 export const finishRunSkipped = async ({
   db,
   job,
+  leaseToken,
   runId,
-  runnerId,
   startedAt,
 }: FinishRunOptions): Promise<void> => {
   const finishedAt = new Date();
@@ -733,8 +760,8 @@ export const finishRunSkipped = async ({
       lockedBy: null,
       lockedUntil: null,
     },
+    leaseToken,
     runId,
-    runnerId,
     runValues: {
       durationMs: durationMs(startedAt, finishedAt),
       error: "SchedulerAborted",
@@ -752,8 +779,8 @@ export const finishRunFailure = async ({
   db,
   error,
   job,
+  leaseToken,
   runId,
-  runnerId,
   startedAt,
 }: FinishRunFailureOptions): Promise<void> => {
   const finishedAt = new Date();
@@ -771,8 +798,8 @@ export const finishRunFailure = async ({
       lockedUntil: null,
       nextRunAt: computeNextRunAt(job.schedule, finishedAt),
     },
+    leaseToken,
     runId,
-    runnerId,
     runValues: {
       durationMs: durationMs(startedAt, finishedAt),
       error: sanitizedError,
@@ -789,3 +816,23 @@ const defaultRunnerId = (): string => {
   const host = process.env["HOSTNAME"] ?? "local";
   return `${host}:${process.pid}:${Bun.randomUUIDv7()}`;
 };
+
+// scheduler_jobs.locked_by is varchar(128). The lease token binds a completion
+// to one specific acquisition: a globally-unique suffix means re-acquiring the
+// same job (even within the same runner process) yields a different token, so a
+// stale still-running execution can no longer satisfy the completion guard. The
+// runnerId prefix is kept for observability but truncated so the token always
+// fits the column.
+const LEASE_TOKEN_COLUMN_LENGTH = 128;
+
+const acquireLeaseToken = (runnerId: string): string => {
+  const suffix = `#${Bun.randomUUIDv7()}`;
+  const prefix = runnerId.slice(0, LEASE_TOKEN_COLUMN_LENGTH - suffix.length);
+  return `${prefix}${suffix}`;
+};
+
+// After a successful claim the acquired row carries its lease token in
+// `lockedBy`; every downstream lease operation matches against exactly that
+// token rather than the reusable runnerId.
+const leaseTokenOf = (job: SchedulerJob): string =>
+  job.lockedBy ?? panic("Leased scheduler job is missing its lease token");
