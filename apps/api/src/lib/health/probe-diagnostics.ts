@@ -36,13 +36,14 @@ export const probeDiagnostics = async (): Promise<DiagnosticsResult> => {
   let redisStatus: "ok" | "error";
   let backlogJobsCount = 0;
   let redisClient: ReturnType<typeof createRedisClient> | null = null;
+  let bullConnection: ReturnType<typeof createBullMqConnection> | null = null;
 
   try {
     redisClient = createRedisClient();
     await redisClient.ping();
     redisStatus = "ok";
 
-    const bullConnection = createBullMqConnection();
+    bullConnection = createBullMqConnection();
     const workflowQueue = new Queue("workflows", { connection: bullConnection });
     const fileDerivativesQueue = new Queue("file-derivatives", { connection: bullConnection });
 
@@ -68,6 +69,13 @@ export const probeDiagnostics = async (): Promise<DiagnosticsResult> => {
     if (redisClient) {
       try {
         redisClient.close();
+      } catch {
+        // Ignore close errors
+      }
+    }
+    if (bullConnection) {
+      try {
+        bullConnection.close();
       } catch {
         // Ignore close errors
       }

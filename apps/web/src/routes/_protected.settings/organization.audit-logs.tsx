@@ -551,6 +551,15 @@ function ConfigDiagnosticsChecklist() {
   );
   const settings = useQuery(organizationSettingsOptions(activeOrganizationId));
 
+  const isLoading =
+    aiAvailability.isLoading ||
+    deepLAvailability.isLoading ||
+    settings.isLoading;
+
+  if (isLoading) {
+    return null;
+  }
+
   const isAiOk = aiAvailability.data?.available ?? false;
   const isDeepLOk = deepLAvailability.data?.configured ?? false;
   const isJurisdictionsOk =

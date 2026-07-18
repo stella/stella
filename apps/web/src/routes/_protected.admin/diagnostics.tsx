@@ -454,17 +454,17 @@ function AdminDiagnosticsPage() {
                           <TableCell className="text-xs whitespace-nowrap">
                             {new Date(log.createdAt).toLocaleString(getFormattingLocale())}
                           </TableCell>
-                          <td className="font-mono text-xs p-3">
+                          <TableCell className="font-mono text-xs p-3">
                             <bdi>{log.actor}</bdi>
-                          </td>
-                          <td className="p-3 text-xs font-semibold">{log.action}</td>
-                          <td className="p-3 text-xs">{log.resourceType}</td>
-                          <td className="max-w-[120px] truncate font-mono text-xs p-3" title={log.resourceId}>
+                          </TableCell>
+                          <TableCell className="p-3 text-xs font-semibold">{log.action}</TableCell>
+                          <TableCell className="p-3 text-xs">{log.resourceType}</TableCell>
+                          <TableCell className="max-w-[120px] truncate font-mono text-xs p-3" title={log.resourceId}>
                             <bdi>{log.resourceId}</bdi>
-                          </td>
-                          <td className="max-w-[200px] truncate font-mono text-xs p-3" title={log.changes ? JSON.stringify(log.changes) : ""}>
+                          </TableCell>
+                          <TableCell className="max-w-[200px] truncate font-mono text-xs p-3" title={log.changes ? JSON.stringify(log.changes) : ""}>
                             <bdi>{log.changes ? JSON.stringify(log.changes) : "-"}</bdi>
-                          </td>
+                          </TableCell>
                         </TableRow>
                       ))
                     )}
