@@ -36,12 +36,17 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { authClient, isTwoFactorEnabledUser } from "@/lib/auth";
+import {
+  authClient,
+  HTTP_TOO_MANY_REQUESTS,
+  isTwoFactorEnabledUser,
+} from "@/lib/auth";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { sessionOptions } from "@/routes/-queries";
 
 const TOTP_LENGTH = 6;
+const HTTP_BAD_REQUEST = 400;
 const BACKUP_CODES_FILE_NAME = "stella-backup-codes.txt";
 const ENABLE_TWO_FACTOR_QUERY_KEY = ["auth", "two-factor", "enable"] as const;
 
@@ -137,6 +142,29 @@ const extractBackupCodes = (data: unknown): string[] => {
     panic("Unexpected response from backup code regeneration");
   }
   return backupCodes;
+};
+
+/**
+ * Toasts the right message for a failed 2FA management call. Only a rejected
+ * OTP (the gate's `400`) reads as "invalid code"; rate limits are already
+ * surfaced by the auth client's shared `429` handler, and any other failure
+ * (e.g. a `500`) shows its converted message instead of a misleading
+ * invalid-code toast.
+ */
+const showManagementMutationError = (
+  error: Parameters<typeof toAuthClientError>[0],
+  t: ReturnType<typeof useTranslations>,
+): void => {
+  if (error.status === HTTP_TOO_MANY_REQUESTS) {
+    return;
+  }
+  stellaToast.add({
+    title:
+      error.status === HTTP_BAD_REQUEST
+        ? t("auth.twoFactor.invalidCode")
+        : toAuthClientError(error).message,
+    type: "error",
+  });
 };
 
 const getTotpSecret = (totpURI: string): string | null => {
@@ -242,8 +270,11 @@ const EnableTwoFactorDialog = ({
     // `enable` rotates the TOTP secret server-side, so an automatic refetch
     // (e.g. on window focus while the user is copying the code from their
     // authenticator app) would invalidate the QR they just scanned. Pin the
-    // result for the lifetime of the dialog.
+    // result for the lifetime of the dialog. `retry: false` overrides the
+    // query client's default retries so a transient failure cannot silently
+    // rotate the secret again behind the QR the user is looking at.
     staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -475,10 +506,7 @@ const DisableTwoFactorDialog = ({
       });
 
       if (error) {
-        stellaToast.add({
-          title: t("auth.twoFactor.invalidCode"),
-          type: "error",
-        });
+        showManagementMutationError(error, t);
         throw toAuthClientError(error);
       }
     },
@@ -628,10 +656,7 @@ const RegenerateBackupCodesDialog = ({
       );
 
       if (error) {
-        stellaToast.add({
-          title: t("auth.twoFactor.invalidCode"),
-          type: "error",
-        });
+        showManagementMutationError(error, t);
         throw toAuthClientError(error);
       }
 
