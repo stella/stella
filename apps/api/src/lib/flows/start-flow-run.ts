@@ -8,6 +8,7 @@ import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type {
   FlowDefinitionSnapshot,
   FlowRunStatus,
+  FlowStep,
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
 
@@ -48,6 +49,67 @@ export type StartFlowRunOptions = {
 export type StartFlowRunResult = {
   runId: SafeId<"flowRun">;
   status: FlowRunStatus;
+};
+
+/** Snapshot fields a run freezes from its definition at start. */
+export type FlowRunDefinitionSnapshotInput = {
+  name: string;
+  steps: FlowStep[];
+};
+
+export type BuildFlowRunRowsInput = {
+  runId: SafeId<"flowRun">;
+  workspaceId: SafeId<"workspace">;
+  definitionId: SafeId<"flowDefinition">;
+  definition: FlowRunDefinitionSnapshotInput;
+  triggerSource: FlowTriggerSource;
+  inputEntityIds: SafeId<"entity">[];
+};
+
+/** The run row plus its pending step rows, ready to insert in one transaction. */
+export type FlowRunRows = {
+  run: typeof flowRuns.$inferInsert;
+  steps: (typeof flowRunSteps.$inferInsert)[];
+};
+
+/**
+ * Build the `flow_runs` row and its pending `flow_run_steps` rows from a
+ * definition snapshot. Shared by the manual entry point (RLS-scoped insert) and
+ * the automated triggers (cap-gated insert), so both write identical row shapes.
+ */
+export const buildFlowRunRows = ({
+  runId,
+  workspaceId,
+  definitionId,
+  definition,
+  triggerSource,
+  inputEntityIds,
+}: BuildFlowRunRowsInput): FlowRunRows => {
+  const snapshot: FlowDefinitionSnapshot = {
+    name: definition.name,
+    steps: definition.steps,
+  };
+  return {
+    run: {
+      id: runId,
+      workspaceId,
+      definitionId,
+      definitionSnapshot: snapshot,
+      status: "pending",
+      currentStepIndex: 0,
+      triggerSource,
+      inputEntityIds,
+      startedAt: new Date(),
+    },
+    steps: definition.steps.map((step, index) => ({
+      id: createSafeId<"flowRunStep">(),
+      workspaceId,
+      runId,
+      index,
+      kind: step.kind,
+      status: "pending" as const,
+    })),
+  };
 };
 
 export const startFlowRun = async ({
@@ -91,34 +153,19 @@ export const startFlowRun = async ({
     }
 
     const runId = createSafeId<"flowRun">();
-    const snapshot: FlowDefinitionSnapshot = {
-      name: definition.name,
-      steps: definition.steps,
-    };
+    const rows = buildFlowRunRows({
+      runId,
+      workspaceId,
+      definitionId,
+      definition,
+      triggerSource,
+      inputEntityIds,
+    });
 
     yield* Result.await(
       safeDb(async (tx) => {
-        await tx.insert(flowRuns).values({
-          id: runId,
-          workspaceId,
-          definitionId,
-          definitionSnapshot: snapshot,
-          status: "pending",
-          currentStepIndex: 0,
-          triggerSource,
-          inputEntityIds,
-          startedAt: new Date(),
-        });
-        await tx.insert(flowRunSteps).values(
-          definition.steps.map((step, index) => ({
-            id: createSafeId<"flowRunStep">(),
-            workspaceId,
-            runId,
-            index,
-            kind: step.kind,
-            status: "pending" as const,
-          })),
-        );
+        await tx.insert(flowRuns).values(rows.run);
+        await tx.insert(flowRunSteps).values(rows.steps);
       }),
     );
 

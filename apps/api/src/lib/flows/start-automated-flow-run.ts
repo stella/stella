@@ -1,25 +1,30 @@
 import { Result } from "better-result";
 
+import { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
-import { countTodaysAutomatedFlowRuns } from "@/api/lib/flows/automated-run-cap";
-import { isAutomatedRunCapReached } from "@/api/lib/flows/flow-trigger-logic";
+import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
+import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
-import { startFlowRun } from "@/api/lib/flows/start-flow-run";
+import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { logger } from "@/api/lib/observability/logger";
-import { createRootSafeDb } from "@/api/lib/root-scoped-db";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Shared tail for both automated triggers (schedule + file-upload): guarantee
- * an actor, enforce the daily spend cap, then start the run. Fire-and-forget by
- * design — it never throws and never surfaces to the upload / scheduler caller;
- * every skip or failure is captured through the structured logger.
+ * an actor, then insert the run under the daily spend cap atomically and
+ * enqueue its first step. Fire-and-forget by design — it never throws and never
+ * surfaces to the upload / scheduler caller; every skip or failure is captured
+ * through the structured logger.
  *
  * Actor guarantee: an automated run is credited to the definition's author
  * (`createdByUserId`). If the author was deleted (`null`), the run is skipped
  * here so it can never reach the executor with an unresolvable actor.
+ *
+ * Cap atomicity: the count-and-insert is a single atomic decision (see
+ * `insertAutomatedFlowRunWithinCap`), so two concurrent triggers can no longer
+ * both pass the check and overshoot `MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY`.
  */
 export type StartAutomatedFlowRunArgs = {
   definitionId: SafeId<"flowDefinition">;
@@ -53,56 +58,92 @@ export const startAutomatedFlowRun = async ({
     return;
   }
 
-  const countResult = await Result.tryPromise({
-    try: async () => await countTodaysAutomatedFlowRuns(definitionId),
+  // Snapshot fields (name, steps) come from a root read: the automated triggers
+  // run in a background context and the cap is an org-wide rail.
+  const definitionResult = await Result.tryPromise({
+    try: async () =>
+      await rootDb.query.flowDefinitions.findFirst({
+        where: {
+          id: { eq: definitionId },
+          organizationId: { eq: organizationId },
+        },
+        columns: { id: true, name: true, steps: true, enabled: true },
+      }),
     catch: (cause) => cause,
   });
-  if (Result.isError(countResult)) {
-    captureError(countResult.error, logContext);
-    logger.error("flow.automated_run_cap_check_failed", {
-      ...logContext,
-      "error.type": errorTag(countResult.error),
-    });
-    return;
-  }
-  // Best-effort guard: two concurrent uploads can both pass the check and
-  // overshoot the cap by one. That is acceptable for a spend rail.
-  if (isAutomatedRunCapReached(countResult.value)) {
-    logger.info("flow.automated_run_capped", {
-      ...logContext,
-      dailyRunCount: countResult.value,
-    });
-    return;
-  }
-
-  const actorUserId = brandPersistedUserId(createdByUserId);
-  const safeDb = createRootSafeDb({
-    organizationId,
-    userId: actorUserId,
-    workspaceIds: [workspaceId],
-  });
-
-  const started = await startFlowRun({
-    safeDb,
-    organizationId,
-    workspaceId,
-    definitionId,
-    triggerSource,
-    inputEntityIds,
-    ...(enqueueDelayMs !== undefined && { enqueueDelayMs }),
-  });
-  if (Result.isError(started)) {
-    captureError(started.error, logContext);
+  if (Result.isError(definitionResult)) {
+    captureError(definitionResult.error, logContext);
     logger.error("flow.automated_run_start_failed", {
       ...logContext,
-      "error.type": errorTag(started.error),
+      "error.type": errorTag(definitionResult.error),
+    });
+    return;
+  }
+  const definition = definitionResult.value;
+  if (!definition) {
+    logger.info("flow.automated_run_definition_missing", logContext);
+    return;
+  }
+  if (!definition.enabled) {
+    logger.info("flow.automated_run_definition_disabled", logContext);
+    return;
+  }
+
+  const runId = createSafeId<"flowRun">();
+  const rows = buildFlowRunRows({
+    runId,
+    workspaceId,
+    definitionId,
+    definition: { name: definition.name, steps: definition.steps },
+    triggerSource,
+    inputEntityIds,
+  });
+
+  const insertResult = await Result.tryPromise({
+    try: async () =>
+      await insertAutomatedFlowRunWithinCap({ definitionId, rows }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(insertResult)) {
+    captureError(insertResult.error, logContext);
+    logger.error("flow.automated_run_start_failed", {
+      ...logContext,
+      "error.type": errorTag(insertResult.error),
+    });
+    return;
+  }
+  if (insertResult.value.outcome === "capped") {
+    logger.info("flow.automated_run_capped", {
+      ...logContext,
+      dailyRunCount: insertResult.value.dailyRunCount,
+    });
+    return;
+  }
+
+  // Enqueue after the rows commit. A failure here leaves the run `pending`; the
+  // worker's boot reconciler re-enqueues its current step, so the run is never
+  // permanently stranded.
+  const enqueued = await Result.tryPromise({
+    try: async () =>
+      await enqueueFlowStep({
+        runId,
+        stepIndex: 0,
+        ...(enqueueDelayMs !== undefined && { delayMs: enqueueDelayMs }),
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(enqueued)) {
+    captureError(enqueued.error, logContext);
+    logger.error("flow.automated_run_start_failed", {
+      ...logContext,
+      "error.type": errorTag(enqueued.error),
     });
     return;
   }
 
   logger.info("flow.automated_run_started", {
     ...logContext,
-    runId: started.value.runId,
+    runId,
     triggerType: triggerSource.type,
   });
 };
