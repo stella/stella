@@ -84,4 +84,39 @@ describe("delete-version chain-of-custody guard", () => {
 
     expect(missing).toEqual([]);
   });
+
+  test("tombstoning a version cancels its open desktop edit sessions", () => {
+    // An open desktop edit session anchored to the withdrawn version could
+    // otherwise resume and re-download the version's bytes. Tombstoning must
+    // cancel those sessions inside the same transaction as the version update.
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "delete-version.ts"),
+      "utf-8",
+    );
+
+    expect(source).toContain("update(desktopEditSessions)");
+    expect(source).toContain(
+      "eq(desktopEditSessions.baseVersionId, params.versionId)",
+    );
+    expect(source).toContain('status: "cancelled"');
+  });
+
+  test("the desktop resume chokepoint refuses a tombstoned base version", () => {
+    // readVersionDocxTarget is the single path that serves a base version's
+    // bytes to a resuming desktop edit session. It must join entity_versions
+    // and require deletedAt IS NULL, so a tombstoned base version is never
+    // served regardless of session state (class guard for the cascade above).
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "desktop-edit-session-utils.ts"),
+      "utf-8",
+    );
+
+    const readVersionTarget = source.slice(
+      source.indexOf("export const readVersionDocxTarget"),
+      source.indexOf("export const presignDocxFieldDownload"),
+    );
+
+    expect(readVersionTarget).toContain("innerJoin(entityVersions");
+    expect(readVersionTarget).toContain("isNull(entityVersions.deletedAt)");
+  });
 });

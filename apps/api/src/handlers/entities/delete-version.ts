@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, entityVersions } from "@/api/db/schema";
+import { desktopEditSessions, entities, entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -172,6 +172,24 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         );
 
+      // Cascade the withdrawal to any open desktop edit session anchored to this
+      // version: without this an in-flight session could resume and re-download
+      // the withdrawn version's bytes. Cancel them in the same transaction so
+      // the tombstone and the session closure commit atomically. The resume-path
+      // chokepoint (readVersionDocxTarget) is the class guard should a future
+      // tombstone writer forget this step; closing here is the primary fix.
+      const cancelledSessions = await tx
+        .update(desktopEditSessions)
+        .set({ status: "cancelled", closedAt: new Date() })
+        .where(
+          and(
+            eq(desktopEditSessions.baseVersionId, params.versionId),
+            eq(desktopEditSessions.workspaceId, workspaceId),
+            eq(desktopEditSessions.status, "open"),
+          ),
+        )
+        .returning({ id: desktopEditSessions.id });
+
       const events: AuditEvent[] = [
         {
           action: AUDIT_ACTION.DELETE,
@@ -199,6 +217,15 @@ export const deleteEntityVersionHandler = async function* ({
               new: promotedVersionId,
             },
           },
+        });
+      }
+      for (const session of cancelledSessions) {
+        events.push({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+          resourceId: session.id,
+          changes: { status: { old: "open", new: "cancelled" } },
+          metadata: { reason: "base_version_tombstoned" },
         });
       }
       await recordAuditEvent(tx, events);
