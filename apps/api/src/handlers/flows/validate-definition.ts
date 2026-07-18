@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

@@ -5,7 +5,7 @@ import {
   type FlowRunStatus,
 } from "@/components/flows/flow-meta";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 // ── Key type ────────────────────────────────────────

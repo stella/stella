@@ -3,7 +3,7 @@ import { inArray } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   executeFlowStep,

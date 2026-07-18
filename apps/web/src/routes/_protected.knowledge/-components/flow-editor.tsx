@@ -48,7 +48,7 @@ import { FlowSwitch } from "@/components/flows/flow-switch";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import {
   buildFlowExample,

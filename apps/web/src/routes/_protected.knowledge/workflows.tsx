@@ -8,7 +8,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { FlowEditor } from "@/routes/_protected.knowledge/-components/flow-editor";
 import type { FlowExampleKey } from "@/routes/_protected.knowledge/-components/flow-examples";

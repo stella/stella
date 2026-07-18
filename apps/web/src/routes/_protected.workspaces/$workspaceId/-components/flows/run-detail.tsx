@@ -31,7 +31,7 @@ import {
 } from "@/components/flows/flow-meta";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   FlowRunDetail as FlowRunDetailData,

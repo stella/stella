@@ -19,7 +19,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import {
   FLOW_PICKER_LIMIT,

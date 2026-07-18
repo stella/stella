@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";

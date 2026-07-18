@@ -4,7 +4,7 @@ import { eq, type InferSelectModel } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 import type { flowDefinitions } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { errorTag } from "@/api/lib/errors/utils";
 import { flowScheduleToSchedulerSchedule } from "@/api/lib/flows/flow-trigger-logic";
 import { logger } from "@/api/lib/observability/logger";

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import { rootDb } from "@/api/db/root";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";

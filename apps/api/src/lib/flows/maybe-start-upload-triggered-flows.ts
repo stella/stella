@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { flowDefinitions } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import {

@@ -3,8 +3,9 @@ import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
 
-import type { SafeDb, SafeDbError, Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { resolveCaching } from "@/api/lib/ai-config";
