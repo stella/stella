@@ -210,6 +210,14 @@ const requireTwoFactorManageOtp = async (
   });
 
   if (Result.isError(verifyResult)) {
+    // Only wrong/expired codes are a client error. An infrastructure failure
+    // (e.g. the database is down) surfaces as a 500 from verifyConfirmationOtp;
+    // preserve that so it is not misreported to the user as an invalid code.
+    if (verifyResult.error.status >= 500) {
+      throw new APIError("INTERNAL_SERVER_ERROR", {
+        message: "Could not verify the two-factor settings change",
+      });
+    }
     throw new APIError("BAD_REQUEST", {
       message: "Invalid verification code",
     });
