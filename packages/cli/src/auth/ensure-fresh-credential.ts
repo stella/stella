@@ -227,11 +227,12 @@ export const ensureFreshCredential = async (
   // refresh itself already succeeded, so treat a persistence failure as a
   // warning, not a failure: hand back the (unsaved) fresh credential and
   // let the caller decide how to surface the warning.
-  const persisted = await Result.tryPromise(() =>
-    writeCredentialFile(
-      input.configDir,
-      upsertCredential(check.latestCredentialFile, updated),
-    ),
+  const persisted = await Result.tryPromise(
+    async () =>
+      await writeCredentialFile(
+        input.configDir,
+        upsertCredential(check.latestCredentialFile, updated),
+      ),
   );
   if (Result.isError(persisted)) {
     return Result.ok({
