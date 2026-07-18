@@ -5,7 +5,6 @@ import {
   AGENT_AUTH_CLAIM_PATH,
   AGENT_AUTH_ID_JAG_ASSERTION_TYPE,
   AGENT_AUTH_SERVICE_SCOPES,
-  AGENT_AUTH_TOKEN_PATH,
   getAgentAuthUrl,
 } from "@/api/agent-auth/constants";
 import { env } from "@/api/env";
@@ -125,14 +124,27 @@ const mapIdJagOutcome = (
         status: 401,
         error: "interaction_required",
         message: "A human must link this agent to the existing account.",
-        claim: {
+        // Same envelope as a `service_auth` registration: registration
+        // handles at the top level, ceremony fields under `claim`, so an
+        // agent parses the step-up with one shape and can poll the claim
+        // grant once the human confirms. `registration_type` reflects the
+        // originating identity type (the agent presented an ID-JAG).
+        stepUp: {
           registration_id: ceremony.registrationId,
+          registration_type: "identity_assertion",
+          claim_url: getAgentAuthUrl(AGENT_AUTH_CLAIM_PATH),
+          claim_token: ceremony.claimToken,
+          claim_token_expires: new Date(
+            Date.now() + ceremony.expiresIn * 1000,
+          ).toISOString(),
+          post_claim_scopes: [...AGENT_AUTH_SERVICE_SCOPES],
+        },
+        claim: {
           user_code: ceremony.userCode,
           verification_uri: verificationUri,
           verification_uri_complete: `${verificationUri}?user_code=${encodeURIComponent(ceremony.userCode)}`,
           expires_in: ceremony.expiresIn,
           interval: ceremony.interval,
-          claim_token: ceremony.claimToken,
         },
       }),
     );
@@ -202,12 +214,14 @@ const agentIdentityHandler = createSafePublicHandler(
     const verificationUri = getClaimVerificationUri();
     const verificationUriComplete = `${verificationUri}?user_code=${encodeURIComponent(ceremony.userCode)}`;
 
-    // Spec shape: ceremony fields nest under `claim`; the poll endpoint, claim
-    // token + its absolute expiry, and the post-claim scopes sit at the top.
+    // Spec shape: ceremony fields nest under `claim`; the claim ceremony
+    // endpoint, claim token + its absolute expiry, and the post-claim scopes
+    // sit at the top. `claim_url` is the claim endpoint (not the token grant
+    // the agent later polls, which it discovers from AS metadata).
     return okResponse({
       registration_id: ceremony.registrationId,
       registration_type: ceremony.registrationType,
-      claim_url: getAgentAuthUrl(AGENT_AUTH_TOKEN_PATH),
+      claim_url: getAgentAuthUrl(AGENT_AUTH_CLAIM_PATH),
       claim_token: ceremony.claimToken,
       claim_token_expires: new Date(
         Date.now() + ceremony.expiresIn * 1000,

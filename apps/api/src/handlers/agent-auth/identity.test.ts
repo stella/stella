@@ -143,9 +143,10 @@ describe("agent-auth service_auth flow", () => {
 
     expect(body["registration_type"]).toBe("service_auth");
     expect(typeof body["registration_id"]).toBe("string");
-    // Top-level handoff fields per the auth.md service guide.
+    // Top-level handoff fields per the auth.md service guide. `claim_url` is
+    // the claim ceremony endpoint, not the token grant the agent later polls.
     expect(typeof body["claim_token"]).toBe("string");
-    expect(String(body["claim_url"])).toContain("/agent/token");
+    expect(String(body["claim_url"])).toContain(AGENT_AUTH_CLAIM_PATH);
     expect(
       new Date(String(body["claim_token_expires"])).getTime(),
     ).toBeGreaterThan(Date.now());

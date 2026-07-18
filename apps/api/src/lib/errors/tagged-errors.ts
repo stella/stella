@@ -30,20 +30,34 @@ export type HandlerErrorUsageDetail = {
 };
 
 /**
- * Step-up claim block returned alongside an agent-auth ID-JAG
- * `interaction_required`: a human must complete the RFC 8628-style claim
- * ceremony before a first `(iss, sub)` delegation is written. Carries the
- * same fields as the `service_auth` ceremony so the agent can poll the
- * existing `/agent/token` claim grant.
+ * Ceremony fields of an agent-auth ID-JAG `interaction_required` step-up: a
+ * human must complete the RFC 8628-style claim ceremony before a first
+ * `(iss, sub)` delegation is written. The pinned guide reserves `claim` for
+ * these ceremony fields only; the registration handles ride at the top level
+ * via {@link HandlerErrorStepUp}, mirroring the `service_auth` registration
+ * envelope so an agent parses both responses with one shape.
  */
 export type HandlerErrorClaim = {
-  registration_id: string;
   user_code: string;
   verification_uri: string;
   verification_uri_complete: string;
   expires_in: number;
   interval: number;
+};
+
+/**
+ * Top-level step-up handles paired with {@link HandlerErrorClaim} on an
+ * agent-auth ID-JAG `interaction_required`: the registration id, its identity
+ * type, the claim ceremony endpoint, the claim token plus its absolute
+ * expiry, and the scopes granted once the ceremony completes.
+ */
+export type HandlerErrorStepUp = {
+  registration_id: string;
+  registration_type: string;
+  claim_url: string;
   claim_token: string;
+  claim_token_expires: string;
+  post_claim_scopes: string[];
 };
 
 export type HandlerErrorProps<
@@ -59,8 +73,10 @@ export type HandlerErrorProps<
    * response body for agent clients that branch on the error.
    */
   error?: string | undefined;
-  /** Step-up ceremony block for an ID-JAG `interaction_required`. */
+  /** Step-up ceremony fields for an ID-JAG `interaction_required`. */
   claim?: HandlerErrorClaim | undefined;
+  /** Top-level step-up handles paired with `claim` on `interaction_required`. */
+  stepUp?: HandlerErrorStepUp | undefined;
   cause?: unknown;
   usage?: HandlerErrorUsageDetail | undefined;
 };
@@ -76,6 +92,7 @@ export class HandlerError<
   declare usage?: HandlerErrorUsageDetail | undefined;
   declare error?: string | undefined;
   declare claim?: HandlerErrorClaim | undefined;
+  declare stepUp?: HandlerErrorStepUp | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -84,6 +101,7 @@ export class HandlerError<
     this.usage = props.usage;
     this.error = props.error;
     this.claim = props.claim;
+    this.stepUp = props.stepUp;
   }
 }
 

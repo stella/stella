@@ -12,6 +12,7 @@ import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
 
 import {
+  AGENT_AUTH_CLAIM_PATH,
   AGENT_AUTH_CONFIRM_PATH,
   AGENT_AUTH_ID_JAG_ASSERTION_TYPE,
   AGENT_AUTH_ID_JAG_JWT_TYP,
@@ -401,10 +402,20 @@ describe("agent-auth ID-JAG existing email (step-up, no silent bind)", () => {
     const body = await readJson(res);
     expect(body["error"]).toBe("interaction_required");
 
+    // Ceremony fields nest under `claim`; the registration handles ride at
+    // the top level, mirroring the service_auth registration envelope so an
+    // agent parses the step-up with one shape.
     const claim = asJson(body["claim"]);
     expect(typeof claim["user_code"]).toBe("string");
-    expect(typeof claim["claim_token"]).toBe("string");
     expect(String(claim["verification_uri"])).toContain("/agent-claim");
+
+    expect(body["registration_type"]).toBe("identity_assertion");
+    expect(String(body["claim_url"])).toContain(AGENT_AUTH_CLAIM_PATH);
+    expect(typeof body["claim_token"]).toBe("string");
+    expect(
+      new Date(String(body["claim_token_expires"])).getTime(),
+    ).toBeGreaterThan(Date.now());
+    expect(Array.isArray(body["post_claim_scopes"])).toBe(true);
 
     // No silent bind: no delegation exists yet for this exact identity.
     const before = await rootDb

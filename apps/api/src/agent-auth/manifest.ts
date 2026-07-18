@@ -6,6 +6,7 @@ import {
   AUTH_MD_SPEC_VERSION,
   getAgentAuthUrl,
 } from "@/api/agent-auth/constants";
+import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import {
   getMcpProtectedResourceMetadataUrl,
@@ -20,8 +21,18 @@ import {
  * resolved from the running environment so the document is correct in every
  * deployment.
  */
-export const getAgentAuthManifest = (): string =>
-  `# stella — agent registration (auth.md)
+export const getAgentAuthManifest = (): string => {
+  // ID-JAG is dark-launched: when the flag is off the AS metadata hides
+  // `identity_assertion` and the identity route 403s it, so the manifest
+  // must not advertise it either or agents discover an unsupported flow.
+  const identityAssertionListItem = env.FEATURE_AGENT_ID_JAG
+    ? `
+- \`identity_assertion\` — present an audience-bound ID-JAG
+  (\`urn:ietf:params:oauth:token-type:id-jag\`) signed by a trusted provider; exchange it
+  via the RFC 7523 jwt-bearer grant.`
+    : "";
+
+  return `# stella — agent registration (auth.md)
 
 stella implements the [auth.md](https://github.com/workos/auth.md) agent-registration
 protocol (pinned to v${AUTH_MD_SPEC_VERSION}). An agent registers on a user's behalf and
@@ -39,10 +50,7 @@ receives a scoped, revocable OAuth access token.
   agent once the user signs in and confirms a \`user_code\`. Poll the token endpoint with
   the claim grant to complete.
 - \`anonymous\` — register with no user identity; receive a reduced-scope token limited to
-  anonymized/public resources. Claimable by a user later.
-- \`identity_assertion\` — present an audience-bound ID-JAG
-  (\`urn:ietf:params:oauth:token-type:id-jag\`) signed by a trusted provider; exchange it
-  via the RFC 7523 jwt-bearer grant.
+  anonymized/public resources. Claimable by a user later.${identityAssertionListItem}
 
 ## Scopes
 
@@ -56,3 +64,4 @@ receives a scoped, revocable OAuth access token.
 - token: \`${getAgentAuthUrl(AGENT_AUTH_TOKEN_PATH)}\`
 - events: \`${getAgentAuthUrl(AGENT_AUTH_EVENTS_PATH)}\`
 `;
+};

@@ -338,11 +338,18 @@ type SafeErrorBody = {
    */
   error?: string;
   /**
-   * Step-up claim ceremony block on an ID-JAG `interaction_required`:
-   * the agent polls the existing `/agent/token` claim grant after a
-   * human completes it. Optional everywhere.
+   * Step-up ceremony fields on an ID-JAG `interaction_required`. Per the
+   * pinned guide `claim` carries ceremony fields only; the registration
+   * handles below ride at the top level (spread from the error's `stepUp`),
+   * mirroring the `service_auth` registration envelope. Optional everywhere.
    */
   claim?: HandlerErrorClaim;
+  registration_id?: string;
+  registration_type?: string;
+  claim_url?: string;
+  claim_token?: string;
+  claim_token_expires?: string;
+  post_claim_scopes?: string[];
 };
 
 // The conditional form is intentional: it keeps status unions distributive so
@@ -778,6 +785,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
     : {}),
   ...(error.error ? { error: error.error } : {}),
   ...(error.claim ? { claim: error.claim } : {}),
+  ...error.stepUp,
 });
 
 export const createSafeRootHandler = <
