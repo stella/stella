@@ -1,8 +1,9 @@
 {
   "as-casts": {
-    "count": 3,
+    "count": 4,
     "files": {
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
+      "apps/api/src/lib/auth.ts": 1,
       "apps/web/src/app-providers.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions.ts": 1
     }
@@ -40,7 +41,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 619,
+    "count": 622,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -137,6 +138,7 @@
       "apps/api/src/handlers/mcp-connectors/oauth.ts": 6,
       "apps/api/src/handlers/mcp-connectors/update-connection.ts": 1,
       "apps/api/src/handlers/me/send-otp.ts": 2,
+      "apps/api/src/handlers/me/two-factor-send-manage-otp.ts": 2,
       "apps/api/src/handlers/organization-settings/read-ai-availability.ts": 1,
       "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts": 2,
       "apps/api/src/handlers/playbooks/auto-run.ts": 1,
@@ -175,7 +177,7 @@
       "apps/api/src/lib/account-deletion-steps.ts": 4,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
-      "apps/api/src/lib/auth.ts": 2,
+      "apps/api/src/lib/auth.ts": 3,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/deepl/client.ts": 3,
       "apps/api/src/lib/document-reference.ts": 2,
