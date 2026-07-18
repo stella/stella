@@ -357,6 +357,49 @@ describe("per-job runtime ceiling", () => {
     expect(run.error).toBe("SchedulerJobTimeoutError");
   });
 
+  test("a task resolving from its own abort handler at the ceiling is still a timeout failure", async () => {
+    await seedJob({ id: "abort-resolve.job", task: "test.abort-resolve" });
+
+    // A cooperative task that returns cleanly the instant its signal aborts: it
+    // fulfills the Promise.race even though the ceiling already fired, so the
+    // fulfillment must be treated as a zombie result, not a success.
+    const registry = registryOf("test.abort-resolve", async ({ signal }) => {
+      await new Promise<void>((resolve) => {
+        signal.addEventListener("abort", () => {
+          resolve();
+        });
+      });
+    });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      maxRuntimeMs: 25,
+      registry,
+      runnerId: "runner-a",
+    });
+
+    // The race fulfilled, but the ceiling fired first: recorded as a timeout
+    // failure (rescheduled), never a success that clears the lease and advances
+    // nextRunAt on an over-ceiling job.
+    expect(result).toMatchObject({
+      acquired: 1,
+      failed: 1,
+      skipped: 0,
+      succeeded: 0,
+    });
+
+    const job = await readJob("abort-resolve.job");
+    expect(job.lastError).toBe("SchedulerJobTimeoutError");
+    expect(job.lastSuccessAt).toBeNull();
+    expect(job.lockedBy).toBeNull();
+    expect(job.nextRunAt.getTime()).toBeGreaterThan(PAST.getTime());
+
+    const run = await readLatestRun("abort-resolve.job");
+    expect(run.status).toBe("failed");
+    expect(run.error).toBe("SchedulerJobTimeoutError");
+  });
+
   test("a parent abort during run creation skips the job without starting the task", async () => {
     await seedJob({ id: "abort-on-create.job", task: "test.tracked" });
 

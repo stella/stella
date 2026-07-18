@@ -505,11 +505,14 @@ const runJob = async ({
   });
   const task = registry.get(job.task);
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
-  // Set the instant the ceiling fires, before the abort is broadcast. The run is
-  // classified on this flag, not on which rejection wins the race: a task whose
-  // own abort handler rejects (e.g. an aborted fetch) must still be recorded as
-  // a timeout failure, never as a cooperative skip.
+  // Set the instant the ceiling fires, before the abort is broadcast, and
+  // consulted after the race regardless of how it settled. The race outcome
+  // alone is not authoritative: a cooperative task that resolves (or rejects)
+  // from its abort listener can fulfill the race even though the ceiling already
+  // fired, so that fulfillment is a zombie result, not a success.
   let timeoutError: SchedulerJobTimeoutError | undefined;
+  let raceError: unknown;
+  let raceRejected = false;
 
   try {
     if (!task) {
@@ -549,51 +552,99 @@ const runJob = async ({
       ),
       timeout,
     ]);
-    // Stop heartbeating before finalizing: the lease must not be renewed while
-    // we release it, and the completion transaction must not race a renewal on
-    // the same connection.
-    heartbeat.stop();
-    await finishRunSuccess({ db, job, leaseToken, runId, startedAt });
-    return "success";
   } catch (error: unknown) {
-    // Stop heartbeating before any completion write: the lease must not be
-    // re-extended while we release it, and the write itself runs a transaction
-    // that must not race a renewal on the same connection.
-    heartbeat.stop();
-    // Classify on whether the ceiling fired, not on which rejection surfaced:
-    // aborting the task can make it reject with its own AbortError before our
-    // timeout rejection is observed. A ceiling expiry is always a timeout
-    // failure (rescheduled), never a cooperative skip (left due).
-    if (timeoutError) {
-      captureError(timeoutError, {
-        schedulerJobId: job.id,
-        schedulerRunId: runId,
-        schedulerTask: job.task,
-      });
-      logger.error("scheduler.job_timed_out", {
-        "scheduler.job_id": job.id,
-        "scheduler.run_id": runId,
-        "scheduler.runner_id": runnerId,
-        "scheduler.task": job.task,
-        "scheduler.timeout_ms": maxRuntimeMs,
-      });
-      await finishRunFailure({
-        db,
-        error: timeoutError,
-        job,
-        leaseToken,
-        runId,
-        startedAt,
-      });
-      return "failed";
+    raceError = error;
+    raceRejected = true;
+  } finally {
+    if (timeoutTimer) {
+      clearTimeout(timeoutTimer);
     }
+    signal?.removeEventListener("abort", abortListener);
+  }
 
-    if (controller.signal.aborted) {
-      await finishRunSkipped({ db, job, leaseToken, runId, startedAt });
-      return "skipped";
-    }
+  // Stop heartbeating before any completion write: the lease must not be renewed
+  // while we release it, and the completion transaction must not race a renewal
+  // on the same connection.
+  heartbeat.stop();
 
-    captureError(error, {
+  return await resolveRunOutcome({
+    aborted: controller.signal.aborted,
+    db,
+    job,
+    leaseToken,
+    maxRuntimeMs,
+    raceError,
+    raceRejected,
+    runId,
+    runnerId,
+    startedAt,
+    timeoutError,
+  });
+};
+
+type ResolveRunOutcomeOptions = {
+  aborted: boolean;
+  db: SchedulerDb;
+  job: SchedulerJob;
+  leaseToken: string;
+  maxRuntimeMs: number;
+  raceError: unknown;
+  raceRejected: boolean;
+  runId: SafeId<"schedulerJobRun">;
+  runnerId: string;
+  startedAt: Date;
+  timeoutError: SchedulerJobTimeoutError | undefined;
+};
+
+// Single-homed post-race classification. Precedence matters: the ceiling flag
+// wins over the abort state (the ceiling aborts the controller itself), and both
+// win over the race outcome, because a fulfilled or rejected race is a zombie
+// result once the ceiling has fired or the parent has aborted. Only a race that
+// fulfilled with neither condition set is a genuine success.
+const resolveRunOutcome = async ({
+  aborted,
+  db,
+  job,
+  leaseToken,
+  maxRuntimeMs,
+  raceError,
+  raceRejected,
+  runId,
+  runnerId,
+  startedAt,
+  timeoutError,
+}: ResolveRunOutcomeOptions): Promise<RunJobStatus> => {
+  if (timeoutError) {
+    captureError(timeoutError, {
+      schedulerJobId: job.id,
+      schedulerRunId: runId,
+      schedulerTask: job.task,
+    });
+    logger.error("scheduler.job_timed_out", {
+      "scheduler.job_id": job.id,
+      "scheduler.run_id": runId,
+      "scheduler.runner_id": runnerId,
+      "scheduler.task": job.task,
+      "scheduler.timeout_ms": maxRuntimeMs,
+    });
+    await finishRunFailure({
+      db,
+      error: timeoutError,
+      job,
+      leaseToken,
+      runId,
+      startedAt,
+    });
+    return "failed";
+  }
+
+  if (aborted) {
+    await finishRunSkipped({ db, job, leaseToken, runId, startedAt });
+    return "skipped";
+  }
+
+  if (raceRejected) {
+    captureError(raceError, {
       schedulerJobId: job.id,
       schedulerRunId: runId,
       schedulerTask: job.task,
@@ -603,17 +654,21 @@ const runJob = async ({
       "scheduler.run_id": runId,
       "scheduler.runner_id": runnerId,
       "scheduler.task": job.task,
-      "error.type": errorTag(error),
+      "error.type": errorTag(raceError),
     });
-    await finishRunFailure({ db, error, job, leaseToken, runId, startedAt });
+    await finishRunFailure({
+      db,
+      error: raceError,
+      job,
+      leaseToken,
+      runId,
+      startedAt,
+    });
     return "failed";
-  } finally {
-    if (timeoutTimer) {
-      clearTimeout(timeoutTimer);
-    }
-    signal?.removeEventListener("abort", abortListener);
-    heartbeat.stop();
   }
+
+  await finishRunSuccess({ db, job, leaseToken, runId, startedAt });
+  return "success";
 };
 
 type CreateRunOptions = {
