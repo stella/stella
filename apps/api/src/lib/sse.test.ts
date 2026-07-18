@@ -58,12 +58,17 @@ const makeFakeRedisClient = (): FakeRedisClient => {
       }
     }),
     close: mock(() => {
-      client.subscribedLive = false;
-      client.connected = false;
       if (closeFailuresRemaining > 0) {
         closeFailuresRemaining -= 1;
+        // A failed close leaves the subscription state intact: the callback is
+        // still live and could deliver, mirroring a real client whose close()
+        // threw. Delivery must be prevented structurally (generation), not by
+        // relying on this teardown.
         throw new Error("close failed");
       }
+      client.subscribedLive = false;
+      client.connected = false;
+      client.messageHandler = null;
     }),
     onReconnect: mock((handler: () => void) => {
       client.reconnectHandlers.push(handler);
@@ -507,6 +512,58 @@ describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
 
     expect(decode((await reader.read()).value)).toContain("remote-in-window");
 
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("a stale subscriber whose close() threw cannot deliver after a replacement attaches", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+    closeFailuresRemaining = 0;
+
+    startSse();
+    await flushMicrotasks();
+    const original = createdClients.at(-1);
+    expect(original?.subscribedLive).toBe(true);
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // The reconnect teardown's close() throws, so the old client keeps its live
+    // pub/sub callback — exactly the "close() may not invalidate delivery" case.
+    closeFailuresRemaining = 1;
+    if (original) {
+      for (const handler of [...original.reconnectHandlers]) {
+        handler();
+      }
+    }
+    await flushMicrotasks();
+
+    const replacement = createdClients.at(-1);
+    expect(replacement).not.toBe(original);
+    expect(replacement?.subscribedLive).toBe(true);
+    // The old client's callback is still live (its close threw and left it).
+    expect(original?.messageHandler).toBeTruthy();
+
+    // A loopback arrives on the OLD generation's still-live callback: the
+    // generation gate must drop it. The replacement's loopback delivers once.
+    const workspacePayload = (type: string): string =>
+      JSON.stringify({
+        scope: "workspace",
+        id: workspaceId,
+        event: { type, data: null },
+      });
+    original?.messageHandler?.(workspacePayload("stale-old-generation"));
+    replacement?.messageHandler?.(workspacePayload("fresh-new-generation"));
+
+    const text = decode((await reader.read()).value);
+    expect(text).toContain("fresh-new-generation");
+    expect(text).not.toContain("stale-old-generation");
+
+    closeFailuresRemaining = 0;
     controller.abort();
     stopSse();
     await flushMicrotasks();

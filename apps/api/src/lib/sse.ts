@@ -366,6 +366,16 @@ type SseLifecycle = {
    * unbounded promise/stack chain over a long outage). `stopSse` clears it.
    */
   attachTimer: ReturnType<typeof setTimeout> | null;
+  /**
+   * Monotonic delivery generation. Each attach captures the current value in
+   * its subscribe callback; every invalidation (a candidate that failed, the
+   * deaf client on reconnect, the active subscriber at shutdown) bumps it. The
+   * callback delivers only while its captured generation still equals this, so
+   * a stale client whose `close()` threw — leaving its pub/sub callback live —
+   * can never deliver alongside its replacement, regardless of `close()`
+   * behaviour. This is structural: it does not depend on cleanup succeeding.
+   */
+  generation: number;
 };
 
 let activeLifecycle: SseLifecycle | null = null;
@@ -448,8 +458,18 @@ const runAttachAttempt = async (
   try {
     subscriber = createRedisClient();
     const attached = subscriber;
+    // Capture the generation this client is attaching under. The callback stays
+    // authorized to deliver only while the lifecycle's generation still matches;
+    // any later invalidation bumps it, structurally silencing a stale client
+    // even if its close() threw and left this callback live.
+    const attachGeneration = lifecycle.generation;
     await attached.subscribe(REDIS_CHANNEL, (message) => {
-      handleMessage(message);
+      if (
+        activeLifecycle === lifecycle &&
+        lifecycle.generation === attachGeneration
+      ) {
+        handleMessage(message);
+      }
     });
     if (activeLifecycle !== lifecycle) {
       // stopSse (and possibly a subsequent startSse) ran while the connection
@@ -475,8 +495,10 @@ const runAttachAttempt = async (
       }
       lifecycle.subscriptionLive = false;
       lifecycle.subscriber = null;
-      // Best-effort: a throwing close() must not skip the re-attach below, or a
-      // reconnect would leave this instance deaf.
+      // Invalidate the deaf client's generation BEFORE closing it, so it stops
+      // delivering even if close() throws and leaves its callback live. The
+      // close itself is then only best-effort resource cleanup.
+      lifecycle.generation += 1;
       closeSubscriberQuietly(attached);
       logger.warn("sse.redis_subscriber_reconnected", {
         channel: REDIS_CHANNEL,
@@ -485,10 +507,12 @@ const runAttachAttempt = async (
     });
     logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
   } catch (error: unknown) {
-    // Best-effort close: a throwing close() here must not skip the retry
-    // scheduling below, or a single failed attempt whose cleanup also throws
-    // would stop the instance retrying and leave it deaf until restart.
+    // Invalidate the failed candidate's generation BEFORE closing it, then
+    // close best-effort: a throwing close() must neither leave the candidate's
+    // callback able to deliver nor skip the retry scheduling below (which would
+    // stop the instance retrying and leave it deaf until restart).
     if (subscriber) {
+      lifecycle.generation += 1;
       closeSubscriberQuietly(subscriber);
     }
     if (activeLifecycle !== lifecycle) {
@@ -582,6 +606,7 @@ export const startSse = (): void => {
     subscriber: null,
     subscriptionLive: false,
     attachTimer: null,
+    generation: 0,
   };
   lifecycle.keepAliveTimer.unref();
   activeLifecycle = lifecycle;
@@ -613,6 +638,9 @@ export const stopSse = (): void => {
   }
 
   if (lifecycle.subscriber) {
+    // Invalidate the active subscriber's generation before shutdown cleanup so
+    // it cannot deliver even if close() throws.
+    lifecycle.generation += 1;
     closeSubscriberQuietly(lifecycle.subscriber);
   }
 };
