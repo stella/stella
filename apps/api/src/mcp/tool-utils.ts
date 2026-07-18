@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -237,6 +238,29 @@ export const notFoundResult = (
   hint?: string,
 ): CallToolResult =>
   structuredErrorResult({ code: "not_found", hint, message });
+
+/**
+ * `internal_error` envelope for a failed DB / backing-handler `Result`. The real
+ * error (a `HandlerError`, `UnhandledException`, driver/ORM message, ...) is
+ * captured for telemetry and never echoed back, so an internal message cannot
+ * leak to an external agent; the caller gets the same generic, code-bearing
+ * envelope the central pipeline's catch-all emits (see `handleMcpToolCall`), so
+ * the companion CLI branches on `error.code` and the receipt is attached.
+ *
+ * This is the single sink for the `errorResult(result.error.message)` class:
+ * every tool site that unwraps a `context.safeDb(...)` /
+ * `Result.gen(() => handler(...))` failure routes through here instead of
+ * surfacing the raw `.message` as plain text. Pass `result.error` (the `Result`
+ * error), not its message, so the cause reaches `captureError` intact.
+ */
+export const internalFailureResult = (error: unknown): CallToolResult => {
+  captureError(error, { source: "mcp" });
+  return structuredErrorResult({
+    code: "internal_error",
+    message: "Tool execution failed",
+    hint: MCP_INTERNAL_ERROR_HINT,
+  });
+};
 
 /**
  * Up to `limit` known tool names closest to `target` by Levenshtein distance,
