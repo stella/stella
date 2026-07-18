@@ -176,10 +176,10 @@ describe("shouldRunScheduledFlowNow", () => {
     ).toBe(false);
   });
 
-  test("weekly with no configured day degrades to running daily", () => {
+  test("weekly with no configured day fails closed (never runs)", () => {
     expect(
       shouldRunScheduledFlowNow({ frequency: "weekly", hourUtc: 9 }, wednesday),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test("monthly runs only on the matching UTC day of month", () => {
@@ -197,12 +197,12 @@ describe("shouldRunScheduledFlowNow", () => {
     ).toBe(false);
   });
 
-  test("monthly with no configured day degrades to running daily", () => {
+  test("monthly with no configured day fails closed (never runs)", () => {
     expect(
       shouldRunScheduledFlowNow(
         { frequency: "monthly", hourUtc: 9 },
         wednesday,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

@@ -103,8 +103,10 @@ export const flowScheduleToSchedulerSchedule = (
  * Per-tick gate for the daily scheduler job. `daily` always runs; `weekly` runs
  * only when today's UTC weekday equals `dayOfWeek`; `monthly` only when today's
  * UTC day-of-month equals `dayOfMonth`. A weekly / monthly schedule missing its
- * day field cannot be gated, so it degrades to running every day (the frontend
- * always supplies the field for those frequencies).
+ * day field cannot be gated to a specific day, so it fails closed (never fires)
+ * rather than degrading to a daily run: the frontend always supplies the field,
+ * so a missing one means a malformed schedule that must not silently multiply
+ * automated runs (and their AI spend) across every daily tick.
  */
 export const shouldRunScheduledFlowNow = (
   schedule: FlowSchedule,
@@ -116,7 +118,7 @@ export const shouldRunScheduledFlowNow = (
   }
   if (frequency === "weekly") {
     if (schedule.dayOfWeek === undefined) {
-      return true;
+      return false;
     }
     const weekday = now.getUTCDay();
     if (
@@ -128,7 +130,7 @@ export const shouldRunScheduledFlowNow = (
     return weekday === schedule.dayOfWeek;
   }
   if (schedule.dayOfMonth === undefined) {
-    return true;
+    return false;
   }
   return now.getUTCDate() === schedule.dayOfMonth;
 };
