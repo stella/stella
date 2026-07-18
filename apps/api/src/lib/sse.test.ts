@@ -2,14 +2,23 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
+type MessageHandler = (message: string) => void;
+
+// Models a Bun RedisClient closely enough to exercise pub/sub loopback. Key
+// modelled facts (all verified against a mock RESP3 server): `connected`
+// reflects the socket; `subscribedLive` reflects whether the SERVER currently
+// delivers pub/sub to this connection; a reconnect restores `connected` but NOT
+// `subscribedLive` (Bun does not re-issue SUBSCRIBE); `publish` fans a message
+// out only to clients that are `subscribedLive`.
 type FakeRedisClient = {
   subscribe: ReturnType<typeof mock>;
   publish: ReturnType<typeof mock>;
   close: ReturnType<typeof mock>;
-  // Bun's RedisClient exposes a live `connected` flag; sse.ts reads it to
-  // decide whether a published event will loop back. Defaults true once the
-  // fake "attaches"; tests flip it to model the socket dropping/reconnecting.
+  onReconnect: ReturnType<typeof mock>;
   connected: boolean;
+  subscribedLive: boolean;
+  messageHandler: MessageHandler | null;
+  reconnectHandlers: (() => void)[];
 };
 
 const createdClients: FakeRedisClient[] = [];
@@ -21,7 +30,7 @@ let subscribeFailuresRemaining = 0;
 
 const makeFakeRedisClient = (): FakeRedisClient => {
   const client: FakeRedisClient = {
-    subscribe: mock(async () => {
+    subscribe: mock(async (_channel: string, handler: MessageHandler) => {
       if (subscribeFailuresRemaining > 0) {
         subscribeFailuresRemaining -= 1;
         throw new Error("redis unavailable");
@@ -29,15 +38,54 @@ const makeFakeRedisClient = (): FakeRedisClient => {
       if (subscribeBehavior === "reject") {
         throw new Error("redis unavailable");
       }
+      // A confirmed subscribe: the server now delivers to this connection.
+      client.messageHandler = handler;
+      client.subscribedLive = true;
+      client.connected = true;
     }),
-    publish: mock(async () => undefined),
-    close: mock(() => undefined),
-    // A freshly attached subscriber is connected; a real Bun client reports
-    // the same once subscribe() resolves.
-    connected: true,
+    // Redis fans a published message out to every connection with a live
+    // subscription. A reconnected-but-not-resubscribed client is absent here,
+    // so it receives nothing — modelling the real deaf-after-reconnect hazard.
+    publish: mock(async (_channel: string, message: string) => {
+      for (const peer of createdClients) {
+        if (peer.subscribedLive && peer.messageHandler) {
+          peer.messageHandler(message);
+        }
+      }
+    }),
+    close: mock(() => {
+      client.subscribedLive = false;
+      client.connected = false;
+    }),
+    onReconnect: mock((handler: () => void) => {
+      client.reconnectHandlers.push(handler);
+      return () => {
+        const index = client.reconnectHandlers.indexOf(handler);
+        if (index !== -1) {
+          client.reconnectHandlers.splice(index, 1);
+        }
+      };
+    }),
+    connected: false,
+    subscribedLive: false,
+    messageHandler: null,
+    reconnectHandlers: [],
   };
   createdClients.push(client);
   return client;
+};
+
+// Model a transient socket drop + Bun auto-reconnect: the socket comes back
+// (`connected` true) but the SERVER no longer has a subscription for it
+// (`subscribedLive` false, because Bun does not re-issue SUBSCRIBE), then Bun
+// fires the onconnect/reconnect handlers.
+const simulateDeafReconnect = (client: FakeRedisClient): void => {
+  client.connected = true;
+  client.subscribedLive = false;
+  client.messageHandler = null;
+  for (const handler of [...client.reconnectHandlers]) {
+    handler();
+  }
 };
 
 const createRedisClientMock = mock(() => makeFakeRedisClient());
@@ -265,81 +313,112 @@ describe("broadcast: local delivery without an attached subscriber", () => {
   });
 });
 
-describe("broadcast: delivery tracks the subscriber's live connection", () => {
-  test("a broadcast is not delivered inline while the subscriber is connected, and is once it drops", async () => {
+describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
+  const decode = (value: Uint8Array | undefined): string =>
+    new TextDecoder().decode(value);
+
+  test("delivers each event to local clients exactly once via loopback while subscribed", async () => {
     createdClients.length = 0;
     subscribeFailuresRemaining = 0;
     subscribeBehavior = "resolve";
 
     startSse();
     await flushMicrotasks();
-    const client = createdClients.at(-1);
-    expect(client).toBeDefined();
 
     const controller = new AbortController();
     const stream = subscribe(workspaceId, organizationId, controller.signal);
     const reader = stream.getReader();
 
-    // Subscriber attached and connected: this event rides the Redis loopback,
-    // so it must NOT be delivered inline (delivering both would double up).
-    broadcast(workspaceId, { type: "while-connected", data: null });
+    // Subscribed: each event must arrive exactly once through the Redis
+    // loopback (publish -> subscriber handler -> local delivery), never a
+    // second inline copy. Reading two events in order proves the first was
+    // delivered exactly once.
+    broadcast(workspaceId, { type: "event-a", data: null });
+    broadcast(workspaceId, { type: "event-b", data: null });
 
-    // The subscriber's Redis connection drops. Bun keeps the client object,
-    // so the old `Boolean(subscriber)` check would still report "attached"
-    // and keep skipping inline delivery, losing events for this instance.
-    if (client) {
-      client.connected = false;
-    }
-
-    // Disconnected: no loopback arrives, so this one MUST be delivered inline.
-    broadcast(workspaceId, { type: "after-disconnect", data: null });
-
-    // The first chunk the local stream sees is the post-disconnect event:
-    // proves the connected broadcast was not inline-delivered (no double
-    // delivery) and the disconnect restored inline delivery (no miss).
-    const { value } = await reader.read();
-    const text = new TextDecoder().decode(value);
-    expect(text).toContain("after-disconnect");
-    expect(text).not.toContain("while-connected");
+    expect(decode((await reader.read()).value)).toContain("event-a");
+    expect(decode((await reader.read()).value)).toContain("event-b");
 
     controller.abort();
     stopSse();
     await flushMicrotasks();
   });
 
-  test("reconnecting restores loopback-only delivery, then a second drop restores inline", async () => {
+  test("a transient drop+reconnect re-subscribes via a fresh client and resumes exactly-once loopback delivery", async () => {
     createdClients.length = 0;
     subscribeFailuresRemaining = 0;
     subscribeBehavior = "resolve";
 
     startSse();
     await flushMicrotasks();
-    const client = createdClients.at(-1);
-    expect(client).toBeDefined();
-
-    if (client) {
-      client.connected = false; // down → inline
-      client.connected = true; // back up → loopback only
-    }
+    const original = createdClients.at(-1);
+    expect(original).toBeDefined();
 
     const controller = new AbortController();
     const stream = subscribe(workspaceId, organizationId, controller.signal);
     const reader = stream.getReader();
 
-    // Reconnected: back to loopback-only, so this is NOT delivered inline.
-    broadcast(workspaceId, { type: "after-reconnect", data: null });
+    // Baseline: loopback delivery works while subscribed.
+    broadcast(workspaceId, { type: "before-drop", data: null });
+    expect(decode((await reader.read()).value)).toContain("before-drop");
 
-    if (client) {
-      client.connected = false; // down again → inline
+    // Bun reconnects the socket but does NOT re-issue SUBSCRIBE: the client is
+    // connected yet deaf. sse.ts must tear it down and attach a FRESH client
+    // (re-subscribing on the same client would double-register the callback).
+    if (original) {
+      simulateDeafReconnect(original);
     }
+    await flushMicrotasks();
 
-    broadcast(workspaceId, { type: "after-second-drop", data: null });
+    // The deaf client was closed and a distinct replacement subscribed.
+    expect(original?.close).toHaveBeenCalledTimes(1);
+    const replacement = createdClients.at(-1);
+    expect(replacement).not.toBe(original);
+    expect(replacement?.subscribedLive).toBe(true);
+    expect(replacement?.subscribe).toHaveBeenCalledTimes(1);
 
-    const { value } = await reader.read();
-    const text = new TextDecoder().decode(value);
-    expect(text).toContain("after-second-drop");
-    expect(text).not.toContain("after-reconnect");
+    // Loopback is restored through the replacement, still exactly once: if the
+    // old code kept treating the reconnected client as attached, no loopback
+    // would arrive and these reads would hang; if it re-subscribed on the same
+    // client, each event would be delivered twice.
+    broadcast(workspaceId, { type: "after-reconnect-1", data: null });
+    broadcast(workspaceId, { type: "after-reconnect-2", data: null });
+    expect(decode((await reader.read()).value)).toContain("after-reconnect-1");
+    expect(decode((await reader.read()).value)).toContain("after-reconnect-2");
 
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("while the replacement subscriber has not yet attached, broadcasts fall back to inline delivery", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+    const original = createdClients.at(-1);
+    expect(original).toBeDefined();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // The replacement attach will fail, so no subscriber is live: the instance
+    // is effectively deaf. Broadcasts MUST still reach local clients inline so
+    // nothing is missed during the reconnect/reattach window.
+    subscribeBehavior = "reject";
+    if (original) {
+      simulateDeafReconnect(original);
+    }
+    await flushMicrotasks();
+
+    broadcast(workspaceId, { type: "deaf-window", data: null });
+    expect(decode((await reader.read()).value)).toContain("deaf-window");
+
+    subscribeBehavior = "resolve";
+    subscribeFailuresRemaining = 0;
     controller.abort();
     stopSse();
     await flushMicrotasks();

@@ -319,26 +319,38 @@ const sendKeepAlive = () => {
 type SseLifecycle = {
   keepAliveTimer: ReturnType<typeof setInterval>;
   subscriber: ReturnType<typeof createRedisClient> | null;
+  /**
+   * Whether `subscriber` currently holds a live SUBSCRIBE on its present
+   * connection. Set true only after a confirmed subscribe on the active
+   * client; set false the moment a reconnect is observed (the old connection's
+   * subscription is gone) and while a replacement client is attaching. Distinct
+   * from the socket's `connected` flag because Bun reconnects the socket
+   * WITHOUT re-issuing SUBSCRIBE — so a `connected` client can be silently deaf.
+   */
+  subscriptionLive: boolean;
 };
 
 let activeLifecycle: SseLifecycle | null = null;
 
 /**
- * Whether this instance currently has a live Redis subscriber attached. Used
- * by `broadcast`/`broadcastToOrganization` to decide whether they must
- * deliver locally inline: without a connected subscriber, a published event
- * never loops back to this instance, so local clients would be missed even
- * when the (independent) publisher connection is healthy.
+ * Whether this instance currently has a live, subscribed Redis subscriber. Used
+ * by `broadcast`/`broadcastToOrganization` to decide whether they must deliver
+ * locally inline: without a subscribed subscriber a published event never loops
+ * back to this instance, so local clients would be missed even when the
+ * (independent) publisher connection is healthy.
  *
- * Reads the client's own live `connected` flag rather than a mirrored bit, so
- * a subscriber that Bun has auto-reconnected away from (transient drop) counts
- * as not attached for as long as it is down — during which `broadcast` falls
- * back to inline local delivery — and counts as attached again the instant its
- * connection (and Bun's re-subscribe) is restored. A stale flag could drift
- * out of step with the socket; the property cannot.
+ * Requires BOTH the socket to be `connected` AND `subscriptionLive`. Bun's
+ * RedisClient auto-reconnects a dropped subscriber but does NOT re-issue
+ * SUBSCRIBE, so `connected` alone would report a reconnected-but-deaf client as
+ * attached and silently drop this instance's events. During the disconnected
+ * window (`connected` false) and the reconnect/reattach window
+ * (`subscriptionLive` false) this returns false, routing broadcasts to inline
+ * local delivery so nothing is missed.
  */
 const hasAttachedSubscriber = (): boolean =>
-  Boolean(activeLifecycle?.subscriber?.connected);
+  Boolean(
+    activeLifecycle?.subscriber?.connected && activeLifecycle.subscriptionLive,
+  );
 
 /**
  * Bounded backoff for retrying the subscriber attach. A transient Redis
@@ -371,17 +383,40 @@ const attachSubscriber = async (
   let subscriber: ReturnType<typeof createRedisClient> | undefined;
   try {
     subscriber = createRedisClient();
-    await subscriber.subscribe(REDIS_CHANNEL, (message) => {
+    const attached = subscriber;
+    await attached.subscribe(REDIS_CHANNEL, (message) => {
       handleMessage(message);
     });
     if (activeLifecycle !== lifecycle) {
       // stopSse (and possibly a subsequent startSse) ran while the connection
       // was still being established; do not attach a stale subscriber to a
       // lifecycle that is no longer the active one.
-      subscriber.close();
+      attached.close();
       return;
     }
-    lifecycle.subscriber = subscriber;
+    lifecycle.subscriber = attached;
+    lifecycle.subscriptionLive = true;
+    // Bun auto-reconnects a dropped subscriber but does NOT re-issue SUBSCRIBE,
+    // and re-subscribing on the SAME client double-registers the callback (both
+    // verified against a mock RESP3 server), which would double-deliver every
+    // event locally. So on any reconnect, drop this now-deaf client and attach
+    // a fresh one, which subscribes exactly once on the new connection. Exactly-
+    // once local delivery holds because `subscriptionLive` is false for the
+    // whole deaf/reattach window, routing broadcasts to inline delivery until
+    // the replacement is subscribed. The initial connect fired before this
+    // handler was registered, so it runs only for genuine reconnects.
+    attached.onReconnect(() => {
+      if (activeLifecycle !== lifecycle || lifecycle.subscriber !== attached) {
+        return;
+      }
+      lifecycle.subscriptionLive = false;
+      lifecycle.subscriber = null;
+      attached.close();
+      logger.warn("sse.redis_subscriber_reconnected", {
+        channel: REDIS_CHANNEL,
+      });
+      void attachSubscriber(lifecycle, 0);
+    });
     logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
   } catch (error: unknown) {
     subscriber?.close();
@@ -427,6 +462,7 @@ export const startSse = (): void => {
   const lifecycle: SseLifecycle = {
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
     subscriber: null,
+    subscriptionLive: false,
   };
   lifecycle.keepAliveTimer.unref();
   activeLifecycle = lifecycle;
