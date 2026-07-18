@@ -47,11 +47,33 @@ export const deleteEntityVersionHandler = async function* ({
   // tombstone mutation run in ONE transaction, serialized on the owning entity
   // row via `FOR UPDATE`. Two concurrent deletes must not each observe more
   // than one live version and tombstone the last two, nor leave
-  // currentVersionId pointing at a tombstone: locking the entity row first
-  // forces the racing deletes to run one at a time, so the second re-reads the
-  // live count and current version the first already changed.
+  // currentVersionId pointing at a tombstone: locking the entity row forces the
+  // racing deletes to run one at a time, so the second re-reads the live count
+  // and current version the first already changed.
+  //
+  // Canonical docx-edit lock order (issue #1139): docx-edit advisory lock ->
+  // desktop_edit_session rows -> entities row. This handler takes no advisory
+  // lock, but it MUST lock the sessions it will cancel BEFORE the entity row so
+  // it agrees with finalize-desktop-edit-session (which locks the session row,
+  // then the entity row). Locking the entity first here and the sessions second
+  // would invert finalize's order and risk an ABBA deadlock.
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      // Lock (not yet cancel) the open sessions anchored to this version first,
+      // establishing the session -> entity order. The cancel UPDATE below
+      // re-touches these already-locked rows.
+      await tx
+        .select({ id: desktopEditSessions.id })
+        .from(desktopEditSessions)
+        .where(
+          and(
+            eq(desktopEditSessions.baseVersionId, params.versionId),
+            eq(desktopEditSessions.workspaceId, workspaceId),
+            eq(desktopEditSessions.status, "open"),
+          ),
+        )
+        .for("update");
+
       const lockedEntityRows = await tx
         .select({
           currentVersionId: entities.currentVersionId,

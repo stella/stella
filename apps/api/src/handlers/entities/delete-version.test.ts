@@ -84,6 +84,30 @@ describe("delete-version chain-of-custody guard", () => {
     ).toBeGreaterThan(txStart);
   });
 
+  test("locks the sessions it cancels before the entity row (finalize's order)", () => {
+    // Lock-order hierarchy (issue #1139): docx-edit advisory lock ->
+    // desktop_edit_session rows -> entities row. This handler takes no advisory
+    // lock, but it MUST lock the sessions it cancels BEFORE the entity row so it
+    // agrees with finalize-desktop-edit-session, which locks the session row
+    // (FOR UPDATE) and then the entity row. Locking the entity first here and
+    // the sessions second (the cancel UPDATE) would invert finalize's order and
+    // risk an ABBA deadlock between a concurrent delete and finalize.
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "delete-version.ts"),
+      "utf-8",
+    );
+
+    const sessionLockIndex = source.indexOf(".from(desktopEditSessions)");
+    const entityLockIndex = source.indexOf(".from(entities)");
+    expect(sessionLockIndex).toBeGreaterThan(-1);
+    expect(entityLockIndex).toBeGreaterThan(-1);
+    // Sessions are locked before the entity row.
+    expect(sessionLockIndex).toBeLessThan(entityLockIndex);
+
+    // Two row-lock acquisitions: the session sweep, then the entity row.
+    expect(source.split('.for("update")').length - 1).toBe(2);
+  });
+
   test("every entityVersions read filters tombstones or is a reviewed exception", () => {
     // Discovery sweep (not an allowlist): enumerate every production read of
     // `entityVersions` and require each one to either carry a `deletedAt`
