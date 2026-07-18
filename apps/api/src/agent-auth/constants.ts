@@ -41,10 +41,24 @@ export const AGENT_AUTH_ASSERTION_TYPES = [
   AGENT_AUTH_ID_JAG_ASSERTION_TYPE,
 ] as const;
 
-/** RFC 8935 security-event schemas we can ingest at the events endpoint. */
-export const AGENT_AUTH_EVENTS_SUPPORTED = [
-  "https://schemas.workos.com/events/agent/auth/identity/assertion/revoked",
-] as const;
+/**
+ * RFC 8935 security-event schema for identity-assertion revocation. NOT yet
+ * advertised in `events_supported`: the events endpoint acknowledges SETs but
+ * does not verify their signature or enforce them, so advertising the type
+ * would let providers treat the 202 as a successful revocation that never
+ * takes effect (an upstream-revoked identity could keep minting tokens). Add
+ * it to AGENT_AUTH_EVENTS_SUPPORTED only once SET verification + delegation
+ * revocation land.
+ */
+export const AGENT_AUTH_ASSERTION_REVOKED_EVENT =
+  "https://schemas.workos.com/events/agent/auth/identity/assertion/revoked" as const;
+
+/**
+ * Security-event schemas we advertise as supported — i.e. verified AND
+ * enforced. Empty until the SET-verification phase lands; the events endpoint
+ * still accepts and acknowledges deliveries.
+ */
+export const AGENT_AUTH_EVENTS_SUPPORTED: readonly string[] = [];
 
 /** Claim-ceremony polling grant (Step 4c). */
 export const AGENT_AUTH_CLAIM_GRANT_TYPE =

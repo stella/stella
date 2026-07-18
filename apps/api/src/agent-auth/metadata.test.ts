@@ -40,6 +40,10 @@ describe("auth.md conformance (pinned spec version)", () => {
     expect(block.identity_assertion.assertion_types_supported).toEqual([
       "urn:ietf:params:oauth:token-type:id-jag",
     ]);
+    // No event schema is advertised until the SET-verification/enforcement
+    // phase lands: advertising an event we only acknowledge (never enforce)
+    // would let providers treat a 202 as a real, effective revocation.
+    expect(block.events_supported).toEqual([]);
 
     for (const url of [
       block.skill,
