@@ -15,21 +15,30 @@ const { isOrgAIConfig, maskApiKey } =
 const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
 
 describe("maskApiKey", () => {
-  test("shows first 8 chars for keys longer than 16 chars", () => {
-    const masked = maskApiKey("sk-1234567890abcdefghij");
+  // Rule: reveal min(8, floor(length / 4)) leading chars. A long, real key
+  // exposes an 8-char identifying prefix; short/misconfigured keys never
+  // expose more than a quarter of their length.
+  test("reveals an 8-char prefix once the key is at least 32 chars", () => {
+    // 35 chars: floor(35 / 4) = 8, so the whole 8-char cap is revealed.
+    const masked = maskApiKey("sk-1234567890abcdefghijklmnopqrstuv");
 
     expect(masked).toBe(`sk-12345${"*".repeat(16)}`);
   });
 
-  test("shows half the key when length is between 2 and 16", () => {
-    expect(maskApiKey("abcd1234")).toBe(`abcd${"*".repeat(16)}`);
+  test("reveals only a quarter of a mid-length key, never half", () => {
+    // A 16-char key exposes 4 chars (floor(16 / 4)); the old floor(length / 2)
+    // rule would have leaked 8 — half the secret.
+    expect(maskApiKey("0123456789abcdef")).toBe(`0123${"*".repeat(16)}`);
   });
 
-  test("shows 1 visible char for a 2-char key", () => {
-    expect(maskApiKey("ab")).toBe(`a${"*".repeat(16)}`);
+  test("reveals a quarter of a short key", () => {
+    // 8 chars -> floor(8 / 4) = 2 visible.
+    expect(maskApiKey("abcd1234")).toBe(`ab${"*".repeat(16)}`);
   });
 
-  test("shows 0 visible chars for a 1-char key", () => {
+  test("reveals no chars for keys shorter than 4", () => {
+    expect(maskApiKey("abc")).toBe("*".repeat(16));
+    expect(maskApiKey("ab")).toBe("*".repeat(16));
     expect(maskApiKey("x")).toBe("*".repeat(16));
   });
 
