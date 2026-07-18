@@ -1,3 +1,5 @@
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "agent_registration" ADD COLUMN "pending_delegation_iss" text;--> statement-breakpoint
 ALTER TABLE "agent_registration" ADD COLUMN "pending_delegation_sub" text;--> statement-breakpoint
 CREATE TABLE "agent_trusted_issuer" (

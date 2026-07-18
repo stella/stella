@@ -1,3 +1,5 @@
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
 CREATE TABLE "agent_registration" (
 	"id" text PRIMARY KEY,
 	"registration_type" text NOT NULL,
