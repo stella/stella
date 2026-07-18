@@ -70,9 +70,8 @@ export const brandPersistedFlowDefinitionId = (
   flowDefinitionId: string,
 ): SafeId<"flowDefinition"> => toSafeId<"flowDefinition">(flowDefinitionId);
 
-export const brandPersistedFlowRunId = (
-  flowRunId: string,
-): SafeId<"flowRun"> => toSafeId<"flowRun">(flowRunId);
+export const brandPersistedFlowRunId = (flowRunId: string): SafeId<"flowRun"> =>
+  toSafeId<"flowRun">(flowRunId);
 
 export const brandPersistedUserFileId = (
   userFileId: string,

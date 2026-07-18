@@ -67,11 +67,7 @@ import {
   workspaceViewTemplates,
   workspaceViews,
 } from "./files-views";
-import {
-  flowDefinitions,
-  flowRunSteps,
-  flowRuns,
-} from "./flows";
+import { flowDefinitions, flowRunSteps, flowRuns } from "./flows";
 import {
   mcpConnectors,
   mcpOAuthClients,
