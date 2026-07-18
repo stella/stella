@@ -27,6 +27,10 @@ let subscribeBehavior: "reject" | "resolve" = "resolve";
 // subscribeBehavior. Lets a test model a transient boot blip (fail once,
 // then the retry attaches) without permanently rejecting.
 let subscribeFailuresRemaining = 0;
+// Number of close() calls that throw before succeeding. Models a cleanup close
+// that fails (e.g. the socket is already gone), which must not abort the
+// attach-retry scheduling.
+let closeFailuresRemaining = 0;
 
 const makeFakeRedisClient = (): FakeRedisClient => {
   const client: FakeRedisClient = {
@@ -56,6 +60,10 @@ const makeFakeRedisClient = (): FakeRedisClient => {
     close: mock(() => {
       client.subscribedLive = false;
       client.connected = false;
+      if (closeFailuresRemaining > 0) {
+        closeFailuresRemaining -= 1;
+        throw new Error("close failed");
+      }
     }),
     onReconnect: mock((handler: () => void) => {
       client.reconnectHandlers.push(handler);
@@ -584,6 +592,50 @@ describe("startSse: subscriber attach retry", () => {
 
     timeoutSpy.mockRestore();
     subscribeFailuresRemaining = 0;
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("a failed attach whose cleanup close() also throws still schedules the next attempt", async () => {
+    createdClients.length = 0;
+    subscribeBehavior = "resolve";
+    // The first 3 attach attempts fail AND their cleanup close() throws. The
+    // retry scheduling must survive the throwing close, so a 4th attempt runs
+    // and attaches — otherwise a single unlucky close would leave the instance
+    // permanently deaf.
+    subscribeFailuresRemaining = 3;
+    closeFailuresRemaining = 3;
+
+    const realSetTimeout = globalThis.setTimeout;
+    // oxlint-disable-next-line no-unsafe-type-assertion -- test-only timer stub
+    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
+      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
+    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
+      immediateSetTimeout,
+    );
+
+    startSse();
+
+    const drainUntilAttached = async (remaining: number): Promise<void> => {
+      if (createdClients.at(-1)?.subscribedLive === true || remaining <= 0) {
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        realSetTimeout(resolve, 0);
+      });
+      await drainUntilAttached(remaining - 1);
+    };
+    await drainUntilAttached(100);
+
+    // 4 clients: 3 failed attempts (each whose close() threw) + the attach.
+    expect(createdClients).toHaveLength(4);
+    expect(createdClients.at(-1)?.subscribedLive).toBe(true);
+    // All three throwing closes were consumed, proving they actually ran.
+    expect(closeFailuresRemaining).toBe(0);
+
+    timeoutSpy.mockRestore();
+    subscribeFailuresRemaining = 0;
+    closeFailuresRemaining = 0;
     stopSse();
     await flushMicrotasks();
   });

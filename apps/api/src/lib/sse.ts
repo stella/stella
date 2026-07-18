@@ -411,6 +411,22 @@ const SUBSCRIBER_ATTACH_STEADY_DELAY_MS = 5000;
 const SUBSCRIBER_ATTACH_STEADY_LOG_EVERY = 12;
 
 /**
+ * Close a subscriber client best-effort: a throwing `close()` (mirroring how
+ * `stopSse` already treats it) must never abort the caller. This matters most
+ * on the attach-failure and reconnect-teardown paths, where an exception here
+ * would skip the retry scheduling and leave the instance permanently deaf.
+ */
+const closeSubscriberQuietly = (
+  client: ReturnType<typeof createRedisClient>,
+): void => {
+  try {
+    client.close();
+  } catch (error: unknown) {
+    logger.warn("sse.redis_close_failed", { "error.type": errorTag(error) });
+  }
+};
+
+/**
  * Run one attach attempt for `lifecycle`. On success it attaches the subscriber
  * and wires reconnect handling; on failure it logs and schedules the NEXT
  * attempt via a timer, then returns. Attempts therefore never await one another
@@ -439,7 +455,7 @@ const runAttachAttempt = async (
       // stopSse (and possibly a subsequent startSse) ran while the connection
       // was still being established; do not attach a stale subscriber to a
       // lifecycle that is no longer the active one.
-      attached.close();
+      closeSubscriberQuietly(attached);
       return;
     }
     lifecycle.subscriber = attached;
@@ -459,7 +475,9 @@ const runAttachAttempt = async (
       }
       lifecycle.subscriptionLive = false;
       lifecycle.subscriber = null;
-      attached.close();
+      // Best-effort: a throwing close() must not skip the re-attach below, or a
+      // reconnect would leave this instance deaf.
+      closeSubscriberQuietly(attached);
       logger.warn("sse.redis_subscriber_reconnected", {
         channel: REDIS_CHANNEL,
       });
@@ -467,7 +485,12 @@ const runAttachAttempt = async (
     });
     logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
   } catch (error: unknown) {
-    subscriber?.close();
+    // Best-effort close: a throwing close() here must not skip the retry
+    // scheduling below, or a single failed attempt whose cleanup also throws
+    // would stop the instance retrying and leave it deaf until restart.
+    if (subscriber) {
+      closeSubscriberQuietly(subscriber);
+    }
     if (activeLifecycle !== lifecycle) {
       // The lifecycle was torn down (stop, or stop+restart) during the
       // attempt; abandon the retry chain quietly.
@@ -590,10 +613,6 @@ export const stopSse = (): void => {
   }
 
   if (lifecycle.subscriber) {
-    try {
-      lifecycle.subscriber.close();
-    } catch (error: unknown) {
-      logger.warn("sse.redis_close_failed", { "error.type": errorTag(error) });
-    }
+    closeSubscriberQuietly(lifecycle.subscriber);
   }
 };
