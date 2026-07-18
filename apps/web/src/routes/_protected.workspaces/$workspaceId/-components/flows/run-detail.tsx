@@ -65,8 +65,10 @@ export const RunDetail = ({ workspaceId, runId, onBack }: RunDetailProps) => {
 
   // The Eden response type for this endpoint can also resolve to a raw
   // `Response` (see flow-run-types.ts); guard it the same way sibling flow
-  // queries do so `query.data` narrows to `FlowRunDetailData` below.
-  if (query.isError || !query.data || query.data instanceof Response) {
+  // queries do so `query.data` narrows to `FlowRunDetailData` below. Success
+  // data is always defined here (isPending/isError already handled), so no
+  // separate falsy check is needed.
+  if (query.isError || query.data instanceof Response) {
     return (
       <div className="flex flex-1 flex-col gap-3 p-6">
         <BackButton onBack={onBack} />
@@ -313,18 +315,18 @@ const StepRunOutput = ({
     );
   }
 
-  if (output.kind === "review-gate") {
-    return (
-      <p className="text-muted-foreground text-xs">
-        {output.decision === "approved"
-          ? t("flows.runs.review.approved")
-          : t("flows.runs.review.rejected")}
-        {output.note ? ` — ${output.note}` : ""}
-      </p>
-    );
-  }
-
-  return null;
+  // review-gate is the only remaining output kind; render it directly. A newly
+  // added kind would fail to typecheck here (no `decision`/`note`), which keeps
+  // the exhaustiveness that an explicit `=== "review-gate"` check would only
+  // duplicate.
+  return (
+    <p className="text-muted-foreground text-xs">
+      {output.decision === "approved"
+        ? t("flows.runs.review.approved")
+        : t("flows.runs.review.rejected")}
+      {output.note ? ` — ${output.note}` : ""}
+    </p>
+  );
 };
 
 const ReviewGateCard = ({
