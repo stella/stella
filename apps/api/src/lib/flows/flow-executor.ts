@@ -399,7 +399,7 @@ const readPriorAiMarkdown = async (
   return markdown;
 };
 
-const loadInputDocuments = async (
+export const loadInputDocuments = async (
   scopedDb: ReturnType<typeof createRootScopedDb>,
   organizationId: SafeId<"organization">,
   entityIds: SafeId<"entity">[],
@@ -407,6 +407,39 @@ const loadInputDocuments = async (
   if (entityIds.length === 0) {
     return [];
   }
+
+  // Detect unavailable inputs before reading or decrypting any content. A
+  // selected input without an `extracted_content` row (extraction still pending
+  // or failed, or a non-extraction entity that the summaries picker surfaced)
+  // would otherwise drop out silently and let the step generate legal output
+  // from an incomplete document set. Fail the step, naming the unavailable
+  // inputs, instead of proceeding with fewer documents.
+  const available = await scopedDb((tx) =>
+    tx.query.extractedContent.findMany({
+      where: { entityId: { in: entityIds } },
+      columns: { entityId: true },
+      limit: entityIds.length,
+    }),
+  );
+  if (available.length < entityIds.length) {
+    const loaded = new Set(available.map((row) => row.entityId));
+    const missingIds = entityIds.filter((id) => !loaded.has(id));
+    const missingEntities = await scopedDb((tx) =>
+      tx.query.entities.findMany({
+        where: { id: { in: missingIds } },
+        columns: { name: true },
+        limit: missingIds.length,
+      }),
+    );
+    const names = missingEntities
+      .map((row) => row.name)
+      .filter((name) => name.length > 0);
+    const named = names.length > 0 ? `: ${names.join(", ")}` : "";
+    throw new FlowStepError({
+      message: `${missingIds.length} selected input document(s) could not be loaded because their content is not available yet (extraction is still pending or has failed)${named}. Re-run this workflow once the document(s) have finished processing.`,
+    });
+  }
+
   const rows = await scopedDb((tx) =>
     tx.query.extractedContent.findMany({
       where: { entityId: { in: entityIds } },
