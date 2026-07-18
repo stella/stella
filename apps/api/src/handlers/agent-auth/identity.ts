@@ -4,6 +4,8 @@ import { t } from "elysia";
 import {
   AGENT_AUTH_CLAIM_PATH,
   AGENT_AUTH_ID_JAG_ASSERTION_TYPE,
+  AGENT_AUTH_SERVICE_SCOPES,
+  AGENT_AUTH_TOKEN_PATH,
   getAgentAuthUrl,
 } from "@/api/agent-auth/constants";
 import { env } from "@/api/env";
@@ -58,18 +60,23 @@ type AgentIdentityResponse =
   | {
       registration_id: string;
       registration_type: "service_auth";
-      user_code: string;
-      verification_uri: string;
-      verification_uri_complete: string;
-      expires_in: number;
-      interval: number;
+      claim_url: string;
       claim_token: string;
+      claim_token_expires: string;
+      post_claim_scopes: string[];
+      claim: {
+        user_code: string;
+        verification_uri: string;
+        verification_uri_complete: string;
+        expires_in: number;
+        interval: number;
+      };
     }
   | {
       registration_id: string;
       registration_type: "identity_assertion";
       identity_assertion: string;
-      assertion_expires: number;
+      assertion_expires: string;
       scopes: string[];
     };
 
@@ -102,7 +109,10 @@ const mapIdJagOutcome = (
       registration_id: result.registrationId,
       registration_type: result.registrationType,
       identity_assertion: result.identityAssertion,
-      assertion_expires: result.assertionExpiresIn,
+      // Spec shape: an absolute expiry timestamp, not the relative TTL.
+      assertion_expires: new Date(
+        Date.now() + result.assertionExpiresIn * 1000,
+      ).toISOString(),
       scopes: [...result.scopes],
     });
   }
@@ -192,15 +202,24 @@ const agentIdentityHandler = createSafePublicHandler(
     const verificationUri = getClaimVerificationUri();
     const verificationUriComplete = `${verificationUri}?user_code=${encodeURIComponent(ceremony.userCode)}`;
 
+    // Spec shape: ceremony fields nest under `claim`; the poll endpoint, claim
+    // token + its absolute expiry, and the post-claim scopes sit at the top.
     return okResponse({
       registration_id: ceremony.registrationId,
       registration_type: ceremony.registrationType,
-      user_code: ceremony.userCode,
-      verification_uri: verificationUri,
-      verification_uri_complete: verificationUriComplete,
-      expires_in: ceremony.expiresIn,
-      interval: ceremony.interval,
+      claim_url: getAgentAuthUrl(AGENT_AUTH_TOKEN_PATH),
       claim_token: ceremony.claimToken,
+      claim_token_expires: new Date(
+        Date.now() + ceremony.expiresIn * 1000,
+      ).toISOString(),
+      post_claim_scopes: [...AGENT_AUTH_SERVICE_SCOPES],
+      claim: {
+        user_code: ceremony.userCode,
+        verification_uri: verificationUri,
+        verification_uri_complete: verificationUriComplete,
+        expires_in: ceremony.expiresIn,
+        interval: ceremony.interval,
+      },
     });
   },
 );

@@ -86,12 +86,14 @@ describe("OAuth authorization server metadata", () => {
     expect(body.agent_auth.identity_endpoint).toBe(
       getAgentAuthUrl(AGENT_AUTH_IDENTITY_PATH),
     );
-    expect(body.agent_auth.identity_types_supported).toEqual([
-      ...AGENT_AUTH_IDENTITY_TYPES,
-    ]);
+    // Default deployment has FEATURE_AGENT_ID_JAG off, so discovery advertises
+    // only the flows the endpoint actually accepts (no identity_assertion).
+    expect(body.agent_auth.identity_types_supported).toEqual(
+      AGENT_AUTH_IDENTITY_TYPES.filter((type) => type !== "identity_assertion"),
+    );
     expect(
       body.agent_auth.identity_assertion.assertion_types_supported,
-    ).toContain("urn:ietf:params:oauth:token-type:id-jag");
+    ).toEqual([]);
   };
 
   test("serves RFC 8414 metadata from the canonical issuer-specific path", async () => {

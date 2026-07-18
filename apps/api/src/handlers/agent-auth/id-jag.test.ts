@@ -294,7 +294,10 @@ describe("agent-auth ID-JAG new identity (auto-provision)", () => {
     const body = await readJson(res);
     expect(body["registration_type"]).toBe("identity_assertion");
     expect(typeof body["identity_assertion"]).toBe("string");
-    expect(body["assertion_expires"]).toBeGreaterThan(0);
+    // Absolute expiry timestamp (spec shape), not a relative TTL.
+    expect(
+      new Date(String(body["assertion_expires"])).getTime(),
+    ).toBeGreaterThan(Date.now());
     expect(v.parse(v.array(v.string()), body["scopes"]).sort()).toEqual([
       "stella:read",
       "stella:search",

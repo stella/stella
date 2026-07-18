@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { AUTH_MD_SPEC_VERSION } from "@/api/agent-auth/constants";
 import { getAgentAuthManifest } from "@/api/agent-auth/manifest";
 import { getAgentAuthMetadataBlock } from "@/api/agent-auth/metadata";
+import { env } from "@/api/env";
 import { getMcpProtectedResourceMetadata } from "@/api/mcp/metadata";
 
 /**
@@ -32,14 +33,6 @@ describe("auth.md conformance (pinned spec version)", () => {
       ].sort(),
     );
 
-    expect(block.identity_types_supported).toEqual([
-      "service_auth",
-      "anonymous",
-      "identity_assertion",
-    ]);
-    expect(block.identity_assertion.assertion_types_supported).toEqual([
-      "urn:ietf:params:oauth:token-type:id-jag",
-    ]);
     // No event schema is advertised until the SET-verification/enforcement
     // phase lands: advertising an event we only acknowledge (never enforce)
     // would let providers treat a 202 as a real, effective revocation.
@@ -52,6 +45,33 @@ describe("auth.md conformance (pinned spec version)", () => {
       block.events_endpoint,
     ]) {
       expect(() => new URL(url)).not.toThrow();
+    }
+  });
+
+  test("identity_assertion is advertised only when the ID-JAG flag is on", () => {
+    const original = env.FEATURE_AGENT_ID_JAG;
+    try {
+      // Dark-launched off: discovery must not offer a path the endpoint 403s.
+      env.FEATURE_AGENT_ID_JAG = false;
+      const off = getAgentAuthMetadataBlock();
+      expect(off.identity_types_supported).toEqual([
+        "service_auth",
+        "anonymous",
+      ]);
+      expect(off.identity_assertion.assertion_types_supported).toEqual([]);
+
+      env.FEATURE_AGENT_ID_JAG = true;
+      const on = getAgentAuthMetadataBlock();
+      expect(on.identity_types_supported).toEqual([
+        "service_auth",
+        "anonymous",
+        "identity_assertion",
+      ]);
+      expect(on.identity_assertion.assertion_types_supported).toEqual([
+        "urn:ietf:params:oauth:token-type:id-jag",
+      ]);
+    } finally {
+      env.FEATURE_AGENT_ID_JAG = original;
     }
   });
 

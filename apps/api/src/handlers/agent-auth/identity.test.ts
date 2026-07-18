@@ -38,6 +38,9 @@ const jsonObjectSchema = v.record(v.string(), v.unknown());
 const readJson = async (res: Response): Promise<Json> =>
   v.parse(jsonObjectSchema, await res.json());
 
+/** Narrow a nested JSON value (e.g. the service_auth `claim` block) to an object. */
+const asJson = (value: unknown): Json => v.parse(jsonObjectSchema, value);
+
 const BASE = "http://localhost";
 
 const postIdentity = async (body: Json) =>
@@ -140,14 +143,24 @@ describe("agent-auth service_auth flow", () => {
 
     expect(body["registration_type"]).toBe("service_auth");
     expect(typeof body["registration_id"]).toBe("string");
-    expect(typeof body["user_code"]).toBe("string");
+    // Top-level handoff fields per the auth.md service guide.
     expect(typeof body["claim_token"]).toBe("string");
-    expect(body["verification_uri"]).toContain("/agent-claim");
-    expect(String(body["verification_uri_complete"])).toContain(
-      encodeURIComponent(String(body["user_code"])),
+    expect(String(body["claim_url"])).toContain("/agent/token");
+    expect(
+      new Date(String(body["claim_token_expires"])).getTime(),
+    ).toBeGreaterThan(Date.now());
+    expect(
+      v.parse(v.array(v.string()), body["post_claim_scopes"]).sort(),
+    ).toEqual(["stella:read", "stella:search"]);
+    // Ceremony fields nest under `claim`.
+    const claim = asJson(body["claim"]);
+    expect(typeof claim["user_code"]).toBe("string");
+    expect(String(claim["verification_uri"])).toContain("/agent-claim");
+    expect(String(claim["verification_uri_complete"])).toContain(
+      encodeURIComponent(String(claim["user_code"])),
     );
-    expect(body["expires_in"]).toBeGreaterThan(0);
-    expect(body["interval"]).toBeGreaterThan(0);
+    expect(claim["expires_in"]).toBeGreaterThan(0);
+    expect(claim["interval"]).toBeGreaterThan(0);
     // The minted access token never appears on the service_auth ceremony.
     expect(body["access_token"]).toBeUndefined();
   });
@@ -221,7 +234,7 @@ describe("agent-auth service_auth flow", () => {
     const regRes = await postIdentity({ type: "service_auth" });
     const reg = await readJson(regRes);
     const claimToken = String(reg["claim_token"]);
-    const userCode = String(reg["user_code"]);
+    const userCode = String(asJson(reg["claim"])["user_code"]);
 
     // Confirm before any poll, so the first post-confirm poll is not
     // throttled by the server-side interval guard.
@@ -274,7 +287,7 @@ describe("agent-auth service_auth flow", () => {
     const regRes = await postIdentity({ type: "service_auth" });
     const reg = await readJson(regRes);
     const confirmRes = await postConfirm(
-      { user_code: String(reg["user_code"]) },
+      { user_code: String(asJson(reg["claim"])["user_code"]) },
       "",
     );
     expect(confirmRes.status).toBe(401);
@@ -297,7 +310,9 @@ describe("agent-auth service_auth flow", () => {
       type: "service_auth",
       login_hint: owner.email,
     });
-    const userCode = String((await readJson(regRes))["user_code"]);
+    const userCode = String(
+      asJson((await readJson(regRes))["claim"])["user_code"],
+    );
 
     // A different signed-in member who intercepted the code cannot bind the
     // agent hinted at the owner's email — same 404 a wrong code would return.
@@ -320,7 +335,7 @@ describe("agent-auth service_auth flow", () => {
     const second = await createHumanSession();
 
     const reg = await readJson(await postIdentity({ type: "service_auth" }));
-    const userCode = String(reg["user_code"]);
+    const userCode = String(asJson(reg["claim"])["user_code"]);
     const claimToken = String(reg["claim_token"]);
 
     expect(
