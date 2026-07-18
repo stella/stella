@@ -57,10 +57,14 @@ const infosoudCourts = createSafeHandler(config, async function* ({ request }) {
     Result.tryPromise({
       try: async () => {
         const client = getInfoSoudClient();
-        const [courts, districtCourts] = await Promise.all([
-          client.getCourts({ signal }),
-          client.getDistrictCourts({ signal }),
-        ]);
+        // Sequential, not Promise.all: the shared client serializes every
+        // call through one politeness throttle, so both loads never run
+        // concurrently anyway. Promise.all would still enqueue the district
+        // load immediately, so a failure on the first load left the second
+        // queued and running against InfoSoud after this handler had already
+        // returned its error response.
+        const courts = await client.getCourts({ signal });
+        const districtCourts = await client.getDistrictCourts({ signal });
         const courtMap = buildCourtMapFromEntries([
           ...courts,
           ...districtCourts,
