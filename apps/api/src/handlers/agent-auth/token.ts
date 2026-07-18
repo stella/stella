@@ -52,7 +52,14 @@ const ERROR_STATUS_BY_CODE: Record<AgentTokenErrorCode, 400 | 403> = {
 };
 
 const toHandlerError = (code: AgentTokenErrorCode): HandlerError =>
-  new HandlerError({ status: ERROR_STATUS_BY_CODE[code], message: code });
+  // `error` carries the machine-readable OAuth error code agents branch on
+  // (safeErrorBody surfaces it only from HandlerError.error); `message` is the
+  // human-readable echo.
+  new HandlerError({
+    status: ERROR_STATUS_BY_CODE[code],
+    error: code,
+    message: code,
+  });
 
 const toTokenResult = (
   result: Result<TokenResponseShape, { code: AgentTokenErrorCode }>,

@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import {
-  AGENT_AUTH_CONFIRM_PATH,
+  AGENT_AUTH_CLAIM_PATH,
   AGENT_AUTH_ID_JAG_ASSERTION_TYPE,
   getAgentAuthUrl,
 } from "@/api/agent-auth/constants";
@@ -175,7 +175,9 @@ const agentIdentityHandler = createSafePublicHandler(
         token_type: token.token_type,
         expires_in: token.expires_in,
         scope: token.scope,
-        claim_uri: getAgentAuthUrl(AGENT_AUTH_CONFIRM_PATH),
+        // The public claim endpoint that upgrades this anonymous registration
+        // (accepts claim_token + email), not the session-authed confirm route.
+        claim_uri: getAgentAuthUrl(AGENT_AUTH_CLAIM_PATH),
       });
     }
 

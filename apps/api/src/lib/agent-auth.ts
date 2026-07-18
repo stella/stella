@@ -13,7 +13,7 @@ import type {
   AgentRegistrationType,
 } from "@/api/agent-auth/constants";
 import { agentRegistration } from "@/api/db/agent-auth-schema";
-import { oauthClient, session } from "@/api/db/auth-schema";
+import { oauthClient, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
@@ -348,14 +348,6 @@ export const startAnonymousRegistration = async (): Promise<
   });
 };
 
-type PendingRegistrationByCode = {
-  id: string;
-  registrationType: string;
-  clientId: string;
-  grantedScopes: string[];
-  expiresAt: Date;
-};
-
 export type ConfirmRegistrationResult =
   | { status: "confirmed"; registrationId: string }
   | { status: "not_found" }
@@ -386,6 +378,7 @@ export const confirmServiceAuthRegistration = async ({
       clientId: agentRegistration.clientId,
       grantedScopes: agentRegistration.grantedScopes,
       expiresAt: agentRegistration.expiresAt,
+      loginHint: agentRegistration.loginHint,
     })
     .from(agentRegistration)
     .where(
@@ -396,7 +389,7 @@ export const confirmServiceAuthRegistration = async ({
     )
     .limit(1);
 
-  const registration: PendingRegistrationByCode | undefined = rows.at(0);
+  const registration = rows.at(0);
   if (!registration) {
     return { status: "not_found" };
   }
@@ -408,6 +401,22 @@ export const confirmServiceAuthRegistration = async ({
     return { status: "expired" };
   }
 
+  // The agent supplied an email hint (service_auth `login_hint`, or the email
+  // an anonymous claim was upgraded with): only the human who owns that email
+  // may bind it. Without this a forwarded/intercepted user_code lets a
+  // different signed-in member claim the agent for their own account. A
+  // mismatch returns the same not_found a wrong code would, so a claimer
+  // cannot probe which email a code belongs to.
+  if (registration.loginHint) {
+    const emailMatches = await confirmerEmailMatchesHint(
+      userId,
+      registration.loginHint,
+    );
+    if (!emailMatches) {
+      return { status: "not_found" };
+    }
+  }
+
   const codeResult = await issueAuthorizationCode({
     clientId: registration.clientId,
     scopes: registration.grantedScopes,
@@ -417,7 +426,12 @@ export const confirmServiceAuthRegistration = async ({
     return { status: "not_found" };
   }
 
-  await rootDb
+  // Flip pending -> claimed conditionally so two humans racing the same
+  // user_code cannot both bind the agent: only the row still `pending` is
+  // updated, and the loser (0 rows) is treated as not_found. This keeps the
+  // stored bound user + authorization code consistent with any durable
+  // (iss, sub) delegation the confirm handler writes for the same winner.
+  const claimed = await rootDb
     .update(agentRegistration)
     .set({
       status: "claimed",
@@ -425,9 +439,35 @@ export const confirmServiceAuthRegistration = async ({
       boundOrganizationId: organizationId,
       authorizationCode: codeResult.value,
     })
-    .where(eq(agentRegistration.id, registration.id));
+    .where(
+      and(
+        eq(agentRegistration.id, registration.id),
+        eq(agentRegistration.status, "pending"),
+      ),
+    )
+    .returning({ id: agentRegistration.id });
+  if (claimed.length === 0) {
+    return { status: "not_found" };
+  }
 
   return { status: "confirmed", registrationId: registration.id };
+};
+
+/**
+ * Whether the confirming human's account email equals the agent-supplied hint
+ * (case-insensitive). Used to gate binding to the hinted identity only.
+ */
+const confirmerEmailMatchesHint = async (
+  userId: SafeId<"user">,
+  loginHint: string,
+): Promise<boolean> => {
+  const rows = await rootDb
+    .select({ email: user.email })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+  const email = rows.at(0)?.email;
+  return email !== undefined && email.toLowerCase() === loginHint.toLowerCase();
 };
 
 export class AuthorizeCodeError extends Error {
@@ -766,7 +806,11 @@ export const startAnonymousUpgrade = async ({
   });
   const expiresAt = new Date(Date.now() + REGISTRATION_TTL_MS);
 
-  await rootDb
+  // Upgrade conditionally on the still-pending anonymous row carrying the
+  // ORIGINAL claim token: if two claims race the same token, only the first
+  // rewrites the user_code / claim token / credentials. The loser (0 rows)
+  // fails closed instead of clobbering the winner's already-returned ceremony.
+  const upgraded = await rootDb
     .update(agentRegistration)
     .set({
       registrationType: "service_auth",
@@ -779,7 +823,18 @@ export const startAnonymousUpgrade = async ({
       expiresAt,
       lastPolledAt: null,
     })
-    .where(eq(agentRegistration.id, registration.id));
+    .where(
+      and(
+        eq(agentRegistration.id, registration.id),
+        eq(agentRegistration.registrationType, "anonymous"),
+        eq(agentRegistration.status, "pending"),
+        eq(agentRegistration.claimTokenHash, tokenHash),
+      ),
+    )
+    .returning({ id: agentRegistration.id });
+  if (upgraded.length === 0) {
+    return Result.err(new AgentTokenError("invalid_grant"));
+  }
 
   return Result.ok({
     registrationId: registration.id,

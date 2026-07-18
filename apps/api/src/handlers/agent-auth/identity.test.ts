@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import {
   AGENT_AUTH_CLAIM_GRANT_TYPE,
+  AGENT_AUTH_CLAIM_PATH,
   AGENT_AUTH_CONFIRM_PATH,
   AGENT_AUTH_IDENTITY_PATH,
   AGENT_AUTH_TOKEN_PATH,
@@ -66,6 +67,15 @@ const postConfirm = async (body: Json, cookieHeader: string) =>
     }),
   );
 
+const postClaim = async (body: Json) =>
+  await agentAuthRoute.handle(
+    new Request(`${BASE}${AGENT_AUTH_CLAIM_PATH}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+
 const decodeJwt = (jwt: string): Json => {
   const segment = jwt.split(".").at(1);
   if (!segment) {
@@ -116,6 +126,7 @@ const createHumanSession = async () => {
   }
   return {
     cookieHeader,
+    email,
     userId: session.user.id,
     organizationId: session.session.activeOrganizationId,
   };
@@ -172,9 +183,10 @@ describe("agent-auth service_auth flow", () => {
       claim_token: String(reg["claim_token"]),
     });
     expect(pendingRes.status).toBe(400);
-    expect((await readJson(pendingRes))["message"]).toBe(
-      "authorization_pending",
-    );
+    // Agents branch on the machine-readable OAuth `error` code, not `message`.
+    const pendingBody = await readJson(pendingRes);
+    expect(pendingBody["error"]).toBe("authorization_pending");
+    expect(pendingBody["message"]).toBe("authorization_pending");
   });
 
   test("second poll inside the interval is throttled with slow_down", async () => {
@@ -190,7 +202,7 @@ describe("agent-auth service_auth flow", () => {
       claim_token: claimToken,
     });
     expect(throttledRes.status).toBe(400);
-    expect((await readJson(throttledRes))["message"]).toBe("slow_down");
+    expect((await readJson(throttledRes))["error"]).toBe("slow_down");
   });
 
   test("confirm binds the human + org and the poll mints a matching JWT", async () => {
@@ -264,6 +276,61 @@ describe("agent-auth service_auth flow", () => {
     );
     expect(confirmRes.status).toBe(404);
   });
+
+  test("confirm requires the hinted email to match the confirming human", async () => {
+    const owner = await createHumanSession();
+    const intruder = await createHumanSession();
+
+    const regRes = await postIdentity({
+      type: "service_auth",
+      login_hint: owner.email,
+    });
+    const userCode = String((await readJson(regRes))["user_code"]);
+
+    // A different signed-in member who intercepted the code cannot bind the
+    // agent hinted at the owner's email — same 404 a wrong code would return.
+    const intruderRes = await postConfirm(
+      { user_code: userCode },
+      intruder.cookieHeader,
+    );
+    expect(intruderRes.status).toBe(404);
+
+    // The hinted owner can.
+    const ownerRes = await postConfirm(
+      { user_code: userCode },
+      owner.cookieHeader,
+    );
+    expect(ownerRes.status).toBe(200);
+  });
+
+  test("a claimed user_code cannot be rebound by a second confirmer", async () => {
+    const first = await createHumanSession();
+    const second = await createHumanSession();
+
+    const reg = await readJson(await postIdentity({ type: "service_auth" }));
+    const userCode = String(reg["user_code"]);
+    const claimToken = String(reg["claim_token"]);
+
+    expect(
+      (await postConfirm({ user_code: userCode }, first.cookieHeader)).status,
+    ).toBe(200);
+    // The pending->claimed flip is conditional, so a racing/replayed confirm
+    // from another member is rejected instead of overwriting the bound user.
+    expect(
+      (await postConfirm({ user_code: userCode }, second.cookieHeader)).status,
+    ).toBe(404);
+
+    // The minted token stays bound to the first confirmer.
+    const tokenRes = await postToken({
+      grant_type: AGENT_AUTH_CLAIM_GRANT_TYPE,
+      claim_token: claimToken,
+    });
+    expect(tokenRes.status).toBe(200);
+    const payload = decodeJwt(
+      String((await readJson(tokenRes))["access_token"]),
+    );
+    expect(payload["sub"]).toBe(first.userId);
+  });
 });
 
 describe("agent-auth anonymous flow", () => {
@@ -275,6 +342,9 @@ describe("agent-auth anonymous flow", () => {
     expect(body["registration_type"]).toBe("anonymous");
     expect(typeof body["claim_token"]).toBe("string");
     expect(body["token_type"]).toBe("Bearer");
+    // The upgrade endpoint the agent posts claim_token + email to — the public
+    // claim route, not the session-authed confirm route.
+    expect(String(body["claim_uri"])).toContain(AGENT_AUTH_CLAIM_PATH);
 
     // Anonymous agents receive exactly the canonical anonymized resource
     // scopes (AGENT_AUTH_ANONYMOUS_SCOPES aliases this set); assert against it
@@ -292,6 +362,32 @@ describe("agent-auth anonymous flow", () => {
     // It cannot carry default (member-scoped) scopes.
     expect(String(payload["scope"])).not.toContain("stella:read ");
     expect(String(payload["scope"])).not.toContain("stella:search ");
+  });
+
+  test("claim upgrade returns a verification URI and is single-use", async () => {
+    const anon = await readJson(await postIdentity({ type: "anonymous" }));
+    const claimToken = String(anon["claim_token"]);
+
+    const first = await postClaim({
+      claim_token: claimToken,
+      email: "owner@stella.dev",
+    });
+    expect(first.status).toBe(200);
+    const firstBody = await readJson(first);
+    // A client needs the user-facing URL to hand the human the returned code.
+    expect(String(firstBody["verification_uri"])).toContain("/agent-claim");
+    expect(String(firstBody["verification_uri_complete"])).toContain(
+      encodeURIComponent(String(firstBody["user_code"])),
+    );
+
+    // The row is upgraded conditionally: a racing/retried claim on the same
+    // (now consumed) anonymous token fails closed instead of clobbering the
+    // first caller's user_code + credentials.
+    const second = await postClaim({
+      claim_token: claimToken,
+      email: "someone-else@stella.dev",
+    });
+    expect(second.status).toBe(400);
   });
 });
 
