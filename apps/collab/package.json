@@ -15,16 +15,16 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@hocuspocus/server": "^4.3.0",
+    "@hocuspocus/server": "^4.4.0",
     "@stll/errors": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
-    "crossws": "^0.4.9",
+    "crossws": "^0.4.10",
     "valibot": "catalog:",
     "yjs": "^13.6.31"
   },
   "devDependencies": {
-    "@hocuspocus/provider": "^4.3.0",
+    "@hocuspocus/provider": "^4.4.0",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:"
   }
