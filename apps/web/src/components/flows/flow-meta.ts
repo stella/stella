@@ -65,7 +65,7 @@ export const FLOW_RUN_TERMINAL_STATUSES = [
 ] as const;
 
 export const isTerminalFlowRunStatus = (status: FlowRunStatus): boolean =>
-  (FLOW_RUN_TERMINAL_STATUSES as readonly string[]).includes(status);
+  FLOW_RUN_TERMINAL_STATUSES.some((terminal) => terminal === status);
 
 // -- Label + icon maps (typed against TranslationKey so a stale key fails
 //    typecheck) --

@@ -19,7 +19,7 @@ export const FLOW_TERMINAL_RUN_STATUSES = [
 ] as const;
 
 export const isTerminalFlowRunStatus = (status: FlowRunStatus): boolean =>
-  (FLOW_TERMINAL_RUN_STATUSES as readonly string[]).includes(status);
+  FLOW_TERMINAL_RUN_STATUSES.some((terminal) => terminal === status);
 
 /**
  * What to do once a non-gate step (`ai` / `create-document`) completes, or

@@ -25,6 +25,7 @@ import {
 import { asc, eq } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   flowDefinitions,
   flowRunSteps,
@@ -35,6 +36,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -192,7 +194,9 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createdByUserId: userId,
     });
 
-    const safeDb = createSafeDb(testDb, [workspaceId], organizationId, userId);
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
 
     const started = await startFlowRun({
       safeDb,
@@ -316,7 +320,9 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       createdByUserId: userId,
     });
 
-    const safeDb = createSafeDb(testDb, [workspaceId], organizationId, userId);
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
     const started = await startFlowRun({
       safeDb,
       organizationId,
