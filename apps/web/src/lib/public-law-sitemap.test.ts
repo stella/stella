@@ -428,14 +428,15 @@ describe("public law sitemap", () => {
       publicLawCrawlAllowed: false,
       seoIndexable: true,
     });
+    const lines = robots.split("\n");
 
     // No allow-list yet, so default-deny keeps every path (including /law) out.
-    expect(robots).toContain("User-agent: *");
-    expect(robots).toContain("Disallow: /");
-    expect(robots).not.toContain("Allow: /law");
-    expect(robots).not.toContain("Disallow: /law/");
-    expect(robots).not.toContain("Disallow: /workspaces");
-    expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
+    expect(lines).toContain("User-agent: *");
+    expect(lines).toContain("Disallow: /");
+    expect(lines.some((line) => line.startsWith("Allow:"))).toBe(false);
+    expect(lines).not.toContain("Disallow: /law/");
+    expect(lines).not.toContain("Disallow: /workspaces");
+    expect(lines).toContain("Sitemap: http://localhost:3000/sitemap.xml");
   });
 
   test("robots allow-lists the public crawl prefixes when indexable and crawling is permitted", () => {
@@ -443,21 +444,33 @@ describe("public law sitemap", () => {
       publicLawCrawlAllowed: true,
       seoIndexable: true,
     });
+    const lines = robots.split("\n");
+    const allowLines = lines.filter((line) => line.startsWith("Allow:"));
 
-    // Allow the public prefixes, then default-deny everything else.
-    expect(robots).toContain("Allow: /law");
-    expect(robots).toContain("Allow: /sitemap.xml");
-    expect(robots).toContain("Allow: /sitemaps");
-    expect(robots).toContain("Disallow: /");
-    expect(robots).not.toContain("Disallow: /law/");
-    expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
+    // Boundary-anchored rules: dir prefixes emit a subtree + exact-path pair,
+    // the sitemap.xml file prefix emits just the exact-path rule.
+    expect(allowLines).toEqual([
+      "Allow: /law/",
+      "Allow: /law$",
+      "Allow: /sitemap.xml$",
+      "Allow: /sitemaps/",
+      "Allow: /sitemaps$",
+    ]);
+    // Sibling-path regression: never emit a bare un-anchored prefix (which
+    // would also match /lawyer, /law-admin, …). Every Allow rule ends in / or $.
+    for (const line of allowLines) {
+      expect(line.endsWith("/") || line.endsWith("$")).toBe(true);
+    }
+    expect(lines).toContain("Disallow: /");
+    expect(lines).not.toContain("Disallow: /law/");
+    expect(lines).toContain("Sitemap: http://localhost:3000/sitemap.xml");
   });
 
   test("robots always default-denies for every flag combination", () => {
     for (const publicLawCrawlAllowed of [false, true]) {
       for (const seoIndexable of [false, true]) {
         const robots = createRobotsTxt({ publicLawCrawlAllowed, seoIndexable });
-        expect(robots).toContain("Disallow: /");
+        expect(robots.split("\n")).toContain("Disallow: /");
       }
     }
   });

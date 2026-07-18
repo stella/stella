@@ -347,11 +347,12 @@ type RobotsTxtOptions = {
 };
 
 // The ONLY crawlable path prefixes on the app host. The indexable robots.txt
-// allow-lists exactly these and then default-denies everything else with a
-// trailing `Disallow: /`, so every route that is not one of these is private
-// by default — a newly added route cannot leak into crawler reach without being
-// added here on purpose. Longest-match precedence means the `Allow:` lines win
-// for their own prefixes while `Disallow: /` covers the rest.
+// allow-lists exactly these (boundary-anchored, see below) and then
+// default-denies everything else with a trailing `Disallow: /`, so every route
+// that is not one of these is private by default — a newly added route cannot
+// leak into crawler reach without being added here on purpose. Longest-match
+// precedence means the `Allow:` rules win for their own prefixes while
+// `Disallow: /` covers the rest.
 export const PUBLIC_CRAWL_PATH_PREFIXES = [
   "/law",
   "/sitemap.xml",
@@ -380,8 +381,21 @@ Disallow: /
   // permitted), then default-deny everything else. When crawling is not
   // permitted the allow-list is empty, so `Disallow: /` alone keeps the whole
   // host — including /law — out of crawler reach.
+  //
+  // Boundary-anchored rules: raw robots.txt prefix matching means `Allow: /law`
+  // would also open `/lawyer` or `/law-admin`, silently un-failing-closed for a
+  // future sibling route. So a directory prefix emits two rules — `<prefix>/`
+  // (the subtree) and `<prefix>$` (the exact path) — and a file prefix (one
+  // containing a ".") emits just `<prefix>$`. `$` is the end-of-path anchor
+  // supported by Googlebot and Bing; crawlers that don't support `$` treat it
+  // literally and simply fail to match, erring toward not crawling — the
+  // failure direction we want.
   const allowLines = publicLawCrawlAllowed
-    ? PUBLIC_CRAWL_PATH_PREFIXES.map((prefix) => `Allow: ${prefix}`)
+    ? PUBLIC_CRAWL_PATH_PREFIXES.flatMap((prefix) =>
+        prefix.includes(".")
+          ? [`Allow: ${prefix}$`]
+          : [`Allow: ${prefix}/`, `Allow: ${prefix}$`],
+      )
     : [];
 
   return `${["User-agent: *", ...allowLines, "Disallow: /", `Sitemap: ${sitemapUrl}`].join("\n")}
