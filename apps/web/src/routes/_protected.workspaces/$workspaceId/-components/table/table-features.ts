@@ -5,6 +5,7 @@ import {
   columnSizingFeature,
   columnVisibilityFeature,
   createCoreRowModel,
+  metaHelper,
   rowExpandingFeature,
   rowSelectionFeature,
   rowSortingFeature,
@@ -23,6 +24,7 @@ export const workspaceTableFeatures = tableFeatures({
   columnPinningFeature,
   columnSizingFeature,
   columnResizingFeature,
+  columnMeta: metaHelper<{ muted?: boolean }>(),
 });
 
 export type WorkspaceTableFeatures = typeof workspaceTableFeatures;
