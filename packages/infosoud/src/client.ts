@@ -752,14 +752,23 @@ export class InfoSoudClient {
       cacheTtlMs: this.#cacheConfig.derivedCourtMapTtlMs,
       deserialize: parseCourtMap,
       load: async () => {
+        // Shared cacheable load; deliberately detached from caller signals
+        // so in-flight dedup works: #getCachedOrLoad only shares an
+        // in-flight load when no signal is passed, so threading this call's
+        // signal into the two loads below would make every concurrent
+        // caller on a cold courts cache start its own redundant throttled
+        // fetch instead of sharing one. A caller that aborts simply
+        // abandons its await; the load keeps running and populates the
+        // cache for everyone else.
+        //
         // Sequential, not Promise.all: this instance serializes every call
         // through one politeness throttle, so both loads never run
         // concurrently anyway. Promise.all would still enqueue the district
         // load immediately, so a failure on the courts load left the
         // district load queued and running against InfoSoud after this
         // call had already rejected.
-        const courts = await this.getCourts({ signal });
-        const districtCourts = await this.getDistrictCourts({ signal });
+        const courts = await this.getCourts();
+        const districtCourts = await this.getDistrictCourts();
 
         return buildCourtMapFromEntries([...courts, ...districtCourts]);
       },

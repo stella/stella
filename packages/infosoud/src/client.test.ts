@@ -89,6 +89,32 @@ const patchSignalListenerCounts = (
   return { addCount: () => adds, removeCount: () => removes };
 };
 
+type WaitForConditionProps = {
+  condition: () => boolean;
+  timeoutMs?: number;
+};
+
+// Poll a condition that is GUARANTEED to become true under correct behaviour
+// (e.g. "the queued caller has registered its abort listener"). The timeout
+// is a bug guard, not an observation window: it only fires when the property
+// under test is actually broken, so it is set generously rather than tuned to
+// expected wall-clock progress.
+const waitForCondition = async ({
+  condition,
+  timeoutMs = 5000,
+}: WaitForConditionProps): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() > deadline) {
+      throw new Error("Condition was not met before timeout.");
+    }
+    // oxlint-disable-next-line no-await-in-loop -- polling loop: each tick must wait before re-checking the condition
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 1);
+    });
+  }
+};
+
 const createCaseSearchResponse = (overrides: Record<string, unknown> = {}) => ({
   bcVec: 64,
   cislo: 1,
@@ -612,6 +638,55 @@ describe("InfoSoudClient", () => {
     expect(fetchCount).toBe(1);
   });
 
+  test("concurrent cold-cache buildCourtMap callers share one in-flight courts load, and an aborted caller's signal does not deprive anyone of the result", async () => {
+    const fetchCountByPath: Record<string, number> = {};
+    let releaseFetch: (() => void) | undefined;
+    const fetchGate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async (input) => {
+        const path = getRequestPath(input);
+        fetchCountByPath[path] = (fetchCountByPath[path] ?? 0) + 1;
+        // Hold every response open until the test releases it, so both
+        // concurrent callers are guaranteed to observe the fetch as still
+        // in flight when the signal below is aborted.
+        await fetchGate;
+        return path.endsWith("/organizace/lov")
+          ? jsonResponse([
+              { kod: "KSUL", nazev: "Krajský soud Ústí nad Labem" },
+            ])
+          : jsonResponse([{ kod: "OSSCEDC", nazev: "Okresní soud Děčín" }]);
+      },
+    });
+
+    const abortController = new AbortController();
+
+    // Fire both calls without awaiting either first, so the second reaches
+    // #getCachedOrLoad's in-flight check while the first call's load is
+    // still pending (and thus already registered in #inFlightRequests).
+    const firstPromise = client.buildCourtMap();
+    const secondPromise = client.buildCourtMap({
+      signal: abortController.signal,
+    });
+
+    // Abort mid-load: buildCourtMap's load() never forwards a signal into
+    // getCourts()/getDistrictCourts(), so this must not cancel the shared
+    // fetch or reject either caller — it only ever gated the outer
+    // court-map cache's own in-flight bookkeeping, never the network call.
+    abortController.abort();
+    releaseFetch?.();
+
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+
+    const fetchCounts = Object.values(fetchCountByPath);
+    expect(fetchCounts).toHaveLength(2);
+    expect(fetchCounts.every((count) => count === 1)).toBe(true);
+    expect(first).toEqual(second);
+  });
+
   test("serializes concurrent requests on one instance with the politeness gap", async () => {
     const delayMs = 40;
     const fetchStartedAt: number[] = [];
@@ -659,6 +734,7 @@ describe("InfoSoudClient", () => {
     });
 
     const abortController = new AbortController();
+    const { addCount } = patchSignalListenerCounts(abortController.signal);
 
     // First call runs immediately; the second and third queue behind it. The
     // second is aborted while queued, so it must reject without fetching and
@@ -677,6 +753,14 @@ describe("InfoSoudClient", () => {
       courtCode: "OSSCEDC",
       spisZn: "3 T 66/2024",
     });
+
+    // Wait until the queued caller has actually registered its abort
+    // listener (i.e. entered the politeness delay) before aborting. Without
+    // this, abort() can fire before the throttle chain even reaches the
+    // second call's task, which short-circuits on the pre-task
+    // signal.throwIfAborted() check and never exercises a genuine mid-wait
+    // cancellation.
+    await waitForCondition({ condition: () => addCount() > 0 });
     abortController.abort();
 
     let abortError: unknown;
