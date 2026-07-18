@@ -9,8 +9,10 @@
     }
   },
   "nullish-array-fallback": {
-    "count": 0,
-    "files": {}
+    "count": 1,
+    "files": {
+      "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 1
+    }
   },
   "barrel-index-files": {
     "count": 0,
@@ -38,7 +40,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 623,
+    "count": 624,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -290,6 +292,7 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-queries.ts": 1,
       "apps/web/src/routes/_protected.knowledge/clauses.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 1,
       "apps/web/src/routes/_protected.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 1,
@@ -340,7 +343,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 510,
+    "count": 511,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -465,7 +468,7 @@
       "apps/web/src/routes/_protected.knowledge/templates.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/tools.tsx": 1,
       "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx": 1,
-      "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 2,
       "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx": 1,
