@@ -124,6 +124,19 @@ run_ratchet_guard() {
   bun scripts/ratchet.ts --check
 }
 
+run_crawl_posture_guard() {
+  # Every app under apps/ declares a `crawlPosture` in package.json (public /
+  # private / mixed / unserved), and this guard verifies its crawl artifacts
+  # match: public apps ship a crawler-inviting robots.txt plus llms.txt; private
+  # apps ship a deny-all robots.txt and per-page noindex; mixed SSR apps serve a
+  # dynamic default-deny robots.txt with an explicit public allowlist (checked in
+  # source) instead of static files. Keeps the public SEO/LLM surface and the
+  # private app from silently drifting. The --self-test run first proves each
+  # detector still fires, so a broken guard cannot pass silently.
+  bun scripts/crawl-posture.ts --self-test || return 1
+  bun scripts/crawl-posture.ts --check
+}
+
 run_exact_mirror_guard() {
   # Build the real app and force every route's Elysia exactMirror to compile;
   # fail if any route's schema cannot be mirrored (recursive schemas fall back
@@ -190,6 +203,7 @@ run_step "Rust format" run_rust_format
 run_step "Typecheck" run_typecheck
 run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_step "Ratchet guard" run_ratchet_guard
+run_step "Crawl posture guard" run_crawl_posture_guard
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "CLI registry snapshot" run_cli_registry_snapshot

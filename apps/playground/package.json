@@ -27,5 +27,6 @@
     "@vitejs/plugin-react": "catalog:",
     "tailwindcss": "catalog:",
     "vite": "catalog:"
-  }
+  },
+  "crawlPosture": "unserved"
 }

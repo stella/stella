@@ -346,6 +346,18 @@ type RobotsTxtOptions = {
   seoIndexable?: boolean;
 };
 
+// The ONLY crawlable path prefixes on the app host. The indexable robots.txt
+// allow-lists exactly these and then default-denies everything else with a
+// trailing `Disallow: /`, so every route that is not one of these is private
+// by default — a newly added route cannot leak into crawler reach without being
+// added here on purpose. Longest-match precedence means the `Allow:` lines win
+// for their own prefixes while `Disallow: /` covers the rest.
+export const PUBLIC_CRAWL_PATH_PREFIXES = [
+  "/law",
+  "/sitemap.xml",
+  "/sitemaps",
+] as const;
+
 export const createRobotsTxt = ({
   publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
   seoIndexable = env.VITE_SEO_INDEXABLE,
@@ -363,20 +375,15 @@ Disallow: /
     "/sitemap.xml",
     env.VITE_PUBLIC_APP_URL,
   ).toString();
-  const lawRule = publicLawCrawlAllowed ? "Allow: /law/" : "Disallow: /law/";
 
-  return `User-agent: *
-${lawRule}
-Disallow: /auth
-Disallow: /onboarding
-Disallow: /consent
-Disallow: /chat
-Disallow: /workspaces
-Disallow: /knowledge
-Disallow: /settings
-Disallow: /organization
-Disallow: /todos
-Disallow: /contacts
-Sitemap: ${sitemapUrl}
+  // Fail closed: allow-list the public crawl prefixes (only once crawling is
+  // permitted), then default-deny everything else. When crawling is not
+  // permitted the allow-list is empty, so `Disallow: /` alone keeps the whole
+  // host — including /law — out of crawler reach.
+  const allowLines = publicLawCrawlAllowed
+    ? PUBLIC_CRAWL_PATH_PREFIXES.map((prefix) => `Allow: ${prefix}`)
+    : [];
+
+  return `${["User-agent: *", ...allowLines, "Disallow: /", `Sitemap: ${sitemapUrl}`].join("\n")}
 `;
 };

@@ -41,5 +41,6 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:"
-  }
+  },
+  "crawlPosture": "unserved"
 }

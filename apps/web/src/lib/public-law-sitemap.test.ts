@@ -423,29 +423,43 @@ describe("public law sitemap", () => {
     expect(createRobotsTxt()).toBe("User-agent: *\nDisallow: /\n");
   });
 
-  test("robots disallows public law but keeps path rules when indexable without crawl permission", () => {
+  test("robots default-denies the whole host when indexable without crawl permission", () => {
     const robots = createRobotsTxt({
       publicLawCrawlAllowed: false,
       seoIndexable: true,
     });
 
-    expect(robots).toContain("Disallow: /law/");
-    expect(robots).toContain("Disallow: /workspaces");
-    expect(robots).toContain("Disallow: /knowledge");
-    expect(robots).toContain("Disallow: /chat");
+    // No allow-list yet, so default-deny keeps every path (including /law) out.
+    expect(robots).toContain("User-agent: *");
+    expect(robots).toContain("Disallow: /");
+    expect(robots).not.toContain("Allow: /law");
+    expect(robots).not.toContain("Disallow: /law/");
+    expect(robots).not.toContain("Disallow: /workspaces");
     expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
-    expect(robots).not.toContain("Allow: /law/");
   });
 
-  test("robots allows public law only when indexable and crawling is permitted", () => {
+  test("robots allow-lists the public crawl prefixes when indexable and crawling is permitted", () => {
     const robots = createRobotsTxt({
       publicLawCrawlAllowed: true,
       seoIndexable: true,
     });
 
-    expect(robots).toContain("Allow: /law/");
+    // Allow the public prefixes, then default-deny everything else.
+    expect(robots).toContain("Allow: /law");
+    expect(robots).toContain("Allow: /sitemap.xml");
+    expect(robots).toContain("Allow: /sitemaps");
+    expect(robots).toContain("Disallow: /");
     expect(robots).not.toContain("Disallow: /law/");
     expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
+  });
+
+  test("robots always default-denies for every flag combination", () => {
+    for (const publicLawCrawlAllowed of [false, true]) {
+      for (const seoIndexable of [false, true]) {
+        const robots = createRobotsTxt({ publicLawCrawlAllowed, seoIndexable });
+        expect(robots).toContain("Disallow: /");
+      }
+    }
   });
 
   test("sitemaps are still served while a non-indexable deployment blocks crawlers", () => {

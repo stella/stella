@@ -255,6 +255,28 @@ jobs:
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 
+      - name: Crawl posture guard
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        # Every app under apps/ declares a `crawlPosture` in package.json:
+        # "public" (indexable SEO/LLM surface), "private" (authenticated app that
+        # must stay invisible to crawlers), "mixed" (an SSR app with both public
+        # and private routes), or "unserved" (not an internet-facing HTML
+        # surface). This guard verifies the crawl artifacts match the declared
+        # posture — a public surface must ship a crawler-inviting robots.txt
+        # (Sitemap, no deny-all) plus an llms.txt and carry no `noindex`; a
+        # private surface must ship a deny-all robots.txt (no Sitemap), a
+        # `noindex` robots meta on every served page, and no llms.txt; a mixed
+        # surface must serve a dynamic default-deny robots.txt with an explicit
+        # public allowlist (a robots server route, no shadowing static
+        # robots.txt, and a crawl-prefix allowlist that maps to real routes,
+        # checked in source) instead of static files — so the SEO/LLM surface and
+        # the private routes cannot silently drift. The --self-test run first
+        # proves each detector still fires, so a broken guard cannot pass
+        # silently.
+        run: |
+          bun scripts/crawl-posture.ts --self-test
+          bun scripts/crawl-posture.ts --check
+
       - name: CLI registry snapshot guard
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         # The stella CLI's committed registry snapshot, generated route map, and
