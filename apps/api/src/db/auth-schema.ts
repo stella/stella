@@ -171,7 +171,14 @@ export const twoFactor = pgTable(
     lockedUntil: timestamp("locked_until"),
   },
   (table) => [
-    index("two_factor_user_id_idx").on(table.userId),
+    // UNIQUE, not a plain index: Better Auth's `/two-factor/enable` does a
+    // (non-atomic) delete-all-then-insert per user, so two enable requests
+    // racing (two tabs, or another client while the settings dialog is open)
+    // can both insert and leave the account with multiple secrets/backup-code
+    // sets — verification/sign-in then reads only one row, so the QR the user
+    // scanned may not be the row used to verify. The uniqueness serializes
+    // enrollment: the losing insert fails instead of duplicating the row.
+    uniqueIndex("two_factor_user_id_uidx").on(table.userId),
     ...denyStellaAccessPolicies(),
   ],
 );

@@ -13,7 +13,7 @@ CREATE TABLE "two_factor" (
 --> statement-breakpoint
 ALTER TABLE "two_factor" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "two_factor" ADD CONSTRAINT "two_factor_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE NO ACTION;--> statement-breakpoint
-CREATE INDEX "two_factor_user_id_idx" ON "two_factor" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "two_factor_user_id_uidx" ON "two_factor" USING btree ("user_id");--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "two_factor" TO stella;--> statement-breakpoint
 CREATE POLICY "auth_no_stella_access" ON "two_factor" AS PERMISSIVE FOR ALL TO "stella" USING (false) WITH CHECK (false);--> statement-breakpoint
 GRANT SELECT (two_factor_enabled) ON TABLE "user" TO stella;
