@@ -84,10 +84,10 @@ describe("delete-version chain-of-custody guard", () => {
     ).toBeGreaterThan(txStart);
   });
 
-  test("locks the sessions it cancels before the entity row (finalize's order)", () => {
+  test("locks each session kind before the entity row (finalize's order)", () => {
     // Lock-order hierarchy (issue #1139): docx-edit advisory lock ->
-    // desktop_edit_session rows -> entities row. This handler takes no advisory
-    // lock, but it MUST lock the sessions it cancels BEFORE the entity row so it
+    // edit-session rows -> entities row. This handler takes no advisory lock,
+    // but it MUST lock the sessions it cancels BEFORE the entity row so it
     // agrees with finalize-desktop-edit-session, which locks the session row
     // (FOR UPDATE) and then the entity row. Locking the entity first here and
     // the sessions second (the cancel UPDATE) would invert finalize's order and
@@ -97,15 +97,102 @@ describe("delete-version chain-of-custody guard", () => {
       "utf-8",
     );
 
-    const sessionLockIndex = source.indexOf(".from(desktopEditSessions)");
-    const entityLockIndex = source.indexOf(".from(entities)");
-    expect(sessionLockIndex).toBeGreaterThan(-1);
-    expect(entityLockIndex).toBeGreaterThan(-1);
-    // Sessions are locked before the entity row.
-    expect(sessionLockIndex).toBeLessThan(entityLockIndex);
+    // Bind each FOR UPDATE to the query it protects: the lock is the first
+    // `.for("update")` that follows that table's `.from(...)`.
+    const lockIndexFor = (fromClause: string): number => {
+      const fromIndex = source.indexOf(fromClause);
+      if (fromIndex === -1) {
+        return -1;
+      }
+      return source.indexOf('.for("update")', fromIndex);
+    };
 
-    // Two row-lock acquisitions: the session sweep, then the entity row.
-    expect(source.split('.for("update")').length - 1).toBe(2);
+    const desktopSessionLock = lockIndexFor(".from(desktopEditSessions)");
+    const collabSessionLock = lockIndexFor(".from(folioCollabSessions)");
+    const entityLock = lockIndexFor(".from(entities)");
+
+    // Every lock is actually acquired (its .from(...) is followed by FOR UPDATE).
+    expect(desktopSessionLock).toBeGreaterThan(-1);
+    expect(collabSessionLock).toBeGreaterThan(-1);
+    expect(entityLock).toBeGreaterThan(-1);
+
+    // Both session kinds are locked before the entity row.
+    expect(desktopSessionLock).toBeLessThan(entityLock);
+    expect(collabSessionLock).toBeLessThan(entityLock);
+  });
+
+  test("cancels every session kind anchored to the tombstoned version", () => {
+    // Class-2 discovery guard: any table that anchors an edit session to a base
+    // version (a base_version_id FK to entity_versions) must be cancelled in the
+    // delete-version transaction, or a session could resume/seed and re-serve
+    // the withdrawn version's bytes. Discover those tables from the schema so a
+    // NEW session kind trips this test until delete-version withdraws it too.
+    const schemaDir = nodePath.join(API_SRC, "db/schema");
+    const schemaText = collectSourceFiles(schemaDir)
+      .map((file) => readFileSync(file, "utf-8"))
+      .join("\n");
+
+    // Each `export const <name> = p.pgTable(...)` becomes one segment; keep the
+    // ones that declare a base_version_id column (an edit session anchored to a
+    // version) and read off the exported table name.
+    const sessionTables = schemaText
+      .split("export const ")
+      .filter(
+        (segment) =>
+          segment.includes("p.pgTable") && segment.includes("base_version_id"),
+      )
+      .map((segment) => /^(\w+)/u.exec(segment)?.[1])
+      .filter((name): name is string => name !== undefined);
+
+    // Sanity: the two known session kinds are discovered.
+    expect(sessionTables).toContain("desktopEditSessions");
+    expect(sessionTables).toContain("folioCollabSessions");
+
+    const deleteVersionSource = readFileSync(
+      nodePath.join(import.meta.dir, "delete-version.ts"),
+      "utf-8",
+    );
+    const uncancelled = sessionTables.filter(
+      (table) => !deleteVersionSource.includes(`update(${table})`),
+    );
+    expect(uncancelled).toEqual([]);
+  });
+
+  test("no relational fields/cellMetadata read is keyed by entityVersionId", () => {
+    // Class-1 guard (round 4). A relational `tx.query.{fields,cellMetadata,
+    // entityVersionAiSummaries}.find*` cannot join entity_versions inline, so
+    // keying one by entityVersionId is the exact TOCTOU shape behind the
+    // withdrawn-version content leaks: resolve a live version in one query, then
+    // read its content in a SEPARATE query keyed by that id. Such reads must
+    // instead fold the content into the entity_versions query (`with:
+    // { fields }`) or use a core join carrying `deletedAt IS NULL`. Banning the
+    // shape outright makes the leak structurally impossible to reintroduce.
+    const RELATIONAL_DEPENDENT_READS = [
+      "query.fields.find",
+      "query.cellMetadata.find",
+      "query.entityVersionAiSummaries.find",
+    ];
+
+    const offenders: string[] = [];
+    for (const file of collectSourceFiles(API_SRC)) {
+      const lines = readFileSync(file, "utf-8").split("\n");
+      const rel = nodePath
+        .relative(API_SRC, file)
+        .split(nodePath.sep)
+        .join("/");
+      for (const [index, line] of lines.entries()) {
+        if (!RELATIONAL_DEPENDENT_READS.some((p) => line.includes(p))) {
+          continue;
+        }
+        // A relational `where: { entityVersionId: { ... } }` within the call.
+        const window = lines.slice(index, index + 10).join("\n");
+        if (window.includes("entityVersionId: {")) {
+          offenders.push(`${rel}:${index + 1}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
   });
 
   test("every entityVersions read filters tombstones or is a reviewed exception", () => {
