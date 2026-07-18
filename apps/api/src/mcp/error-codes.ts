@@ -50,6 +50,40 @@ export const MCP_ERROR_CODES = [
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
 
 /**
+ * Map a backing safe handler's HTTP-ish status onto a stable envelope code,
+ * preserving the handler's curated message at the call site. Mirrors the sweep
+ * of 4xx statuses the handlers actually return:
+ *  - 400 / 413 / 422 -> `validation_error` (shape, payload size, semantic);
+ *  - 401 / 403 -> `permission_denied` (the tool paths are always authenticated,
+ *    so a 401 here is an authorization gap, not a login prompt);
+ *  - 402 -> `usage_limited`; 404 -> `not_found`; 409 -> `conflict`;
+ *  - 429 -> `rate_limited`.
+ * Any other status (5xx, or an unmapped value) is a genuine server failure whose
+ * detail must not leak, so it falls through to `internal_error`.
+ */
+export const statusCodeToErrorCode = (status: number): McpErrorCode => {
+  switch (status) {
+    case 400:
+    case 413:
+    case 422:
+      return "validation_error";
+    case 401:
+    case 403:
+      return "permission_denied";
+    case 402:
+      return "usage_limited";
+    case 404:
+      return "not_found";
+    case 409:
+      return "conflict";
+    case 429:
+      return "rate_limited";
+    default:
+      return "internal_error";
+  }
+};
+
+/**
  * One structured validation issue in the error envelope. `path` is the dot-path
  * to the offending field (empty string for a whole-object / root issue);
  * `message` is the human-readable reason. Emitted under `error.issues` only for

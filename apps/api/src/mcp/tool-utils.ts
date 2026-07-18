@@ -8,6 +8,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
@@ -17,6 +18,7 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
+import { statusCodeToErrorCode } from "@/api/mcp/error-codes";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -240,20 +242,34 @@ export const notFoundResult = (
   structuredErrorResult({ code: "not_found", hint, message });
 
 /**
- * `internal_error` envelope for a failed DB / backing-handler `Result`. The real
- * error (a `HandlerError`, `UnhandledException`, driver/ORM message, ...) is
- * captured for telemetry and never echoed back, so an internal message cannot
- * leak to an external agent; the caller gets the same generic, code-bearing
- * envelope the central pipeline's catch-all emits (see `handleMcpToolCall`), so
- * the companion CLI branches on `error.code` and the receipt is attached.
+ * Envelope for a failed backing-handler `Result`, the single sink for the
+ * `errorResult(result.error.message)` class. Every tool site that unwraps a
+ * `context.safeDb(...)` / `Result.gen(() => handler(...))` failure routes here
+ * instead of surfacing the raw `.message` as plain text. Pass `result.error`
+ * (the `Result` error), not its message, so the cause reaches `captureError`
+ * intact.
  *
- * This is the single sink for the `errorResult(result.error.message)` class:
- * every tool site that unwraps a `context.safeDb(...)` /
- * `Result.gen(() => handler(...))` failure routes through here instead of
- * surfacing the raw `.message` as plain text. Pass `result.error` (the `Result`
- * error), not its message, so the cause reaches `captureError` intact.
+ * The backing safe handlers return two distinct kinds of error, and they must
+ * not be conflated:
+ *  - An *expected* business failure is a `HandlerError` carrying a curated
+ *    message and a 4xx status (e.g. "date is in the future" = 400, "already
+ *    archived" = 409). An agent needs that message and a branchable code, so it
+ *    is surfaced with the status mapped to an envelope code and the handler's
+ *    own message preserved. It is *not* recorded as a telemetry error: it is
+ *    normal, caller-driven flow, not a fault.
+ *  - A genuine internal failure (a 5xx `HandlerError`, an `UnhandledException`
+ *    or `DatabaseError` from a driver/ORM throw, or any non-`HandlerError`) is
+ *    captured and returned as the same generic, code-bearing `internal_error`
+ *    envelope the central pipeline's catch-all emits (see `handleMcpToolCall`),
+ *    so no internal detail leaks to an external agent.
  */
 export const internalFailureResult = (error: unknown): CallToolResult => {
+  if (HandlerError.is(error)) {
+    const code = statusCodeToErrorCode(error.status);
+    if (code !== "internal_error") {
+      return structuredErrorResult({ code, message: error.message });
+    }
+  }
   captureError(error, { source: "mcp" });
   return structuredErrorResult({
     code: "internal_error",
