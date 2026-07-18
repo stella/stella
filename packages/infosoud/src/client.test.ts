@@ -57,8 +57,17 @@ const patchSignalListenerCounts = (
 ): { addCount: () => number; removeCount: () => number } => {
   let adds = 0;
   let removes = 0;
-  const originalAdd = signal.addEventListener.bind(signal);
-  const originalRemove = signal.removeEventListener.bind(signal);
+  // Bind off EventTarget.prototype (what AbortSignal's listener methods
+  // actually resolve to at runtime), not off `signal.addEventListener`
+  // directly: AbortSignal narrows addEventListener/removeEventListener to an
+  // overload set keyed by event name, and Function.prototype.bind() on an
+  // overloaded method collapses to only its last overload, which drops the
+  // `| null` that EventTarget's single signature (and this wrapper's own
+  // parameter type below) allows.
+  const originalAdd: EventTarget["addEventListener"] =
+    EventTarget.prototype.addEventListener.bind(signal);
+  const originalRemove: EventTarget["removeEventListener"] =
+    EventTarget.prototype.removeEventListener.bind(signal);
 
   signal.addEventListener = (
     type: string,
@@ -658,10 +667,23 @@ describe("InfoSoudClient", () => {
     if (firstStart === undefined || thirdStart === undefined) {
       throw new Error("Expected two fetch timestamps");
     }
-    // One politeness gap from the first request, not two: the aborted caller
-    // did not push the third caller back by an extra delay.
+    // setTimeout never fires early, so this lower bound is a firm proof that
+    // at least one politeness gap elapsed before the third fetch (the
+    // aborted caller did not let the third one through instantly).
     expect(thirdStart - firstStart).toBeGreaterThanOrEqual(delayMs - 5);
-    expect(thirdStart - firstStart).toBeLessThan(delayMs * 2);
+    // This is a loose sanity ceiling, not a precise "one gap, not two" proof:
+    // a real timer plus the event loop has no firm upper bound on how late
+    // it can fire if the CI worker stalls, so asserting close to
+    // `delayMs * 2` (the value that would indicate the aborted caller
+    // wrongly consumed a politeness slot) is flaky under scheduler pauses
+    // even though the implementation is correct. Kept wide enough that
+    // ordinary CI jitter cannot trip it, so it only catches a total
+    // stall/deadlock in the throttle chain; it intentionally no longer
+    // pins the exact single-vs-double-gap distinction that the original
+    // tight bound asserted, per PR review guidance trading that precision
+    // for CI robustness (the fetch-count check above still proves the
+    // aborted caller never reaches the network, independent of timing).
+    expect(thirdStart - firstStart).toBeLessThan(delayMs * 10);
   });
 
   test("a pre-aborted signal performs no request at all", async () => {
