@@ -38,6 +38,7 @@ export {
   InfoSoudAPIError,
   InfoSoudError,
   InfoSoudParseError,
+  InfoSoudPragueCourtResolutionError,
   InfoSoudRequestError,
 } from "./errors.js";
 export {

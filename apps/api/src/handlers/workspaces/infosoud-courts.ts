@@ -3,7 +3,6 @@ import { Result } from "better-result";
 import {
   buildCourtMapFromEntries,
   InfoSoudAPIError,
-  InfoSoudClient,
   InfoSoudParseError,
   InfoSoudRequestError,
 } from "@stll/infosoud";
@@ -13,7 +12,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { compareByLocale } from "@/api/lib/collation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const createInfoSoudClient = () => new InfoSoudClient({ cache: false });
+import { getInfoSoudClient } from "./infosoud-common";
 
 const toInfoSoudCourtsError = (error: unknown): HandlerError => {
   if (error instanceof InfoSoudAPIError) {
@@ -52,16 +51,27 @@ const config = {
   mcp: { type: "internal", reason: "native_tool_ui" },
 } satisfies HandlerConfig;
 
-const infosoudCourts = createSafeHandler(config, async function* ({ request }) {
-  const signal = request.signal;
+const infosoudCourts = createSafeHandler(config, async function* () {
   const result = yield* Result.await(
     Result.tryPromise({
       try: async () => {
-        const client = createInfoSoudClient();
-        const [courts, districtCourts] = await Promise.all([
-          client.getCourts({ signal }),
-          client.getDistrictCourts({ signal }),
-        ]);
+        const client = getInfoSoudClient();
+        // Shared cacheable load; deliberately detached from caller signals
+        // so in-flight dedup works: #getCachedOrLoad only shares an
+        // in-flight load when no signal is passed, so threading each
+        // request's own AbortSignal here would make every concurrent caller
+        // on a cold courts cache start its own redundant throttled fetch. A
+        // disconnected caller just abandons its await; the load keeps
+        // running and populates the 24h cache for every other caller.
+        //
+        // Sequential, not Promise.all: the shared client serializes every
+        // call through one politeness throttle, so both loads never run
+        // concurrently anyway. Promise.all would still enqueue the district
+        // load immediately, so a failure on the first load left the second
+        // queued and running against InfoSoud after this handler had already
+        // returned its error response.
+        const courts = await client.getCourts();
+        const districtCourts = await client.getDistrictCourts();
         const courtMap = buildCourtMapFromEntries([
           ...courts,
           ...districtCourts,

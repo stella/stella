@@ -4,7 +4,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 import {
-  createInfoSoudClient,
+  getInfoSoudClient,
   infosoudLookupBodySchema,
   toInfoSoudLookupError,
 } from "./infosoud-common";
@@ -22,7 +22,7 @@ const infosoudLookup = createSafeHandler(
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () => {
-          const client = createInfoSoudClient();
+          const client = getInfoSoudClient();
           const lookupResult = await client.searchCaseWithHearings({
             courtCode: body.courtCode,
             signal: request.signal,

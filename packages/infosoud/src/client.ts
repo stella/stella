@@ -20,6 +20,7 @@ import {
 import {
   InfoSoudAPIError,
   InfoSoudParseError,
+  InfoSoudPragueCourtResolutionError,
   InfoSoudRequestError,
 } from "./errors.js";
 import { enrichCaseEventWithDetail } from "./event-details.js";
@@ -367,13 +368,32 @@ const parseErrorMessage = (
   return `InfoSoud request failed with ${status} for ${path}`;
 };
 
-const delay = async (ms: number): Promise<void> => {
-  if (ms <= 0) {
+const delay = async (ms: number, signal?: AbortSignal): Promise<void> => {
+  if (ms <= 0 || signal?.aborted) {
     return;
   }
 
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
+  await new Promise<void>((resolve) => {
+    // Wake early on abort so a cancelled caller does not hold the throttle
+    // chain for the full politeness gap; the throttle re-checks the signal
+    // once this resolves and rejects the caller. The timer and the abort
+    // listener are mutually exclusive (abort clears the timer), so the wait
+    // settles exactly once. Both settlement paths remove the abort listener:
+    // `{ once: true }` drops it as part of dispatching the abort event, and
+    // the timer path removes it explicitly. Without the explicit removal, a
+    // long-lived signal reused across many *successful* waits (e.g. a
+    // scheduler sweep threading one AbortSignal through hundreds of throttled
+    // calls) would accumulate one stale listener per call.
+    const finish = (): void => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      finish();
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 };
 
@@ -483,6 +503,10 @@ export class InfoSoudClient {
   readonly #fetchImpl: FetchLike;
   readonly #inFlightRequests = new Map<string, Promise<unknown>>();
   #lastRequestFinishedAt = 0;
+  // Serializes the network critical section so concurrent calls on one
+  // instance queue up and honour the politeness interval instead of firing
+  // in parallel against the upstream registry.
+  #throttleChain: Promise<void> = Promise.resolve();
   readonly #timeoutMs: number;
   readonly #userAgent: string;
 
@@ -728,10 +752,23 @@ export class InfoSoudClient {
       cacheTtlMs: this.#cacheConfig.derivedCourtMapTtlMs,
       deserialize: parseCourtMap,
       load: async () => {
-        const [courts, districtCourts] = await Promise.all([
-          this.getCourts({ signal }),
-          this.getDistrictCourts({ signal }),
-        ]);
+        // Shared cacheable load; deliberately detached from caller signals
+        // so in-flight dedup works: #getCachedOrLoad only shares an
+        // in-flight load when no signal is passed, so threading this call's
+        // signal into the two loads below would make every concurrent
+        // caller on a cold courts cache start its own redundant throttled
+        // fetch instead of sharing one. A caller that aborts simply
+        // abandons its await; the load keeps running and populates the
+        // cache for everyone else.
+        //
+        // Sequential, not Promise.all: this instance serializes every call
+        // through one politeness throttle, so both loads never run
+        // concurrently anyway. Promise.all would still enqueue the district
+        // load immediately, so a failure on the courts load left the
+        // district load queued and running against InfoSoud after this
+        // call had already rejected.
+        const courts = await this.getCourts();
+        const districtCourts = await this.getDistrictCourts();
 
         return buildCourtMapFromEntries([...courts, ...districtCourts]);
       },
@@ -817,10 +854,7 @@ export class InfoSoudClient {
       }
     }
 
-    throw new InfoSoudRequestError(
-      path,
-      `Cannot resolve Prague district court for ${spisZn.cisloSenatu} ${spisZn.druhVeci} ${spisZn.bcVec}/${spisZn.rocnik}`,
-    );
+    throw new InfoSoudPragueCourtResolutionError(path, spisZn);
   }
 
   async #request<T>({
@@ -838,40 +872,42 @@ export class InfoSoudClient {
       cacheTtlMs,
       deserialize: parse,
       load: async () => {
-        await this.#throttle();
-
-        const url = new URL(`${this.#baseUrl}${path}`);
-        if (query) {
-          url.search = query.toString();
-        }
-
-        const timeoutSignal = withTimeoutSignal(signal, this.#timeoutMs);
-
+        // Normalize both transport failures and a throttle-level abort (the
+        // throttle can reject before the task runs when the caller's signal is
+        // already aborted) into a single InfoSoudRequestError shape.
         try {
-          const response = await this.#fetchImpl(url, {
-            ...(body ? { body: JSON.stringify(body) } : {}),
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/json",
-              "User-Agent": this.#userAgent,
-            },
-            method,
-            signal: timeoutSignal,
-          });
+          return await this.#throttle(async () => {
+            const url = new URL(`${this.#baseUrl}${path}`);
+            if (query) {
+              url.search = query.toString();
+            }
 
-          const responseBody = await this.#readResponseBody(response);
-          this.#lastRequestFinishedAt = Date.now();
+            const timeoutSignal = withTimeoutSignal(signal, this.#timeoutMs);
 
-          if (!response.ok) {
-            throw new InfoSoudAPIError({
-              message: parseErrorMessage(responseBody, response.status, path),
-              path,
-              responseBody,
-              status: response.status,
+            const response = await this.#fetchImpl(url, {
+              ...(body ? { body: JSON.stringify(body) } : {}),
+              headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": this.#userAgent,
+              },
+              method,
+              signal: timeoutSignal,
             });
-          }
 
-          return parse(responseBody);
+            const responseBody = await this.#readResponseBody(response);
+
+            if (!response.ok) {
+              throw new InfoSoudAPIError({
+                message: parseErrorMessage(responseBody, response.status, path),
+                path,
+                responseBody,
+                status: response.status,
+              });
+            }
+
+            return parse(responseBody);
+          }, signal);
         } catch (error) {
           if (
             error instanceof InfoSoudAPIError ||
@@ -902,10 +938,43 @@ export class InfoSoudClient {
     return result;
   }
 
-  async #throttle(): Promise<void> {
-    const elapsed = Date.now() - this.#lastRequestFinishedAt;
-    const remainingDelay = this.#delayMs - elapsed;
-    await delay(remainingDelay);
+  /**
+   * Serializes network work through a single promise chain: each call waits
+   * for the previous request to finish, then honours the politeness interval
+   * measured from that request's completion, then runs. Two concurrent calls
+   * on one instance are therefore paced apart instead of firing together.
+   *
+   * The caller's AbortSignal is honoured while queued. If it aborts before the
+   * task starts (either before or during the politeness wait), the caller
+   * rejects with the signal's abort reason without running the task and
+   * without advancing #lastRequestFinishedAt, so a cancelled caller never
+   * spends a politeness slot or an upstream request, and the next waiter is
+   * still paced from the previous *completed* request rather than the skipped
+   * one. An abort during the task is left to the task's own signal handling.
+   */
+  async #throttle<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    const run = this.#throttleChain.then(async () => {
+      signal?.throwIfAborted();
+
+      const elapsed = Date.now() - this.#lastRequestFinishedAt;
+      await delay(this.#delayMs - elapsed, signal);
+
+      signal?.throwIfAborted();
+
+      try {
+        return await task();
+      } finally {
+        this.#lastRequestFinishedAt = Date.now();
+      }
+    });
+
+    // Keep the chain alive even if a request rejects or a queued caller is
+    // aborted, so one failure cannot wedge every queued caller behind it.
+    this.#throttleChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await run;
   }
 
   #buildRequestCacheKey({
