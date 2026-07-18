@@ -1546,9 +1546,10 @@ export const TemplateForm = ({
   // Formula fields are derived server-side at fill time, never user-entered:
   // the form renders no input for them and submits no value.
   // Derived fields never render as inputs: formulas compute from other
-  // values, AI-drafted fields (aiPrompt) are written by the model at fill
-  // time, and contact-sourced fields are resolved from the matter's client
-  // contact. Fields whose marker appears nowhere (count 0) are asked only
+  // values and AI-drafted fields (aiPrompt) are written by the model at fill
+  // time. Data-bound fields resolve from a matter record too, but only in a
+  // matter context (see `hasMatterContext` below).
+  // Fields whose marker appears nowhere (count 0) are asked only
   // when something still consumes the answer: condition questions
   // (booleans), paths referenced by a named condition, or sources another
   // field derives from (formula, optionsFrom).
@@ -1571,13 +1572,20 @@ export const TemplateForm = ({
       addFormulaFieldReferences(f.formula, allFields, referencedPaths);
     }
   }
+  // A data-bound field's value is resolved server-side from a matter record,
+  // but only when the fill carries a workspace/matter context (`saveTarget`).
+  // With one, the field is hidden (the server fills it). Without one — a
+  // standalone knowledge fill — the binding cannot resolve, so the field is
+  // shown as an ordinary input for the person to fill instead of being silently
+  // dropped. Formula/AI/condition fields stay hidden either way (always derived).
+  const hasMatterContext = saveTarget !== undefined;
   const fields = allFields.filter(
     (f) =>
       f.formula === undefined &&
       f.aiPrompt === undefined &&
       f.condition === undefined &&
       f.conditionAst === undefined &&
-      f.source === undefined &&
+      (f.source === undefined || !hasMatterContext) &&
       (f.count > 0 || f.inputType === "boolean" || referencedPaths.has(f.path)),
   );
   const [values, setValues] = useState<FormValues>(() => ({

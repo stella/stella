@@ -2959,7 +2959,7 @@
       "slashGroupReuse": "Izmantot atkārtoti",
       "slashHint": "Rakstiet, lai filtrētu laukus vai nosauktu jaunu",
       "sourceEnable": "Aizpildīt no lietas",
-      "sourceHint": "Vērtība tiek aizpildīta no lietas (tās klienta, puses, pašas lietas vai advokāta) dokumenta ģenerēšanas brīdī.",
+      "sourceHint": "Vērtība tiek aizpildīta no lietas (tās klienta, puses, pašas lietas, advokāta vai biroja) dokumenta ģenerēšanas brīdī.",
       "sourcePickSource": "Datu avots",
       "textPlusAi": "Persona + MI",
       "useExisting": "Izmantot esošo lauku {name}",

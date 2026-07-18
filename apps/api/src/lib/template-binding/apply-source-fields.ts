@@ -24,7 +24,6 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
-import { replaceResolvedValue } from "@/api/handlers/docx/composite-fields";
 import type { FieldMeta } from "@/api/handlers/docx/types";
 
 import type {
@@ -293,6 +292,14 @@ export const applySourceFields = (
     if (resolved === null) {
       continue;
     }
-    replaceResolvedValue(values, field.path, resolved);
+    // Write the resolved value under the field's flat dotted path, the shape
+    // the downstream substitution reads: both `resolvePath` and
+    // `flattenTemplateData` resolve a flat dotted key (`client.name`)
+    // identically to a nested leaf, and the formula step writes its derived
+    // values the same way. A bound field renders no fill input, so its
+    // container object is usually absent; the nested-container writer
+    // (`replaceResolvedValue`) would bail on the missing container and leave
+    // the binding unwritten.
+    values[field.path] = resolved;
   }
 };

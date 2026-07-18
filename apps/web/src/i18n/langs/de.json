@@ -2959,7 +2959,7 @@
       "slashGroupReuse": "Wiederverwenden",
       "slashHint": "Tippen, um Felder zu filtern oder ein neues zu benennen",
       "sourceEnable": "Aus der Akte ausfüllen",
-      "sourceHint": "Der Wert wird beim Erstellen des Dokuments aus der Akte (deren Klient, einer Partei, der Akte selbst oder einem Anwalt) übernommen.",
+      "sourceHint": "Der Wert wird beim Erstellen des Dokuments aus der Akte (deren Klient, einer Partei, der Akte selbst, einem Anwalt oder der Kanzlei) übernommen.",
       "sourcePickSource": "Datenquelle",
       "textPlusAi": "Person + KI",
       "useExisting": "Vorhandenes Feld {name} verwenden",

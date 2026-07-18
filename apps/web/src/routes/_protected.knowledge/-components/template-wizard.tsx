@@ -210,6 +210,20 @@ export type TemplateEditableField = {
   validation?: FieldValidation | undefined;
 };
 
+/**
+ * The field shape the value-source controls (binding, formula) edit. A superset
+ * of {@link TemplateEditableField} that also carries the AI-draft fields the
+ * Studio field adds, so enabling one value mode can clear every rival — the
+ * AI-draft modes included — without the wizard depending on the Studio's field
+ * type. Both the wizard's plain field and the Studio's `StudioField` assign to
+ * it (the AI fields are optional here, required on the Studio field).
+ */
+export type EditableField = TemplateEditableField & {
+  aiPrompt?: string | undefined;
+  aiAdapt?: boolean | undefined;
+  aiSeesDocument?: boolean | undefined;
+};
+
 /** Field-level validation. The studio's UI surfaces only the `{{#each}}`
  *  repeat bounds (`minItems`/`maxItems`) today; the scalar rules
  *  (`required`/`minLength`/`maxLength`/`min`/`max`/`pattern`) are carried
@@ -1624,19 +1638,24 @@ const composeSource = (
   role: string,
   ref: string,
 ): FieldSource => {
-  if (source.kind === "party") {
-    return { kind: "party", role, field: fieldKey };
+  switch (source.kind) {
+    case "contact":
+      return { kind: "contact", field: fieldKey };
+    case "party":
+      return { kind: "party", role, field: fieldKey };
+    case "matter":
+      return { kind: "matter", field: fieldKey };
+    case "attorney":
+      return { kind: "attorney", ref, field: fieldKey };
+    case "firm":
+      return { kind: "firm", field: fieldKey };
+    default: {
+      // A new source kind must be handled explicitly rather than silently
+      // persisting as a contact binding.
+      const exhaustive: never = source;
+      return exhaustive;
+    }
   }
-  if (source.kind === "attorney") {
-    return { kind: "attorney", ref, field: fieldKey };
-  }
-  if (source.kind === "matter") {
-    return { kind: "matter", field: fieldKey };
-  }
-  if (source.kind === "firm") {
-    return { kind: "firm", field: fieldKey };
-  }
-  return { kind: "contact", field: fieldKey };
 };
 
 /** The source selected by default when a source is first enabled or switched:
@@ -1645,8 +1664,8 @@ const defaultSourceFor = (source: CatalogSource): FieldSource =>
   composeSource(
     source,
     source.fields.at(0)?.key ?? "",
-    source.roles?.at(0)?.value ?? "",
-    source.refs?.at(0)?.value ?? "",
+    source.kind === "party" ? (source.roles.at(0)?.value ?? "") : "",
+    source.kind === "attorney" ? (source.refs.at(0)?.value ?? "") : "",
   );
 
 /** Binding-source affordance: the field's value is resolved server-side from a
@@ -1666,6 +1685,10 @@ const BindingSourceConfigControl = ({
   const sources = data?.sources ?? [];
   const firstSource = sources.at(0);
 
+  // A binding is a derived value source, mutually exclusive with every other
+  // input mode; enabling it clears them all (matching the Studio's value-source
+  // switcher, which clears aiPrompt/aiAdapt/aiSeesDocument together) so a field
+  // never carries a binding beside a rival the backend validator rejects.
   const emitSource = (source: FieldSource) =>
     onUpdate({
       source,
@@ -1674,6 +1697,12 @@ const BindingSourceConfigControl = ({
       parts: undefined,
       format: undefined,
       optionsFrom: undefined,
+      dateFormat: undefined,
+      condition: undefined,
+      conditionAst: undefined,
+      aiPrompt: undefined,
+      aiAdapt: false,
+      aiSeesDocument: false,
     });
 
   // Fail safe: while the catalog is loading or errored there is nothing to
@@ -1770,7 +1799,7 @@ const BindingSourcePicker = ({
         </Select>
       </Field>
 
-      {selected.roles !== undefined && source.kind === "party" && (
+      {selected.kind === "party" && source.kind === "party" && (
         <Field>
           <FieldLabel>{t("common.role")}</FieldLabel>
           <Select
@@ -1795,7 +1824,7 @@ const BindingSourcePicker = ({
         </Field>
       )}
 
-      {selected.refs !== undefined && source.kind === "attorney" && (
+      {selected.kind === "attorney" && source.kind === "attorney" && (
         <Field>
           <FieldLabel>{t("templates.binding.sourceAttorney")}</FieldLabel>
           <Select
@@ -1857,6 +1886,7 @@ export const FieldConfigEditor = ({
   hideRequired = false,
   siblingPaths,
   hideFormulaControl = false,
+  hideSourceControl = false,
   defaultDateLocale,
 }: {
   field: TemplateEditableField;
@@ -1875,6 +1905,10 @@ export const FieldConfigEditor = ({
   /** The host renders its own formula affordance (the Studio's source
    *  picker); drop the built-in control to avoid duplicating it. */
   hideFormulaControl?: boolean;
+  /** Hide the data-binding affordance. Set for a field inside an `{{#each}}`
+   *  repeat block: the backend resolver leaves loop-item paths unresolved, so
+   *  a binding there would silently produce nothing. */
+  hideSourceControl?: boolean;
   /** Preselected locale for a date field's format picker — the template's
    *  primary language when the host knows it; app locale otherwise. */
   defaultDateLocale?: string | undefined;
@@ -2016,7 +2050,7 @@ export const FieldConfigEditor = ({
         <FormulaConfigControl field={field} onUpdate={onUpdate} />
       )}
 
-      {!isComposite && typeChoice !== "company" && (
+      {!isComposite && !hideSourceControl && typeChoice !== "company" && (
         <BindingSourceConfigControl field={field} onUpdate={onUpdate} />
       )}
 

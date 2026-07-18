@@ -2959,7 +2959,7 @@
       "slashGroupReuse": "Taaskasuta",
       "slashHint": "Tipi väljade filtreerimiseks või uue nimetamiseks",
       "sourceEnable": "Täida toimikust",
-      "sourceHint": "Väärtus täidetakse dokumendi loomisel toimikust (selle klient, osapool, toimik ise või advokaat).",
+      "sourceHint": "Väärtus täidetakse dokumendi loomisel toimikust (selle klient, osapool, toimik ise, advokaat või büroo).",
       "sourcePickSource": "Andmeallikas",
       "textPlusAi": "Isik + TI",
       "useExisting": "Kasuta olemasolevat välja {name}",

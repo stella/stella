@@ -2959,7 +2959,7 @@
       "slashGroupReuse": "Użyj ponownie",
       "slashHint": "Wpisz, aby filtrować pola lub nazwać nowe",
       "sourceEnable": "Wypełnij ze sprawy",
-      "sourceHint": "Wartość jest wypełniana ze sprawy (jej klienta, strony, samej sprawy lub prawnika) podczas generowania dokumentu.",
+      "sourceHint": "Wartość jest wypełniana ze sprawy (jej klienta, strony, samej sprawy, prawnika lub kancelarii) podczas generowania dokumentu.",
       "sourcePickSource": "Źródło danych",
       "textPlusAi": "Osoba + AI",
       "useExisting": "Użyj istniejącego pola {name}",

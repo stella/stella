@@ -2959,7 +2959,7 @@
       "slashGroupReuse": "Reutilizar",
       "slashHint": "Escribe para filtrar campos o nombrar uno nuevo",
       "sourceEnable": "Rellenar desde el asunto",
-      "sourceHint": "El valor se rellena a partir del asunto (su cliente, una parte, el propio asunto o un abogado) al generar el documento.",
+      "sourceHint": "El valor se rellena a partir del asunto (su cliente, una parte, el propio asunto, un abogado o el despacho) al generar el documento.",
       "sourcePickSource": "Fuente de datos",
       "textPlusAi": "Persona + IA",
       "useExisting": "Usar el campo existente {name}",

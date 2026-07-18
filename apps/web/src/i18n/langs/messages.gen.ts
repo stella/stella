@@ -2962,7 +2962,7 @@ type Messages = {
       "slashGroupReuse": "Reuse";
       "slashHint": "Type to filter or name a new field";
       "sourceEnable": "Fill from a matter record";
-      "sourceHint": "The value is filled from the matter (its client, a party, the matter itself, or an attorney) when the document is generated.";
+      "sourceHint": "The value is filled from the matter (its client, a party, the matter itself, an attorney, or the firm) when the document is generated.";
       "sourcePickSource": "Data source";
       "textPlusAi": "Person + AI";
       "useExisting": "Use existing {name}";

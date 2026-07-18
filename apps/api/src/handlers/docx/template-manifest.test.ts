@@ -693,6 +693,33 @@ describe("mergeManifestWithDiscovery", () => {
     expect(resolved.find((f) => f.path === "rent")?.formula).toBeUndefined();
   });
 
+  test("carries a manifest binding onto a field discovered in the document", () => {
+    // A placeholder discovered in the document (count > 0) whose manifest entry
+    // declares a `source` must keep that binding after the merge; without
+    // mergeField copying `source`, a discovered bound field loses its binding.
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [{ path: "client_name", kind: "string", count: 2 }],
+      structureErrors: [],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "client_name",
+          source: { kind: "contact", field: "displayName" },
+        },
+      ],
+    };
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+    const discoveredField = resolved.find((f) => f.path === "client_name");
+    expect(discoveredField?.count).toBe(2);
+    expect(discoveredField?.source).toEqual({
+      kind: "contact",
+      field: "displayName",
+    });
+  });
+
   test("drops namespace parents (a path that is only a prefix of others)", () => {
     const discovery: DiscoveredTemplate = {
       placeholders: [],

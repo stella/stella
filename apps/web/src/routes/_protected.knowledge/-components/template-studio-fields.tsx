@@ -1472,6 +1472,7 @@ export const FieldFace = ({
           hideFormulaControl
           hideHint={valueSource === "ai"}
           hideRequired
+          hideSourceControl={loopContainerPath !== null}
           onUpdate={onUpdate}
         />
         {field.lookup !== undefined && field.lookup.formats.length > 0 ? (

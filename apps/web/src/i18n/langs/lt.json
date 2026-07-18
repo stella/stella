@@ -2959,7 +2959,7 @@
       "slashGroupReuse": "Naudoti pakartotinai",
       "slashHint": "Rašykite, kad filtruotumėte laukus arba pavadintumėte naują",
       "sourceEnable": "Užpildyti iš bylos",
-      "sourceHint": "Reikšmė generuojant dokumentą užpildoma iš bylos (jos kliento, šalies, pačios bylos arba advokato).",
+      "sourceHint": "Reikšmė generuojant dokumentą užpildoma iš bylos (jos kliento, šalies, pačios bylos, advokato arba kontoros).",
       "sourcePickSource": "Duomenų šaltinis",
       "textPlusAi": "Asmuo + DI",
       "useExisting": "Naudoti esamą lauką {name}",

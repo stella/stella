@@ -1133,6 +1133,13 @@ const mergeField = (
     if (meta.lookup !== undefined) {
       resolved.lookup = meta.lookup;
     }
+    // A discovered placeholder that also carries a data binding in the manifest
+    // keeps that binding on save (the common case); without this, `source` is
+    // preserved only for manifest-only fields and a bound in-document field
+    // loses its binding on every round-trip. Mirrors lookup/formula above.
+    if (meta.source !== undefined) {
+      resolved.source = meta.source;
+    }
     if (meta.formula !== undefined) {
       resolved.formula = meta.formula;
     }

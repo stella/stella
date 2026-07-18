@@ -2959,7 +2959,7 @@
       "slashGroupReuse": "Znovu použít",
       "slashHint": "Pište pro filtrování polí nebo pojmenování nového",
       "sourceEnable": "Vyplnit ze spisu",
-      "sourceHint": "Hodnota se při generování dokumentu vyplní ze spisu (jeho klienta, strany, samotného spisu nebo advokáta).",
+      "sourceHint": "Hodnota se při generování dokumentu vyplní ze spisu (jeho klienta, strany, samotného spisu, advokáta nebo kanceláře).",
       "sourcePickSource": "Zdroj dat",
       "textPlusAi": "Osoba + AI",
       "useExisting": "Použít existující pole {name}",

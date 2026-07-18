@@ -13,7 +13,6 @@
 import {
   ATTORNEY_REFS,
   type AttorneyRef,
-  type BindingSourceKind,
   CONTACT_FIELDS,
   type ContactField,
   FIRM_FIELDS,
@@ -30,15 +29,33 @@ import {
  *  the frontend; a future custom field would instead carry a literal `label`. */
 export type CatalogField = { key: string; labelKey: string };
 
-export type CatalogSource = {
-  kind: BindingSourceKind;
-  labelKey: string;
-  /** Present for `party`: the author also picks which role to resolve. */
-  roles?: { value: WorkspaceContactRole; labelKey: string }[];
-  /** Present for `attorney`: the author also picks which attorney to resolve. */
-  refs?: { value: AttorneyRef; labelKey: string }[];
-  fields: CatalogField[];
-};
+/** A role/ref picker offered alongside the field picker for the party and
+ *  attorney sources. */
+type CatalogRole = { value: WorkspaceContactRole; labelKey: string };
+type CatalogRef = { value: AttorneyRef; labelKey: string };
+
+/**
+ * One pickable source. Discriminated on `kind` so the per-kind extras are
+ * modelled where they exist rather than as always-optional fields: `party`
+ * carries `roles`, `attorney` carries `refs`, and the rest carry neither. A new
+ * kind then fails typecheck at every consumer instead of silently defaulting.
+ */
+export type CatalogSource =
+  | { kind: "contact"; labelKey: string; fields: CatalogField[] }
+  | {
+      kind: "party";
+      labelKey: string;
+      roles: CatalogRole[];
+      fields: CatalogField[];
+    }
+  | { kind: "matter"; labelKey: string; fields: CatalogField[] }
+  | {
+      kind: "attorney";
+      labelKey: string;
+      refs: CatalogRef[];
+      fields: CatalogField[];
+    }
+  | { kind: "firm"; labelKey: string; fields: CatalogField[] };
 
 export type BindingCatalog = { sources: CatalogSource[] };
 
@@ -101,9 +118,9 @@ const contactFields = (): CatalogField[] =>
   CONTACT_FIELDS.map((key) => ({ key, labelKey: CONTACT_FIELD_LABELS[key] }));
 
 /**
- * Build the binding catalog. Static today; an org id is accepted so a future
- * custom-field registry can append per-org definitions without a signature
- * change.
+ * Build the binding catalog. Static today (built from the binding-sources
+ * taxonomy); a future custom-field registry can append per-org definitions by
+ * adding a parameter here without changing any consumer.
  */
 export const buildBindingCatalog = (): BindingCatalog => ({
   sources: [

@@ -2959,7 +2959,7 @@
       "slashGroupReuse": "Újrahasználat",
       "slashHint": "Gépeljen a mezők szűréséhez vagy új elnevezéséhez",
       "sourceEnable": "Kitöltés az ügyből",
-      "sourceHint": "Az érték a dokumentum létrehozásakor az ügyből (annak ügyfeléből, egy félből, magából az ügyből vagy egy ügyvédből) kerül kitöltésre.",
+      "sourceHint": "Az érték a dokumentum létrehozásakor az ügyből (annak ügyfeléből, egy félből, magából az ügyből, egy ügyvédből vagy egy ügyvédi irodából) kerül kitöltésre.",
       "sourcePickSource": "Adatforrás",
       "textPlusAi": "Személy + MI",
       "useExisting": "A meglévő {name} mező használata",

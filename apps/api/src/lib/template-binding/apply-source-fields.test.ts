@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { resolvePath } from "@stll/template-conditions";
+
 import type { FieldMeta, FieldSource } from "@/api/handlers/docx/types";
 
 import {
@@ -317,6 +319,25 @@ describe("applySourceFields", () => {
     expect(values["matter_name"]).toBe("Smith v. Jones");
     expect(values["attorney_name"]).toBe("Eva Novak");
     expect(values["firm_name"]).toBe("Novak & Partners");
+  });
+
+  test("a dotted bound path is written where the substitution reads it, even with no container object", () => {
+    // The fill form renders no input for a bound field, so `values` holds
+    // neither the flat "client.name" key nor a "client" container object. The
+    // resolved value must still land where `resolvePath` (and the downstream
+    // flattening) reads it.
+    const values: Record<string, unknown> = {};
+    applySourceFields(
+      values,
+      {
+        fields: [
+          sourced("client.name", { kind: "contact", field: "displayName" }),
+        ],
+      },
+      context({ client: contact({ displayName: "Jane Doe" }) }),
+    );
+    expect(values["client.name"]).toBe("Jane Doe");
+    expect(resolvePath("client.name", values)).toBe("Jane Doe");
   });
 
   test("an explicit value already in the bag is not overwritten", () => {
