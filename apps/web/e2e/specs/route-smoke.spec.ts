@@ -1,4 +1,10 @@
-import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
+import type {
+  APIRequestContext,
+  BrowserContext,
+  Page,
+  Request,
+} from "@playwright/test";
+import { expect, request as apiRequestFactory, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -13,8 +19,6 @@ import {
 import {
   type BrowserErrorCollector,
   createBrowserErrorCollector,
-  expect,
-  test,
 } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -25,12 +29,16 @@ import {
 // Long enough that idle warmup requests (tool connectors, skills, usage
 // entitlement on chat routes) land inside the window deterministically; the
 // network baseline records them as part of the route's manifest instead of
-// racing them. Costs ~30s across the walk.
+// racing them.
 const DEFAULT_SETTLE_MS = 1000;
-// The route walk is intentionally serial and cold-compiles every authenticated
-// route. Keep runner headroom separate from the network and bundle budgets that
-// enforce product performance after the walk completes.
-const ROUTE_SMOKE_TIMEOUT_MS = 300_000;
+
+// Repo-root .playwright/storage-state.json — mirrors apps/web/e2e/playwright.config.ts
+// (seed-test-user.ts writes it there). The route walk owns its own browser
+// context and API request context (created in beforeAll) so setup/teardown are
+// no longer hostage to a per-test fixture lifecycle; both need the authenticated
+// storage state wired in explicitly.
+const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
+const STORAGE_STATE = path.resolve(REPO_ROOT, ".playwright/storage-state.json");
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -45,6 +53,8 @@ type RouteExpectation =
   | { kind: "redirectsTo"; to: string }
   | { kind: "settles" };
 
+// The concrete route smoked by a single test case: template (stable key),
+// resolved path, optional settle window, and where it is expected to land.
 type SmokeRoute = {
   template: string;
   path: string;
@@ -59,203 +69,266 @@ type SmokeRoute = {
   expectation?: RouteExpectation;
 };
 
-const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
-  { template: "/chat", path: "/chat" },
-  { template: "/chat/$threadId", path: `/chat/${randomUUID()}` },
+// Runtime fixtures every dynamic route path is resolved against. Populated once
+// in beforeAll and shared across the per-route test cases.
+type SmokeWorld = {
+  workspace: TestWorkspace;
+  contactId: string;
+  documentRoute: { entityId: string; path: string };
+};
+
+// A route case declared at collection time. `path` is a function so dynamic
+// routes (workspace/contact/document ids) resolve against the beforeAll world
+// when the case actually runs, while templates stay static so the per-route
+// `test()` cases and the coverage assertion can be built before setup runs.
+type SmokeRouteDef = {
+  template: string;
+  path: (world: SmokeWorld) => string;
+  settleMs?: number;
+  expectation?: RouteExpectation;
+};
+
+const staticRoute = (
+  template: string,
+  extra: Omit<SmokeRouteDef, "template" | "path"> = {},
+): SmokeRouteDef => ({ template, path: () => template, ...extra });
+
+// Every authenticated route smoked, one case each. Order is the walk order; the
+// heavy document route stays last. Kept as declarations (not live SmokeRoutes)
+// so each route is its own `test()` with its own timeout instead of one 300s
+// mega-test whose budget any single slow or dev-server-stalled route can blow.
+const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
+  staticRoute("/chat"),
   {
-    template: "/chat/new",
-    path: "/chat/new",
-    expectation: { kind: "settles" },
+    template: "/chat/$threadId",
+    path: () => `/chat/${randomUUID()}`,
   },
-  { template: "/contacts", path: "/contacts" },
-  {
-    template: "/dev/autocomplete",
-    path: "/dev/autocomplete",
-    expectation: { kind: "settles" },
-  },
-  { template: "/knowledge", path: "/knowledge" },
-  { template: "/knowledge/clauses", path: "/knowledge/clauses" },
+  staticRoute("/chat/new", { expectation: { kind: "settles" } }),
+  staticRoute("/contacts"),
+  staticRoute("/dev/autocomplete", { expectation: { kind: "settles" } }),
+  staticRoute("/knowledge"),
+  staticRoute("/knowledge/clauses"),
   // Reachable in dev/staging (playbooks preview gate is open there); redirects
   // to /knowledge only in production where the flag is off.
-  { template: "/knowledge/playbooks", path: "/knowledge/playbooks" },
-  {
-    template: "/knowledge/mcp",
-    path: "/knowledge/mcp",
+  staticRoute("/knowledge/playbooks"),
+  staticRoute("/knowledge/mcp", {
     expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=mcp" },
-  },
-  {
-    template: "/knowledge/prompts",
-    path: "/knowledge/prompts",
+  }),
+  staticRoute("/knowledge/prompts", {
     expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=skill" },
-  },
-  {
-    template: "/knowledge/skills",
-    path: "/knowledge/skills",
+  }),
+  staticRoute("/knowledge/skills", {
     expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=skill" },
-  },
-  { template: "/knowledge/styles", path: "/knowledge/styles" },
-  { template: "/knowledge/templates", path: "/knowledge/templates" },
-  { template: "/knowledge/tools", path: "/knowledge/tools" },
-  {
-    template: "/settings",
-    path: "/settings",
+  }),
+  staticRoute("/knowledge/styles"),
+  staticRoute("/knowledge/templates"),
+  staticRoute("/knowledge/tools"),
+  staticRoute("/settings", {
     expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
+  }),
+  staticRoute("/settings/account/beta", { expectation: { kind: "settles" } }),
+  staticRoute("/settings/account/connections"),
+  staticRoute("/settings/account/desktop"),
+  staticRoute("/settings/account/profile"),
+  staticRoute("/settings/organization", {
+    expectation: { kind: "redirectsTo", to: "/settings/organization/members" },
+  }),
+  staticRoute("/settings/organization/ai"),
+  staticRoute("/settings/organization/anonymization"),
+  staticRoute("/settings/organization/audit-logs"),
+  staticRoute("/settings/organization/catalogue", {
+    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
+  }),
+  staticRoute("/settings/organization/document-types"),
+  staticRoute("/settings/organization/matter-numbering"),
+  staticRoute("/settings/organization/members"),
+  staticRoute("/settings/organization/usage"),
+  staticRoute("/todos"),
+  staticRoute("/workspaces"),
+  {
+    template: "/chat/workspaces/$workspaceId/$threadId",
+    path: (world) => `/chat/workspaces/${world.workspace.id}/${randomUUID()}`,
   },
   {
-    template: "/settings/account/beta",
-    path: "/settings/account/beta",
+    template: "/chat/workspaces/$workspaceId/new",
+    path: (world) => `/chat/workspaces/${world.workspace.id}/new`,
     expectation: { kind: "settles" },
   },
   {
-    template: "/settings/account/connections",
-    path: "/settings/account/connections",
-  },
-  { template: "/settings/account/desktop", path: "/settings/account/desktop" },
-  { template: "/settings/account/profile", path: "/settings/account/profile" },
-  {
-    template: "/settings/organization",
-    path: "/settings/organization",
-    expectation: { kind: "redirectsTo", to: "/settings/organization/members" },
-  },
-  { template: "/settings/organization/ai", path: "/settings/organization/ai" },
-  {
-    template: "/settings/organization/anonymization",
-    path: "/settings/organization/anonymization",
+    template: "/workspaces/$workspaceId",
+    path: (world) => `/workspaces/${world.workspace.id}`,
+    expectation: { kind: "redirectsTo", to: "" },
   },
   {
-    template: "/settings/organization/audit-logs",
-    path: "/settings/organization/audit-logs",
+    template: "/workspaces/$workspaceId/expenses",
+    path: (world) => `/workspaces/${world.workspace.id}/expenses`,
   },
   {
-    template: "/settings/organization/catalogue",
-    path: "/settings/organization/catalogue",
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
+    template: "/workspaces/$workspaceId/invoices",
+    path: (world) => `/workspaces/${world.workspace.id}/invoices`,
   },
   {
-    template: "/settings/organization/document-types",
-    path: "/settings/organization/document-types",
+    template: "/workspaces/$workspaceId/timesheets",
+    path: (world) => `/workspaces/${world.workspace.id}/timesheets`,
+    expectation: { kind: "redirectsTo", to: "" },
   },
   {
-    template: "/settings/organization/matter-numbering",
-    path: "/settings/organization/matter-numbering",
+    template: "/workspaces/$workspaceId/$viewId",
+    path: (world) =>
+      `/workspaces/${world.workspace.id}/${world.workspace.viewId}`,
   },
   {
-    template: "/settings/organization/members",
-    path: "/settings/organization/members",
+    template: "/contacts/$contactId",
+    path: (world) => `/contacts/${world.contactId}`,
   },
   {
-    template: "/settings/organization/usage",
-    path: "/settings/organization/usage",
+    template: "/workspaces/$workspaceId/entities/$entityId",
+    path: (world) =>
+      `/workspaces/${world.workspace.id}/entities/${world.documentRoute.entityId}`,
+    settleMs: 1500,
+    expectation: { kind: "settles" },
   },
-  { template: "/todos", path: "/todos" },
-  { template: "/workspaces", path: "/workspaces" },
+  {
+    template: "/workspaces/$workspaceId/$viewId/document",
+    path: (world) => world.documentRoute.path,
+    settleMs: 2000,
+  },
 ];
 
+// Redirect targets for workspace-scoped aliases depend on the runtime view id,
+// so their `expectation.to` is resolved here rather than in the static table.
+const resolveExpectation = (
+  def: SmokeRouteDef,
+  world: SmokeWorld,
+): RouteExpectation | undefined => {
+  if (def.expectation?.kind !== "redirectsTo") {
+    return def.expectation;
+  }
+  if (def.expectation.to !== "") {
+    return def.expectation;
+  }
+  return {
+    kind: "redirectsTo",
+    to: `/workspaces/${world.workspace.id}/${world.workspace.viewId}`,
+  };
+};
+
+const resolveRoute = (def: SmokeRouteDef, world: SmokeWorld): SmokeRoute => {
+  const expectation = resolveExpectation(def, world);
+  return {
+    template: def.template,
+    path: def.path(world),
+    ...(def.settleMs === undefined ? {} : { settleMs: def.settleMs }),
+    ...(expectation === undefined ? {} : { expectation }),
+  };
+};
+
 // These routes need richer domain setup than cheap route smoke should own.
-// Keeping them explicit means a newly added authenticated route fails this spec
-// until it is either smoked or deliberately placed here.
+// Keeping them explicit means a newly added authenticated route fails the
+// coverage assertion until it is either smoked or deliberately placed here.
 const INTENTIONALLY_NOT_SMOKED = new Set([
   "/knowledge/tools/$skillId",
   "/workspaces/$workspaceId/invoices/$invoiceId",
   "/workspaces/$workspaceId/reports/$exportId",
 ]);
 
-test("authenticated routes render without browser errors", async ({
-  context,
-  request,
-}) => {
-  test.setTimeout(ROUTE_SMOKE_TIMEOUT_MS);
+// One serial group so the expensive workspace/contact/document setup runs once
+// and is shared across every route case. Each route is its own `test()` with
+// the config's per-test timeout: a single slow route (cold compile) or a
+// dev-server sub-resource stall now fails and is attributed to that one route
+// instead of consuming a single 300s budget shared by all ~45 routes.
+test.describe
+  .serial("authenticated routes render without browser errors", () => {
+  let apiRequest: APIRequestContext;
+  let context: BrowserContext;
+  let world: SmokeWorld | null = null;
+  // Recorded the moment each fixture is created (not only after the whole
+  // setup succeeds), so a failure mid-setup still tears down what exists.
+  let createdWorkspace: SmokeWorld["workspace"] | null = null;
+  let createdContactId: string | null = null;
+  const networkResults = new Map<string, RouteNetworkMetrics>();
 
-  const cleanupTasks: (() => Promise<void>)[] = [];
+  test.beforeAll(async ({ browser }) => {
+    apiRequest = await apiRequestFactory.newContext({
+      storageState: STORAGE_STATE,
+    });
+    context = await browser.newContext({ storageState: STORAGE_STATE });
 
-  try {
-    const workspace = await createTestWorkspace(request, "route-smoke");
-    cleanupTasks.push(
-      async () => await deleteTestWorkspace(request, workspace.id),
-    );
+    const workspace = await createTestWorkspace(apiRequest, "route-smoke");
+    createdWorkspace = workspace;
+    const contactId = await createContact(apiRequest);
+    createdContactId = contactId;
+    const documentRoute = await createDocumentRoute(apiRequest, workspace);
+    world = { workspace, contactId, documentRoute };
+  });
 
-    const contactId = await createContact(request);
-    cleanupTasks.push(
-      async () => await apiDelete(request, `/contacts/${contactId}`),
-    );
-
-    const documentRoute = await createDocumentRoute(request, workspace);
-
-    const routes: SmokeRoute[] = [
-      ...STATIC_AUTHENTICATED_ROUTES,
-      ...createWorkspaceRoutes(workspace),
-      {
-        template: "/contacts/$contactId",
-        path: `/contacts/${contactId}`,
-      },
-      {
-        template: "/workspaces/$workspaceId/entities/$entityId",
-        path: `/workspaces/${workspace.id}/entities/${documentRoute.entityId}`,
-        settleMs: 1500,
-        expectation: { kind: "settles" },
-      },
-      {
-        template: "/workspaces/$workspaceId/$viewId/document",
-        path: documentRoute.path,
-        settleMs: 2000,
-      },
-    ];
-
-    await expectAuthenticatedRouteCoverage(routes);
-
-    const networkResults = new Map<string, RouteNetworkMetrics>();
-    for (const route of routes) {
-      // eslint-disable-next-line no-await-in-loop -- each route gets an isolated page so browser errors can be attributed to its direct render without concurrent route state leaking across pages
-      await test.step(route.template, async () => {
-        await smokeRoute({ context, results: networkResults, route });
-      });
+  test.afterAll(async () => {
+    // Best-effort but total: attempt every teardown step even if one throws,
+    // so a single failure cannot strand the other fixture or leak the browser
+    // context / request context. Runs on the beforeAll-owned request context
+    // (not a per-test fixture), so it cannot race a timing-out test body into
+    // the "context closed" masking error.
+    const failures: unknown[] = [];
+    if (createdContactId !== null) {
+      try {
+        await apiDelete(apiRequest, `/contacts/${createdContactId}`);
+      } catch (error) {
+        failures.push(error);
+      }
     }
+    if (createdWorkspace !== null) {
+      try {
+        await deleteTestWorkspace(apiRequest, createdWorkspace.id);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    try {
+      await context.close();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await apiRequest.dispose();
+    } catch (error) {
+      failures.push(error);
+    }
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures,
+        "route-smoke teardown failed to release one or more fixtures",
+      );
+    }
+  });
 
-    assertNetworkBaseline(networkResults);
-  } finally {
-    await Promise.all(cleanupTasks.map(async (cleanup) => await cleanup()));
+  test("route coverage matches the authenticated route tree", async () => {
+    await expectAuthenticatedRouteCoverage(SMOKE_ROUTE_DEFS);
+  });
+
+  // Declared via a helper (not a closure literal inside the loop) so each
+  // parametrized `test()` is a plain call in the loop body. The shared
+  // context/world/results it closes over are group-scoped and assigned once in
+  // beforeAll.
+  const declareRouteTest = (def: SmokeRouteDef) => {
+    test(def.template, async () => {
+      if (world === null) {
+        throw new Error("route-smoke world was not initialized in beforeAll");
+      }
+      await smokeRoute({
+        context,
+        results: networkResults,
+        route: resolveRoute(def, world),
+      });
+    });
+  };
+  for (const def of SMOKE_ROUTE_DEFS) {
+    declareRouteTest(def);
   }
-});
 
-const createWorkspaceRoutes = (workspace: TestWorkspace): SmokeRoute[] => [
-  {
-    template: "/chat/workspaces/$workspaceId/$threadId",
-    path: `/chat/workspaces/${workspace.id}/${randomUUID()}`,
-  },
-  {
-    template: "/chat/workspaces/$workspaceId/new",
-    path: `/chat/workspaces/${workspace.id}/new`,
-    expectation: { kind: "settles" },
-  },
-  {
-    template: "/workspaces/$workspaceId",
-    path: `/workspaces/${workspace.id}`,
-    expectation: {
-      kind: "redirectsTo",
-      to: `/workspaces/${workspace.id}/${workspace.viewId}`,
-    },
-  },
-  {
-    template: "/workspaces/$workspaceId/expenses",
-    path: `/workspaces/${workspace.id}/expenses`,
-  },
-  {
-    template: "/workspaces/$workspaceId/invoices",
-    path: `/workspaces/${workspace.id}/invoices`,
-  },
-  {
-    template: "/workspaces/$workspaceId/timesheets",
-    path: `/workspaces/${workspace.id}/timesheets`,
-    expectation: {
-      kind: "redirectsTo",
-      to: `/workspaces/${workspace.id}/${workspace.viewId}`,
-    },
-  },
-  {
-    template: "/workspaces/$workspaceId/$viewId",
-    path: `/workspaces/${workspace.id}/${workspace.viewId}`,
-  },
-];
+  test("network manifest matches the committed baseline", () => {
+    assertNetworkBaseline(networkResults);
+  });
+});
 
 const createContact = async (request: APIRequestContext): Promise<string> => {
   const contactId = randomUUID();
@@ -389,7 +462,7 @@ const assertRedirectRoute = async ({
   const redirectRoute = { ...route, expectation };
 
   try {
-    await page.goto(redirectRoute.path, { waitUntil: "domcontentloaded" });
+    await gotoSmokeRoute(page, redirectRoute);
     await expect(page, redirectRoute.template).not.toHaveURL(/\/auth(?:\/|$)/u);
     await waitForRedirectDestination(page, redirectRoute);
     assertFinalDestination(page, redirectRoute);
@@ -407,7 +480,7 @@ const renderSmokeRoute = async ({
   page: Page;
   route: SmokeRoute;
 }) => {
-  await page.goto(route.path, { waitUntil: "domcontentloaded" });
+  await gotoSmokeRoute(page, route);
   await expect(page, route.template).not.toHaveURL(/\/auth(?:\/|$)/u);
   await waitForRedirectDestination(page, route);
   await assertNoRouteBoundary(page, route.template);
@@ -422,6 +495,39 @@ const renderSmokeRoute = async ({
   await assertNoRouteBoundary(page, route.template);
   assertFinalDestination(page, route);
   browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
+};
+
+// `goto` waits for DOMContentLoaded, which a render-blocking `<head>`
+// sub-resource (e.g. the dev-only /@tanstack-start/styles.css aggregation, or a
+// module the dev server stalls on) gates: if the server never answers that one
+// request, the document is parsed but DCL never fires and `goto` hits the
+// navigation timeout with an opaque "Timeout exceeded". Naming the still-pending
+// request(s) turns that into a diagnosable "the dev server stalled on X" so the
+// culprit sub-resource is visible in the failure instead of the trace only.
+const gotoSmokeRoute = async (page: Page, route: SmokeRoute) => {
+  const inflight = new Set<string>();
+  const onRequest = (request_: Request) => inflight.add(request_.url());
+  const onSettled = (request_: Request) => inflight.delete(request_.url());
+  page.on("request", onRequest);
+  page.on("requestfinished", onSettled);
+  page.on("requestfailed", onSettled);
+
+  try {
+    await page.goto(route.path, { waitUntil: "domcontentloaded" });
+  } catch (error) {
+    if (error instanceof Error && /Timeout.*exceeded/u.test(error.message)) {
+      const pending = [...inflight];
+      if (pending.length > 0) {
+        const pendingList = pending.map((url) => `  ${url}`).join("\n");
+        error.message += `\n\nDOMContentLoaded never fired on ${route.template} (${route.path}); the dev server left ${pending.length} request(s) unanswered. A render-blocking sub-resource that never responds blocks DCL and stalls navigation:\n${pendingList}`;
+      }
+    }
+    throw error;
+  } finally {
+    page.off("request", onRequest);
+    page.off("requestfinished", onSettled);
+    page.off("requestfailed", onSettled);
+  }
 };
 
 // A route counts as smoked only if it settled on its own component or its
@@ -495,11 +601,11 @@ const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
 };
 
 const expectAuthenticatedRouteCoverage = async (
-  routes: readonly SmokeRoute[],
+  routeDefs: readonly SmokeRouteDef[],
 ) => {
   const actual = await readAuthenticatedRouteTemplates();
   const expected = [
-    ...routes.map((route) => route.template),
+    ...routeDefs.map((def) => def.template),
     ...INTENTIONALLY_NOT_SMOKED,
   ].toSorted();
 
@@ -530,8 +636,8 @@ const readAuthenticatedRouteTemplates = async (): Promise<string[]> => {
 // The generated route tree types every authenticated `to` path against a
 // `Protected*` route (the `_protected` layout). Deriving the smoke set from
 // that structural marker, rather than a hand-maintained prefix allow-list,
-// means a newly added authenticated top-level section fails this spec until it
-// is either smoked or placed in INTENTIONALLY_NOT_SMOKED.
+// means a newly added authenticated top-level section fails the coverage test
+// until it is either smoked or placed in INTENTIONALLY_NOT_SMOKED.
 const PROTECTED_ROUTE_LINE = /^'(?<path>[^']+)':\s*typeof\s+Protected/u;
 
 const parseAuthenticatedRouteTemplate = (line: string): string | null =>
