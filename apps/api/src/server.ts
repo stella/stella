@@ -398,7 +398,25 @@ const api = new Elysia()
       )
       .use(agentAuthRoute),
   )
-  .use(agentAuthConfirmRoute)
+  .use(
+    // The session-authed confirm endpoint is mounted at the root (its path is
+    // fixed, not `/v1`-prefixed), so it would otherwise escape the shared `api`
+    // limiter. Give this mutating endpoint its own abuse budget.
+    new Elysia()
+      .use(
+        rateLimit({
+          scoping: "scoped",
+          duration: API_RATE_LIMITS.api.duration,
+          max: API_RATE_LIMITS.api.max,
+          ...createRedisRateLimit({
+            failurePolicy: "fail_open_local",
+            scope: "agent-auth-confirm",
+          }),
+          skip: () => env.E2E_DISABLE_AUTH_RATE_LIMIT,
+        }),
+      )
+      .use(agentAuthConfirmRoute),
+  )
   .use(healthRoute)
   .use(verifyRoute)
   .use(hostedUsageWebhookRoute)
