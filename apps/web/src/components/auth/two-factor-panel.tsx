@@ -183,9 +183,12 @@ export function TwoFactorPanel({ className }: TwoFactorPanelProps) {
           <Checkbox
             checked={trustDevice}
             disabled={verifyTwoFactor.isPending}
+            id="two-factor-trust-device"
             onCheckedChange={setTrustDevice}
           />
-          <FieldLabel>{t("auth.twoFactor.trustDevice")}</FieldLabel>
+          <FieldLabel htmlFor="two-factor-trust-device">
+            {t("auth.twoFactor.trustDevice")}
+          </FieldLabel>
         </Field>
 
         <div className="mt-3 flex justify-center">
