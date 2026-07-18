@@ -51,7 +51,12 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
 // (deny-all RLS policy + REVOKE ALL, like `oauth_client`). They
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
-const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set(["agent_registration"]);
+const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  "agent_registration",
+  "agent_trusted_issuer",
+  "agent_delegation",
+  "agent_assertion_replay",
+]);
 
 const SQL_IDENTIFIER_PATTERN =
   /"(?<quoted>[^"]+)"|(?<unquoted>[a-z_][a-z0-9_]*)/giu;

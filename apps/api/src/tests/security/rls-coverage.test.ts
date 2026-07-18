@@ -80,6 +80,11 @@ describe("policy coverage", () => {
     "usage_entitlements",
     "usage_allocations",
     "usage_events",
+    // Control-plane auth table: same trust tier as oauth_client /
+    // agent_registration. It carries organization_id/user_id columns but is
+    // not tenant-scoped — it has a deny-all RLS policy plus REVOKE ALL from
+    // stella, so the org-policy coverage requirement does not apply.
+    "agent_delegation",
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
   const GLOBAL_CASE_LAW_TABLES = [
