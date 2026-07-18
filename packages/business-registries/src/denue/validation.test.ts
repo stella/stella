@@ -36,6 +36,11 @@ describe("state code validation", () => {
     expect(validateStateCode("32")).toBe(true);
   });
 
+  test("accepts the national sentinel via its one-digit form", () => {
+    // "0" normalizes to "00" (national); it is valid but is not a state.
+    expect(validateStateCode("0")).toBe(true);
+  });
+
   test("rejects out-of-range state codes", () => {
     expect(validateStateCode("33")).toBe(false);
     expect(validateStateCode("99")).toBe(false);

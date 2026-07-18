@@ -1,3 +1,5 @@
+import { isRecord } from "../shared/guards.js";
+import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   AresAPIError,
@@ -22,7 +24,6 @@ const RES_URL = `${BASE}/ekonomicke-subjekty-res`;
 const VR_URL = `${BASE}/ekonomicke-subjekty-vr`;
 const SEARCH_URL = `${BASE}/ekonomicke-subjekty/vyhledat`;
 
-const TIMEOUT_MS = 10_000;
 const DEFAULT_SEARCH_LIMIT = 50;
 // ARES documents `pocet` as a plain non-negative integer with no
 // published upper bound. Mirror the brreg/gcis/prh/orsr ceiling so a
@@ -32,9 +33,6 @@ const MAX_SEARCH_LIMIT = 100;
 // ---------------------------------------------------------------------------
 // Internal fetch helpers
 // ---------------------------------------------------------------------------
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isOptionalRecord = (value: unknown): boolean =>
   value === undefined || isRecord(value);
@@ -145,41 +143,33 @@ const handleAresError = async (
 const readAresJson = async <T>(
   response: Response,
   isExpectedShape: (value: unknown) => value is T,
-): Promise<T> => {
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch (error) {
-    throw new AresAPIError({
-      message: "ARES returned a non-JSON response",
-      httpStatus: response.status,
-      cause: error,
-    });
-  }
-
-  if (!isExpectedShape(body)) {
-    throw new AresAPIError({
-      message: "ARES returned an unexpected response shape",
-      httpStatus: response.status,
-    });
-  }
-
-  return body;
-};
+): Promise<T> =>
+  await readRegistryJson({
+    response,
+    isExpectedShape,
+    wrapParseError: (cause) =>
+      new AresAPIError({
+        message: "ARES returned a non-JSON response",
+        httpStatus: response.status,
+        cause,
+      }),
+    wrapShapeError: () =>
+      new AresAPIError({
+        message: "ARES returned an unexpected response shape",
+        httpStatus: response.status,
+      }),
+  });
 
 const aresGet = async <T>(
   url: string,
   isExpectedShape: (value: unknown) => value is T,
 ): Promise<T | null> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json" },
-    });
-  } catch (error) {
-    throw new AresRequestError(url, "ARES request failed", { cause: error });
-  }
+  const response = await performRegistryRequest({
+    url,
+    init: { headers: { Accept: "application/json" } },
+    wrapRequestError: (cause) =>
+      new AresRequestError(url, "ARES request failed", { cause }),
+  });
 
   if (response.status === 404) {
     let body: AresErrorResponse = {};
@@ -211,20 +201,19 @@ const aresPost = async <T>(
   payload: unknown,
   isExpectedShape: (value: unknown) => value is T,
 ): Promise<T> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
+  const response = await performRegistryRequest({
+    url,
+    init: {
       method: "POST",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
-    });
-  } catch (error) {
-    throw new AresRequestError(url, "ARES request failed", { cause: error });
-  }
+    },
+    wrapRequestError: (cause) =>
+      new AresRequestError(url, "ARES request failed", { cause }),
+  });
 
   if (!response.ok) {
     await handleAresError(response, url);

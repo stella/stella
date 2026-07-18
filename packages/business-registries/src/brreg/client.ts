@@ -1,3 +1,5 @@
+import { isRecord } from "../shared/guards.js";
+import { registryFetch } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   BrregAPIError,
@@ -19,13 +21,9 @@ const BASE = "https://data.brreg.no/enhetsregisteret/api";
 const ENHETER_URL = `${BASE}/enheter`;
 const UNDERENHETER_URL = `${BASE}/underenheter`;
 
-const TIMEOUT_MS = 10_000;
 const DEFAULT_SEARCH_LIMIT = 50;
 const MAX_SEARCH_LIMIT = 100;
 const BRREG_RESULT_CAP = 10_000;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isOptionalRecord = (value: unknown): boolean =>
   value === undefined || isRecord(value);
@@ -94,78 +92,58 @@ const parseErrorBody = (value: unknown): BrregErrorResponse => {
   return result;
 };
 
-const readBrregJson = async <T>(
-  response: Response,
-  isExpectedShape: (value: unknown) => value is T,
-): Promise<T> => {
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch (error) {
-    throw new BrregAPIError({
-      message: "Brreg returned a non-JSON response",
-      httpStatus: response.status,
-      cause: error,
-    });
-  }
-
-  if (!isExpectedShape(body)) {
-    throw new BrregAPIError({
-      message: "Brreg returned an unexpected response shape",
-      httpStatus: response.status,
-    });
-  }
-
-  return body;
-};
-
 const brregGet = async <T>(
   url: string,
   isExpectedShape: (value: unknown) => value is T,
-): Promise<T | null> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json" },
-    });
-  } catch (error) {
-    throw new BrregRequestError(url, "Brreg request failed", { cause: error });
-  }
+): Promise<T | null> =>
+  await registryFetch({
+    url,
+    init: { headers: { Accept: "application/json" } },
+    isExpectedShape,
+    wrapRequestError: (cause) =>
+      new BrregRequestError(url, "Brreg request failed", { cause }),
+    wrapParseError: (response, cause) =>
+      new BrregAPIError({
+        message: "Brreg returned a non-JSON response",
+        httpStatus: response.status,
+        cause,
+      }),
+    wrapShapeError: (response) =>
+      new BrregAPIError({
+        message: "Brreg returned an unexpected response shape",
+        httpStatus: response.status,
+      }),
+    onErrorResponse: async (response) => {
+      if (response.status === 404) {
+        return null;
+      }
 
-  if (response.status === 404) {
-    return null;
-  }
+      // 410 Gone — Brreg uses this for entities removed from disclosure
+      // (typically by court order or another legal requirement). The
+      // response body carries an error envelope, not an entity payload,
+      // so we surface "no result" rather than feeding the body through
+      // the entity parser.
+      //
+      // Struck-off / deleted entities — which still belong in the domain
+      // model — come back as `200 OK` with `slettedato` set; the parser
+      // handles those via BrregEntityStatus's "deleted" arm.
+      if (response.status === 410) {
+        return null;
+      }
 
-  // 410 Gone — Brreg uses this for entities removed from disclosure
-  // (typically by court order or another legal requirement). The
-  // response body carries an error envelope, not an entity payload,
-  // so we surface "no result" rather than feeding the body through
-  // the entity parser.
-  //
-  // Struck-off / deleted entities — which still belong in the domain
-  // model — come back as `200 OK` with `slettedato` set; the parser
-  // handles those via BrregEntityStatus's "deleted" arm.
-  if (response.status === 410) {
-    return null;
-  }
-
-  if (!response.ok) {
-    let body: BrregErrorResponse = {};
-    try {
-      body = parseErrorBody(await response.json());
-    } catch {
-      // non-JSON error body
-    }
-    throw new BrregAPIError({
-      message: `Brreg ${response.status}: ${body.feilmelding ?? response.statusText}`,
-      httpStatus: response.status,
-      upstreamMessage: body.feilmelding ?? null,
-    });
-  }
-
-  return readBrregJson(response, isExpectedShape);
-};
+      let body: BrregErrorResponse = {};
+      try {
+        body = parseErrorBody(await response.json());
+      } catch {
+        // non-JSON error body
+      }
+      throw new BrregAPIError({
+        message: `Brreg ${response.status}: ${body.feilmelding ?? response.statusText}`,
+        httpStatus: response.status,
+        upstreamMessage: body.feilmelding ?? null,
+      });
+    },
+  });
 
 // ---------------------------------------------------------------------------
 // Public API

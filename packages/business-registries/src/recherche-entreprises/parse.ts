@@ -1,3 +1,4 @@
+import { trimToNull } from "../shared/strings.js";
 import type {
   RechercheEntreprisesAddress,
   RechercheEntreprisesCompany,
@@ -21,14 +22,6 @@ const ANNUAIRE_BASE = "https://annuaire-entreprises.data.gouv.fr/entreprise/";
 const STATUS_ACTIVE = "A";
 const LEGAL_ENTITY_STATUS_CEASED = "C";
 const ESTABLISHMENT_STATUS_CLOSED = "F";
-
-const trimToNull = (value: string | null | undefined): string | null => {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length === 0 ? null : trimmed;
-};
 
 const buildStreetFromAtoms = (
   raw: RechercheEntreprisesRawEtablissement,

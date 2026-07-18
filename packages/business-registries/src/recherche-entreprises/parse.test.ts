@@ -217,6 +217,44 @@ describe("parseCompany", () => {
   });
 });
 
+describe("tolerates non-string optional fields from upstream", () => {
+  // Class guard: the recherche shape guard only validates `siret` on an
+  // etablissement and `type_dirigeant` on a director; every other optional
+  // field is declared `string | null` but is NOT runtime-checked. The
+  // upstream Etalab API occasionally serves numeric atoms (a bare
+  // `numero_voie: 42`) rather than strings. The parser leans on the shared
+  // `trimToNull`, which must treat those non-strings as absent — the local
+  // helper this consolidated did the same. This pins that tolerance so a
+  // future tightening of the shared helper (throwing on non-strings) is
+  // caught here rather than surfacing as a raw TypeError on a live lookup.
+  //
+  // `JSON.parse` returns `any`, which models the untyped upstream body
+  // exactly (the real client feeds `response.json()` through the same
+  // parser); parsing a raw JSON string keeps the numeric atoms the type
+  // declarations forbid, with no cast.
+  test("numeric address atoms are dropped, not thrown, in parseEstablishment", () => {
+    const raw: RechercheEntreprisesRawEtablissement = JSON.parse(
+      `{"siret":"12345678900011","numero_voie":42,"type_voie":7,` +
+        `"libelle_voie":123,"code_postal":75001,"adresse":99}`,
+    );
+    const establishment = parseEstablishment(raw);
+    expect(establishment.siret).toBe("12345678900011");
+    // Every address atom was numeric → treated as absent → no address.
+    expect(establishment.address).toBeNull();
+  });
+
+  test("a numeric organisation `denomination` skips the director without throwing", () => {
+    const raw: RechercheEntreprisesRawUniteLegale = JSON.parse(
+      `{"siren":"552100554","nom_complet":"EXEMPLE SA",` +
+        `"dirigeants":[{"type_dirigeant":"personne morale","denomination":552}]}`,
+    );
+    const company = parseCompany(raw);
+    expect(company.siren).toBe("552100554");
+    // The organisation director had a non-string name → skipped, not a throw.
+    expect(company.directors).toEqual([]);
+  });
+});
+
 describe("parseSearchEntry", () => {
   test("surfaces siege.adresse as the search-row address", () => {
     const entry = parseSearchEntry({

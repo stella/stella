@@ -19,4 +19,10 @@ describe("clampSearchLimit", () => {
   test("returns the ceiling itself when requested equals the ceiling", () => {
     expect(clampSearchLimit(100, 100)).toBe(100);
   });
+
+  test("clamps a non-finite requested limit down to the minimum", () => {
+    expect(clampSearchLimit(Number.NaN, 100)).toBe(1);
+    expect(clampSearchLimit(Number.POSITIVE_INFINITY, 100)).toBe(100);
+    expect(clampSearchLimit(Number.NEGATIVE_INFINITY, 100)).toBe(1);
+  });
 });

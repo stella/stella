@@ -1,3 +1,5 @@
+import { isRecord } from "../shared/guards.js";
+import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import { PrhAPIError, PrhRequestError, PrhValidationError } from "./errors.js";
 import { parseCompany, parseSearchEntry } from "./parse.js";
@@ -12,14 +14,10 @@ import { normalizeBusinessId, validateBusinessId } from "./validation.js";
 const BASE = "https://avoindata.prh.fi/opendata-ytj-api/v3";
 const COMPANIES_URL = `${BASE}/companies`;
 
-const TIMEOUT_MS = 10_000;
 const DEFAULT_SEARCH_LIMIT = 50;
 // PRH paginates at 100 hits per page; mirror Brreg's clamp so the
 // dispatch layer can pass through any limit safely.
 const MAX_SEARCH_LIMIT = 100;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isOptionalRecord = (value: unknown): boolean =>
   value === undefined || isRecord(value);
@@ -76,15 +74,12 @@ const parseErrorBody = (value: unknown): PrhErrorResponse => {
 };
 
 const prhGet = async (url: string): Promise<PrhCompaniesResponse> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json" },
-    });
-  } catch (error) {
-    throw new PrhRequestError(url, "PRH request failed", { cause: error });
-  }
+  const response = await performRegistryRequest({
+    url,
+    init: { headers: { Accept: "application/json" } },
+    wrapRequestError: (cause) =>
+      new PrhRequestError(url, "PRH request failed", { cause }),
+  });
 
   if (!response.ok) {
     let body: PrhErrorResponse = {};
@@ -101,23 +96,17 @@ const prhGet = async (url: string): Promise<PrhCompaniesResponse> => {
     });
   }
 
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch (error) {
-    throw new PrhRequestError(url, "Failed to parse PRH response JSON", {
-      cause: error,
-    });
-  }
-
-  if (!isPrhCompaniesResponse(body)) {
-    throw new PrhAPIError({
-      message: "PRH returned an unexpected response shape",
-      httpStatus: response.status,
-    });
-  }
-
-  return body;
+  return readRegistryJson({
+    response,
+    isExpectedShape: isPrhCompaniesResponse,
+    wrapParseError: (cause) =>
+      new PrhRequestError(url, "Failed to parse PRH response JSON", { cause }),
+    wrapShapeError: () =>
+      new PrhAPIError({
+        message: "PRH returned an unexpected response shape",
+        httpStatus: response.status,
+      }),
+  });
 };
 
 /**
