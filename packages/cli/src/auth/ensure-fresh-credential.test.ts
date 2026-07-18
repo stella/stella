@@ -3,8 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { readCredentialFile } from "./credential-store.js";
-import type { StoredCredential } from "./credential-store.js";
+import {
+  readCredentialFile,
+  upsertCredential,
+  writeCredentialFile,
+} from "./credential-store.js";
+import type { CredentialFile, StoredCredential } from "./credential-store.js";
 import { ensureFreshCredential } from "./ensure-fresh-credential.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 
@@ -23,6 +27,23 @@ const buildCredential = (
   updatedAt: 0,
   ...overrides,
 });
+
+const EMPTY_FILE: CredentialFile = {
+  credentials: [],
+  defaultOrgByServer: {},
+  version: 1,
+};
+
+/** Seeds `configDir`'s `credentials.json` with `credential`, as a real caller would have loaded it from. */
+const seedCredential = async (
+  configDir: string,
+  credential: StoredCredential,
+): Promise<void> => {
+  await writeCredentialFile(
+    configDir,
+    upsertCredential(EMPTY_FILE, credential),
+  );
+};
 
 /** A mock `/oauth2/token` endpoint whose response depends on the test scenario, plus a request counter. */
 const startMockProvider = (
@@ -73,6 +94,7 @@ describe("ensureFreshCredential", () => {
     );
     try {
       const credential = buildCredential({ expiresAt: Date.now() + 60_000 });
+      await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,
@@ -111,6 +133,7 @@ describe("ensureFreshCredential", () => {
 
     try {
       const credential = buildCredential({ expiresAt: Date.now() - 1000 });
+      await seedCredential(configDir, credential);
       const now = Date.now();
       const result = await ensureFreshCredential({
         configDir,
@@ -145,6 +168,7 @@ describe("ensureFreshCredential", () => {
 
     try {
       const credential = buildCredential({ expiresAt: Date.now() - 1000 });
+      await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,
@@ -170,6 +194,7 @@ describe("ensureFreshCredential", () => {
         expiresAt: Date.now() - 1000,
         refreshToken: undefined,
       });
+      await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,

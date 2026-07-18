@@ -96,6 +96,13 @@ export const resolveAccessToken = async ({
     now,
   });
   if (Result.isError(fresh)) {
+    // `ensureFreshCredential` reports this exact tag when a concurrent
+    // `auth logout` removed the credential while the exchange was in
+    // flight: not a failure to refresh, just "no longer signed in," so this
+    // command sees the same outcome as if it had never found a credential.
+    if (fresh.error._tag === "CredentialNotFoundError") {
+      return { status: "unauthenticated" };
+    }
     return { status: "refresh-failed", error: fresh.error };
   }
   return { status: "ok", token: fresh.value.accessToken };

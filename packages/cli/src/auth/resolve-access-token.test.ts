@@ -5,6 +5,7 @@ import path from "node:path";
 
 import {
   readCredentialFile,
+  removeCredential,
   upsertCredential,
   writeCredentialFile,
 } from "./credential-store.js";
@@ -370,6 +371,71 @@ describe("resolveAccessToken", () => {
           (stored) => stored.serverUrl === otherServerUrl,
         )?.accessToken,
       ).toBe("other-exchange-token");
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("does not resurrect a credential a concurrent auth logout removes mid-exchange", async () => {
+    let tokenRequestCount = 0;
+    const provider = startMockProvider(async (body) => {
+      tokenRequestCount += 1;
+      if (
+        body.get("grant_type") !== "refresh_token" ||
+        body.get("refresh_token") !== "old-refresh-token"
+      ) {
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      }
+      // Simulate a concurrent `stella auth logout` removing this exact
+      // credential while the token-endpoint exchange (which still succeeds
+      // at the network level) is in flight. Reads the target's own
+      // serverUrl/orgId back off disk rather than closing over `provider`
+      // (not yet assigned while this callback is being constructed).
+      const concurrent = await readCredentialFile(configDir);
+      const target = concurrent.credentials.at(0);
+      if (target === undefined) {
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      }
+      await writeCredentialFile(
+        configDir,
+        removeCredential(concurrent, target.serverUrl, target.orgId),
+      );
+      return Response.json({
+        access_token: "resurrected-access-token",
+        expires_in: 900,
+        refresh_token: "resurrected-refresh-token",
+        scope: "openid stella:read",
+        token_type: "Bearer",
+      });
+    });
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      // Logout wins: the exchange happened, but the credential it would
+      // have refreshed is gone, so this resolves the same as "never signed
+      // in" rather than handing back the resurrected token.
+      expect(result.status).toBe("unauthenticated");
+      expect(tokenRequestCount).toBe(1);
+
+      // The logged-out credential must not reappear on disk, and
+      // specifically not carrying the token from the (already-in-flight)
+      // exchange that should never have been written back.
+      const persisted = await readCredentialFile(configDir);
+      expect(
+        persisted.credentials.find(
+          (stored) =>
+            stored.serverUrl === provider.serverUrl && stored.orgId === "org-1",
+        ),
+      ).toBeUndefined();
     } finally {
       provider.close();
     }

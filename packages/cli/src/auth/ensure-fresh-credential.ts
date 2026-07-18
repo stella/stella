@@ -13,12 +13,13 @@ import { Result } from "better-result";
 
 import { getMcpResourceUrl } from "./constants.js";
 import {
+  findCredentialByOrgId,
   readCredentialFile,
   upsertCredential,
   writeCredentialFile,
 } from "./credential-store.js";
 import type { StoredCredential } from "./credential-store.js";
-import { NoRefreshTokenError } from "./errors.js";
+import { CredentialNotFoundError, NoRefreshTokenError } from "./errors.js";
 import type { CliAuthError } from "./errors.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 import { refreshAccessToken } from "./token-exchange.js";
@@ -102,6 +103,28 @@ export const ensureFreshCredential = async (
   // process can make it without a lock (full read-modify-write atomicity is
   // a separate, tracked follow-up).
   const latestCredentialFile = await readCredentialFile(input.configDir);
+
+  // The exchange itself doesn't prove this exact (serverUrl, orgId)
+  // credential is still meant to exist: a concurrent `stella auth logout`
+  // may have removed it while the refresh request was in flight. Writing
+  // the refreshed token back unconditionally would resurrect a credential
+  // the user explicitly signed out of — fail the same way as "never had a
+  // credential" instead of reviving it.
+  const stillPresent = findCredentialByOrgId(
+    latestCredentialFile,
+    input.credential.serverUrl,
+    input.credential.orgId,
+  );
+  if (stillPresent === undefined) {
+    return Result.err(
+      new CredentialNotFoundError({
+        message: `Not signed in to ${input.credential.serverUrl}. Run \`stella auth login\`.`,
+        org: input.credential.orgId,
+        serverUrl: input.credential.serverUrl,
+      }),
+    );
+  }
+
   await writeCredentialFile(
     input.configDir,
     upsertCredential(latestCredentialFile, updated),
