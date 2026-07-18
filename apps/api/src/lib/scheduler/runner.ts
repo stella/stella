@@ -596,11 +596,17 @@ type ResolveRunOutcomeOptions = {
   timeoutError: SchedulerJobTimeoutError | undefined;
 };
 
-// Single-homed post-race classification. Precedence matters: the ceiling flag
-// wins over the abort state (the ceiling aborts the controller itself), and both
-// win over the race outcome, because a fulfilled or rejected race is a zombie
-// result once the ceiling has fired or the parent has aborted. Only a race that
-// fulfilled with neither condition set is a genuine success.
+// Single-homed post-race classification, in strict precedence:
+//   1. the ceiling fired  -> timeout failure: the result is a zombie, the lease
+//      was already released, and the job must be rescheduled.
+//   2. the race fulfilled  -> success, even if the parent signal aborted
+//      mid-flight. A finished unit of work is recorded once; re-running it (by
+//      skipping and leaving nextRunAt due) would duplicate side effects, which
+//      is exactly the idempotency bug this ceiling exists to prevent. Recording
+//      a real completion is always safe during graceful shutdown.
+//   3. the race rejected while the controller was aborted -> skip: the task did
+//      not finish, it bailed on the abort, so leave it due to run again.
+//   4. the race rejected on its own -> failure.
 const resolveRunOutcome = async ({
   aborted,
   db,
@@ -638,37 +644,37 @@ const resolveRunOutcome = async ({
     return "failed";
   }
 
+  if (!raceRejected) {
+    await finishRunSuccess({ db, job, leaseToken, runId, startedAt });
+    return "success";
+  }
+
   if (aborted) {
     await finishRunSkipped({ db, job, leaseToken, runId, startedAt });
     return "skipped";
   }
 
-  if (raceRejected) {
-    captureError(raceError, {
-      schedulerJobId: job.id,
-      schedulerRunId: runId,
-      schedulerTask: job.task,
-    });
-    logger.error("scheduler.job_failed", {
-      "scheduler.job_id": job.id,
-      "scheduler.run_id": runId,
-      "scheduler.runner_id": runnerId,
-      "scheduler.task": job.task,
-      "error.type": errorTag(raceError),
-    });
-    await finishRunFailure({
-      db,
-      error: raceError,
-      job,
-      leaseToken,
-      runId,
-      startedAt,
-    });
-    return "failed";
-  }
-
-  await finishRunSuccess({ db, job, leaseToken, runId, startedAt });
-  return "success";
+  captureError(raceError, {
+    schedulerJobId: job.id,
+    schedulerRunId: runId,
+    schedulerTask: job.task,
+  });
+  logger.error("scheduler.job_failed", {
+    "scheduler.job_id": job.id,
+    "scheduler.run_id": runId,
+    "scheduler.runner_id": runnerId,
+    "scheduler.task": job.task,
+    "error.type": errorTag(raceError),
+  });
+  await finishRunFailure({
+    db,
+    error: raceError,
+    job,
+    leaseToken,
+    runId,
+    startedAt,
+  });
+  return "failed";
 };
 
 type CreateRunOptions = {

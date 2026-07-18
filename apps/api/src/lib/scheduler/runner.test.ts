@@ -400,6 +400,59 @@ describe("per-job runtime ceiling", () => {
     expect(run.error).toBe("SchedulerJobTimeoutError");
   });
 
+  test("a signal-ignoring task that completes while the parent aborts records success", async () => {
+    await seedJob({ id: "ignores-abort.job", task: "test.ignores-abort" });
+
+    const parentController = new AbortController();
+    let startTask = () => {};
+    const started = new Promise<void>((resolve) => {
+      startTask = resolve;
+    });
+    let releaseTask = () => {};
+    // Ignores its signal entirely, mirroring an await that never threads the
+    // AbortSignal (e.g. a queue.add during graceful shutdown).
+    const registry = registryOf("test.ignores-abort", async () => {
+      startTask();
+      await new Promise<void>((resolve) => {
+        releaseTask = resolve;
+      });
+    });
+
+    const runPromise = runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      maxRuntimeMs: 60_000,
+      registry,
+      runnerId: "runner-a",
+      signal: parentController.signal,
+    });
+
+    await started;
+    // The parent aborts mid-run; the task ignores it and finishes its work.
+    parentController.abort();
+    releaseTask();
+
+    const result = await runPromise;
+
+    // The finished unit of work is recorded, not skipped-and-left-due (which
+    // would re-dispatch the completed occurrence after a restart or later poll).
+    expect(result).toMatchObject({
+      acquired: 1,
+      failed: 0,
+      skipped: 0,
+      succeeded: 1,
+    });
+
+    const job = await readJob("ignores-abort.job");
+    expect(job.lastSuccessAt).not.toBeNull();
+    expect(job.lastError).toBeNull();
+    expect(job.lockedBy).toBeNull();
+    expect(job.nextRunAt.getTime()).toBeGreaterThan(PAST.getTime());
+
+    const run = await readLatestRun("ignores-abort.job");
+    expect(run.status).toBe("success");
+  });
+
   test("a parent abort during run creation skips the job without starting the task", async () => {
     await seedJob({ id: "abort-on-create.job", task: "test.tracked" });
 
