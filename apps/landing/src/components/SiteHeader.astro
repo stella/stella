@@ -2,7 +2,7 @@
 import ThemeToggle from "./ThemeToggle.astro";
 import MainNav from "./MainNav.astro";
 import LanguageSwitcher from "./LanguageSwitcher.astro";
-import GitHubIcon from "./GitHubIcon.astro";
+import { GitHubLogoIcon } from "@stll/ui/components/brand-icons";
 import MobileNav from "./MobileNav.astro";
 import { getTranslations } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
@@ -54,7 +54,7 @@ const githubUrl = "https://github.com/stella/stella";
           rel="noopener noreferrer"
           aria-label="stella on GitHub"
         >
-          <GitHubIcon class="h-5 w-5" />
+          <GitHubLogoIcon className="h-5 w-5" />
         </a>
       </div>
 
