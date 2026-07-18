@@ -15,20 +15,32 @@ import { resolveAccessToken } from "./resolve-access-token.js";
  * A mock stella server exposing both the RFC 8414 metadata document and the
  * `/oauth2/token` endpoint, plus a total request counter so a test can assert
  * the offline-instant fast path made no network call at all.
+ *
+ * `onDiscovery`, when given, runs while the `.well-known` request is being
+ * answered — a hook for simulating a concurrent `stella` process (e.g. a
+ * parallel `auth login`) that writes to `credentials.json` during the window
+ * `resolveAccessToken` spends awaiting metadata discovery.
  */
 const startMockProvider = (
   handleTokenRequest: (body: URLSearchParams) => Response,
+  onDiscovery?: () => Promise<void>,
 ) => {
   let requestCount = 0;
   const server = Bun.serve({
+    // Derives the endpoint URLs from the incoming request's own origin
+    // rather than `server.port` — referencing `server` from inside its own
+    // `fetch` handler is a circular initializer TypeScript can't type
+    // (`server`'s type depends on `fetch`'s type, which would depend on
+    // `server`). `request.url` already carries the correct host:port.
     fetch: async (request) => {
       requestCount += 1;
       const url = new URL(request.url);
       if (url.pathname === "/.well-known/oauth-authorization-server") {
+        await onDiscovery?.();
         return Response.json({
-          authorization_endpoint: `http://127.0.0.1:${server.port}/oauth2/authorize`,
-          issuer: `http://127.0.0.1:${server.port}`,
-          token_endpoint: `http://127.0.0.1:${server.port}/oauth2/token`,
+          authorization_endpoint: `${url.origin}/oauth2/authorize`,
+          issuer: url.origin,
+          token_endpoint: `${url.origin}/oauth2/token`,
         });
       }
       if (url.pathname === "/oauth2/token") {
@@ -224,6 +236,71 @@ describe("resolveAccessToken", () => {
 
       expect(result.status).toBe("unauthenticated");
       expect(provider.getRequestCount()).toBe(0);
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("does not clobber a credential a concurrent process writes while metadata discovery is in flight", async () => {
+    const otherServerUrl = "https://other.example";
+    let discoveryRequestCount = 0;
+    const provider = startMockProvider(
+      (body) =>
+        body.get("grant_type") === "refresh_token" &&
+        body.get("refresh_token") === "old-refresh-token"
+          ? Response.json({
+              access_token: "new-access-token",
+              expires_in: 900,
+              refresh_token: "new-refresh-token",
+              scope: "openid stella:read",
+              token_type: "Bearer",
+            })
+          : Response.json({ error: "invalid_grant" }, { status: 400 }),
+      async () => {
+        discoveryRequestCount += 1;
+        // Simulate a concurrent `stella` process (e.g. `auth login` to a
+        // different server) finishing a write to `credentials.json` while
+        // this command's metadata discovery request is still in flight.
+        const concurrent = await readCredentialFile(configDir);
+        await writeCredentialFile(
+          configDir,
+          upsertCredential(
+            concurrent,
+            buildCredential(otherServerUrl, {
+              accessToken: "other-server-token",
+            }),
+          ),
+        );
+      },
+    );
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      expect(result.status).toBe("ok");
+      if (result.status === "ok") {
+        expect(result.token).toBe("new-access-token");
+      }
+      expect(discoveryRequestCount).toBe(1);
+
+      // The concurrently-written credential for the other server must
+      // survive this command's refresh write-back rather than being
+      // silently dropped by a stale pre-discovery snapshot of
+      // `credentials.json`.
+      const persisted = await readCredentialFile(configDir);
+      expect(
+        persisted.credentials.find(
+          (stored) => stored.serverUrl === otherServerUrl,
+        )?.accessToken,
+      ).toBe("other-server-token");
     } finally {
       provider.close();
     }

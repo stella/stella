@@ -116,6 +116,12 @@ const resolvePreamble = async (): Promise<{
   // still applies, and the startup registry refresh below is skipped rather
   // than firing a doomed request that 401-warns on a stale token.
   const resolved = await resolveAccessToken({ configDir, serverUrl });
+  if (resolved.status === "refresh-failed") {
+    // Surface the specific reason (e.g. "no refresh token, run `stella auth
+    // login` again") instead of letting the command path's generic "Not
+    // signed in" message stand in for it.
+    process.stderr.write(`${resolved.error.message}\n`);
+  }
   const token = resolved.status === "ok" ? resolved.token : undefined;
   return { configDir, serverUrl, token };
 };

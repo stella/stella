@@ -75,10 +75,25 @@ export const resolveAccessToken = async ({
     return { status: "refresh-failed", error: metadata.error };
   }
 
+  // Re-read right before the refresh/write rather than reusing the snapshot
+  // from the top of this function: metadata discovery is a network round
+  // trip, and another `stella` process (a concurrent command, or `auth
+  // login`/`logout` for a different server) may have written to
+  // `credentials.json` while it was in flight. Refreshing off a stale
+  // in-memory copy would both retry with a possibly-already-rotated refresh
+  // token and, on write, silently clobber that concurrent update —
+  // `upsertCredential` merges into whatever `credentialFile` it's handed, so
+  // a stale handle here becomes data loss on disk, not just a stale read.
+  const freshCredentialFile = await readCredentialFile(configDir);
+  const freshCredential = findDefaultCredential(freshCredentialFile, serverUrl);
+  if (freshCredential === undefined) {
+    return { status: "unauthenticated" };
+  }
+
   const fresh = await ensureFreshCredential({
     configDir,
-    credential,
-    credentialFile,
+    credential: freshCredential,
+    credentialFile: freshCredentialFile,
     metadata: metadata.value,
     now,
   });
