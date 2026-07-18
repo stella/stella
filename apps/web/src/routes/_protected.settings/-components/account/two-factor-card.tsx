@@ -150,10 +150,15 @@ const extractBackupCodes = (data: unknown): string[] => {
  * surfaced by the auth client's shared `429` handler, and any other failure
  * (e.g. a `500`) shows its converted message instead of a misleading
  * invalid-code toast.
+ *
+ * Takes the already-resolved `invalidCodeMessage` string rather than the
+ * `useTranslations` function: typing a `t` parameter as
+ * `ReturnType<typeof useTranslations>` forces the full translation-key union to
+ * instantiate at every call site here, which trips TS2590 (union too complex).
  */
 const showManagementMutationError = (
   error: Parameters<typeof toAuthClientError>[0],
-  t: ReturnType<typeof useTranslations>,
+  invalidCodeMessage: string,
 ): void => {
   if (error.status === HTTP_TOO_MANY_REQUESTS) {
     return;
@@ -161,7 +166,7 @@ const showManagementMutationError = (
   stellaToast.add({
     title:
       error.status === HTTP_BAD_REQUEST
-        ? t("auth.twoFactor.invalidCode")
+        ? invalidCodeMessage
         : toAuthClientError(error).message,
     type: "error",
   });
@@ -506,7 +511,7 @@ const DisableTwoFactorDialog = ({
       });
 
       if (error) {
-        showManagementMutationError(error, t);
+        showManagementMutationError(error, t("auth.twoFactor.invalidCode"));
         throw toAuthClientError(error);
       }
     },
@@ -656,7 +661,7 @@ const RegenerateBackupCodesDialog = ({
       );
 
       if (error) {
-        showManagementMutationError(error, t);
+        showManagementMutationError(error, t("auth.twoFactor.invalidCode"));
         throw toAuthClientError(error);
       }
 
