@@ -5,6 +5,7 @@ import {
   InfoSoudAPIError,
   InfoSoudParseError,
   InfoSoudPragueCourtResolutionError,
+  InfoSoudRequestError,
 } from "./errors.js";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
@@ -565,9 +566,135 @@ describe("InfoSoudClient", () => {
 
     expect(fetchStartedAt).toHaveLength(2);
     const [firstStart, secondStart] = fetchStartedAt;
+    if (firstStart === undefined || secondStart === undefined) {
+      throw new Error("Expected two fetch timestamps");
+    }
     // setTimeout never fires early, so the gap is a firm lower bound; allow a
     // small slack for timer-resolution rounding.
     expect(secondStart - firstStart).toBeGreaterThanOrEqual(delayMs - 5);
+  });
+
+  test("a queued caller aborted mid-wait does not spend a politeness slot", async () => {
+    const delayMs = 40;
+    const fetchStartedAt: number[] = [];
+
+    const client = new InfoSoudClient({
+      cache: false,
+      delayMs,
+      fetch: async () => {
+        fetchStartedAt.push(Date.now());
+        return jsonResponse(createCaseSearchResponse());
+      },
+    });
+
+    const abortController = new AbortController();
+
+    // First call runs immediately; the second and third queue behind it. The
+    // second is aborted while queued, so it must reject without fetching and
+    // without advancing the politeness clock, leaving the third paced from the
+    // first request's completion (one gap) rather than two.
+    const first = client.searchCase({
+      courtCode: "OSSCEDC",
+      spisZn: "1 T 64/2024",
+    });
+    const aborted = client.searchCase({
+      courtCode: "OSSCEDC",
+      signal: abortController.signal,
+      spisZn: "2 T 65/2024",
+    });
+    const third = client.searchCase({
+      courtCode: "OSSCEDC",
+      spisZn: "3 T 66/2024",
+    });
+    abortController.abort();
+
+    let abortError: unknown;
+    try {
+      await aborted;
+    } catch (error) {
+      abortError = error;
+    }
+    expect(abortError).toBeInstanceOf(InfoSoudRequestError);
+
+    await Promise.all([first, third]);
+
+    // The aborted caller never reached the network.
+    expect(fetchStartedAt).toHaveLength(2);
+    const [firstStart, thirdStart] = fetchStartedAt;
+    if (firstStart === undefined || thirdStart === undefined) {
+      throw new Error("Expected two fetch timestamps");
+    }
+    // One politeness gap from the first request, not two: the aborted caller
+    // did not push the third caller back by an extra delay.
+    expect(thirdStart - firstStart).toBeGreaterThanOrEqual(delayMs - 5);
+    expect(thirdStart - firstStart).toBeLessThan(delayMs * 2);
+  });
+
+  test("a pre-aborted signal performs no request at all", async () => {
+    let fetchCount = 0;
+
+    const client = new InfoSoudClient({
+      cache: false,
+      delayMs: 0,
+      fetch: async () => {
+        fetchCount += 1;
+        return jsonResponse(createCaseSearchResponse());
+      },
+    });
+
+    const abortController = new AbortController();
+    abortController.abort();
+
+    let abortError: unknown;
+    try {
+      await client.searchCase({
+        courtCode: "OSSCEDC",
+        signal: abortController.signal,
+        spisZn: "1 T 64/2024",
+      });
+    } catch (error) {
+      abortError = error;
+    }
+    expect(abortError).toBeInstanceOf(InfoSoudRequestError);
+
+    expect(fetchCount).toBe(0);
+  });
+
+  test("an aborted queued caller does not poison the shared throttle chain", async () => {
+    let fetchCount = 0;
+
+    const client = new InfoSoudClient({
+      cache: false,
+      delayMs: 0,
+      fetch: async () => {
+        fetchCount += 1;
+        return jsonResponse(createCaseSearchResponse());
+      },
+    });
+
+    const abortController = new AbortController();
+    abortController.abort();
+
+    let abortError: unknown;
+    try {
+      await client.searchCase({
+        courtCode: "OSSCEDC",
+        signal: abortController.signal,
+        spisZn: "1 T 64/2024",
+      });
+    } catch (error) {
+      abortError = error;
+    }
+    expect(abortError).toBeInstanceOf(InfoSoudRequestError);
+
+    // A subsequent caller behind the aborted one still runs to completion.
+    const result = await client.searchCase({
+      courtCode: "OSSCEDC",
+      spisZn: "2 T 65/2024",
+    });
+
+    expect(result.bcVec).toBe(64);
+    expect(fetchCount).toBe(1);
   });
 
   test("raises a typed Prague resolution error when no district matches", async () => {

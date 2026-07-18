@@ -368,13 +368,29 @@ const parseErrorMessage = (
   return `InfoSoud request failed with ${status} for ${path}`;
 };
 
-const delay = async (ms: number): Promise<void> => {
-  if (ms <= 0) {
+const delay = async (ms: number, signal?: AbortSignal): Promise<void> => {
+  if (ms <= 0 || signal?.aborted) {
     return;
   }
 
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
+  await new Promise<void>((resolve) => {
+    // Wake early on abort so a cancelled caller does not hold the throttle
+    // chain for the full politeness gap; the throttle re-checks the signal
+    // once this resolves and rejects the caller. The timer and the abort
+    // listener are mutually exclusive (abort clears the timer), so the wait
+    // settles exactly once.
+    const finish = (): void => {
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        finish();
+      },
+      { once: true },
+    );
   });
 };
 
@@ -839,16 +855,19 @@ export class InfoSoudClient {
       cacheKey,
       cacheTtlMs,
       deserialize: parse,
-      load: () =>
-        this.#throttle(async () => {
-          const url = new URL(`${this.#baseUrl}${path}`);
-          if (query) {
-            url.search = query.toString();
-          }
+      load: async () => {
+        // Normalize both transport failures and a throttle-level abort (the
+        // throttle can reject before the task runs when the caller's signal is
+        // already aborted) into a single InfoSoudRequestError shape.
+        try {
+          return await this.#throttle(async () => {
+            const url = new URL(`${this.#baseUrl}${path}`);
+            if (query) {
+              url.search = query.toString();
+            }
 
-          const timeoutSignal = withTimeoutSignal(signal, this.#timeoutMs);
+            const timeoutSignal = withTimeoutSignal(signal, this.#timeoutMs);
 
-          try {
             const response = await this.#fetchImpl(url, {
               ...(body ? { body: JSON.stringify(body) } : {}),
               headers: {
@@ -872,20 +891,21 @@ export class InfoSoudClient {
             }
 
             return parse(responseBody);
-          } catch (error) {
-            if (
-              error instanceof InfoSoudAPIError ||
-              error instanceof InfoSoudParseError ||
-              error instanceof InfoSoudRequestError
-            ) {
-              throw error;
-            }
-
-            throw new InfoSoudRequestError(path, `Request failed for ${path}`, {
-              cause: error,
-            });
+          }, signal);
+        } catch (error) {
+          if (
+            error instanceof InfoSoudAPIError ||
+            error instanceof InfoSoudParseError ||
+            error instanceof InfoSoudRequestError
+          ) {
+            throw error;
           }
-        }),
+
+          throw new InfoSoudRequestError(path, `Request failed for ${path}`, {
+            cause: error,
+          });
+        }
+      },
       signal,
     });
     return result;
@@ -907,11 +927,24 @@ export class InfoSoudClient {
    * for the previous request to finish, then honours the politeness interval
    * measured from that request's completion, then runs. Two concurrent calls
    * on one instance are therefore paced apart instead of firing together.
+   *
+   * The caller's AbortSignal is honoured while queued. If it aborts before the
+   * task starts (either before or during the politeness wait), the caller
+   * rejects with the signal's abort reason without running the task and
+   * without advancing #lastRequestFinishedAt, so a cancelled caller never
+   * spends a politeness slot or an upstream request, and the next waiter is
+   * still paced from the previous *completed* request rather than the skipped
+   * one. An abort during the task is left to the task's own signal handling.
    */
-  #throttle<T>(task: () => Promise<T>): Promise<T> {
+  async #throttle<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const run = this.#throttleChain.then(async () => {
+      signal?.throwIfAborted();
+
       const elapsed = Date.now() - this.#lastRequestFinishedAt;
-      await delay(this.#delayMs - elapsed);
+      await delay(this.#delayMs - elapsed, signal);
+
+      signal?.throwIfAborted();
+
       try {
         return await task();
       } finally {
@@ -919,13 +952,13 @@ export class InfoSoudClient {
       }
     });
 
-    // Keep the chain alive even if a request rejects, so one failure cannot
-    // wedge every queued caller behind it.
+    // Keep the chain alive even if a request rejects or a queued caller is
+    // aborted, so one failure cannot wedge every queued caller behind it.
     this.#throttleChain = run.then(
       () => undefined,
       () => undefined,
     );
-    return run;
+    return await run;
   }
 
   #buildRequestCacheKey({
