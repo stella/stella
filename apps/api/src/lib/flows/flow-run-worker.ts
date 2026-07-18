@@ -1,9 +1,10 @@
 import { Worker } from "bullmq";
-import { inArray } from "drizzle-orm";
+import { and, asc, gt, inArray } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
+import type { SafeId } from "@/api/lib/branded-types";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   executeFlowStep,
@@ -35,8 +36,10 @@ const MAX_STALLED_COUNT = 2;
 // hung job "active" and blocking follow-up steps.
 const FLOW_STEP_JOB_TIMEOUT_MS = 4 * 60 * 1000;
 
-// Upper bound on the boot-time orphan re-enqueue scan.
-const ORPHAN_SCAN_LIMIT = 1000;
+// Batch size for the boot-time orphan re-enqueue scan. The scan keyset-paginates
+// through every pending/running run rather than stopping at the first batch, so a
+// backlog larger than one batch is still fully recovered.
+const ORPHAN_SCAN_BATCH_SIZE = 1000;
 
 /**
  * Initialize the BullMQ worker for flow runs. Call once at API startup
@@ -126,24 +129,54 @@ export const initFlowRunWorker = (): Worker<FlowStepJobData> => {
   return worker;
 };
 
-const reconcileOrphanedFlowRuns = async (): Promise<void> => {
-  const rows = await rootDb
-    .select({
-      id: flowRuns.id,
-      currentStepIndex: flowRuns.currentStepIndex,
-    })
-    .from(flowRuns)
-    .where(inArray(flowRuns.status, ["pending", "running"]))
-    .limit(ORPHAN_SCAN_LIMIT);
+// Keyset-paginate by id through every `pending`/`running` run and re-enqueue its
+// current step. Re-adding the step does not change the row's status, so a plain
+// `LIMIT` scan would re-select the same head of the backlog on every restart and
+// never reach the tail; ordering by id and advancing a cursor visits each run
+// exactly once until the backlog is drained. `batchSize` is injectable so tests
+// can exercise the multi-batch path without seeding thousands of rows.
+export const reconcileOrphanedFlowRuns = async (
+  batchSize: number = ORPHAN_SCAN_BATCH_SIZE,
+): Promise<void> => {
+  let cursor: SafeId<"flowRun"> | null = null;
+  let reconciled = 0;
 
-  if (rows.length === 0) {
-    return;
+  for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- keyset pages are inherently sequential: each query needs the previous batch's last id as its cursor
+    const batch = await rootDb
+      .select({
+        id: flowRuns.id,
+        currentStepIndex: flowRuns.currentStepIndex,
+      })
+      .from(flowRuns)
+      .where(
+        and(
+          inArray(flowRuns.status, ["pending", "running"]),
+          cursor === null ? undefined : gt(flowRuns.id, cursor),
+        ),
+      )
+      .orderBy(asc(flowRuns.id))
+      .limit(batchSize);
+
+    if (batch.length === 0) {
+      break;
+    }
+
+    for (const row of batch) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential re-enqueue bounds concurrent queue writes; the batch is capped at batchSize
+      await enqueueFlowStep({ runId: row.id, stepIndex: row.currentStepIndex });
+    }
+
+    reconciled += batch.length;
+
+    const lastRow = batch.at(-1);
+    if (lastRow === undefined || batch.length < batchSize) {
+      break;
+    }
+    cursor = lastRow.id;
   }
 
-  for (const row of rows) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential re-enqueue bounds concurrent queue writes; the set is capped at ORPHAN_SCAN_LIMIT
-    await enqueueFlowStep({ runId: row.id, stepIndex: row.currentStepIndex });
+  if (reconciled > 0) {
+    logger.info("flow.orphans_reconciled", { count: String(reconciled) });
   }
-
-  logger.info("flow.orphans_reconciled", { count: String(rows.length) });
 };
