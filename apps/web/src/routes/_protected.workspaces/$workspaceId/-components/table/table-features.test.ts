@@ -1,26 +1,22 @@
 import { constructTable, createColumnHelper } from "@tanstack/table-core";
-import { storeReactivityBindings } from "@tanstack/table-core/store-reactivity-bindings";
 import { describe, expect, test } from "bun:test";
 
-import { workspaceTableFeatures } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-features";
+import {
+  workspaceTableFeatures,
+  type WorkspaceTableFeatures,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-features";
 
-const testFeatures = {
-  coreReactivityFeature: storeReactivityBindings(),
-  ...workspaceTableFeatures,
-};
-
-type TestFeatures = typeof testFeatures;
 type TestRow = {
   id: string;
   name: string;
 };
 
-const columnHelper = createColumnHelper<TestFeatures, TestRow>();
+const columnHelper = createColumnHelper<WorkspaceTableFeatures, TestRow>();
 
 describe("workspace table v9 feature set", () => {
   test("keeps only the APIs the grid render path uses", () => {
     const table = constructTable({
-      features: testFeatures,
+      features: workspaceTableFeatures,
       data: [{ id: "row-a", name: "Alpha" }],
       columns: columnHelper.columns([
         columnHelper.accessor("name", { header: "Name" }),
