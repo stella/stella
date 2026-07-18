@@ -144,8 +144,11 @@ const FlowExampleCard = ({
   exampleKey: FlowExampleKey;
   onSelect: () => void;
 }) => {
-  const t = useTranslations();
-  const example = buildFlowExample(exampleKey, t);
+  // Scoped to `flows.examples` to match the relative keys the example builders
+  // request (e.g. `ndaIntake.name`); the root translator would look those up as
+  // top-level keys and miss, rendering raw key output on the empty-state cards.
+  const tExamples = useTranslations("flows.examples");
+  const example = buildFlowExample(exampleKey, tExamples);
 
   return (
     <button
