@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { desktopEditSessions, entityVersions } from "@/api/db/schema";
+import { desktopEditSessions, entityVersions, fields } from "@/api/db/schema";
 import {
   decodeVersionCursor,
   encodeVersionCursor,
@@ -182,17 +182,32 @@ const readVersionsHandler = async function* ({
 
       const userMap = new Map(authorUsers.map((u) => [u.id, u]));
 
-      // Fetch file fields for this page's versions
-      const versionFields = await tx.query.fields.findMany({
-        where: { entityVersionId: { in: pageVersionIds } },
-        limit: LIMITS.versionFieldsScanLimit,
-        columns: {
-          id: true,
-          entityVersionId: true,
-          propertyId: true,
-          content: true,
-        },
-      });
+      // Fetch file fields for this page's versions, joined to entity_versions
+      // and filtered to live (non-tombstoned) versions in the same query. The
+      // pageVersionIds already come from the deletedAt-filtered list above, but
+      // pinning the fields read to a live version too closes the same-tx window
+      // where a version tombstoned mid-request could still surface its field
+      // content here.
+      const versionFields = await tx
+        .select({
+          id: fields.id,
+          entityVersionId: fields.entityVersionId,
+          propertyId: fields.propertyId,
+          content: fields.content,
+        })
+        .from(fields)
+        .innerJoin(
+          entityVersions,
+          eq(entityVersions.id, fields.entityVersionId),
+        )
+        .where(
+          and(
+            inArray(fields.entityVersionId, pageVersionIds),
+            eq(fields.workspaceId, workspaceId),
+            isNull(entityVersions.deletedAt),
+          ),
+        )
+        .limit(LIMITS.versionFieldsScanLimit);
 
       return {
         kind: "ok" as const,

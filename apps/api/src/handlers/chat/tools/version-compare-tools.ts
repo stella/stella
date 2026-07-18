@@ -136,6 +136,11 @@ const resolveVersionDocx = async (
   filePropertyId: SafeId<"property">,
   label: string,
 ): Promise<ResolvedVersionDocx> => {
+  // Read the version and its active file field in one tombstone-checked query.
+  // Loading the field separately (keyed only by entityVersionId + propertyId)
+  // after the version's `deletedAt IS NULL` check left a TOCTOU window: a
+  // tombstone landing between the two reads would still hand a withdrawn
+  // version's DOCX to the AI diff.
   const version = await safeDb((tx) =>
     tx.query.entityVersions.findFirst({
       where: {
@@ -145,6 +150,7 @@ const resolveVersionDocx = async (
         deletedAt: { isNull: true },
       },
       columns: { entityId: true, workspaceId: true },
+      with: { fields: { columns: { content: true, propertyId: true } } },
     }),
   );
 
@@ -160,23 +166,11 @@ const resolveVersionDocx = async (
     });
   }
 
-  const field = await safeDb((tx) =>
-    tx.query.fields.findFirst({
-      where: {
-        entityVersionId: { eq: versionId },
-        propertyId: { eq: filePropertyId },
-      },
-      columns: { content: true },
-    }),
+  const field = version.value.fields.find(
+    (candidate) => candidate.propertyId === filePropertyId,
   );
-  if (Result.isError(field)) {
-    throw new ChatToolError({
-      message: `Failed to load the ${label} version's active file field.`,
-      cause: field.error,
-    });
-  }
 
-  if (!field.value || !isDocxFileContent(field.value.content)) {
+  if (!field || !isDocxFileContent(field.content)) {
     throw new ChatToolError({
       message: `The ${label} version does not contain the active DOCX file.`,
     });
@@ -185,7 +179,7 @@ const resolveVersionDocx = async (
   return {
     entityId: version.value.entityId,
     workspaceId: version.value.workspaceId,
-    fileId: field.value.content.id,
+    fileId: field.content.id,
   };
 };
 

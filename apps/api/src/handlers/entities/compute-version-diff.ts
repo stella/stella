@@ -1,9 +1,9 @@
-import { and, desc, eq, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 
 import { compareDocxVersions } from "@stll/folio-core/server";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entityVersions } from "@/api/db/schema";
+import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { countVersionDiffWords } from "@/api/handlers/entities/version-diff-word-counts";
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -71,25 +71,26 @@ export const computeVersionDiffStats = async ({
     return;
   }
 
-  // Get DOCX file fields for both versions
-  const [newFields, prevFields] = await Promise.all([
-    scopedDb((tx) =>
-      // SAFETY: one entity version's fields, bounded by LIMITS.propertiesCount via the unique (propertyId, entityVersionId) index
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.fields.findMany({
-        where: { entityVersionId: { eq: versionId } },
-        columns: { content: true },
-      }),
-    ),
-    scopedDb((tx) =>
-      // SAFETY: one entity version's fields, bounded by LIMITS.propertiesCount via the unique (propertyId, entityVersionId) index
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.fields.findMany({
-        where: { entityVersionId: { eq: prevVersionId } },
-        columns: { content: true },
-      }),
-    ),
-  ]);
+  // Fetch DOCX fields for both versions in one query that joins entity_versions
+  // and requires deletedAt IS NULL, so a version tombstoned between the lookups
+  // above and this read cannot feed withdrawn content into the diff stats.
+  const fieldRows = await scopedDb((tx) =>
+    // SAFETY: two versions' fields, each bounded by LIMITS.propertiesCount via the unique (propertyId, entityVersionId) index
+    tx
+      .select({
+        entityVersionId: fields.entityVersionId,
+        content: fields.content,
+      })
+      .from(fields)
+      .innerJoin(entityVersions, eq(entityVersions.id, fields.entityVersionId))
+      .where(
+        and(
+          inArray(fields.entityVersionId, [versionId, prevVersionId]),
+          eq(fields.workspaceId, workspaceId),
+          isNull(entityVersions.deletedAt),
+        ),
+      ),
+  );
 
   const findDocxFile = (
     fieldList: { content: FieldContent }[],
@@ -102,8 +103,12 @@ export const computeVersionDiffStats = async ({
     return null;
   };
 
-  const newFile = findDocxFile(newFields);
-  const prevFile = findDocxFile(prevFields);
+  const newFile = findDocxFile(
+    fieldRows.filter((f) => f.entityVersionId === versionId),
+  );
+  const prevFile = findDocxFile(
+    fieldRows.filter((f) => f.entityVersionId === prevVersionId),
+  );
 
   if (!newFile || !prevFile) {
     return; // Non-DOCX versions

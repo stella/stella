@@ -1139,6 +1139,11 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
   // Specific version metadata + field values.
   if (parsed.output.version_id !== undefined) {
     const versionId = brandPersistedEntityVersionId(parsed.output.version_id);
+    // Read the version metadata and its fields in one tombstone-checked query.
+    // Loading the fields separately (keyed only by entityVersionId) after the
+    // version's `deletedAt IS NULL` check left a TOCTOU window: a tombstone
+    // landing between the two reads would still hand a withdrawn version's
+    // field content back through the tool.
     const versionRow = await context.scopedDb((tx) =>
       tx.query.entityVersions.findFirst({
         where: {
@@ -1155,26 +1160,23 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
           description: true,
           createdAt: true,
         },
+        with: {
+          // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via
+          // the unique (propertyId, entityVersionId) index.
+          fields: { columns: { id: true, propertyId: true, content: true } },
+        },
       }),
     );
     if (!versionRow) {
       return notFoundResult("Version not found");
     }
-    const versionFields = await context.scopedDb((tx) =>
-      // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via the
-      // unique (propertyId, entityVersionId) index.
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.fields.findMany({
-        where: { entityVersionId: { eq: versionId } },
-        columns: { id: true, propertyId: true, content: true },
-      }),
-    );
+    const { fields: versionFields, ...versionMeta } = versionRow;
 
     const payload = {
       entityId,
       name: owner.name,
       version: {
-        ...versionRow,
+        ...versionMeta,
         createdAt: versionRow.createdAt.toISOString(),
         fields: versionFields,
       },
