@@ -326,6 +326,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `templates.binding-catalog` | read | stella:templates | — | generic invoke → `stella templates binding-catalog` |
 | `templates.categories-create` | write | stella:templates | — | generic invoke → `stella templates categories-create` |
 | `templates.categories-delete` | write, destructive | stella:templates | — | generic invoke → `stella templates categories-delete` |
 | `templates.categories-list` | read | stella:templates | — | generic invoke → `stella templates categories-list` |
