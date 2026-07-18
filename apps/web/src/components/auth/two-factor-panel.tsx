@@ -66,7 +66,7 @@ export function TwoFactorPanel({ className }: TwoFactorPanelProps) {
           setBackupCode("");
         }
         if (error.status !== HTTP_TOO_MANY_REQUESTS) {
-          let message = error.message ?? t("errors.actionFailed");
+          let message = t("errors.actionFailed");
           if (error.code === "INVALID_CODE") {
             message = t("auth.twoFactor.invalidCode");
           } else if (error.code === "INVALID_BACKUP_CODE") {

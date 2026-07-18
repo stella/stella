@@ -255,7 +255,10 @@ const EnableTwoFactorDialog = ({
       if (error) {
         setCode("");
         stellaToast.add({
-          title: error.message ?? t("errors.actionFailed"),
+          title:
+            error.code === "INVALID_CODE"
+              ? t("auth.twoFactor.invalidCode")
+              : t("errors.actionFailed"),
           type: "error",
         });
         throw toAuthClientError(error);
@@ -471,7 +474,7 @@ const DisableTwoFactorDialog = ({
 
       if (error) {
         stellaToast.add({
-          title: error.message ?? t("errors.actionFailed"),
+          title: t("auth.twoFactor.invalidCode"),
           type: "error",
         });
         throw toAuthClientError(error);
@@ -624,7 +627,7 @@ const RegenerateBackupCodesDialog = ({
 
       if (error) {
         stellaToast.add({
-          title: error.message ?? t("errors.actionFailed"),
+          title: t("auth.twoFactor.invalidCode"),
           type: "error",
         });
         throw toAuthClientError(error);
