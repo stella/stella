@@ -8,8 +8,10 @@ import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   callGatewayExternalMcpTool,
+  gatewayLoadErrorResult,
   recordSkillGatewayToolAudit,
 } from "@/api/mcp/gateway/external-tools";
+import type { ResolvedSkillTool } from "@/api/mcp/gateway/skills";
 import { resolveSkillTool } from "@/api/mcp/gateway/skills";
 import { structuredErrorResult, textResult } from "@/api/mcp/tool-utils";
 
@@ -37,7 +39,18 @@ export const dispatchGatewayToolCall = async ({
   }
 
   const startedAt = Date.now();
-  const skill = await resolveSkillTool({ context, toolName });
+  let skill: ResolvedSkillTool | null;
+  try {
+    skill = await resolveSkillTool({ context, toolName });
+  } catch (error) {
+    // A load fault means we cannot tell whether the skill exists: answer with a
+    // retryable error, never a definitive `unknown_tool`.
+    const loadError = gatewayLoadErrorResult(error);
+    if (loadError) {
+      return loadError;
+    }
+    throw error;
+  }
   if (!skill) {
     return structuredErrorResult({
       code: "unknown_tool",

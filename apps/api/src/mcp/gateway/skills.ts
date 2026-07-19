@@ -9,6 +9,7 @@ import {
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { McpGatewayLoadError } from "@/api/mcp/errors";
 
 type SkillToolRow = {
   body: string;
@@ -67,7 +68,13 @@ export const loadVisibleSkillTools = async ({
 
   if (Result.isError(rows)) {
     captureError(rows.error, { source: "mcp-gateway-skills" });
-    return [];
+    // Propagate the load fault instead of `[]`, so a transient DB outage is not
+    // mistaken for "no skills": dispatch maps this to a retryable error and
+    // `tools/list` fails loudly rather than silently dropping skill tools.
+    throw new McpGatewayLoadError({
+      message: "Failed to load agent skills",
+      cause: rows.error,
+    });
   }
 
   return resolveSkillToolPrecedence(rows.value);
