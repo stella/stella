@@ -621,7 +621,7 @@
     },
     "annotations": {
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": true
     }
   },
   {
