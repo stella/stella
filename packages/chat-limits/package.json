@@ -1,5 +1,5 @@
 {
-  "name": "@stll/errors",
+  "name": "@stll/chat-limits",
   "version": "0.0.0",
   "private": true,
   "license": "Apache-2.0",
@@ -12,12 +12,9 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/errors",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/errors",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/chat-limits",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/chat-limits",
     "format": "oxfmt ."
-  },
-  "dependencies": {
-    "better-result": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",

@@ -52,6 +52,7 @@
         "@stll/boe": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/catalogue": "workspace:*",
+        "@stll/chat-limits": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/docx-core": "0.3.0",
@@ -67,6 +68,7 @@
         "@stll/skills": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
+        "@stll/time": "workspace:*",
         "@stll/transactional": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "@tanstack/ai": "catalog:",
@@ -226,6 +228,7 @@
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
         "@stll/catalogue": "workspace:*",
+        "@stll/chat-limits": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/docx-core": "0.3.0",
@@ -239,6 +242,7 @@
         "@stll/permissions": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
+        "@stll/time": "workspace:*",
         "@stll/ui": "workspace:*",
         "@streamdown/cjk": "^1.0.2",
         "@streamdown/math": "^1.0.2",
@@ -379,6 +383,14 @@
         "better-result": "catalog:",
         "valibot": "catalog:",
       },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+      },
+    },
+    "packages/chat-limits": {
+      "name": "@stll/chat-limits",
+      "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
@@ -568,6 +580,14 @@
     "packages/text-normalize": {
       "name": "@stll/text-normalize",
       "version": "0.1.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+      },
+    },
+    "packages/time": {
+      "name": "@stll/time",
+      "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
@@ -1685,6 +1705,8 @@
 
     "@stll/catalogue": ["@stll/catalogue@workspace:packages/catalogue"],
 
+    "@stll/chat-limits": ["@stll/chat-limits@workspace:packages/chat-limits"],
+
     "@stll/cli": ["@stll/cli@workspace:packages/cli"],
 
     "@stll/collab": ["@stll/collab@workspace:apps/collab"],
@@ -1738,6 +1760,8 @@
     "@stll/template-conditions": ["@stll/template-conditions@workspace:packages/template-conditions"],
 
     "@stll/text-normalize": ["@stll/text-normalize@workspace:packages/text-normalize"],
+
+    "@stll/time": ["@stll/time@workspace:packages/time"],
 
     "@stll/transactional": ["@stll/transactional@workspace:packages/transactional"],
 

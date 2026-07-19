@@ -31,6 +31,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { env } from "@/api/env";
 import {
   type FeedbackIntakeGuards,
@@ -41,7 +43,6 @@ import {
   isTransactionalEmailConfigured,
   sendFeedbackEmail,
 } from "@/api/lib/email/email";
-import { DAY_IN_MS } from "@/api/lib/time";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";
 

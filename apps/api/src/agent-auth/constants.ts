@@ -1,4 +1,5 @@
-import { DAY_IN_MS } from "@/api/lib/time";
+import { DAY_IN_MS } from "@stll/time";
+
 import {
   getMcpBaseUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,

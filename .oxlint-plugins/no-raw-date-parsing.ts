@@ -16,8 +16,8 @@
 //    the clocks-change day is 23 or 25 hours, not 24. Calendar math must
 //    use `addDays` from `lib/dates.ts`; a genuine 24-hour DURATION (TTL,
 //    staleness window, polling interval) must use the named `DAY_IN_MS`
-//    from `apps/{web,api}/src/lib/time.ts` (that module is allowlisted in
-//    oxlint.config.ts as the one place the literal may appear).
+//    from the `@stll/time` package (its one home, outside this rule's
+//    apps/{web,api}/src scope).
 //
 // Flagged:
 //   new Date("2024-01-01")
@@ -136,7 +136,7 @@ export default {
           dayMsArithmetic:
             "Raw day-length ms arithmetic breaks across DST (a calendar " +
             "day is 23-25 hours). Use addDays() from lib/dates.ts for " +
-            "calendar math, or DAY_IN_MS from lib/time.ts for a plain " +
+            "calendar math, or DAY_IN_MS from `@stll/time` for a plain " +
             "24-hour duration.",
         },
       },

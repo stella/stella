@@ -5,12 +5,12 @@ import {
 } from "@tanstack/react-query";
 
 import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
+import { DAY_IN_MS } from "@stll/time";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
-import { DAY_IN_MS } from "@/lib/time";
 
 export const TIME_PRESETS = ["day", "week", "month", "year"] as const;
 export type TimePreset = (typeof TIME_PRESETS)[number];

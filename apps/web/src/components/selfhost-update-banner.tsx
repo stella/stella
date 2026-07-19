@@ -4,6 +4,8 @@ import { ExternalLinkIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
@@ -11,7 +13,6 @@ import { logDevError } from "@/lib/errors/utils";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { compareSemver } from "@/lib/semver-compare";
-import { DAY_IN_MS } from "@/lib/time";
 
 const RELEASES_API_URL =
   "https://api.github.com/repos/stella/stella/releases/latest";
