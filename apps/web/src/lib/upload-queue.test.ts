@@ -748,7 +748,7 @@ describe("a stale retry does not leak across runs", () => {
     }
   });
 
-  test("a stale retry waking with nothing else pending still lets the new run reach done", async () => {
+  test("a stale retry waking with nothing else pending does not block or re-block the new run", async () => {
     jest.useFakeTimers();
     try {
       const uploader = new ScriptedUploader();
@@ -764,22 +764,95 @@ describe("a stale retry does not leak across runs", () => {
       await flush();
       expect(doneEvents).toHaveLength(1);
 
-      // No failed files to retry: the new run starts empty, with only
-      // the stale sleeping retry outstanding.
+      // No failed files to retry: the new run starts empty, with only the
+      // stale sleeping retry outstanding. cancel()/retryFailed() reset the
+      // retry counter on their own run transition, so the empty run has
+      // nothing left to wait on and reaches "done" immediately, without
+      // sitting "running" until the stale sleeper's backoff elapses.
       queue.retryFailed();
       await flush();
-      expect(queue.getState()).toBe("running");
-
-      jest.advanceTimersByTime(1000);
-      await flush();
-
-      // The new (empty) run must still reach "done" once the stale
-      // retry is dropped, rather than hanging forever.
       expect(queue.getState()).toBe("done");
       expect(doneEvents).toHaveLength(2);
       expect(doneEvents[1]!.completed).toHaveLength(0);
       expect(doneEvents[1]!.failed).toHaveLength(0);
+
+      // The stale retry then wakes, well after the run that admitted it is
+      // gone. It must be dropped silently: no re-upload, no extra `done`,
+      // and no corruption of the counter a later run would depend on.
+      jest.advanceTimersByTime(1000);
+      await flush();
+
+      expect(queue.getState()).toBe("done");
+      expect(doneEvents).toHaveLength(2);
       expect(uploader.callCount("flaky")).toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("the new run reaches done as soon as its own work drains, without waiting for a stale sleeper", async () => {
+    jest.useFakeTimers();
+    try {
+      const uploader = new ScriptedUploader();
+      const cap = 2;
+      const { queue, doneEvents } = harness(uploader, cap);
+
+      queue.enqueue(makeFiles("flaky", "badfile"));
+      await flush();
+      expect(uploader.active).toBe(2);
+
+      // Permanent failure: lands in `failed`, eligible for retryFailed().
+      uploader.rejectFile("badfile", httpError(400));
+      await flush();
+
+      // Retryable failure: frees its inflight slot and starts sleeping
+      // through backoff, bumping the (then-)global `retrying` counter.
+      uploader.rejectFile("flaky", httpError(500));
+      await flush();
+
+      queue.cancel();
+      await flush();
+      expect(doneEvents).toHaveLength(1);
+
+      // New run scoped to "badfile" only. "flaky"'s retry is still asleep,
+      // with a full 1000ms left on its backoff.
+      queue.retryFailed();
+      await flush();
+      expect(uploader.liveNamesList()).toEqual(["badfile"]);
+
+      // The new run's only file finishes well before the stale sleeper
+      // wakes. The run has no other pending or in-flight work, so it must
+      // reach "done" right away instead of waiting on a counter left over
+      // from a run that no longer exists.
+      uploader.resolveFile("badfile", "ok:badfile");
+      await flush();
+
+      expect(queue.getState()).toBe("done");
+      expect(doneEvents).toHaveLength(2);
+      expect(doneEvents[1]!.cancelled).toBe(false);
+      expect(doneEvents[1]!.completed).toEqual(["ok:badfile"]);
+      expect(doneEvents[1]!.failed).toHaveLength(0);
+
+      // "flaky"'s stale backoff now elapses. It must be dropped silently:
+      // no re-upload, no extra `done`, and no corruption of the (already
+      // reset) counter that a THIRD run would depend on.
+      jest.advanceTimersByTime(1000);
+      await flush();
+
+      expect(uploader.callCount("flaky")).toBe(1);
+      expect(doneEvents).toHaveLength(2);
+      expect(queue.getState()).toBe("done");
+
+      // A third run must not be blocked or corrupted by the long-dead
+      // sleeper either.
+      queue.enqueue(makeFiles("third"));
+      await flush();
+      uploader.resolveFile("third", "ok:third");
+      await flush();
+
+      expect(queue.getState()).toBe("done");
+      expect(doneEvents).toHaveLength(3);
+      expect(doneEvents[2]!.completed).toEqual(["ok:third"]);
     } finally {
       jest.useRealTimers();
     }

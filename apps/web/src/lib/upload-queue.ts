@@ -159,6 +159,7 @@ export class UploadQueue<T> {
     this.completed = [];
     this.failed = [];
     this.total = files.length;
+    this.retrying = 0;
 
     this.setState("running");
     this.emitProgress();
@@ -206,6 +207,7 @@ export class UploadQueue<T> {
     }
     this.inflight.clear();
     this.pending = [];
+    this.retrying = 0;
 
     this.setState("cancelled");
     this.emit("done", {
@@ -228,6 +230,7 @@ export class UploadQueue<T> {
     this.total = this.pending.length;
     this.failed = [];
     this.completed = [];
+    this.retrying = 0;
 
     this.setState("running");
     this.emitProgress();
@@ -331,7 +334,16 @@ export class UploadQueue<T> {
         this.pump();
 
         await sleep(delay);
-        this.retrying--;
+
+        // Only decrement if this sleeper's run is still the current one.
+        // cancel()/enqueue()/retryFailed() all reset `retrying` to 0 as
+        // part of starting or tearing down a run; a sleeper admitted
+        // under an earlier, superseded run must not touch a fresh run's
+        // counter (or drive an already-reset counter negative) just
+        // because it happens to wake up after the reset.
+        if (this.runId === admittedRunId) {
+          this.retrying--;
+        }
 
         // Cancelled during backoff: cancel() already cleared
         // the pending queue and emitted done; drop the retry.
