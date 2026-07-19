@@ -605,19 +605,21 @@ describe("review resolution → persist gating", () => {
 describe("shouldKeepBodyPanelMounted", () => {
   // Regression for switching Body → Variants/History mid-review: Base UI's
   // `Tabs.Panel` unmounts hidden panels by default, destroying the
-  // `ClauseEditor` (and its in-memory tracked-change state) while
-  // `reviewStatus` was still "pending" — stranding the gate with no review
-  // UI left to resolve it. Only "pending" has a live, interactive review UI
-  // (the AI edit bar / hunk menu) that a tab switch could destroy;
-  // "persisting" has none — its persist promise runs independently of
-  // `ClauseEditor`'s lifecycle — so it doesn't need to be pinned.
+  // `ClauseEditor` (and its in-memory tracked-change state) while the
+  // review outcome was still unknown — stranding the gate with no review UI
+  // left to resolve it. "pending" has a live, interactive review UI (the AI
+  // edit bar / hunk menu) that a tab switch could destroy. "persisting" has
+  // none, but its save outcome is still unknown: on a failed save, the
+  // accepted body needed to retry exists only in that `ClauseEditor`
+  // instance, so unmounting it is unrecoverable client-side. Only
+  // "resolved" is safe to unmount.
 
   test("pins the panel mounted while a review is pending", () => {
     expect(shouldKeepBodyPanelMounted("pending")).toBe(true);
   });
 
-  test("does not pin the panel once persisting (no interactive review UI left to lose)", () => {
-    expect(shouldKeepBodyPanelMounted("persisting")).toBe(false);
+  test("pins the panel mounted while persisting (save outcome not yet known)", () => {
+    expect(shouldKeepBodyPanelMounted("persisting")).toBe(true);
   });
 
   test("does not pin the panel outside a review", () => {

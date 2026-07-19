@@ -20,18 +20,19 @@ export type ClauseEditorReviewStatus = "resolved" | "pending" | "persisting";
 
 /**
  * Whether the clause body's `Tabs.Panel` must stay mounted even while
- * another tab (Variants/History) is active. Only "pending" needs this: it's
- * the sole status with a live, interactive review UI (the AI edit bar and
- * hunk menu) that resolves the review — Base UI's `Tabs.Panel` unmounts
- * hidden panels by default, and losing that `ClauseEditor` instance strands
- * the review with `reviewStatus` stuck pending and no UI left to resolve it.
- * "persisting" doesn't need this: its persist promise runs independently of
- * `ClauseEditor`'s lifecycle (see `settleReviewPersist`), so it self-heals
- * off the render tree.
+ * another tab (Variants/History) is active. Everything except "resolved"
+ * needs this — Base UI's `Tabs.Panel` unmounts hidden panels by default, and
+ * losing that `ClauseEditor` instance strands the review with no UI left to
+ * recover it. "pending" has a live, interactive review UI (the AI edit bar
+ * and hunk menu) that resolves the review. "persisting" has none, but its
+ * save outcome is still unknown: if the save fails, the accepted body that
+ * would let the user retry exists only in that `ClauseEditor` instance
+ * (see `settleReviewPersist`), so unmounting it there is unrecoverable
+ * client-side.
  */
 export const shouldKeepBodyPanelMounted = (
   status: ClauseEditorReviewStatus,
-): boolean => status === "pending";
+): boolean => status !== "resolved";
 
 type InlineMark = NonNullable<JSONContent["marks"]>[number];
 
