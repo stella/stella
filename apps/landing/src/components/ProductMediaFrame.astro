@@ -1,6 +1,6 @@
 ---
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 import type { ProductMedia } from "../data/products/types";
 import { productStoryThumbnails } from "../data/product-story";
 import MediaSkeleton from "./MediaSkeleton.astro";
@@ -20,7 +20,7 @@ const aspect = media.aspect ?? "16 / 9";
 // A video slot upgrades from skeleton to <video> the moment its file lands in
 // public/. The build's cwd is the Astro project dir (apps/landing), so resolve
 // public assets from there; this runs at build time with no data edits.
-const videoOnDisk = (p: string) => existsSync(join(process.cwd(), "public", p));
+const videoOnDisk = (p: string) => existsSync(path.join(process.cwd(), "public", p));
 const videoReady = media.type === "video" && videoOnDisk(media.src);
 const posterReady = media.type === "video" && media.poster !== undefined && videoOnDisk(media.poster);
 const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sceneId] : undefined;
@@ -36,7 +36,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
   style={`aspect-ratio: ${aspect}; background: linear-gradient(135deg, color-mix(in srgb, var(--card) 88%, var(--background)), color-mix(in srgb, var(--muted) 52%, var(--background))); box-shadow: inset 0 1px 0 color-mix(in srgb, white 22%, transparent)`}
 >
   <div
-    class="pointer-events-none absolute -top-1/2 left-[8%] z-10 h-full w-[42%] rotate-[18deg] rounded-full blur-3xl"
+    class="pointer-events-none absolute -top-1/2 start-[8%] z-10 h-full w-[42%] rotate-[18deg] rounded-full blur-3xl"
     style="background: color-mix(in srgb, white 20%, transparent)"
     aria-hidden="true"
   >

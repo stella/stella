@@ -114,7 +114,9 @@ const t = getTranslations(locale);
       const encoded = encodeURIComponent(PROMPT);
       for (const a of root.querySelectorAll<HTMLAnchorElement>("[data-llm]")) {
         const builder = LINKS[a.dataset.llm ?? ""];
-        if (builder) a.href = builder(encoded);
+        if (builder) {
+          a.href = builder(encoded);
+        }
       }
 
       const copyBtn = root.querySelector<HTMLButtonElement>("[data-copy]");
@@ -123,7 +125,9 @@ const t = getTranslations(locale);
         await navigator.clipboard?.writeText(PROMPT);
         const copiedLabel = root.dataset.copiedLabel;
         const defaultLabel = root.dataset.copyLabelDefault;
-        if (!(copyLabel && copiedLabel && defaultLabel)) return;
+        if (!(copyLabel && copiedLabel && defaultLabel)) {
+          return;
+        }
         copyBtn.classList.add("is-copied");
         copyLabel.textContent = copiedLabel;
         setTimeout(() => {

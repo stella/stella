@@ -80,7 +80,7 @@ const initializeGradient = async (
   const startTime = performance.now();
   let isVisible = true;
   const visibilityObserver = new IntersectionObserver(([entry]) => {
-    isVisible = entry?.isIntersecting ?? false;
+    isVisible = entry.isIntersecting;
   });
   visibilityObserver.observe(container);
 

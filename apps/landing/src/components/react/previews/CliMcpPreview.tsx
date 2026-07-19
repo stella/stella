@@ -29,9 +29,7 @@ export const CliMcpPreview = ({
 }: CliMcpPreviewProps) => {
   const [activeWindow, setActiveWindow] = useState(getInitialActiveWindow);
   const [hasManualWindowFocus, setHasManualWindowFocus] = useState(false);
-  const [isAutoPlaying, setIsAutoPlaying] = useState(
-    () => sceneId === undefined,
-  );
+  const [isAutoPlaying] = useState(() => sceneId === undefined);
   const [isInViewport, setIsInViewport] = useState(false);
   const [positions, setPositions] = useState<
     Record<DraggableWindow, { x: number; y: number }>
@@ -68,7 +66,7 @@ export const CliMcpPreview = ({
   useEffect(() => {
     const element = story.current;
     if (!element) {
-      return;
+      return undefined;
     }
 
     const observer = new IntersectionObserver(
@@ -86,7 +84,7 @@ export const CliMcpPreview = ({
       !isInViewport ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
-      return;
+      return undefined;
     }
 
     const timeout = window.setTimeout(() => {
@@ -102,7 +100,7 @@ export const CliMcpPreview = ({
       !isInViewport ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
-      return;
+      return undefined;
     }
 
     const durationMs = teamsLoopFrame % 2 === 0 ? 1600 : 5000;
@@ -119,7 +117,7 @@ export const CliMcpPreview = ({
       !isInViewport ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
-      return;
+      return undefined;
     }
 
     const timeout = window.setTimeout(() => {
@@ -139,74 +137,77 @@ export const CliMcpPreview = ({
   // (with a persistent scroll-timeline fill), and `translate` composes with
   // an animated `transform` instead of being overridden by it. The whole
   // window is the drag surface; pointerdown also activates (click-to-front).
-  const getDragHandleProps = (dragWindow: DraggableWindow) => ({
-    onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
-      activateWindow(dragWindow);
-      if (!window.matchMedia("(min-width: 640px)").matches) {
-        return;
-      }
-      const scene = story.current;
-      const windowElement = event.currentTarget.closest(".mac-window");
-      if (!scene || !(windowElement instanceof HTMLElement)) {
-        return;
-      }
-      // Bounds keep the whole window inside the scene box, so the scene's
-      // overflow clip can never cut it off mid-drag.
-      const sceneRect = scene.getBoundingClientRect();
-      const windowRect = windowElement.getBoundingClientRect();
-      const { x: startX, y: startY } = positions[dragWindow];
-      const baseLeft = windowRect.left - startX;
-      const baseTop = windowRect.top - startY;
-      event.currentTarget.setPointerCapture(event.pointerId);
-      drag.current = {
-        window: dragWindow,
-        pointerId: event.pointerId,
-        pointerX: event.clientX,
-        pointerY: event.clientY,
-        startX,
-        startY,
-        minX: sceneRect.left - baseLeft,
-        maxX: Math.max(
-          sceneRect.left - baseLeft,
-          sceneRect.right - windowRect.width - baseLeft,
+  const handleDragPointerDown = (
+    dragWindow: DraggableWindow,
+    event: PointerEvent<HTMLDivElement>,
+  ) => {
+    activateWindow(dragWindow);
+    if (!window.matchMedia("(min-width: 640px)").matches) {
+      return;
+    }
+    const scene = story.current;
+    const windowElement = event.currentTarget.closest(".mac-window");
+    if (!scene || !(windowElement instanceof HTMLElement)) {
+      return;
+    }
+    // Bounds keep the whole window inside the scene box, so the scene's
+    // overflow clip can never cut it off mid-drag.
+    const sceneRect = scene.getBoundingClientRect();
+    const windowRect = windowElement.getBoundingClientRect();
+    const { x: startX, y: startY } = positions[dragWindow];
+    const baseLeft = windowRect.left - startX;
+    const baseTop = windowRect.top - startY;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = {
+      window: dragWindow,
+      pointerId: event.pointerId,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      startX,
+      startY,
+      minX: sceneRect.left - baseLeft,
+      maxX: Math.max(
+        sceneRect.left - baseLeft,
+        sceneRect.right - windowRect.width - baseLeft,
+      ),
+      minY: sceneRect.top - baseTop,
+      maxY: Math.max(
+        sceneRect.top - baseTop,
+        sceneRect.bottom - windowRect.height - baseTop,
+      ),
+    };
+  };
+
+  const handleDragPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const activeDrag = drag.current;
+    if (activeDrag?.pointerId !== event.pointerId) {
+      return;
+    }
+    setPositions((current) => {
+      const next = { ...current };
+      next[activeDrag.window] = {
+        x: clamp(
+          activeDrag.startX + event.clientX - activeDrag.pointerX,
+          activeDrag.minX,
+          activeDrag.maxX,
         ),
-        minY: sceneRect.top - baseTop,
-        maxY: Math.max(
-          sceneRect.top - baseTop,
-          sceneRect.bottom - windowRect.height - baseTop,
+        y: clamp(
+          activeDrag.startY + event.clientY - activeDrag.pointerY,
+          activeDrag.minY,
+          activeDrag.maxY,
         ),
       };
-    },
-    onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
-      const activeDrag = drag.current;
-      if (activeDrag?.pointerId !== event.pointerId) {
-        return;
-      }
-      setPositions((current) => {
-        const next = { ...current };
-        next[activeDrag.window] = {
-          x: clamp(
-            activeDrag.startX + event.clientX - activeDrag.pointerX,
-            activeDrag.minX,
-            activeDrag.maxX,
-          ),
-          y: clamp(
-            activeDrag.startY + event.clientY - activeDrag.pointerY,
-            activeDrag.minY,
-            activeDrag.maxY,
-          ),
-        };
-        return next;
-      });
-    },
-    onPointerUp: (event: PointerEvent<HTMLDivElement>) => {
-      if (drag.current?.pointerId !== event.pointerId) {
-        return;
-      }
-      event.currentTarget.releasePointerCapture(event.pointerId);
-      drag.current = null;
-    },
-  });
+      return next;
+    });
+  };
+
+  const handleDragPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (drag.current?.pointerId !== event.pointerId) {
+      return;
+    }
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    drag.current = null;
+  };
 
   return (
     <div
@@ -238,7 +239,9 @@ export const CliMcpPreview = ({
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("client"))
           }
-          {...getDragHandleProps("client")}
+          onPointerDown={(event) => handleDragPointerDown("client", event)}
+          onPointerMove={handleDragPointerMove}
+          onPointerUp={handleDragPointerUp}
           role="button"
           style={{
             borderColor:
@@ -305,7 +308,9 @@ export const CliMcpPreview = ({
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("source"))
           }
-          {...getDragHandleProps("source")}
+          onPointerDown={(event) => handleDragPointerDown("source", event)}
+          onPointerMove={handleDragPointerMove}
+          onPointerUp={handleDragPointerUp}
           role="button"
           style={{
             borderColor:
@@ -343,7 +348,9 @@ export const CliMcpPreview = ({
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("terminal"))
           }
-          {...getDragHandleProps("terminal")}
+          onPointerDown={(event) => handleDragPointerDown("terminal", event)}
+          onPointerMove={handleDragPointerMove}
+          onPointerUp={handleDragPointerUp}
           role="button"
           style={{
             background: "var(--terminal-chrome)",
@@ -516,8 +523,8 @@ const TeamsWindow = ({ showAnswer }: { showAnswer: boolean }) => (
         )}
       >
         <span
-          className="flex h-[clamp(1.25rem,2.3cqw,1.9rem)] w-[clamp(1.25rem,2.3cqw,1.9rem)] shrink-0 items-center justify-center rounded-md text-white"
-          style={{ background: AGENT_ACCENT }}
+          className="flex h-[clamp(1.25rem,2.3cqw,1.9rem)] w-[clamp(1.25rem,2.3cqw,1.9rem)] shrink-0 items-center justify-center rounded-md"
+          style={{ background: AGENT_ACCENT, color: AGENT_ACCENT_FOREGROUND }}
         >
           <StellaMark className="h-[62%] w-[62%]" />
         </span>
@@ -596,6 +603,7 @@ const TypingCommand = ({ command }: { command: string }) => {
             className="inline-block whitespace-nowrap"
             key={`${token}-${tokenIndex}`}
           >
+            {/* eslint-disable-next-line no-misused-spread -- ASCII-only CLI command text, no grapheme clusters */}
             {[...token].map((character, index) => {
               const delay =
                 COMMAND_TYPE_DELAY_MS +
@@ -764,6 +772,9 @@ const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
 const AGENT_ACCENT = "#d97757";
+// White in both themes: the accent chip is a fixed brand color (like the
+// Teams mark above), so its glyph must not follow the theme's foreground.
+const AGENT_ACCENT_FOREGROUND = "#fff";
 const ACTIVE_WINDOW_Z_INDEX = 20;
 const PINNED_MAIN_Z_INDEX = 0;
 const COMMAND_TYPE_DELAY_MS = 350;

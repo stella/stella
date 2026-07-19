@@ -114,17 +114,21 @@ const ogAlternates = hasLocalizedAlternates
     {/* Theme: follow system preference, allow manual override */}
     <script is:inline>
       (function() {
-        var t = localStorage.getItem("theme");
-        var systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
-        var prefersDark = systemTheme.matches;
+        const t = localStorage.getItem("theme");
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+        const prefersDark = systemTheme.matches;
         if (t === "dark" || (!t && prefersDark)) {
           document.documentElement.classList.add("dark");
         }
         // When no manual override, follow system changes in real time
-        if (window.__systemThemeBound) return;
+        if (window.__systemThemeBound) {
+          return;
+        }
         window.__systemThemeBound = true;
-        systemTheme.addEventListener("change", function(e) {
-          if (localStorage.getItem("theme")) return;
+        systemTheme.addEventListener("change", (e) => {
+          if (localStorage.getItem("theme")) {
+            return;
+          }
           document.documentElement.classList.toggle("dark", e.matches);
         });
       })();
@@ -137,10 +141,10 @@ const ogAlternates = hasLocalizedAlternates
     <script is:inline>
       if (!window.__themeSwapBound) {
         window.__themeSwapBound = true;
-        document.addEventListener("astro:before-swap", function (e) {
-          var t = localStorage.getItem("theme");
-          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          var dark = t === "dark" || (!t && prefersDark);
+        document.addEventListener("astro:before-swap", (e) => {
+          const t = localStorage.getItem("theme");
+          const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          const dark = t === "dark" || (!t && prefersDark);
           e.newDocument.documentElement.classList.toggle("dark", dark);
           e.newDocument.documentElement.classList.add("js-reveal");
         });
@@ -164,15 +168,15 @@ const ogAlternates = hasLocalizedAlternates
     <script is:inline>
       if (!window.__devStyleSwapBound) {
         window.__devStyleSwapBound = true;
-        document.addEventListener("astro:before-swap", function (e) {
-          document
-            .querySelectorAll("head style[data-vite-dev-id]")
-            .forEach(function (live) {
-              var incoming = e.newDocument.head.querySelector(
-                'style[data-vite-dev-id="' + CSS.escape(live.dataset.viteDevId) + '"]',
-              );
-              if (incoming) incoming.textContent = live.textContent;
-            });
+        document.addEventListener("astro:before-swap", (e) => {
+          for (const live of document.querySelectorAll("head style[data-vite-dev-id]")) {
+            const incoming = e.newDocument.head.querySelector(
+              `style[data-vite-dev-id="${CSS.escape(live.dataset.viteDevId)}"]`,
+            );
+            if (incoming) {
+              incoming.textContent = live.textContent;
+            }
+          }
         });
       }
     </script>
@@ -295,8 +299,8 @@ const ogAlternates = hasLocalizedAlternates
     */}
     <script is:inline>
       document.documentElement.classList.add("no-transitions");
-      requestAnimationFrame(function() {
-        requestAnimationFrame(function() {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
           document.documentElement.classList.remove("no-transitions");
         });
       });
@@ -309,11 +313,13 @@ const ogAlternates = hasLocalizedAlternates
     */}
     <script is:inline>
       (function () {
-        if (window.__revealBound) return;
+        if (window.__revealBound) {
+          return;
+        }
         window.__revealBound = true;
 
-        var observer = null;
-        var pendingReveal = null;
+        let observer = null;
+        let pendingReveal = null;
 
         function revealCleanup() {
           if (pendingReveal !== null) {
@@ -328,19 +334,25 @@ const ogAlternates = hasLocalizedAlternates
 
         function revealSetup() {
           revealCleanup();
-          var targets = document.querySelectorAll("[data-reveal]");
-          if (!targets.length) return;
-          var reveal = function (el) { el.setAttribute("data-in-view", ""); };
-          if (typeof IntersectionObserver === "undefined") {
-            targets.forEach(reveal);
+          const targets = document.querySelectorAll("[data-reveal]");
+          if (!targets.length) {
             return;
           }
-          observer = new IntersectionObserver(function (entries) {
-            entries.forEach(function (entry) {
-              if (!entry.isIntersecting) return;
+          const reveal = (el) => { el.dataset.inView = ""; };
+          if (typeof IntersectionObserver === "undefined") {
+            for (const el of targets) {
+              reveal(el);
+            }
+            return;
+          }
+          observer = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) {
+                continue;
+              }
               reveal(entry.target);
               observer?.unobserve(entry.target);
-            });
+            }
           }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
           // Reveal whatever is already in (or above) the viewport on load so the
           // hero never depends on the observer firing; defer the rest to the IO
@@ -349,16 +361,18 @@ const ogAlternates = hasLocalizedAlternates
           // requestAnimationFrame) because rAF is fully paused in a backgrounded
           // tab, which would leave the hero invisible until the tab is focused;
           // the 0ms task still yields a paint first, so the transition animates.
-          pendingReveal = setTimeout(function () {
+          pendingReveal = setTimeout(() => {
             pendingReveal = null;
-            targets.forEach(function (el) {
-              if (!el.isConnected) return;
+            for (const el of targets) {
+              if (!el.isConnected) {
+                continue;
+              }
               if (el.getBoundingClientRect().top < window.innerHeight) {
                 reveal(el);
               } else {
                 observer?.observe(el);
               }
-            });
+            }
           }, 0);
         }
 
@@ -368,12 +382,12 @@ const ogAlternates = hasLocalizedAlternates
         // entrance state; the normal setup still observes everything below it.
         function revealViewportAfterSwap() {
           document.documentElement.classList.add("reveal-without-motion");
-          document.querySelectorAll("[data-reveal]").forEach(function (el) {
+          for (const el of document.querySelectorAll("[data-reveal]")) {
             if (el.getBoundingClientRect().top < window.innerHeight) {
-              el.setAttribute("data-in-view", "");
+              el.dataset.inView = "";
             }
-          });
-          setTimeout(function () {
+          }
+          setTimeout(() => {
             document.documentElement.classList.remove("reveal-without-motion");
           }, 0);
         }

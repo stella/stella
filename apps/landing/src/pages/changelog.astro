@@ -297,7 +297,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     let previewReleaseSlugs = new Set<string>();
     const readCurrentPage = () => {
       const page = Number(new URLSearchParams(window.location.search).get("page"));
-      if (!Number.isInteger(page) || page < 1) return 1;
+      if (!Number.isInteger(page) || page < 1) {
+        return 1;
+      }
       return page;
     };
     let currentPage = 1;
@@ -307,7 +309,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     const safeHttpsUrl = (value: string) => {
       try {
         const url = new URL(value);
-        if (url.protocol !== "https:") return null;
+        if (url.protocol !== "https:") {
+          return null;
+        }
         return url.href;
       } catch {
         return null;
@@ -318,15 +322,15 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       tagName
         .toLowerCase()
         .replaceAll(".", "-")
-        .replace(/[^a-z0-9-]/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-|-$/g, "");
+        .replace(/[^a-z0-9-]/gu, "-")
+        .replace(/-+/gu, "-")
+        .replace(/^-|-$/gu, "");
 
     const normalizeMarkdownText = (text: string) =>
       text
-        .replace(/\[([^\]]+)]\((https?:\/\/[^)\s]+)\)/g, "$1")
-        .replace(/[*_`]/g, "")
-        .replace(/\s+/g, " ")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gu, "$1")
+        .replace(/[*_`]/gu, "")
+        .replace(/\s+/gu, " ")
         .trim();
 
     const findMarkdownHeading = (body: string, level: 1 | 2) => {
@@ -363,7 +367,7 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
     const appendTextWithInlineMarkdown = (target: HTMLElement, text: string) => {
       const inlinePattern =
-        /(\*\*([^*]+)\*\*)|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
+        /(\*\*([^*]+)\*\*)|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gu;
       let cursor = 0;
 
       for (const match of text.matchAll(inlinePattern)) {
@@ -410,7 +414,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       for (const block of parseChangelogMarkdown(body)) {
         if (block.type === "video") {
           const safeSrc = safeHttpsUrl(block.src);
-          if (!safeSrc) {continue;}
+          if (!safeSrc) {
+            continue;
+          }
 
           const video = document.createElement("video");
           video.controls = true;
@@ -493,7 +499,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     };
 
     const formatDate = (publishedAt: string | null) => {
-      if (!publishedAt) return "Unpublished";
+      if (!publishedAt) {
+        return "Unpublished";
+      }
       return new Intl.DateTimeFormat("en", {
         dateStyle: "medium",
       }).format(new Date(publishedAt));
@@ -724,8 +732,11 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
           headers: { Accept: "application/vnd.github+json" },
           signal,
         });
-        if (!response.ok) return null;
+        if (!response.ok) {
+          return null;
+        }
 
+        // eslint-disable-next-line no-await-in-loop -- body of the sequentially fetched page; see above
         const releases = (await response.json()) as GitHubRelease[];
         stellaReleases.push(
           ...releases.filter(
@@ -750,7 +761,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     };
 
     const renderPagination = () => {
-      if (!paginationContainer) return;
+      if (!paginationContainer) {
+        return;
+      }
       paginationContainer.replaceChildren();
 
       if (currentPage === 1 && !hasNextPage) {
@@ -769,7 +782,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       previousButton.disabled = currentPage === 1;
       previousButton.textContent = "Previous";
       previousButton.addEventListener("click", () => {
-        if (currentPage === 1) return;
+        if (currentPage === 1) {
+          return;
+        }
         currentPage -= 1;
         loadReleases();
       });
@@ -789,7 +804,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       nextButton.disabled = !hasNextPage;
       nextButton.textContent = "Next";
       nextButton.addEventListener("click", () => {
-        if (!hasNextPage) return;
+        if (!hasNextPage) {
+          return;
+        }
         currentPage += 1;
         loadReleases();
       });
@@ -801,7 +818,9 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
     const loadReleases = async () => {
       const loadContainer = releasesContainer;
-      if (!loadContainer?.isConnected) return;
+      if (!loadContainer?.isConnected) {
+        return;
+      }
 
       activeReleaseLoad?.abort();
       const controller = new AbortController();
@@ -878,10 +897,14 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
     const scrollToCurrentHash = () => {
       const id = decodeURIComponent(window.location.hash.slice(1));
-      if (!id) return;
+      if (!id) {
+        return;
+      }
 
-      const target = document.getElementById(id);
-      if (!target) return;
+      const target = document.querySelector(`#${CSS.escape(id)}`);
+      if (!target) {
+        return;
+      }
 
       let ancestor: HTMLElement | null = target;
       while (ancestor) {
@@ -897,12 +920,14 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
     const initializeChangelog = () => {
       activeReleaseLoad?.abort();
       activeReleaseLoad = null;
-      releasesContainer = document.getElementById("changelog-releases");
-      paginationContainer = document.getElementById("changelog-pagination");
-      previewReleaseSlugsElement = document.getElementById(
-        "changelog-preview-release-slugs",
+      releasesContainer = document.querySelector("#changelog-releases");
+      paginationContainer = document.querySelector("#changelog-pagination");
+      previewReleaseSlugsElement = document.querySelector(
+        "#changelog-preview-release-slugs",
       );
-      if (!releasesContainer) return;
+      if (!releasesContainer) {
+        return;
+      }
 
       previewReleaseSlugs = new Set(readPreviewReleaseSlugs());
       currentPage = readCurrentPage();

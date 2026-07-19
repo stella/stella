@@ -194,13 +194,13 @@ const connect = resolveNavLinks(connectLinks, t);
     // Lock page scroll while a menu is open. Derived from DOM state on every
     // toggle, so any close path (outside click, Escape, link navigation)
     // releases the lock. `toggle` does not bubble, so listen in capture.
-    function syncScrollLock() {
-      var anyOpen = document.querySelector("[data-mobile-nav][open]") !== null;
+    const syncScrollLock = () => {
+      const anyOpen = document.querySelector("[data-mobile-nav][open]") !== null;
       document.documentElement.classList.toggle("mobile-nav-scroll-lock", anyOpen);
-    }
+    };
     document.addEventListener(
       "toggle",
-      function (event) {
+      (event) => {
         if (event.target instanceof Element && event.target.matches("[data-mobile-nav]")) {
           syncScrollLock();
         }
@@ -210,18 +210,24 @@ const connect = resolveNavLinks(connectLinks, t);
     // After a client-side navigation the swapped-in menu is closed but no
     // toggle event fires for the removed one; re-sync so the lock releases.
     document.addEventListener("astro:page-load", syncScrollLock);
-    document.addEventListener("click", function (event) {
-      document.querySelectorAll("[data-mobile-nav][open]").forEach(function (menu) {
-        if (!menu.contains(event.target)) menu.removeAttribute("open");
-      });
+    document.addEventListener("click", (event) => {
+      for (const menu of document.querySelectorAll("[data-mobile-nav][open]")) {
+        if (!menu.contains(event.target)) {
+          menu.removeAttribute("open");
+        }
+      }
     });
-    document.addEventListener("keydown", function (event) {
-      if (event.key !== "Escape") return;
-      document.querySelectorAll("[data-mobile-nav][open]").forEach(function (menu) {
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      for (const menu of document.querySelectorAll("[data-mobile-nav][open]")) {
         menu.removeAttribute("open");
-        var trigger = menu.querySelector(".mobile-nav-trigger");
-        if (trigger instanceof HTMLElement) trigger.focus();
-      });
+        const trigger = menu.querySelector(".mobile-nav-trigger");
+        if (trigger instanceof HTMLElement) {
+          trigger.focus();
+        }
+      }
     });
   }
 </script>

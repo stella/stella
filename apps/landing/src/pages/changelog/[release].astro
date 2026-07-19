@@ -44,7 +44,7 @@ const socialImage = `/images/changelog/${release.slug}.png`;
   </main>
 
   <script is:inline define:vars={{ changelogHref }}>
-    document.addEventListener("astro:page-load", function () {
+    document.addEventListener("astro:page-load", () => {
       window.location.replace(changelogHref);
     });
   </script>

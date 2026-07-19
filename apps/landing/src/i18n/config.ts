@@ -7,6 +7,8 @@
 // og:locale and writing direction are not part of @stll/locales, so they live
 // here keyed by Locale; a missing entry fails typecheck if the app adds a locale.
 
+import { panic } from "better-result";
+
 import { UI_LOCALES, displayLanguageName, type UiLocale } from "@stll/locales";
 
 export const defaultLocale: UiLocale = "en";
@@ -47,19 +49,30 @@ const RTL_LOCALES = new Set<Locale>(["ar"]);
 const toPath = (tag: Locale): string =>
   tag === defaultLocale ? "" : tag.toLowerCase();
 
-export const locales = Object.fromEntries(
-  UI_LOCALES.map((tag) => [
-    tag,
-    {
+const isCompleteLocaleRecord = (
+  value: Partial<Record<Locale, LocaleConfig>>,
+): value is Record<Locale, LocaleConfig> =>
+  UI_LOCALES.every((tag) => tag in value);
+
+const buildLocales = (): Record<Locale, LocaleConfig> => {
+  const result: Partial<Record<Locale, LocaleConfig>> = {};
+  for (const tag of UI_LOCALES) {
+    result[tag] = {
       path: toPath(tag),
       label: displayLanguageName(tag),
       hreflang: tag,
       og: OG_LOCALE[tag],
       dir: RTL_LOCALES.has(tag) ? "rtl" : "ltr",
-    } satisfies LocaleConfig,
-  ]),
-) as Record<Locale, LocaleConfig>;
+    };
+  }
+  if (!isCompleteLocaleRecord(result)) {
+    panic("landing locales are missing a UI locale entry");
+  }
+  return result;
+};
 
-export const localeCodes = Object.keys(locales) as Locale[];
+export const locales = buildLocales();
+
+export const localeCodes: readonly Locale[] = UI_LOCALES;
 
 export const isLocale = (value: string): value is Locale => value in locales;

@@ -229,61 +229,75 @@ const compactMenus = [
     // Mega-menu: hovering a feature on the left swaps the preview on the right.
     // The header re-renders per page, so re-bind triggers on every navigation;
     // guard each element so it is never double-bound.
-    function setupMegaTriggers() {
-      document.querySelectorAll("[data-nav-dropdown]").forEach(function (dd) {
-        var triggers = dd.querySelectorAll("[data-mega-trigger]");
-        var panes = dd.querySelectorAll(".nav-mega-pane");
-        if (!triggers.length || !panes.length) return;
+    const setupMegaTriggers = () => {
+      for (const dd of document.querySelectorAll("[data-nav-dropdown]")) {
+        const triggers = dd.querySelectorAll("[data-mega-trigger]");
+        const panes = dd.querySelectorAll(".nav-mega-pane");
+        if (!triggers.length || !panes.length) {
+          continue;
+        }
 
-        function loadPaneImages(pane) {
+        const loadPaneImages = (pane) => {
           pane.dispatchEvent(new CustomEvent("stella:load-theme-images", {
             bubbles: true,
           }));
-        }
+        };
 
-        function activateTrigger(t) {
-          var slug = t.getAttribute("data-slug");
-          panes.forEach(function (p) {
-            var isActive = p.getAttribute("data-pane") === slug;
+        const activateTrigger = (t) => {
+          const slug = t.dataset.slug;
+          for (const p of panes) {
+            const isActive = p.dataset.pane === slug;
             p.classList.toggle("is-active", isActive);
-            if (isActive) loadPaneImages(p);
-          });
-          triggers.forEach(function (x) {
+            if (isActive) {
+              loadPaneImages(p);
+            }
+          }
+          for (const x of triggers) {
             x.classList.toggle("is-hover", x === t);
-          });
-        }
+          }
+        };
 
         if (!dd.__megaToggleBound) {
           dd.__megaToggleBound = true;
-          dd.addEventListener("toggle", function () {
-            if (!dd.open) return;
-            var activePane = dd.querySelector(".nav-mega-pane.is-active");
-            if (activePane) loadPaneImages(activePane);
+          dd.addEventListener("toggle", () => {
+            if (!dd.open) {
+              return;
+            }
+            const activePane = dd.querySelector(".nav-mega-pane.is-active");
+            if (activePane) {
+              loadPaneImages(activePane);
+            }
           });
         }
 
-        triggers.forEach(function (t) {
-          if (t.__megaBound) return;
+        for (const t of triggers) {
+          if (t.__megaBound) {
+            continue;
+          }
           t.__megaBound = true;
-          t.addEventListener("pointerenter", function () { activateTrigger(t); });
-          t.addEventListener("focus", function () { activateTrigger(t); });
-        });
-      });
-    }
+          t.addEventListener("pointerenter", () => { activateTrigger(t); });
+          t.addEventListener("focus", () => { activateTrigger(t); });
+        }
+      }
+    };
     document.addEventListener("astro:page-load", setupMegaTriggers);
 
     // Close any open nav dropdown on outside click or Escape. These are
     // document-level and only need to be added once.
-    document.addEventListener("click", function (e) {
-      document.querySelectorAll("[data-nav-dropdown][open]").forEach(function (d) {
-        if (!d.contains(e.target)) d.removeAttribute("open");
-      });
+    document.addEventListener("click", (e) => {
+      for (const d of document.querySelectorAll("[data-nav-dropdown][open]")) {
+        if (!d.contains(e.target)) {
+          d.removeAttribute("open");
+        }
+      }
     });
-    document.addEventListener("keydown", function (e) {
-      if (e.key !== "Escape") return;
-      document.querySelectorAll("[data-nav-dropdown][open]").forEach(function (d) {
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") {
+        return;
+      }
+      for (const d of document.querySelectorAll("[data-nav-dropdown][open]")) {
         d.removeAttribute("open");
-      });
+      }
     });
   }
 </script>
