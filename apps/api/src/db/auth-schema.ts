@@ -37,7 +37,12 @@ export const user = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  () => [...authUserPolicies()],
+  (table) => [
+    // Keyset pagination over registrations (operator observability)
+    // orders by (created_at, id); without this the read is a table scan.
+    index("user_createdAt_idx").on(table.createdAt, table.id),
+    ...authUserPolicies(),
+  ],
 );
 
 type AuthUserColumnNameByField = Record<
