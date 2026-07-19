@@ -1,3 +1,5 @@
+SET lock_timeout = '2s';
+--> statement-breakpoint
 SET statement_timeout = '0';
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting

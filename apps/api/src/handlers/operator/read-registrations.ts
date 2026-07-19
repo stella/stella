@@ -3,10 +3,10 @@ import { Result } from "better-result";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { operatorReadDb } from "@/api/lib/operator-read-db";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
+import { operatorReadDb } from "@/api/lib/operator-read-db";
 
 import {
   authorizeOperatorAccess,
