@@ -37,6 +37,7 @@ import type {
   AsyncContent,
   VersionDiffSegment,
 } from "@/components/versions/version-list";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -108,8 +109,10 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
           templateId,
         ),
       })
-      .catch(() => {
-        /* fire-and-forget */
+      .catch((error: unknown) => {
+        // Invalidation failure leaves the clause list (and its nested preview)
+        // stale without a user-facing symptom: capture it for telemetry.
+        getAnalytics().captureError(error);
       });
   }, [queryClient, activeOrganizationId, templateId]);
 

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1441,14 +1441,20 @@ const HistoryTab = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<ParagraphDiff[] | null>(null);
   const [loading, setLoading] = useState(false);
+  // Bumped on every click so a slow response for an earlier version cannot
+  // clobber the diff of a version selected later (or after a toggle-off).
+  const requestGenerationRef = useRef(0);
 
   const handleVersionClick = async (versionId: string) => {
     if (selectedId === versionId) {
+      requestGenerationRef.current += 1;
       setSelectedId(null);
       setDiffResult(null);
+      setLoading(false);
       return;
     }
 
+    const generation = (requestGenerationRef.current += 1);
     setSelectedId(versionId);
     setLoading(true);
     setDiffResult(null);
@@ -1457,6 +1463,12 @@ const HistoryTab = ({
       .clauses({ clauseId })
       .versions({ versionId })
       .get();
+
+    if (generation !== requestGenerationRef.current) {
+      // A newer click superseded this request; the winning request owns the
+      // loading flag and diff state, so drop this stale response entirely.
+      return;
+    }
 
     setLoading(false);
 

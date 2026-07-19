@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic, TaggedError } from "better-result";
 import {
   AlertTriangleIcon,
   BookmarkIcon,
@@ -66,14 +65,8 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray, optionalReadonlyArray } from "@/lib/arrays";
 import { BoundedMap } from "@/lib/bounded-set";
-import {
-  DOCX_MIME,
-  SIDE_RAIL_TAB_ICON_SIZE_PX,
-  TOOLBAR_ROW_HEIGHT,
-} from "@/lib/consts";
-import { toAPIError } from "@/lib/errors/api";
+import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { parseArrayItemKey } from "@/routes/_protected.knowledge/-components/template-array-item-key";
@@ -114,18 +107,12 @@ import {
   templateClausePreviewOptions,
   templateClausesOptions,
   templateDetailOptions,
+  templateFillDiscoverOptions,
   templateRecipesOptions,
 } from "@/routes/_protected.knowledge/-queries";
 
 type StudioFacet = "fields" | "guidance" | "history" | "fill";
 type TemplateStudioPayload = { templateId: string };
-
-class TemplateDocumentFetchError extends TaggedError(
-  "TemplateDocumentFetchError",
-)<{
-  message: string;
-  status: number;
-}>() {}
 
 const STUDIO_FACETS: readonly StudioFacet[] = [
   "fields",
@@ -449,43 +436,12 @@ export const TemplateFillFacet = ({
     data: discovered,
     isLoading: discovering,
     isError,
-  } = useQuery({
-    queryKey: [
-      ...knowledgeKeys.templates.detail(activeOrganizationId, templateId),
-      "fill-discover",
-      presignedUrl,
-      fileName,
-    ],
-    queryFn: async ({ signal }) => {
-      if (presignedUrl === undefined || fileName === undefined) {
-        panic("fill tab: saved template document is unavailable");
-      }
-      const res = await fetchWithTimeout(presignedUrl, {
-        signal,
-        timeoutMs: 15_000,
-      });
-      if (!res.ok) {
-        throw new TemplateDocumentFetchError({
-          message: `Template document fetch failed (${res.status})`,
-          status: res.status,
-        });
-      }
-      const blob = await res.blob();
-      const file = new File([blob], fileName, { type: DOCX_MIME });
-      const response = await api.templates.discover.post(
-        { file },
-        { fetch: { signal } },
-      );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      if (response.data instanceof Response) {
-        panic("fill tab: discover returned a raw response");
-      }
-      return response.data;
-    },
-    enabled: presignedUrl !== undefined && fileName !== undefined,
-  });
+  } = useQuery(
+    templateFillDiscoverOptions({
+      key: { organizationId: activeOrganizationId, templateId },
+      context: { presignedUrl, fileName },
+    }),
+  );
 
   if (!detail || discovering) {
     return (

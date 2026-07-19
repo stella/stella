@@ -1,14 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { panic, TaggedError } from "better-result";
 
-import { api } from "@/lib/api";
-import { DOCX_MIME } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
+import type { api } from "@/lib/api";
 import {
-  knowledgeKeys,
   templateDetailOptions,
+  templateFillDiscoverOptions,
 } from "@/routes/_protected.knowledge/-queries";
 
 /**
@@ -16,15 +12,9 @@ import {
  * form outside the Studio: load the template detail (presigned source URL),
  * fetch the bytes, and re-discover fields server-side — the same merge the
  * fill endpoint applies, so `{{#each}}` array fields and manifest metadata
- * are both present.
+ * are both present. Shares the `templateFillDiscoverOptions` cache entry with
+ * the Studio fill tab.
  */
-
-class TemplateDocumentFetchError extends TaggedError(
-  "TemplateDocumentFetchError",
-)<{
-  message: string;
-  status: number;
-}>() {}
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 
@@ -54,49 +44,19 @@ export const useTemplateFillSchema = (
       ? detailData
       : null;
 
-  const presignedUrl = detail?.presignedUrl;
-  const fileName = detail?.fileName;
   const {
     data: discovered,
     isError: discoverError,
     isLoading: discovering,
-  } = useQuery({
-    queryKey: [
-      ...knowledgeKeys.templates.detail(activeOrganizationId, templateId),
-      "fill-discover",
-      presignedUrl,
-      fileName,
-    ],
-    queryFn: async ({ signal }) => {
-      if (presignedUrl === undefined || fileName === undefined) {
-        panic("template fill: saved template document is unavailable");
-      }
-      const res = await fetchWithTimeout(presignedUrl, {
-        signal,
-        timeoutMs: 15_000,
-      });
-      if (!res.ok) {
-        throw new TemplateDocumentFetchError({
-          message: `Template document fetch failed (${res.status})`,
-          status: res.status,
-        });
-      }
-      const blob = await res.blob();
-      const file = new File([blob], fileName, { type: DOCX_MIME });
-      const response = await api.templates.discover.post(
-        { file },
-        { fetch: { signal } },
-      );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      if (response.data instanceof Response) {
-        panic("template fill: discover returned a raw response");
-      }
-      return response.data;
-    },
-    enabled: presignedUrl !== undefined && fileName !== undefined,
-  });
+  } = useQuery(
+    templateFillDiscoverOptions({
+      key: { organizationId: activeOrganizationId, templateId },
+      context: {
+        presignedUrl: detail?.presignedUrl,
+        fileName: detail?.fileName,
+      },
+    }),
+  );
 
   if (detailError || discoverError) {
     return { state: "error" };
