@@ -716,15 +716,20 @@ const ClauseBodyEditor = ({
     undefined,
   );
 
-  // Mirrors `saveBody` itself, assigned right after its declaration below.
-  // The reissue path recurses into `saveBody`, but a `const` closure
-  // referencing its own not-yet-initialized binding trips the React
-  // Compiler's self-reference check; going through this ref instead breaks
-  // that cycle while still always calling the latest `saveBody`.
+  // Mirrors `saveBody` itself, kept in sync by the effect right after its
+  // declaration below. The reissue path recurses into `saveBody`, but a
+  // `const` closure referencing its own not-yet-initialized binding (or a
+  // self-referencing named function expression) trips the React Compiler's
+  // self-reference analysis; going through this ref instead breaks that
+  // cycle. Writing the ref from an effect — rather than during render —
+  // keeps the write outside the compiler's render-phase purview: `saveBody`
+  // is only ever invoked asynchronously (debounce timer, blur handler, or
+  // its own reissue after an awaited request), always well after the effect
+  // that syncs this render's closure into the ref has committed.
   const saveBodyRef = useRef<
     (body: ClauseParagraph[], explicitReviewFlushToken?: number) => void
   >(() => {
-    // Overwritten immediately below, before any caller can reach this —
+    // Overwritten by the effect below before any caller can reach this —
     // `saveBody`'s own definition never invokes it during render.
   });
 
@@ -819,10 +824,15 @@ const ClauseBodyEditor = ({
     },
     [clauseId, t, onRefresh, onReviewStatusChange],
   );
-  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: lets the reissue path above call the current `saveBody` without a self-referential closure the compiler rejects
-  saveBodyRef.current = (body, explicitReviewFlushToken) => {
-    void saveBody(body, explicitReviewFlushToken);
-  };
+  // Sync the latest `saveBody` closure into the ref outside of render (see
+  // `saveBodyRef` above). `saveBody` is only ever called from a later
+  // event/timer/await, so this always commits before any caller could read
+  // a stale value.
+  useExternalSyncEffect(() => {
+    saveBodyRef.current = (body, explicitReviewFlushToken) => {
+      void saveBody(body, explicitReviewFlushToken);
+    };
+  }, [saveBody]);
 
   const debouncedSave = useDebouncedCallback((body: ClauseParagraph[]) => {
     void saveBody(body);
