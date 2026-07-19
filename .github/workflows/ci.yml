@@ -1016,7 +1016,7 @@ jobs:
       - name: Install turbo
         if: steps.changed.outputs.run == 'true'
         # Match the Dockerfiles: Turbo is only used for pruned source overlays.
-        run: bun install -g turbo@2.10.4
+        run: bun install -g turbo@2.10.5
 
       - name: Prepare Docker install inputs
         if: steps.changed.outputs.run == 'true'
