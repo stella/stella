@@ -64,6 +64,8 @@ beforeEach(() => {
     const text = args.map(String).join(" ");
     if (INTL_ERROR_CODES.some((code) => text.includes(code))) {
       intlErrors.push(text);
+    } else {
+      originalConsoleError(...args);
     }
   };
 });
