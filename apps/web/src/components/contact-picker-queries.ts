@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type ContactPickerOrganizationKey = {
@@ -42,10 +42,6 @@ export const contactPickerSearchOptions = ({
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.items;
+      return unwrapEden(response).items;
     },
   });

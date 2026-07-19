@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 type ExpenseCategory =
@@ -74,11 +74,7 @@ export const expensesOptions = (
           fetch: { signal },
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.items;
+      return unwrapEden(response).items;
     },
   });
 

@@ -16,7 +16,7 @@ import { Separator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
@@ -120,10 +120,7 @@ export const PropertyPopover = ({
           ...groupParams,
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: (data, { action, scoped, set }) => {
       void queryClient.invalidateQueries({

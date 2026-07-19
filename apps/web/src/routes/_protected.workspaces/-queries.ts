@@ -2,7 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 
@@ -51,11 +51,7 @@ const readWorkspaces = async (signal?: AbortSignal) => {
     signal ? { fetch: { signal } } : {},
   );
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data;
+  return unwrapEden(response);
 };
 
 export type WorkspacesData = Awaited<ReturnType<typeof readWorkspaces>>;
@@ -83,11 +79,7 @@ export const workspacesNavigationOptions = (activeOrganizationId: string) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -100,11 +92,7 @@ export const workspaceOptions = (workspaceId: string) =>
         .workspaces({ workspaceId })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -127,11 +115,7 @@ export const workspaceActivityOptions = ({
           query,
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     initialPageParam: getInitialWorkspaceActivityCursor(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -154,11 +138,7 @@ export const overviewOptions = (workspaceId: string) =>
         .workspaces({ workspaceId })
         .overview.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

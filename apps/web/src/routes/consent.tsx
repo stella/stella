@@ -22,7 +22,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
@@ -132,10 +132,7 @@ function ConsentPage() {
       const response = await api["organization-settings"].get({
         fetch: { signal },
       });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data.practiceJurisdictions;
+      return unwrapEden(response).practiceJurisdictions;
     },
   });
   const showJurisdictionsNotice =

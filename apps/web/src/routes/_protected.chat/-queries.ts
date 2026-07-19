@@ -28,7 +28,7 @@ import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -476,13 +476,11 @@ export const fetchOlderMessages = async ({
       },
     });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
+  const data = unwrapEden(response);
 
   return {
-    messages: response.data.messages,
-    olderCursor: response.data.olderCursor,
+    messages: data.messages,
+    olderCursor: data.olderCursor,
   };
 };
 
@@ -501,11 +499,7 @@ const fetchGroupedChatThreads = async ({
     },
   });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data;
+  return unwrapEden(response);
 };
 
 type FileChatThreadFetchResult = {
@@ -536,20 +530,18 @@ const fetchFileChatThread = async ({
       fieldId: toSafeId<"field">(fieldId),
     });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
+  const data = unwrapEden(response);
 
   return {
-    threadId: toChatThreadId(response.data.threadId),
-    messages: response.data.messages,
-    olderCursor: response.data.olderCursor,
-    contextMatterIds: response.data.contextMatterIds,
-    lastActivityAt: response.data.lastActivityAt,
-    webSearchAvailable: response.data.webSearchAvailable,
-    webSearchEnabled: response.data.webSearchEnabled,
-    model: response.data.model,
-    context: response.data.context,
+    threadId: toChatThreadId(data.threadId),
+    messages: data.messages,
+    olderCursor: data.olderCursor,
+    contextMatterIds: data.contextMatterIds,
+    lastActivityAt: data.lastActivityAt,
+    webSearchAvailable: data.webSearchAvailable,
+    webSearchEnabled: data.webSearchEnabled,
+    model: data.model,
+    context: data.context,
   };
 };
 
@@ -560,11 +552,7 @@ const fetchTemplateChatThread = async ({
     templateId: toSafeId<"template">(templateId),
   });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return toChatThreadId(response.data.threadId);
+  return toChatThreadId(unwrapEden(response).threadId);
 };
 
 export const mergeGroupedChatThreadPages = (
@@ -1833,11 +1821,7 @@ export const chatThreadSuggestedPromptsOptions = ({
 const fetchChatModelOptions = async () => {
   const response = await api.chat["model-options"].get();
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data;
+  return unwrapEden(response);
 };
 
 // The composer (+) menu's Models submenu fetches this lazily (only once the
@@ -1873,11 +1857,7 @@ const fetchChatThreadTitle = async ({
         : {},
     });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data.title;
+  return unwrapEden(response).title;
 };
 
 type ChatThreadTitleOptionsArgs = {

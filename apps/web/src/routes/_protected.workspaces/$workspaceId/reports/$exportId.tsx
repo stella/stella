@@ -11,7 +11,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -168,10 +168,7 @@ const reportExportRecoveryOptions = ({
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reports({ exportId: toSafeId<"reportExport">(exportId) })
         .get({ fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     refetchInterval: (query) => {
       const status = query.state.data?.status;

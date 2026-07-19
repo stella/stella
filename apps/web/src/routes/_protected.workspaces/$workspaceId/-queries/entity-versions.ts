@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
@@ -38,11 +38,7 @@ export const entityVersionsOptions = ({
         .entity({ entityId })
         .versions.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });
 
@@ -56,13 +52,11 @@ export const fetchOlderVersions = async ({
     .entity({ entityId })
     .versions.get({ query: { before } });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
+  const data = unwrapEden(response);
 
   return {
-    versions: response.data.versions,
-    olderCursor: response.data.olderCursor,
+    versions: data.versions,
+    olderCursor: data.olderCursor,
   };
 };
 
@@ -88,11 +82,7 @@ export const fieldFileOptions = ({
         .field({ fieldId })
         .file.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });
 
@@ -110,10 +100,6 @@ export const entityVersionDetailOptions = ({
         .versions({ versionId })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });

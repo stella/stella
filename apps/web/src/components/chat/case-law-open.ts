@@ -10,7 +10,7 @@ import {
   isCaseLawDecisionId,
   pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
@@ -43,10 +43,7 @@ const resolveCaseLawDecisionRouteParams = async (
       .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionRef) })
       .get();
 
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
-    const data = response.data;
+    const data = unwrapEden(response);
     assertPublicLawApiData(data, "resolvePublicCaseLawDecision");
 
     return createCaseLawDecisionRouteParams({
@@ -62,10 +59,7 @@ const resolveCaseLawDecisionRouteParams = async (
     limit: CASE_LAW_LINK_SEARCH_LIMIT,
   });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-  const data = response.data;
+  const data = unwrapEden(response);
   assertPublicLawApiData(data, "searchPublicCaseLawDecisionLinks");
 
   const hit = pickCaseLawDecisionHit(decisionRef, data.hits);

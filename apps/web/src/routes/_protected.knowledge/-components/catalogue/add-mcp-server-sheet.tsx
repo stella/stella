@@ -17,7 +17,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
@@ -78,10 +78,7 @@ export const AddMcpServerSheet = ({
       const response = await api.mcp
         .connectors({ slug: connector.slug })
         .connect.post({ queryKey: ["mcp"] });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return { connector, data: response.data };
+      return { connector, data: unwrapEden(response) };
     },
     onSuccess: ({ connector, data }) => {
       if (data.type === "bearer") {
@@ -117,10 +114,7 @@ export const AddMcpServerSheet = ({
         url: trimmedUrl,
         queryKey: ["mcp"],
       });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: (data) => {
       invalidate();
@@ -136,10 +130,7 @@ export const AddMcpServerSheet = ({
         token: payload.token,
         queryKey: ["mcp"],
       });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: () => {
       stellaToast.add({

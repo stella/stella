@@ -72,7 +72,7 @@ import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { pageTitle } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
@@ -744,11 +744,9 @@ const CreateContactDialog = ({
       const response = await api.contacts["business-registries"].get({
         query: { registry: "ares", q: ico },
       });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      const data = unwrapEden(response);
 
-      const hit = response.data.type === "lookup" ? response.data.hit : null;
+      const hit = data.type === "lookup" ? data.hit : null;
 
       if (!hit) {
         stellaToast.add({

@@ -8,7 +8,7 @@
 
 import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -16,20 +16,16 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
 
-import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { deepLConfigOptions, deepLKeys } from "@/lib/deepl/queries";
-import { toAPIError } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { unwrapEden } from "@/lib/errors/api";
+import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 export const DeepLKeyCard = () => {
   const t = useTranslations("translate.settings");
   const tCommon = useTranslations("common");
   const tErrors = useTranslations("errors");
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
   const activeOrganizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -41,58 +37,24 @@ export const DeepLKeyCard = () => {
 
   const [apiKey, setApiKey] = useState("");
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api["organization-settings"].deepl.post({
-        apiKey,
-      });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+  const saveMutation = useSettingsMutation({
+    mutationFn: async () =>
+      unwrapEden(await api["organization-settings"].deepl.post({ apiKey })),
+    invalidate: deepLKeys.all,
+    successToast: { title: t("saved"), description: t("savedDescription") },
+    errorToast: {
+      title: tErrors("actionFailed"),
+      description: tErrors("actionFailed"),
     },
-    onSuccess: async () => {
-      setApiKey("");
-      await queryClient.invalidateQueries({ queryKey: deepLKeys.all });
-      stellaToast.add({
-        title: t("saved"),
-        description: t("savedDescription"),
-        type: "success",
-      });
-    },
-    onError: (error: unknown) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: tErrors("actionFailed"),
-        description: userErrorFromThrown(error, tErrors("actionFailed")),
-        type: "error",
-      });
-    },
+    onSuccess: () => setApiKey(""),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api["organization-settings"].deepl.delete();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: deepLKeys.all });
-      stellaToast.add({
-        title: t("removed"),
-        description: t("removedDescription"),
-        type: "success",
-      });
-    },
-    onError: (error: unknown) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: tErrors("actionFailed"),
-        type: "error",
-      });
-    },
+  const deleteMutation = useSettingsMutation({
+    mutationFn: async () =>
+      unwrapEden(await api["organization-settings"].deepl.delete()),
+    invalidate: deepLKeys.all,
+    successToast: { title: t("removed"), description: t("removedDescription") },
+    errorToast: { title: tErrors("actionFailed") },
   });
 
   const isConfigured = deeplConfig?.configured === true;

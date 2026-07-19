@@ -29,7 +29,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type SkillScope = "team" | "private";
@@ -123,10 +123,7 @@ const BlueprintGallerySheetBody = ({
         blueprintId: id,
         queryKey: ["skills"],
       });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return { id: response.data.id };
+      return { id: unwrapEden(response).id };
     },
     onSuccess: ({ id }) => {
       onCreated({ id });

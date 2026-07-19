@@ -25,7 +25,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
@@ -110,11 +110,7 @@ const RateTablesView = ({
           ...body,
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -135,11 +131,7 @@ const RateTablesView = ({
           id: toSafeId<"rateTable">(id),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -164,11 +156,7 @@ const RateTablesView = ({
           id: toSafeId<"rateTable">(body.id),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -448,11 +436,7 @@ const RateEntriesView = ({
           }),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -477,11 +461,7 @@ const RateEntriesView = ({
           id: toSafeId<"rateEntry">(id),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);

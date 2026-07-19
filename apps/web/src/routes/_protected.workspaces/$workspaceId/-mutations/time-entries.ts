@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { timeEntriesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
@@ -33,11 +33,7 @@ export const useCreateTimeEntry = () => {
         matterId: toSafeId<"entity">(body.matterId),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -79,11 +75,7 @@ export const useUpdateTimeEntry = () => {
         }),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -108,11 +100,7 @@ export const useDeleteTimeEntry = () => {
         id: toSafeId<"timeEntry">(id),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -142,11 +130,7 @@ export const useStartTimer = () => {
         matterId: toSafeId<"entity">(body.matterId),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -169,11 +153,7 @@ export const useStopTimer = () => {
         queryKey: timeEntriesKeys.all(workspaceId),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -200,11 +180,7 @@ export const useBatchUpdateTimeEntries = () => {
         ids: body.ids.map((id) => toSafeId<"timeEntry">(id)),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -229,11 +205,7 @@ export const useBatchDeleteTimeEntries = () => {
         ids: ids.map((id) => toSafeId<"timeEntry">(id)),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -264,11 +236,7 @@ export const useSplitTimeEntry = () => {
         })),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);

@@ -15,7 +15,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 /** Modal shown when the current organisation cannot run more AI work. */
@@ -50,10 +50,7 @@ export const UsageLimitModal = ({
   const managementMutation = useMutation({
     mutationFn: async () => {
       const response = await api.usage.hosted.management.post();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: ({ url }) => {
       window.location.href = url;

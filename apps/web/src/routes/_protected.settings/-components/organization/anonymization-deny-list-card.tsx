@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { Trash2, UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -21,11 +21,11 @@ import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
-import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 import {
   organizationAnonymizationBlacklistKeys,
   organizationAnonymizationBlacklistOptions,
@@ -274,8 +274,6 @@ const dedupeByCanonical = (
 
 export const AnonymizationDenyListCard = () => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
   const activeOrganizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -289,33 +287,21 @@ export const AnonymizationDenyListCard = () => {
   // upsert: rows missing from the request are deleted, present
   // rows are upserted (keyed on lowercased canonical). Callers
   // therefore submit the full target list, not a delta.
-  const updateMutation = useMutation({
-    mutationFn: async ({ entries }: UpdateBlacklistVars) => {
-      const response = await api["organization-settings"][
-        "anonymization-blacklist"
-      ].put({
-        entries: entries.map((entry) => ({
-          canonical: entry.canonical,
-          label: entry.label,
-          ...(entry.variants ? { variants: [...entry.variants] } : {}),
-          ...(entry.enabled !== undefined ? { enabled: entry.enabled } : {}),
-        })),
-      });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: organizationAnonymizationBlacklistKeys.byOrganization({
-          organizationId: activeOrganizationId,
+  const updateMutation = useSettingsMutation({
+    mutationFn: async ({ entries }: UpdateBlacklistVars) =>
+      unwrapEden(
+        await api["organization-settings"]["anonymization-blacklist"].put({
+          entries: entries.map((entry) => ({
+            canonical: entry.canonical,
+            label: entry.label,
+            ...(entry.variants ? { variants: [...entry.variants] } : {}),
+            ...(entry.enabled !== undefined ? { enabled: entry.enabled } : {}),
+          })),
         }),
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-    },
+      ),
+    invalidate: organizationAnonymizationBlacklistKeys.byOrganization({
+      organizationId: activeOrganizationId,
+    }),
   });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 

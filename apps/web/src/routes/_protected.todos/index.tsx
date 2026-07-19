@@ -29,7 +29,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { pageTitle } from "@/lib/page-title";
 import type { TaskItem } from "@/routes/_protected.todos/-queries";
 import { myTasksOptions } from "@/routes/_protected.todos/-queries";
@@ -145,11 +145,7 @@ function MyTodosPage() {
       name: t("tasks.untitled"),
     });
 
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
-
-    const entityId = response.data.entityId;
+    const entityId = unwrapEden(response).entityId;
 
     await navigate({
       to: "/workspaces/$workspaceId",

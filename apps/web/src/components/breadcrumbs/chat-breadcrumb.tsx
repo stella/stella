@@ -16,7 +16,7 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   chatThreadTitleOptions,
@@ -92,10 +92,7 @@ export const ChatBreadcrumb = ({
               : {},
           },
         );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onMutate: async (nextTitle) => {
       await queryClient.cancelQueries({ queryKey: groupedKey });

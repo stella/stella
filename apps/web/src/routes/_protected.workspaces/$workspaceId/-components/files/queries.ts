@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import {
   fetchStorageArrayBuffer,
@@ -83,15 +83,13 @@ export const fileMetadataOptions = (props: FileOptionsProps) =>
           fetch: { signal },
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      const data = unwrapEden(response);
 
       return {
-        fileId: response.data.fileId,
-        fileName: response.data.fileName,
-        mimeType: response.data.mimeType,
-        originalMimeType: response.data.originalMimeType,
+        fileId: data.fileId,
+        fileName: data.fileName,
+        mimeType: data.mimeType,
+        originalMimeType: data.originalMimeType,
       } satisfies FileMetadata;
     },
   });
@@ -108,20 +106,18 @@ export const fileOptions = (props: FileOptionsProps) =>
           fetch: { signal },
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      const data = unwrapEden(response);
 
-      const buffer = await fetchStorageArrayBuffer(response.data.presignedUrl, {
+      const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
         signal,
         purpose: props.purpose ?? "display",
       });
 
       return {
-        fileId: response.data.fileId,
-        fileName: response.data.fileName,
-        mimeType: response.data.mimeType,
-        originalMimeType: response.data.originalMimeType,
+        fileId: data.fileId,
+        fileName: data.fileName,
+        mimeType: data.mimeType,
+        originalMimeType: data.originalMimeType,
         buffer,
       } satisfies FileData;
     },
@@ -136,16 +132,14 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         ["email-html"]({ fieldId: props.fieldId })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      const data = unwrapEden(response);
 
       return {
-        fileId: response.data.fileId,
-        fileName: response.data.fileName,
-        html: response.data.html,
-        mimeType: response.data.mimeType,
-        originalMimeType: response.data.originalMimeType,
+        fileId: data.fileId,
+        fileName: data.fileName,
+        html: data.html,
+        mimeType: data.mimeType,
+        originalMimeType: data.originalMimeType,
       } satisfies EmailHtmlPreviewData;
     },
   });
@@ -162,20 +156,18 @@ export const textFileOptions = (props: FileOptionsProps) =>
           fetch: { signal },
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      const data = unwrapEden(response);
 
-      const buffer = await fetchStorageArrayBuffer(response.data.presignedUrl, {
+      const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
         signal,
         purpose: "download",
       });
 
       return {
-        fileId: response.data.fileId,
-        fileName: response.data.fileName,
-        mimeType: response.data.mimeType,
-        originalMimeType: response.data.originalMimeType,
+        fileId: data.fileId,
+        fileName: data.fileName,
+        mimeType: data.mimeType,
+        originalMimeType: data.originalMimeType,
         text: new TextDecoder().decode(buffer),
       } satisfies TextFileData;
     },

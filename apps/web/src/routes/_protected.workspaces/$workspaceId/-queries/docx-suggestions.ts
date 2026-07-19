@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
@@ -49,12 +49,10 @@ export const docxSuggestionsOptions = ({
           query: { status, limit: DOCX_SUGGESTIONS_HYDRATION_LIMIT },
           fetch: { signal },
         });
-        if (firstPage.error) {
-          throw toAPIError(firstPage.error);
-        }
+        const firstData = unwrapEden(firstPage);
 
-        const items = [...firstPage.data.items];
-        let nextCursor = firstPage.data.nextCursor;
+        const items = [...firstData.items];
+        let nextCursor = firstData.nextCursor;
 
         while (nextCursor !== null && items.length < max) {
           // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: each page's `nextCursor` is required to request the next
@@ -66,11 +64,9 @@ export const docxSuggestionsOptions = ({
             },
             fetch: { signal },
           });
-          if (page.error) {
-            throw toAPIError(page.error);
-          }
-          items.push(...page.data.items);
-          nextCursor = page.data.nextCursor;
+          const pageData = unwrapEden(page);
+          items.push(...pageData.items);
+          nextCursor = pageData.nextCursor;
         }
 
         return { items, nextCursor };

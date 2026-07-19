@@ -3,7 +3,7 @@ import { useRouteContext } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
 import { viewTemplateKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/view-templates";
@@ -27,10 +27,7 @@ export const useCreateViewTemplate = () => {
       const response = await api["view-templates"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).put(body);
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return { data: response.data, workspaceId };
+      return { data: unwrapEden(response), workspaceId };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({
@@ -63,10 +60,7 @@ export const useDeleteViewTemplate = () => {
       })({
         templateId: toSafeId<"workspaceViewTemplate">(templateId),
       }).delete();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return { data: response.data, workspaceId };
+      return { data: unwrapEden(response), workspaceId };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({

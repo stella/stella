@@ -46,7 +46,7 @@ import {
   type DeepLTargetLanguageCode,
 } from "@/lib/deepl/languages";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -114,11 +114,7 @@ export const TranslateDocumentDialog = ({
           queryKey: entitiesKeys.all(workspaceId),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async (data) => {
       stellaToast.add({

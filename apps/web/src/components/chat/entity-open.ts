@@ -4,7 +4,7 @@ import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
@@ -140,14 +140,12 @@ export const openEntityInInspector = async (
       .entity({ entityId: toSafeId<"entity">(entityId) })
       .get();
 
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
+    const data = unwrapEden(response);
 
-    const responseLabel = response.data.name;
+    const responseLabel = data.name;
     const openedByKind = openEntityByKind({
       entityId,
-      kind: response.data.kind,
+      kind: data.kind,
       label: responseLabel,
       workspaceId,
     });
@@ -157,7 +155,7 @@ export const openEntityInInspector = async (
 
     const opened = openDisplayableFile({
       entityId,
-      fields: response.data.fields,
+      fields: data.fields,
       label: responseLabel,
       workspaceId,
     });

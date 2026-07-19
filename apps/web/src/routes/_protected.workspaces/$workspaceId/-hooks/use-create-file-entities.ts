@@ -12,7 +12,7 @@ import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
@@ -672,10 +672,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
       name: t("workspaces.files.defaultPropertyName"),
       contentType: "file",
     });
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
-    propertyId = response.data.id;
+    propertyId = unwrapEden(response).id;
     return propertyId;
   };
 

@@ -21,7 +21,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { downloadFile } from "@/lib/utils";
@@ -104,11 +104,9 @@ export const PdfViewerControls = ({
         .url({ fieldId })
         .get({ query: { purpose: "download" } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      const data = unwrapEden(response);
 
-      const fileResponse = await fetchWithTimeout(response.data.presignedUrl, {
+      const fileResponse = await fetchWithTimeout(data.presignedUrl, {
         timeoutMs: 60_000,
       });
       if (!fileResponse.ok) {

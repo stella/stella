@@ -34,7 +34,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import {
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
@@ -224,11 +224,7 @@ const DisconnectButton = ({ clientName, consentId }: DisconnectButtonProps) => {
         consentId,
       }).delete();
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async () => {
       stellaToast.add({

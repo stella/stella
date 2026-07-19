@@ -53,7 +53,7 @@ import {
 } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
@@ -225,10 +225,7 @@ function ProfilePageBody() {
       const res = await api.me.delete["pending-tasks"].get({
         fetch: { signal },
       });
-      if (res.error) {
-        throw toAPIError(res.error);
-      }
-      return res.data;
+      return unwrapEden(res);
     },
     enabled: isDeleteDialogOpen,
   });
@@ -237,10 +234,7 @@ function ProfilePageBody() {
     mutationFn: async () => {
       setOtpError(null);
       const res = await api.me.delete["send-otp"].post();
-      if (res.error) {
-        throw toAPIError(res.error);
-      }
-      return res.data;
+      return unwrapEden(res);
     },
     onSuccess: () => {
       setStep("otp");
@@ -265,10 +259,7 @@ function ProfilePageBody() {
     }) => {
       setOtpError(null);
       const res = await api.me.delete.verify.post(payload);
-      if (res.error) {
-        throw toAPIError(res.error);
-      }
-      return res.data;
+      return unwrapEden(res);
     },
     onSuccess: async () => {
       stellaToast.add({

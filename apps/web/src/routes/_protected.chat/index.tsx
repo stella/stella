@@ -51,7 +51,7 @@ import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -157,16 +157,14 @@ function ChatIndex() {
           query: { allowMissingThread: true },
           fetch: { signal },
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      const data = unwrapEden(response);
       return {
-        webSearchAvailable: response.data.webSearchAvailable,
-        webSearchEnabled: response.data.webSearchEnabled,
-        model: response.data.model,
+        webSearchAvailable: data.webSearchAvailable,
+        webSearchEnabled: data.webSearchEnabled,
+        model: data.model,
         // The draft's cache-stable context floor (system prompt + tools), so
         // the hero meter shows the honest baseline instead of 0% before send.
-        context: response.data.context,
+        context: data.context,
       };
     },
   });
@@ -205,10 +203,7 @@ function ChatIndex() {
           ),
         })
         .patch({ webSearchEnabled: true }, { query: {} });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);

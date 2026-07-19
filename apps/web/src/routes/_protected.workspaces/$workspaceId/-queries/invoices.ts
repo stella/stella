@@ -1,7 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 /** Mirrors `INVOICE_STATUSES` in `apps/api/src/db/schema.ts`. */
@@ -51,11 +51,7 @@ export const invoicesOptions = (
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });
 
@@ -71,11 +67,7 @@ export const invoicesInfiniteOptions = (workspaceId: string, limit: number) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     initialPageParam: getInitialInvoicesPageParam(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -90,11 +82,7 @@ export const invoiceByIdOptions = (workspaceId: string, invoiceId: string) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });
 

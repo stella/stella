@@ -4,7 +4,7 @@ import type { PropertyContentType } from "@stll/api/types";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -64,11 +64,7 @@ export const useCreateProperty = ({ workspaceId }: { workspaceId: string }) => {
           ...(fallback !== undefined ? { fallback } : {}),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async () => {
       // Reflect the actor's own write immediately instead of waiting on
@@ -130,11 +126,7 @@ export const useCreatePropertiesBatch = ({
           })),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -245,11 +237,7 @@ export const usePreviewProperty = () => {
             : {}),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -289,11 +277,7 @@ export const useSuggestPrompt = () => {
             : {}),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);

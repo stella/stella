@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 
 const myTasksKeys = {
   all: ["my-tasks"],
@@ -14,11 +14,7 @@ export const myTasksOptions = queryOptions({
       fetch: { signal },
     });
 
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
-
-    return response.data;
+    return unwrapEden(response);
   },
 });
 

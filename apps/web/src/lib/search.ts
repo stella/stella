@@ -8,7 +8,7 @@ import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 import { DAY_IN_MS } from "@stll/time";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -134,11 +134,7 @@ export const searchInfiniteOptions = (params: SearchParams) =>
         { fetch: { signal } },
       );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -169,11 +165,7 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
         { fetch: { signal } },
       );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     enabled: params.query.length > 0,
     placeholderData: keepPreviousData,

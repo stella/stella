@@ -29,7 +29,7 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -137,10 +137,7 @@ function AuditLogsPage() {
           query: cleanParams,
         });
 
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-        return response.data;
+        return unwrapEden(response);
       },
       catch: (error) => error,
     });

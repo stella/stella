@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";
 
 type BankAccount = {
@@ -86,11 +86,7 @@ export const useCreateContact = () => {
     mutationFn: async (vars: CreateContactVars) => {
       const response = await api.contacts.put(vars);
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -131,11 +127,7 @@ export const useUpdateContact = () => {
     mutationFn: async ({ contactId, ...body }: UpdateContactVars) => {
       const response = await api.contacts({ contactId }).post(body);
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);

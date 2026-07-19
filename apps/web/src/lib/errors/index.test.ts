@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { APIError, internalToolErrorMessage, toAPIError } from "./api";
+import {
+  APIError,
+  internalToolErrorMessage,
+  toAPIError,
+  unwrapEden,
+} from "./api";
 import {
   AuthClientError,
   isMemberError,
@@ -198,6 +203,39 @@ describe("toAPIError", () => {
     const error = toAPIError({ status: 402, value });
 
     expect(error.message).toBe("Usage limit reached.");
+  });
+});
+
+describe("unwrapEden", () => {
+  test("returns the payload when there is no error", () => {
+    const payload = { id: "abc", value: 1 };
+
+    expect(unwrapEden({ data: payload, error: null })).toBe(payload);
+  });
+
+  test("preserves a nullable success payload", () => {
+    expect(unwrapEden({ data: null, error: null })).toBeNull();
+  });
+
+  test("throws a localized APIError when the response carries an error", () => {
+    expect(() =>
+      unwrapEden({
+        data: null,
+        error: { status: 403, value: { code: "forbidden", message: "no" } },
+      }),
+    ).toThrow(APIError);
+
+    try {
+      unwrapEden({
+        data: null,
+        error: { status: 403, value: { code: "forbidden", message: "no" } },
+      });
+    } catch (error) {
+      expect(APIError.is(error)).toBe(true);
+      if (APIError.is(error)) {
+        expect(error.message).toBe("You do not have permission to do this.");
+      }
+    }
   });
 });
 

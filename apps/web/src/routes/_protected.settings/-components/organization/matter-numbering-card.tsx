@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -15,16 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
-import { stellaToast } from "@stll/ui/components/toast";
 
-import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/routes/_protected.organization/-settings-queries";
+import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 const PATTERN_PRESETS = [
   { value: "{SEQ}", key: "sequential" as const },
@@ -66,8 +65,6 @@ const MatterNumberingCardBody = ({
   settings: MatterNumberingSettings;
 }) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const [pattern, setPattern] = useState(settings.matterNumberPattern);
@@ -87,49 +84,30 @@ const MatterNumberingCardBody = ({
       debouncedPattern,
       debouncedPadding,
     ],
-    queryFn: async ({ signal }) => {
-      const response = await api["organization-settings"].preview.post(
-        {
-          matterNumberPattern: debouncedPattern,
-          matterNumberPadding: debouncedPadding,
-        },
-        { fetch: { signal } },
-      );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
+    queryFn: async ({ signal }) =>
+      unwrapEden(
+        await api["organization-settings"].preview.post(
+          {
+            matterNumberPattern: debouncedPattern,
+            matterNumberPadding: debouncedPadding,
+          },
+          { fetch: { signal } },
+        ),
+      ),
   });
   const preview = previewData?.preview ?? null;
 
-  const updateMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api["organization-settings"].post({
-        matterNumberPattern: pattern,
-        matterNumberPadding: padding,
-      });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: organizationSettingsKeys.all,
-      });
-      stellaToast.add({
-        title: t("success.matterNumberingUpdated"),
-        type: "success",
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-    },
+  const updateMutation = useSettingsMutation({
+    mutationFn: async () =>
+      unwrapEden(
+        await api["organization-settings"].post({
+          matterNumberPattern: pattern,
+          matterNumberPadding: padding,
+        }),
+      ),
+    invalidate: organizationSettingsKeys.all,
+    successToast: { title: t("success.matterNumberingUpdated") },
+    errorToast: { title: t("errors.actionFailed") },
   });
 
   const selectedPreset =

@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { expensesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/expenses";
 
@@ -41,11 +41,7 @@ export const useCreateExpense = () => {
           matterId: toSafeId<"entity">(body.matterId),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -85,11 +81,7 @@ export const useUpdateExpense = () => {
           }),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -114,11 +106,7 @@ export const useDeleteExpense = () => {
           id: toSafeId<"expense">(id),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);

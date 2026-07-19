@@ -70,7 +70,7 @@ import {
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { routeQueryOptions } from "@/lib/react-query";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -235,10 +235,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           taskId: toSafeId<"entity">(taskId),
           status,
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async (_data, variables) => {
       await Promise.all([
