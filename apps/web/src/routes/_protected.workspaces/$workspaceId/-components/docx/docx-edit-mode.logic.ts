@@ -84,17 +84,33 @@ export const createTrailingSingleFlight = ({
           // eslint-disable-next-line no-await-in-loop
           await run();
         } catch (error) {
-          onError?.(error);
+          try {
+            onError?.(error);
+          } catch {
+            // A reporter failure must not prevent settler resolution or
+            // abort a queued trailing run below: onError is telemetry,
+            // not part of the save contract.
+          }
         }
         for (const settle of settlers) {
           settle();
         }
+        // The returned trigger below can set `queued = true` while `run()`
+        // above is in flight; the checker only sees the straight-line reset
+        // on the line above and misses that concurrent path.
+        // eslint-disable-next-line typescript/no-unnecessary-condition
       } while (queued);
     } finally {
       active = false;
     }
   };
 
+  // Returns the already-created `settled` promise synchronously (either
+  // immediately, or after firing `drain` without awaiting it); wrapping in
+  // `async` would add a redundant microtask and could let a trigger observe
+  // a settled promise before `drain` has synchronously registered it as
+  // active.
+  // eslint-disable-next-line typescript/promise-function-async
   return () => {
     const settled = new Promise<void>((resolve) => {
       // Runs synchronously: the resolver is registered before the

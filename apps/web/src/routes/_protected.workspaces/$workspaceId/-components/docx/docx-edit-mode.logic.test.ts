@@ -12,7 +12,7 @@ import {
 } from "./docx-edit-mode.logic";
 
 /** Resolve every queued microtask (and the current macrotask). */
-const tick = () =>
+const tick = async () =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
   });
@@ -294,7 +294,7 @@ describe("trailing single-flight coordinator", () => {
     const gates: Gate[] = [];
     let runCalls = 0;
     const trigger = createTrailingSingleFlight({
-      run: () => {
+      run: async () => {
         runCalls += 1;
         const g = gate();
         gates.push(g);
@@ -302,14 +302,14 @@ describe("trailing single-flight coordinator", () => {
       },
     });
 
-    trigger();
+    void trigger();
     expect(runCalls).toBe(1);
 
     // Three more while the first is still in flight: they must all
     // collapse into a single trailing run, not three.
-    trigger();
-    trigger();
-    trigger();
+    void trigger();
+    void trigger();
+    void trigger();
     await tick();
     expect(runCalls).toBe(1);
 
@@ -327,7 +327,7 @@ describe("trailing single-flight coordinator", () => {
     let live = "a";
     const snapshots: string[] = [];
     const trigger = createTrailingSingleFlight({
-      run: () => {
+      run: async () => {
         snapshots.push(live);
         const g = gate();
         gates.push(g);
@@ -335,10 +335,10 @@ describe("trailing single-flight coordinator", () => {
       },
     });
 
-    trigger();
+    void trigger();
     // Edit lands while the first save is mid-flight.
     live = "b";
-    trigger();
+    void trigger();
 
     gates[0]?.resolve();
     await tick();
@@ -352,7 +352,7 @@ describe("trailing single-flight coordinator", () => {
     const gates: Gate[] = [];
     let runCalls = 0;
     const trigger = createTrailingSingleFlight({
-      run: () => {
+      run: async () => {
         runCalls += 1;
         const g = gate();
         gates.push(g);
@@ -360,12 +360,12 @@ describe("trailing single-flight coordinator", () => {
       },
     });
 
-    trigger();
+    void trigger();
     gates[0]?.resolve();
     await tick();
     expect(runCalls).toBe(1);
 
-    trigger();
+    void trigger();
     gates[1]?.resolve();
     await tick();
     expect(runCalls).toBe(2);
@@ -374,14 +374,14 @@ describe("trailing single-flight coordinator", () => {
   test("an awaiting trigger resolves only after the trailing run it belongs to", async () => {
     const gates: Gate[] = [];
     const trigger = createTrailingSingleFlight({
-      run: () => {
+      run: async () => {
         const g = gate();
         gates.push(g);
         return g.promise;
       },
     });
 
-    trigger();
+    void trigger();
     let flushed = false;
     // Issued while the first run is in flight: it belongs to the
     // trailing run, not the already-snapshotted in-flight run.
@@ -407,7 +407,9 @@ describe("trailing single-flight coordinator", () => {
   test("a failed run reports to onError exactly once and still settles the caller", async () => {
     let errorCount = 0;
     const trigger = createTrailingSingleFlight({
-      run: () => Promise.reject(new Error("save failed")),
+      run: () => {
+        throw new Error("save failed");
+      },
       onError: () => {
         errorCount += 1;
       },
@@ -423,7 +425,7 @@ describe("trailing single-flight coordinator", () => {
     let runCalls = 0;
     let errorCount = 0;
     const trigger = createTrailingSingleFlight({
-      run: () => {
+      run: async () => {
         runCalls += 1;
         const g = gate();
         gates.push(g);
@@ -434,8 +436,8 @@ describe("trailing single-flight coordinator", () => {
       },
     });
 
-    trigger();
-    trigger();
+    void trigger();
+    void trigger();
 
     gates[0]?.reject(new Error("first save failed"));
     await tick();
@@ -446,5 +448,32 @@ describe("trailing single-flight coordinator", () => {
     gates[1]?.resolve();
     await tick();
     expect(errorCount).toBe(1);
+  });
+
+  test("a throwing onError still settles the caller and runs a queued trailing run", async () => {
+    const gates: Gate[] = [];
+    let runCalls = 0;
+    const trigger = createTrailingSingleFlight({
+      run: async () => {
+        runCalls += 1;
+        const g = gate();
+        gates.push(g);
+        return g.promise;
+      },
+      onError: () => {
+        throw new Error("reporter failed");
+      },
+    });
+
+    const first = trigger();
+    const second = trigger();
+
+    gates[0]?.reject(new Error("first save failed"));
+    // Resolves (does not reject and does not hang) despite onError throwing.
+    await first;
+    expect(runCalls).toBe(2);
+
+    gates[1]?.resolve();
+    await second;
   });
 });

@@ -1010,14 +1010,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // Its `run`/`onError` are stable and read the latest committed
   // closures, so recreating it would only lose that state.
   const triggerCheckpointSaveRef = useRef<(() => Promise<void>) | null>(null);
-  if (triggerCheckpointSaveRef.current === null) {
-    triggerCheckpointSaveRef.current = createTrailingSingleFlight({
-      run: runCheckpointSave,
-      onError: reportCheckpointSaveError,
-    });
-  }
+  triggerCheckpointSaveRef.current ??= createTrailingSingleFlight({
+    run: runCheckpointSave,
+    onError: reportCheckpointSaveError,
+  });
   const triggerCheckpointSave = useCallback(
-    () => triggerCheckpointSaveRef.current?.() ?? Promise.resolve(),
+    async () =>
+      await (triggerCheckpointSaveRef.current?.() ?? Promise.resolve()),
     [],
   );
 
