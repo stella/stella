@@ -302,3 +302,76 @@ describe("runIngestionPipeline — database timeouts", () => {
     expect(persistedCursor).toBe("cursor-1");
   });
 });
+
+describe("runIngestionPipeline — empty-page cursor progress", () => {
+  test("persists the fetched cursor when the cycle aborts on an empty page", async () => {
+    const source = {
+      id: createSafeId<"caseLawSource">(),
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      name: "Empty-page source",
+      enabled: true,
+      syncCursor: "cursor-1",
+      lastSyncAt: null,
+      config: {},
+      descriptor: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    } satisfies typeof caseLawSources.$inferSelect;
+
+    // The cycle deadline fires while the fetch is in flight; the page it
+    // returns carries no decisions but real cursor progress. Acquiring the
+    // DB slot here used to throw AbortError before the cursor advance ran,
+    // pinning the adapter to the same cursor on every later cycle.
+    const controller = new AbortController();
+    czNsAdapter.fetchPage = async () => {
+      controller.abort();
+      return Result.ok({ decisions: [], nextCursor: "cursor-2" });
+    };
+
+    let acquires = 0;
+    const dbSlot = {
+      acquire: async (signal?: AbortSignal) => {
+        acquires++;
+        if (signal?.aborted) {
+          throw new DOMException("aborted", "AbortError");
+        }
+      },
+      release: () => undefined,
+    };
+
+    let persistedCursor: string | null | undefined;
+    const scopedDb: ScopedDb = async (callback) => {
+      const tx = {
+        update: (table: unknown) => ({
+          set: (values: { syncCursor?: string | null }) => {
+            if (table === caseLawSources) {
+              persistedCursor = values.syncCursor;
+            }
+
+            return { where: async () => undefined };
+          },
+        }),
+      };
+
+      // SAFETY: this test exercises only the final case_law_sources cursor
+      // update (the empty page performs no decision writes); the fake
+      // implements that chain.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      return await callback(tx as unknown as Transaction);
+    };
+
+    const result = await runIngestionPipeline({
+      source,
+      scopedDb,
+      signal: controller.signal,
+      maxPages: 1,
+      dbSlot,
+    });
+
+    // An empty page has no DB work, so the slot must never be contended.
+    expect(acquires).toBe(0);
+    expect(result.pagesProcessed).toBe(1);
+    expect(result.nextCursor).toBe("cursor-2");
+    expect(persistedCursor).toBe("cursor-2");
+  });
+});

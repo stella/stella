@@ -623,10 +623,19 @@ export const runIngestionPipeline = async ({
     // before the next page fetch so external API calls don't
     // hold the slot. try-finally ensures no slot leak on
     // unexpected exceptions.
-    if (dbSlot) {
+    //
+    // A page with no decisions never touches the slot: it has no DB
+    // work, and acquiring anyway let a cycle-timeout abort land in
+    // the gap between the fetch returning and the acquire — breaking
+    // out before the cursor advance below ever ran, silently
+    // discarding the forward progress the fetch had already made and
+    // pinning the adapter to the same cursor on every later cycle.
+    let pageHoldsDbSlot = false;
+    if (dbSlot && page.decisions.length > 0) {
       try {
         // oxlint-disable-next-line no-await-in-loop -- sequential per-page DB-slot acquisition bounds concurrent DB pressure
         await dbSlot.acquire(signal);
+        pageHoldsDbSlot = true;
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           haltReason = "Cycle timeout exceeded";
@@ -761,7 +770,7 @@ export const runIngestionPipeline = async ({
       cursor = page.nextCursor;
       pagesProcessed++;
     } finally {
-      if (dbSlot) {
+      if (dbSlot && pageHoldsDbSlot) {
         dbSlot.release();
       }
     }
