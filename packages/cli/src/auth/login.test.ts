@@ -194,12 +194,15 @@ describe("login orchestration", () => {
     await rm(configDir, { force: true, recursive: true });
   });
 
-  // The loopback module mock delegates to the real listener when
-  // `loopbackMode === "real"`; leave it there so other test files that use the
-  // real listener are unaffected by this file's headless scenario.
+  // `mock.module` is process-wide: `bun test src` runs every CLI test file in
+  // one process, so leaving `./loopback-listener.js` and `./browser-open.js`
+  // mocked after this file finishes would leak the fake listener/opener into
+  // any later file that imports either module. Restore the real modules once
+  // this file's tests are done, not just the local toggles.
   afterAll(() => {
     loopbackMode = "real";
     onBrowserOpen = () => {};
+    mock.restore();
   });
 
   test("loopback happy path persists a credential with org, scopes, and refresh token", async () => {

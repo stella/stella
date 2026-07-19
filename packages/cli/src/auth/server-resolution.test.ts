@@ -1,5 +1,13 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -22,6 +30,14 @@ const setEnvServerUrl = (value: string | undefined): void => {
 
 setEnvServerUrl(undefined);
 const { resolveServerUrl } = await import("./server-resolution.js");
+
+// `mock.module` is process-wide: `bun test src` runs every CLI test file in one
+// process, so leaving `../env.js` mocked after this file finishes would leak the
+// fake environment into any later file that imports `env.js` or
+// `server-resolution.js`. Restore the real module once this file's tests are done.
+afterAll(() => {
+  mock.restore();
+});
 
 const configWith = (defaultServerUrl: string) => ({
   defaultServerUrl,
