@@ -725,11 +725,21 @@ describe("canReviewFlushReportResolved", () => {
   // `reported` flag when it's allowed to.
   test("a pre-review autosave settling mid-review leaves the gate untouched, and the review's own flush still resolves it correctly", async () => {
     let reviewFlushEpoch = 0;
-    let reported: ClauseEditorReviewStatus = "pending";
+    // A plain `let` here gets narrowed by control-flow analysis to the
+    // literal it was last assigned in *this* scope ("pending"), even though
+    // `settleSave` below can reassign it to "resolved" — TS doesn't widen a
+    // captured variable's flow type back out just because a closure that
+    // mutates it exists. Route the mutation through an object property
+    // instead: TS doesn't narrow properties the same way, so both `expect`s
+    // below see the full `ClauseEditorReviewStatus` union, matching runtime
+    // reality.
+    const state: { reported: ClauseEditorReviewStatus } = {
+      reported: "pending",
+    };
 
     const settleSave = (reviewFlushToken: number | undefined) => {
       if (canReviewFlushReportResolved(reviewFlushToken, reviewFlushEpoch)) {
-        reported = "resolved";
+        state.reported = "resolved";
       }
     };
 
@@ -737,13 +747,13 @@ describe("canReviewFlushReportResolved", () => {
     // settles now, while the review is still "pending" — it carries no
     // token.
     settleSave(undefined);
-    expect(reported).toBe("pending");
+    expect(state.reported).toBe("pending");
 
     // The review resolves: `onReviewResolved` mints the epoch's token and
     // its own flush settles successfully.
     const reviewFlushToken = (reviewFlushEpoch += 1);
     settleSave(reviewFlushToken);
-    expect(reported).toBe("resolved");
+    expect(state.reported).toBe("resolved");
   });
 });
 

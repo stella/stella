@@ -94,8 +94,16 @@ const hasPendingTrackedChanges = (editor: Editor): boolean => {
 type AiEditState =
   | { status: "idle" }
   | { status: "prompting"; instruction: string }
-  | { status: "generating"; instruction: string; baseline: ClauseBody }
-  | { status: "reviewing"; instruction: string; baseline: ClauseBody };
+  | {
+      status: "generating";
+      instruction: string;
+      baseline: readonly ClauseParagraph[];
+    }
+  | {
+      status: "reviewing";
+      instruction: string;
+      baseline: readonly ClauseParagraph[];
+    };
 
 export type { ClauseEditorReviewStatus } from "./clause-ai-tracked-changes";
 
@@ -320,7 +328,10 @@ export const ClauseEditor = ({
   const getLiveBody = (): ClauseBody =>
     isUsableEditor(editor) ? tipTapToClauseBody(editor.getJSON()) : content;
 
-  const runRewrite = async (instruction: string, baseline: ClauseBody) => {
+  const runRewrite = async (
+    instruction: string,
+    baseline: readonly ClauseParagraph[],
+  ) => {
     const trimmed = instruction.trim();
     if (trimmed === "") {
       return;
@@ -341,7 +352,10 @@ export const ClauseEditor = ({
       editor.setEditable(false);
     }
     const response = await api.clauses["ai-rewrite"].post({
-      body: baseline,
+      // The request body schema wants a mutable array; `baseline` stays
+      // `readonly` everywhere else in this module (it's never mutated,
+      // just read and compared) — copy only at this serialization boundary.
+      body: [...baseline],
       instruction: trimmed,
       usageNotes: usageNotes ?? null,
       title: title ?? null,
