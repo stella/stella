@@ -26,6 +26,7 @@
     "security:audit:write-baseline": "bun scripts/dependency-audit.ts --write-baseline",
     "policies:check": "bun test scripts/check-policy-evidence.test.ts && bun scripts/check-policy-evidence.ts",
     "marketing:check": "bun scripts/check-marketing-content.ts",
+    "marketing:stale": "bun scripts/check-marketing-recordings.ts",
     "sync-ai": "bash .ai/shared/scripts/sync-ai-skills.sh .",
     "sync-ai:check": "bash .ai/shared/scripts/sync-ai-skills.sh --check .",
     "link-codex": "bash scripts/link-codex-skills.sh",

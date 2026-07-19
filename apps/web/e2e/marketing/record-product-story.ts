@@ -6,9 +6,22 @@
 import { chromium, request as playwrightRequest } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { execFile } from "node:child_process";
-import { mkdir, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+
+// Explicit .ts extension: `capture:product-story` runs this file under
+// node's type stripping, whose ESM resolver requires real file paths.
+import { captureDefinitions, RECORDINGS_MANIFEST_PATH } from "./captures.ts";
+import type {
+  CaptureDefinition,
+  CaptureTheme,
+  CaptureViewport,
+  RecordingManifestEntry,
+  RecordingsManifest,
+  StoryCaptureId,
+} from "./captures.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const MEDIA_DIR = path.join(REPO_ROOT, "apps/landing/public/media/products");
@@ -21,19 +34,25 @@ const EMAIL = "test@stella.dev";
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 const NORTHSTAR_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
-const VIEWPORT = { height: 720, width: 1280 } as const;
+// The wide/hero/portrait viewports and the capture matrix live in
+// ./captures.ts so the staleness check (scripts/check-marketing-recordings.ts)
+// shares one source of truth with the recorder.
+const NAV_VIEWPORT = { height: 720, width: 1280 } as const;
+const MANIFEST_PATH = path.join(REPO_ROOT, RECORDINGS_MANIFEST_PATH);
 // eslint-disable-next-line typescript/strict-void-return -- promisify resolves execFile via its custom `__promisify__` overload; the rule matches the generic void-callback overload instead
 const execFileAsync = promisify(execFile);
 
-type CaptureTheme = "dark" | "light";
-type StoryCaptureId = "agent" | "editor" | "review" | "workspace";
-
-type StoryCapture = {
+type StoryScene = {
   durationSeconds: number;
   id: StoryCaptureId;
   path: (views: MarketingViewRoutes) => string;
   prepare: (page: Page) => Promise<void>;
 };
+
+// One scene can be captured at several viewports; `captureId` names the
+// output files (story-<captureId>[-dark].mp4) and is what MARKETING_CAPTURE
+// (comma-separated) filters on.
+type StoryCapture = StoryScene & CaptureDefinition;
 
 type MarketingViewRoutes = {
   agent: string;
@@ -41,7 +60,7 @@ type MarketingViewRoutes = {
   table: string;
 };
 
-const captures = [
+const scenes = [
   {
     id: "workspace",
     path: ({ files }) => files,
@@ -100,13 +119,33 @@ const captures = [
         .waitFor();
     },
   },
-] as const satisfies readonly StoryCapture[];
+] as const satisfies readonly StoryScene[];
+
+// Join the shared capture matrix (viewports, watched paths) with this file's
+// per-scene routes and choreography.
+const captures: readonly StoryCapture[] = captureDefinitions.map(
+  (definition) => {
+    const scene = scenes.find(({ id }) => id === definition.sceneId);
+    if (!scene) {
+      throw new Error(
+        `No scene choreography for capture ${definition.captureId}`,
+      );
+    }
+    return { ...scene, ...definition };
+  },
+);
+
+const captureFilter = CAPTURE_FILTER
+  ? new Set(CAPTURE_FILTER.split(","))
+  : undefined;
 
 const main = async () => {
   await mkdir(MEDIA_DIR, { recursive: true });
   await rm(RAW_VIDEO_DIR, { force: true, recursive: true });
   await mkdir(RAW_VIDEO_DIR, { recursive: true });
 
+  const recordedAtCommit = await resolveRecordedAtCommit();
+  const recordedEntries: RecordingManifestEntry[] = [];
   let cookies = await authenticate();
   const browser = await chromium.launch({ headless: true });
   cookies = await selectMarketingOrganization(browser, cookies);
@@ -117,16 +156,89 @@ const main = async () => {
       continue;
     }
     for (const capture of captures) {
-      if (CAPTURE_FILTER && capture.id !== CAPTURE_FILTER) {
+      if (captureFilter && !captureFilter.has(capture.captureId)) {
         continue;
       }
       // eslint-disable-next-line no-await-in-loop -- recordings are captured one scene at a time; a shared browser cannot record overlapping scenes
       await recordCapture({ browser, capture, cookies, theme, views });
+      recordedEntries.push({
+        captureId: capture.captureId,
+        theme,
+        viewport: capture.viewport,
+        recordedAtCommit,
+        watchedPaths: capture.watchedPaths,
+      });
     }
   }
 
   await browser.close();
   await rm(RAW_VIDEO_DIR, { force: true, recursive: true });
+  await updateRecordingsManifest(recordedEntries);
+};
+
+// The commit the recordings were made from, stamped into the manifest so
+// scripts/check-marketing-recordings.ts can diff watched paths against it.
+// Callers on a dirty tree should pass MARKETING_COMMIT explicitly; the
+// fallback is a read-only rev-parse of HEAD.
+const resolveRecordedAtCommit = async () => {
+  const fromEnvironment = process.env["MARKETING_COMMIT"];
+  if (fromEnvironment) {
+    return fromEnvironment;
+  }
+  const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], {
+    cwd: REPO_ROOT,
+  });
+  return stdout.trim();
+};
+
+const updateRecordingsManifest = async (
+  recordedEntries: readonly RecordingManifestEntry[],
+) => {
+  if (recordedEntries.length === 0) {
+    return;
+  }
+  const manifest = await readRecordingsManifest();
+  const entriesByKey = new Map(
+    manifest.entries.map((entry) => [manifestKey(entry), entry]),
+  );
+  for (const entry of recordedEntries) {
+    entriesByKey.set(manifestKey(entry), entry);
+  }
+  const entries = [...entriesByKey.values()].sort(
+    (a, b) =>
+      a.captureId.localeCompare(b.captureId) || a.theme.localeCompare(b.theme),
+  );
+  await writeFile(
+    MANIFEST_PATH,
+    `${JSON.stringify({ entries } satisfies RecordingsManifest, null, 2)}\n`,
+  );
+  process.stdout.write(
+    `stamped ${recordedEntries.length} recordings in ${RECORDINGS_MANIFEST_PATH}\n`,
+  );
+};
+
+const manifestKey = (entry: RecordingManifestEntry) =>
+  `${entry.captureId}:${entry.theme}`;
+
+const readRecordingsManifest = async (): Promise<RecordingsManifest> => {
+  if (!existsSync(MANIFEST_PATH)) {
+    return { entries: [] };
+  }
+  const parsed: unknown = JSON.parse(await readFile(MANIFEST_PATH, "utf8"));
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("entries" in parsed) ||
+    !Array.isArray(parsed.entries)
+  ) {
+    throw new TypeError(
+      `${RECORDINGS_MANIFEST_PATH} must contain an entries array`,
+    );
+  }
+  // SAFETY: the recorder only merges over the manifest it wrote itself and
+  // rewrites every field it touches; deep-validating entry shapes is the
+  // check script's job.
+  return { entries: parsed.entries as RecordingManifestEntry[] };
 };
 
 type AuthCookie = Awaited<ReturnType<typeof authenticate>>[number];
@@ -146,7 +258,12 @@ const recordCapture = async ({
   theme,
   views,
 }: RecordCaptureOptions) => {
-  const context = await createRecordingContext({ browser, cookies, theme });
+  const context = await createRecordingContext({
+    browser,
+    cookies,
+    theme,
+    viewport: capture.viewport,
+  });
   const page = await context.newPage();
   configurePage(page);
   const recordingStartedAt = performance.now();
@@ -165,16 +282,22 @@ const recordCapture = async ({
 
   const video = page.video();
   if (!video) {
-    throw new Error(`Video recording did not start for ${capture.id}`);
+    throw new Error(`Video recording did not start for ${capture.captureId}`);
   }
 
   await page.close();
   const suffix = theme === "dark" ? "-dark" : "";
-  const rawPath = path.join(RAW_VIDEO_DIR, `${capture.id}${suffix}.webm`);
-  const outputPath = path.join(MEDIA_DIR, `story-${capture.id}${suffix}.mp4`);
+  const rawPath = path.join(
+    RAW_VIDEO_DIR,
+    `${capture.captureId}${suffix}.webm`,
+  );
+  const outputPath = path.join(
+    MEDIA_DIR,
+    `story-${capture.captureId}${suffix}.mp4`,
+  );
   const posterPath = path.join(
     MEDIA_DIR,
-    `story-${capture.id}${suffix}-poster.jpg`,
+    `story-${capture.captureId}${suffix}-poster.jpg`,
   );
   await video.saveAs(rawPath);
   await context.close();
@@ -193,19 +316,21 @@ type RecordingContextOptions = {
   browser: Browser;
   cookies: AuthCookie[];
   theme: CaptureTheme;
+  viewport: CaptureViewport;
 };
 
 const createRecordingContext = async ({
   browser,
   cookies,
   theme,
+  viewport,
 }: RecordingContextOptions) => {
   const context = await browser.newContext({
     baseURL: WEB_URL,
     colorScheme: theme,
     locale: "en-GB",
-    recordVideo: { dir: RAW_VIDEO_DIR, size: VIEWPORT },
-    viewport: VIEWPORT,
+    recordVideo: { dir: RAW_VIDEO_DIR, size: viewport },
+    viewport,
   });
   await context.addCookies(cookies);
   await context.addInitScript((nextTheme) => {
@@ -226,7 +351,7 @@ const selectMarketingOrganization = async (
   const context = await browser.newContext({
     baseURL: WEB_URL,
     locale: "en-GB",
-    viewport: VIEWPORT,
+    viewport: NAV_VIEWPORT,
   });
   await context.addCookies(cookies);
   const page = await context.newPage();
