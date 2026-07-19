@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
-import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcript";
 import {
-  buildRecapMessageWindow,
-  RECAP_RECENT_MESSAGE_LIMIT,
-} from "@/api/handlers/chat/thread-recap-window";
+  assertChatThreadScopeMatches,
+  resolveChatScope,
+} from "@/api/handlers/chat/chat-scope";
+import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcript";
+import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -127,61 +127,14 @@ const getSuggestedPrompts = createSafeRootHandler(
     }
 
     const persistedWorkspaceId = thread.workspaceId ?? null;
-    const requestedWorkspaceId =
-      scope.scope === "workspace" ? scope.workspaceId : null;
-    if (persistedWorkspaceId !== requestedWorkspaceId) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Chat thread scope does not match request",
-        }),
-      );
-    }
+    yield* assertChatThreadScopeMatches({ persistedWorkspaceId, scope });
 
     if (thread.usedAnonymization) {
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 
     const messageWindow = yield* Result.await(
-      safeDb(async (tx) => {
-        const firstUserMessages = await tx.query.chatMessages.findMany({
-          where: {
-            threadId: { eq: threadId },
-            userId: { eq: user.id },
-            role: { eq: "user" },
-          },
-          columns: {
-            id: true,
-            role: true,
-            content: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "asc" },
-          limit: 1,
-        });
-
-        const recentMessagesDesc = await tx.query.chatMessages.findMany({
-          where: {
-            threadId: { eq: threadId },
-            userId: { eq: user.id },
-          },
-          columns: {
-            id: true,
-            role: true,
-            content: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "desc" },
-          limit: RECAP_RECENT_MESSAGE_LIMIT,
-        });
-
-        return {
-          messages: buildRecapMessageWindow({
-            firstUserMessage: firstUserMessages.at(0) ?? null,
-            recentMessagesDesc,
-          }),
-        };
-      }),
+      loadRecapMessageWindow({ safeDb, threadId, userId: user.id }),
     );
 
     if (messageWindow.messages.length === 0) {

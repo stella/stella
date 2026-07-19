@@ -1,3 +1,6 @@
+import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeId } from "@/api/lib/branded-types";
+
 export const RECAP_RECENT_MESSAGE_LIMIT = 24;
 
 type RecapWindowMessage = {
@@ -23,3 +26,62 @@ export const buildRecapMessageWindow = <TMessage extends RecapWindowMessage>({
 
   return [firstUserMessage, ...recentMessages];
 };
+
+type LoadRecapMessageWindowProps = {
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+};
+
+/**
+ * Load the message window both the recap and suggested-prompt generators run
+ * on: the thread's first user message plus its most recent messages, merged
+ * into chronological order. `recentCount` is the pre-merge recent-message
+ * count the recap uses for its staleness gate; suggested prompts ignore it.
+ */
+export const loadRecapMessageWindow = async ({
+  safeDb,
+  threadId,
+  userId,
+}: LoadRecapMessageWindowProps) =>
+  await safeDb(async (tx) => {
+    const [firstUserMessages, recentMessagesDesc] = await Promise.all([
+      tx.query.chatMessages.findMany({
+        where: {
+          threadId: { eq: threadId },
+          userId: { eq: userId },
+          role: { eq: "user" },
+        },
+        columns: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+        limit: 1,
+      }),
+      tx.query.chatMessages.findMany({
+        where: {
+          threadId: { eq: threadId },
+          userId: { eq: userId },
+        },
+        columns: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        limit: RECAP_RECENT_MESSAGE_LIMIT,
+      }),
+    ]);
+
+    return {
+      recentCount: recentMessagesDesc.length,
+      messages: buildRecapMessageWindow({
+        firstUserMessage: firstUserMessages.at(0) ?? null,
+        recentMessagesDesc,
+      }),
+    };
+  });

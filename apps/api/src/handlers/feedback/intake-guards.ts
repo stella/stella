@@ -20,6 +20,7 @@
 
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 
 type RedisLike = {
@@ -137,8 +138,8 @@ export const createFeedbackIntakeGuards = ({
     ttlMs,
   }) => {
     try {
-      const reply = await withCommandTimeout(
-        getRedis().send("SET", [
+      const reply = await withCommandTimeout({
+        command: getRedis().send("SET", [
           `${REDIS_KEY_PREFIX}dedup:${key}`,
           "1",
           "NX",
@@ -146,7 +147,8 @@ export const createFeedbackIntakeGuards = ({
           String(ttlMs),
         ]),
         commandTimeoutMs,
-      );
+        label: "feedback-intake-redis-command",
+      });
       // Redis SET ... NX returns "OK" when it set the key, nil otherwise.
       return reply === "OK";
     } catch (error) {
@@ -165,10 +167,11 @@ export const createFeedbackIntakeGuards = ({
     key,
   }) => {
     try {
-      await withCommandTimeout(
-        getRedis().send("DEL", [`${REDIS_KEY_PREFIX}dedup:${key}`]),
+      await withCommandTimeout({
+        command: getRedis().send("DEL", [`${REDIS_KEY_PREFIX}dedup:${key}`]),
         commandTimeoutMs,
-      );
+        label: "feedback-intake-redis-command",
+      });
     } catch (error) {
       onRedisError(error);
       dedupFallback.delete(key);
@@ -181,14 +184,15 @@ export const createFeedbackIntakeGuards = ({
   }) => {
     const scoped = `${bucket}:${key}`;
     try {
-      await withCommandTimeout(
-        getRedis().send("EVAL", [
+      await withCommandTimeout({
+        command: getRedis().send("EVAL", [
           RELEASE_COUNTER_SCRIPT,
           "1",
           `${REDIS_KEY_PREFIX}${scoped}`,
         ]),
         commandTimeoutMs,
-      );
+        label: "feedback-intake-redis-command",
+      });
     } catch (error) {
       onRedisError(error);
       releaseCounterFallback({
@@ -213,10 +217,11 @@ const evalCounter = async ({
   redis: RedisLike;
   windowMs: number;
 }): Promise<number> => {
-  const rawCount = await withCommandTimeout(
-    redis.send("EVAL", [CONSUME_SCRIPT, "1", key, String(windowMs)]),
+  const rawCount = await withCommandTimeout({
+    command: redis.send("EVAL", [CONSUME_SCRIPT, "1", key, String(windowMs)]),
     commandTimeoutMs,
-  );
+    label: "feedback-intake-redis-command",
+  });
   const count = Number(rawCount);
   if (!Number.isFinite(count)) {
     throw new TypeError("Redis returned a non-numeric counter value");
@@ -325,24 +330,6 @@ const cleanupDedupFallback = (
       fallback.delete(key);
     }
   }
-};
-
-const withCommandTimeout = async <T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-): Promise<T> => {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timeoutId = setTimeout(
-      () => reject(new Error("redis command timeout")),
-      timeoutMs,
-    );
-  });
-  return await Promise.race([promise, timeout]).finally(() => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  });
 };
 
 export const feedbackIntakeGuards = createFeedbackIntakeGuards();

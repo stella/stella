@@ -4,17 +4,17 @@ import { t } from "elysia";
 
 import { chatThreads } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
-import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import {
+  assertChatThreadScopeMatches,
+  resolveChatScope,
+} from "@/api/handlers/chat/chat-scope";
 import {
   generateThreadRecapText,
   isThreadStaleForRecap,
   RECAP_MIN_MESSAGE_COUNT,
   RECAP_PROMPT_VERSION,
 } from "@/api/handlers/chat/thread-recap";
-import {
-  buildRecapMessageWindow,
-  RECAP_RECENT_MESSAGE_LIMIT,
-} from "@/api/handlers/chat/thread-recap-window";
+import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -88,66 +88,15 @@ const getThreadRecap = createSafeRootHandler(
       );
     }
 
-    // Reject a scope that contradicts the persisted thread, mirroring
-    // get-messages: a workspace thread asked for as global (or vice
-    // versa) is a client bug.
     const persistedWorkspaceId = thread.workspaceId ?? null;
-    const requestedWorkspaceId =
-      scope.scope === "workspace" ? scope.workspaceId : null;
-    if (persistedWorkspaceId !== requestedWorkspaceId) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Chat thread scope does not match request",
-        }),
-      );
-    }
+    yield* assertChatThreadScopeMatches({ persistedWorkspaceId, scope });
 
     if (thread.usedAnonymization) {
       return Result.ok<ThreadRecapResult>({ recap: null });
     }
 
     const messageWindow = yield* Result.await(
-      safeDb(async (tx) => {
-        const firstUserMessages = await tx.query.chatMessages.findMany({
-          where: {
-            threadId: { eq: threadId },
-            userId: { eq: user.id },
-            role: { eq: "user" },
-          },
-          columns: {
-            id: true,
-            role: true,
-            content: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "asc" },
-          limit: 1,
-        });
-
-        const recentMessagesDesc = await tx.query.chatMessages.findMany({
-          where: {
-            threadId: { eq: threadId },
-            userId: { eq: user.id },
-          },
-          columns: {
-            id: true,
-            role: true,
-            content: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: "desc" },
-          limit: RECAP_RECENT_MESSAGE_LIMIT,
-        });
-
-        return {
-          recentCount: recentMessagesDesc.length,
-          messages: buildRecapMessageWindow({
-            firstUserMessage: firstUserMessages.at(0) ?? null,
-            recentMessagesDesc,
-          }),
-        };
-      }),
+      loadRecapMessageWindow({ safeDb, threadId, userId: user.id }),
     );
 
     // Only recap a completed exchange the user is returning to after a

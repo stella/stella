@@ -1,4 +1,3 @@
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 /**
  * Redis-backed storage for better-auth's rate limiter.
  *
@@ -13,6 +12,10 @@ import { TimeoutError } from "@/api/lib/errors/tagged-errors";
  */
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  type ScheduleTimeout,
+  withCommandTimeout,
+} from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 
 type RateLimitValue = {
@@ -78,31 +81,6 @@ const isStricterRateLimitValue = (
   (candidate.count === current.count &&
     candidate.lastRequest > current.lastRequest);
 
-const withCommandTimeout = async <T>(
-  promise: Promise<T>,
-  commandTimer: CommandTimer,
-): Promise<T> => {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timeoutId = commandTimer.set(
-      () =>
-        reject(
-          new TimeoutError({
-            label: "auth-rate-limit-redis-command",
-            message: "Redis command timed out",
-            timeoutMs: COMMAND_TIMEOUT_MS,
-          }),
-        ),
-      COMMAND_TIMEOUT_MS,
-    );
-  });
-  return await Promise.race([promise, timeout]).finally(() => {
-    if (timeoutId) {
-      commandTimer.clear(timeoutId);
-    }
-  });
-};
-
 /**
  * Build the better-auth rate-limit storage. `ttlMs` is the longest
  * rate-limit window; it expires both Redis keys and fallback entries.
@@ -118,6 +96,10 @@ export const createAuthRateLimitStorage = (
       enableOfflineQueue: false,
     });
   const commandTimer = options.commandTimer ?? DEFAULT_COMMAND_TIMER;
+  const scheduleTimeout: ScheduleTimeout = (callback, delayMs) => {
+    const timeoutId = commandTimer.set(callback, delayMs);
+    return () => commandTimer.clear(timeoutId);
+  };
   // Bun's RedisClient surfaces connection loss via the onclose callback
   // and exposes errors through rejected commands. Leaving onclose unset
   // is safe; per-command rejections drive the fail-open path below.
@@ -143,25 +125,29 @@ export const createAuthRateLimitStorage = (
   };
 
   const writeRedis = async (key: string, value: RateLimitValue) => {
-    await withCommandTimeout(
-      redis.set(
+    await withCommandTimeout({
+      command: redis.set(
         `${REDIS_KEY_PREFIX}${key}`,
         JSON.stringify(value),
         "PX",
         ttlMs,
       ),
-      commandTimer,
-    );
+      commandTimeoutMs: COMMAND_TIMEOUT_MS,
+      label: "auth-rate-limit-redis-command",
+      scheduleTimeout,
+    });
   };
 
   return {
     get: async (key) => {
       try {
         const fallbackValue = readFallback(key);
-        const raw = await withCommandTimeout(
-          redis.get(`${REDIS_KEY_PREFIX}${key}`),
-          commandTimer,
-        );
+        const raw = await withCommandTimeout({
+          command: redis.get(`${REDIS_KEY_PREFIX}${key}`),
+          commandTimeoutMs: COMMAND_TIMEOUT_MS,
+          label: "auth-rate-limit-redis-command",
+          scheduleTimeout,
+        });
         if (raw === null) {
           return fallbackValue;
         }

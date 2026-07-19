@@ -1,11 +1,17 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import {
+  assertChatThreadScopeMatches,
+  resolveChatScope,
+} from "@/api/handlers/chat/chat-scope";
 import { toSafeId } from "@/api/lib/branded-types";
 
 const workspaceId = toSafeId<"workspace">(
   "019d0000-0000-7000-8000-000000000001",
+);
+const otherWorkspaceId = toSafeId<"workspace">(
+  "019d0000-0000-7000-8000-000000000002",
 );
 
 describe("resolveChatScope", () => {
@@ -61,5 +67,55 @@ describe("resolveChatScope", () => {
 
     expect(Result.isError(deleting)).toBe(true);
     expect(Result.isError(inaccessible)).toBe(true);
+  });
+});
+
+describe("assertChatThreadScopeMatches", () => {
+  test("passes when a workspace thread is requested under its own scope", () => {
+    const result = assertChatThreadScopeMatches({
+      persistedWorkspaceId: workspaceId,
+      scope: { scope: "workspace", workspaceId },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("passes when a global thread is requested under global scope", () => {
+    const result = assertChatThreadScopeMatches({
+      persistedWorkspaceId: null,
+      scope: { scope: "global" },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("rejects a workspace thread requested under global scope", () => {
+    const result = assertChatThreadScopeMatches({
+      persistedWorkspaceId: workspaceId,
+      scope: { scope: "global" },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.status).toBe(400);
+    }
+  });
+
+  test("rejects a global thread requested under a workspace scope", () => {
+    const result = assertChatThreadScopeMatches({
+      persistedWorkspaceId: null,
+      scope: { scope: "workspace", workspaceId },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("rejects a workspace thread requested under a different workspace", () => {
+    const result = assertChatThreadScopeMatches({
+      persistedWorkspaceId: workspaceId,
+      scope: { scope: "workspace", workspaceId: otherWorkspaceId },
+    });
+
+    expect(Result.isError(result)).toBe(true);
   });
 });
