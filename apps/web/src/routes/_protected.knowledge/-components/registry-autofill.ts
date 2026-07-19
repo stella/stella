@@ -85,7 +85,12 @@ export const extractRegistryFields = (
     out.legalForm = hit.legalForm;
   }
   // The canonical id is the registration number for the chosen registry
-  // (KRS number, IČO, company number, …).
+  // (KRS number, IČO, company number, …). VIES is the one registry where
+  // `hit.id` is a VAT number rather than a registration number, so a
+  // field-group that only has a `vat`/`tax_id`-suffixed field (mapped to
+  // `taxId`, not `registrationId`) still gets zero updates from a
+  // successful VIES lookup. Mapping VIES's id into `taxId` too is
+  // deliberately deferred: known limitation, tracked for a follow-up pass.
   if (hit.id) {
     out.registrationId = hit.id;
   }

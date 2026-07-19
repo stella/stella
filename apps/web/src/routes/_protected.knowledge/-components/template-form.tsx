@@ -1412,9 +1412,29 @@ const RegistryAutofillControl = ({
     }
     const seq = (lookupSeq.current += 1);
     setLoading(true);
-    const response = await api.contacts["business-registries"].get({
-      query: { registry, q },
-    });
+    // A timeout, dropped connection, or DNS failure throws instead of
+    // resolving to an Eden `.error` response, which would otherwise leave
+    // `loading` stuck forever (see runDownload's own catch below for the
+    // same class of bug on the fill/download path).
+    let response: Awaited<
+      ReturnType<(typeof api.contacts)["business-registries"]["get"]>
+    >;
+    try {
+      response = await api.contacts["business-registries"].get({
+        query: { registry, q },
+      });
+    } catch (error) {
+      if (seq === lookupSeq.current) {
+        setLoading(false);
+        stellaToast.add({
+          type: "error",
+          title: t("templates.registryNotFound"),
+          description: userErrorFromThrown(error, t("common.unexpectedError")),
+        });
+      }
+      getAnalytics().captureError(error);
+      return;
+    }
     if (seq !== lookupSeq.current) {
       // A newer lookup started while this one was in flight; drop its result.
       return;
