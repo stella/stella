@@ -39,42 +39,43 @@ type LoadRecapMessageWindowProps = {
  * into chronological order. `recentCount` is the pre-merge recent-message
  * count the recap uses for its staleness gate; suggested prompts ignore it.
  */
-export const loadRecapMessageWindow = ({
+export const loadRecapMessageWindow = async ({
   safeDb,
   threadId,
   userId,
 }: LoadRecapMessageWindowProps) =>
-  safeDb(async (tx) => {
-    const firstUserMessages = await tx.query.chatMessages.findMany({
-      where: {
-        threadId: { eq: threadId },
-        userId: { eq: userId },
-        role: { eq: "user" },
-      },
-      columns: {
-        id: true,
-        role: true,
-        content: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "asc" },
-      limit: 1,
-    });
-
-    const recentMessagesDesc = await tx.query.chatMessages.findMany({
-      where: {
-        threadId: { eq: threadId },
-        userId: { eq: userId },
-      },
-      columns: {
-        id: true,
-        role: true,
-        content: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: "desc" },
-      limit: RECAP_RECENT_MESSAGE_LIMIT,
-    });
+  await safeDb(async (tx) => {
+    const [firstUserMessages, recentMessagesDesc] = await Promise.all([
+      tx.query.chatMessages.findMany({
+        where: {
+          threadId: { eq: threadId },
+          userId: { eq: userId },
+          role: { eq: "user" },
+        },
+        columns: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+        limit: 1,
+      }),
+      tx.query.chatMessages.findMany({
+        where: {
+          threadId: { eq: threadId },
+          userId: { eq: userId },
+        },
+        columns: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+        limit: RECAP_RECENT_MESSAGE_LIMIT,
+      }),
+    ]);
 
     return {
       recentCount: recentMessagesDesc.length,
