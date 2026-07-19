@@ -2279,7 +2279,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under { body, params, query }; workspace-scoped capabilities take the target workspace as input.params.workspaceId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validateOnly: true to check input without running it; destructive capabilities require confirm: true after human approval.",
     "annotations": {
       "idempotentHint": false,
-      "openWorldHint": false
+      "openWorldHint": true
     },
     "inputSchema": {
       "type": "object",

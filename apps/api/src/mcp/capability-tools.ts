@@ -1136,7 +1136,14 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
   },
   {
-    annotations: { idempotentHint: false, openWorldHint: false },
+    // openWorldHint: true because the target capability is selected at
+    // runtime by id, and the catalog includes contacts.business-registries-
+    // lookup, which reaches the shared business-registry dispatch (ARES,
+    // KRS, ORSR, ...) the same external interaction matter-tools.ts's company
+    // lookup and template-tools.ts's fill_template declare open-world for;
+    // the hint is static per tool, so it must cover that reachable case even
+    // though most capabilities never leave the closed Stella domain.
+    annotations: { idempotentHint: false, openWorldHint: true },
     name: "invoke_capability",
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
