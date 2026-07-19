@@ -20,6 +20,7 @@ const TITLE_MAX_OUTPUT_TOKENS = 32;
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
 
 type GenerateThreadTitleProps = {
+  initialTitle: string;
   messages: [ChatMessage, ChatMessage]; // [userMessage, AIMessage]
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
@@ -32,6 +33,7 @@ type GenerateThreadTitleProps = {
 };
 
 export const generateThreadTitle = async ({
+  initialTitle,
   messages,
   organizationId,
   orgAIConfig,
@@ -98,10 +100,22 @@ Assistant: ${assistantText}`,
         },
       });
 
-      // Only replace a still-default placeholder title. A "user" rename or a
+      // Only replace a still-default placeholder title whose text still
+      // matches what this request set at creation. A "user" rename or a
       // prior "ai" title is left untouched: the generator writes once, and a
       // rename that raced this fire-and-forget path must win.
-      if (!currentThread || !aiTitlingMayReplace(currentThread.titleSource)) {
+      //
+      // The title-text comparison (not just titleSource) also covers a
+      // rolling-deploy window: an old API task's rename-thread implementation
+      // predates titleSource and only writes `title`, so a rename it serves
+      // leaves titleSource="default" behind. Requiring the title to still
+      // equal initialTitle catches that stale-column case too, since any
+      // rename necessarily changes the text.
+      if (
+        !currentThread ||
+        !aiTitlingMayReplace(currentThread.titleSource) ||
+        currentThread.title !== initialTitle
+      ) {
         return false;
       }
 
@@ -114,6 +128,7 @@ Assistant: ${assistantText}`,
             // Re-check inside the UPDATE so a rename committing between the
             // read above and this write cannot be clobbered.
             eq(chatThreads.titleSource, CHAT_TITLE_SOURCE.DEFAULT),
+            eq(chatThreads.title, initialTitle),
           ),
         )
         .returning({ id: chatThreads.id });

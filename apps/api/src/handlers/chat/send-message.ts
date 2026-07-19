@@ -464,6 +464,12 @@ const sendMessage = createSafeRootHandler(
       }
       const validatedMessage = validatedMessageResult.value;
 
+      // Captured once and threaded through to generateThreadTitle below: the
+      // generator's guard compares the thread's live title against this
+      // value to detect any rename (even one whose titleSource column went
+      // stale) rather than trusting titleSource alone.
+      const initialThreadTitle = extractTitle(validatedMessage.message.parts);
+
       const thread = yield* Result.await(
         loadThread({
           initialContextMatterIds: requestedContextMatterIds,
@@ -472,7 +478,7 @@ const sendMessage = createSafeRootHandler(
           recordAuditEvent,
           safeDb,
           threadId: body.threadId,
-          title: extractTitle(validatedMessage.message.parts),
+          title: initialThreadTitle,
           userId: user.id,
           workspaceId,
         }),
@@ -1125,6 +1131,7 @@ const sendMessage = createSafeRootHandler(
                       body.sendMode !== CHAT_SEND_MODE.anonymized
                     ) {
                       void generateThreadTitle({
+                        initialTitle: initialThreadTitle,
                         messages: [
                           parsedMessage.message,
                           resolvedResponseMessage,
