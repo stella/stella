@@ -57,8 +57,8 @@ import {
 } from "@/api/lib/workflow-target-queries";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
 import {
-  COMPLETE_ENTITY_SCRIPT,
-  parseEntityCompletionReply,
+  recordEntityCompletion,
+  resetCompletionState,
 } from "@/api/lib/workflow/completion-tracking";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
@@ -114,7 +114,18 @@ const workflowKey = (workspaceId: SafeId<"workspace">, field: string) =>
 const WORKFLOW_RUN_STATE_FIELDS = [
   "running",
   "total",
+  "completed-entities",
+  // Legacy pre-set INCR counter. Kept in the cleanup surface so a run that
+  // straddled the deploy (read via the completion script's compat path) has
+  // its counter deleted on finish/skip/orphan, and so the compat path dies
+  // with the transition.
   "completed",
+  // Marker written by `resetCompletionState` for every run started under
+  // this code. Gates the completion script's legacy-counter read so a
+  // straggler old-code replica cannot contaminate a run that provably
+  // started under set-mode tracking (see completion-tracking.ts guarantee
+  // 3). Cleaned up here like every sibling run-state key.
+  "set-mode",
   "plan-properties",
   "request-id",
   "scoped",
@@ -548,9 +559,35 @@ export const startWorkflow = async ({
       return { status: "skipped" };
     }
 
-    // Store entity count for completion tracking
-    await redis.set(workflowKey(workspaceId, "total"), String(targetCount));
-    await redis.set(workflowKey(workspaceId, "completed"), "0");
+    // Start from an empty completion set and mark this run as set-mode. The
+    // set grows lazily via SADD, so a prior run whose run-state outlived it
+    // (worker death between the completion script's EXPIRE and the
+    // sibling-key refresh, a manual lock deletion, a TTL discrepancy) could
+    // leave stale members that inflate this run's SCARD and finalize it
+    // early. The set-mode marker gates the completion script's legacy
+    // counter out of this run's count entirely, even if a straggler
+    // old-code replica recreates the legacy counter for one of this run's
+    // entities mid-rollout (see completion-tracking.ts guarantee 3). We
+    // hold the run lock (NX) here, so no live run shares these keys.
+    await resetCompletionState({
+      redis,
+      completedEntitiesKey: workflowKey(workspaceId, "completed-entities"),
+      legacyCompletedKey: workflowKey(workspaceId, "completed"),
+      setModeKey: workflowKey(workspaceId, "set-mode"),
+      runStateTtlSec: runLockTtlSec,
+    });
+
+    // Store entity count for completion tracking. Carries the run-lock TTL
+    // (refreshed on each entity completion) so it self-heals with the rest
+    // of the run-state instead of leaking after the run lapses. The
+    // completed-entities set is (re)given its TTL by the completion script's
+    // first SADD, so it needs no seed here.
+    await redis.set(
+      workflowKey(workspaceId, "total"),
+      String(targetCount),
+      "EX",
+      runLockTtlSec,
+    );
 
     // Snapshot the property IDs in this workflow's plan so finishWorkflow
     // can freshen only the ones it actually processed. Without this,
@@ -1128,13 +1165,14 @@ const handleWorkflowJobFailed = (
           });
         },
       );
-      await onEntityCompleted(
-        branded.workspaceId,
-        branded.organizationId,
-        brandPersistedUserId(data.userId),
-        data.requestId,
-        data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
-      );
+      await onEntityCompleted({
+        workspaceId: branded.workspaceId,
+        organizationId: branded.organizationId,
+        userId: brandPersistedUserId(data.userId),
+        entityId: brandPersistedEntityId(data.entityId),
+        requestId: data.requestId,
+        runLockTtlSec: data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
+      });
     })().catch((completionError: unknown) => {
       captureError(completionError, {
         workspaceId: data.workspaceId,
@@ -1374,13 +1412,14 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
   // Broadcast entity invalidation so frontend refetches
   broadcastInvalidation(branded.workspaceId, ["entities", branded.workspaceId]);
 
-  await onEntityCompleted(
-    branded.workspaceId,
-    branded.organizationId,
+  await onEntityCompleted({
+    workspaceId: branded.workspaceId,
+    organizationId: branded.organizationId,
     userId,
+    entityId: brandedEntityId,
     requestId,
-    data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
-  );
+    runLockTtlSec: data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
+  });
 };
 
 type ProcessOneBatchArgs = {
@@ -1853,34 +1892,48 @@ const processOneBatch = async ({
 
 // ── Completion tracking ────────────────────────────────
 
-const onEntityCompleted = async (
-  workspaceId: SafeId<"workspace">,
-  organizationId: SafeId<"organization">,
-  userId: SafeId<"user">,
-  requestId: string,
-  runLockTtlSec: number,
-) => {
+type OnEntityCompletedArgs = {
+  workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  entityId: SafeId<"entity">;
+  requestId: string;
+  runLockTtlSec: number;
+};
+
+const onEntityCompleted = async ({
+  workspaceId,
+  organizationId,
+  userId,
+  entityId,
+  requestId,
+  runLockTtlSec,
+}: OnEntityCompletedArgs) => {
   const redis = getRedis();
 
-  // Atomically re-check that this job still belongs to the active
-  // workflow request AND increment the completed counter in the same
-  // Redis command (see `COMPLETE_ENTITY_SCRIPT`). A plain check-then-INCR
-  // (two round trips) leaves a window where a stale job's check can pass
-  // just before the run it belongs to finishes and a new run resets the
-  // counters — the stale job's INCR would then land on the new run's
-  // counter instead of being a no-op. Same idiom as
-  // `RESERVE_RECOVERY_LOCK_SCRIPT` above.
-  const reply: unknown = await redis.send("EVAL", [
-    COMPLETE_ENTITY_SCRIPT,
-    "4",
-    workflowKey(workspaceId, "request-id"),
-    workflowKey(workspaceId, "running"),
-    workflowKey(workspaceId, "completed"),
-    workflowKey(workspaceId, "total"),
-    requestId,
-    LEGACY_RUNNING_LOCK_VALUE,
-  ]);
-  const result = parseEntityCompletionReply(reply);
+  // Atomically re-check that this job still belongs to the active workflow
+  // request AND record this entity's completion in the same Redis command
+  // (see `COMPLETE_ENTITY_SCRIPT`). The check-and-write bundling closes the
+  // stale-run window (a check could otherwise pass just before the run it
+  // belongs to finishes); the SADD/SCARD set makes the write idempotent per
+  // entity, so a re-driven entity (timeout after completion, stalled-job
+  // reclaim, exhausted-retry failure handler) cannot double-count and push
+  // the run to finalize while an entity is still mid-flight.
+  const result = await recordEntityCompletion({
+    redis,
+    keys: {
+      requestId: workflowKey(workspaceId, "request-id"),
+      running: workflowKey(workspaceId, "running"),
+      completedEntities: workflowKey(workspaceId, "completed-entities"),
+      total: workflowKey(workspaceId, "total"),
+      legacyCompleted: workflowKey(workspaceId, "completed"),
+      setMode: workflowKey(workspaceId, "set-mode"),
+    },
+    activeRequestId: requestId,
+    legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
+    entityId,
+    runStateTtlSec: runLockTtlSec,
+  });
   if (!result.matched) {
     return;
   }
@@ -1890,16 +1943,18 @@ const onEntityCompleted = async (
     return;
   }
 
-  // Long workflows can outlast the initial TTL on the running lock and
-  // the plan-properties snapshot. Each completed entity refreshes both
-  // back to the full window so progress keeps the lock alive instead
-  // of letting a slow batch fall back to the "freshen everything"
-  // path or admit a parallel run.
+  // Long workflows can outlast the initial TTL on the run-state keys. Each
+  // completed entity refreshes them back to the full window so progress
+  // keeps the lock alive instead of letting a slow batch fall back to the
+  // "freshen everything" path, admit a parallel run, or leak `total`. The
+  // completed-entities set and the set-mode marker are both refreshed
+  // inside the completion script above.
   await Promise.all([
     redis.expire(workflowKey(workspaceId, "running"), runLockTtlSec),
     redis.expire(workflowKey(workspaceId, "plan-properties"), runLockTtlSec),
     redis.expire(workflowKey(workspaceId, "request-id"), runLockTtlSec),
     redis.expire(workflowKey(workspaceId, "service-tier"), runLockTtlSec),
+    redis.expire(workflowKey(workspaceId, "total"), runLockTtlSec),
     // Refresh the scoped flag's TTL for the same reason: if it
     // expires mid-run, `finishWorkflow` would mistake a long-running
     // scoped retry for a full sweep and freshen the property globally.
