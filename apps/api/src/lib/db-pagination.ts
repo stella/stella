@@ -154,6 +154,12 @@ export type TimestampIdCursorCodec<Id> = {
 type TimestampIdCursorCodecOptions<Id> = {
   column: SQLWrapper;
   brandId: (id: string) => Id;
+  /**
+   * Validates the raw decoded id part before branding. Defaults to the UUID
+   * guard; tables with non-UUID primary keys (e.g. Better Auth text ids)
+   * supply their own guard so their cursors round-trip.
+   */
+  isIdPart?: (value: unknown) => value is string;
 };
 
 // Accepts the canonical base64url JSON tuple and, as a fallback, the legacy
@@ -177,6 +183,7 @@ const timestampIdCursorTuple = (cursor: string): [unknown, unknown] | null => {
 export const createTimestampIdCursorCodec = <Id>({
   column,
   brandId,
+  isIdPart = isUuidPaginationCursorPart,
 }: TimestampIdCursorCodecOptions<Id>): TimestampIdCursorCodec<Id> => ({
   cursorValue: pgTimestampCursorValue(column),
   keysetAfter: ({ cursor, idColumn, direction }) => {
@@ -202,7 +209,7 @@ export const createTimestampIdCursorCodec = <Id>({
     }
     const [rawTimestamp, rawId] = tuple;
     const timestamp = parsePgTimestampCursorValue(rawTimestamp);
-    if (timestamp === null || !isUuidPaginationCursorPart(rawId)) {
+    if (timestamp === null || !isIdPart(rawId)) {
       return null;
     }
     return { timestamp, id: brandId(rawId) };

@@ -126,7 +126,7 @@ export type McpCapabilityReason =
  * - `account_lifecycle`: account deletion / lifecycle flows.
  * - `hosted_billing`: hosted-billing checkout / setup / management plumbing.
  * - `mcp_transport`: the MCP transport / connector routes themselves.
- * - `health_infra`: health and smoke endpoints.
+ * - `health_infra`: health, smoke, and operator observability endpoints.
  * - `chat_thread_ui`: chat-thread UI chrome reads (breadcrumb title lookup);
  *   the rename operation is a `capability` under the same reason.
  * - `provider_secret`: writes/probes of provider API keys and secrets (AI
