@@ -156,6 +156,60 @@ export const productStoryMedia = {
   },
 } as const satisfies Record<ProductStorySceneId, ProductStoryMedia>;
 
+// Aspect-matched variants for the companion composition (CliMcpPreview with
+// side windows): its main window content box is ~1.674:1, not 16:9, so these
+// captures fill it without cropping. Scene-only embeds (product pages,
+// HomeProductStory chapters) keep the 16:9 masters above. `cli` reuses the
+// agent capture, mirroring productStoryMedia.
+export const productStoryHeroMedia = {
+  workspace: {
+    videoSrc: "/media/products/story-workspace-hero.mp4",
+    darkVideoSrc: "/media/products/story-workspace-hero-dark.mp4",
+    posterSrc: "/media/products/story-workspace-hero-poster.jpg",
+    darkPosterSrc: "/media/products/story-workspace-hero-dark-poster.jpg",
+    alt: "A seeded matter workspace open in stella",
+  },
+  review: {
+    videoSrc: "/media/products/story-review-hero.mp4",
+    darkVideoSrc: "/media/products/story-review-hero-dark.mp4",
+    posterSrc: "/media/products/story-review-hero-poster.jpg",
+    darkPosterSrc: "/media/products/story-review-hero-dark-poster.jpg",
+    alt: "A contract review table running in stella",
+  },
+  editor: {
+    videoSrc: "/media/products/story-editor-hero.mp4",
+    darkVideoSrc: "/media/products/story-editor-hero-dark.mp4",
+    posterSrc: "/media/products/story-editor-hero-poster.jpg",
+    darkPosterSrc: "/media/products/story-editor-hero-dark-poster.jpg",
+    alt: "A Word document being reviewed in the stella Editor",
+  },
+  agent: {
+    videoSrc: "/media/products/story-agent-hero.mp4",
+    darkVideoSrc: "/media/products/story-agent-hero-dark.mp4",
+    posterSrc: "/media/products/story-agent-hero-poster.jpg",
+    darkPosterSrc: "/media/products/story-agent-hero-dark-poster.jpg",
+    alt: "A grounded answer with cited matter sources in stella",
+  },
+  cli: {
+    videoSrc: "/media/products/story-agent-hero.mp4",
+    darkVideoSrc: "/media/products/story-agent-hero-dark.mp4",
+    posterSrc: "/media/products/story-agent-hero-poster.jpg",
+    darkPosterSrc: "/media/products/story-agent-hero-dark-poster.jpg",
+    alt: "A grounded answer produced through stella MCP",
+  },
+} as const satisfies Record<ProductStorySceneId, ProductStoryMedia>;
+
+// Portrait capture (~0.869:1) for the floating "stella Editor" side window in
+// the companion composition; recorded at a narrow viewport so the app's
+// responsive compact layout fills the window without cropping.
+export const productStoryEditorPortraitMedia = {
+  videoSrc: "/media/products/story-editor-portrait.mp4",
+  darkVideoSrc: "/media/products/story-editor-portrait-dark.mp4",
+  posterSrc: "/media/products/story-editor-portrait-poster.jpg",
+  darkPosterSrc: "/media/products/story-editor-portrait-dark-poster.jpg",
+  alt: "A Word document being reviewed in the stella Editor",
+} as const satisfies ProductStoryMedia;
+
 export type StoryDocumentStatus =
   | "active"
   | "complete"

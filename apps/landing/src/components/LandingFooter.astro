@@ -114,6 +114,16 @@ const legalLinks = [
   .footer-art {
     inset: -12%;
     transition: opacity 500ms ease;
+    /* The art box extends 12% past the footer on every side, so the
+       overflow clip lands at 12 / 124 ≈ 9.7% of this element's height.
+       Dissolve the artwork to transparent above that point so no hard
+       edge appears where the clip cuts it at the footer's top boundary. */
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 9.7%,
+      black 38%
+    );
+    mask-image: linear-gradient(to bottom, transparent 9.7%, black 38%);
   }
 
   .footer-art-light {

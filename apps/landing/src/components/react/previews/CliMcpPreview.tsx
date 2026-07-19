@@ -1,11 +1,13 @@
 import {
   type KeyboardEvent,
+  type PointerEvent,
   type ReactNode,
   useEffect,
   useRef,
   useState,
 } from "react";
 
+import { StellaMark } from "@stll/ui/components/stella-mark";
 import { cn } from "@stll/ui/lib/utils";
 
 import { CLI_DEMO_TOOLS } from "../../../data/cli-demo";
@@ -18,6 +20,7 @@ import {
 import { RecordedStellaScene } from "../product-story/RecordedStellaScene";
 
 export const CliMcpPreview = ({
+  backdrop = "wash",
   initialScenarioId = "search",
   includeStyles = true,
   revealSideWindowsOnScroll = false,
@@ -30,7 +33,13 @@ export const CliMcpPreview = ({
     () => sceneId === undefined,
   );
   const [isInViewport, setIsInViewport] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [positions, setPositions] = useState<
+    Record<DraggableWindow, { x: number; y: number }>
+  >(() => ({
+    client: { x: 0, y: 0 },
+    source: { x: 0, y: 0 },
+    terminal: { x: 0, y: 0 },
+  }));
   const [storyFrame, setStoryFrame] = useState(0);
   const [teamsLoopFrame, setTeamsLoopFrame] = useState(0);
   const [terminalLoopFrame, setTerminalLoopFrame] = useState(0);
@@ -125,11 +134,87 @@ export const CliMcpPreview = ({
     setHasManualWindowFocus(true);
   };
 
+  // Drag offsets go on the CSS `translate` property, not `transform`: the
+  // side windows' reveal animations drive `transform` on the same elements
+  // (with a persistent scroll-timeline fill), and `translate` composes with
+  // an animated `transform` instead of being overridden by it. The whole
+  // window is the drag surface; pointerdown also activates (click-to-front).
+  const getDragHandleProps = (dragWindow: DraggableWindow) => ({
+    onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
+      activateWindow(dragWindow);
+      if (!window.matchMedia("(min-width: 640px)").matches) {
+        return;
+      }
+      const scene = story.current;
+      const windowElement = event.currentTarget.closest(".mac-window");
+      if (!scene || !(windowElement instanceof HTMLElement)) {
+        return;
+      }
+      // Bounds keep the whole window inside the scene box, so the scene's
+      // overflow clip can never cut it off mid-drag.
+      const sceneRect = scene.getBoundingClientRect();
+      const windowRect = windowElement.getBoundingClientRect();
+      const { x: startX, y: startY } = positions[dragWindow];
+      const baseLeft = windowRect.left - startX;
+      const baseTop = windowRect.top - startY;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      drag.current = {
+        window: dragWindow,
+        pointerId: event.pointerId,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        startX,
+        startY,
+        minX: sceneRect.left - baseLeft,
+        maxX: Math.max(
+          sceneRect.left - baseLeft,
+          sceneRect.right - windowRect.width - baseLeft,
+        ),
+        minY: sceneRect.top - baseTop,
+        maxY: Math.max(
+          sceneRect.top - baseTop,
+          sceneRect.bottom - windowRect.height - baseTop,
+        ),
+      };
+    },
+    onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
+      const activeDrag = drag.current;
+      if (activeDrag?.pointerId !== event.pointerId) {
+        return;
+      }
+      setPositions((current) => {
+        const next = { ...current };
+        next[activeDrag.window] = {
+          x: clamp(
+            activeDrag.startX + event.clientX - activeDrag.pointerX,
+            activeDrag.minX,
+            activeDrag.maxX,
+          ),
+          y: clamp(
+            activeDrag.startY + event.clientY - activeDrag.pointerY,
+            activeDrag.minY,
+            activeDrag.maxY,
+          ),
+        };
+        return next;
+      });
+    },
+    onPointerUp: (event: PointerEvent<HTMLDivElement>) => {
+      if (drag.current?.pointerId !== event.pointerId) {
+        return;
+      }
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      drag.current = null;
+    },
+  });
+
   return (
     <div
       ref={story}
       className={cn(
-        "cli-story bg-background relative h-full w-full overflow-hidden",
+        "cli-story relative h-full w-full overflow-hidden",
+        backdrop === "wash" && "bg-background",
+        backdrop === "transparent" && "cli-story-transparent",
         isAutoPlaying && "cli-story-auto",
         revealSideWindowsOnScroll && "cli-story-with-scroll-reveal",
         !showCompanions && "cli-story-scene-only",
@@ -148,20 +233,32 @@ export const CliMcpPreview = ({
         <div
           aria-label="Bring Microsoft Teams conversation to front"
           aria-pressed={focusedWindow === "client"}
-          className="cli-client mac-window bg-card focus-visible:outline-ring absolute start-[3.1%] top-[8.5%] hidden h-[29%] w-[18%] min-w-0 cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] focus-visible:outline-2 focus-visible:outline-offset-2 sm:block"
+          className="cli-client mac-window bg-card focus-visible:outline-ring absolute start-[2.4%] top-[6.5%] hidden h-[38%] w-[23%] min-w-0 cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none"
           onFocus={() => activateWindow("client")}
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("client"))
           }
-          onPointerDown={() => activateWindow("client")}
+          {...getDragHandleProps("client")}
           role="button"
           style={{
             borderColor:
               "color-mix(in srgb, var(--foreground) 11%, transparent)",
-            zIndex: getWindowZIndex(focusedWindow, "client"),
+            translate: `${positions.client.x}px ${positions.client.y}px`,
+            zIndex: getWindowZIndex({
+              focusedWindow,
+              hasManualWindowFocus,
+              window: "client",
+            }),
           }}
           tabIndex={0}
         >
+          <div className="shrink-0">
+            <WindowChrome
+              icon={<TeamsMark />}
+              label="Microsoft Teams"
+              prominent
+            />
+          </div>
           <TeamsWindow
             showAnswer={!isAutoPlaying || teamsLoopFrame % 2 === 1}
           />
@@ -180,7 +277,11 @@ export const CliMcpPreview = ({
         role="button"
         style={{
           borderColor: "color-mix(in srgb, var(--foreground) 11%, transparent)",
-          zIndex: getWindowZIndex(focusedWindow, "workspace"),
+          zIndex: getWindowZIndex({
+            focusedWindow,
+            hasManualWindowFocus,
+            window: "workspace",
+          }),
         }}
         tabIndex={0}
       >
@@ -189,6 +290,7 @@ export const CliMcpPreview = ({
           <RecordedStellaScene
             isActive={isInViewport}
             sceneId={activeSceneId}
+            variant={showCompanions ? "hero" : "wide"}
           />
         </div>
       </div>
@@ -197,27 +299,35 @@ export const CliMcpPreview = ({
         <div
           aria-label="Bring stella Editor to front"
           aria-pressed={focusedWindow === "source"}
-          className="cli-response mac-window bg-card focus-visible:outline-ring absolute end-[0.8%] top-[18%] hidden h-[48%] w-[18.5%] cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2 sm:block"
+          className="cli-response mac-window bg-card focus-visible:outline-ring absolute end-[0.8%] top-[18%] hidden h-[48%] w-[18.5%] cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none"
           key={activeScenario.id}
           onFocus={() => activateWindow("source")}
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("source"))
           }
-          onPointerDown={() => activateWindow("source")}
+          {...getDragHandleProps("source")}
           role="button"
           style={{
             borderColor:
               "color-mix(in srgb, var(--foreground) 11%, transparent)",
-            zIndex: getWindowZIndex(focusedWindow, "source"),
+            translate: `${positions.source.x}px ${positions.source.y}px`,
+            zIndex: getWindowZIndex({
+              focusedWindow,
+              hasManualWindowFocus,
+              window: "source",
+            }),
           }}
           tabIndex={0}
         >
-          <WindowChrome label="stella Editor" />
+          <div className="shrink-0">
+            <WindowChrome label="stella Editor" />
+          </div>
           <div className="bg-background relative h-[calc(100%-var(--mac-titlebar-height))] overflow-hidden">
             <RecordedStellaScene
               crop="document"
               isActive={isInViewport}
               sceneId="editor"
+              variant="portrait"
             />
           </div>
         </div>
@@ -228,58 +338,29 @@ export const CliMcpPreview = ({
           aria-label="Bring stella terminal to front"
           aria-live="polite"
           aria-pressed={focusedWindow === "terminal"}
-          className="cli-window mac-window group focus-visible:outline-ring absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 cursor-pointer appearance-none flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] focus-visible:outline-2 focus-visible:outline-offset-2 sm:start-[5.4%] sm:bottom-[13.8%] sm:h-[40.8%] sm:w-[19.1%]"
+          className="cli-window mac-window group focus-visible:outline-ring absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 cursor-grab appearance-none flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:start-[5.4%] sm:bottom-[13.8%] sm:h-[40.8%] sm:w-[19.1%] sm:touch-none"
           onFocus={() => activateWindow("terminal")}
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("terminal"))
           }
-          onPointerDown={() => activateWindow("terminal")}
+          {...getDragHandleProps("terminal")}
           role="button"
           style={{
             background: "var(--terminal-chrome)",
             borderColor:
               "color-mix(in srgb, var(--terminal-foreground) 18%, transparent)",
             color: "var(--terminal-foreground)",
-            transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
-            zIndex: getWindowZIndex(focusedWindow, "terminal"),
+            translate: `${positions.terminal.x}px ${positions.terminal.y}px`,
+            zIndex: getWindowZIndex({
+              focusedWindow,
+              hasManualWindowFocus,
+              window: "terminal",
+            }),
           }}
           tabIndex={0}
         >
-          <div
-            className="cli-drag-handle shrink-0 cursor-grab touch-none active:cursor-grabbing"
-            onPointerDown={(event) => {
-              if (!window.matchMedia("(min-width: 640px)").matches) {return;}
-              event.currentTarget.setPointerCapture(event.pointerId);
-              drag.current = {
-                pointerId: event.pointerId,
-                pointerX: event.clientX,
-                pointerY: event.clientY,
-                startX: position.x,
-                startY: position.y,
-              };
-            }}
-            onPointerMove={(event) => {
-              if (drag.current?.pointerId !== event.pointerId) {return;}
-              setPosition({
-                x: clamp(
-                  drag.current.startX + event.clientX - drag.current.pointerX,
-                  -90,
-                  210,
-                ),
-                y: clamp(
-                  drag.current.startY + event.clientY - drag.current.pointerY,
-                  -70,
-                  60,
-                ),
-              });
-            }}
-            onPointerUp={(event) => {
-              if (drag.current?.pointerId !== event.pointerId) {return;}
-              event.currentTarget.releasePointerCapture(event.pointerId);
-              drag.current = null;
-            }}
-          >
-            <WindowChrome label="stella agent" />
+          <div className="shrink-0">
+            <WindowChrome label="stella CLI agent" />
           </div>
 
           <div
@@ -397,25 +478,26 @@ export const CliMcpPreview = ({
   );
 };
 
+// The Teams chrome lives in the parent (wrapped in the drag handle); this is
+// only the window body.
 const TeamsWindow = ({ showAnswer }: { showAnswer: boolean }) => (
   <>
-    <WindowChrome icon={<TeamsMark />} label="Microsoft Teams" prominent />
     <div
-      className="border-b px-[clamp(.45rem,.8vw,.65rem)] py-[clamp(.22rem,.45vw,.38rem)]"
+      className="border-b px-[clamp(.5rem,.9cqw,.8rem)] py-[clamp(.25rem,.5cqw,.45rem)]"
       style={{
         borderColor: "color-mix(in srgb, var(--foreground) 8%, transparent)",
       }}
     >
-      <p className="text-foreground truncate text-[clamp(.4rem,.64vw,.58rem)] font-semibold">
+      <p className="text-foreground truncate text-[clamp(.5rem,.85cqw,.8rem)] font-semibold">
         {storyTeamsExchange.channel}
       </p>
-      <p className="text-muted-foreground truncate text-[clamp(.32rem,.5vw,.46rem)]">
+      <p className="text-muted-foreground truncate text-[clamp(.42rem,.68cqw,.62rem)]">
         {storyTeamsExchange.context}
       </p>
     </div>
-    <div className="space-y-[clamp(.38rem,.68vw,.56rem)] p-[clamp(.45rem,.8vw,.65rem)] text-[clamp(.34rem,.5vw,.5rem)] leading-snug">
+    <div className="space-y-[clamp(.42rem,.8cqw,.7rem)] p-[clamp(.5rem,.9cqw,.8rem)] text-[clamp(.45rem,.7cqw,.66rem)] leading-snug">
       <div className="story-step story-step-visible flex gap-2">
-        <span className="bg-muted text-foreground flex h-[clamp(1.1rem,1.9vw,1.55rem)] w-[clamp(1.1rem,1.9vw,1.55rem)] shrink-0 items-center justify-center rounded-full font-semibold">
+        <span className="bg-muted text-foreground flex h-[clamp(1.25rem,2.3cqw,1.9rem)] w-[clamp(1.25rem,2.3cqw,1.9rem)] shrink-0 items-center justify-center rounded-full font-semibold">
           P
         </span>
         <div className="min-w-0">
@@ -434,10 +516,10 @@ const TeamsWindow = ({ showAnswer }: { showAnswer: boolean }) => (
         )}
       >
         <span
-          className="flex h-[clamp(1.1rem,1.9vw,1.55rem)] w-[clamp(1.1rem,1.9vw,1.55rem)] shrink-0 items-center justify-center rounded-md font-semibold text-white"
+          className="flex h-[clamp(1.25rem,2.3cqw,1.9rem)] w-[clamp(1.25rem,2.3cqw,1.9rem)] shrink-0 items-center justify-center rounded-md text-white"
           style={{ background: AGENT_ACCENT }}
         >
-          S
+          <StellaMark className="h-[62%] w-[62%]" />
         </span>
         <div className="min-w-0">
           <p className="text-foreground font-semibold">
@@ -451,7 +533,7 @@ const TeamsWindow = ({ showAnswer }: { showAnswer: boolean }) => (
           </p>
           <div
             className={cn(
-              "story-step mt-[clamp(.25rem,.5vw,.4rem)] rounded-[clamp(.28rem,.55vw,.45rem)] border p-[clamp(.28rem,.5vw,.42rem)]",
+              "story-step mt-[clamp(.3rem,.6cqw,.5rem)] rounded-[clamp(.3rem,.6cqw,.5rem)] border p-[clamp(.32rem,.6cqw,.55rem)]",
               showAnswer && "story-step-visible",
             )}
             style={{
@@ -579,6 +661,12 @@ type WindowChromeProps = {
 };
 
 type CliMcpPreviewProps = {
+  /**
+   * "wash": opaque scene background (standalone embeds).
+   * "transparent": only the radial blooms; the surface behind the scene
+   * (e.g. the homepage hero gradient) shows through.
+   */
+  backdrop?: "wash" | "transparent";
   includeStyles?: boolean;
   initialScenarioId?: CliScenarioId;
   revealSideWindowsOnScroll?: boolean;
@@ -599,12 +687,21 @@ type PreviewWindow = keyof typeof PREVIEW_WINDOW_Z_INDEX;
 
 const STORY_PHASES = openingProductStory;
 
+// The floating companion windows; the main workspace window is the scene
+// backdrop and stays fixed.
+type DraggableWindow = Exclude<PreviewWindow, "workspace">;
+
 type DragState = {
+  window: DraggableWindow;
   pointerId: number;
   pointerX: number;
   pointerY: number;
   startX: number;
   startY: number;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
 };
 
 type CliScenario = {
@@ -668,16 +765,37 @@ const clamp = (value: number, min: number, max: number) =>
 
 const AGENT_ACCENT = "#d97757";
 const ACTIVE_WINDOW_Z_INDEX = 20;
+const PINNED_MAIN_Z_INDEX = 0;
 const COMMAND_TYPE_DELAY_MS = 350;
 const COMMAND_CHARACTER_DELAY_MS = 24;
 const TERMINAL_LOOP_DURATION_MS = 9000;
 
 const getInitialActiveWindow = (): PreviewWindow => "terminal";
 
-const getWindowZIndex = (activeWindow: PreviewWindow, window: PreviewWindow) =>
-  activeWindow === window
+type WindowZIndexOptions = {
+  focusedWindow: PreviewWindow;
+  hasManualWindowFocus: boolean;
+  window: PreviewWindow;
+};
+
+// The main workspace window is the scene's backdrop: the floating companions
+// stack above it, and the auto-playing choreography never raises it. Only an
+// explicit user click/focus brings it forward; clicking any companion sends
+// it back behind them.
+const getWindowZIndex = ({
+  focusedWindow,
+  hasManualWindowFocus,
+  window,
+}: WindowZIndexOptions) => {
+  if (window === "workspace") {
+    return hasManualWindowFocus && focusedWindow === "workspace"
+      ? ACTIVE_WINDOW_Z_INDEX
+      : PINNED_MAIN_Z_INDEX;
+  }
+  return focusedWindow === window
     ? ACTIVE_WINDOW_Z_INDEX
     : PREVIEW_WINDOW_Z_INDEX[window];
+};
 
 const getScenarioAccent = (scenario: CliScenario) =>
   scenario.type === "agent" ? AGENT_ACCENT : "var(--terminal-accent)";
@@ -784,6 +902,9 @@ const CLI_STYLES = `
   }
   .mac-window {
     border-radius: clamp(.62rem, 1vw, .9rem);
+    /* --card is translucent in the dark theme; windows overlap, so composite
+       it over the page background for an opaque surface. */
+    background: linear-gradient(var(--card), var(--card)) var(--background);
   }
   .mac-window::after {
     content: "";
@@ -877,6 +998,15 @@ const CLI_STYLES = `
       radial-gradient(ellipse 58% 66% at 18% 76%, color-mix(in srgb, #24527a 22%, transparent), transparent 72%),
       radial-gradient(ellipse 52% 58% at 84% 30%, color-mix(in srgb, #1f3f61 18%, transparent), transparent 74%),
       linear-gradient(180deg, color-mix(in srgb, var(--background) 96%, #142233 4%), color-mix(in srgb, var(--background) 84%, #172a40 16%));
+  }
+  /* Transparent backdrop: the shared hero gradient behind the scene is the
+     only surface; painting anything here reads as a boxed preview background. */
+  .cli-story-transparent .cli-story-wash,
+  .dark .cli-story-transparent .cli-story-wash {
+    background: none;
+  }
+  .cli-story-transparent .cli-story-reflection {
+    display: none;
   }
   .cli-story-reflection {
     opacity: .44;

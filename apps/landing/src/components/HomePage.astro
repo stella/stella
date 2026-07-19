@@ -21,158 +21,165 @@ const selfHostingDocsUrl =
 
 <Base translationScope="all-locales">
   <main>
-    {/* ——— Hero ——— */}
-    <section
-      class="relative flex min-h-[34rem] flex-col overflow-hidden pt-6 sm:min-h-[36rem] sm:pt-8 lg:min-h-[38rem]"
-    >
-      <div class="absolute inset-0 overflow-hidden" id="gradient-bg">
-        <div
-          id="gradient-light"
-          class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"
-        >
-        </div>
-        <div
-          id="gradient-dark"
-          class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"
-        >
-        </div>
-      </div>
-
-      <div
-        class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-10 sm:pb-12"
+    {/* ——— Hero + opening product story: one shared background surface ——— */}
+    <div class="relative overflow-hidden">
+      <section
+        class="relative flex min-h-[34rem] flex-col pt-6 sm:min-h-[36rem] sm:pt-8 lg:min-h-[38rem]"
       >
-        <a
-          href="/changelog"
-          data-reveal
-          style="--reveal-delay: 120ms; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
-          class="group mb-7 inline-flex max-w-[calc(100%-3rem)] items-center gap-2.5 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-transform hover:-translate-y-0.5"
+        {/* Extends past the hero so the gradient continues behind the scene
+            below, resolving to the page background at its own bottom edge. */}
+        <div
+          class="absolute inset-x-0 top-0 h-[145%] overflow-hidden"
+          id="gradient-bg"
         >
-          <span
-            class="hero-beta-dot h-2 w-2 shrink-0 rounded-full"
-            style="background: var(--success)"
-            aria-hidden="true"></span>
-          <span
-            class="hidden shrink-0 whitespace-nowrap sm:inline"
-            style="color: var(--foreground)">{t("hero.badge")}</span
+          <div
+            id="gradient-light"
+            class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"
           >
-          <span
-            class="inline-flex min-w-0 items-center gap-1.5 sm:border-s sm:ps-2.5"
-            style="border-color: var(--border); color: var(--muted-foreground)"
+          </div>
+          <div
+            id="gradient-dark"
+            class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"
+          >
+          </div>
+          <div
+            class="pointer-events-none absolute inset-x-0 bottom-0 h-1/3"
+            style="background: linear-gradient(to bottom, transparent, var(--background))"
+          >
+          </div>
+        </div>
+
+        <div
+          class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-10 sm:pb-12"
+        >
+          <a
+            href="/changelog"
+            data-reveal
+            style="--reveal-delay: 120ms; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
+            class="group mb-7 inline-flex max-w-[calc(100%-3rem)] items-center gap-2.5 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-transform hover:-translate-y-0.5"
+          >
+            <span
+              class="hero-beta-dot h-2 w-2 shrink-0 rounded-full"
+              style="background: var(--success)"
+              aria-hidden="true"></span>
+            <span
+              class="hidden shrink-0 whitespace-nowrap sm:inline"
+              style="color: var(--foreground)">{t("hero.badge")}</span
+            >
+            <span
+              class="inline-flex min-w-0 items-center gap-1.5 sm:border-s sm:ps-2.5"
+              style="border-color: var(--border); color: var(--muted-foreground)"
+            >
+              {
+                latestRelease && (
+                  <span
+                    class="shrink-0 font-medium"
+                    style="color: var(--foreground)"
+                  >
+                    {latestRelease.tagName}
+                  </span>
+                )
+              }
+              <span class="min-w-0 truncate">
+                {
+                  latestRelease
+                    ? (latestRelease.heading ?? latestRelease.displayName)
+                    : "Changelog"
+                }
+              </span>
+              <span
+                aria-hidden="true"
+                class="shrink-0 transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+                >→</span
+              >
+            </span>
+          </a>
+          <h1
+            data-reveal
+            style="--reveal-delay: 240ms"
+            class="max-w-[90rem] text-balance text-center font-display text-5xl font-medium leading-[1.02] sm:text-6xl lg:text-7xl xl:text-[5.5rem]"
           >
             {
-              latestRelease && (
-                <span
-                  class="shrink-0 font-medium"
-                  style="color: var(--foreground)"
-                >
-                  {latestRelease.tagName}
-                </span>
+              isSourceLocale ? (
+                <>Put AI to work on every matter.</>
+              ) : (
+                <>
+                  {t("hero.titleLine1")}
+                  <br />
+                  <a
+                    href={githubUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="os-link"
+                    title="View source on GitHub"
+                  >
+                    {t("hero.titleLine2")}
+                  </a>
+                </>
               )
             }
-            <span class="min-w-0 truncate">
-              {
-                latestRelease
-                  ? (latestRelease.heading ?? latestRelease.displayName)
-                  : "Changelog"
-              }
-            </span>
-            <span
-              aria-hidden="true"
-              class="shrink-0 transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
-              >→</span
-            >
-          </span>
-        </a>
-        <h1
-          data-reveal
-          style="--reveal-delay: 240ms"
-          class="max-w-[90rem] text-balance text-center font-display text-5xl font-medium leading-[1.02] sm:text-6xl lg:text-7xl xl:text-[5.5rem]"
-        >
-          {
-            isSourceLocale ? (
-              <>Put AI to work on every matter.</>
-            ) : (
-              <>
-                {t("hero.titleLine1")}
-                <br />
-                <a
-                  href={githubUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="os-link"
-                  title="View source on GitHub"
-                >
-                  {t("hero.titleLine2")}
-                </a>
-              </>
-            )
-          }
-        </h1>
-        <p
-          data-reveal
-          style="--reveal-delay: 360ms; color: var(--muted-foreground)"
-          class="mt-6 max-w-2xl text-balance text-center text-lg leading-[1.55]"
-        >
-          {
-            isSourceLocale ? (
-              <>
-                One workspace for matters, documents, research, and agents,
-                grounded in your sources and permissions.
-              </>
-            ) : (
-              <>
-                {t("hero.subtitle")}
-                <br />
-                {t("hero.subtitle2")}
-              </>
-            )
-          }
-        </p>
-        <div
-          data-reveal
-          style="--reveal-delay: 440ms"
-          class="mt-8 flex flex-row items-center gap-3"
-        >
-          <a
-            href={selfHostingDocsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
-            class="inline-flex h-11 items-center rounded-[0.85rem] px-6 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+          </h1>
+          <p
+            data-reveal
+            style="--reveal-delay: 360ms; color: var(--muted-foreground)"
+            class="mt-6 max-w-2xl text-balance text-center text-lg leading-[1.55]"
           >
-            {t("hero.selfHost")}
-          </a>
-          <a
-            id="hero-cta"
-            href={appUrl}
-            style="background: var(--primary); color: var(--primary-foreground)"
-            class="group inline-flex h-11 items-center gap-2 rounded-[0.85rem] px-6 text-sm font-medium shadow-sm transition-[opacity,transform] hover:-translate-y-0.5 hover:opacity-90 whitespace-nowrap"
+            {
+              isSourceLocale ? (
+                <>
+                  One workspace for matters, documents, research, and agents,
+                  grounded in your sources and permissions.
+                </>
+              ) : (
+                <>
+                  {t("hero.subtitle")}
+                  <br />
+                  {t("hero.subtitle2")}
+                </>
+              )
+            }
+          </p>
+          <div
+            data-reveal
+            style="--reveal-delay: 440ms"
+            class="mt-8 flex flex-row items-center gap-3"
           >
-            {t("common.startFree")}
-            <span
-              aria-hidden="true"
-              class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5">→</span
+            <a
+              href={selfHostingDocsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+              class="inline-flex h-11 items-center rounded-[0.85rem] px-6 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
             >
-          </a>
+              {t("hero.selfHost")}
+            </a>
+            <a
+              id="hero-cta"
+              href={appUrl}
+              style="background: var(--primary); color: var(--primary-foreground)"
+              class="group inline-flex h-11 items-center gap-2 rounded-[0.85rem] px-6 text-sm font-medium shadow-sm transition-[opacity,transform] hover:-translate-y-0.5 hover:opacity-90 whitespace-nowrap"
+            >
+              {t("common.startFree")}
+              <span
+                aria-hidden="true"
+                class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5">→</span
+              >
+            </a>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-1/4"
-        style="background: linear-gradient(to bottom, transparent, var(--background))"
-      >
-      </div>
-    </section>
-
-    {/* ——— Opening product story ——— */}
-    <section class="relative overflow-hidden" id="opening-product-story">
-      <div class="relative aspect-[4/5] w-full sm:aspect-[2.03]">
-        <CliMcpPreview
-          client:load
-          revealSideWindowsOnScroll
-        />
-      </div>
-    </section>
+      {/* ——— Opening product story ——— */}
+      <section class="relative overflow-hidden" id="opening-product-story">
+        <div class="relative aspect-[4/5] w-full sm:aspect-[2.03]">
+          <CliMcpPreview
+            client:load
+            revealSideWindowsOnScroll
+            backdrop="transparent"
+          />
+        </div>
+      </section>
+    </div>
 
     <HomeProductStory />
 
