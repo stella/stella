@@ -292,3 +292,17 @@ export class TimeoutError extends TaggedError("TimeoutError")<{
   timeoutMs?: number;
   cause?: unknown;
 }>() {}
+
+/**
+ * A scheduler job exceeded its per-job execution ceiling. The task promise
+ * cannot be cancelled, so the runner stops heartbeating, releases the lease,
+ * and marks the run as timed out; a later "zombie" completion is rejected by
+ * the guarded completion writes.
+ */
+export class SchedulerJobTimeoutError extends TaggedError(
+  "SchedulerJobTimeoutError",
+)<{
+  message: string;
+  jobId: string;
+  timeoutMs: number;
+}>() {}
