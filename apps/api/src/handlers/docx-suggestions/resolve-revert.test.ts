@@ -243,7 +243,7 @@ const createWorkspaceContext = ({
 const runHandler = async <TContext>(
   endpoint: { handler: (context: TContext) => Promise<unknown> },
   context: WorkspaceTestContext,
-  requestShape: Record<string, unknown>,
+  requestShape: Partial<TContext> & Record<string, unknown>,
 ): Promise<unknown> => {
   try {
     return await endpoint.handler(

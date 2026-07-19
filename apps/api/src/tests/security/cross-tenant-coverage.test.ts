@@ -57,6 +57,7 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "document-types": WAIVER_REASON.preExistingGap,
   docx: WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,
+  flows: WAIVER_REASON.preExistingGap,
   legislation: WAIVER_REASON.preExistingGap,
   me: WAIVER_REASON.preExistingGap,
   "organization-settings": WAIVER_REASON.preExistingGap,
@@ -73,6 +74,7 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "view-templates": WAIVER_REASON.preExistingGap,
   views: WAIVER_REASON.preExistingGap,
   workspaces: WAIVER_REASON.preExistingGap,
+  "agent-auth": WAIVER_REASON.noTenantReadSurface,
   auth: WAIVER_REASON.noTenantReadSurface,
   dev: WAIVER_REASON.noTenantReadSurface,
   "external-preview": WAIVER_REASON.noTenantReadSurface,
@@ -98,10 +100,12 @@ const handlerDomains = readdirSync(handlersDir, { withFileTypes: true })
 // with no second list to maintain.
 const coveredDomains = new Set(
   [
-    ...readFileSync(crossTenantMatrixPath, "utf8").matchAll(
-      /@\/api\/handlers\/([^/"]+)\//g,
+    ...readFileSync(crossTenantMatrixPath, "utf-8").matchAll(
+      /@\/api\/handlers\/([^/"]+)\//gu,
     ),
-  ].map((match) => match[1]),
+  ]
+    .map((match) => match[1])
+    .filter((domain): domain is string => domain !== undefined),
 );
 
 describe("cross-tenant matrix coverage guard", () => {

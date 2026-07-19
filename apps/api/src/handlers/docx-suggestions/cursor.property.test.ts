@@ -3,7 +3,11 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import { encodePaginationCursor } from "@/api/lib/pagination";
+import {
+  encodePaginationCursor,
+  isUuidPaginationCursorPart,
+  parseDateTimePaginationCursorPart,
+} from "@/api/lib/pagination";
 import { brandPersistedDocxSuggestionId } from "@/api/lib/safe-id-boundaries";
 
 import {
@@ -16,15 +20,12 @@ import {
 // cannot is the Invalid Date, which the encoder never produces.
 const validDate = fc.date({ noInvalidDate: true });
 
-// Local copies of the shapes the codec accepts, used only to filter generators
-// away from the (astronomically unlikely) case where a random string is itself
-// a valid part.
-const uuidCursorPartPattern =
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
-const isDateTimeCursorPart = (value: string): boolean => {
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
-};
+// Filter predicate to steer generators away from the (astronomically
+// unlikely) case where a random string is itself a valid part. Reuses the
+// production decoder's own predicates so the test preconditions can never
+// drift from what `decodeDocxSuggestionCursor` actually accepts.
+const isDateTimeCursorPart = (value: string): boolean =>
+  parseDateTimePaginationCursorPart(value) !== null;
 
 describe("docx suggestion cursor codec (properties)", () => {
   test("decode ∘ encode recovers the (createdAt, id) pair", () => {
@@ -92,7 +93,7 @@ describe("docx suggestion cursor codec (properties)", () => {
   test("a non-UUID id part decodes to null", () => {
     fc.assert(
       fc.property(validDate, fc.string(), (createdAt, rawId) => {
-        fc.pre(!uuidCursorPartPattern.test(rawId));
+        fc.pre(!isUuidPaginationCursorPart(rawId));
         expect(
           decodeDocxSuggestionCursor(
             encodePaginationCursor([createdAt.toISOString(), rawId]),
