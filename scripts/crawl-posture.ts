@@ -10,8 +10,8 @@
 //
 // Postures:
 //   public   — an indexable SEO/LLM surface. robots.txt must invite crawlers
-//              (a Sitemap, no deny-all), an llms.txt must exist, and no source
-//              page may carry a `noindex` robots meta.
+//              (a Sitemap, no wildcard or bot-specific deny-all), an llms.txt
+//              must exist, and no source page may carry a `noindex` robots meta.
 //   private  — an authenticated app that must stay invisible to crawlers.
 //              robots.txt must deny all (`User-agent: *` + `Disallow: /`) with
 //              no Sitemap and no `Allow:` rule (a more specific Allow can beat
@@ -92,6 +92,7 @@ type ViolationCode =
   | "private-has-llms"
   | "public-robots-missing"
   | "public-robots-deny-all"
+  | "public-robots-bot-specific-deny-all"
   | "public-robots-missing-sitemap"
   | "public-llms-missing"
   | "public-src-noindex"
@@ -194,6 +195,25 @@ const hasPermissiveBotGroup = (robotsText: string): boolean =>
     (group) =>
       !group.agents.includes("*") &&
       !group.rules.some(
+        (rule) => rule.field === "disallow" && rule.value === "/",
+      ),
+  );
+
+// A non-wildcard group (e.g. `User-agent: Googlebot`) that denies all itself.
+// Per the robots.txt spec, a crawler follows the MOST SPECIFIC group that names
+// it and ignores the wildcard fallback entirely — so a `User-agent: Googlebot`
+// group with `Disallow: /` blocks that bot even though the wildcard
+// `User-agent: *` group invites everyone else. `hasDenyAll` only inspects the
+// wildcard group, so it does not catch this. A group whose stacked agents
+// include `*` shares the wildcard's rules and is exempt. This mirrors
+// `hasPermissiveBotGroup` on the private side: there a bot-specific group can
+// carve an unwanted opening in a deny-all; here one can carve an unwanted
+// closure in an invite-all.
+const hasBotSpecificDenyAll = (robotsText: string): boolean =>
+  parseRobotsGroups(robotsText).some(
+    (group) =>
+      !group.agents.includes("*") &&
+      group.rules.some(
         (rule) => rule.field === "disallow" && rule.value === "/",
       ),
   );
@@ -442,6 +462,15 @@ const checkPublic = (appDir: string, app: string): Violation[] => {
         message:
           "public app public/robots.txt contains a deny-all `Disallow: /`.",
         fix: "remove the deny-all; a public surface must invite crawlers.",
+      });
+    }
+    if (hasBotSpecificDenyAll(robots)) {
+      violations.push({
+        app,
+        code: "public-robots-bot-specific-deny-all",
+        message:
+          "public app public/robots.txt contains a bot-specific `User-agent` group that denies all.",
+        fix: "remove the bot-specific group, or its `Disallow: /`: a named bot follows only its own most-specific group and ignores the wildcard invite.",
       });
     }
     if (!hasSitemapLine(robots)) {
@@ -755,6 +784,8 @@ const DENY_ALL_ROBOTS_WITH_BOT_CARVEOUT =
 const PUBLIC_ROBOTS =
   "User-agent: *\nAllow: /\n\nSitemap: https://example.com/sitemap.xml\n";
 const PUBLIC_ROBOTS_NO_SITEMAP = "User-agent: *\nAllow: /\n";
+const PUBLIC_ROBOTS_WITH_BOT_DENY_ALL =
+  "User-agent: *\nAllow: /\n\nUser-agent: Googlebot\nDisallow: /\n\nSitemap: https://example.com/sitemap.xml\n";
 const LLMS_TXT = "# Example\nA public surface for LLM readers.\n";
 
 const pkg = (posture: string): string =>
@@ -1021,6 +1052,24 @@ const runSelfTest = (): number => {
       writeFixtureFile(root, path.join(app, "public", "llms.txt"), LLMS_TXT);
     }),
     "public-robots-deny-all",
+  );
+
+  // 8a. public with a bot-specific group that denies all, even though the
+  //     wildcard group invites everyone. That bot follows only its own
+  //     most-specific group and ignores the wildcard invite, so it is silently
+  //     blocked from a supposedly public surface.
+  expectCode(
+    "public with bot-specific deny-all",
+    reportForSingleApp((root, app) => {
+      writeFixtureFile(root, path.join(app, "package.json"), pkg("public"));
+      writeFixtureFile(
+        root,
+        path.join(app, "public", "robots.txt"),
+        PUBLIC_ROBOTS_WITH_BOT_DENY_ALL,
+      );
+      writeFixtureFile(root, path.join(app, "public", "llms.txt"), LLMS_TXT);
+    }),
+    "public-robots-bot-specific-deny-all",
   );
 
   // 8b. public with no robots.txt at all.
