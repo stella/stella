@@ -51,10 +51,11 @@ import type { MatterTarget } from "@/components/matter-target-picker";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { userErrorMessage } from "@/lib/errors/user-safe";
+import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
@@ -64,29 +65,25 @@ import {
   buildAutofillUpdates,
   groupSupportsRegistryAutofill,
 } from "./registry-autofill";
+import { LOOKUP_REGISTRY_OPTIONS } from "./registry-options";
 import {
   firstOfNextMonthIso,
   formatDateValue,
   inDaysIso,
   todayIso,
 } from "./template-date-format";
+import type {
+  NamedCondition,
+  ResolvedField,
+  StructureError,
+} from "./template-discover-types";
+import type { LookupRegistry } from "./template-field-manifest";
 import { TemplatePrefillPanel } from "./template-prefill-panel";
 import type { PrefillSuggestionDto } from "./template-prefill-panel";
 
 type FillFormat = "docx" | "pdf";
 
 const DOCX_EXT_RE = /\.docx$/iu;
-
-type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
-
-type DiscoverData = Exclude<
-  NonNullable<Extract<DiscoverResponse, { data: unknown }>["data"]>,
-  Response
->;
-
-type ResolvedField = DiscoverData["fields"][number];
-type NamedCondition = DiscoverData["conditions"][number];
-type StructureError = DiscoverData["structureErrors"][number];
 
 const REQUIRED_MARKER = "*";
 
@@ -1389,21 +1386,6 @@ const collectEmptyOptionalFields = (
   return labels;
 };
 
-// Registries offered for one-click party-block autofill. Slugs are a
-// subset of the unified lookup endpoint's supported registries; labels
-// are registry proper names (not translatable UI copy).
-const REGISTRY_OPTIONS = [
-  { slug: "krs", label: "Poland — KRS" },
-  { slug: "ares", label: "Czechia — ARES" },
-  { slug: "orsr", label: "Slovakia — ORSR" },
-  { slug: "companies-house", label: "United Kingdom — Companies House" },
-  { slug: "prh", label: "Finland — PRH" },
-  { slug: "brreg", label: "Norway — Brønnøysund" },
-  { slug: "recherche-entreprises", label: "France — recherche-entreprises" },
-] as const;
-
-type RegistrySlug = (typeof REGISTRY_OPTIONS)[number]["slug"];
-
 /** One-click party-block autofill from a business register. Looks up a
  *  company by its canonical id (KRS number, IČO, …) and fills the
  *  matching fields in this group; the user reviews before submitting. */
@@ -1415,19 +1397,48 @@ const RegistryAutofillControl = ({
   onApply: (updates: { path: string; value: string }[]) => void;
 }) => {
   const t = useTranslations();
-  const [registry, setRegistry] = useState<RegistrySlug>("krs");
+  const [registry, setRegistry] = useState<LookupRegistry>("krs");
   const [companyId, setCompanyId] = useState("");
   const [loading, setLoading] = useState(false);
+  // Monotonic id for the in-flight lookup: a newer lookup supersedes older
+  // ones so the last id the user issued wins, not whichever request happens
+  // to settle last.
+  const lookupSeq = useRef(0);
 
   const handleLookup = async () => {
     const q = companyId.trim();
     if (q === "") {
       return;
     }
+    const seq = (lookupSeq.current += 1);
     setLoading(true);
-    const response = await api.contacts["business-registries"].get({
-      query: { registry, q },
-    });
+    // A timeout, dropped connection, or DNS failure throws instead of
+    // resolving to an Eden `.error` response, which would otherwise leave
+    // `loading` stuck forever (see runDownload's own catch below for the
+    // same class of bug on the fill/download path).
+    let response: Awaited<
+      ReturnType<(typeof api.contacts)["business-registries"]["get"]>
+    >;
+    try {
+      response = await api.contacts["business-registries"].get({
+        query: { registry, q },
+      });
+    } catch (error) {
+      if (seq === lookupSeq.current) {
+        setLoading(false);
+        stellaToast.add({
+          type: "error",
+          title: t("templates.registryNotFound"),
+          description: userErrorFromThrown(error, t("common.unexpectedError")),
+        });
+      }
+      getAnalytics().captureError(error);
+      return;
+    }
+    if (seq !== lookupSeq.current) {
+      // A newer lookup started while this one was in flight; drop its result.
+      return;
+    }
     setLoading(false);
 
     if (response.error) {
@@ -1470,7 +1481,7 @@ const RegistryAutofillControl = ({
     <div className="flex flex-wrap items-center gap-2 border-b pb-3">
       <Select
         onValueChange={(val) => {
-          const option = REGISTRY_OPTIONS.find((o) => o.slug === val);
+          const option = LOOKUP_REGISTRY_OPTIONS.find((o) => o.slug === val);
           if (option) {
             setRegistry(option.slug);
           }
@@ -1481,7 +1492,7 @@ const RegistryAutofillControl = ({
           <SelectValue />
         </SelectTrigger>
         <SelectPopup>
-          {REGISTRY_OPTIONS.map((option) => (
+          {LOOKUP_REGISTRY_OPTIONS.map((option) => (
             <SelectItem key={option.slug} value={option.slug}>
               {option.label}
             </SelectItem>
@@ -1494,7 +1505,11 @@ const RegistryAutofillControl = ({
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            void handleLookup();
+            // Guard the Enter path on the same loading state as the button so
+            // two quick Enters cannot fire overlapping lookups.
+            if (!loading) {
+              void handleLookup();
+            }
           }
         }}
         placeholder={t("templates.registryIdPlaceholder")}
@@ -2069,6 +2084,30 @@ export const TemplateForm = ({
     ],
   );
 
+  // Run a download and surface a thrown fill/convert failure as a toast.
+  // handleDownload's own error-toast only covers Eden `.error` responses; a
+  // timeout, dropped connection, or blob-read failure throws instead, which
+  // would otherwise be swallowed into a silent no-op that also leaves the
+  // button stuck on its "generating" label.
+  const runDownload = (
+    format: FillFormat,
+    options?: { skipEmptyGate?: boolean },
+  ) => {
+    handleDownload(format, options).catch((error: unknown) => {
+      setLoading(false);
+      stellaToast.add({
+        type: "error",
+        title: t(
+          format === "pdf"
+            ? "templates.pdfConversionFailed"
+            : "templates.fillFailed",
+        ),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
+      });
+      getAnalytics().captureError(error);
+    });
+  };
+
   // ── Save to matter ────────────────────────────────
   const [matterDialogOpen, setMatterDialogOpen] = useState(false);
   const [matterTarget, setMatterTarget] = useState<MatterTarget | null>(null);
@@ -2169,8 +2208,7 @@ export const TemplateForm = ({
       void fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null);
       return;
     }
-    // Errors are surfaced as toasts inside handleDownload
-    handleDownload("docx").catch(() => undefined);
+    runDownload("docx");
   };
 
   /** The empty-fields warning's explicit confirm: run the armed action while
@@ -2183,11 +2221,11 @@ export const TemplateForm = ({
     const { action } = emptyWarning;
     setEmptyWarning(null);
     if (action === "downloadDocx") {
-      handleDownload("docx", { skipEmptyGate: true }).catch(() => undefined);
+      runDownload("docx", { skipEmptyGate: true });
       return;
     }
     if (action === "downloadPdf") {
-      handleDownload("pdf", { skipEmptyGate: true }).catch(() => undefined);
+      runDownload("pdf", { skipEmptyGate: true });
       return;
     }
     if (action === "moveToMatter") {
@@ -2423,7 +2461,7 @@ export const TemplateForm = ({
             <DropdownMenuItem
               disabled={loading || hasErrors}
               onClick={() => {
-                void handleDownload("docx").catch(() => undefined);
+                runDownload("docx");
               }}
             >
               {t("templates.downloadDocx")}
@@ -2431,7 +2469,7 @@ export const TemplateForm = ({
             <DropdownMenuItem
               disabled={loading || hasErrors}
               onClick={() => {
-                void handleDownload("pdf").catch(() => undefined);
+                runDownload("pdf");
               }}
             >
               {t("templates.downloadPdf")}

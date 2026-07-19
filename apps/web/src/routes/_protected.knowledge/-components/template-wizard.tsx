@@ -45,27 +45,25 @@ import { userErrorMessage } from "@/lib/errors/user-safe";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 import {
+  LOOKUP_REGISTRY_OPTIONS,
+  type LookupRegistryOption,
+} from "./registry-options";
+import {
   DATE_FORMAT_STYLES,
   formatDateExample,
   type TemplateDateFormat,
 } from "./template-date-format";
+import type {
+  NamedCondition,
+  ResolvedField,
+  StructureError,
+} from "./template-discover-types";
 import {
   defaultCompositeFormat,
   isInputType,
   type InputType,
   type LookupRegistry,
 } from "./template-field-manifest";
-
-type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
-
-type DiscoverData = Exclude<
-  NonNullable<Extract<DiscoverResponse, { data: unknown }>["data"]>,
-  Response
->;
-
-export type ResolvedField = DiscoverData["fields"][number];
-export type NamedCondition = DiscoverData["conditions"][number];
-export type StructureError = DiscoverData["structureErrors"][number];
 
 const DOCX_EXTENSION_RE = /\.docx$/iu;
 const REQUIRED_MARKER = "*";
@@ -959,37 +957,6 @@ const OptionsFromFieldControl = ({
     </Field>
   );
 };
-
-/** One registry option for the "Company ID" field type. `country` is the
- *  registry's jurisdiction (ISO 3166-1 alpha-2, or "EU" for the EU-wide VIES
- *  pseudo-jurisdiction), used to order options jurisdiction-first. Labels are
- *  registry proper names, not translatable UI copy. */
-type LookupRegistryOption = {
-  slug: LookupRegistry;
-  label: string;
-  country: string;
-};
-
-/** Registries offered for the "Company ID" field type, one entry each. Mirrors
- *  `LOOKUP_REGISTRIES` (the full `BUSINESS_REGISTRY_SLUGS`); Eden exposes types
- *  only, so the slugs are mirrored here — extend together with the API. */
-const LOOKUP_REGISTRY_OPTIONS: readonly LookupRegistryOption[] = [
-  { slug: "ares", label: "Czechia — ARES", country: "CZ" },
-  { slug: "orsr", label: "Slovakia — ORSR", country: "SK" },
-  { slug: "krs", label: "Poland — KRS", country: "PL" },
-  {
-    slug: "companies-house",
-    label: "United Kingdom — Companies House",
-    country: "GB",
-  },
-  { slug: "denue", label: "Mexico — INEGI DENUE", country: "MX" },
-  { slug: "brreg", label: "Norway — Brønnøysund (BRREG)", country: "NO" },
-  { slug: "prh", label: "Finland — PRH", country: "FI" },
-  { slug: "recherche-entreprises", label: "France — RNE", country: "FR" },
-  { slug: "edgar", label: "United States — SEC EDGAR", country: "US" },
-  { slug: "gcis", label: "Taiwan — GCIS", country: "TW" },
-  { slug: "vies", label: "European Union — VIES (VAT)", country: "EU" },
-];
 
 /** The app locale's region (ISO 3166-1 alpha-2), or null when the locale has
  *  no resolvable region. `maximize()` adds the likely region for

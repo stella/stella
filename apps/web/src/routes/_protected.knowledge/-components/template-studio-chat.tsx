@@ -272,6 +272,7 @@ const TemplateStudioChatInner = ({
   const t = useTranslations();
   const user = useAuthenticatedUser();
   const author = user.preferredName ?? user.name ?? user.email;
+  const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -1344,9 +1345,21 @@ const TemplateStudioChatInner = ({
             stop();
           }}
           onSubmit={({ prompt, files }) => {
+            // ensureAIAvailable is a real round-trip; a concurrent "new chat"
+            // rotation can swap the active thread while it is in flight. This
+            // instance (keyed by chatThreadId) still targets its own thread,
+            // so bail if the active thread moved rather than deliver the send
+            // to a thread the user has already left.
+            const submittingThreadId = chatThreadId;
             ensureAIAvailable()
               .then(async (available) => {
                 if (!available) {
+                  return;
+                }
+                const currentThreadId = queryClient.getQueryData(
+                  chatKeys.templateThread(activeOrganizationId, { templateId }),
+                );
+                if (currentThreadId !== submittingThreadId) {
                   return;
                 }
                 // Always pop the thread open on send, even if the user
