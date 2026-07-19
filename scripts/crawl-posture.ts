@@ -14,8 +14,10 @@
 //              page may carry a `noindex` robots meta.
 //   private  — an authenticated app that must stay invisible to crawlers.
 //              robots.txt must deny all (`User-agent: *` + `Disallow: /`) with
-//              no Sitemap, every served *.html must carry a `noindex` robots
-//              meta, and no llms.txt may exist (it would advertise the surface).
+//              no Sitemap and no `Allow:` rule (a more specific Allow can beat
+//              the deny-all for the paths it names), every served *.html must
+//              carry a `noindex` robots meta, and no llms.txt may exist (it
+//              would advertise the surface).
 //   unserved — not an internet-facing HTML surface (API, desktop shell, CLI
 //              runtime, collab server). No requirements.
 //
@@ -84,6 +86,7 @@ type ViolationCode =
   | "private-robots-missing"
   | "private-robots-not-deny-all"
   | "private-robots-has-sitemap"
+  | "private-robots-has-allow"
   | "private-html-no-noindex"
   | "private-has-llms"
   | "public-robots-missing"
@@ -167,6 +170,14 @@ const hasDenyAll = (robotsText: string): boolean =>
       group.rules.some(
         (rule) => rule.field === "disallow" && rule.value === "/",
       ),
+  );
+
+// Any `Allow:` rule at all, in any group. Crawlers resolve Allow/Disallow by
+// most-specific-path-wins, so a single `Allow: /public` rule can carve a hole
+// in an otherwise deny-all robots.txt; a private app must never emit one.
+const hasAnyAllowRule = (robotsText: string): boolean =>
+  parseRobotsGroups(robotsText).some((group) =>
+    group.rules.some((rule) => rule.field === "allow"),
   );
 
 // --- robots meta detection --------------------------------------------------
@@ -348,6 +359,15 @@ const checkPrivate = (appDir: string, app: string): Violation[] => {
         code: "private-robots-has-sitemap",
         message: "private app public/robots.txt advertises a Sitemap.",
         fix: "remove the `Sitemap:` line; a private surface must not point crawlers at a sitemap.",
+      });
+    }
+    if (hasAnyAllowRule(robots)) {
+      violations.push({
+        app,
+        code: "private-robots-has-allow",
+        message:
+          "private app public/robots.txt contains an `Allow:` rule alongside the deny-all.",
+        fix: "remove the `Allow:` rule; a more specific Allow can override the deny-all for the paths it names.",
       });
     }
   }
@@ -701,6 +721,8 @@ const DENY_ALL_ROBOTS = "User-agent: *\nDisallow: /\n";
 const DENY_ALL_ROBOTS_WITH_SITEMAP =
   "User-agent: *\nDisallow: /\n\nSitemap: https://example.com/sitemap.xml\n";
 const NOT_DENY_ALL_ROBOTS = "User-agent: *\nDisallow: /admin\n";
+const DENY_ALL_ROBOTS_WITH_ALLOW =
+  "User-agent: *\nDisallow: /\nAllow: /public\n";
 const PUBLIC_ROBOTS =
   "User-agent: *\nAllow: /\n\nSitemap: https://example.com/sitemap.xml\n";
 const PUBLIC_ROBOTS_NO_SITEMAP = "User-agent: *\nAllow: /\n";
@@ -892,6 +914,21 @@ const runSelfTest = (): number => {
       writeFixtureFile(root, path.join(app, "index.html"), NOINDEX_HTML);
     }),
     "private-robots-has-sitemap",
+  );
+
+  // 5b. private robots.txt with a deny-all plus an Allow rule
+  expectCode(
+    "private robots.txt with Allow rule",
+    reportForSingleApp((root, app) => {
+      writeFixtureFile(root, path.join(app, "package.json"), pkg("private"));
+      writeFixtureFile(
+        root,
+        path.join(app, "public", "robots.txt"),
+        DENY_ALL_ROBOTS_WITH_ALLOW,
+      );
+      writeFixtureFile(root, path.join(app, "index.html"), NOINDEX_HTML);
+    }),
+    "private-robots-has-allow",
   );
 
   // 6. private index.html without noindex meta
