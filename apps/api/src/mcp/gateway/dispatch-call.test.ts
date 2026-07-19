@@ -195,13 +195,19 @@ describe("dispatchGatewayToolCall", () => {
     resolveSkillToolMock.mockRejectedValue(otherFault);
     gatewayLoadErrorResultMock.mockReturnValue(null);
 
-    await expect(
-      dispatchGatewayToolCall({
-        args: {},
-        context,
-        mode: "default",
-        toolName: "skill__alpha",
-      }),
-    ).rejects.toBe(otherFault);
+    // bun-types declares `.rejects.toBe` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead (mirrors
+    // external-tools.test.ts's load-fault assertion).
+    const rejection: unknown = await dispatchGatewayToolCall({
+      args: {},
+      context,
+      mode: "default",
+      toolName: "skill__alpha",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBe(otherFault);
   });
 });
