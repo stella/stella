@@ -1,33 +1,41 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeFolioCollabSession } from "@/api/lib/folio-collab-sessions";
+import {
+  permissiveBodySchema,
+  validatePostAuth,
+} from "@/api/lib/permissive-route-schema";
+
+import {
+  folioCollabSessionCredentialsSchema,
+  folioCollabSessionNotFoundError,
+} from "./session-credentials";
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
-  body: t.Object({
-    sessionId: tSafeId("folioCollabSession"),
-    token: t.String({ minLength: 64, maxLength: 64 }),
-  }),
+  body: permissiveBodySchema({ keys: ["sessionId", "token"] }),
 } satisfies TokenHandlerConfig;
 
 const authorizeFolioCollabSessionHandler = createSafeTokenHandler(
   config,
   // eslint-disable-next-line require-yield -- token auth returns a plain Promise; nothing to Result.await
-  async function* ({ body: { sessionId, token } }) {
+  async function* ({ body }) {
+    const credentials = validatePostAuth(
+      folioCollabSessionCredentialsSchema,
+      body,
+    );
+    if (!credentials.ok) {
+      return Result.err(folioCollabSessionNotFoundError());
+    }
+    const { sessionId, token } = credentials.value;
+
     const authorized = await authorizeFolioCollabSession({ sessionId, token });
 
     if (authorized.status === "missing") {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Collaborative edit session not found.",
-        }),
-      );
+      return Result.err(folioCollabSessionNotFoundError());
     }
     if (authorized.status === "token-expired") {
       return Result.err(

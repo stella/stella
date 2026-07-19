@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, asc, gte } from "drizzle-orm";
-import { t } from "elysia";
 import type { Static } from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
@@ -13,6 +12,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { permissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /**
@@ -39,12 +39,11 @@ const registrationCursor = createTimestampIdCursorCodec({
  * before the handler's token gate runs, so a strict schema would emit 422s
  * to unauthenticated probes — leaking both the endpoint's existence (which
  * must read as 404 while unconfigured) and its parameter shape. All real
- * validation happens post-authorization in `validateRegistrationsFilter`.
+ * validation happens post-authorization in `validateRegistrationsFilter`;
+ * the branded helper is the only schema shape `TokenHandlerConfig` accepts.
  */
-export const readRegistrationsQuerySchema = t.Object({
-  since: t.Optional(t.String()),
-  limit: t.Optional(t.String()),
-  cursor: t.Optional(t.String()),
+export const readRegistrationsQuerySchema = permissiveRouteSchema({
+  keys: ["since", "limit", "cursor"],
 });
 
 export type ReadRegistrationsQuery = Static<

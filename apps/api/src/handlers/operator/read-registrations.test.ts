@@ -101,6 +101,20 @@ describe("GET /operator/registrations", () => {
     expect(response.status).toBe(401);
   });
 
+  test("unknown query parameters on a probe never yield validation errors", async () => {
+    const unconfigured = buildApp({ configuredToken: undefined });
+    const unconfiguredResponse = await unconfigured.handle(
+      registrationsRequest({ probe: "1", admin: "true" }),
+    );
+    expect(unconfiguredResponse.status).toBe(404);
+
+    const configured = buildApp({ configuredToken: TOKEN });
+    const configuredResponse = await configured.handle(
+      registrationsRequest({ probe: "1", admin: "true" }),
+    );
+    expect(configuredResponse.status).toBe(401);
+  });
+
   test("400 when since is missing on an authorized request", async () => {
     const app = buildApp({ configuredToken: TOKEN });
     const response = await app.handle(

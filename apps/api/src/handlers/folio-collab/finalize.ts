@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import {
   entities,
@@ -33,23 +32,28 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { authorizeFolioCollabSession } from "@/api/lib/folio-collab-sessions";
+import {
+  permissiveBodySchema,
+  permissiveRouteSchema,
+  validatePostAuth,
+} from "@/api/lib/permissive-route-schema";
 import { getS3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
+import {
+  folioCollabSessionCredentialsSchema,
+  folioCollabSessionNotFoundError,
+} from "./session-credentials";
+
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
-  params: t.Object({
-    sessionId: tSafeId("folioCollabSession"),
-  }),
-  body: t.Object({
-    token: t.String({ minLength: 64, maxLength: 64 }),
-  }),
+  params: permissiveRouteSchema({ keys: ["sessionId"] }),
+  body: permissiveBodySchema({ keys: ["token"] }),
 } satisfies TokenHandlerConfig;
 
 type FinalizeResult =
@@ -68,24 +72,23 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
 >(
   config,
   // eslint-disable-next-line require-yield -- token auth + scopedDb returns plain Promises; nothing to Result.await
-  async function* ({
-    body: { token },
-    params: { sessionId },
-    request,
-    server,
-  }) {
+  async function* ({ body, params, request, server }) {
+    const credentials = validatePostAuth(folioCollabSessionCredentialsSchema, {
+      sessionId: params.sessionId,
+      token: body?.token,
+    });
+    if (!credentials.ok) {
+      return Result.err(folioCollabSessionNotFoundError());
+    }
+    const { sessionId, token } = credentials.value;
+
     const authorizedSession = await authorizeFolioCollabSession({
       sessionId,
       token,
     });
 
     if (authorizedSession.status === "missing") {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Collaborative edit session not found.",
-        }),
-      );
+      return Result.err(folioCollabSessionNotFoundError());
     }
     if (authorizedSession.status === "token-expired") {
       return Result.err(
@@ -166,12 +169,7 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
     });
 
     if (!sessionPreview) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Collaborative edit session not found.",
-        }),
-      );
+      return Result.err(folioCollabSessionNotFoundError());
     }
 
     if (sessionPreview.status !== "open") {
