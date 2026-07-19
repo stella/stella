@@ -29,5 +29,6 @@
     "@resvg/resvg-js": "^2.6.2",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19"
-  }
+  },
+  "crawlPosture": "public"
 }

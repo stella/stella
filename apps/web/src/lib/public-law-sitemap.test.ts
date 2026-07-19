@@ -423,29 +423,56 @@ describe("public law sitemap", () => {
     expect(createRobotsTxt()).toBe("User-agent: *\nDisallow: /\n");
   });
 
-  test("robots disallows public law but keeps path rules when indexable without crawl permission", () => {
+  test("robots default-denies the whole host when indexable without crawl permission", () => {
     const robots = createRobotsTxt({
       publicLawCrawlAllowed: false,
       seoIndexable: true,
     });
+    const lines = robots.split("\n");
 
-    expect(robots).toContain("Disallow: /law/");
-    expect(robots).toContain("Disallow: /workspaces");
-    expect(robots).toContain("Disallow: /knowledge");
-    expect(robots).toContain("Disallow: /chat");
-    expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
-    expect(robots).not.toContain("Allow: /law/");
+    // No allow-list yet, so default-deny keeps every path (including /law) out.
+    expect(lines).toContain("User-agent: *");
+    expect(lines).toContain("Disallow: /");
+    expect(lines.some((line) => line.startsWith("Allow:"))).toBe(false);
+    expect(lines).not.toContain("Disallow: /law/");
+    expect(lines).not.toContain("Disallow: /workspaces");
+    expect(lines).toContain("Sitemap: http://localhost:3000/sitemap.xml");
   });
 
-  test("robots allows public law only when indexable and crawling is permitted", () => {
+  test("robots allow-lists the public crawl prefixes when indexable and crawling is permitted", () => {
     const robots = createRobotsTxt({
       publicLawCrawlAllowed: true,
       seoIndexable: true,
     });
+    const lines = robots.split("\n");
+    const allowLines = lines.filter((line) => line.startsWith("Allow:"));
 
-    expect(robots).toContain("Allow: /law/");
-    expect(robots).not.toContain("Disallow: /law/");
-    expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
+    // Boundary-anchored rules: dir prefixes emit a subtree + exact-path pair,
+    // the sitemap.xml file prefix emits just the exact-path rule.
+    expect(allowLines).toEqual([
+      "Allow: /law/",
+      "Allow: /law$",
+      "Allow: /sitemap.xml$",
+      "Allow: /sitemaps/",
+      "Allow: /sitemaps$",
+    ]);
+    // Sibling-path regression: never emit a bare un-anchored prefix (which
+    // would also match /lawyer, /law-admin, …). Every Allow rule ends in / or $.
+    for (const line of allowLines) {
+      expect(line.endsWith("/") || line.endsWith("$")).toBe(true);
+    }
+    expect(lines).toContain("Disallow: /");
+    expect(lines).not.toContain("Disallow: /law/");
+    expect(lines).toContain("Sitemap: http://localhost:3000/sitemap.xml");
+  });
+
+  test("robots always default-denies for every flag combination", () => {
+    for (const publicLawCrawlAllowed of [false, true]) {
+      for (const seoIndexable of [false, true]) {
+        const robots = createRobotsTxt({ publicLawCrawlAllowed, seoIndexable });
+        expect(robots.split("\n")).toContain("Disallow: /");
+      }
+    }
   });
 
   test("sitemaps are still served while a non-indexable deployment blocks crawlers", () => {

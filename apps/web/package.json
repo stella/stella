@@ -140,5 +140,6 @@
     "react-grab": "^0.1.48",
     "rollup-plugin-visualizer": "^7.0.1",
     "unified": "^11.0.5"
-  }
+  },
+  "crawlPosture": "mixed"
 }

@@ -27,5 +27,6 @@
     "@hocuspocus/provider": "^4.4.0",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:"
-  }
+  },
+  "crawlPosture": "unserved"
 }

@@ -32,5 +32,6 @@
     "@types/react-dom": "catalog:react19",
     "@vitejs/plugin-react": "catalog:",
     "vite": "catalog:"
-  }
+  },
+  "crawlPosture": "unserved"
 }
