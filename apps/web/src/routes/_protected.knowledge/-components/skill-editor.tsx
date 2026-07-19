@@ -49,7 +49,7 @@ import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -330,10 +330,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       const response = await api
         .skills({ skillId: safeSkillId })
         .patch({ ...payload, queryKey: ["skills"] });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: () => {
       onChanged();
@@ -359,10 +356,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       const response = await api
         .skills({ skillId: safeSkillId })
         .resources.post({ ...payload, queryKey: ["skills"] });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: (data) => {
       onChanged();
@@ -384,10 +378,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
           ...payload,
           queryKey: ["skills"],
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: (data) => {
       onChanged();
@@ -406,11 +397,8 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       const response = await api
         .skills({ skillId: safeSkillId })
         .resources.delete({ path: payload.path, queryKey: ["skills"] });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
       return {
-        ...response.data,
+        ...unwrapEden(response),
         resourceId: payload.resourceId,
         path: payload.path,
       };
@@ -444,10 +432,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       const response = await api
         .skills({ skillId: safeSkillId })
         .resources.rename.post({ ...payload, queryKey: ["skills"] });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: (data, variables) => {
       onChanged();

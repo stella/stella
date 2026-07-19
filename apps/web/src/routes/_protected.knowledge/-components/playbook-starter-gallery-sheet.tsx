@@ -16,7 +16,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   knowledgeKeys,
@@ -65,10 +65,7 @@ const PlaybookStarterGallerySheetBody = ({
       const response = await api.playbooks["from-starter"].post({
         starterId,
       });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return { id: response.data.id };
+      return { id: unwrapEden(response).id };
     },
     onSuccess: ({ id }) => {
       void queryClient.invalidateQueries({

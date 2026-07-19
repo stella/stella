@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
@@ -18,11 +18,7 @@ export const propertiesOptions = (workspaceId: string) =>
         .properties({ workspaceId })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.map(toWorkspaceProperty);
+      return unwrapEden(response).map(toWorkspaceProperty);
     },
     refetchOnMount: false,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,

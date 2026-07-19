@@ -8,7 +8,7 @@ import {
 
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -143,11 +143,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
           { fetch: { signal } },
         );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      const { items: rawEntities, ...rest } = response.data;
+      const { items: rawEntities, ...rest } = unwrapEden(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -181,11 +177,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
           { fetch: { signal } },
         );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      const { items: rawEntities, ...rest } = response.data;
+      const { items: rawEntities, ...rest } = unwrapEden(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -220,17 +212,14 @@ export const filesystemEntitiesOptions = (
           { fetch: { signal } },
         );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      const data = unwrapEden(response);
 
-      const entities: WorkspaceEntity[] =
-        response.data.entities.map(toWorkspaceEntity);
+      const entities: WorkspaceEntity[] = data.entities.map(toWorkspaceEntity);
 
       // Parent links of ancestor folders a filter/search hid. Used only to
       // complete the ancestor chain for cross-matter copy/move dedup; never
       // rendered, so they stay out of selection and bulk actions.
-      const ancestorLinks = response.data.ancestorLinks;
+      const ancestorLinks = data.ancestorLinks;
 
       return { entities, ancestorLinks };
     },
@@ -271,11 +260,7 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
           { fetch: { signal } },
         );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      const { items: rawEntities, ...rest } = response.data;
+      const { items: rawEntities, ...rest } = unwrapEden(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -309,11 +294,7 @@ export const groupCountsOptions = (key: GroupCountsOptionsInput) =>
           { fetch: { signal } },
         );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.counts;
+      return unwrapEden(response).counts;
     },
   });
 
@@ -364,14 +345,10 @@ export const entitySummariesOptions = (workspaceId: string) =>
             },
           });
 
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
+        const data = unwrapEden(response);
 
-        summaries.push(
-          ...response.data.items.map(({ id, name }) => ({ id, name })),
-        );
-        cursor = response.data.nextCursor ?? undefined;
+        summaries.push(...data.items.map(({ id, name }) => ({ id, name })));
+        cursor = data.nextCursor ?? undefined;
       } while (cursor !== undefined);
 
       return summaries;
@@ -386,11 +363,7 @@ export const entitySummariesCountOptions = (workspaceId: string) =>
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .summaries.count.get({ fetch: { signal }, query: {} });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.totalCount;
+      return unwrapEden(response).totalCount;
     },
   });
 
@@ -421,18 +394,16 @@ const fetchAllWorkspaceFolders = async ({
         },
       });
 
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
+    const data = unwrapEden(response);
 
     folders.push(
-      ...response.data.items.map((folder) => ({
+      ...data.items.map((folder) => ({
         entityId: folder.id,
         name: folder.name,
         parentId: folder.parentId,
       })),
     );
-    cursor = response.data.nextCursor ?? undefined;
+    cursor = data.nextCursor ?? undefined;
   } while (cursor !== undefined);
 
   return folders;
@@ -477,12 +448,10 @@ const fetchAllWorkspaceFiles = async ({
         },
       });
 
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
+    const data = unwrapEden(response);
 
     files.push(
-      ...response.data.items.map((file) => ({
+      ...data.items.map((file) => ({
         entityId: file.entityId,
         name: file.name,
         parentId: file.parentId,
@@ -490,7 +459,7 @@ const fetchAllWorkspaceFiles = async ({
         mimeType: file.mimeType,
       })),
     );
-    cursor = response.data.nextCursor ?? undefined;
+    cursor = data.nextCursor ?? undefined;
   } while (cursor !== undefined);
 
   return files;

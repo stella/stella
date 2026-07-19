@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { ConditionNode } from "@/lib/types";
@@ -42,15 +42,13 @@ export const propertyFacetsOptions = (key: PropertyFacetsOptionsInput) =>
           { fetch: { signal } },
         );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+      const data = unwrapEden(response);
 
       const counts = new Map<string, number>();
-      for (const entry of response.data.values) {
+      for (const entry of data.values) {
         counts.set(entry.value, entry.count);
       }
 
-      return { counts, truncated: response.data.truncated };
+      return { counts, truncated: data.truncated };
     },
   });

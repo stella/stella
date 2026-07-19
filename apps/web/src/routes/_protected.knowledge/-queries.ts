@@ -3,7 +3,7 @@ import { panic, TaggedError } from "better-result";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME, STALE_TIME } from "@/lib/consts";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
@@ -208,11 +208,7 @@ export const templatesOptions = (
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     initialPageParam: "",
     getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -230,11 +226,7 @@ export const templateDetailOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -250,11 +242,7 @@ export const templatePreviewOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .preview.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -382,10 +370,7 @@ export const templateVersionsOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .versions.get({ query, fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      const page = response.data;
+      const page = unwrapEden(response);
       if (!("items" in page)) {
         // 404 body shape; the error channel already covers real 404s.
         throw new APIError({ status: 404, message: "Template not found" });
@@ -408,11 +393,7 @@ export const templateClausesOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .clauses.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -431,11 +412,7 @@ export const templateClausePreviewOptions = (
         templateId: toSafeId<"template">(templateId),
       }).get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -453,11 +430,7 @@ export const templateCheckOptions = (
         .templates({ templateId: toSafeId<"template">(templateId) })
         .check.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });
 
@@ -472,11 +445,7 @@ export const templateRecipesOptions = (organizationId: string) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -491,11 +460,7 @@ export const templateCategoriesOptions = (organizationId: string) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -508,11 +473,7 @@ export const clauseCategoriesOptions = (organizationId: string) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -548,11 +509,7 @@ export const clausesOptions = (
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -565,11 +522,7 @@ export const clauseDetailOptions = (organizationId: string, clauseId: string) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -593,11 +546,7 @@ export const playbooksOptions = (
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -611,11 +560,7 @@ export const documentTypesOptions = (organizationId: string) =>
     queryFn: async ({ signal }) => {
       const response = await api["document-types"].get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -629,11 +574,7 @@ export const playbookStartersOptions = (organizationId: string) =>
     queryFn: async ({ signal }) => {
       const response = await api.playbooks.starters.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -649,11 +590,7 @@ export const playbookDetailOptions = (
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -672,11 +609,7 @@ export const playbookVersionsOptions = (
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
         .versions.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -702,11 +635,7 @@ export const flowsOptions = (
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -719,11 +648,7 @@ export const flowDetailOptions = (organizationId: string, flowId: string) =>
         .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -746,10 +671,7 @@ export const skillsOptions = (organizationId: string) =>
         query,
         fetch: { signal },
       });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     initialPageParam: "",
     getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -763,10 +685,7 @@ export const skillDetailOptions = (organizationId: string, skillId: string) =>
       const response = await api
         .skills({ skillId: toSafeId<"agentSkill">(skillId) })
         .get({ fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -778,10 +697,7 @@ export const mcpConnectorsOptions = (organizationId: string) =>
     queryKey: knowledgeKeys.mcp.connectors(organizationId),
     queryFn: async ({ signal }) => {
       const response = await api.mcp.connectors.get({ fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -791,10 +707,7 @@ export const mcpConnectionsOptions = (organizationId: string) =>
     queryKey: knowledgeKeys.mcp.connections(organizationId),
     queryFn: async ({ signal }) => {
       const response = await api.mcp.connections.get({ fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });

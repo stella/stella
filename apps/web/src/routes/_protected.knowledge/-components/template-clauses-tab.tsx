@@ -39,7 +39,7 @@ import type {
 } from "@/components/versions/version-list";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
@@ -405,10 +405,7 @@ export const OutdatedChanges = ({
         .clauses({ clauseId: toSafeId<"clause">(clauseId) })
         .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
         .diff.get();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      setDiff({ status: "ready", value: response.data.segments });
+      setDiff({ status: "ready", value: unwrapEden(response).segments });
     } catch {
       setDiff({ status: "error" });
     }
@@ -424,10 +421,7 @@ export const OutdatedChanges = ({
         .clauses({ clauseId: toSafeId<"clause">(clauseId) })
         .versions({ versionId: toSafeId<"clauseVersion">(versionId) })
         .summarize.post();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      setSummary({ status: "ready", value: response.data.summary });
+      setSummary({ status: "ready", value: unwrapEden(response).summary });
     } catch {
       setSummary({ status: "error" });
     }

@@ -9,7 +9,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { templateVersionsOptions } from "@/routes/_protected.knowledge/-queries";
@@ -78,10 +78,7 @@ export const TemplateVersionsTab = ({
         .templates({ templateId: toSafeId<"template">(templateId) })
         .versions({ versionId: toSafeId<"templateVersion">(versionId) })
         .diff.get();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data.segments;
+      return unwrapEden(response).segments;
     };
 
   const buildSummarize =
@@ -90,10 +87,7 @@ export const TemplateVersionsTab = ({
         .templates({ templateId: toSafeId<"template">(templateId) })
         .versions({ versionId: toSafeId<"templateVersion">(versionId) })
         .summarize.post({});
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data.summary;
+      return unwrapEden(response).summary;
     };
 
   if (isLoading) {

@@ -68,7 +68,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
@@ -464,10 +464,7 @@ const ClauseHeader = ({
   const deleteClause = useMutation({
     mutationFn: async () => {
       const response = await api.clauses({ clauseId }).delete();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: () => {
       stellaToast.add({

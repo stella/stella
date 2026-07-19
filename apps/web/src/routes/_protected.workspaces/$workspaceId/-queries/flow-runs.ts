@@ -5,7 +5,7 @@ import {
   type FlowRunStatus,
 } from "@/components/flows/flow-meta";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 // ── Key type ────────────────────────────────────────
@@ -63,11 +63,7 @@ export const flowRunsOptions = ({
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .flows.runs.get({ query, fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     // Poll while any listed run is still active; the function form returns
     // `false` once everything is terminal so the interval clears itself.
@@ -94,11 +90,7 @@ export const flowRunDetailOptions = (workspaceId: string, runId: string) =>
         .flows.runs({ runId: toSafeId<"flowRun">(runId) })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     refetchInterval: (query) => {
       const data = query.state.data;

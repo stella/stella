@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 
 export const billingCodesKeys = {
   all: (workspaceId: string) => ["billingCodes", workspaceId],
@@ -28,10 +28,6 @@ export const billingCodesOptions = (
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.items;
+      return unwrapEden(response).items;
     },
   });

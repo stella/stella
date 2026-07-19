@@ -1536,11 +1536,7 @@ const ensureFolders = async ({
           parentId: parentSafeId,
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      const newEntityId: string = response.data.entityId;
+      const newEntityId: string = unwrapEden(response).entityId;
       currentParentId = newEntityId;
       knownFolders.set(key, newEntityId);
       folderIds.set(pathKey, newEntityId);

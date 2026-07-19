@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
@@ -76,11 +76,7 @@ export const timeEntriesOptions = (
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.items;
+      return unwrapEden(response).items;
     },
   });
 
@@ -100,11 +96,7 @@ export const activeTimerOptions = (workspaceId: string) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.items.at(0) ?? null;
+      return unwrapEden(response).items.at(0) ?? null;
     },
     refetchInterval: 60_000,
   });

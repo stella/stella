@@ -38,7 +38,7 @@ import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
@@ -269,10 +269,7 @@ export function VersionsSidebar({
         size: file.size,
         sha256Hex,
       });
-      if (presign.error) {
-        throw toAPIError(presign.error);
-      }
-      const { uploadId, url, headers } = presign.data;
+      const { uploadId, url, headers } = unwrapEden(presign);
 
       // 3. PUT to S3.
       const putResponse = await fetchWithTimeout(url, {
@@ -410,10 +407,7 @@ export function VersionsSidebar({
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .versions({ versionId: toSafeId<"entityVersion">(versionId) })
         .diff.get();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data.segments;
+      return unwrapEden(response).segments;
     };
 
   const buildSummarize =
@@ -423,10 +417,7 @@ export function VersionsSidebar({
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .versions({ versionId: toSafeId<"entityVersion">(versionId) })
         .summarize.post({});
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data.summary;
+      return unwrapEden(response).summary;
     };
 
   // Render oldest → newest top-to-bottom so the timeline reads

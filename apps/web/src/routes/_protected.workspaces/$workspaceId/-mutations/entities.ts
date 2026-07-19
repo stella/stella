@@ -5,7 +5,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
@@ -38,11 +38,7 @@ export const useCreateEntities = () => {
           }),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -68,11 +64,7 @@ export const useDeleteEntities = () => {
           entityIds: entityIds.map((entityId) => toSafeId<"entity">(entityId)),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async (_data, { workspaceId }) => {
       await queryClient.invalidateQueries({
@@ -104,11 +96,7 @@ export const useMoveEntity = () => {
           parentId: parentId === null ? null : toSafeId<"entity">(parentId),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -136,11 +124,7 @@ export const useRenameEntity = () => {
           name,
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -179,11 +163,7 @@ export const useUpsertField = () => {
           content,
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
 
     onError: (error) => {

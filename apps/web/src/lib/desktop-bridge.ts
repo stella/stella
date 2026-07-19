@@ -3,7 +3,7 @@ import { FetchBoundaryError } from "@stll/errors";
 import { env } from "@/env";
 import { api } from "@/lib/api";
 import { buildSelfHostConnectDeepLink } from "@/lib/desktop-self-host-link.logic";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -189,11 +189,7 @@ const openRemoteDesktopSession = async ({
       propertyId: toSafeId<"property">(propertyId),
     });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data satisfies RemoteDesktopSession;
+  return unwrapEden(response) satisfies RemoteDesktopSession;
 };
 
 const createDesktopEditHandoff = async ({
@@ -212,11 +208,7 @@ const createDesktopEditHandoff = async ({
       propertyId: toSafeId<"property">(propertyId),
     });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data satisfies DesktopEditHandoff;
+  return unwrapEden(response) satisfies DesktopEditHandoff;
 };
 
 const readDesktopEditHandoffStatus = async ({
@@ -233,11 +225,7 @@ const readDesktopEditHandoffStatus = async ({
     })
     .status.get();
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data satisfies DesktopEditHandoffStatus;
+  return unwrapEden(response) satisfies DesktopEditHandoffStatus;
 };
 
 const launchDesktopEditHandoff = (deepLinkUrl: string) => {

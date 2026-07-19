@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
@@ -52,13 +52,11 @@ export const fetchOlderVersions = async ({
     .entity({ entityId })
     .versions.get({ query: { before } });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
+  const data = unwrapEden(response);
 
   return {
-    versions: response.data.versions,
-    olderCursor: response.data.olderCursor,
+    versions: data.versions,
+    olderCursor: data.olderCursor,
   };
 };
 

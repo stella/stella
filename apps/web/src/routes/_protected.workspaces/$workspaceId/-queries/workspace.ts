@@ -2,7 +2,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
@@ -100,11 +100,7 @@ export const workflowTargetCountOptions = ({
           { fetch: { signal } },
         );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.count;
+      return unwrapEden(response).count;
     },
   });
 
@@ -143,10 +139,6 @@ export const justificationsOptions = ({
           { fetch: { signal } },
         );
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.map(toWorkspaceJustification);
+      return unwrapEden(response).map(toWorkspaceJustification);
     },
   });
