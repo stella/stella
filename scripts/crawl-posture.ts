@@ -87,6 +87,7 @@ type ViolationCode =
   | "private-robots-not-deny-all"
   | "private-robots-has-sitemap"
   | "private-robots-has-allow"
+  | "private-robots-permissive-bot-group"
   | "private-html-no-noindex"
   | "private-has-llms"
   | "public-robots-missing"
@@ -178,6 +179,23 @@ const hasDenyAll = (robotsText: string): boolean =>
 const hasAnyAllowRule = (robotsText: string): boolean =>
   parseRobotsGroups(robotsText).some((group) =>
     group.rules.some((rule) => rule.field === "allow"),
+  );
+
+// A non-wildcard group (e.g. `User-agent: Googlebot`) that does not itself
+// deny all. Per the robots.txt spec, a crawler follows the MOST SPECIFIC
+// group that names it and ignores the wildcard fallback entirely — so a
+// `User-agent: Googlebot` group with `Allow: /` (or no rules at all) lets
+// that bot in even though the `User-agent: *` group denies everyone else.
+// `hasDenyAll`/`hasAnyAllowRule` only inspect the wildcard group and a
+// deny-all's own `Allow:` lines, so neither catches this. A group whose
+// stacked agents include `*` shares the wildcard's rules and is exempt.
+const hasPermissiveBotGroup = (robotsText: string): boolean =>
+  parseRobotsGroups(robotsText).some(
+    (group) =>
+      !group.agents.includes("*") &&
+      !group.rules.some(
+        (rule) => rule.field === "disallow" && rule.value === "/",
+      ),
   );
 
 // --- robots meta detection --------------------------------------------------
@@ -368,6 +386,15 @@ const checkPrivate = (appDir: string, app: string): Violation[] => {
         message:
           "private app public/robots.txt contains an `Allow:` rule alongside the deny-all.",
         fix: "remove the `Allow:` rule; a more specific Allow can override the deny-all for the paths it names.",
+      });
+    }
+    if (hasPermissiveBotGroup(robots)) {
+      violations.push({
+        app,
+        code: "private-robots-permissive-bot-group",
+        message:
+          "private app public/robots.txt contains a bot-specific `User-agent` group that does not itself deny all.",
+        fix: "remove the bot-specific group, or add `Disallow: /` to it: a named bot follows only its own most-specific group and ignores the wildcard deny-all.",
       });
     }
   }
@@ -723,6 +750,8 @@ const DENY_ALL_ROBOTS_WITH_SITEMAP =
 const NOT_DENY_ALL_ROBOTS = "User-agent: *\nDisallow: /admin\n";
 const DENY_ALL_ROBOTS_WITH_ALLOW =
   "User-agent: *\nDisallow: /\nAllow: /public\n";
+const DENY_ALL_ROBOTS_WITH_BOT_CARVEOUT =
+  "User-agent: *\nDisallow: /\n\nUser-agent: Googlebot\nAllow: /\n";
 const PUBLIC_ROBOTS =
   "User-agent: *\nAllow: /\n\nSitemap: https://example.com/sitemap.xml\n";
 const PUBLIC_ROBOTS_NO_SITEMAP = "User-agent: *\nAllow: /\n";
@@ -929,6 +958,23 @@ const runSelfTest = (): number => {
       writeFixtureFile(root, path.join(app, "index.html"), NOINDEX_HTML);
     }),
     "private-robots-has-allow",
+  );
+
+  // 5c. private robots.txt with a wildcard deny-all plus a bot-specific group
+  //     that carves its own access back out (e.g. `User-agent: Googlebot` +
+  //     `Allow: /`), which that bot follows instead of the wildcard.
+  expectCode(
+    "private robots.txt with bot-specific carve-out",
+    reportForSingleApp((root, app) => {
+      writeFixtureFile(root, path.join(app, "package.json"), pkg("private"));
+      writeFixtureFile(
+        root,
+        path.join(app, "public", "robots.txt"),
+        DENY_ALL_ROBOTS_WITH_BOT_CARVEOUT,
+      );
+      writeFixtureFile(root, path.join(app, "index.html"), NOINDEX_HTML);
+    }),
+    "private-robots-permissive-bot-group",
   );
 
   // 6. private index.html without noindex meta
