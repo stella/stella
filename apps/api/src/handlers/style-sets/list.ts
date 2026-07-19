@@ -1,25 +1,14 @@
 import { Result } from "better-result";
-import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
-import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
-import {
-  parsePgTimestampCursorValue,
-  pgTimestampCursorBoundary,
-  pgTimestampCursorValue,
-} from "@/api/lib/db-pagination";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isUuidPaginationCursorPart,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedStyleSetId } from "@/api/lib/safe-id-boundaries";
 import { styleSetColumns } from "@/api/lib/style-sets";
 
@@ -36,21 +25,10 @@ const config = {
   query: querySchema,
 } satisfies HandlerConfig;
 
-type StyleSetCursor = {
-  updatedAt: ParsedPgTimestampCursor;
-  id: SafeId<"styleSet">;
-};
-
-const decodeStyleSetCursor = (cursor: string): StyleSetCursor | null => {
-  const parts = decodePaginationCursor(cursor);
-  const updatedAt = parsePgTimestampCursorValue(parts?.at(0));
-  const id = parts?.at(1);
-  if (!updatedAt || !isUuidPaginationCursorPart(id)) {
-    return null;
-  }
-
-  return { updatedAt, id: brandPersistedStyleSetId(id) };
-};
+const styleSetCursor = createTimestampIdCursorCodec({
+  column: styleSets.updatedAt,
+  brandId: brandPersistedStyleSetId,
+});
 
 export default createSafeRootHandler(
   config,
@@ -62,19 +40,17 @@ export default createSafeRootHandler(
     ];
 
     if (query.cursor) {
-      const cursor = decodeStyleSetCursor(query.cursor);
+      const cursor = styleSetCursor.decode(query.cursor);
       if (!cursor) {
         return Result.err(
           new HandlerError({ status: 400, message: "Invalid cursor" }),
         );
       }
-      const cursorCondition = or(
-        lt(styleSets.updatedAt, pgTimestampCursorBoundary(cursor.updatedAt)),
-        and(
-          eq(styleSets.updatedAt, pgTimestampCursorBoundary(cursor.updatedAt)),
-          lt(styleSets.id, cursor.id),
-        ),
-      );
+      const cursorCondition = styleSetCursor.keysetAfter({
+        cursor,
+        idColumn: styleSets.id,
+        direction: "descending",
+      });
       if (cursorCondition) {
         conditions.push(cursorCondition);
       }
@@ -85,9 +61,7 @@ export default createSafeRootHandler(
         tx
           .select({
             ...styleSetColumns,
-            updatedAtCursor: pgTimestampCursorValue(styleSets.updatedAt).as(
-              "updated_at_cursor",
-            ),
+            updatedAtCursor: styleSetCursor.cursorValue.as("updated_at_cursor"),
           })
           .from(styleSets)
           .where(and(...conditions))
@@ -99,7 +73,7 @@ export default createSafeRootHandler(
       rows,
       limit,
       cursorForItem: (item) =>
-        encodePaginationCursor([item.updatedAtCursor, item.id]),
+        styleSetCursor.encode(item.updatedAtCursor, item.id),
     });
 
     return Result.ok({
