@@ -97,11 +97,3 @@ equal the package version, the published-version hint must remain within the
 advertised range, and every packaged CLI scope must exist in the API's OAuth
 and MCP scope sets. The canaried tarball's SHA-256 checksum is verified again
 in the isolated OIDC publishing job, so npm receives those exact bytes.
-
-## Production Freshness
-
-`production-freshness.yml` checks production daily. It fails when production
-trails `main` by more than 100 commits or when the oldest unreleased commit has
-waited more than 168 hours. The check also rejects a production commit that is
-not an ancestor of `main`. Threshold overrides are available only on a manual
-workflow run, keeping the scheduled policy reviewable in source.

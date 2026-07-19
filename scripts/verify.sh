@@ -215,8 +215,7 @@ run_step "Release-channel self-test" bash scripts/release-channel.test.sh
 run_step "API release contract self-test" bun test \
   --preload ./apps/api/src/tests/setup-env.ts \
   scripts/check-api-cli-contract.test.ts \
-  scripts/check-api-deployment.test.ts \
-  scripts/check-production-freshness.test.ts
+  scripts/check-api-deployment.test.ts
 run_step "Desktop-release-changes self-test" bash scripts/detect-desktop-release-changes.test.sh
 run_step "Bridge-version guard" bash scripts/check-bridge-version.sh
 
