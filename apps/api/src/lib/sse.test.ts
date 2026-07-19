@@ -2,27 +2,103 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
+type MessageHandler = (message: string) => void;
+
+// Models a Bun RedisClient closely enough to exercise pub/sub loopback. Key
+// modelled facts (all verified against a mock RESP3 server): `connected`
+// reflects the socket; `subscribedLive` reflects whether the SERVER currently
+// delivers pub/sub to this connection; a reconnect restores `connected` but NOT
+// `subscribedLive` (Bun does not re-issue SUBSCRIBE); `publish` fans a message
+// out only to clients that are `subscribedLive`.
 type FakeRedisClient = {
   subscribe: ReturnType<typeof mock>;
   publish: ReturnType<typeof mock>;
   close: ReturnType<typeof mock>;
+  onReconnect: ReturnType<typeof mock>;
+  connected: boolean;
+  subscribedLive: boolean;
+  messageHandler: MessageHandler | null;
+  reconnectHandlers: (() => void)[];
 };
 
 const createdClients: FakeRedisClient[] = [];
 let subscribeBehavior: "reject" | "resolve" = "resolve";
+// Number of subscribe() attempts to fail before succeeding, independent of
+// subscribeBehavior. Lets a test model a transient boot blip (fail once,
+// then the retry attaches) without permanently rejecting.
+let subscribeFailuresRemaining = 0;
+// Number of close() calls that throw before succeeding. Models a cleanup close
+// that fails (e.g. the socket is already gone), which must not abort the
+// attach-retry scheduling.
+let closeFailuresRemaining = 0;
 
 const makeFakeRedisClient = (): FakeRedisClient => {
   const client: FakeRedisClient = {
-    subscribe: mock(async () => {
+    subscribe: mock(async (_channel: string, handler: MessageHandler) => {
+      if (subscribeFailuresRemaining > 0) {
+        subscribeFailuresRemaining -= 1;
+        throw new Error("redis unavailable");
+      }
       if (subscribeBehavior === "reject") {
         throw new Error("redis unavailable");
       }
+      // A confirmed subscribe: the server now delivers to this connection.
+      client.messageHandler = handler;
+      client.subscribedLive = true;
+      client.connected = true;
     }),
-    publish: mock(async () => undefined),
-    close: mock(() => undefined),
+    // Redis fans a published message out to every connection with a live
+    // subscription. A reconnected-but-not-resubscribed client is absent here,
+    // so it receives nothing — modelling the real deaf-after-reconnect hazard.
+    publish: mock(async (_channel: string, message: string) => {
+      for (const peer of createdClients) {
+        if (peer.subscribedLive && peer.messageHandler) {
+          peer.messageHandler(message);
+        }
+      }
+    }),
+    close: mock(() => {
+      if (closeFailuresRemaining > 0) {
+        closeFailuresRemaining -= 1;
+        // A failed close leaves the subscription state intact: the callback is
+        // still live and could deliver, mirroring a real client whose close()
+        // threw. Delivery must be prevented structurally (generation), not by
+        // relying on this teardown.
+        throw new Error("close failed");
+      }
+      client.subscribedLive = false;
+      client.connected = false;
+      client.messageHandler = null;
+    }),
+    onReconnect: mock((handler: () => void) => {
+      client.reconnectHandlers.push(handler);
+      return () => {
+        const index = client.reconnectHandlers.indexOf(handler);
+        if (index !== -1) {
+          client.reconnectHandlers.splice(index, 1);
+        }
+      };
+    }),
+    connected: false,
+    subscribedLive: false,
+    messageHandler: null,
+    reconnectHandlers: [],
   };
   createdClients.push(client);
   return client;
+};
+
+// Model a transient socket drop + Bun auto-reconnect: the socket comes back
+// (`connected` true) but the SERVER no longer has a subscription for it
+// (`subscribedLive` false, because Bun does not re-issue SUBSCRIBE), then Bun
+// fires the onconnect/reconnect handlers.
+const simulateDeafReconnect = (client: FakeRedisClient): void => {
+  client.connected = true;
+  client.subscribedLive = false;
+  client.messageHandler = null;
+  for (const handler of [...client.reconnectHandlers]) {
+    handler();
+  }
 };
 
 const createRedisClientMock = mock(() => makeFakeRedisClient());
@@ -200,6 +276,424 @@ describe("startSse / stopSse lifecycle", () => {
     stopSse();
     expect(newClient?.close).toHaveBeenCalledTimes(1);
 
+    await flushMicrotasks();
+  });
+});
+
+describe("subscribe: already-aborted signal", () => {
+  test("an already-aborted signal registers no connection and closes the stream", async () => {
+    const controller = new AbortController();
+    // The signal aborts before subscribe runs, mirroring a client that
+    // disconnects during the async auth macro. With the leak, the stream
+    // would stay open and registered forever; the fix closes it up front.
+    controller.abort();
+
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    const first = await reader.read();
+    expect(first.done).toBe(true);
+
+    // A subsequent broadcast must not resurrect or feed the dead stream:
+    // nothing was registered, so there is nothing to enqueue into.
+    broadcast(workspaceId, { type: "after-abort", data: null });
+    await flushMicrotasks();
+
+    const second = await reader.read();
+    expect(second.done).toBe(true);
+  });
+});
+
+describe("broadcast: local delivery without an attached subscriber", () => {
+  test("broadcast delivers locally when no Redis subscriber is attached", async () => {
+    // No startSse: this instance has no attached subscriber, so a
+    // published event never loops back. Local clients must still get it.
+    stopSse();
+    await flushMicrotasks();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    broadcast(workspaceId, { type: "local-only", data: { n: 1 } });
+
+    const { value } = await reader.read();
+    const text = new TextDecoder().decode(value);
+    expect(text).toContain("local-only");
+
+    controller.abort();
+    await flushMicrotasks();
+  });
+});
+
+describe("broadcast: subscriber reconnect keeps delivery exactly-once", () => {
+  const decode = (value: Uint8Array | undefined): string =>
+    new TextDecoder().decode(value);
+
+  test("delivers each event to local clients exactly once via loopback while subscribed", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // Subscribed: each event must arrive exactly once through the Redis
+    // loopback (publish -> subscriber handler -> local delivery), never a
+    // second inline copy. Reading two events in order proves the first was
+    // delivered exactly once.
+    broadcast(workspaceId, { type: "event-a", data: null });
+    broadcast(workspaceId, { type: "event-b", data: null });
+
+    expect(decode((await reader.read()).value)).toContain("event-a");
+    expect(decode((await reader.read()).value)).toContain("event-b");
+
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("a transient drop+reconnect re-subscribes via a fresh client and resumes exactly-once loopback delivery", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+    const original = createdClients.at(-1);
+    expect(original).toBeDefined();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // Baseline: loopback delivery works while subscribed.
+    broadcast(workspaceId, { type: "before-drop", data: null });
+    expect(decode((await reader.read()).value)).toContain("before-drop");
+
+    // Bun reconnects the socket but does NOT re-issue SUBSCRIBE: the client is
+    // connected yet deaf. sse.ts must tear it down and attach a FRESH client
+    // (re-subscribing on the same client would double-register the callback).
+    if (original) {
+      simulateDeafReconnect(original);
+    }
+    await flushMicrotasks();
+
+    // The deaf client was closed and a distinct replacement subscribed.
+    expect(original?.close).toHaveBeenCalledTimes(1);
+    const replacement = createdClients.at(-1);
+    expect(replacement).not.toBe(original);
+    expect(replacement?.subscribedLive).toBe(true);
+    expect(replacement?.subscribe).toHaveBeenCalledTimes(1);
+
+    // Loopback is restored through the replacement, still exactly once: if the
+    // old code kept treating the reconnected client as attached, no loopback
+    // would arrive and these reads would hang; if it re-subscribed on the same
+    // client, each event would be delivered twice.
+    broadcast(workspaceId, { type: "after-reconnect-1", data: null });
+    broadcast(workspaceId, { type: "after-reconnect-2", data: null });
+    expect(decode((await reader.read()).value)).toContain("after-reconnect-1");
+    expect(decode((await reader.read()).value)).toContain("after-reconnect-2");
+
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("while the replacement subscriber has not yet attached, broadcasts fall back to inline delivery", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+    const original = createdClients.at(-1);
+    expect(original).toBeDefined();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // The replacement attach will fail, so no subscriber is live: the instance
+    // is effectively deaf. Broadcasts MUST still reach local clients inline so
+    // nothing is missed during the reconnect/reattach window.
+    subscribeBehavior = "reject";
+    if (original) {
+      simulateDeafReconnect(original);
+    }
+    await flushMicrotasks();
+
+    broadcast(workspaceId, { type: "deaf-window", data: null });
+    expect(decode((await reader.read()).value)).toContain("deaf-window");
+
+    subscribeBehavior = "resolve";
+    subscribeFailuresRemaining = 0;
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("an own event broadcast during the attach window is delivered exactly once (loopback copy dropped)", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+    const original = createdClients.at(-1);
+    expect(original).toBeDefined();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // Enter the attach window: the replacement client's SUBSCRIBE is accepted
+    // (subscribedLive), so the server loops events back, but sse.ts has not yet
+    // set subscriptionLive, so hasAttachedSubscriber() is false. Do NOT flush.
+    if (original) {
+      simulateDeafReconnect(original);
+    }
+    const replacement = createdClients.at(-1);
+    expect(replacement).not.toBe(original);
+    expect(replacement?.subscribedLive).toBe(true);
+
+    // Broadcast our own event in the window: delivered inline AND published with
+    // our origin id + deliveredInline=true, so the copy that loops back through
+    // the already-live subscription must be suppressed.
+    broadcast(workspaceId, { type: "own-in-window", data: null });
+
+    // Exactly one copy (the inline one). Attaching the replacement and then
+    // broadcasting a steady event that rides loopback only; reading it second
+    // proves the windowed event was not delivered twice.
+    expect(decode((await reader.read()).value)).toContain("own-in-window");
+    await flushMicrotasks();
+    broadcast(workspaceId, { type: "after-window", data: null });
+    expect(decode((await reader.read()).value)).toContain("after-window");
+
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("a remote event received during the attach window is delivered via loopback", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+
+    startSse();
+    await flushMicrotasks();
+    const original = createdClients.at(-1);
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    if (original) {
+      simulateDeafReconnect(original);
+    }
+    const replacement = createdClients.at(-1);
+    expect(replacement?.messageHandler).toBeTruthy();
+
+    // Another instance's event arrives on our subscription during the window.
+    // Inline delivery never covers remote events, and origin suppression only
+    // drops OUR own inline-delivered events, so this must deliver via loopback.
+    const remotePayload = JSON.stringify({
+      scope: "workspace",
+      id: workspaceId,
+      event: { type: "remote-in-window", data: null },
+      originInstanceId: "some-other-instance",
+      deliveredInline: false,
+    });
+    replacement?.messageHandler?.(remotePayload);
+
+    expect(decode((await reader.read()).value)).toContain("remote-in-window");
+
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("a stale subscriber whose close() threw cannot deliver after a replacement attaches", async () => {
+    createdClients.length = 0;
+    subscribeFailuresRemaining = 0;
+    subscribeBehavior = "resolve";
+    closeFailuresRemaining = 0;
+
+    startSse();
+    await flushMicrotasks();
+    const original = createdClients.at(-1);
+    expect(original?.subscribedLive).toBe(true);
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    // The reconnect teardown's close() throws, so the old client keeps its live
+    // pub/sub callback — exactly the "close() may not invalidate delivery" case.
+    closeFailuresRemaining = 1;
+    if (original) {
+      for (const handler of [...original.reconnectHandlers]) {
+        handler();
+      }
+    }
+    await flushMicrotasks();
+
+    const replacement = createdClients.at(-1);
+    expect(replacement).not.toBe(original);
+    expect(replacement?.subscribedLive).toBe(true);
+    // The old client's callback is still live (its close threw and left it).
+    expect(original?.messageHandler).toBeTruthy();
+
+    // A loopback arrives on the OLD generation's still-live callback: the
+    // generation gate must drop it. The replacement's loopback delivers once.
+    const workspacePayload = (type: string): string =>
+      JSON.stringify({
+        scope: "workspace",
+        id: workspaceId,
+        event: { type, data: null },
+      });
+    original?.messageHandler?.(workspacePayload("stale-old-generation"));
+    replacement?.messageHandler?.(workspacePayload("fresh-new-generation"));
+
+    const text = decode((await reader.read()).value);
+    expect(text).toContain("fresh-new-generation");
+    expect(text).not.toContain("stale-old-generation");
+
+    closeFailuresRemaining = 0;
+    controller.abort();
+    stopSse();
+    await flushMicrotasks();
+  });
+});
+
+describe("startSse: subscriber attach retry", () => {
+  test("a transient attach failure is retried and the subscriber attaches", async () => {
+    createdClients.length = 0;
+    // First attach attempt fails; the bounded backoff retry must attach.
+    subscribeFailuresRemaining = 1;
+
+    startSse();
+    await flushMicrotasks();
+
+    // The first attempt created a client, failed, and closed it.
+    expect(createdClients).toHaveLength(1);
+    expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
+
+    // Wait past the first backoff delay (200ms) so the retry can run.
+    await Bun.sleep(300);
+    await flushMicrotasks();
+
+    // A second client was created for the retry and stayed attached.
+    expect(createdClients).toHaveLength(2);
+    const attached = createdClients[1];
+    expect(attached?.subscribe).toHaveBeenCalledTimes(1);
+    expect(attached?.close).not.toHaveBeenCalled();
+
+    // Stopping now closes the attached retry client exactly once.
+    stopSse();
+    expect(attached?.close).toHaveBeenCalledTimes(1);
+
+    await flushMicrotasks();
+    subscribeFailuresRemaining = 0;
+  });
+
+  test("keeps retrying at the capped interval and recovers after a long outage", async () => {
+    createdClients.length = 0;
+    subscribeBehavior = "resolve";
+    // Fail the 5-step ramp plus 35 steady attempts (40 failures), then attach.
+    // Proves retries continue indefinitely deep into the steady phase, so an
+    // outage far longer than the ramp still self-heals when Redis recovers —
+    // and, with the timer-scheduled driver, without any recursive/awaited
+    // attempt chain building up.
+    subscribeFailuresRemaining = 40;
+
+    // Zero out the retry backoff so 41 attempts run fast: each attempt's timer
+    // fires on the next macrotask instead of after the real ramp/steady delay.
+    // The drain below uses the real setTimeout captured here.
+    const realSetTimeout = globalThis.setTimeout;
+    // A timer stub that fires the callback promptly, ignoring the delay. Matching
+    // Bun's full overloaded setTimeout type adds no test value, so assert it.
+    // oxlint-disable-next-line no-unsafe-type-assertion -- test-only timer stub
+    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
+      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
+    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
+      immediateSetTimeout,
+    );
+
+    startSse();
+
+    // Drain macrotasks until the subscriber attaches; bounded recursion (not a
+    // loop) so no await sits inside a loop and a stuck run cannot hang forever.
+    const drainUntilAttached = async (remaining: number): Promise<void> => {
+      if (createdClients.at(-1)?.subscribedLive === true || remaining <= 0) {
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        realSetTimeout(resolve, 0);
+      });
+      await drainUntilAttached(remaining - 1);
+    };
+    await drainUntilAttached(300);
+
+    // 41 clients: 40 failed attach attempts (well past the 5-step ramp) + the
+    // one that finally subscribed.
+    expect(createdClients).toHaveLength(41);
+    const attached = createdClients.at(-1);
+    expect(attached?.subscribedLive).toBe(true);
+    expect(attached?.subscribe).toHaveBeenCalledTimes(1);
+    expect(attached?.close).not.toHaveBeenCalled();
+
+    timeoutSpy.mockRestore();
+    subscribeFailuresRemaining = 0;
+    stopSse();
+    await flushMicrotasks();
+  });
+
+  test("a failed attach whose cleanup close() also throws still schedules the next attempt", async () => {
+    createdClients.length = 0;
+    subscribeBehavior = "resolve";
+    // The first 3 attach attempts fail AND their cleanup close() throws. The
+    // retry scheduling must survive the throwing close, so a 4th attempt runs
+    // and attaches — otherwise a single unlucky close would leave the instance
+    // permanently deaf.
+    subscribeFailuresRemaining = 3;
+    closeFailuresRemaining = 3;
+
+    const realSetTimeout = globalThis.setTimeout;
+    // oxlint-disable-next-line no-unsafe-type-assertion -- test-only timer stub
+    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
+      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
+    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
+      immediateSetTimeout,
+    );
+
+    startSse();
+
+    const drainUntilAttached = async (remaining: number): Promise<void> => {
+      if (createdClients.at(-1)?.subscribedLive === true || remaining <= 0) {
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        realSetTimeout(resolve, 0);
+      });
+      await drainUntilAttached(remaining - 1);
+    };
+    await drainUntilAttached(100);
+
+    // 4 clients: 3 failed attempts (each whose close() threw) + the attach.
+    expect(createdClients).toHaveLength(4);
+    expect(createdClients.at(-1)?.subscribedLive).toBe(true);
+    // All three throwing closes were consumed, proving they actually ran.
+    expect(closeFailuresRemaining).toBe(0);
+
+    timeoutSpy.mockRestore();
+    subscribeFailuresRemaining = 0;
+    closeFailuresRemaining = 0;
+    stopSse();
     await flushMicrotasks();
   });
 });
