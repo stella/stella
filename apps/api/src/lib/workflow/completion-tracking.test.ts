@@ -91,15 +91,16 @@ const createFakeRedis = (state: FakeRedisState) => ({
     if (command !== "EVAL" || arg(args, 0) !== COMPLETE_ENTITY_SCRIPT) {
       throw new TypeError(`Unexpected Redis command: ${command}`);
     }
-    // KEYS[1..4] then ARGV[1..4]; KEYS start at index 2 (after script + numkeys).
+    // KEYS[1..5] then ARGV[1..4]; KEYS start at index 2 (after script + numkeys).
     const requestIdKey = arg(args, 2);
     const runningKey = arg(args, 3);
     const completedEntitiesKey = arg(args, 4);
     const totalKey = arg(args, 5);
-    const activeRequestId = arg(args, 6);
-    const legacyRunningLockValue = arg(args, 7);
-    const entityId = arg(args, 8);
-    const runStateTtlSec = Number(arg(args, 9));
+    const legacyCompletedKey = arg(args, 6);
+    const activeRequestId = arg(args, 7);
+    const legacyRunningLockValue = arg(args, 8);
+    const entityId = arg(args, 9);
+    const runStateTtlSec = Number(arg(args, 10));
 
     const currentRequestId = state.strings.get(requestIdKey) ?? null;
     const runningValue = state.strings.get(runningKey) ?? null;
@@ -119,8 +120,12 @@ const createFakeRedis = (state: FakeRedisState) => ({
     state.sets.set(completedEntitiesKey, completedSet);
     state.ttlSec.set(completedEntitiesKey, runStateTtlSec);
 
+    // Deploy-transition compat: a pre-set run's finished entities live in the
+    // legacy INCR counter, absent from the set. Add them so the run reaches total.
+    const legacyCompleted =
+      Number(state.strings.get(legacyCompletedKey) ?? "0") || 0;
     const total = Number(state.strings.get(totalKey) ?? "0") || 0;
-    return [1, completedSet.size, total];
+    return [1, completedSet.size + legacyCompleted, total];
   },
 });
 
@@ -130,6 +135,7 @@ describe("recordEntityCompletion", () => {
     running: "workflow:ws_1:running",
     completedEntities: "workflow:ws_1:completed-entities",
     total: "workflow:ws_1:total",
+    legacyCompleted: "workflow:ws_1:completed",
   };
   const activeRequestId = "req_1";
   const legacyRunningLockValue = "1";
@@ -215,6 +221,7 @@ describe("recordEntityCompletion", () => {
     await resetCompletionState({
       redis: createFakeRedis(state),
       completedEntitiesKey: keys.completedEntities,
+      legacyCompletedKey: keys.legacyCompleted,
     });
     expect(state.sets.get(keys.completedEntities)).toBeUndefined();
 
@@ -234,5 +241,52 @@ describe("recordEntityCompletion", () => {
 
     expect(result).toEqual({ matched: false });
     expect(state.sets.get(keys.completedEntities)).toBeUndefined();
+  });
+
+  test("finalizes an in-flight run that straddled a deploy", async () => {
+    // The class of bug: a deploy lands mid-run. The pre-set code recorded
+    // finished entities in the legacy `completed` INCR counter; those entities
+    // never enter the new set. Counting the set alone would leave `completed`
+    // permanently below `total`, so the run would never finalize.
+    const state = seedActiveRun(3);
+    state.strings.set(keys.legacyCompleted, "2"); // 2 entities finished pre-deploy
+
+    // The remaining entity finishes post-deploy under the new set path.
+    const result = await complete(state, "entity_c");
+
+    // Effective completed = SCARD(1) + legacy(2) = 3 == total, so the run
+    // reaches total and finalizes instead of stranding below it.
+    expect(result).toEqual({ matched: true, completed: 3, total: 3 });
+  });
+
+  test("accepts the narrow overshoot when a pre-deploy entity retries post-deploy", async () => {
+    // Documented, accepted window: an entity counted in the legacy counter is
+    // retried post-deploy and also lands in the set, so it is counted twice
+    // (legacy 2 + set 1 = 3 == total). Finalizing one completion early beats a
+    // run that never finalizes; still no blind counting of post-deploy work.
+    const state = seedActiveRun(3);
+    state.strings.set(keys.legacyCompleted, "2");
+
+    const result = await complete(state, "entity_a");
+
+    expect(result).toEqual({ matched: true, completed: 3, total: 3 });
+  });
+
+  test("reset clears the legacy counter so fresh runs count the set alone", async () => {
+    // Guards that the compat path dies with the transition: a stale legacy
+    // counter left by a prior run must not inflate a fresh run's count and
+    // finalize it early. resetCompletionState deletes it under the run lock.
+    const state = seedActiveRun(2);
+    state.strings.set(keys.legacyCompleted, "5");
+
+    await resetCompletionState({
+      redis: createFakeRedis(state),
+      completedEntitiesKey: keys.completedEntities,
+      legacyCompletedKey: keys.legacyCompleted,
+    });
+    expect(state.strings.get(keys.legacyCompleted)).toBeUndefined();
+
+    const first = await complete(state, "entity_a");
+    expect(first).toEqual({ matched: true, completed: 1, total: 2 });
   });
 });

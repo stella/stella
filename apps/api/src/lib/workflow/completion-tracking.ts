@@ -30,14 +30,31 @@
 // The set is (re)given the run-state TTL on every completion so it never
 // lingers TTL-less after the run lapses, matching every sibling key.
 //
+//  3. Deploy-transition compatibility. A run that began under the previous
+//     code recorded finished entities in a legacy INCR counter
+//     (`completed`, KEYS[5]) instead of this set. After a mid-run deploy
+//     those entities are absent from the set, so counting the set alone
+//     would leave `completed` permanently below `total` and the run would
+//     never finalize (stranded until TTL or the boot reconciler). We add
+//     the legacy counter to the set's cardinality so an in-flight old run
+//     can still reach `total`. New runs never have this key
+//     (`resetCompletionState` / `clearWorkflowRunState` delete it), so once
+//     the transition passes, effective completed equals `SCARD` alone.
+//     Narrow accepted window: an entity that finished pre-deploy and is
+//     retried post-deploy is counted in both the legacy counter and the
+//     set, overshooting by one and finalizing one completion early —
+//     preferred over a run that never finalizes.
+//
 // KEYS[1] = request-id key, KEYS[2] = running key,
-// KEYS[3] = completed-entities set key, KEYS[4] = total key.
+// KEYS[3] = completed-entities set key, KEYS[4] = total key,
+// KEYS[5] = legacy `completed` counter key (deploy-transition only).
 // ARGV[1] = requestId, ARGV[2] = legacy running-lock value,
 // ARGV[3] = entityId, ARGV[4] = run-state TTL seconds.
 //
 // Returns `[matched, completed, total]`, where `matched` is `1` only when
 // the completion was recorded against the currently active request and
-// `completed` is the count of distinct entities finished so far.
+// `completed` is the count of distinct entities finished so far (the set's
+// cardinality plus any legacy pre-deploy counter, per guarantee 3).
 export const COMPLETE_ENTITY_SCRIPT = `
 local currentRequestId = redis.call("GET", KEYS[1])
 local runningValue = redis.call("GET", KEYS[2])
@@ -56,9 +73,10 @@ end
 redis.call("SADD", KEYS[3], entityId)
 redis.call("EXPIRE", KEYS[3], tonumber(runStateTtlSec))
 local completed = redis.call("SCARD", KEYS[3])
+local legacyCompleted = tonumber(redis.call("GET", KEYS[5])) or 0
 local totalRaw = redis.call("GET", KEYS[4])
 local total = tonumber(totalRaw) or 0
-return {1, completed, total}
+return {1, completed + legacyCompleted, total}
 `;
 
 export type EntityCompletionReply =
@@ -107,6 +125,9 @@ export type WorkflowCompletionKeys = {
   running: string;
   completedEntities: string;
   total: string;
+  // Legacy pre-set INCR counter, read only for deploy-transition
+  // compatibility (guarantee 3). Absent for runs started under this code.
+  legacyCompleted: string;
 };
 
 type RecordEntityCompletionArgs = {
@@ -133,11 +154,12 @@ export const recordEntityCompletion = async ({
 }: RecordEntityCompletionArgs): Promise<EntityCompletionReply> => {
   const reply = await redis.send("EVAL", [
     COMPLETE_ENTITY_SCRIPT,
-    "4",
+    "5",
     keys.requestId,
     keys.running,
     keys.completedEntities,
     keys.total,
+    keys.legacyCompleted,
     activeRequestId,
     legacyRunningLockValue,
     entityId,
@@ -149,27 +171,34 @@ export const recordEntityCompletion = async ({
 type ResetCompletionStateArgs = {
   redis: EntityCompletionRedis;
   completedEntitiesKey: string;
+  legacyCompletedKey: string;
 };
 
 /**
- * Clear the distinct-entity completion set before a new run enqueues its
- * jobs. The set is a Redis Set that completions grow lazily via `SADD`, so
- * it can outlive the run-state that named it: a worker death between the
- * completion script's `EXPIRE` and the sibling-key TTL refresh, a manual
- * lock deletion, or a TTL discrepancy can leave a populated set behind. A
- * later run reuses the same key, and its first `SADD`/`SCARD` would then
- * read the stale members and could reach `total` while entities are still
- * mid-flight — finalizing the run early and stranding cells at `pending`.
+ * Clear the completion accounting before a new run enqueues its jobs. The
+ * distinct-entity set grows lazily via `SADD`, so it can outlive the
+ * run-state that named it: a worker death between the completion script's
+ * `EXPIRE` and the sibling-key TTL refresh, a manual lock deletion, or a
+ * TTL discrepancy can leave a populated set behind. A later run reuses the
+ * same key, and its first `SADD`/`SCARD` would then read the stale members
+ * and could reach `total` while entities are still mid-flight — finalizing
+ * the run early and stranding cells at `pending`.
  *
- * Deleting the key here gives every run an empty set, so `SCARD` counts
- * only this run's entities. The caller must already hold the run lock so no
- * live run shares the key. Routed through `send` (not a typed `del`) to
- * keep this module free of a live-connection dependency and unit-testable
- * against the same in-memory fake as `recordEntityCompletion`.
+ * Also deletes the legacy `completed` counter so the deploy-transition
+ * compat path (guarantee 3 in `COMPLETE_ENTITY_SCRIPT`) dies with the
+ * transition: once a fresh run starts, effective completed is the set's
+ * `SCARD` alone, never inheriting a prior run's counter.
+ *
+ * Deleting both keys here gives every run empty accounting. The caller must
+ * already hold the run lock so no live run shares the keys. Routed through
+ * `send` (not a typed `del`) to keep this module free of a live-connection
+ * dependency and unit-testable against the same in-memory fake as
+ * `recordEntityCompletion`.
  */
 export const resetCompletionState = async ({
   redis,
   completedEntitiesKey,
+  legacyCompletedKey,
 }: ResetCompletionStateArgs): Promise<void> => {
-  await redis.send("DEL", [completedEntitiesKey]);
+  await redis.send("DEL", [completedEntitiesKey, legacyCompletedKey]);
 };

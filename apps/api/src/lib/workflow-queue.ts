@@ -115,6 +115,11 @@ const WORKFLOW_RUN_STATE_FIELDS = [
   "running",
   "total",
   "completed-entities",
+  // Legacy pre-set INCR counter. Kept in the cleanup surface so a run that
+  // straddled the deploy (read via the completion script's compat path) has
+  // its counter deleted on finish/skip/orphan, and so the compat path dies
+  // with the transition.
+  "completed",
   "plan-properties",
   "request-id",
   "scoped",
@@ -557,6 +562,7 @@ export const startWorkflow = async ({
     await resetCompletionState({
       redis,
       completedEntitiesKey: workflowKey(workspaceId, "completed-entities"),
+      legacyCompletedKey: workflowKey(workspaceId, "completed"),
     });
 
     // Store entity count for completion tracking. Carries the run-lock TTL
@@ -1908,6 +1914,7 @@ const onEntityCompleted = async ({
       running: workflowKey(workspaceId, "running"),
       completedEntities: workflowKey(workspaceId, "completed-entities"),
       total: workflowKey(workspaceId, "total"),
+      legacyCompleted: workflowKey(workspaceId, "completed"),
     },
     activeRequestId: requestId,
     legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
