@@ -46,3 +46,104 @@ jobs:
         run: bun run test -- --concurrency=2
         env:
           TURBO_FORCE: "true"
+
+  # Postgres-backed API suites that gate on STELLA_RUN_POSTGRES_TESTS=true and a
+  # real DATABASE_URL. The plain `bun run test` above skips them (they no-op in
+  # the skip branch), so they only ever execute here against a service Postgres
+  # with migrations applied. Failures are real regressions (pool isolation,
+  # JSONB persistence), so this job is kept separate from the network smoke
+  # canary below whose failures mean "upstream changed", not "we broke something".
+  postgres-suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:18.3
+        env:
+          POSTGRES_USER: stella
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stella -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Apply migrations to service Postgres
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+        # Exercises the shipped migrate entrypoint (Bun SQL + drizzle migrator),
+        # so the JSONB persistence suite runs against the real schema, including
+        # the case-law ingestion role/policy migrations.
+        run: bun run src/db/migrate.ts
+
+      - name: Run Postgres-gated API suites
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella:stella@127.0.0.1:5432/stella
+          STELLA_RUN_POSTGRES_TESTS: "true"
+        # setup-env.ts supplies the remaining test env via `??=`; the explicit
+        # DATABASE_URL above wins. These files never call `mock.module`, so a
+        # shared process is fine.
+        run: >-
+          bun test --preload ./src/tests/setup-env.ts
+          src/db/root.test.ts
+          src/handlers/case-law/ingestion/pipeline.db.test.ts
+
+  # Upstream-API drift canary for the CJEU adapter. Hits live Cellar SPARQL +
+  # EUR-Lex endpoints, so a failure most often means an upstream schema/endpoint
+  # changed, not a regression in our code. Isolated from the Postgres suites so
+  # a flaky external endpoint cannot mask a real DB regression, and vice versa.
+  smoke-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Run live CJEU smoke suite
+        working-directory: apps/api
+        env:
+          SMOKE_TEST: "1"
+        run: >-
+          bun test --preload ./src/tests/setup-env.ts
+          src/handlers/case-law/ingestion/adapters/eu-ecj.smoke.test.ts
