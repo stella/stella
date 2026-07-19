@@ -1010,11 +1010,19 @@ describe("write-ordering matrix: saveBody vs. a stale in-flight save", () => {
     let sequenceCounter = 0;
     let inFlightAbort: AbortController | null = null;
     let latestSettled: { sequence: number; body: string } | undefined;
+    // Mirrors `latestRequestedBodyRef`: the body of the most recently
+    // *requested* save, updated unconditionally at the top of every
+    // `startSave` — a superset of `latestSettled`'s body. The reissue path
+    // below must read this, not `latestSettled.body`, so a newer edit made
+    // after the last settlement isn't clobbered by reissuing older content.
+    let latestRequestedBody: string | undefined;
     const toasts: string[] = [];
     const gateReports: string[] = [];
     const reissuedBodies: string[] = [];
 
     const startSave = (body: string) => {
+      latestRequestedBody = body;
+
       const sequence = (sequenceCounter += 1);
       inFlightAbort?.abort();
       const controller = new AbortController();
@@ -1031,9 +1039,9 @@ describe("write-ordering matrix: saveBody vs. a stale in-flight save", () => {
           // early return before either side effect.
           if (
             shouldReissueAfterStaleSettlement(isStale, !response.error) &&
-            latestSettled
+            latestRequestedBody !== undefined
           ) {
-            reissuedBodies.push(latestSettled.body);
+            reissuedBodies.push(latestRequestedBody);
           }
           return;
         }
@@ -1090,6 +1098,44 @@ describe("write-ordering matrix: saveBody vs. a stale in-flight save", () => {
     expect(h.toasts).toEqual([]);
     expect(h.gateReports).toEqual(["accepted AI body"]);
     expect(h.reissuedBodies).toEqual(["accepted AI body"]);
+  });
+
+  // Regression for the P1 follow-up: the reissue above must not reissue
+  // `latestSettled.body` verbatim — if the user edited again after that
+  // settlement, the reissue is a fresh, higher-sequence save of OLDER
+  // content, and the sequence guard can't catch it (the reissue genuinely
+  // *is* the newest save). It must reissue the newest *requested* body
+  // instead.
+  test("a newer edit made after settlement is not clobbered: the reissue carries the newest requested body, not the last settled one", () => {
+    const h = makeSaveHarness();
+
+    // Same setup as the P1 race above: a pre-AI autosave starts, then the
+    // accepted-body flush starts and settles first.
+    const stale = h.startSave("pre-AI body");
+    const accepted = h.startSave("accepted AI body");
+    accepted.settle({});
+    expect(h.gateReports).toEqual(["accepted AI body"]);
+
+    // The user keeps typing after the accepted body settled: a newer save
+    // starts — and is still in flight, not yet settled — carrying content
+    // that supersedes the accepted body.
+    const newerEdit = h.startSave("newer edit after settle");
+
+    // Only now does the original stale autosave's write finally land.
+    stale.settle({});
+
+    // The reissue must carry the newest *requested* body — the user's
+    // still-in-flight edit — not `latestSettled.body` ("accepted AI body"):
+    // reissuing the settled snapshot here would silently regress the newer
+    // edit's content.
+    expect(h.reissuedBodies).toEqual(["newer edit after settle"]);
+
+    // Sanity: the newer edit's own settlement still reports normally.
+    newerEdit.settle({});
+    expect(h.gateReports).toEqual([
+      "accepted AI body",
+      "newer edit after settle",
+    ]);
   });
 
   test("abort surfaces no error toast even when the superseded request genuinely fails", () => {

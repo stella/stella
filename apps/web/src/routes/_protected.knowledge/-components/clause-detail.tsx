@@ -691,14 +691,30 @@ const ClauseBodyEditor = ({
   // before its response can reach this function at all.
   const inFlightSaveAbortRef = useRef<AbortController | null>(null);
 
-  // Sequence + body of the most recently *settled* successful save. Lets a
-  // late-arriving stale settlement recognize it lost the race
-  // (`isStaleSaveSettlement`) and, if its write still reached the server
-  // despite being aborted, re-issue this body to reclaim the last write
-  // (`shouldReissueAfterStaleSettlement`).
+  // Sequence + body of the most recently *settled* successful save. The
+  // sequence lets a late-arriving stale settlement recognize it lost the
+  // race (`isStaleSaveSettlement`); the body is kept alongside it for
+  // context even though the reissue path below intentionally does not read
+  // it — see `latestRequestedBodyRef`.
   const latestSettledSaveRef = useRef<
     { sequence: number; body: ClauseParagraph[] } | undefined
   >(undefined);
+
+  // The body of the most recently *requested* `saveBody` call — set at the
+  // very top of every call (debounce, blur, or review flush), before the
+  // request even goes out. Unlike `latestSettledSaveRef`, this updates
+  // unconditionally, so it is always a superset of the settled body: the
+  // reissue path below must reclaim a lost write with THIS body, not the
+  // last settled snapshot. Reissuing the settled snapshot would silently
+  // resurrect stale content if the user typed again after that settlement —
+  // that edit's own save is newer than the reissue's source sequence, but
+  // the reissue itself mints a fresh, higher sequence, so the sequence guard
+  // can't catch it (the reissue genuinely *is* the newest save). Reissuing
+  // the latest requested body instead is a no-op when it still equals the
+  // settled body, and preserves the newer edit when it doesn't.
+  const latestRequestedBodyRef = useRef<ClauseParagraph[] | undefined>(
+    undefined,
+  );
 
   // Mirrors `saveBody` itself, assigned right after its declaration below.
   // The reissue path recurses into `saveBody`, but a `const` closure
@@ -714,6 +730,11 @@ const ClauseBodyEditor = ({
 
   const saveBody = useCallback(
     async (body: ClauseParagraph[], explicitReviewFlushToken?: number) => {
+      // Record before anything async happens: this is what makes the ref
+      // always reflect the newest content asked to persist, regardless of
+      // which call's request settles first (see `latestRequestedBodyRef`).
+      latestRequestedBodyRef.current = body;
+
       const reviewFlushToken = reviewFlushTokenForSave(
         explicitReviewFlushToken,
         retryPendingTokenRef.current,
@@ -744,12 +765,13 @@ const ClauseBodyEditor = ({
         if (shouldReissueAfterStaleSettlement(isStale, !response.error)) {
           // This stale save's write still reached the server (the local
           // abort couldn't recall a request that had already landed) *and*
-          // landed after the body we know is current — re-issue that body
-          // once so the server's last write matches the UI again.
-          const current = latestSettledSaveRef.current;
-          if (current) {
-            saveBodyRef.current(current.body);
-          }
+          // landed after the body we last knew settled — re-issue the most
+          // recently *requested* body (see `latestRequestedBodyRef`), not
+          // the last settled snapshot, so a newer edit made since that
+          // settlement can't be overwritten by this reissue. This function's
+          // own first line always assigns the ref before this point runs, so
+          // it is never undefined here.
+          saveBodyRef.current(latestRequestedBodyRef.current);
         }
         return;
       }
