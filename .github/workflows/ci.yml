@@ -343,6 +343,25 @@ jobs:
             bun run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
           done
 
+      - name: Knip unused-dependency checks
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        # Complements the production import gate above: flags declared
+        # `dependencies`/`devDependencies` that no file in the workspace
+        # imports (non-production run so test/e2e/tooling files count as
+        # usage). Scoped to the shipping apps, matching the loop above.
+        #
+        # Only the `dependencies` issue type is enforced here. `exports`
+        # and `files` stay OFF (see the `exclude` in knip.json): the
+        # unused-export surface still needs a triage pass, and the unused
+        # -file set is dominated by feature slices whose ship-or-delete
+        # call is a product decision (e.g. the flag-gated time-billing
+        # components), not mechanical dead code. Enrolling those checks
+        # is a deliberate follow-up, not a silent flip.
+        run: |
+          for workspace in apps/api apps/legal-atlas-runner apps/web; do
+            bun run knip --no-progress --include dependencies --workspace "$workspace"
+          done
+
       - name: Test
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         env:
