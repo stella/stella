@@ -16,12 +16,31 @@ export default defineConfig({
   ),
   use: {
     ...devices["Desktop Chrome"],
-    baseURL: process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
-    storageState: path.join(REPO_ROOT, ".playwright/storage-state.json"),
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 1,
     colorScheme: "light",
     locale: "en-GB",
     trace: "retain-on-failure",
   },
+  // Two targets share this suite: the app (screenshot captures of product
+  // surfaces) and the landing site itself (island/navigation guards). The
+  // package scripts select a project explicitly; CI's marketing job runs
+  // only the app project.
+  projects: [
+    {
+      name: "app",
+      testIgnore: /landing-.*\.spec\.ts$/u,
+      use: {
+        baseURL: process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
+        storageState: path.join(REPO_ROOT, ".playwright/storage-state.json"),
+      },
+    },
+    {
+      name: "landing",
+      testMatch: /landing-.*\.spec\.ts$/u,
+      use: {
+        baseURL: process.env["E2E_LANDING_URL"] ?? "http://localhost:4321",
+      },
+    },
+  ],
 });

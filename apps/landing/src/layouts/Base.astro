@@ -147,6 +147,36 @@ const ogAlternates = hasLocalizedAlternates
       }
     </script>
 
+    {/*
+      Dev-only stylesheet persistence across ClientRouter swaps. In dev,
+      Astro inlines every Vite-managed stylesheet into the served HTML as
+      <style data-vite-dev-id> snapshots, while Vite keeps the live copies
+      in this document HMR-synced (Tailwind utilities for hydrated islands
+      arrive after the server snapshot). Astro's head swap only persists a
+      live <style> when the incoming copy is byte-identical, so a stale
+      server snapshot would replace the fresh element, detach it from HMR,
+      and leave islands unstyled until the next file edit. Copying the live
+      content onto the incoming element makes the swap recognize and keep
+      the live element (content and HMR registration survive). No-op in
+      production: styles ship as <link> tags persisted by href, and
+      data-vite-dev-id does not exist.
+    */}
+    <script is:inline>
+      if (!window.__devStyleSwapBound) {
+        window.__devStyleSwapBound = true;
+        document.addEventListener("astro:before-swap", function (e) {
+          document
+            .querySelectorAll("head style[data-vite-dev-id]")
+            .forEach(function (live) {
+              var incoming = e.newDocument.head.querySelector(
+                'style[data-vite-dev-id="' + CSS.escape(live.dataset.viteDevId) + '"]',
+              );
+              if (incoming) incoming.textContent = live.textContent;
+            });
+        });
+      }
+    </script>
+
     {/* Client-side routing: crossfade between pages instead of full reloads. */}
     <ClientRouter />
 

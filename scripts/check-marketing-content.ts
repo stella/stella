@@ -4,7 +4,11 @@ import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { CLI_DEMO_TOOLS } from "../apps/landing/src/data/cli-demo";
-import { productStoryMedia } from "../apps/landing/src/data/product-story";
+import {
+  productStoryEditorPortraitMedia,
+  productStoryHeroMedia,
+  productStoryMedia,
+} from "../apps/landing/src/data/product-story";
 import { products } from "../apps/landing/src/data/products/registry";
 import { securityControls } from "../apps/landing/src/data/security-controls";
 
@@ -48,7 +52,9 @@ export const checkMarketingContent = (rootDir: string): string[] => {
   } else {
     const toolNames = new Set(
       cliRegistry.flatMap((tool) => {
-        if (!isRecord(tool) || typeof tool["name"] !== "string") {return [];}
+        if (!isRecord(tool) || typeof tool["name"] !== "string") {
+          return [];
+        }
         return [tool["name"]];
       }),
     );
@@ -61,7 +67,14 @@ export const checkMarketingContent = (rootDir: string): string[] => {
     }
   }
 
-  for (const [sceneId, media] of Object.entries(productStoryMedia)) {
+  const storyMediaEntries = [
+    ...Object.entries(productStoryMedia),
+    ...Object.entries(productStoryHeroMedia).map(
+      ([sceneId, media]) => [`${sceneId} (hero)`, media] as const,
+    ),
+    ["editor (portrait)", productStoryEditorPortraitMedia] as const,
+  ];
+  for (const [sceneId, media] of storyMediaEntries) {
     for (const asset of [
       media.videoSrc,
       media.darkVideoSrc,
