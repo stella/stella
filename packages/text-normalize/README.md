@@ -36,3 +36,25 @@ normalizeSearchText("أحمد") === normalizeSearchText("احمد"); // true
 The same fold must be reproduced by the PostgreSQL `arabic_normalize()`
 function used in contacts trigram expression indexes and search predicates;
 the golden vectors in `src/normalize.test.ts` pin the shared contract.
+
+## Diacritics
+
+`stripDiacritics` decomposes with NFD and removes every combining mark
+(`\p{Diacritic}`, so marks beyond the U+0300–U+036F block are covered
+too). Use it for accent-insensitive search keys.
+
+`stripDiacriticsForSlug` is the same strip but decomposes with NFKD, so
+compatibility characters (ligatures, full-width forms, superscripts) fold
+to their base before a `[a-z0-9]` slug filter runs. Slugs are persisted,
+public URL segments; this variant pins the exact form existing slugs were
+generated with.
+
+## Spaced letters
+
+`collapseSpacedLetters` joins letter-spaced court headings
+(`r o z h o d o l :` to `rozhodol:`) back into searchable words. It
+requires at least four spaced letters, so Czech/Slovak single-letter word
+lists (`a b c`) are left intact. `spacedLetterRunRegex()` returns the
+underlying matcher for callers that need per-match offsets (find-in-page
+highlighting). Index-time and query-time collapse share this one
+threshold so a heading collapses identically on both sides.

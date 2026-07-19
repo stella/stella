@@ -1,6 +1,8 @@
 import { Result, panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
@@ -118,45 +120,10 @@ type ProcessResult = {
  *
  * Applied once in the pipeline so adapters don't repeat this.
  */
-/**
- * Collapse spaced-out letters used for emphasis in court PDFs.
- *
- * Slovak and Czech courts format words with letter-spacing:
- *   `r o z h o d o l :` → `rozhodol:`
- *   `o d ô v o d n e n i e :` → `odôvodnenie:`
- *   `z a m i e t a` → `zamieta`
- *
- * These break full-text search ("rozhodol" won't match
- * "r o z h o d o l"). We collapse sequences of single Unicode
- * letters separated by single spaces, optionally followed by
- * punctuation. Multi-spaces between collapsed words are then
- * normalized to single space.
- *
- * Safe: won't touch normal text, digits, IČO numbers, or
- * case references (anchored by whitespace/string boundaries).
- *
- * Requires at least FOUR letters in the run. Czech/Slovak have many
- * single-letter words (prepositions a, i, k, o, s, u, v, z), so a 2–3
- * letter run like `u a v` ("u", "a", "v") is far more likely to be real
- * words than letter-spaced emphasis; collapsing it to `uav` would corrupt
- * the search text. Genuine spaced words ("z a m i e t a", "r o z h o d o l")
- * are always longer, so the floor loses nothing in practice.
- */
-const SPACED_WORD =
-  /(?<=\s|^)(?:\p{L} (?:\p{L} ){2,}\p{L})(?: ?[,:;.!?])?(?=\s|$)/gu;
-
-/**
- * Collapse multiple spaces to single. Applied to all
- * ingested text to normalize PDF justified spacing where
- * words are padded with extra spaces for alignment.
- */
-const collapseMultiSpaces = (text: string): string =>
-  text.replace(/ {2,}/gu, " ");
-
-const collapseSpacedLetters = (text: string): string =>
-  collapseMultiSpaces(
-    text.replace(SPACED_WORD, (match) => match.replace(/ /gu, "")),
-  );
+// Spaced-letter collapse (letter-spaced court headings such as
+// "r o z h o d o l :" -> "rozhodol:") is single-homed in
+// @stll/text-normalize's collapseSpacedLetters, so index-time collapse
+// here and the case-viewer's query-time collapse share one threshold.
 
 export const sanitizeResult = (r: IngestionResult): IngestionResult => {
   // Strip dangerous chars and normalize non-breaking spaces.

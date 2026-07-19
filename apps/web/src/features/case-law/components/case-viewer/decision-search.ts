@@ -1,4 +1,8 @@
-import { applyArabicFolds } from "@stll/text-normalize";
+import {
+  applyArabicFolds,
+  spacedLetterRunRegex,
+  stripDiacritics,
+} from "@stll/text-normalize";
 
 export type SearchPiece = {
   id: string;
@@ -16,16 +20,7 @@ export type SearchResults = {
   rangesByPieceId: Record<string, SearchMatchRange[]>;
 };
 
-const DIACRITIC_RE = /\p{Diacritic}+/gu;
 const LETTER_OR_NUMBER_RE = /[\p{L}\p{N}]/u;
-
-// Matches runs of single-letter words separated by spaces,
-// optionally followed by punctuation (e.g. "r o z h o d o l :"
-// or "z a m i e t a"). Collapsed to the concatenated letters
-// so users can search "rozhodol" and find the spaced heading.
-// Mirrors `collapseSpacedLetters` in the API pipeline.
-const SPACED_LETTER_RUN_RE =
-  /(?<=\s|^)(?:\p{L} (?:\p{L} )*\p{L})(?: ?[,:;.!?])?(?=\s|$)/gu;
 
 type NormalizedText = {
   endMap: number[];
@@ -46,7 +41,7 @@ const normalizeSearchText = (text: string): NormalizedText => {
   // so the letters collapse into one searchable word while each
   // letter's startMap/endMap still points at its original char.
   const dropSpaceAt = new Set<number>();
-  for (const match of text.matchAll(SPACED_LETTER_RUN_RE)) {
+  for (const match of text.matchAll(spacedLetterRunRegex())) {
     const matchStart = match.index;
     const matched = match[0];
     for (let i = 0; i < matched.length; i++) {
@@ -79,11 +74,11 @@ const normalizeSearchText = (text: string): NormalizedText => {
   for (const rawChar of text) {
     // NFKC folds presentation forms to canonical letters; applyArabicFolds
     // then folds Arabic variants (before NFD, so a composed alef-hamza is
-    // not split first); NFD + mark removal strips remaining Latin/Arabic
-    // combining diacritics.
-    const normalizedChar = applyArabicFolds(rawChar.normalize("NFKC"))
-      .normalize("NFD")
-      .replace(DIACRITIC_RE, "");
+    // not split first); stripDiacritics (NFD + mark removal) strips the
+    // remaining Latin/Arabic combining diacritics.
+    const normalizedChar = stripDiacritics(
+      applyArabicFolds(rawChar.normalize("NFKC")),
+    );
     const origStart = originalIndex;
     const origEnd = originalIndex + rawChar.length;
 

@@ -1,7 +1,11 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { applyArabicFolds, normalizeSearchText } from "@stll/text-normalize";
+import {
+  applyArabicFolds,
+  normalizeSearchText,
+  stripDiacritics,
+} from "@stll/text-normalize";
 
 const PREFIX_QUERY_TOKEN_LIMIT = 8;
 const ADVANCED_QUERY_OPERATOR_RE =
@@ -76,8 +80,7 @@ export const normalizeFileNameVariantForSearch = (
 const normalizeTextForLexemes = (text: string): string =>
   text.replace(/[._-]+/gu, " ");
 
-export const removeSearchDiacritics = (text: string): string =>
-  text.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+export const removeSearchDiacritics = stripDiacritics;
 
 export const fileNameSearchText = (name: string): string =>
   compact([
