@@ -371,7 +371,7 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
     const normalizeMarkdownText = (text: string) =>
       text
-        .replace(/\[([^\]]+)]\((https?:\/\/[^)\s]+)\)/gu, "$1")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/gu, "$1")
         .replace(/[*_`]/gu, "")
         .replace(/\s+/gu, " ")
         .trim();
@@ -472,7 +472,7 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
         const htmlVideoSrc = line.match(
           /^<video\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/video>$/iu,
         )?.[1];
-        const markdownVideoSrc = line.match(/^!\[[^\]]*]\((https:\/\/[^)\s]+)\)$/u)?.[1];
+        const markdownVideoSrc = line.match(/^!\[[^\]]*\]\((https:\/\/[^)\s]+)\)$/u)?.[1];
         const videoSrc = htmlVideoSrc ?? markdownVideoSrc;
         if (videoSrc) {
           closeList();
@@ -919,7 +919,7 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       const id = decodeURIComponent(window.location.hash.slice(1));
       if (!id) {return;}
 
-      const target = document.querySelector(`#${id}`);
+      const target = document.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
       if (!target) {return;}
 
       let ancestor: HTMLElement | null = target;
@@ -940,6 +940,7 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       if (!container) {return;}
 
       const resp = await fetch(svgUrl);
+      if (!resp.ok) {return;}
       const svg = await resp.text();
       // safe-html: first-party build-time gradient SVG fetched from the site's own /images/gradients asset, never user content
       container.innerHTML = svg;
@@ -950,7 +951,7 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
         svgEl.style.height = "100%";
       }
 
-      const groups = container.querySelectorAll<SVGGElement>("svg g");
+      const groups = [...container.querySelectorAll<SVGGElement>("svg g")];
       const group = groups.at(-1) ?? null;
       const rects = group
         ? [...group.querySelectorAll<SVGRectElement>("rect")]

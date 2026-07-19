@@ -170,7 +170,7 @@ const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "medium" });
         svgEl.style.height = "100%";
       }
 
-      const groups = container.querySelectorAll<SVGGElement>("svg g");
+      const groups = [...container.querySelectorAll<SVGGElement>("svg g")];
       const group = groups.at(-1) ?? null;
       const rects = group
         ? [...group.querySelectorAll<SVGRectElement>("rect")]

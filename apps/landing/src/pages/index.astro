@@ -835,11 +835,11 @@ const selfHostingDocsUrl =
 
   <script>
     const initGradient = async (containerId: string, svgUrl: string) => {
-      const el = document.querySelector(`#${containerId}`);
-      if (!el) {return;}
-      const container: HTMLElement = el;
+      const container = document.querySelector<HTMLElement>(`#${containerId}`);
+      if (!container) {return;}
 
       const resp = await fetch(svgUrl);
+      if (!resp.ok) {return;}
       const svg = await resp.text();
       // safe-html: first-party build-time gradient SVG fetched from the site's own /images/gradients asset, never user content
       container.innerHTML = svg;
@@ -852,7 +852,7 @@ const selfHostingDocsUrl =
 
       // Select the last <g> — in dark mode the SVG has two groups
       // (glow layer + sharp layer); we animate only the sharp layer.
-      const groups = container.querySelectorAll<SVGGElement>("svg g");
+      const groups = [...container.querySelectorAll<SVGGElement>("svg g")];
       const group = groups.at(-1) ?? null;
       const rects = group
         ? [...group.querySelectorAll<SVGRectElement>("rect")]
@@ -877,7 +877,7 @@ const selfHostingDocsUrl =
 
       const startTime = performance.now();
 
-      function loop() {
+      const loop = () => {
         if (!container.isConnected) {return;}
         // Skip animation when this layer is hidden (opacity 0)
         if (getComputedStyle(container).opacity === "0") {
@@ -925,7 +925,7 @@ const selfHostingDocsUrl =
         }
 
         requestAnimationFrame(loop);
-      }
+      };
 
       requestAnimationFrame(loop);
     };
