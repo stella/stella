@@ -54,7 +54,7 @@ if runningValue ~= requestId and runningValue ~= legacyRunningLockValue then
 end
 
 redis.call("SADD", KEYS[3], entityId)
-redis.call("EXPIRE", KEYS[3], runStateTtlSec)
+redis.call("EXPIRE", KEYS[3], tonumber(runStateTtlSec))
 local completed = redis.call("SCARD", KEYS[3])
 local totalRaw = redis.call("GET", KEYS[4])
 local total = tonumber(totalRaw) or 0
@@ -144,4 +144,32 @@ export const recordEntityCompletion = async ({
     String(runStateTtlSec),
   ]);
   return parseEntityCompletionReply(reply);
+};
+
+type ResetCompletionStateArgs = {
+  redis: EntityCompletionRedis;
+  completedEntitiesKey: string;
+};
+
+/**
+ * Clear the distinct-entity completion set before a new run enqueues its
+ * jobs. The set is a Redis Set that completions grow lazily via `SADD`, so
+ * it can outlive the run-state that named it: a worker death between the
+ * completion script's `EXPIRE` and the sibling-key TTL refresh, a manual
+ * lock deletion, or a TTL discrepancy can leave a populated set behind. A
+ * later run reuses the same key, and its first `SADD`/`SCARD` would then
+ * read the stale members and could reach `total` while entities are still
+ * mid-flight — finalizing the run early and stranding cells at `pending`.
+ *
+ * Deleting the key here gives every run an empty set, so `SCARD` counts
+ * only this run's entities. The caller must already hold the run lock so no
+ * live run shares the key. Routed through `send` (not a typed `del`) to
+ * keep this module free of a live-connection dependency and unit-testable
+ * against the same in-memory fake as `recordEntityCompletion`.
+ */
+export const resetCompletionState = async ({
+  redis,
+  completedEntitiesKey,
+}: ResetCompletionStateArgs): Promise<void> => {
+  await redis.send("DEL", [completedEntitiesKey]);
 };

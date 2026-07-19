@@ -56,7 +56,10 @@ import {
   readFullWorkflowSnapshotCursor,
 } from "@/api/lib/workflow-target-queries";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
-import { recordEntityCompletion } from "@/api/lib/workflow/completion-tracking";
+import {
+  recordEntityCompletion,
+  resetCompletionState,
+} from "@/api/lib/workflow/completion-tracking";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
   AIJustification,
@@ -545,11 +548,22 @@ export const startWorkflow = async ({
       return { status: "skipped" };
     }
 
+    // Start from an empty completion set. It grows lazily via SADD, so a
+    // prior run whose run-state outlived it (worker death between the
+    // completion script's EXPIRE and the sibling-key refresh, a manual lock
+    // deletion, a TTL discrepancy) could leave stale members that inflate
+    // this run's SCARD and finalize it early. We hold the run lock (NX)
+    // here, so no live run shares the key.
+    await resetCompletionState({
+      redis,
+      completedEntitiesKey: workflowKey(workspaceId, "completed-entities"),
+    });
+
     // Store entity count for completion tracking. Carries the run-lock TTL
     // (refreshed on each entity completion) so it self-heals with the rest
     // of the run-state instead of leaking after the run lapses. The
-    // completed-entities set is created lazily by the completion script's
-    // first SADD and given its TTL there, so it needs no seed here.
+    // completed-entities set is (re)given its TTL by the completion script's
+    // first SADD, so it needs no seed here.
     await redis.set(
       workflowKey(workspaceId, "total"),
       String(targetCount),

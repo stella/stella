@@ -4,6 +4,7 @@ import {
   COMPLETE_ENTITY_SCRIPT,
   parseEntityCompletionReply,
   recordEntityCompletion,
+  resetCompletionState,
 } from "@/api/lib/workflow/completion-tracking";
 
 describe("parseEntityCompletionReply", () => {
@@ -73,6 +74,20 @@ const arg = (args: string[], index: number): string => {
 
 const createFakeRedis = (state: FakeRedisState) => ({
   send: async (command: string, args: string[]): Promise<unknown> => {
+    if (command === "DEL") {
+      let removed = 0;
+      for (const key of args) {
+        const existed =
+          state.strings.has(key) ||
+          state.sets.has(key) ||
+          state.ttlSec.has(key);
+        state.strings.delete(key);
+        state.sets.delete(key);
+        state.ttlSec.delete(key);
+        removed += Number(existed);
+      }
+      return removed;
+    }
     if (command !== "EVAL" || arg(args, 0) !== COMPLETE_ENTITY_SCRIPT) {
       throw new TypeError(`Unexpected Redis command: ${command}`);
     }
@@ -129,8 +144,8 @@ describe("recordEntityCompletion", () => {
     ttlSec: new Map(),
   });
 
-  const complete = (state: FakeRedisState, entityId: string) =>
-    recordEntityCompletion({
+  const complete = async (state: FakeRedisState, entityId: string) =>
+    await recordEntityCompletion({
       redis: createFakeRedis(state),
       keys,
       activeRequestId,
@@ -182,6 +197,30 @@ describe("recordEntityCompletion", () => {
     // Guards the no-TTL-leak fix: the set is created by the script and must
     // carry the run-state TTL so it self-heals rather than lingering forever.
     expect(state.ttlSec.get(keys.completedEntities)).toBe(3600);
+  });
+
+  test("clears a prior run's leftover completion set before counting", async () => {
+    // The class of bug: the completion set is grown lazily via SADD, so it
+    // can outlive the run-state that named it (worker death between the
+    // script's EXPIRE and the sibling-key refresh, a manual lock deletion, a
+    // TTL discrepancy). A new run reuses the same key, and its first SADD
+    // would land in the stale set — SCARD could then reach `total` while
+    // this run's entities are still mid-flight and finalize it early.
+    const state = seedActiveRun(2);
+    state.sets.set(
+      keys.completedEntities,
+      new Set(["entity_stale_1", "entity_stale_2"]),
+    );
+
+    await resetCompletionState({
+      redis: createFakeRedis(state),
+      completedEntitiesKey: keys.completedEntities,
+    });
+    expect(state.sets.get(keys.completedEntities)).toBeUndefined();
+
+    // The new run now counts only its own entities from a clean slate.
+    const first = await complete(state, "entity_a");
+    expect(first).toEqual({ matched: true, completed: 1, total: 2 });
   });
 
   test("does not record a completion for a superseded request", async () => {
