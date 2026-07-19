@@ -12,11 +12,13 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // and result builders (`structuredErrorResult` / `textResult`) stay real, so the
 // asserted envelopes are the exact shapes callers receive.
 const callGatewayExternalMcpToolMock = mock();
+const gatewayLoadErrorResultMock = mock();
 const recordSkillGatewayToolAuditMock = mock(async () => undefined);
 const resolveSkillToolMock = mock();
 
 void mock.module("@/api/mcp/gateway/external-tools", () => ({
   callGatewayExternalMcpTool: callGatewayExternalMcpToolMock,
+  gatewayLoadErrorResult: gatewayLoadErrorResultMock,
   recordSkillGatewayToolAudit: recordSkillGatewayToolAuditMock,
 }));
 void mock.module("@/api/mcp/gateway/skills", () => ({
@@ -54,6 +56,8 @@ const parseResult = (result: CallToolResult | null): unknown => {
 describe("dispatchGatewayToolCall", () => {
   beforeEach(() => {
     callGatewayExternalMcpToolMock.mockReset();
+    gatewayLoadErrorResultMock.mockReset();
+    gatewayLoadErrorResultMock.mockReturnValue(null);
     recordSkillGatewayToolAuditMock.mockReset();
     recordSkillGatewayToolAuditMock.mockResolvedValue(undefined);
     resolveSkillToolMock.mockReset();
@@ -160,5 +164,44 @@ describe("dispatchGatewayToolCall", () => {
         durationMs: expect.any(Number),
       }),
     );
+  });
+
+  test("answers a retryable envelope instead of throwing when resolving the skill faults", async () => {
+    // A load fault means we cannot tell whether the skill exists: the retryable
+    // envelope must win over a definitive `unknown_tool`, never surface as an
+    // unhandled rejection.
+    const loadFault = new Error("db unavailable");
+    resolveSkillToolMock.mockRejectedValue(loadFault);
+    const sentinel: CallToolResult = {
+      content: [{ type: "text", text: "retryable" }],
+      isError: true,
+    };
+    gatewayLoadErrorResultMock.mockReturnValue(sentinel);
+
+    const result = await dispatchGatewayToolCall({
+      args: {},
+      context,
+      mode: "default",
+      toolName: "skill__alpha",
+    });
+
+    expect(gatewayLoadErrorResultMock).toHaveBeenCalledWith(loadFault);
+    expect(result).toBe(sentinel);
+    expect(recordSkillGatewayToolAuditMock).not.toHaveBeenCalled();
+  });
+
+  test("rethrows a resolve fault that gatewayLoadErrorResult does not recognize as a load fault", async () => {
+    const otherFault = new Error("not a load fault");
+    resolveSkillToolMock.mockRejectedValue(otherFault);
+    gatewayLoadErrorResultMock.mockReturnValue(null);
+
+    await expect(
+      dispatchGatewayToolCall({
+        args: {},
+        context,
+        mode: "default",
+        toolName: "skill__alpha",
+      }),
+    ).rejects.toBe(otherFault);
   });
 });

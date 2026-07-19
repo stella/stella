@@ -7,6 +7,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // skills.ts routes its only failure path (a Result.err from safeDb) through
@@ -167,13 +168,21 @@ describe("MCP gateway skill tools", () => {
     expect(tools).toHaveLength(LIMITS.mcpGatewaySkillsMax);
   });
 
-  test("returns an empty list and captures the error when the DB read fails", async () => {
+  test("propagates a load fault (captured, not swallowed) instead of an empty list when the DB read fails", async () => {
+    // A DB outage must not be mistaken for "no skills": the loader throws a
+    // distinct fault so tools/list fails loudly rather than silently dropping
+    // every skill tool. bun-types declares `.rejects.toThrow` as void, so
+    // awaiting it trips type-aware lint; capture the rejection explicitly
+    // instead (mirrors external-tools.test.ts's load-fault assertion).
     const dbError = new DatabaseError({ message: "db unavailable" });
     const context = createContext({ dbError });
 
-    const tools = await loadVisibleSkillTools({ context });
+    const rejection: unknown = await loadVisibleSkillTools({ context }).then(
+      () => null,
+      (error: unknown) => error,
+    );
 
-    expect(tools).toEqual([]);
+    expect(rejection).toBeInstanceOf(McpGatewayLoadError);
     expect(captureErrorMock).toHaveBeenCalledWith(dbError, {
       source: "mcp-gateway-skills",
     });
