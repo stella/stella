@@ -2,7 +2,6 @@ import { Result } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
@@ -76,6 +75,12 @@ export type CorpusIndexAdapter<
   /** Build the corpus index search document, omitting empty optional fields. */
   buildDoc: (row: TRow, text: string) => Record<string, unknown>;
   /**
+   * Read the canonical corpus text object for a row's `textS3Key`. Supplied
+   * by the family adapter (not imported directly) so the shared core stays
+   * free of a hard dependency on any one family's object-storage module.
+   */
+  readCorpusText: (key: string) => Promise<string>;
+  /**
    * Rows not yet in this generation (missing). Ordered oldest-first, bounded by
    * `limit`; the license gate is applied in the query.
    */
@@ -128,12 +133,10 @@ export type LoadDocsForBatchOptions<TBrand extends SafeIdType, TRow> = {
   readText?: (row: TRow) => Promise<string>;
 };
 
-const loadText = async <
-  TBrand extends SafeIdType,
-  TRow extends CorpusIndexRow<TBrand>,
->(
-  row: TRow,
+const loadText = async <TBrand extends SafeIdType>(
+  row: CorpusIndexRow<TBrand>,
   fetchFulltext: FetchFulltext<TBrand>,
+  readCorpusText: (key: string) => Promise<string>,
 ): Promise<string> => {
   // No catch-and-fallback here: a read failure propagates so the caller
   // can isolate this document (record it failed, drop it from the batch) and
@@ -204,7 +207,9 @@ export const createCorpusIndexer = <
     }: LoadDocsForBatchOptions<TBrand, TRow>,
   ): Promise<LoadedBatch<TBrand, TRow>> => {
     const loadRowText =
-      readText ?? (async (row: TRow) => await loadText(row, fetchFulltext));
+      readText ??
+      (async (row: TRow) =>
+        await loadText(row, fetchFulltext, adapter.readCorpusText));
     const docs: LoadedBatch<TBrand, TRow>["docs"] = [];
     const readFailures: LoadedBatch<TBrand, TRow>["readFailures"] = [];
     for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
@@ -353,8 +358,8 @@ export const createCorpusIndexer = <
     // Load text (S3) with bounded concurrency, then ingest one NDJSON batch.
     // A per-document read failure fails only that document; record it and let
     // the rest still commit.
-    const fetchFulltext: FetchFulltext<TBrand> = (id) =>
-      adapter.fetchFulltext(scopedDb, id);
+    const fetchFulltext: FetchFulltext<TBrand> = async (id) =>
+      await adapter.fetchFulltext(scopedDb, id);
     const { docs, readFailures } = await loadDocsForBatch(rows, {
       generation,
       fetchFulltext,

@@ -5,6 +5,7 @@ import {
   caseLawIndexJobs,
   caseLawSources,
 } from "@/api/db/schema";
+import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createCorpusIndexer } from "@/api/lib/corpus-index/core";
@@ -103,8 +104,9 @@ const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>({
   family: "case_law",
   captureStep: "backfillCorpusIndex.loadText",
   buildDoc,
-  selectMissing: (scopedDb, { generation, limit }) =>
-    scopedDb((tx) =>
+  readCorpusText,
+  selectMissing: async (scopedDb, { generation, limit }) =>
+    await scopedDb((tx) =>
       tx
         .select(SELECT_COLUMNS)
         .from(caseLawDecisions)
@@ -125,8 +127,8 @@ const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>({
         .orderBy(asc(caseLawDecisions.createdAt))
         .limit(limit),
     ),
-  selectStale: (scopedDb, { generation, limit }) =>
-    scopedDb((tx) =>
+  selectStale: async (scopedDb, { generation, limit }) =>
+    await scopedDb((tx) =>
       tx
         .select(SELECT_COLUMNS)
         .from(caseLawDecisions)
