@@ -54,7 +54,7 @@ type PendingUpload = {
   name: string;
   signal: AbortSignal;
   resolve: (value: string) => void;
-  reject: (error: unknown) => void;
+  reject: (error: Error) => void;
 };
 
 /**
@@ -73,16 +73,14 @@ class ScriptedUploader {
   sawConcurrentDoubleUpload = false;
 
   private readonly live: PendingUpload[] = [];
-  private readonly liveNames = new Set<string>();
   private readonly settled = new WeakSet<PendingUpload>();
 
-  readonly fn = (file: File, signal: AbortSignal): Promise<string> => {
+  readonly fn = async (file: File, signal: AbortSignal): Promise<string> => {
     this.totalCalls++;
     this.callsByFile.set(file.name, (this.callsByFile.get(file.name) ?? 0) + 1);
-    if (this.liveNames.has(file.name)) {
+    if (this.live.some((p) => p.name === file.name)) {
       this.sawConcurrentDoubleUpload = true;
     }
-    this.liveNames.add(file.name);
     this.active++;
     this.maxActive = Math.max(this.maxActive, this.active);
 
@@ -117,7 +115,6 @@ class ScriptedUploader {
     }
     this.settled.add(entry);
     this.active--;
-    this.liveNames.delete(entry.name);
     const index = this.live.indexOf(entry);
     if (index !== -1) {
       this.live.splice(index, 1);
@@ -136,7 +133,7 @@ class ScriptedUploader {
     this.pendingFor(name).resolve(value);
   }
 
-  rejectFile(name: string, error: unknown) {
+  rejectFile(name: string, error: Error) {
     this.pendingFor(name).reject(error);
   }
 
@@ -150,28 +147,30 @@ class ScriptedUploader {
 }
 
 type DoneEvent = {
-  completed: unknown[];
+  completed: string[];
   failed: { file: File; error: Error }[];
   cancelled: boolean;
 };
 
 /** Wire up a queue with recording listeners for the events under test. */
-const harness = <T = string>(
-  uploader: ScriptedUploader,
-  concurrency: number,
-) => {
-  const queue = new UploadQueue<T>(
-    uploader.fn as (file: File, signal: AbortSignal) => Promise<T>,
-    concurrency,
-  );
+const harness = (uploader: ScriptedUploader, concurrency: number) => {
+  const queue = new UploadQueue<string>(uploader.fn, concurrency);
   const doneEvents: DoneEvent[] = [];
   const states: string[] = [];
   const progress: { completed: number; failed: number; total: number }[] = [];
   const rateLimited: { retryAfterS: number }[] = [];
-  queue.on("done", (data) => doneEvents.push(data as DoneEvent));
-  queue.on("state-change", (state) => states.push(state));
-  queue.on("progress", (data) => progress.push(data));
-  queue.on("rate-limited", (data) => rateLimited.push(data));
+  queue.on("done", (data) => {
+    doneEvents.push(data);
+  });
+  queue.on("state-change", (state) => {
+    states.push(state);
+  });
+  queue.on("progress", (data) => {
+    progress.push(data);
+  });
+  queue.on("rate-limited", (data) => {
+    rateLimited.push(data);
+  });
   return { queue, doneEvents, states, progress, rateLimited };
 };
 
