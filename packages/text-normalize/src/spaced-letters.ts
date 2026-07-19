@@ -42,11 +42,27 @@ export const spacedLetterRunRegex = (): RegExp =>
 const MULTI_SPACE_RE = / {2,}/gu;
 const SPACE_RE = / /gu;
 
+// Single-entry cache: sk-courts.ts's classifiers (isHoldingMarker,
+// isReasoningMarker, isInstructionMarker) each re-normalize the same line
+// text in sequence while classifying a heading, so consecutive calls on an
+// identical string are common during ingestion. Deterministic pure
+// function, so caching only the most recent call is always correct — a
+// cache miss just falls through to the normal computation.
+let lastInput: string | undefined;
+let lastResult: string | undefined;
+
 /**
  * Collapse every spaced-letter run in `text` to its concatenated letters,
  * then normalize any resulting multi-spaces to a single space.
  */
-export const collapseSpacedLetters = (text: string): string =>
-  text
+export const collapseSpacedLetters = (text: string): string => {
+  if (text === lastInput && lastResult !== undefined) {
+    return lastResult;
+  }
+  const result = text
     .replace(spacedLetterRunRegex(), (match) => match.replace(SPACE_RE, ""))
     .replace(MULTI_SPACE_RE, " ");
+  lastInput = text;
+  lastResult = result;
+  return result;
+};
