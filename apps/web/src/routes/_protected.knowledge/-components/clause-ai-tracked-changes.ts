@@ -215,13 +215,14 @@ export const settleReviewPersist = async (
  * leave actions read that gate, so they'd unblock against a stale body.
  *
  * The caller captures a fresh `reviewFlushToken` (an incrementing epoch,
- * same shape as `rewriteRequestIdRef` in `ClauseEditor`) only inside
- * `onReviewResolved`, and threads it into that one `saveBody` invocation.
- * Ordinary autosaves never carry a token, so they always resolve to `false`
- * here. Comparing against the *current* epoch (not just checking the token
- * is present) also means a superseded review flush — one review resolves,
- * then a second starts and resolves again before the first's persist
- * settles — can't win a race against the newer one.
+ * same shape as `rewriteRequestIdRef` in `ClauseEditor`) inside
+ * `onReviewResolved`, or reads a pending retry token armed by an earlier
+ * failed flush (see {@link nextRetryPendingToken}), and threads it into a
+ * `saveBody` invocation. Ordinary autosaves that carry neither always
+ * resolve to `false` here. Comparing against the *current* epoch (not just
+ * checking the token is present) also means a superseded review flush — one
+ * review resolves, then a second starts and resolves again before the
+ * first's persist settles — can't win a race against the newer one.
  */
 export const canReviewFlushReportResolved = (
   reviewFlushToken: number | undefined,
@@ -229,6 +230,51 @@ export const canReviewFlushReportResolved = (
 ): boolean =>
   reviewFlushToken !== undefined &&
   reviewFlushToken === currentReviewFlushEpoch;
+
+/**
+ * The token a `saveBody` call should actually carry: its own explicit token
+ * if it has one (the review's own flush, minted fresh in `onReviewResolved`),
+ * otherwise a pending retry token armed by an earlier failed flush (see
+ * {@link nextRetryPendingToken}) — so a later save through *any* trigger
+ * (blur, the keystroke debounce) can still be the one that clears the gate.
+ *
+ * Read this once, synchronously, at the very start of `saveBody`, before the
+ * request goes out. That ordering is what keeps the stale-autosave race
+ * fixed: an autosave already in flight when a flush fails captured its own
+ * `explicitToken` argument (`undefined`) earlier in its call and can't
+ * retroactively see a retry token armed after it already started — only a
+ * save that starts after the arming reads it.
+ */
+export const reviewFlushTokenForSave = (
+  explicitToken: number | undefined,
+  retryPendingToken: number | undefined,
+): number | undefined => explicitToken ?? retryPendingToken;
+
+/**
+ * The retry token to arm after a `saveBody` call fails, or `undefined` to
+ * clear it.
+ *
+ * Only a failure of a save that was itself allowed to report the gate
+ * resolved — the review's own flush, or an earlier armed retry of it — re-
+ * arms: a plain autosave failing outside of any review persist has no gate
+ * to unblock and must not manufacture one. Re-arming with the *current*
+ * epoch (not the failed token verbatim) means a review superseded by a
+ * newer one while its retry is still pending can't have a stale retry token
+ * wrongly clear the newer review's gate — the newer flush's own explicit
+ * token wins instead (see {@link reviewFlushTokenForSave}), and the stale
+ * retry token is discarded because it can never match a bumped epoch again.
+ *
+ * This is what turns a single failed flush into a self-healing gate: fail →
+ * arm → next save (any trigger) may resolve; if that save also fails, arm
+ * again, repeating until one succeeds.
+ */
+export const nextRetryPendingToken = (
+  reviewFlushToken: number | undefined,
+  currentReviewFlushEpoch: number,
+): number | undefined =>
+  canReviewFlushReportResolved(reviewFlushToken, currentReviewFlushEpoch)
+    ? currentReviewFlushEpoch
+    : undefined;
 
 /** Stable identity of a body for detecting external resets vs. the editor's
  *  own round-tripped edits (text + formatting + directive kind/expression). */

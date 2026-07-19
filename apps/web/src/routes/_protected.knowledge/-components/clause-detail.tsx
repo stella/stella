@@ -74,6 +74,8 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   canReviewFlushReportResolved,
   type ClauseEditorReviewStatus,
+  nextRetryPendingToken,
+  reviewFlushTokenForSave,
   shouldKeepBodyPanelMounted,
 } from "@/routes/_protected.knowledge/-components/clause-ai-tracked-changes";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
@@ -658,13 +660,28 @@ const ClauseBodyEditor = ({
   // Epoch for the review's own flush save (see `canReviewFlushReportResolved`):
   // bumped only inside `onReviewResolved`, below. Ordinary autosaves
   // (blur/debounced) never touch this ref and never pass a token into
-  // `saveBody`, so they can never report the review gate "resolved" — only
-  // the save this epoch was minted for can, and only while it's still the
-  // current one.
+  // `saveBody`, so they can never report the review gate "resolved" purely
+  // by matching this epoch — only a save carrying the current epoch's token
+  // (minted directly, or picked up via `retryPendingTokenRef` below) can.
   const reviewFlushEpochRef = useRef(0);
 
+  // Armed by a failed review flush (see `nextRetryPendingToken`): while set,
+  // the *next* `saveBody` call — whatever triggers it, blur or the
+  // keystroke debounce included — retries clearing the gate on the failed
+  // flush's behalf. Read once at the very start of `saveBody`, before the
+  // request goes out, so a save already in flight when the failure armed
+  // this can't retroactively pick it up (see `reviewFlushTokenForSave`) —
+  // the original stale-autosave race stays fixed.
+  const retryPendingTokenRef = useRef<number | undefined>(undefined);
+
   const saveBody = useCallback(
-    async (body: ClauseParagraph[], reviewFlushToken?: number) => {
+    async (body: ClauseParagraph[], explicitReviewFlushToken?: number) => {
+      const reviewFlushToken = reviewFlushTokenForSave(
+        explicitReviewFlushToken,
+        retryPendingTokenRef.current,
+      );
+      retryPendingTokenRef.current = undefined;
+
       // Head-only autosave: persists the working copy without snapshotting a
       // version. The version snapshot happens on explicit save / leave.
       const response = await api.clauses({ clauseId }).post({ body });
@@ -673,9 +690,15 @@ const ClauseBodyEditor = ({
         // Leave the review-status gate exactly where it was (e.g.
         // "persisting" right after accepting an AI review): do not report
         // "resolved" on a failed persist, or version-save could snapshot a
-        // still-stale server body. The next successful persist through this
-        // same function — the debounced/blur autosave on the user's next
-        // edit, or a retry — reports "resolved" and lifts the gate.
+        // still-stale server body. If this failing save was itself allowed
+        // to clear the gate, arm a retry so the *next* successful persist
+        // through this function — the debounced/blur autosave on the user's
+        // next edit, or another retry — reports "resolved" even though it
+        // carries no explicit token of its own.
+        retryPendingTokenRef.current = nextRetryPendingToken(
+          reviewFlushToken,
+          reviewFlushEpochRef.current,
+        );
         stellaToast.add({
           type: "error",
           title: t("clauses.saveFailed"),
@@ -687,12 +710,11 @@ const ClauseBodyEditor = ({
         return;
       }
 
-      // Only the review's own flush (the caller that captured
-      // `reviewFlushToken` from `reviewFlushEpochRef` when the review
-      // resolved) may lift the gate. A plain autosave — blur or the
-      // keystroke debounce — never passes a token, so a stale one that
-      // started before a review began but settles after can't clear a
-      // gate it knows nothing about.
+      // Only a save carrying the current epoch's token — the review's own
+      // flush, or a later retry of it — may lift the gate. A plain autosave
+      // that never picked up a retry token still carries none, so a stale
+      // one that started before a review began but settles after can't
+      // clear a gate it knows nothing about.
       if (
         canReviewFlushReportResolved(
           reviewFlushToken,
@@ -740,9 +762,10 @@ const ClauseBodyEditor = ({
           // it apart from an unrelated autosave settling in the same
           // window — only the save carrying the *current* token may report
           // "resolved" (see `canReviewFlushReportResolved`). saveBody
-          // reports "resolved" itself on success; on failure it toasts and
-          // leaves the "persisting" gate blocked for a later successful
-          // autosave to lift.
+          // reports "resolved" itself on success; on failure it arms
+          // `retryPendingTokenRef` and toasts, leaving the "persisting" gate
+          // blocked until a later successful save — any trigger, no token of
+          // its own required — picks that retry token up and lifts it.
           debouncedSave.cancel();
           const reviewFlushToken = (reviewFlushEpochRef.current += 1);
           await saveBody(body, reviewFlushToken);

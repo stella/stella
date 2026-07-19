@@ -17,8 +17,10 @@ import {
   type ClauseEditorReviewStatus,
   hasAlignedClauseStructure,
   isRewriteStale,
+  nextRetryPendingToken,
   nonHistoricalDispatch,
   resolveRewriteBaseline,
+  reviewFlushTokenForSave,
   reviewResolutionStatus,
   settleReviewPersist,
   shouldKeepBodyPanelMounted,
@@ -754,6 +756,187 @@ describe("canReviewFlushReportResolved", () => {
     const reviewFlushToken = (reviewFlushEpoch += 1);
     settleSave(reviewFlushToken);
     expect(state.reported).toBe("resolved");
+  });
+});
+
+describe("retry-pending gate self-healing (nextRetryPendingToken / reviewFlushTokenForSave)", () => {
+  // Regression for the fix above: gating `saveBody`'s success path on a
+  // token that only the review's own flush ever carried also broke the
+  // failure path's documented contract ("a later successful persist through
+  // this same function ... lifts it"). A failed flush left `persisting`,
+  // but the only retries a user could trigger afterward were plain
+  // blur/debounce autosaves, which never carry a token — so the gate could
+  // never resolve again. `nextRetryPendingToken` arms a retry on a
+  // qualifying failure; `reviewFlushTokenForSave` lets the *next* saveBody
+  // call — any trigger — pick that token up.
+  //
+  // Full machine under test: pending -> persisting -> (success -> resolved
+  // | failure -> persisting+retryPending -> any later successful save ->
+  // resolved). The original stale-pre-review-autosave race must stay inert
+  // throughout.
+
+  // A minimal simulation of ClauseBodyEditor's saveBody, using plain
+  // variables in place of the component's refs/state.
+  const makeHarness = () => {
+    let reviewFlushEpoch = 0;
+    let retryPendingToken: number | undefined;
+    let reported: ClauseEditorReviewStatus = "pending";
+
+    const saveBody = (
+      explicitToken: number | undefined,
+      outcome: "success" | "failure",
+    ) => {
+      const reviewFlushToken = reviewFlushTokenForSave(
+        explicitToken,
+        retryPendingToken,
+      );
+      retryPendingToken = undefined;
+
+      if (outcome === "failure") {
+        retryPendingToken = nextRetryPendingToken(
+          reviewFlushToken,
+          reviewFlushEpoch,
+        );
+        return;
+      }
+
+      if (canReviewFlushReportResolved(reviewFlushToken, reviewFlushEpoch)) {
+        reported = "resolved";
+      }
+    };
+
+    const mintReviewFlush = () => (reviewFlushEpoch += 1);
+
+    return {
+      saveBody,
+      mintReviewFlush,
+      getReported: () => reported,
+      setReported: (status: ClauseEditorReviewStatus) => {
+        reported = status;
+      },
+      getRetryPendingToken: () => retryPendingToken,
+    };
+  };
+
+  test("the exact stick case: a failed review flush followed by a tokenless retry save still resolves", () => {
+    const h = makeHarness();
+    h.setReported("persisting");
+
+    // The review resolves; onReviewResolved mints a token and flushes — the
+    // save fails (e.g. a transient network error).
+    const flushToken = h.mintReviewFlush();
+    h.saveBody(flushToken, "failure");
+    expect(h.getReported()).toBe("persisting");
+    expect(h.getRetryPendingToken()).toBe(flushToken);
+
+    // Before this fix, every subsequent retry is a plain blur/debounce
+    // autosave carrying no token, so the gate stuck forever. Now the next
+    // save — however it's triggered — picks up the armed retry token.
+    h.saveBody(undefined, "success");
+    expect(h.getReported()).toBe("resolved");
+  });
+
+  test("repeated failures keep re-arming the retry (self-healing survives more than one failed retry)", () => {
+    const h = makeHarness();
+    h.setReported("persisting");
+
+    const flushToken = h.mintReviewFlush();
+    h.saveBody(flushToken, "failure");
+    expect(h.getRetryPendingToken()).toBe(flushToken);
+
+    // The picked-up retry itself fails too.
+    h.saveBody(undefined, "failure");
+    expect(h.getReported()).toBe("persisting");
+    expect(h.getRetryPendingToken()).toBe(flushToken);
+
+    // A third save, still tokenless, finally succeeds.
+    h.saveBody(undefined, "success");
+    expect(h.getReported()).toBe("resolved");
+  });
+
+  test("a plain autosave failing with no review in flight does not arm a retry", () => {
+    const h = makeHarness();
+    h.setReported("resolved");
+
+    // No review ever resolved (epoch stays 0, no token was ever minted): an
+    // ordinary autosave failing here has no gate to unblock.
+    h.saveBody(undefined, "failure");
+    expect(h.getRetryPendingToken()).toBeUndefined();
+    expect(h.getReported()).toBe("resolved");
+  });
+
+  test("a stale pre-review autosave settling after a retry was armed still cannot resolve the gate", () => {
+    const h = makeHarness();
+    h.setReported("pending");
+
+    // A blur/debounce autosave starts before any review — it captures its
+    // token (none) now, even though it doesn't "settle" (call saveBody's
+    // continuation) until later.
+    const staleToken = reviewFlushTokenForSave(undefined, undefined);
+
+    // The review begins and resolves; its flush fails and arms a retry.
+    const flushToken = h.mintReviewFlush();
+    h.setReported("persisting");
+    h.saveBody(flushToken, "failure");
+    expect(h.getRetryPendingToken()).toBe(flushToken);
+
+    // The stale autosave finally settles. It never re-reads
+    // `retryPendingToken` (its token was captured before the retry was
+    // armed), so it must not consume it or resolve the gate.
+    if (
+      canReviewFlushReportResolved(
+        staleToken,
+        /* epoch at the time saveBody's success path runs */ 1,
+      )
+    ) {
+      h.setReported("resolved");
+    }
+    expect(h.getReported()).toBe("persisting");
+    // The armed retry token is untouched, still available for a real retry.
+    expect(h.getRetryPendingToken()).toBe(flushToken);
+  });
+
+  test("a retry token from a superseded review can't clear a newer review's gate; the newer flush's own token wins", () => {
+    const h = makeHarness();
+    h.setReported("persisting");
+
+    // First review resolves and its flush fails, arming a retry for epoch 1.
+    const firstFlushToken = h.mintReviewFlush();
+    h.saveBody(firstFlushToken, "failure");
+    expect(h.getRetryPendingToken()).toBe(firstFlushToken);
+
+    // Before any autosave picks that up, a second review resolves — a fresh
+    // epoch token is minted and flushed explicitly (superseding the first).
+    const secondFlushToken = h.mintReviewFlush();
+    h.saveBody(secondFlushToken, "success");
+
+    expect(secondFlushToken).not.toBe(firstFlushToken);
+    expect(h.getReported()).toBe("resolved");
+    // The stale first-epoch retry token was discarded as a side effect of
+    // the second flush's explicit token taking priority.
+    expect(h.getRetryPendingToken()).toBeUndefined();
+  });
+
+  describe("nextRetryPendingToken", () => {
+    test("arms with the current epoch only when the failing save was itself allowed to resolve", () => {
+      expect(nextRetryPendingToken(1, 1)).toBe(1);
+      expect(nextRetryPendingToken(undefined, 1)).toBeUndefined();
+      expect(nextRetryPendingToken(1, 2)).toBeUndefined();
+    });
+  });
+
+  describe("reviewFlushTokenForSave", () => {
+    test("prefers the explicit token over a pending retry token", () => {
+      expect(reviewFlushTokenForSave(2, 1)).toBe(2);
+    });
+
+    test("falls back to the pending retry token when there is no explicit token", () => {
+      expect(reviewFlushTokenForSave(undefined, 1)).toBe(1);
+    });
+
+    test("is undefined when neither is set (an ordinary autosave with nothing pending)", () => {
+      expect(reviewFlushTokenForSave(undefined, undefined)).toBeUndefined();
+    });
   });
 });
 
