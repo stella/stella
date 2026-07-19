@@ -542,6 +542,7 @@
     },
     "stopResponse": "Arrêter",
     "stopped": "Arrêté",
+    "suggestedFollowupsLabel": "Suggestions de questions de suivi",
     "suggestionSeverity": {
       "style": "Style",
       "substantive": "Substantiel",

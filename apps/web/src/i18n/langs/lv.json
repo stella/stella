@@ -542,6 +542,7 @@
     },
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
+    "suggestedFollowupsLabel": "Ieteiktie papildjautājumi",
     "suggestionSeverity": {
       "style": "Stils",
       "substantive": "Pēc būtības",

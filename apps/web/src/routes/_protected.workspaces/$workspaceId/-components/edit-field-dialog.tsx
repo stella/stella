@@ -18,7 +18,6 @@ import {
 import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { toFormErrors } from "@/lib/schema";
@@ -188,12 +187,6 @@ export const EditFieldDialog = ({
           },
           onSettled: () => {
             setIsOpen(false);
-          },
-          onError: () => {
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
           },
         },
       );

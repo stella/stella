@@ -1,3 +1,5 @@
+import { useTranslations } from "use-intl";
+
 import { SuggestedActions } from "@/components/suggested-actions";
 
 // A user + assistant exchange is the minimum to have something to suggest from.
@@ -33,6 +35,7 @@ export const SuggestedFollowupChips = ({
   prompts,
   onSelect,
 }: SuggestedFollowupChipsProps) => {
+  const t = useTranslations();
   const eligible =
     isEmpty &&
     !isGenerating &&
@@ -48,7 +51,7 @@ export const SuggestedFollowupChips = ({
     <SuggestedActions
       actions={prompts.map((prompt) => ({ id: prompt, label: prompt }))}
       className="pb-2"
-      label="Suggested follow-up prompts"
+      label={t("chat.suggestedFollowupsLabel")}
       onSelect={onSelect}
       orientation="horizontal"
       surface="overlay"

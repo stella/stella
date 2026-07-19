@@ -336,6 +336,32 @@ export const RowActions = ({
     });
   };
 
+  // Force-release the lock and surface the same auth-aware feedback
+  // whether the caller is the synchronous fallback or the delayed
+  // takeover timer, so neither path can fail silently.
+  const forceTakeoverWithFeedback = async () => {
+    try {
+      await doForceTakeover();
+    } catch (forceError) {
+      if (forceError instanceof Error && isUnauthorizedError(forceError)) {
+        stellaToast.add({
+          description: t(
+            "workspaces.files.desktopEdit.authRequiredDescription",
+          ),
+          title: t("workspaces.files.desktopEdit.authRequiredTitle"),
+          type: "error",
+        });
+        return;
+      }
+
+      stellaToast.add({
+        description: t("workspaces.files.desktopEdit.unavailableDescription"),
+        title: t("workspaces.files.desktopEdit.unavailableTitle"),
+        type: "error",
+      });
+    }
+  };
+
   const handleReleaseLock = async () => {
     if (!file || file.mimeType !== DOCX_MIME) {
       return;
@@ -403,29 +429,10 @@ export const RowActions = ({
       // released lock is a no-op on the API side).
       setTimeout(() => {
         stellaToast.close(toastId);
-        void doForceTakeover();
+        void forceTakeoverWithFeedback();
       }, 30_000);
     } catch {
-      try {
-        await doForceTakeover();
-      } catch (forceError) {
-        if (forceError instanceof Error && isUnauthorizedError(forceError)) {
-          stellaToast.add({
-            description: t(
-              "workspaces.files.desktopEdit.authRequiredDescription",
-            ),
-            title: t("workspaces.files.desktopEdit.authRequiredTitle"),
-            type: "error",
-          });
-          return;
-        }
-
-        stellaToast.add({
-          description: t("workspaces.files.desktopEdit.unavailableDescription"),
-          title: t("workspaces.files.desktopEdit.unavailableTitle"),
-          type: "error",
-        });
-      }
+      await forceTakeoverWithFeedback();
     }
   };
 

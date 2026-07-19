@@ -542,6 +542,7 @@
     },
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
+    "suggestedFollowupsLabel": "أسئلة متابعة مقترحة",
     "suggestionSeverity": {
       "style": "أسلوب",
       "substantive": "جوهري",

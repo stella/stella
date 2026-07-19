@@ -545,6 +545,7 @@ type Messages = {
     };
     "stopResponse": "Stop";
     "stopped": "Stopped";
+    "suggestedFollowupsLabel": "Suggested follow-up prompts";
     "suggestionSeverity": {
       "style": "Style";
       "substantive": "Substantive";

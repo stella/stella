@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -53,6 +54,20 @@ type OTPPanelProps = {
 const OTP_LENGTH = 6;
 const OTP_EXPIRED_MESSAGE = "OTP expired";
 
+type VerifyOtpError = {
+  status?: number | undefined;
+  message?: string | undefined;
+};
+
+// Thrown instead of the raw signIn error once its toast has already been
+// shown, so `onError` below can tell "already surfaced" apart from an
+// unreported failure (network drop, session-refresh error, …) without
+// blanket-skipping every AuthClientError/APIError that reaches it.
+class AlreadyToastedError extends TaggedError("AlreadyToastedError")<{
+  message: string;
+  cause: unknown;
+}>() {}
+
 export function OTPPanel({
   className,
   email,
@@ -69,6 +84,25 @@ export function OTPPanel({
   const invalidateSession = useInvalidateSession();
   const isOtpComplete = otp.length === OTP_LENGTH;
   const { isPulsing: isOtpPulsing, pulse: pulseOtp } = usePulse(600);
+
+  // A closure over `t` (not a parameter) so its type is never written out:
+  // annotating a parameter as `ReturnType<typeof useTranslations>` blows up
+  // overload resolution against the full namespaced-key union badly enough
+  // to hit TS's type-complexity ceiling (TS2590) at the call site below.
+  //
+  // Takes the already-converted `cause` (not the raw signIn error) for the
+  // fallback branch: `userErrorFromThrown` only ever surfaces a vetted,
+  // localized message, never the untrusted raw `error.message` from the
+  // server response.
+  const verifyErrorTitle = (error: VerifyOtpError, cause: unknown): string => {
+    if (error.status === HTTP_TOO_MANY_REQUESTS) {
+      return t("auth.rateLimitExceeded");
+    }
+    if (error.message === OTP_EXPIRED_MESSAGE) {
+      return t("auth.oneTimeCodeExpired");
+    }
+    return userErrorFromThrown(cause, t("errors.actionFailed"));
+  };
 
   const handleUseDifferentEmail = () => {
     if (onUseDifferentEmail) {
@@ -132,16 +166,10 @@ export function OTPPanel({
 
       if (signInError) {
         setOtp("");
-        if (signInError.status !== HTTP_TOO_MANY_REQUESTS) {
-          stellaToast.add({
-            title:
-              signInError.message === OTP_EXPIRED_MESSAGE
-                ? t("auth.oneTimeCodeExpired")
-                : (signInError.message ?? t("errors.actionFailed")),
-            type: "error",
-          });
-        }
-        throw toAuthClientError(signInError);
+        const cause = toAuthClientError(signInError);
+        const title = verifyErrorTitle(signInError, cause);
+        stellaToast.add({ title, type: "error" });
+        throw new AlreadyToastedError({ message: title, cause });
       }
 
       if (isTwoFactorRedirect(signInData)) {
@@ -173,7 +201,21 @@ export function OTPPanel({
       await onVerified?.();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(
+        AlreadyToastedError.is(error) ? error.cause : error,
+      );
+      // Only the structured sign-in error already toasted a message in the
+      // mutationFn (marked by AlreadyToastedError); every other throw
+      // reaching here — network failures, a session-refresh error from
+      // invalidateSession, an onVerified failure — has never been surfaced,
+      // so it always gets a toast.
+      if (AlreadyToastedError.is(error)) {
+        return;
+      }
+      stellaToast.add({
+        title: userErrorFromThrown(error, t("errors.actionFailed")),
+        type: "error",
+      });
     },
   });
 

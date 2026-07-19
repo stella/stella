@@ -542,6 +542,7 @@
     },
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
+    "suggestedFollowupsLabel": "Siūlomi tęstiniai klausimai",
     "suggestionSeverity": {
       "style": "Stilius",
       "substantive": "Esminis",

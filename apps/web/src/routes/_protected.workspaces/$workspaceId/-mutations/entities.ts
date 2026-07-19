@@ -1,4 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
+
+import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -121,6 +124,7 @@ type RenameEntityVars = {
 
 export const useRenameEntity = () => {
   const analytics = useAnalytics();
+  const t = useTranslations();
 
   return useMutation({
     mutationFn: async ({ workspaceId, entityId, name }: RenameEntityVars) => {
@@ -140,6 +144,10 @@ export const useRenameEntity = () => {
     },
     onError: (error) => {
       analytics.captureError(error);
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
     },
   });
 };
@@ -153,6 +161,7 @@ type UpsertFieldVars = {
 
 export const useUpsertField = () => {
   const analytics = useAnalytics();
+  const t = useTranslations();
 
   return useMutation({
     mutationFn: async ({
@@ -179,6 +188,10 @@ export const useUpsertField = () => {
 
     onError: (error) => {
       analytics.captureError(error);
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
     },
   });
 };
