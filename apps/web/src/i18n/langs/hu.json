@@ -542,6 +542,7 @@
     },
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
+    "suggestedFollowupsLabel": "Javasolt követő kérdések",
     "suggestionSeverity": {
       "style": "Stílus",
       "substantive": "Érdemi",

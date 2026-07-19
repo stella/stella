@@ -1,6 +1,7 @@
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
+import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 
 type RedisLike = {
@@ -10,6 +11,10 @@ type RedisLike = {
 type FallbackEntry = {
   count: number;
   expiresAt: number;
+};
+
+type FallbackCleanupState = {
+  nextCleanupAt: number;
 };
 
 type McpGatewayRateLimiterOptions = {
@@ -22,6 +27,7 @@ type McpGatewayRateLimiterOptions = {
 const REDIS_KEY_PREFIX = "mcp:gateway:ratelimit:";
 const REDIS_COMMAND_TIMEOUT_MS = 500;
 const FALLBACK_CLEANUP_THRESHOLD = 10_000;
+const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
 const CONSUME_SCRIPT = `
 local current = redis.call("INCR", KEYS[1])
 if current == 1 then
@@ -46,6 +52,7 @@ export const createMcpGatewayRateLimiter = ({
 }: McpGatewayRateLimiterOptions = {}) => {
   let redis: RedisLike | null = null;
   const fallback = new Map<string, FallbackEntry>();
+  const cleanupState: FallbackCleanupState = { nextCleanupAt: 0 };
 
   const getRedis = () => {
     redis ??= createRedis();
@@ -71,6 +78,7 @@ export const createMcpGatewayRateLimiter = ({
     } catch (error) {
       onRedisError(error);
       return consumeFallback({
+        cleanupState,
         fallback,
         key,
         now: now(),
@@ -90,15 +98,16 @@ const consumeRedis = async ({
   key: string;
   redis: RedisLike;
 }): Promise<number> => {
-  const rawCount = await withCommandTimeout(
-    redis.send("EVAL", [
+  const rawCount = await withCommandTimeout({
+    command: redis.send("EVAL", [
       CONSUME_SCRIPT,
       "1",
       key,
       String(LIMITS.mcpGatewayRateLimitWindowMs),
     ]),
     commandTimeoutMs,
-  );
+    label: "mcp-gateway-redis-command",
+  });
   const count = Number(rawCount);
   if (!Number.isFinite(count)) {
     throw new TypeError("Redis returned a non-numeric rate-limit count");
@@ -107,10 +116,12 @@ const consumeRedis = async ({
 };
 
 const consumeFallback = ({
+  cleanupState,
   fallback,
   key,
   now,
 }: {
+  cleanupState: FallbackCleanupState;
   fallback: Map<string, FallbackEntry>;
   key: string;
   now: number;
@@ -121,7 +132,7 @@ const consumeFallback = ({
       count: 1,
       expiresAt: now + LIMITS.mcpGatewayRateLimitWindowMs,
     });
-    cleanupFallbackIfNeeded(fallback, now);
+    cleanupFallbackIfNeeded(fallback, now, cleanupState);
     return true;
   }
 
@@ -133,38 +144,24 @@ const consumeFallback = ({
   return true;
 };
 
+// Throttled O(n) sweep: even once the map is past its threshold, only sweep
+// expired entries at most once per interval so a Redis outage that inserts
+// past 10k entries does not run a full scan on every single insert.
 const cleanupFallbackIfNeeded = (
   fallback: Map<string, FallbackEntry>,
   now: number,
+  state: FallbackCleanupState,
 ) => {
-  if (fallback.size < FALLBACK_CLEANUP_THRESHOLD) {
+  if (fallback.size < FALLBACK_CLEANUP_THRESHOLD || now < state.nextCleanupAt) {
     return;
   }
 
+  state.nextCleanupAt = now + FALLBACK_CLEANUP_INTERVAL_MS;
   for (const [key, entry] of fallback) {
     if (entry.expiresAt <= now) {
       fallback.delete(key);
     }
   }
-};
-
-const withCommandTimeout = async <T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-): Promise<T> => {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timeoutId = setTimeout(
-      () => reject(new Error("redis command timeout")),
-      timeoutMs,
-    );
-  });
-
-  return await Promise.race([promise, timeout]).finally(() => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  });
 };
 
 const gatewayRateLimiter = createMcpGatewayRateLimiter();

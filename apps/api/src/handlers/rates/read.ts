@@ -1,19 +1,13 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isUuidPaginationCursorPart,
-  parseDateTimePaginationCursorPart,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedRateTableId } from "@/api/lib/safe-id-boundaries";
 
 const readRateTablesQuerySchema = t.Object({
@@ -23,26 +17,10 @@ const readRateTablesQuerySchema = t.Object({
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
 
-type RateTableCursor = {
-  createdAt: Date;
-  id: SafeId<"rateTable">;
-};
-
-const rateTableCreatedAtCursor = sql<Date>`date_trunc('milliseconds', ${rateTables.createdAt})`;
-
-const decodeRateTableCursor = (cursor: string): RateTableCursor | null => {
-  const parts = decodePaginationCursor(cursor);
-  const createdAt = parts?.at(0);
-  const id = parts?.at(1);
-
-  const createdAtDate = parseDateTimePaginationCursorPart(createdAt);
-
-  if (!createdAtDate || !isUuidPaginationCursorPart(id)) {
-    return null;
-  }
-
-  return { createdAt: createdAtDate, id: brandPersistedRateTableId(id) };
-};
+const rateTableCursor = createTimestampIdCursorCodec({
+  column: rateTables.createdAt,
+  brandId: brandPersistedRateTableId,
+});
 
 const readRateTables = createSafeHandler(
   {
@@ -55,7 +33,7 @@ const readRateTables = createSafeHandler(
     const conditions = [eq(rateTables.workspaceId, workspaceId)];
 
     if (query.cursor) {
-      const cursor = decodeRateTableCursor(query.cursor);
+      const cursor = rateTableCursor.decode(query.cursor);
 
       if (!cursor) {
         return Result.err(
@@ -63,13 +41,11 @@ const readRateTables = createSafeHandler(
         );
       }
 
-      const cursorCondition = or(
-        gt(rateTableCreatedAtCursor, cursor.createdAt),
-        and(
-          eq(rateTableCreatedAtCursor, cursor.createdAt),
-          gt(rateTables.id, cursor.id),
-        ),
-      );
+      const cursorCondition = rateTableCursor.keysetAfter({
+        cursor,
+        idColumn: rateTables.id,
+        direction: "ascending",
+      });
 
       if (cursorCondition) {
         conditions.push(cursorCondition);
@@ -85,12 +61,13 @@ const readRateTables = createSafeHandler(
             currency: rateTables.currency,
             isDefault: rateTables.isDefault,
             createdAt: rateTables.createdAt,
-            createdAtCursor: rateTableCreatedAtCursor.as("created_at_cursor"),
+            createdAtCursor:
+              rateTableCursor.cursorValue.as("created_at_cursor"),
             updatedAt: rateTables.updatedAt,
           })
           .from(rateTables)
           .where(and(...conditions))
-          .orderBy(asc(rateTableCreatedAtCursor), asc(rateTables.id))
+          .orderBy(asc(rateTables.createdAt), asc(rateTables.id))
           .limit(limit + 1),
       ),
     );
@@ -99,7 +76,7 @@ const readRateTables = createSafeHandler(
       rows: tables,
       limit,
       cursorForItem: (item) =>
-        encodePaginationCursor([item.createdAtCursor.toISOString(), item.id]),
+        rateTableCursor.encode(item.createdAtCursor, item.id),
     });
 
     // Batch count entries per table

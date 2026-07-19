@@ -4,7 +4,10 @@ import type { JWTPayload } from "jose";
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import type { McpMode } from "@/api/mcp/constants";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
-import { McpAuthenticationError } from "@/api/mcp/errors";
+import {
+  McpAuthenticationError,
+  McpTokenVerificationError,
+} from "@/api/mcp/errors";
 
 export type McpSession = {
   userId: string;
@@ -58,6 +61,52 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
   };
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+/**
+ * A genuine token rejection surfaces as a better-call `APIError` with an
+ * `UNAUTHORIZED` (401) status: `verifyAccessToken` maps expired tokens, invalid
+ * signatures, wrong audience/issuer, no-matching-key, and a missing payload to
+ * that shape. Everything else the verifier can throw is an infrastructure fault
+ * (a JWKS fetch/network error re-thrown as a plain `Error`, or a jose JWKS
+ * timeout/invalid error) and must not be reported to the caller as a bad token.
+ */
+const isTokenRejectionError = (error: unknown): boolean =>
+  isRecord(error) &&
+  error["name"] === "APIError" &&
+  (error["status"] === "UNAUTHORIZED" || error["statusCode"] === 401);
+
+/**
+ * Classify a failure thrown while resolving the bearer token. A genuine token
+ * rejection (bad claims from `extractMcpSession`, or an `UNAUTHORIZED` verifier
+ * error) becomes an `McpAuthenticationError` (surfaces as 401). An
+ * infrastructure fault becomes an `McpTokenVerificationError` (captured,
+ * retryable 5xx) so a JWKS outage does not masquerade as an invalid token.
+ */
+export const classifyMcpTokenVerificationError = (
+  error: unknown,
+): McpAuthenticationError | McpTokenVerificationError => {
+  if (error instanceof McpAuthenticationError) {
+    return error;
+  }
+  // Already-classified faults are returned as-is so re-classification is
+  // idempotent and never nests a verification error inside another one.
+  if (error instanceof McpTokenVerificationError) {
+    return error;
+  }
+  if (isTokenRejectionError(error)) {
+    return new McpAuthenticationError({
+      message: "Invalid or expired token",
+      cause: error,
+    });
+  }
+  return new McpTokenVerificationError({
+    message: "Token verification is temporarily unavailable",
+    cause: error,
+  });
+};
+
 export const authenticateMcpRequest = async (
   bearerToken: string,
   mode: McpMode = "default",
@@ -70,9 +119,6 @@ export const authenticateMcpRequest = async (
 
     return extractMcpSession(payload);
   } catch (error) {
-    throw new McpAuthenticationError({
-      message: "Invalid or expired token",
-      cause: error,
-    });
+    throw classifyMcpTokenVerificationError(error);
   }
 };

@@ -29,6 +29,103 @@ export const resolveCheckpointAutosaveStatus = ({
   return checkpointSaved ? "synced" : "pending";
 };
 
+type TrailingSingleFlightOptions = {
+  run: () => Promise<void>;
+  onError?: (error: unknown) => void;
+};
+
+/**
+ * Single-flight coordinator with a coalesced trailing run.
+ *
+ * The three checkpoint paths (debounced autosave, awaitable flush,
+ * and the Cmd/Ctrl+S handler) each snapshot the live editor and
+ * persist the result. Firing two concurrently races two `save()`
+ * round-trips whose `setAutosaveStatus` writes land in
+ * nondeterministic order, so a stale "pending"/"synced" can win.
+ *
+ * The returned `trigger` runs `run` immediately when idle. Triggers
+ * that arrive while a run is in flight coalesce into exactly one
+ * trailing run that fires after the in-flight run settles, no matter
+ * how many arrived. Because `run` re-snapshots the editor when it
+ * executes, the trailing run captures state produced during the
+ * in-flight save (latest wins) and nothing is dropped.
+ *
+ * `trigger` resolves once a run that started at or after the call
+ * has settled, so awaitable callers (flush before navigation) block
+ * on a save that reflects their snapshot. A trigger during an
+ * in-flight run is satisfied by the trailing run, never by the
+ * already-snapshotted in-flight run.
+ *
+ * Rejections are routed to `onError` and never abort the trailing
+ * run, leave a caller's promise unsettled, or surface as an
+ * unhandled rejection; `onError` fires exactly once per failed run.
+ */
+export const createTrailingSingleFlight = ({
+  run,
+  onError,
+}: TrailingSingleFlightOptions): (() => Promise<void>) => {
+  let active = false;
+  let queued = false;
+  // Resolvers waiting for the *next* run to settle. A trigger is
+  // satisfied only by a run that starts at or after it, since an
+  // in-flight run may have snapshotted before the trigger fired.
+  let nextRunSettlers: (() => void)[] = [];
+
+  const drain = async () => {
+    active = true;
+    try {
+      do {
+        queued = false;
+        const settlers = nextRunSettlers;
+        nextRunSettlers = [];
+        try {
+          // Sequential by design: the trailing run must not start
+          // until the in-flight run settles (single-flight).
+          // eslint-disable-next-line no-await-in-loop
+          await run();
+        } catch (error) {
+          try {
+            onError?.(error);
+          } catch {
+            // A reporter failure must not prevent settler resolution or
+            // abort a queued trailing run below: onError is telemetry,
+            // not part of the save contract.
+          }
+        }
+        for (const settle of settlers) {
+          settle();
+        }
+        // The returned trigger below can set `queued = true` while `run()`
+        // above is in flight; the checker only sees the straight-line reset
+        // on the line above and misses that concurrent path.
+        // eslint-disable-next-line typescript/no-unnecessary-condition
+      } while (queued);
+    } finally {
+      active = false;
+    }
+  };
+
+  // Returns the already-created `settled` promise synchronously (either
+  // immediately, or after firing `drain` without awaiting it); wrapping in
+  // `async` would add a redundant microtask and could let a trigger observe
+  // a settled promise before `drain` has synchronously registered it as
+  // active.
+  // eslint-disable-next-line typescript/promise-function-async
+  return () => {
+    const settled = new Promise<void>((resolve) => {
+      // Runs synchronously: the resolver is registered before the
+      // active/idle branch below reads or mutates coordinator state.
+      nextRunSettlers.push(resolve);
+    });
+    if (active) {
+      queued = true;
+      return settled;
+    }
+    void drain();
+    return settled;
+  };
+};
+
 type BuildAnonymizationDetectionKeyOptions = {
   text: string;
   excludedCanonicals: Iterable<string>;

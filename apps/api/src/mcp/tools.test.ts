@@ -302,11 +302,20 @@ const createReadDecisionResult = () => ({
 });
 
 const createSelectBuilder = (rows: unknown[]) => {
+  // `.where()` is terminal for most callers (awaited directly as the row array),
+  // but the gateway connector query chains `.orderBy().limit()` after it. Return
+  // an array that also answers those builder steps with the same rows so every
+  // shape resolves identically; a bare array would make `.orderBy` undefined and
+  // turn the connector load into a spurious McpGatewayLoadError.
+  const terminal = Object.assign([...rows], {
+    orderBy: () => terminal,
+    limit: () => terminal,
+  });
   const builder = {
     from: () => builder,
     innerJoin: () => builder,
     leftJoin: () => builder,
-    where: () => rows,
+    where: () => terminal,
   };
 
   return builder;

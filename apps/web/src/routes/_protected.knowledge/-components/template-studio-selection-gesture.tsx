@@ -402,7 +402,12 @@ export const useTemplateStudioSelectionGesture = ({
     if (sequence !== enrichSeqRef.current) {
       return;
     }
-    const match = response.error ? null : response.data.suggestions.at(0);
+    if (response.error) {
+      getAnalytics().captureError(response.error);
+      setEnrichment({ status: "idle" });
+      return;
+    }
+    const match = response.data.suggestions.at(0);
     if (!match) {
       setEnrichment({ status: "idle" });
       return;

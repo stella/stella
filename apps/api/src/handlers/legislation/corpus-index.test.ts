@@ -64,7 +64,7 @@ describe("legislation loadDocsForBatch read-failure isolation", () => {
     const failure = readFailures.at(0);
     expect(failure?.indexId).toBe(corpusIndexId(generation, "CZ"));
     expect(failure?.job).toMatchObject({
-      documentId: badRow.id,
+      entityId: badRow.id,
       contentHash: "hash_bad",
       operation: "index",
       status: "failed",

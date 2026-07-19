@@ -37,3 +37,34 @@ export const resolveChatScope = async function* ({
     workspaceId: workspace.id,
   } as const;
 };
+
+export type ChatScope =
+  | { scope: "global" }
+  | { scope: "workspace"; workspaceId: SafeId<"workspace"> };
+
+type AssertChatThreadScopeMatchesProps = {
+  persistedWorkspaceId: SafeId<"workspace"> | null;
+  scope: ChatScope;
+};
+
+/**
+ * Reject a request whose chat scope contradicts the persisted thread: a
+ * workspace-scoped thread asked for as global (or vice versa) is a client bug.
+ * Fail loud with a 400 instead of silently 404'ing or creating a duplicate.
+ */
+export const assertChatThreadScopeMatches = ({
+  persistedWorkspaceId,
+  scope,
+}: AssertChatThreadScopeMatchesProps): Result<void, HandlerError<400>> => {
+  const requestedWorkspaceId =
+    scope.scope === "workspace" ? scope.workspaceId : null;
+  if (persistedWorkspaceId !== requestedWorkspaceId) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Chat thread scope does not match request",
+      }),
+    );
+  }
+  return Result.ok();
+};

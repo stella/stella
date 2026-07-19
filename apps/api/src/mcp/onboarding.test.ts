@@ -64,6 +64,7 @@ type MattersRow = {
 type SelectChain = {
   select: () => SelectChain;
   from: () => SelectChain;
+  innerJoin: () => SelectChain;
   where: () => SelectChain;
   orderBy: () => SelectChain;
   limit: () => Promise<MattersRow[]>;
@@ -108,6 +109,9 @@ const createScopedDb = ({
       const builder: SelectChain = {
         select: () => builder,
         from: () => builder,
+        // The gateway connector load joins two tables; model the step so its
+        // read resolves to the (empty by default) seed instead of erroring.
+        innerJoin: () => builder,
         where: () => builder,
         orderBy: () => builder,
         limit: async () => matters,

@@ -1,9 +1,11 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { panic, TaggedError } from "better-result";
 
 import { api } from "@/lib/api";
-import { STALE_TIME } from "@/lib/consts";
+import { DOCX_MIME, STALE_TIME } from "@/lib/consts";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
+import type { QueryOptionsInput } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -78,12 +80,12 @@ export const knowledgeKeys = {
       "clauses",
     ],
     // Resolved plain text of each linked clause slot, for the Fill subtab's
-    // live in-document preview. Lives in the templates subtree so editing a
-    // clause link (which invalidates templates) refreshes the preview text.
+    // live in-document preview. Nested under the `clauses` key so invalidating
+    // the clause links (both edit sites do) prefix-matches and refreshes the
+    // preview text; keeping it a sibling would leave the preview stale.
     clausePreview: (organizationId: string, templateId: string) => [
-      ...knowledgeKeys.templates.all(organizationId),
-      templateId,
-      "clause-preview",
+      ...knowledgeKeys.templates.clauses(organizationId, templateId),
+      "preview",
     ],
     check: (organizationId: string, templateId: string) => [
       ...knowledgeKeys.templates.all(organizationId),
@@ -94,6 +96,14 @@ export const knowledgeKeys = {
       ...knowledgeKeys.templates.all(organizationId),
       templateId,
       "docx-buffer",
+    ],
+    // Server re-discovered fill schema for the saved document. Nested under
+    // `detail` (the document reference it depends on), keyed on the stable
+    // template id only: the presigned URL rotates on every detail refetch and
+    // must not be part of the cache identity.
+    fillDiscover: (organizationId: string, templateId: string) => [
+      ...knowledgeKeys.templates.detail(organizationId, templateId),
+      "fill-discover",
     ],
   },
   templateCategories: {
@@ -277,6 +287,80 @@ export const templateDocxBufferOptions = (
       return response.arrayBuffer();
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Re-parses a *saved* template's stored .docx server-side to recover the
+// fillable field schema (the same merge the fill endpoint applies, so
+// `{{#each}}` array fields and manifest metadata are both present). Shared by
+// the Studio fill tab and any host that renders the fill form standalone, so
+// both dedupe on one cache entry. Keyed on the stable template id (see the
+// `fillDiscover` key comment): the presigned URL and file name are runtime-only
+// context, never cache identity.
+export class TemplateDocumentFetchError extends TaggedError(
+  "TemplateDocumentFetchError",
+)<{
+  message: string;
+  status: number;
+}>() {}
+
+type TemplateFillDiscoverKey = {
+  organizationId: string;
+  templateId: string;
+};
+
+type TemplateFillDiscoverContext = {
+  presignedUrl: string | undefined;
+  fileName: string | undefined;
+};
+
+type TemplateFillDiscoverOptionsInput = QueryOptionsInput<
+  TemplateFillDiscoverKey,
+  TemplateFillDiscoverContext
+>;
+
+export const templateFillDiscoverOptions = ({
+  key,
+  context,
+}: TemplateFillDiscoverOptionsInput) =>
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- presignedUrl/fileName are runtime-only context; keyed on the stable template id so a URL rotation does not evict this cache and force a re-download + re-discover.
+  queryOptions({
+    queryKey: knowledgeKeys.templates.fillDiscover(
+      key.organizationId,
+      key.templateId,
+    ),
+    queryFn: async ({ signal }) => {
+      if (
+        context.presignedUrl === undefined ||
+        context.fileName === undefined
+      ) {
+        panic("template fill: saved template document is unavailable");
+      }
+      const res = await fetchWithTimeout(context.presignedUrl, {
+        signal,
+        timeoutMs: 15_000,
+      });
+      if (!res.ok) {
+        throw new TemplateDocumentFetchError({
+          message: `Template document fetch failed (${res.status})`,
+          status: res.status,
+        });
+      }
+      const blob = await res.blob();
+      const file = new File([blob], context.fileName, { type: DOCX_MIME });
+      const response = await api.templates.discover.post(
+        { file },
+        { fetch: { signal } },
+      );
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      if (response.data instanceof Response) {
+        panic("template fill: discover returned a raw response");
+      }
+      return response.data;
+    },
+    enabled:
+      context.presignedUrl !== undefined && context.fileName !== undefined,
   });
 
 const TEMPLATE_VERSIONS_PAGE_SIZE = 20;

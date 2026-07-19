@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import {
+  assertChatThreadScopeMatches,
+  resolveChatScope,
+} from "@/api/handlers/chat/chat-scope";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -60,17 +63,10 @@ const getOlderMessages = createSafeRootHandler(
       );
     }
 
-    const persistedWorkspaceId = thread.workspaceId ?? null;
-    const requestedWorkspaceId =
-      scope.scope === "workspace" ? scope.workspaceId : null;
-    if (persistedWorkspaceId !== requestedWorkspaceId) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Chat thread scope does not match request",
-        }),
-      );
-    }
+    yield* assertChatThreadScopeMatches({
+      persistedWorkspaceId: thread.workspaceId ?? null,
+      scope,
+    });
 
     const cursor = decodeMessagePageCursor(before);
     if (!cursor) {

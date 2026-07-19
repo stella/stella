@@ -8,6 +8,7 @@ import { templates, templateVersions } from "@/api/db/schema";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { isTemplateManifest } from "@/api/handlers/docx/types";
+import { buildTemplateVersionS3Key } from "@/api/handlers/templates/storage-keys";
 import {
   MAX_TEMPLATE_LANGUAGES,
   normalizeTemplateLanguages,
@@ -23,12 +24,6 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { getS3 } from "@/api/lib/s3";
-
-const buildVersionS3Key = (
-  organizationId: SafeId<"organization">,
-  templateId: SafeId<"template">,
-  version: number,
-) => `${organizationId}/templates/${templateId}/v${version}.docx`;
 
 const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
@@ -240,7 +235,7 @@ const updateTemplateHandler = async function* ({
 
         // Each version gets its own immutable S3 key so
         // historical snapshots remain downloadable.
-        const versionS3Key = buildVersionS3Key(
+        const versionS3Key = buildTemplateVersionS3Key(
           organizationId,
           templateId,
           newVersion,

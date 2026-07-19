@@ -24,6 +24,7 @@ import {
   writeManifest,
 } from "@/api/handlers/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
+import { buildTemplateS3Key } from "@/api/handlers/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/handlers/templates/template-languages";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
@@ -73,11 +74,6 @@ export type CreateStoredTemplateOptions = {
   kind?: TemplateKind | undefined;
   recordAuditEvent: AuditRecorder;
 };
-
-const buildS3Key = (
-  organizationId: SafeId<"organization">,
-  templateId: SafeId<"template">,
-) => `${organizationId}/templates/${templateId}.docx`;
 
 export const createStoredTemplate = async function* ({
   safeDb,
@@ -192,7 +188,7 @@ export const createStoredTemplate = async function* ({
 
   // Pre-generate the ID so the S3 key and DB row stay in sync.
   const templateId = createSafeId<"template">();
-  const s3Key = buildS3Key(organizationId, templateId);
+  const s3Key = buildTemplateS3Key(organizationId, templateId);
 
   await getS3().write(s3Key, new Uint8Array(docxWithManifest));
 

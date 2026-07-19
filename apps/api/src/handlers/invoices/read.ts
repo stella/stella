@@ -1,19 +1,13 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, or, sql } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { invoices } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-  isUuidPaginationCursorPart,
-  parseDateTimePaginationCursorPart,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
 const readInvoicesQuerySchema = t.Object({
@@ -23,26 +17,10 @@ const readInvoicesQuerySchema = t.Object({
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
 
-type InvoiceCursor = {
-  createdAt: Date;
-  id: SafeId<"invoice">;
-};
-
-const invoiceCreatedAtCursor = sql<Date>`date_trunc('milliseconds', ${invoices.createdAt})`;
-
-const decodeInvoiceCursor = (cursor: string): InvoiceCursor | null => {
-  const parts = decodePaginationCursor(cursor);
-  const createdAt = parts?.at(0);
-  const id = parts?.at(1);
-
-  const createdAtDate = parseDateTimePaginationCursorPart(createdAt);
-
-  if (!createdAtDate || !isUuidPaginationCursorPart(id)) {
-    return null;
-  }
-
-  return { createdAt: createdAtDate, id: brandPersistedInvoiceId(id) };
-};
+const invoiceCursor = createTimestampIdCursorCodec({
+  column: invoices.createdAt,
+  brandId: brandPersistedInvoiceId,
+});
 
 const readInvoices = createSafeHandler(
   {
@@ -55,7 +33,7 @@ const readInvoices = createSafeHandler(
     const conditions = [eq(invoices.workspaceId, workspaceId)];
 
     if (query.cursor) {
-      const cursor = decodeInvoiceCursor(query.cursor);
+      const cursor = invoiceCursor.decode(query.cursor);
 
       if (!cursor) {
         return Result.err(
@@ -63,13 +41,11 @@ const readInvoices = createSafeHandler(
         );
       }
 
-      const cursorCondition = or(
-        gt(invoiceCreatedAtCursor, cursor.createdAt),
-        and(
-          eq(invoiceCreatedAtCursor, cursor.createdAt),
-          gt(invoices.id, cursor.id),
-        ),
-      );
+      const cursorCondition = invoiceCursor.keysetAfter({
+        cursor,
+        idColumn: invoices.id,
+        direction: "ascending",
+      });
 
       if (cursorCondition) {
         conditions.push(cursorCondition);
@@ -89,12 +65,12 @@ const readInvoices = createSafeHandler(
             currency: invoices.currency,
             totalAmount: invoices.totalAmount,
             createdAt: invoices.createdAt,
-            createdAtCursor: invoiceCreatedAtCursor.as("created_at_cursor"),
+            createdAtCursor: invoiceCursor.cursorValue.as("created_at_cursor"),
             updatedAt: invoices.updatedAt,
           })
           .from(invoices)
           .where(and(...conditions))
-          .orderBy(asc(invoiceCreatedAtCursor), asc(invoices.id))
+          .orderBy(asc(invoices.createdAt), asc(invoices.id))
           .limit(limit + 1),
       ),
     );
@@ -103,7 +79,7 @@ const readInvoices = createSafeHandler(
       rows,
       limit,
       cursorForItem: (item) =>
-        encodePaginationCursor([item.createdAtCursor.toISOString(), item.id]),
+        invoiceCursor.encode(item.createdAtCursor, item.id),
     });
 
     return Result.ok({

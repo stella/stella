@@ -24,7 +24,8 @@
       "required": ["query"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -51,7 +52,8 @@
       "required": ["id"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -89,7 +91,8 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -123,7 +126,8 @@
       "required": ["query"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -192,7 +196,8 @@
       "required": ["query"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -219,7 +224,8 @@
       "required": ["entity_id"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -246,7 +252,8 @@
       "required": ["decision_id"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -267,7 +274,8 @@
       "required": ["contact_id"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -554,6 +562,10 @@
         }
       },
       "required": ["jurisdictions"]
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -581,7 +593,8 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -605,6 +618,10 @@
         }
       },
       "required": ["template_id", "values"]
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": true
     }
   },
   {
@@ -747,6 +764,10 @@
           }
         }
       }
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -788,7 +809,8 @@
       "required": ["matter_id"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -826,7 +848,8 @@
       "required": ["entity_id"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -880,6 +903,10 @@
           "maxLength": 1024
         }
       }
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -908,7 +935,9 @@
       "required": ["entity_id"]
     },
     "annotations": {
-      "destructiveHint": true
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -941,7 +970,8 @@
       "required": ["matter_id"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -984,6 +1014,10 @@
         }
       },
       "required": ["entity_id", "property_id", "content"]
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -1025,6 +1059,10 @@
           "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
         }
       }
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -1049,7 +1087,9 @@
       "required": ["matter_id"]
     },
     "annotations": {
-      "destructiveHint": true
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1096,6 +1136,10 @@
           "description": "Free-text notes; pass null to clear"
         }
       }
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -1120,7 +1164,9 @@
       "required": ["contact_id"]
     },
     "annotations": {
-      "destructiveHint": true
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1159,7 +1205,8 @@
       "required": ["registry", "query"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": true
     }
   },
   {
@@ -1211,7 +1258,8 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1269,6 +1317,10 @@
           "description": "Entity-link ID to remove"
         }
       }
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -1310,6 +1362,10 @@
         }
       },
       "required": ["matter_id"]
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -1358,7 +1414,8 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1475,6 +1532,10 @@
           "description": "When updating, also append a version snapshot of the body"
         }
       }
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -1499,7 +1560,9 @@
       "required": ["clause_id"]
     },
     "annotations": {
-      "destructiveHint": true
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1532,7 +1595,8 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1555,6 +1619,10 @@
         }
       },
       "required": ["matter_id", "playbook_id"]
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -1614,7 +1682,8 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1698,6 +1767,10 @@
           "description": "Set the entry's status. Only valid when updating."
         }
       }
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -1722,7 +1795,9 @@
       "required": ["time_entry_id"]
     },
     "annotations": {
-      "destructiveHint": true
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1752,7 +1827,8 @@
       "required": ["matter_id", "user_id", "date"]
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1789,7 +1865,8 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1804,7 +1881,8 @@
       "properties": {}
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -1885,7 +1963,8 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": true
     }
   },
   {
@@ -1943,7 +2022,8 @@
       }
     },
     "annotations": {
-      "readOnlyHint": true
+      "readOnlyHint": true,
+      "openWorldHint": false
     }
   },
   {
@@ -2014,6 +2094,10 @@
         }
       },
       "required": ["action"]
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false
     }
   },
   {
@@ -2048,6 +2132,10 @@
         }
       },
       "required": ["kind", "title", "body"]
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": true
     }
   },
   {
@@ -2082,6 +2170,9 @@
         }
       },
       "additionalProperties": false
+    },
+    "annotations": {
+      "openWorldHint": false
     }
   },
   {
@@ -2101,6 +2192,9 @@
       },
       "required": ["capability"],
       "additionalProperties": false
+    },
+    "annotations": {
+      "openWorldHint": false
     }
   },
   {
@@ -2151,6 +2245,10 @@
       },
       "required": ["capability"],
       "additionalProperties": false
+    },
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": true
     }
   }
 ]

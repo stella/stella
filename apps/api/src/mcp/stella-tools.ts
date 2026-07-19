@@ -435,7 +435,7 @@ const buildContactTextFieldSpecs = (
 
 export const STELLA_TOOL_DEFINITIONS = [
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "List the matters you can access, or get one matter's overview. Omit " +
       "matter_id to list accessible matters (filter with status, page with " +
@@ -474,7 +474,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "Search across all accessible matters. Use this when the user explicitly " +
       "asks to search outside a single matter or you do not yet know the right matter.",
@@ -504,7 +504,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:search",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "Search the shared case-law corpus. Supports free-text search plus " +
       "optional filters such as court, country, language, date range, and " +
@@ -550,7 +550,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:search",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "Read extracted text from a document found anywhere in your accessible " +
       "matters. Use after search_across_matters. Long documents are returned " +
@@ -577,7 +577,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "Read a single case-law decision by its decision ID. Returns metadata, " +
       "plain text, citation links, and source URLs. Long decision text and " +
@@ -603,7 +603,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "Read a contact by ID. Use this after matter overview or entity metadata " +
       "surfaces a contact the user wants to inspect more closely.",
@@ -661,6 +661,11 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["jurisdictions"],
     },
+    // Not idempotent: the handler records a fresh audit event and bumps
+    // updatedAt on every call even when the jurisdictions are unchanged, so a
+    // repeat with identical args has an observable additional effect (a
+    // duplicate audit entry) in this compliance context.
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_practice_jurisdictions",

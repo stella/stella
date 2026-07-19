@@ -66,6 +66,8 @@ import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import { composeRefs } from "@/lib/utils";
@@ -93,6 +95,7 @@ import {
   aggregateAnonymizationMatches,
   buildAnonymizationDetectionKey,
   buildExcludedCanonicalsSet,
+  createTrailingSingleFlight,
   decideAnonymizationDetectionRun,
   dedupeDetectedAnonymizationTerms,
   mergeAnonymizationTerms,
@@ -364,8 +367,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           markRan();
           return;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           inFlightUntil = 0;
+          // Surface worker failures to telemetry: a silent reset
+          // hides systemic detection-worker breakage behind a facet
+          // that merely stops showing "Detecting…".
+          getAnalytics().captureError(error);
           // Mark on failure too — without this, a worker
           // error would leave the facet stuck on
           // "Detecting…" forever.
@@ -967,37 +974,21 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
   }, []);
 
-  const saveChangeCheckpoint = useCallback(() => {
+  // The debounced autosave, the awaitable flush, and the Cmd/Ctrl+S
+  // handler all serialize the live editor and persist the buffer.
+  // Firing two concurrently raced two `ref.save()` round-trips whose
+  // `setAutosaveStatus` writes landed in nondeterministic order (and
+  // `flushPendingChanges` cancelled only the queued timer, not an
+  // in-flight save). Route every path through one single-flight
+  // coordinator: concurrent triggers coalesce into one in-flight
+  // save plus one trailing save. `ref.save()` re-snapshots the live
+  // document when it runs, so the trailing save captures edits made
+  // during the in-flight save (latest wins).
+  const runCheckpointSave = useLatestCallback(async () => {
     const ref = editorRef.current;
     if (!ref) {
       return;
     }
-
-    setAutosaveStatus("syncing");
-    void (async () => {
-      const buffer = await ref.save({ selective: true });
-      const checkpointSaved = buffer
-        ? await saveActiveCheckpoint(buffer)
-        : false;
-      setAutosaveStatus(
-        resolveCheckpointAutosaveStatus({
-          buffer: buffer ?? null,
-          checkpointSaved,
-        }),
-      );
-    })();
-  }, [saveActiveCheckpoint, setAutosaveStatus]);
-
-  // Awaitable variant of `saveChangeCheckpoint` for callers that
-  // need to wait for the round-trip before navigating (e.g. the
-  // sidepeek → full view handoff). Cancels the queued debounced
-  // checkpoint so we don't fire it twice.
-  const flushPendingChanges = useCallback(async () => {
-    const ref = editorRef.current;
-    if (!ref) {
-      return;
-    }
-    clearQueuedChangeCheckpoint();
     setAutosaveStatus("syncing");
     const buffer = await ref.save({ selective: true });
     const checkpointSaved = buffer ? await saveActiveCheckpoint(buffer) : false;
@@ -1007,7 +998,41 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         checkpointSaved,
       }),
     );
-  }, [clearQueuedChangeCheckpoint, saveActiveCheckpoint, setAutosaveStatus]);
+  });
+
+  const reportCheckpointSaveError = useLatestCallback((error: unknown) => {
+    getAnalytics().captureError(error);
+    setAutosaveStatus("pending");
+  });
+
+  // Lazy-init once (React's sanctioned ref pattern): the coordinator
+  // owns the in-flight/trailing state, which must survive rerenders.
+  // Its `run`/`onError` are stable and read the latest committed
+  // closures, so recreating it would only lose that state.
+  const triggerCheckpointSaveRef = useRef<(() => Promise<void>) | null>(null);
+  triggerCheckpointSaveRef.current ??= createTrailingSingleFlight({
+    run: runCheckpointSave,
+    onError: reportCheckpointSaveError,
+  });
+  const triggerCheckpointSave = useCallback(
+    async () =>
+      await (triggerCheckpointSaveRef.current?.() ?? Promise.resolve()),
+    [],
+  );
+
+  const saveChangeCheckpoint = useCallback(() => {
+    void triggerCheckpointSave();
+  }, [triggerCheckpointSave]);
+
+  // Awaitable variant of `saveChangeCheckpoint` for callers that
+  // need to wait for the round-trip before navigating (e.g. the
+  // sidepeek → full view handoff). Cancels the queued debounced
+  // checkpoint so we don't fire it twice; the coordinator coalesces
+  // an already in-flight save into the trailing run this awaits.
+  const flushPendingChanges = useCallback(async () => {
+    clearQueuedChangeCheckpoint();
+    await triggerCheckpointSave();
+  }, [clearQueuedChangeCheckpoint, triggerCheckpointSave]);
 
   // Cmd+S / Ctrl+S checkpoints only while the document is actively editable.
   useExternalSyncEffect(() => {
@@ -1022,28 +1047,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
       e.preventDefault();
       clearQueuedChangeCheckpoint();
-      const ref = editorRef.current;
-      if (!ref) {
-        return;
-      }
-
-      setAutosaveStatus("syncing");
-      void (async () => {
-        const buffer = await ref.save({ selective: true });
-        const checkpointSaved = buffer
-          ? await saveActiveCheckpoint(buffer)
-          : false;
-        setAutosaveStatus(
-          resolveCheckpointAutosaveStatus({
-            buffer: buffer ?? null,
-            checkpointSaved,
-          }),
-        );
-      })();
+      void triggerCheckpointSave();
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [clearQueuedChangeCheckpoint, isUnlocked, saveActiveCheckpoint]);
+  }, [clearQueuedChangeCheckpoint, isUnlocked, triggerCheckpointSave]);
 
   useMountEffect(() => () => {
     clearQueuedChangeCheckpoint();
