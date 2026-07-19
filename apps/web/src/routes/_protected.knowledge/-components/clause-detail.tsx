@@ -370,7 +370,7 @@ const ClauseHeader = ({
   // Snapshot the current head body as a new version. The head is already
   // autosaved, so this only appends to history (no data is at risk).
   const saveVersion = useCallback(async () => {
-    if (reviewStatus === "pending") {
+    if (reviewStatus !== "resolved") {
       return false;
     }
     setSavingVersion(true);
@@ -406,7 +406,7 @@ const ClauseHeader = ({
   // Un-versioned head edits don't block leaving (they're already saved); we
   // just offer to capture them as a version first.
   const handleBack = useCallback(() => {
-    if (reviewStatus === "pending") {
+    if (reviewStatus !== "resolved") {
       return;
     }
     if (dirtySinceVersion) {
@@ -417,7 +417,7 @@ const ClauseHeader = ({
   }, [dirtySinceVersion, reviewStatus, onBack]);
 
   const leaveWithoutVersion = useCallback(() => {
-    if (reviewStatus === "pending") {
+    if (reviewStatus !== "resolved") {
       return;
     }
     onBack();
@@ -563,7 +563,7 @@ const ClauseHeader = ({
       {canEdit && (
         <Button
           disabled={
-            !dirtySinceVersion || savingVersion || reviewStatus === "pending"
+            !dirtySinceVersion || savingVersion || reviewStatus !== "resolved"
           }
           onClick={() => {
             void saveVersion();
@@ -699,6 +699,13 @@ const ClauseBodyEditor = ({
           // triggers the "save a version?" prompt.
           onBodyDirty();
           debouncedSave(body);
+        }}
+        onReviewResolved={async (body) => {
+          // An accepted/rejected AI review is a decisive action, like blur:
+          // flush immediately instead of waiting on the keystroke debounce,
+          // so the "persisting" gate above lifts as soon as possible.
+          debouncedSave.cancel();
+          await saveBody(body);
         }}
         onReviewStatusChange={onReviewStatusChange}
         title={detail.title}

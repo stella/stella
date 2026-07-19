@@ -15,6 +15,8 @@ import {
   buildTrackedChangeDoc,
   hasAlignedClauseStructure,
   nonHistoricalDispatch,
+  reviewResolutionStatus,
+  settleReviewPersist,
 } from "./clause-ai-tracked-changes";
 import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
@@ -482,5 +484,65 @@ describe("undo history around AI review resolution", () => {
     expect(
       trackedRuns(undone.doc.toJSON()).every((run) => run.mark === null),
     ).toBe(true);
+  });
+});
+
+describe("review resolution → persist gating", () => {
+  // Regression for the race where `reviewStatus` flipped to "resolved" the
+  // instant the final hunk resolved, while the accepted body's persist was
+  // still in flight — a version save could fire in that window and snapshot
+  // the stale pre-AI body. `reviewResolutionStatus` + `settleReviewPersist`
+  // together keep the caller's reported status at "persisting" (which
+  // version-save actions must treat identically to "pending") until the
+  // persist settles.
+
+  test("a changed resolution reports 'persisting', not 'resolved' — the caller must still gate on it", () => {
+    expect(reviewResolutionStatus(true)).toBe("persisting");
+  });
+
+  test("an unchanged resolution (e.g. reject-all back to baseline) needs no persist", () => {
+    expect(reviewResolutionStatus(false)).toBe("resolved");
+  });
+
+  test("accept-final-hunk: version save stays blocked until the persist resolves, then unblocks", async () => {
+    let resolvePersist: () => void = () => {
+      throw new Error("resolvePersist called before assignment");
+    };
+    const persist = async () =>
+      new Promise<void>((resolve) => {
+        resolvePersist = resolve;
+      });
+
+    // Mirrors the caller: report "persisting" synchronously on resolution...
+    let reported: "resolved" | "persisting" = reviewResolutionStatus(true);
+    expect(reported).toBe("persisting");
+
+    const settled = settleReviewPersist(persist).then(() => {
+      reported = "resolved";
+      return undefined;
+    });
+
+    // ...and version-save actions (gated on reported !== "resolved") stay
+    // blocked while the persist is still in flight.
+    expect(reported).toBe("persisting");
+
+    resolvePersist();
+    await settled;
+
+    expect(reported).toBe("resolved");
+  });
+
+  test("a persist failure still unblocks — settleReviewPersist never rejects", async () => {
+    const persist = async () => {
+      throw new Error("save failed");
+    };
+
+    let reported: "resolved" | "persisting" = reviewResolutionStatus(true);
+    await settleReviewPersist(persist).then(() => {
+      reported = "resolved";
+      return undefined;
+    });
+
+    expect(reported).toBe("resolved");
   });
 });

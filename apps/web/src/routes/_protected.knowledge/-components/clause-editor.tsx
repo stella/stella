@@ -55,6 +55,8 @@ import {
   buildTrackedChangeDoc,
   hasAlignedClauseStructure,
   nonHistoricalDispatch,
+  reviewResolutionStatus,
+  settleReviewPersist,
 } from "./clause-ai-tracked-changes";
 import { ClauseDirectiveNode } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
@@ -106,7 +108,10 @@ type AiEditState =
   | { status: "generating"; instruction: string; baseline: ClauseBody }
   | { status: "reviewing"; instruction: string; baseline: ClauseBody };
 
-export type ClauseEditorReviewStatus = "resolved" | "pending";
+// "persisting" sits between an AI review resolving and the accepted body
+// actually reaching the server: version-save actions must keep treating it
+// as unsafe, exactly like "pending", until it settles back to "resolved".
+export type ClauseEditorReviewStatus = "resolved" | "pending" | "persisting";
 
 type ClauseEditorProps = {
   content: ClauseParagraph[];
@@ -118,6 +123,14 @@ type ClauseEditorProps = {
   usageNotes?: string | undefined;
   title?: string;
   onReviewStatusChange?: (status: ClauseEditorReviewStatus) => void;
+  /**
+   * Fired once an AI review resolves (accept/reject) with a changed body,
+   * so the caller can persist it immediately instead of waiting on the
+   * normal keystroke debounce. The returned promise gates the
+   * "persisting" -> "resolved" transition; it must resolve even when the
+   * persist fails (surface the error yourself, don't reject).
+   */
+  onReviewResolved?: (body: ClauseParagraph[]) => Promise<void>;
 };
 
 export const ClauseEditor = ({
@@ -128,6 +141,7 @@ export const ClauseEditor = ({
   usageNotes,
   title,
   onReviewStatusChange,
+  onReviewResolved,
 }: ClauseEditorProps) => {
   const t = useTranslations();
   const [aiEdit, setAiEdit] = useState<AiEditState>({ status: "idle" });
@@ -145,6 +159,11 @@ export const ClauseEditor = ({
   );
   const emitReviewStatus = useLatestCallback(
     (status: ClauseEditorReviewStatus) => onReviewStatusChange?.(status),
+  );
+  const emitReviewResolved = useLatestCallback(
+    async (body: ClauseParagraph[]) => {
+      await onReviewResolved?.(body);
+    },
   );
 
   const updateInstruction = (value: string) => {
@@ -232,9 +251,16 @@ export const ClauseEditor = ({
         e.setEditable(true);
         setHunkMenu(null);
         setAiEdit({ status: "idle" });
-        emitReviewStatus("resolved");
+        emitReviewStatus(reviewResolutionStatus(changed));
         if (changed) {
           emitChange(resolvedBody);
+          // The accepted body still has to reach the server: keep
+          // version-save actions gated on "persisting" until it does, and
+          // unblock regardless of whether the persist succeeded (its own
+          // save flow surfaces the error).
+          void settleReviewPersist(async () => {
+            await emitReviewResolved(resolvedBody);
+          }).then(() => emitReviewStatus("resolved"));
         }
         return;
       }

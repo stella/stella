@@ -134,6 +134,36 @@ export const nonHistoricalDispatch = (
 ): ((tr: Transaction) => void) | undefined =>
   dispatch && ((tr) => dispatch(tr.setMeta("addToHistory", false)));
 
+/**
+ * Status to report the instant the last tracked-change hunk resolves. A
+ * resolution that leaves the body unchanged (e.g. rejecting everything back
+ * to the pre-AI text) needs no persist and is immediately safe. A changed
+ * resolution isn't safe to snapshot into a version yet: the accepted body
+ * still has to reach the server, so callers must gate on
+ * {@link settleReviewPersist} before reporting "resolved".
+ */
+export const reviewResolutionStatus = (
+  changed: boolean,
+): "resolved" | "persisting" => (changed ? "persisting" : "resolved");
+
+/**
+ * Awaits the persist of an accepted AI body so the "persisting" gate above
+ * always lifts back to "resolved" — including when the persist rejects.
+ * The persist call owns its own user-facing error handling (the established
+ * save-failed toast); this helper's only job is to guarantee a caller
+ * blocked on the gate is never stuck.
+ */
+export const settleReviewPersist = async (
+  persist: () => Promise<void>,
+): Promise<void> => {
+  try {
+    await persist();
+  } catch {
+    // Persist failures surface their own toast (see the caller's save
+    // flow); swallow here so the "persisting" gate always lifts.
+  }
+};
+
 export const hasAlignedClauseStructure = (
   baseline: readonly ClauseParagraph[],
   revised: readonly ClauseParagraph[],

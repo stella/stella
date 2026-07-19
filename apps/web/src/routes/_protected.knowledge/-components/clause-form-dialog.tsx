@@ -121,7 +121,7 @@ const ClauseFormDialogBody = ({
     useState<ClauseEditorReviewStatus>("resolved");
 
   const handleSave = async () => {
-    if (!form.title.trim() || reviewStatus === "pending") {
+    if (!form.title.trim() || reviewStatus !== "resolved") {
       return;
     }
 
@@ -329,7 +329,7 @@ const ClauseFormDialogBody = ({
           {t("common.cancel")}
         </DialogClose>
         <Button
-          disabled={saving || !form.title.trim() || reviewStatus === "pending"}
+          disabled={saving || !form.title.trim() || reviewStatus !== "resolved"}
           onClick={() => {
             void handleSave();
           }}
