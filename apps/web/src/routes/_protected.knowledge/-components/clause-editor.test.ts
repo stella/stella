@@ -14,7 +14,9 @@ import {
 import {
   buildTrackedChangeDoc,
   hasAlignedClauseStructure,
+  isRewriteStale,
   nonHistoricalDispatch,
+  resolveRewriteBaseline,
   reviewResolutionStatus,
   settleReviewPersist,
   shouldKeepBodyPanelMounted,
@@ -405,6 +407,87 @@ describe("buildTrackedChangeDoc", () => {
     expect(
       runs.some((run) => run.mark !== null && run.text.includes("Lead in")),
     ).toBe(false);
+  });
+});
+
+describe("rewrite baseline sourced from live editor content", () => {
+  // Regression: the AI-rewrite baseline used to come from the `content`
+  // prop (server/query state), which lags behind an unsaved edit sitting in
+  // the editor during the debounced-autosave window. Building the rewrite
+  // (and the tracked-change diff) against that stale prop, then applying
+  // the accept, silently discarded the user's unsaved edit.
+
+  test("a fresh prompt sources the baseline from the live body, not a separately-tracked value", () => {
+    const liveBody: ClauseParagraph[] = [{ text: "Live unsaved edit." }];
+    expect(resolveRewriteBaseline({ status: "prompting" }, liveBody)).toBe(
+      liveBody,
+    );
+  });
+
+  test("a regenerate reuses the open review's own baseline, not the live (tracked-change) doc", () => {
+    const reviewBaseline: ClauseParagraph[] = [{ text: "Pre-review text." }];
+    const liveTrackedDoc: ClauseParagraph[] = [
+      { text: "Pre-review text. AI insert." },
+    ];
+    expect(
+      resolveRewriteBaseline(
+        { status: "reviewing", baseline: reviewBaseline },
+        liveTrackedDoc,
+      ),
+    ).toBe(reviewBaseline);
+  });
+
+  test("isRewriteStale is false while the live doc still matches the captured baseline", () => {
+    const baseline: ClauseParagraph[] = [{ text: "Baseline text." }];
+    const stillMatching: ClauseParagraph[] = [{ text: "Baseline text." }];
+    expect(isRewriteStale(stillMatching, baseline)).toBe(false);
+  });
+
+  test("isRewriteStale fires when the live doc changes during generation — the content-changed abort path", () => {
+    const baseline: ClauseParagraph[] = [{ text: "Baseline text." }];
+    const changedDuringGeneration: ClauseParagraph[] = [
+      { text: "Changed mid-generation." },
+    ];
+    expect(isRewriteStale(changedDuringGeneration, baseline)).toBe(true);
+  });
+
+  test("a rewrite built from the live (unsaved) body diffs against that body, not a stale server body", () => {
+    // The editor holds an unsaved edit that hasn't reached the server yet —
+    // `detail.body` (the stale server prop) still has the original text.
+    const staleServerBody: ClauseParagraph[] = [
+      { text: "Buyer must pay within 30 days." },
+    ];
+    const liveUnsavedBody: ClauseParagraph[] = [
+      { text: "Seller must pay on delivery." },
+    ];
+    const aiRewritten: ClauseParagraph[] = [
+      { text: "Seller must pay within 10 days of delivery." },
+    ];
+
+    const baseline = resolveRewriteBaseline(
+      { status: "prompting" },
+      liveUnsavedBody,
+    );
+    expect(baseline).toEqual(liveUnsavedBody);
+    expect(baseline).not.toEqual(staleServerBody);
+
+    const { doc, revisionIds } = buildTrackedChangeDoc(baseline, aiRewritten);
+    expect(revisionIds).toHaveLength(1);
+
+    // Rejecting the AI's hunk must restore the user's unsaved edit exactly —
+    // not the stale server body. Had the baseline wrongly been
+    // `staleServerBody`, accepting the suggestion would have replaced the
+    // editor's live content with a doc diffed against text the user had
+    // already changed away from: the unsaved edit would be gone the moment
+    // the suggestion applied, with no tracked-change hunk left to reject it
+    // back.
+    const rejectedState = applyTrackedCommand(
+      doc,
+      rejectAIEditRevision(revisionIds),
+    );
+    expect(tipTapToClauseBody(rejectedState.doc.toJSON())).toEqual(
+      liveUnsavedBody,
+    );
   });
 });
 

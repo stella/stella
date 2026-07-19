@@ -52,10 +52,13 @@ import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 
 import {
+  bodyKey,
   buildTrackedChangeDoc,
   type ClauseEditorReviewStatus,
   hasAlignedClauseStructure,
+  isRewriteStale,
   nonHistoricalDispatch,
+  resolveRewriteBaseline,
   reviewResolutionStatus,
   settleReviewPersist,
 } from "./clause-ai-tracked-changes";
@@ -85,21 +88,6 @@ const hasPendingTrackedChanges = (editor: Editor): boolean => {
       doc.rangeHasMark(0, doc.content.size, deletionMark))
   );
 };
-
-/** Stable identity of a body for detecting external resets vs. the editor's
- *  own round-tripped edits (text + formatting + directive kind/expression). */
-const bodyKey = (body: readonly ClauseParagraph[]): string =>
-  body
-    .map((p) =>
-      p.isDirective
-        ? `D:${p.directiveKind ?? ""}:${p.directiveExpression ?? ""}`
-        : `P:${p.style ?? ""}:${p.level ?? ""}:${p.listKind ?? ""}:${p.listLevel ?? ""}:${(
-            p.runs ?? [{ text: p.text }]
-          )
-            .map((r) => `${r.bold ? "b" : ""}${r.italic ? "i" : ""}|${r.text}`)
-            .join("\u0001")}`,
-    )
-    .join("\u0000");
 
 // ── Editor Component ────────────────────────────────
 
@@ -153,7 +141,6 @@ export const ClauseEditor = ({
   } | null>(null);
 
   const getAiState = useLatestCallback(() => aiEdit);
-  const getContent = useLatestCallback(() => content);
   const emitChange = useLatestCallback(onChange);
   const emitBlur = useLatestCallback((body: ClauseParagraph[]) =>
     onBlur?.(body),
@@ -325,6 +312,14 @@ export const ClauseEditor = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editor is a stable ref; only re-sync when contentKey changes
   }, [contentKey]);
 
+  // The editor's actual on-screen content, not the `content` prop: the
+  // debounced autosave means the prop can lag behind live keystrokes (an
+  // unsaved edit sits in the editor until the debounce/blur flushes it),
+  // so an AI rewrite must be built against what's live, not the stale prop.
+  // Falls back to the prop only if the editor instance is gone.
+  const getLiveBody = (): ClauseBody =>
+    isUsableEditor(editor) ? tipTapToClauseBody(editor.getJSON()) : content;
+
   const runRewrite = async (instruction: string, baseline: ClauseBody) => {
     const trimmed = instruction.trim();
     if (trimmed === "") {
@@ -357,7 +352,10 @@ export const ClauseEditor = ({
       // current attempt also owns editor editability; don't touch it.
       return;
     }
-    if (bodyKey(getContent()) !== bodyKey(baseline)) {
+    if (isRewriteStale(getLiveBody(), baseline)) {
+      // The live doc moved since `baseline` was captured (e.g. an external
+      // content reset synced in mid-generation) — the hunks built below are
+      // index-aligned to `baseline` and would misapply against it.
       setAiEdit({ status: "idle" });
       if (isUsableEditor(editor)) {
         editor.setEditable(true);
@@ -428,7 +426,7 @@ export const ClauseEditor = ({
     if (aiEdit.status === "idle" || aiEdit.status === "generating") {
       return;
     }
-    const baseline = aiEdit.status === "prompting" ? content : aiEdit.baseline;
+    const baseline = resolveRewriteBaseline(aiEdit, getLiveBody());
     if (aiEdit.status === "reviewing" && isUsableEditor(editor)) {
       editor
         .chain()

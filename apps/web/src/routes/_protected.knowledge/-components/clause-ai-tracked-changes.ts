@@ -201,6 +201,55 @@ export const settleReviewPersist = async (
   }
 };
 
+/** Stable identity of a body for detecting external resets vs. the editor's
+ *  own round-tripped edits (text + formatting + directive kind/expression). */
+export const bodyKey = (body: readonly ClauseParagraph[]): string =>
+  body
+    .map((p) =>
+      p.isDirective
+        ? `D:${p.directiveKind ?? ""}:${p.directiveExpression ?? ""}`
+        : `P:${p.style ?? ""}:${p.level ?? ""}:${p.listKind ?? ""}:${p.listLevel ?? ""}:${(
+            p.runs ?? [{ text: p.text }]
+          )
+            .map((r) => `${r.bold ? "b" : ""}${r.italic ? "i" : ""}|${r.text}`)
+            .join("\u0001")}`,
+    )
+    .join("\u0000");
+
+/**
+ * Which body a rewrite request is built from. The "prompting" branch (a
+ * fresh AI-edit request, not a regenerate from an open review) must source
+ * `liveBody` — the editor's actual on-screen content — rather than any
+ * server/query-derived prop: a debounced autosave means that prop can lag
+ * behind live keystrokes, and building the rewrite (and later the
+ * tracked-change diff) against a stale baseline misaligns hunks and, on
+ * accept, silently discards the unsaved edit. This signature takes only
+ * `liveBody`, not the stale prop, so that bug can't be reintroduced by
+ * wiring the wrong value back in at the call site. The "reviewing" branch
+ * (regenerate) reuses the baseline the open review was already built from —
+ * the live doc during review holds the AI's tracked-change markup, not
+ * plain text, so it can't serve as a rewrite baseline itself.
+ */
+export const resolveRewriteBaseline = (
+  aiEdit:
+    | { status: "prompting" }
+    | { status: "reviewing"; baseline: readonly ClauseParagraph[] },
+  liveBody: readonly ClauseParagraph[],
+): readonly ClauseParagraph[] =>
+  aiEdit.status === "prompting" ? liveBody : aiEdit.baseline;
+
+/**
+ * Whether the editor's live content has drifted from the `baseline` a
+ * rewrite request was built from. Used to abort applying a generated
+ * suggestion whose tracked-change hunks are index-aligned to `baseline`: if
+ * the live doc moved since (e.g. an external content reset synced in
+ * mid-generation), applying the diff would corrupt that alignment.
+ */
+export const isRewriteStale = (
+  liveBody: readonly ClauseParagraph[],
+  baseline: readonly ClauseParagraph[],
+): boolean => bodyKey(liveBody) !== bodyKey(baseline);
+
 export const hasAlignedClauseStructure = (
   baseline: readonly ClauseParagraph[],
   revised: readonly ClauseParagraph[],
