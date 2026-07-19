@@ -1,6 +1,7 @@
 {
   "extends": "@stll/typescript-config/react-library.json",
   "compilerOptions": {
+    "types": ["bun"],
     "paths": {
       "@stll/ui/*": ["./src/*"]
     }

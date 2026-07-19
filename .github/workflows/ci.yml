@@ -128,7 +128,18 @@ jobs:
       needs.trust-check.outputs.trusted == 'true'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 25m, matching lint/typecheck-baseline: this job's own "Test" step
+    # duration scales with however many packages `turbo --affected` marks
+    # (any PR touching multiple large packages' test suites at once runs
+    # them with --concurrency=2 on a standard runner, not in isolation).
+    # Bumped from 20m after a PR whose diff was affected-flagged across
+    # apps/api, apps/web, packages/transactional and packages/ui
+    # simultaneously hit the old 20m ceiling with the Test step still in
+    # progress; a same-day comparable run (apps/api affected alone) needed
+    # only ~8m for the whole job, and re-running each affected package's
+    # suite locally finished in well under 5m with zero failures — so this
+    # is legitimate multi-package work outgrowing the budget, not a hang.
+    timeout-minutes: 25
     permissions:
       contents: read
 
