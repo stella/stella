@@ -53,6 +53,7 @@ import { userErrorMessage } from "@/lib/errors/user-safe";
 
 import {
   buildTrackedChangeDoc,
+  type ClauseEditorReviewStatus,
   hasAlignedClauseStructure,
   nonHistoricalDispatch,
   reviewResolutionStatus,
@@ -108,10 +109,7 @@ type AiEditState =
   | { status: "generating"; instruction: string; baseline: ClauseBody }
   | { status: "reviewing"; instruction: string; baseline: ClauseBody };
 
-// "persisting" sits between an AI review resolving and the accepted body
-// actually reaching the server: version-save actions must keep treating it
-// as unsafe, exactly like "pending", until it settles back to "resolved".
-export type ClauseEditorReviewStatus = "resolved" | "pending" | "persisting";
+export type { ClauseEditorReviewStatus } from "./clause-ai-tracked-changes";
 
 type ClauseEditorProps = {
   content: ClauseParagraph[];
@@ -126,9 +124,12 @@ type ClauseEditorProps = {
   /**
    * Fired once an AI review resolves (accept/reject) with a changed body,
    * so the caller can persist it immediately instead of waiting on the
-   * normal keystroke debounce. The returned promise gates the
-   * "persisting" -> "resolved" transition; it must resolve even when the
-   * persist fails (surface the error yourself, don't reject).
+   * normal keystroke debounce. Must resolve even when the persist fails
+   * (surface the error yourself, don't reject) — a failure must NOT report
+   * the "persisting" gate as "resolved" via `onReviewStatusChange`; report
+   * "resolved" yourself only once the body actually reaches the server,
+   * whether that's this call's own success or a later retry through the
+   * normal autosave path.
    */
   onReviewResolved?: (body: ClauseParagraph[]) => Promise<void>;
 };
@@ -255,12 +256,15 @@ export const ClauseEditor = ({
         if (changed) {
           emitChange(resolvedBody);
           // The accepted body still has to reach the server: keep
-          // version-save actions gated on "persisting" until it does, and
-          // unblock regardless of whether the persist succeeded (its own
-          // save flow surfaces the error).
+          // version-save actions gated on "persisting" until it does. The
+          // persist call (onReviewResolved) reports "resolved" itself once
+          // it actually succeeds; a failure surfaces its own toast and
+          // leaves the gate blocked for a later successful retry (see
+          // settleReviewPersist's doc for the full contract) instead of
+          // unblocking unconditionally here.
           void settleReviewPersist(async () => {
             await emitReviewResolved(resolvedBody);
-          }).then(() => emitReviewStatus("resolved"));
+          });
         }
         return;
       }

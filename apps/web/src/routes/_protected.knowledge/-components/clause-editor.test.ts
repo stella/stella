@@ -17,6 +17,7 @@ import {
   nonHistoricalDispatch,
   reviewResolutionStatus,
   settleReviewPersist,
+  shouldKeepBodyPanelMounted,
 } from "./clause-ai-tracked-changes";
 import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
@@ -504,23 +505,33 @@ describe("review resolution → persist gating", () => {
     expect(reviewResolutionStatus(false)).toBe("resolved");
   });
 
-  test("accept-final-hunk: version save stays blocked until the persist resolves, then unblocks", async () => {
+  // `settleReviewPersist` only runs `persist` and swallows an unexpected
+  // exception; it never reports "resolved" itself. Reporting success is the
+  // `persist` callback's own job (mirroring `ClauseBodyEditor.saveBody`,
+  // which calls `onReviewStatusChange("resolved")` only once its POST
+  // actually succeeds) — this is the load-bearing part of the fix: a naive
+  // `.then(() => report("resolved"))` chained onto `settleReviewPersist`
+  // would report success even when `persist` failed.
+
+  test("accept-final-hunk: version save stays blocked until the persist resolves, then the persist's own success unblocks it", async () => {
     let resolvePersist: () => void = () => {
       throw new Error("resolvePersist called before assignment");
     };
+    // Mirrors the real persist call: it reports "resolved" itself, from
+    // inside the callback, only once it actually succeeds.
     const persist = async () =>
       new Promise<void>((resolve) => {
-        resolvePersist = resolve;
+        resolvePersist = () => {
+          reported = "resolved";
+          resolve();
+        };
       });
 
     // Mirrors the caller: report "persisting" synchronously on resolution...
     let reported: "resolved" | "persisting" = reviewResolutionStatus(true);
     expect(reported).toBe("persisting");
 
-    const settled = settleReviewPersist(persist).then(() => {
-      reported = "resolved";
-      return undefined;
-    });
+    const settled = settleReviewPersist(persist);
 
     // ...and version-save actions (gated on reported !== "resolved") stay
     // blocked while the persist is still in flight.
@@ -532,17 +543,61 @@ describe("review resolution → persist gating", () => {
     expect(reported).toBe("resolved");
   });
 
-  test("a persist failure still unblocks — settleReviewPersist never rejects", async () => {
+  test("a persist failure leaves the gate blocked — settleReviewPersist does not report resolved on its own", async () => {
     const persist = async () => {
       throw new Error("save failed");
     };
 
-    let reported: "resolved" | "persisting" = reviewResolutionStatus(true);
-    await settleReviewPersist(persist).then(() => {
-      reported = "resolved";
-      return undefined;
-    });
+    // The real persist call (saveBody) only touches `reported` on success;
+    // a failure surfaces its own toast and never reaches that line, so
+    // `reported` must stay at "persisting" even once `settleReviewPersist`
+    // has swallowed the rejection and settled.
+    const reported: "resolved" | "persisting" = reviewResolutionStatus(true);
+    await settleReviewPersist(persist);
 
+    expect(reported).toBe("persisting");
+  });
+
+  test("no permanent wedge: a later successful retry through the same persist path lifts a gate stranded by an earlier failure", async () => {
+    let reported: "resolved" | "persisting" = reviewResolutionStatus(true);
+    expect(reported).toBe("persisting");
+
+    // First attempt fails (e.g. the initial accept-all flush) — the toast
+    // fires elsewhere; the gate stays blocked.
+    await settleReviewPersist(async () => {
+      throw new Error("save failed");
+    });
+    expect(reported).toBe("persisting");
+
+    // The user keeps editing; the body editor's normal debounced/blur
+    // autosave retries the same persist call (same shape as saveBody) and
+    // succeeds this time, reporting "resolved" itself.
+    await settleReviewPersist(async () => {
+      reported = "resolved";
+    });
     expect(reported).toBe("resolved");
+  });
+});
+
+describe("shouldKeepBodyPanelMounted", () => {
+  // Regression for switching Body → Variants/History mid-review: Base UI's
+  // `Tabs.Panel` unmounts hidden panels by default, destroying the
+  // `ClauseEditor` (and its in-memory tracked-change state) while
+  // `reviewStatus` was still "pending" — stranding the gate with no review
+  // UI left to resolve it. Only "pending" has a live, interactive review UI
+  // (the AI edit bar / hunk menu) that a tab switch could destroy;
+  // "persisting" has none — its persist promise runs independently of
+  // `ClauseEditor`'s lifecycle — so it doesn't need to be pinned.
+
+  test("pins the panel mounted while a review is pending", () => {
+    expect(shouldKeepBodyPanelMounted("pending")).toBe(true);
+  });
+
+  test("does not pin the panel once persisting (no interactive review UI left to lose)", () => {
+    expect(shouldKeepBodyPanelMounted("persisting")).toBe(false);
+  });
+
+  test("does not pin the panel outside a review", () => {
+    expect(shouldKeepBodyPanelMounted("resolved")).toBe(false);
   });
 });

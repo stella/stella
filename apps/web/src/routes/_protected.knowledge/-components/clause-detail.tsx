@@ -71,14 +71,15 @@ import { compareByLocale } from "@/lib/collation";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
+import {
+  type ClauseEditorReviewStatus,
+  shouldKeepBodyPanelMounted,
+} from "@/routes/_protected.knowledge/-components/clause-ai-tracked-changes";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 import { diffClauseBodies } from "@/routes/_protected.knowledge/-components/clause-diff";
 import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/clause-diff";
 import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
-import {
-  ClauseEditor,
-  type ClauseEditorReviewStatus,
-} from "@/routes/_protected.knowledge/-components/clause-editor";
+import { ClauseEditor } from "@/routes/_protected.knowledge/-components/clause-editor";
 import type { ClauseParagraph } from "@/routes/_protected.knowledge/-components/clause-editor-types";
 import { useClauseNavStore } from "@/routes/_protected.knowledge/-components/clause-nav-store";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
@@ -292,7 +293,10 @@ const DetailContent = ({
           <TabsTab value="history">{t("common.history")}</TabsTab>
         </TabsList>
 
-        <TabsPanel value="body">
+        <TabsPanel
+          keepMounted={shouldKeepBodyPanelMounted(reviewStatus)}
+          value="body"
+        >
           <ClauseBodyEditor
             canEdit={canEdit}
             clauseId={clauseId}
@@ -657,6 +661,12 @@ const ClauseBodyEditor = ({
       const response = await api.clauses({ clauseId }).post({ body });
 
       if (response.error) {
+        // Leave the review-status gate exactly where it was (e.g.
+        // "persisting" right after accepting an AI review): do not report
+        // "resolved" on a failed persist, or version-save could snapshot a
+        // still-stale server body. The next successful persist through this
+        // same function — the debounced/blur autosave on the user's next
+        // edit, or a retry — reports "resolved" and lifts the gate.
         stellaToast.add({
           type: "error",
           title: t("clauses.saveFailed"),
@@ -668,9 +678,13 @@ const ClauseBodyEditor = ({
         return;
       }
 
+      // Any successful persist through this function means the server body
+      // is in sync, so it's always safe to report "resolved" here — a no-op
+      // outside a review, and the gate-lifting signal after one.
+      onReviewStatusChange("resolved");
       onRefresh();
     },
-    [clauseId, t, onRefresh],
+    [clauseId, t, onRefresh, onReviewStatusChange],
   );
 
   const debouncedSave = useDebouncedCallback((body: ClauseParagraph[]) => {
@@ -702,8 +716,10 @@ const ClauseBodyEditor = ({
         }}
         onReviewResolved={async (body) => {
           // An accepted/rejected AI review is a decisive action, like blur:
-          // flush immediately instead of waiting on the keystroke debounce,
-          // so the "persisting" gate above lifts as soon as possible.
+          // flush immediately instead of waiting on the keystroke debounce.
+          // saveBody reports "resolved" itself on success; on failure it
+          // toasts and leaves the "persisting" gate blocked for a later
+          // successful autosave to lift.
           debouncedSave.cancel();
           await saveBody(body);
         }}

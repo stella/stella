@@ -13,6 +13,26 @@ import { DELETION_MARK, INSERTION_MARK } from "./clause-tracked-change-marks";
 const TRACKED_AUTHOR = "ai";
 const REVISION_IDS_PER_MILLISECOND = 1000;
 
+// "persisting" sits between an AI review resolving and the accepted body
+// actually reaching the server: version-save actions must keep treating it
+// as unsafe, exactly like "pending", until it settles back to "resolved".
+export type ClauseEditorReviewStatus = "resolved" | "pending" | "persisting";
+
+/**
+ * Whether the clause body's `Tabs.Panel` must stay mounted even while
+ * another tab (Variants/History) is active. Only "pending" needs this: it's
+ * the sole status with a live, interactive review UI (the AI edit bar and
+ * hunk menu) that resolves the review — Base UI's `Tabs.Panel` unmounts
+ * hidden panels by default, and losing that `ClauseEditor` instance strands
+ * the review with `reviewStatus` stuck pending and no UI left to resolve it.
+ * "persisting" doesn't need this: its persist promise runs independently of
+ * `ClauseEditor`'s lifecycle (see `settleReviewPersist`), so it self-heals
+ * off the render tree.
+ */
+export const shouldKeepBodyPanelMounted = (
+  status: ClauseEditorReviewStatus,
+): boolean => status === "pending";
+
 type InlineMark = NonNullable<JSONContent["marks"]>[number];
 
 type RunCursor = {
@@ -139,19 +159,26 @@ export const nonHistoricalDispatch = (
  * resolution that leaves the body unchanged (e.g. rejecting everything back
  * to the pre-AI text) needs no persist and is immediately safe. A changed
  * resolution isn't safe to snapshot into a version yet: the accepted body
- * still has to reach the server, so callers must gate on
- * {@link settleReviewPersist} before reporting "resolved".
+ * still has to reach the server, so callers must stay gated on "persisting"
+ * until their own persist call reports success (see {@link
+ * settleReviewPersist}) — a failed persist must NOT report "resolved".
  */
 export const reviewResolutionStatus = (
   changed: boolean,
 ): "resolved" | "persisting" => (changed ? "persisting" : "resolved");
 
 /**
- * Awaits the persist of an accepted AI body so the "persisting" gate above
- * always lifts back to "resolved" — including when the persist rejects.
- * The persist call owns its own user-facing error handling (the established
- * save-failed toast); this helper's only job is to guarantee a caller
- * blocked on the gate is never stuck.
+ * Fires the persist of an accepted AI body, swallowing an unexpected
+ * exception so this fire-and-forget call can never produce an unhandled
+ * rejection. Unlike a naive `.then()` chain, this does NOT report the
+ * "persisting" gate back to "resolved" on completion: `persist` owns that
+ * signal itself (e.g. `ClauseBodyEditor.saveBody` calls
+ * `onReviewStatusChange("resolved")` only once its POST actually succeeds,
+ * after surfacing its own save-failed toast on error). A failed persist
+ * therefore leaves the gate blocked exactly like "pending" — version-save
+ * stays disabled — until a later successful persist lifts it: the body
+ * editor's normal debounced/blur autosave retries the same call on the next
+ * edit, or the user retries by blurring the (already editable) field again.
  */
 export const settleReviewPersist = async (
   persist: () => Promise<void>,
@@ -159,8 +186,10 @@ export const settleReviewPersist = async (
   try {
     await persist();
   } catch {
-    // Persist failures surface their own toast (see the caller's save
-    // flow); swallow here so the "persisting" gate always lifts.
+    // Unexpected persist exceptions surface their own toast inside
+    // `persist` (see the caller's save flow); swallow here purely so this
+    // fire-and-forget call never produces an unhandled rejection. The
+    // "persisting" gate stays blocked — only a successful persist lifts it.
   }
 };
 
