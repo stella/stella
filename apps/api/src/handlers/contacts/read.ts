@@ -28,10 +28,34 @@ type DecodedCursor = {
   id: SafeId<"contact">;
 };
 
+// Legacy cursors were base64 of `displayName\0uuid`; the current form is the
+// base64url JSON tuple `encodePaginationCursor` emits. `decodePaginationCursor`
+// returns null for the legacy shape (its NUL-delimited payload is not JSON), so
+// fall back to it there and an in-flight cursor survives the format change
+// instead of silently restarting pagination at page 1 (duplicate contacts).
+const LEGACY_CONTACT_CURSOR_SEPARATOR = "\0";
+
+const decodeLegacyContactCursor = (cursor: string): DecodedCursor | null => {
+  const decoded = Buffer.from(cursor, "base64").toString("utf-8");
+  const separatorIndex = decoded.indexOf(LEGACY_CONTACT_CURSOR_SEPARATOR);
+  if (separatorIndex === -1) {
+    return null;
+  }
+  const displayName = decoded.slice(0, separatorIndex);
+  const id = decoded.slice(separatorIndex + 1);
+  if (!isUuidPaginationCursorPart(id)) {
+    return null;
+  }
+  return { displayName, id: brandPersistedContactId(id) };
+};
+
 const decodeCursor = (cursor: string): DecodedCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  const displayName = parts?.at(0);
-  const id = parts?.at(1);
+  if (parts === null) {
+    return decodeLegacyContactCursor(cursor);
+  }
+  const displayName = parts.at(0);
+  const id = parts.at(1);
   if (typeof displayName !== "string" || !isUuidPaginationCursorPart(id)) {
     return null;
   }

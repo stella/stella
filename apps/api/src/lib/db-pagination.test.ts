@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
+import { invoices } from "@/api/db/schema";
 import {
   createTimestampIdCursorCodec,
   parsePgTimestampCursorValue,
@@ -28,6 +30,7 @@ describe("PostgreSQL timestamp cursor values", () => {
           expect(parsePgTimestampCursorValue(value)).toEqual({
             type: "pgTimestampCursor",
             value,
+            precision: "microseconds",
           });
         },
       ),
@@ -35,11 +38,12 @@ describe("PostgreSQL timestamp cursor values", () => {
     );
   });
 
-  test("keeps already-issued ISO cursor values readable", () => {
+  test("keeps already-issued ISO cursor values readable, tagged millisecond", () => {
     const value = "2026-07-10T08:15:30.123Z";
     expect(parsePgTimestampCursorValue(value)).toEqual({
       type: "pgTimestampCursor",
       value,
+      precision: "milliseconds",
     });
   });
 
@@ -81,7 +85,11 @@ describe("createTimestampIdCursorCodec", () => {
           const timestamp = cursorTimestamp(date, microseconds);
           const decoded = codec.decode(codec.encode(timestamp, id));
           expect(decoded).toEqual({
-            timestamp: { type: "pgTimestampCursor", value: timestamp },
+            timestamp: {
+              type: "pgTimestampCursor",
+              value: timestamp,
+              precision: "microseconds",
+            },
             id: brandPersistedInvoiceId(id),
           });
         },
@@ -113,8 +121,12 @@ describe("createTimestampIdCursorCodec", () => {
   test("accepts the legacy pipe-delimited `timestamp|uuid` form", () => {
     const timestamp = "2026-07-10T08:15:30.123456";
     const id = "6f5b2c1a-1111-4222-8333-444455556666";
-    expect(codec.decode(`${timestamp}${"|"}${id}`)).toEqual({
-      timestamp: { type: "pgTimestampCursor", value: timestamp },
+    expect(codec.decode(`${timestamp}|${id}`)).toEqual({
+      timestamp: {
+        type: "pgTimestampCursor",
+        value: timestamp,
+        precision: "microseconds",
+      },
       id: brandPersistedInvoiceId(id),
     });
   });
@@ -123,8 +135,78 @@ describe("createTimestampIdCursorCodec", () => {
     const timestamp = "2026-07-10T08:15:30.123Z";
     const id = "6f5b2c1a-1111-4222-8333-444455556666";
     expect(codec.decode(codec.encode(timestamp, id))).toEqual({
-      timestamp: { type: "pgTimestampCursor", value: timestamp },
+      timestamp: {
+        type: "pgTimestampCursor",
+        value: timestamp,
+        precision: "milliseconds",
+      },
       id: brandPersistedInvoiceId(id),
     });
+  });
+});
+
+describe("createTimestampIdCursorCodec keysetAfter", () => {
+  // `keysetAfter` builds the SQL keyset predicate; render it with the Postgres
+  // dialect so the class guard asserts on the emitted comparison, not internals.
+  const dialect = new PgDialect();
+  const codec = createTimestampIdCursorCodec({
+    column: invoices.createdAt,
+    brandId: brandPersistedInvoiceId,
+  });
+  const id = "6f5b2c1a-1111-4222-8333-444455556666";
+
+  const renderAfter = (
+    rawTimestamp: string,
+    direction: "ascending" | "descending",
+  ): string => {
+    const cursor = codec.decode(codec.encode(rawTimestamp, id));
+    if (cursor === null) {
+      throw new Error("cursor failed to decode");
+    }
+    const predicate = codec.keysetAfter({
+      cursor,
+      idColumn: invoices.id,
+      direction,
+    });
+    if (predicate === undefined) {
+      throw new Error("keysetAfter produced no predicate");
+    }
+    return dialect.sqlToQuery(predicate).sql;
+  };
+
+  test("canonical microsecond cursor compares the raw column", () => {
+    const ascending = renderAfter("2026-07-10T08:15:30.123456", "ascending");
+    expect(ascending).not.toContain("date_trunc");
+    // Forward page: timestamp `>` boundary, id `>` on the tie-break.
+    expect(ascending).toContain('"created_at" >');
+    expect(ascending).toContain('"id" >');
+
+    const descending = renderAfter("2026-07-10T08:15:30.123456", "descending");
+    expect(descending).not.toContain("date_trunc");
+    expect(descending).toContain('"created_at" <');
+    expect(descending).toContain('"id" <');
+  });
+
+  test("INVARIANT: legacy millisecond cursor truncates the column on both sides", () => {
+    // A page issued before the microsecond migration truncated created_at to the
+    // millisecond and ordered on that; resuming it must compare the truncated
+    // column so a row at `…​.123456` is not re-emitted (asc) or skipped (desc)
+    // against a `…​.123` boundary. Both the range and tie-break clauses must
+    // truncate, so require two date_trunc occurrences.
+    const cases = [
+      { direction: "ascending", op: ">" },
+      { direction: "descending", op: "<" },
+    ] as const;
+    for (const { direction, op } of cases) {
+      const rendered = renderAfter("2026-07-10T08:15:30.123Z", direction);
+      const truncation = `date_trunc('milliseconds', "invoices"."created_at")`;
+      // Both the range clause and the tie-break clause truncate the column.
+      const truncations = rendered.match(
+        /date_trunc\('milliseconds', "invoices"\."created_at"\)/gu,
+      );
+      expect(truncations?.length).toBe(2);
+      expect(rendered).toContain(`${truncation} ${op}`);
+      expect(rendered).toContain(`${truncation} =`);
+    }
   });
 });

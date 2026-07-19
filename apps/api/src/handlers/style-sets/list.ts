@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
@@ -46,11 +46,11 @@ export default createSafeRootHandler(
           new HandlerError({ status: 400, message: "Invalid cursor" }),
         );
       }
-      const boundary = styleSetCursor.boundary(cursor);
-      const cursorCondition = or(
-        lt(styleSets.updatedAt, boundary),
-        and(eq(styleSets.updatedAt, boundary), lt(styleSets.id, cursor.id)),
-      );
+      const cursorCondition = styleSetCursor.keysetAfter({
+        cursor,
+        idColumn: styleSets.id,
+        direction: "descending",
+      });
       if (cursorCondition) {
         conditions.push(cursorCondition);
       }

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { rateEntries, rateTables } from "@/api/db/schema";
@@ -41,11 +41,11 @@ const readRateTables = createSafeHandler(
         );
       }
 
-      const boundary = rateTableCursor.boundary(cursor);
-      const cursorCondition = or(
-        gt(rateTables.createdAt, boundary),
-        and(eq(rateTables.createdAt, boundary), gt(rateTables.id, cursor.id)),
-      );
+      const cursorCondition = rateTableCursor.keysetAfter({
+        cursor,
+        idColumn: rateTables.id,
+        direction: "ascending",
+      });
 
       if (cursorCondition) {
         conditions.push(cursorCondition);

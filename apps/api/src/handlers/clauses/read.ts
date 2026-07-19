@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -99,11 +99,11 @@ export const listClausesHandler = async function* ({
     }
     // Compound cursor: (createdAt < cursorDate) OR
     // (createdAt = cursorDate AND id < cursorId)
-    const boundary = clauseCursor.boundary(parsed);
-    const cursorCondition = or(
-      lt(clauses.createdAt, boundary),
-      and(eq(clauses.createdAt, boundary), lt(clauses.id, parsed.id)),
-    );
+    const cursorCondition = clauseCursor.keysetAfter({
+      cursor: parsed,
+      idColumn: clauses.id,
+      direction: "descending",
+    });
     if (cursorCondition) {
       conditions.push(cursorCondition);
     }

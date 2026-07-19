@@ -1423,13 +1423,11 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
           eq(invoices.workspaceId, workspaceId),
           cursor === null
             ? undefined
-            : or(
-                gt(invoices.createdAt, invoicePageCursor.boundary(cursor)),
-                and(
-                  eq(invoices.createdAt, invoicePageCursor.boundary(cursor)),
-                  gt(invoices.id, cursor.id),
-                ),
-              ),
+            : invoicePageCursor.keysetAfter({
+                cursor,
+                idColumn: invoices.id,
+                direction: "ascending",
+              }),
         ),
       )
       .orderBy(asc(invoices.createdAt), asc(invoices.id))

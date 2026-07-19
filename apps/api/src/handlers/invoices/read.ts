@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, or } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { invoices } from "@/api/db/schema";
@@ -41,11 +41,11 @@ const readInvoices = createSafeHandler(
         );
       }
 
-      const boundary = invoiceCursor.boundary(cursor);
-      const cursorCondition = or(
-        gt(invoices.createdAt, boundary),
-        and(eq(invoices.createdAt, boundary), gt(invoices.id, cursor.id)),
-      );
+      const cursorCondition = invoiceCursor.keysetAfter({
+        cursor,
+        idColumn: invoices.id,
+        direction: "ascending",
+      });
 
       if (cursorCondition) {
         conditions.push(cursorCondition);

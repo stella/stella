@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, inArray, gte, lt, lte, or } from "drizzle-orm";
+import { and, desc, eq, inArray, gte, lt, lte } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -82,11 +82,11 @@ export const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
       return conditions;
     }
 
-    const boundary = auditLogCursor.boundary(cursor);
-    const cursorCondition = or(
-      lt(auditLogs.createdAt, boundary),
-      and(eq(auditLogs.createdAt, boundary), lt(auditLogs.id, cursor.id)),
-    );
+    const cursorCondition = auditLogCursor.keysetAfter({
+      cursor,
+      idColumn: auditLogs.id,
+      direction: "descending",
+    });
     if (cursorCondition) {
       conditions.push(cursorCondition);
     }
