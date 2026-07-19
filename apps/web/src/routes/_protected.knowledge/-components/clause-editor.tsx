@@ -48,6 +48,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 
@@ -264,9 +265,14 @@ export const ClauseEditor = ({
             // leaves the gate blocked for a later successful retry (see
             // settleReviewPersist's doc for the full contract) instead of
             // unblocking unconditionally here.
-            void settleReviewPersist(async () => {
+            const persistReviewedBody = async () => {
               await emitReviewResolved(resolvedBody);
-            });
+            };
+            void settleReviewPersist(persistReviewedBody).catch(
+              (error: unknown) => {
+                getAnalytics().captureError(error);
+              },
+            );
           }
           // Without onReviewResolved there is no incremental persist to wait
           // on — reviewResolutionStatus already reported "resolved" above,

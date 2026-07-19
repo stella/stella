@@ -66,6 +66,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
 import { toAPIError } from "@/lib/errors/api";
@@ -830,7 +831,9 @@ const ClauseBodyEditor = ({
   // a stale value.
   useExternalSyncEffect(() => {
     saveBodyRef.current = (body, explicitReviewFlushToken) => {
-      void saveBody(body, explicitReviewFlushToken);
+      void saveBody(body, explicitReviewFlushToken).catch((error: unknown) => {
+        getAnalytics().captureError(error);
+      });
     };
   }, [saveBody]);
 
