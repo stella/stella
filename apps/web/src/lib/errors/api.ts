@@ -45,12 +45,12 @@ type EdenResponse<T> =
  * public-law endpoints whose `data` is `X | null`) keep their nullability at the
  * call site. Do not pass an explicit type argument; let inference flow.
  */
-export const unwrapEden = <T>(response: EdenResponse<T>): T => {
+export function unwrapEden<T>(response: EdenResponse<T>): T {
   if (response.error) {
     throw toAPIError(response.error);
   }
   return response.data;
-};
+}
 
 export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
   if (value === null || value === undefined) {
