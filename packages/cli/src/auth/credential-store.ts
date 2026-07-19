@@ -13,6 +13,7 @@
 // `aws`/`gh` multi-profile credential file pattern.
 
 import { Result } from "better-result";
+import { randomUUID } from "node:crypto";
 import {
   chmod,
   mkdir,
@@ -193,7 +194,11 @@ export const writeCredentialFile = async (
   const filePath = credentialsFilePath(configDir);
   await mkdir(configDir, { mode: 0o700, recursive: true });
 
-  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  // `process.pid` + `Date.now()` alone can collide: two concurrent writes in
+  // the same process land in the same millisecond and would race on the same
+  // temp path. `randomUUID` makes each call's temp path unique regardless of
+  // timing.
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
   const written = await Result.tryPromise(async () => {
     await fsOps.writeFile(tempPath, `${JSON.stringify(file, null, 2)}\n`, {
       mode: CREDENTIALS_FILE_MODE,
