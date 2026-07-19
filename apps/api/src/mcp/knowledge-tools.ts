@@ -48,6 +48,7 @@ import {
   ensureActiveWorkspace,
   enumProp,
   errorResult,
+  internalFailureResult,
   intProp,
   nullableStringProp,
   stringProp,
@@ -877,7 +878,7 @@ const readClauseDetail = async ({
       }),
     );
     if (Result.isError(result)) {
-      return errorResult(result.error.message);
+      return internalFailureResult(result.error);
     }
     const version = result.value;
     // Fail-closed (P7): a malformed version body aborts before any push runs,
@@ -909,7 +910,7 @@ const readClauseDetail = async ({
     getClauseHandler({ safeDb: context.safeDb, organizationId, clauseId }),
   );
   if (Result.isError(result)) {
-    return errorResult(result.error.message);
+    return internalFailureResult(result.error);
   }
   const clause = { ...result.value, metadata: undefined };
   // title/description/usageNotes are queued unconditionally, matching the
@@ -1020,7 +1021,7 @@ const handleListClausesTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(listed)) {
-    return errorResult(listed.error.message);
+    return internalFailureResult(listed.error);
   }
   const clauses = listed.value.items;
 
@@ -1036,7 +1037,7 @@ const handleListClausesTool: McpToolHandler = async ({ args, context }) => {
         )
       : undefined;
   if (categoriesResult !== undefined && Result.isError(categoriesResult)) {
-    return errorResult(categoriesResult.error.message);
+    return internalFailureResult(categoriesResult.error);
   }
   const categories =
     categoriesResult !== undefined && !Result.isError(categoriesResult)
@@ -1239,7 +1240,7 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(created)) {
-      return errorResult(created.error.message);
+      return internalFailureResult(created.error);
     }
     return textResult({ clauseId: created.value.id });
   }
@@ -1282,7 +1283,7 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(updated)) {
-    return errorResult(updated.error.message);
+    return internalFailureResult(updated.error);
   }
   return textResult({ clauseId: updated.value.id });
 };
@@ -1316,7 +1317,7 @@ const handleDeleteClauseTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(deleted)) {
-    return errorResult(deleted.error.message);
+    return internalFailureResult(deleted.error);
   }
   return textResult({ deleted: true });
 };
@@ -1362,7 +1363,7 @@ const readPlaybookDetail = async ({
     }),
   );
   if (Result.isError(result)) {
-    return errorResult(result.error.message);
+    return internalFailureResult(result.error);
   }
   const playbook = result.value;
 
@@ -1410,7 +1411,7 @@ const handleListPlaybooksTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(listed)) {
-    return errorResult(listed.error.message);
+    return internalFailureResult(listed.error);
   }
   const items = listed.value.items;
 
@@ -1489,7 +1490,7 @@ const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
     });
   });
   if (Result.isError(txResult)) {
-    return errorResult(txResult.error.message);
+    return internalFailureResult(txResult.error);
   }
   const outcome = txResult.value;
   if (!outcome.ok) {

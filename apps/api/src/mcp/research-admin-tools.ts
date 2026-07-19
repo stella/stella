@@ -34,6 +34,7 @@ import {
   ensureActiveWorkspace,
   enumProp,
   errorResult,
+  internalFailureResult,
   intProp,
   stringProp,
   structuredErrorResult,
@@ -400,7 +401,7 @@ const handleSearchLegislationTool: McpToolHandler = async ({
         catch: mapBoeError,
       });
       if (Result.isError(block)) {
-        return errorResult(block.error.message);
+        return internalFailureResult(block.error);
       }
       return textResult({ lawId, blockId, block: block.value });
     }
@@ -412,7 +413,7 @@ const handleSearchLegislationTool: McpToolHandler = async ({
         catch: mapBoeError,
       });
       if (Result.isError(related)) {
-        return errorResult(related.error.message);
+        return internalFailureResult(related.error);
       }
       return textResult(related.value);
     }
@@ -434,7 +435,7 @@ const handleSearchLegislationTool: McpToolHandler = async ({
       catch: mapBoeError,
     });
     if (Result.isError(detail)) {
-      return errorResult(detail.error.message);
+      return internalFailureResult(detail.error);
     }
     return textResult(detail.value);
   }
@@ -464,7 +465,7 @@ const handleSearchLegislationTool: McpToolHandler = async ({
     catch: mapBoeError,
   });
   if (Result.isError(result)) {
-    return errorResult(result.error.message);
+    return internalFailureResult(result.error);
   }
   // Passthrough: the output is public BOE statutory data and the query is
   // caller-supplied, so no tenant-authored text needs redaction.
@@ -555,7 +556,7 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(page)) {
-    return errorResult(page.error.message);
+    return internalFailureResult(page.error);
   }
   return textResult(page.value);
 };
@@ -672,7 +673,7 @@ const handleAddMember = async ({
     }),
   );
   if (Result.isError(added)) {
-    return errorResult(added.error.message);
+    return internalFailureResult(added.error);
   }
   return textResult({ memberId: added.value.id });
 };
@@ -702,7 +703,7 @@ const handleRemoveMember = async ({
     }),
   );
   if (Result.isError(removed)) {
-    return errorResult(removed.error.message);
+    return internalFailureResult(removed.error);
   }
   return textResult({ removed: true, id: removed.value.id });
 };
@@ -780,7 +781,7 @@ const handleManageOrganizationTool: McpToolHandler = async ({
     }),
   );
   if (Result.isError(updated)) {
-    return errorResult(updated.error.message);
+    return internalFailureResult(updated.error);
   }
   return textResult(updated.value);
 };

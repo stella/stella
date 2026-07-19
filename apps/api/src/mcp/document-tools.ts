@@ -71,6 +71,7 @@ import {
   ensureWorkspaceAccess,
   enumProp,
   errorResult,
+  internalFailureResult,
   intProp,
   isToolErrorResult,
   MAX_LIST_LIMIT,
@@ -1103,7 +1104,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(baseResult)) {
-      return errorResult(baseResult.error.message);
+      return internalFailureResult(baseResult.error);
     }
     const targetResult = await Result.gen(() =>
       loadEntityVersionDocxText({
@@ -1115,7 +1116,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(targetResult)) {
-      return errorResult(targetResult.error.message);
+      return internalFailureResult(targetResult.error);
     }
 
     const segments = buildLineDiffSegments(
@@ -1193,7 +1194,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
     readEntityByIdHandler({ safeDb: context.safeDb, workspaceId, entityId }),
   );
   if (Result.isError(currentResult)) {
-    return errorResult(currentResult.error.message);
+    return internalFailureResult(currentResult.error);
   }
   const current = currentResult.value;
 
@@ -1402,7 +1403,7 @@ const createDocumentEntity = async ({
     }),
   );
   if (Result.isError(created)) {
-    return errorResult(created.error.message);
+    return internalFailureResult(created.error);
   }
 
   return textResult({ entityId: created.value.entityId });
@@ -1495,7 +1496,7 @@ const applyVersionAnnotations = async ({
       }),
     );
     if (Result.isError(labelled)) {
-      return errorResult(labelled.error.message);
+      return internalFailureResult(labelled.error);
     }
   }
   if (description !== undefined) {
@@ -1510,7 +1511,7 @@ const applyVersionAnnotations = async ({
       }),
     );
     if (Result.isError(described)) {
-      return errorResult(described.error.message);
+      return internalFailureResult(described.error);
     }
   }
   return null;
@@ -1581,7 +1582,7 @@ const updateDocumentEntity = async ({
       }),
     );
     if (Result.isError(renamed)) {
-      return errorResult(renamed.error.message);
+      return internalFailureResult(renamed.error);
     }
   }
 
@@ -1595,7 +1596,7 @@ const updateDocumentEntity = async ({
       }),
     );
     if (Result.isError(moved)) {
-      return errorResult(moved.error.message);
+      return internalFailureResult(moved.error);
     }
   }
 
@@ -1685,7 +1686,7 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(deleted)) {
-      return errorResult(deleted.error.message);
+      return internalFailureResult(deleted.error);
     }
     return textResult({ deleted: true });
   }
@@ -1703,7 +1704,7 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(deleted)) {
-    return errorResult(deleted.error.message);
+    return internalFailureResult(deleted.error);
   }
   return textResult({ deleted: true });
 };
@@ -1921,7 +1922,7 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(result)) {
-    return errorResult(result.error.message);
+    return internalFailureResult(result.error);
   }
 
   return textResult({});

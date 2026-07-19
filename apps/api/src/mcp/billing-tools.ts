@@ -47,6 +47,7 @@ import {
   ensureWorkspaceAccess,
   enumProp,
   errorResult,
+  internalFailureResult,
   intProp,
   MAX_LIST_LIMIT,
   notFoundResult,
@@ -1037,7 +1038,7 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(created)) {
-      return errorResult(created.error.message);
+      return internalFailureResult(created.error);
     }
     return textResult({ timeEntryId: created.value.id });
   }
@@ -1096,7 +1097,7 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(updated)) {
-    return errorResult(updated.error.message);
+    return internalFailureResult(updated.error);
   }
   return textResult({ timeEntryId, updated: true });
 };
@@ -1140,7 +1141,7 @@ const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(deleted)) {
-    return errorResult(deleted.error.message);
+    return internalFailureResult(deleted.error);
   }
   return textResult({ deleted: deleted.value.deleted });
 };
@@ -1184,7 +1185,7 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
       ),
   );
   if (Result.isError(validated)) {
-    return errorResult(validated.error.message);
+    return internalFailureResult(validated.error);
   }
   if (!validated.value) {
     return errorResult("user_id is not a member of this organization");
@@ -1201,7 +1202,7 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
     return Result.ok(rate);
   });
   if (Result.isError(resolved)) {
-    return errorResult(resolved.error.message);
+    return internalFailureResult(resolved.error);
   }
 
   // Passthrough: only a rate amount (minor units) and currency code, no
@@ -1496,7 +1497,7 @@ const handleGetUsageTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(entitlement)) {
-    return errorResult(entitlement.error.message);
+    return internalFailureResult(entitlement.error);
   }
 
   // Passthrough: plan/seat/period/remaining-units are organization billing

@@ -63,6 +63,7 @@ import {
   ensureWorkspaceAccess,
   enumProp,
   errorResult,
+  internalFailureResult,
   getWorkspaceStatus,
   intProp,
   MAX_LIST_LIMIT,
@@ -587,7 +588,7 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(created)) {
-      return errorResult(created.error.message);
+      return internalFailureResult(created.error);
     }
     return textResult({ matterId: created.value.id });
   }
@@ -648,7 +649,7 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(updated)) {
-      return errorResult(updated.error.message);
+      return internalFailureResult(updated.error);
     }
   }
 
@@ -661,7 +662,7 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(archived)) {
-      return errorResult(archived.error.message);
+      return internalFailureResult(archived.error);
     }
   } else if (input.status === "active") {
     const unarchived = await Result.gen(() =>
@@ -672,7 +673,7 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(unarchived)) {
-      return errorResult(unarchived.error.message);
+      return internalFailureResult(unarchived.error);
     }
   }
 
@@ -719,7 +720,7 @@ const handleDeleteMatterTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(deleted)) {
-    return errorResult(deleted.error.message);
+    return internalFailureResult(deleted.error);
   }
   return textResult({ deleted: true });
 };
@@ -829,7 +830,7 @@ const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(created)) {
-      return errorResult(created.error.message);
+      return internalFailureResult(created.error);
     }
     return textResult({ contactId: created.value.id });
   }
@@ -862,7 +863,7 @@ const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(updated)) {
-    return errorResult(updated.error.message);
+    return internalFailureResult(updated.error);
   }
   return textResult({ contactId: updated.value.id });
 };
@@ -896,7 +897,7 @@ const handleDeleteContactTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(deleted)) {
-    return errorResult(deleted.error.message);
+    return internalFailureResult(deleted.error);
   }
   return textResult({ deleted: true });
 };
@@ -931,7 +932,7 @@ const handleLookupBusinessRegistryTool: McpToolHandler = async ({
     q: parsed.output.query,
   });
   if (Result.isError(result)) {
-    return errorResult(result.error.message);
+    return internalFailureResult(result.error);
   }
   // Passthrough: the output is public business-register data and the query is
   // caller-supplied, so no tenant-authored text needs redaction.
@@ -1578,7 +1579,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(created)) {
-      return errorResult(created.error.message);
+      return internalFailureResult(created.error);
     }
     return textResult({ taskId: created.value.entityId });
   }
@@ -1635,7 +1636,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(updated)) {
-      return errorResult(updated.error.message);
+      return internalFailureResult(updated.error);
     }
   }
 
@@ -1650,7 +1651,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(added)) {
-      return errorResult(added.error.message);
+      return internalFailureResult(added.error);
     }
   }
 
@@ -1665,7 +1666,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(removed)) {
-      return errorResult(removed.error.message);
+      return internalFailureResult(removed.error);
     }
   }
 
@@ -1680,7 +1681,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(linked)) {
-      return errorResult(linked.error.message);
+      return internalFailureResult(linked.error);
     }
   }
 
@@ -1695,7 +1696,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(unlinked)) {
-      return errorResult(unlinked.error.message);
+      return internalFailureResult(unlinked.error);
     }
   }
 
@@ -1824,7 +1825,7 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
       }),
     );
     if (Result.isError(removed)) {
-      return errorResult(removed.error.message);
+      return internalFailureResult(removed.error);
     }
     return textResult({ unlinked: true });
   }
@@ -1846,7 +1847,7 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
     }),
   );
   if (Result.isError(created)) {
-    return errorResult(created.error.message);
+    return internalFailureResult(created.error);
   }
   return textResult({ workspaceContactId: created.value.id });
 };
