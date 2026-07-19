@@ -1,13 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  chmod,
-  mkdtemp,
-  readdir,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { chmod, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -86,9 +78,9 @@ describe("credential file round-trip (tmp XDG dir)", () => {
 
   test("a genuinely-absent file is silent (never signed in, not corruption)", async () => {
     const warnings: string[] = [];
-    const file = await readCredentialFile(configDir, (message) =>
-      warnings.push(message),
-    );
+    const file = await readCredentialFile(configDir, (message) => {
+      warnings.push(message);
+    });
     expect(file).toEqual({
       credentials: [],
       defaultOrgByServer: {},
@@ -143,9 +135,9 @@ describe("credential file round-trip (tmp XDG dir)", () => {
   test("warns (with the path) and falls back to empty on a non-JSON file", async () => {
     await Bun.write(credentialsFilePath(configDir), "not json");
     const warnings: string[] = [];
-    const file = await readCredentialFile(configDir, (message) =>
-      warnings.push(message),
-    );
+    const file = await readCredentialFile(configDir, (message) => {
+      warnings.push(message);
+    });
     expect(file).toEqual({
       credentials: [],
       defaultOrgByServer: {},
@@ -162,9 +154,9 @@ describe("credential file round-trip (tmp XDG dir)", () => {
       JSON.stringify({ credentials: "not-an-array", version: 99 }),
     );
     const warnings: string[] = [];
-    const file = await readCredentialFile(configDir, (message) =>
-      warnings.push(message),
-    );
+    const file = await readCredentialFile(configDir, (message) => {
+      warnings.push(message);
+    });
     expect(file.credentials).toEqual([]);
     expect(warnings).toHaveLength(1);
     expect(warnings.at(0)).toContain("schema");
@@ -201,9 +193,20 @@ describe("credential file round-trip (tmp XDG dir)", () => {
       original,
       buildCredential({ accessToken: "new-token", orgId: "org-2" }),
     );
-    await expect(
-      writeCredentialFile(configDir, replacement, failingRename),
-    ).rejects.toThrow("simulated crash before rename");
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection = await writeCredentialFile(
+      configDir,
+      replacement,
+      failingRename,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error ? rejection.message : "").toContain(
+      "simulated crash before rename",
+    );
 
     // Live file is byte-for-byte the pre-failure store: no truncation, no
     // partial write, and the failed temp was cleaned up.

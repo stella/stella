@@ -606,21 +606,32 @@ describe("resolveAccessToken", () => {
         buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
       );
 
-      // Force the persist step specifically — not the read — to fail: a
-      // read-only `credentials.json` still opens for reading (so
+      // Force the persist step specifically — not the read — to fail. The
+      // store write is atomic (temp file + rename, see credential-store.ts),
+      // so a read-only `credentials.json` no longer blocks it: `rename`
+      // replaces the target inode, which only requires the *directory* to be
+      // writable. Drop the directory's write bit instead — that blocks the
+      // temp file from ever being created — while keeping read+execute so
       // `checkForNewerStoredGeneration`'s re-read still sees the real,
-      // unchanged credential) but rejects the write with EACCES. This is
-      // deterministic and root-safe-enough for this repo's CI runners
-      // (non-root); there's no fs-injection point on this branch to stub
-      // `writeFile` directly (that lands with the atomic temp+rename
-      // hygiene follow-up).
-      await chmod(credentialsFilePath(configDir), 0o400);
+      // unchanged credential on disk. `resolveAccessToken` has no
+      // `AtomicWriteOps` injection point of its own (that seam is exercised
+      // directly against `writeCredentialFile` in credential-store.test.ts),
+      // so this stays a filesystem-level simulation. Deterministic and
+      // root-safe-enough for this repo's CI runners (non-root); permissions
+      // are restored in `finally` so `afterEach`'s recursive cleanup of
+      // `configDir` can still remove it.
+      await chmod(configDir, 0o500);
 
-      const result = await resolveAccessToken({
-        configDir,
-        serverUrl: provider.serverUrl,
-        now,
-      });
+      let result: Awaited<ReturnType<typeof resolveAccessToken>>;
+      try {
+        result = await resolveAccessToken({
+          configDir,
+          serverUrl: provider.serverUrl,
+          now,
+        });
+      } finally {
+        await chmod(configDir, 0o700);
+      }
 
       // The refresh itself succeeded — the in-memory token is valid and
       // must not be discarded just because it couldn't be saved.

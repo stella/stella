@@ -207,8 +207,15 @@ export const writeCredentialFile = async (
   });
   if (Result.isError(written)) {
     // Best-effort cleanup so a failed write leaves no temp litter behind; the
-    // live file was never opened, so it is already intact.
-    await Result.tryPromise(async () => await fsOps.rm(tempPath));
+    // live file was never opened, so it is already intact. The write's own
+    // error (thrown below) is what surfaces to the caller — a failed
+    // cleanup here has no further signal to add.
+    const cleanup = await Result.tryPromise(
+      async () => await fsOps.rm(tempPath),
+    );
+    if (Result.isError(cleanup)) {
+      // Ignored: see comment above.
+    }
     throw written.error;
   }
 };
