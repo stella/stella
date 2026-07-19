@@ -43,6 +43,18 @@ const FIXTURE_DIR = path.join(import.meta.dir, "../../fixtures/rpc");
 const readFixture = (name: string): unknown =>
   JSON.parse(readFileSync(path.join(FIXTURE_DIR, name), "utf-8"));
 
+// Fixtures are hand-authored JSON objects (never arrays or primitives); this
+// guard narrows the parsed `unknown` before mutating tests spread/drop keys,
+// rather than asserting the shape blind.
+const readFixtureRecord = (name: string): Record<string, unknown> => {
+  const parsed = readFixture(name);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new TypeError(`fixture ${name} is not a JSON object`);
+  }
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- narrowed above: plain JSON object, not null/array
+  return parsed as Record<string, unknown>;
+};
+
 const collectKeys = (value: unknown, keys: string[] = []): string[] => {
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -282,13 +294,13 @@ describe("desktop bridge RPC golden fixtures", () => {
   });
 
   test("isAppSnapshot rejects a snapshot missing a required field", () => {
-    const parsed = readFixture("app-snapshot.json") as Record<string, unknown>;
+    const parsed = readFixtureRecord("app-snapshot.json");
     const { bridgeVersion: _dropped, ...withoutBridgeVersion } = parsed;
     expect(isAppSnapshot(withoutBridgeVersion)).toBe(false);
   });
 
   test("isAppSnapshot rejects a snapshot whose capabilities are not strings", () => {
-    const parsed = readFixture("app-snapshot.json") as Record<string, unknown>;
+    const parsed = readFixtureRecord("app-snapshot.json");
     expect(isAppSnapshot({ ...parsed, capabilities: [1, 2, 3] })).toBe(false);
   });
 

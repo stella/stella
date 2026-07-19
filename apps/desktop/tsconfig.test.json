@@ -1,0 +1,9 @@
+{
+  "extends": "@stll/typescript-config/react-library.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    "tsBuildInfoFile": "./.cache/tsbuildinfo.test.json"
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "exclude": ["dist", "node_modules", "src-tauri"]
+}
