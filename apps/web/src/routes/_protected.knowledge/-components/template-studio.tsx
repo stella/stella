@@ -1068,9 +1068,29 @@ export const TemplateStudioPage = ({
       // where the stored DOCX already carries the renamed {{@clause:...}}
       // markers but template_clauses.slotName does not, showing a false
       // check-badge mismatch.
-      void queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-      });
+      //
+      // `fillDiscover` is nested under `detail` but deliberately keyed on the
+      // stable template id only, not the rotating presigned URL (see the key
+      // comment in -queries.ts): its refetch must run against the *new*
+      // detail's URL. Invalidating it in the same pass as `detail` refetches
+      // both concurrently, so a still-mounted Fill facet can re-run discovery
+      // with the pre-save URL still in its context, discovering the old
+      // document's fields. Exclude it here and invalidate it separately once
+      // `detail` (and everything else) has settled.
+      void queryClient
+        .invalidateQueries({
+          queryKey: knowledgeKeys.templates.all(activeOrganizationId),
+          predicate: (query) => query.queryKey.at(-1) !== "fill-discover",
+        })
+        .then(
+          async () =>
+            await queryClient.invalidateQueries({
+              queryKey: knowledgeKeys.templates.fillDiscover(
+                activeOrganizationId,
+                templateId,
+              ),
+            }),
+        );
       // Report overall failure when a slot PATCH hard-failed: the document
       // itself saved, but "Save and leave" must stay in the Studio so the
       // still-pending steps (and their retry) are not discarded by the
