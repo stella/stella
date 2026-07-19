@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -60,6 +60,7 @@ export default createSafeHandler(
             and(
               eq(fields.entityVersionId, entityVersions.id),
               eq(entityVersions.entityId, entityId),
+              isNull(entityVersions.deletedAt),
             ),
           )
           .where(eq(fields.entityVersionId, baseVersionId)),
@@ -73,6 +74,7 @@ export default createSafeHandler(
             and(
               eq(fields.entityVersionId, entityVersions.id),
               eq(entityVersions.entityId, entityId),
+              isNull(entityVersions.deletedAt),
             ),
           )
           .where(eq(fields.entityVersionId, targetVersionId)),

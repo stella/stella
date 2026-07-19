@@ -12,6 +12,21 @@
       "unknownDevice": "Tundmatu seade"
     }
   },
+  "agentClaim": {
+    "access": "Saadav juurdepääs",
+    "accessReadSearch": "Lugemis- ja otsingujuurdepääs",
+    "approve": "Kinnita",
+    "codeLabel": "Sisestage oma agendi kuvatud kood",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Võite oma agendi juurde naasta.",
+    "connectedTitle": "Agent ühendatud",
+    "description": "Tehisintellekti agent taotleb teie nimel juurdepääsu teie stella tööruumile. Kinnitage ainult juhul, kui alustasite seda ise.",
+    "error": "Midagi läks valesti. Palun proovige uuesti.",
+    "errorExpired": "See päring on aegunud. Alustage ühendust oma agendist uuesti.",
+    "errorInvalid": "See kood ei tundu õige. Kontrollige seda ja proovige uuesti.",
+    "errorNotFound": "Selle koodi jaoks ei leidnud me ootel olevat päringut. Kontrollige koodi ja proovige uuesti.",
+    "title": "Ühenda oma agent"
+  },
   "ai": {
     "analyzeWithAI": "Analüüsi AI-ga",
     "editWithAI": "Muuda AI-ga",
@@ -96,6 +111,17 @@
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
     "signInWithPassword": "Logi sisse parooliga",
     "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
+    "twoFactor": {
+      "backupCodePlaceholder": "Sisestage varukood",
+      "enterAuthenticatorCode": "Sisestage kinnituskood oma autentimisrakendusest.",
+      "enterBackupCode": "Sisestage üks oma varukoodidest.",
+      "invalidBackupCode": "Vale varukood. Proovige uuesti.",
+      "invalidCode": "Vale kinnituskood. Proovige uuesti.",
+      "title": "Kinnitage oma identiteet",
+      "trustDevice": "Usalda seda seadet 30 päeva",
+      "useAuthenticatorApp": "Kasuta selle asemel autentimisrakendust",
+      "useBackupCode": "Kasuta selle asemel varukoodi"
+    },
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
     "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },
@@ -936,7 +962,8 @@
     "user": "Kasutaja",
     "verify": "Kinnita",
     "version": "Versioon",
-    "versionLabel": "Versioon {version}"
+    "versionLabel": "Versioon {version}",
+    "workflows": "Töövood"
   },
   "consent": {
     "allow": "Luba",
@@ -1292,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Loo töövoog",
+    "created": "Töövoog loodud",
+    "deleteFailed": "Töövoogu ei õnnestunud kustutada.",
+    "deleteFlow": "Kustuta töövoog",
+    "deleted": "Töövoog kustutatud",
+    "descriptionPlaceholder": "Mida see töövoog teeb",
+    "disableFlow": "Keela töövoog",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "Töövoogusid veel pole",
+    "emptyDescription": "Loo töövoog, et muuta dokumendid ja eesmärk valmis tulemuseks.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Luba töövoog",
+    "enabledDescription": "Keelatud töövoogusid ei saa käivitada ega vallandada.",
+    "enabledLabel": "Lubatud",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "Kõik toimikud",
+      "anyExtension": "Mis tahes failitüüp",
+      "extensions": "Failitüübid",
+      "extensionsPlaceholder": "Lisa failitüüp (nt pdf) ja vajuta Enter"
+    },
+    "loadFailed": "Töövoogusid ei õnnestunud laadida.",
+    "loading": "Töövoo laadimine…",
+    "namePlaceholder": "nt NDA vastuvõtu ülevaatus",
+    "nameRequired": "Sisesta töövoo nimi.",
+    "runs": {
+      "activeSublabel": "aktiivne",
+      "cancel": "Tühista käivitus",
+      "cancelFailed": "Käivitust ei õnnestunud tühistada.",
+      "cancelled": "Käivitus tühistatud",
+      "confirmCancel": "Kas tühistada see käivitus? Lõpetatud sammud säilitatakse.",
+      "createdDocument": "Loodud dokument",
+      "empty": "Käivitusi veel pole",
+      "emptyDescription": "Sinu käivitatud käivitused ilmuvad siia.",
+      "history": "Käivituste ajalugu",
+      "inputDocuments": "Sisenddokumendid",
+      "launch": "Käivita töövoog",
+      "loadFailed": "Seda käivitust ei õnnestunud laadida.",
+      "noEnabledFlows": "Lubatud töövoogusid pole. Loo see jaotises Teadmus › Töövood.",
+      "openDocument": "Ava dokument",
+      "review": {
+        "approve": "Kinnita",
+        "approved": "Kinnitatud",
+        "failed": "Ülevaatust ei õnnestunud esitada.",
+        "note": "Märkus (valikuline)",
+        "notePlaceholder": "Lisa märkus dokumenteerimiseks",
+        "priorOutput": "Eelmine tulemus",
+        "reject": "Lükka tagasi",
+        "rejected": "Tagasi lükatud",
+        "title": "Ülevaatus on nõutav"
+      },
+      "selectFlow": "Vali töövoog",
+      "start": "Alusta",
+      "startFailed": "Töövoogu ei õnnestunud käivitada.",
+      "started": "Töövoog käivitatud",
+      "stepProgress": "Samm {current} / {total}",
+      "tooManyInputDocuments": "Valige selle töövoo käivitamiseks kuni {max} dokumenti."
+    },
+    "saveFailed": "Töövoogu ei õnnestunud salvestada.",
+    "schedule": {
+      "daily": "Iga päev",
+      "dayOfMonth": "Kuupäev",
+      "dayOfWeek": "Nädalapäev",
+      "frequency": "Sagedus",
+      "hour": "Tund (UTC)",
+      "monthly": "Iga kuu",
+      "selectWorkspace": "Vali toimik",
+      "utcHint": "Ajastatud ajad on UTC-s.",
+      "weekly": "Iga nädal",
+      "workspaceRequired": "Vali ajastuse jaoks toimik."
+    },
+    "status": {
+      "awaitingReview": "Ootab ülevaatust",
+      "cancelled": "Tühistatud",
+      "completed": "Lõpetatud",
+      "failed": "Ebaõnnestus",
+      "pending": "Ootel",
+      "running": "Töötab",
+      "skipped": "Vahele jäetud"
+    },
+    "stepCount": "{count, plural, one {# samm} other {# sammu}}",
+    "steps": {
+      "add": "Lisa samm:",
+      "ai": "AI samm",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Loo dokument",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Dokumendi pealkiri",
+      "documentTitlePlaceholder": "nt Kokkuvõtte memo",
+      "documentTitleRequired": "Sisesta dokumendi pealkiri.",
+      "empty": "Lisa vähemalt üks samm.",
+      "includeDocuments": "Kaasa sisenddokumendid",
+      "instructions": "Juhised",
+      "instructionsPlaceholder": "Mida ülevaataja peaks kontrollima",
+      "namePlaceholder": "Sammu nimi",
+      "nameRequired": "Sisesta igale sammule nimi.",
+      "prompt": "Viip",
+      "promptPlaceholder": "Juhised AI sammu jaoks",
+      "promptRequired": "Sisesta AI sammu jaoks viip.",
+      "required": "Lisa vähemalt üks samm.",
+      "reviewGate": "Ülevaatuse värav",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Sammud"
+    },
+    "trigger": {
+      "fileUpload": "Faili üleslaadimine",
+      "manual": "Käsitsi",
+      "manualHint": "Käivita see töövoog vajadusel toimikust.",
+      "schedule": "Ajastus",
+      "title": "Käivitaja",
+      "typeLabel": "Käivitaja tüüp"
+    },
+    "updated": "Töövoog uuendatud"
   },
   "folio": {
     "acceptChange": "Nõustu muudatusega",
@@ -1808,6 +1986,9 @@
       "tools": {
         "description": "Ühenda stella avalike registritega ja muude allikatega",
         "title": "Tööriistad"
+      },
+      "workflows": {
+        "description": "Automatiseeri dokumenditööd korduvkasutatavate mitmeastmeliste töövoogudega."
       }
     },
     "skills": {
@@ -2190,6 +2371,33 @@
       "timezoneDescription": "Kasutatakse teadete ja e-kirjade ajatemplite jaoks",
       "timezoneSaved": "Ajavöönd uuendatud",
       "title": "Konto",
+      "twoFactor": {
+        "backupCodesDescription": "Hoidke neid turvalises kohas. Iga koodi saab kasutada üks kord sisselogimiseks, kui kaotate juurdepääsu oma autentimisrakendusele.",
+        "backupCodesRegenerated": "Varukoodid loodi uuesti",
+        "backupCodesSavedConfirm": "Olen need koodid salvestanud",
+        "backupCodesTitle": "Salvestage oma varukoodid",
+        "copyAllCodes": "Kopeeri kõik koodid",
+        "description": "Nõua sisselogimisel kinnituskoodi autentimisrakendusest.",
+        "disable": "Keela kahefaktoriline autentimine",
+        "disableConfirmDescription": "Teilt ei küsita sisselogimisel enam kinnituskoodi.",
+        "disableConfirmTitle": "Kas keelata kahefaktoriline autentimine?",
+        "disableOtpDescription": "Saatsime teie e-postile kinnituskoodi. Sisestage see allpool kahefaktorilise autentimise keelamise kinnitamiseks.",
+        "disabledStatus": "Keelatud",
+        "disabledSuccess": "Kahefaktoriline autentimine keelatud",
+        "downloadCodes": "Laadi alla tekstifailina",
+        "enable": "Luba kahefaktoriline autentimine",
+        "enabledStatus": "Lubatud",
+        "enabledSuccess": "Kahefaktoriline autentimine lubatud",
+        "enterCodeToConfirm": "Seadistuse kinnitamiseks sisestage kinnituskood oma autentimisrakendusest.",
+        "manualSetupKey": "Seadistusvõti",
+        "regenerateBackupCodes": "Loo varukoodid uuesti",
+        "regenerateConfirmDescription": "Teie praegused varukoodid lakkavad kohe töötamast.",
+        "regenerateConfirmTitle": "Kas luua varukoodid uuesti?",
+        "regenerateOtpDescription": "Saatsime teie e-postile kinnituskoodi. Varukoodide taasloomise kinnitamiseks sisestage see allpool.",
+        "scanQrDescription": "Skannige see QR-kood oma autentimisrakendusega või sisestage seadistusvõti käsitsi.",
+        "setupTitle": "Seadista kahefaktoriline autentimine",
+        "title": "Kahefaktoriline autentimine"
+      },
       "wordEditIdentitySaved": "Wordi muudatuste isik uuendatud",
       "wordEditShortcut": "Wordi muudatuste lühend",
       "wordEditShortcutDescription": "Lühike silt teie initsiaalide jaoks Wordi muudatustes.",

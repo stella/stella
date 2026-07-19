@@ -300,6 +300,36 @@ export const CAPABILITY_DISPATCH = {
   "fields.upsert-by-id": {
     load: async () => await import("@/api/handlers/fields/upsert-by-id"),
   },
+  "flows.create": {
+    load: async () => await import("@/api/handlers/flows/create"),
+  },
+  "flows.delete-by-id": {
+    load: async () => await import("@/api/handlers/flows/delete-by-id"),
+  },
+  "flows.read-by-id": {
+    load: async () => await import("@/api/handlers/flows/read-by-id"),
+  },
+  "flows.read-list": {
+    load: async () => await import("@/api/handlers/flows/read-list"),
+  },
+  "flows.run-cancel": {
+    load: async () => await import("@/api/handlers/flows/run-cancel"),
+  },
+  "flows.run-detail": {
+    load: async () => await import("@/api/handlers/flows/run-detail"),
+  },
+  "flows.run-list": {
+    load: async () => await import("@/api/handlers/flows/run-list"),
+  },
+  "flows.run-review": {
+    load: async () => await import("@/api/handlers/flows/run-review"),
+  },
+  "flows.run-start": {
+    load: async () => await import("@/api/handlers/flows/run-start"),
+  },
+  "flows.update-by-id": {
+    load: async () => await import("@/api/handlers/flows/update-by-id"),
+  },
   "invoices.add-entries": {
     load: async () => await import("@/api/handlers/invoices/add-entries"),
   },

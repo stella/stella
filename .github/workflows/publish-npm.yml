@@ -279,7 +279,7 @@ jobs:
       # of shipping a broken CLI.
       - name: Set up Node for the CLI smoke test
         if: ${{ steps.pack.outputs.cli == 'true' }}
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -360,7 +360,7 @@ jobs:
         # fan out one matrix leg per selected package.
         package: ${{ fromJSON(needs.pack.outputs.packages) }}
     steps:
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org

@@ -29,12 +29,54 @@ export type HandlerErrorUsageDetail = {
   available: number;
 };
 
+/**
+ * Ceremony fields of an agent-auth ID-JAG `interaction_required` step-up: a
+ * human must complete the RFC 8628-style claim ceremony before a first
+ * `(iss, sub)` delegation is written. The pinned guide reserves `claim` for
+ * these ceremony fields only; the registration handles ride at the top level
+ * via {@link HandlerErrorStepUp}, mirroring the `service_auth` registration
+ * envelope so an agent parses both responses with one shape.
+ */
+export type HandlerErrorClaim = {
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete: string;
+  expires_in: number;
+  interval: number;
+};
+
+/**
+ * Top-level step-up handles paired with {@link HandlerErrorClaim} on an
+ * agent-auth ID-JAG `interaction_required`: the registration id, its identity
+ * type, the claim ceremony endpoint, the claim token plus its absolute
+ * expiry, and the scopes granted once the ceremony completes.
+ */
+export type HandlerErrorStepUp = {
+  registration_id: string;
+  registration_type: string;
+  claim_url: string;
+  claim_token: string;
+  claim_token_expires: string;
+  post_claim_scopes: string[];
+};
+
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
   code?: HandlerErrorCode | undefined;
   status: TStatus;
   message: string;
+  /**
+   * OAuth-style machine-readable error identifier (e.g. `login_required`,
+   * `interaction_required`, `issuer_not_enabled`). Distinct from `code`
+   * (the internal chat-transport vocabulary); surfaced verbatim on the
+   * response body for agent clients that branch on the error.
+   */
+  error?: string | undefined;
+  /** Step-up ceremony fields for an ID-JAG `interaction_required`. */
+  claim?: HandlerErrorClaim | undefined;
+  /** Top-level step-up handles paired with `claim` on `interaction_required`. */
+  stepUp?: HandlerErrorStepUp | undefined;
   cause?: unknown;
   usage?: HandlerErrorUsageDetail | undefined;
 };
@@ -48,12 +90,18 @@ export class HandlerError<
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare usage?: HandlerErrorUsageDetail | undefined;
+  declare error?: string | undefined;
+  declare claim?: HandlerErrorClaim | undefined;
+  declare stepUp?: HandlerErrorStepUp | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
     this.code = props.code;
     this.status = props.status;
     this.usage = props.usage;
+    this.error = props.error;
+    this.claim = props.claim;
+    this.stepUp = props.stepUp;
   }
 }
 
@@ -243,4 +291,18 @@ export class TimeoutError extends TaggedError("TimeoutError")<{
   label: string;
   timeoutMs?: number;
   cause?: unknown;
+}>() {}
+
+/**
+ * A scheduler job exceeded its per-job execution ceiling. The task promise
+ * cannot be cancelled, so the runner stops heartbeating, releases the lease,
+ * and marks the run as timed out; a later "zombie" completion is rejected by
+ * the guarded completion writes.
+ */
+export class SchedulerJobTimeoutError extends TaggedError(
+  "SchedulerJobTimeoutError",
+)<{
+  message: string;
+  jobId: string;
+  timeoutMs: number;
 }>() {}

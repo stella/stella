@@ -1,16 +1,18 @@
 {
   "as-casts": {
-    "count": 3,
+    "count": 4,
     "files": {
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
+      "apps/api/src/lib/auth.ts": 1,
       "apps/web/src/app-providers.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions.ts": 1
     }
   },
   "nullish-array-fallback": {
-    "count": 1,
+    "count": 4,
     "files": {
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx": 1
+      "apps/web/src/routes/_protected.knowledge/-components/flow-editor.tsx": 3,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx": 1
     }
   },
   "barrel-index-files": {
@@ -22,7 +24,7 @@
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 10,
+    "count": 9,
     "files": {
       "apps/web/src/components/ai-suggestions/use-review-actions.ts": 1,
       "apps/web/src/components/chat/rehype-anon-spans.ts": 1,
@@ -31,8 +33,7 @@
       "apps/web/src/lib/relative-time.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-field-manifest.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-preview.tsx": 2,
-      "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracking.ts": 1
+      "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx": 1
     }
   },
   "raw-use-effect-suppressions": {
@@ -104,16 +105,11 @@
       "apps/api/src/handlers/docx/resolve-ai-conditions.ts": 1,
       "apps/api/src/handlers/docx/resolve-ai-fields.ts": 3,
       "apps/api/src/handlers/docx/resolve-clause-slots.ts": 3,
-      "apps/api/src/handlers/entities/compute-version-diff.ts": 2,
       "apps/api/src/handlers/entities/copy-to-workspace.ts": 1,
       "apps/api/src/handlers/entities/copy-utils.ts": 6,
-      "apps/api/src/handlers/entities/delete-version.ts": 1,
       "apps/api/src/handlers/entities/delete.ts": 1,
       "apps/api/src/handlers/entities/query-entities.ts": 1,
-      "apps/api/src/handlers/entities/read-by-id.ts": 1,
-      "apps/api/src/handlers/entities/read-version-by-id.ts": 1,
       "apps/api/src/handlers/entities/read-versions.ts": 1,
-      "apps/api/src/handlers/entities/version-diff-sources.ts": 2,
       "apps/api/src/handlers/entities/zip-archive.ts": 1,
       "apps/api/src/handlers/external-preview/preview.ts": 2,
       "apps/api/src/handlers/fields/mark-column-flag.ts": 1,
@@ -137,6 +133,7 @@
       "apps/api/src/handlers/mcp-connectors/oauth.ts": 6,
       "apps/api/src/handlers/mcp-connectors/update-connection.ts": 1,
       "apps/api/src/handlers/me/send-otp.ts": 2,
+      "apps/api/src/handlers/me/two-factor-send-manage-otp.ts": 2,
       "apps/api/src/handlers/organization-settings/read-ai-availability.ts": 1,
       "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts": 2,
       "apps/api/src/handlers/playbooks/auto-run.ts": 1,
@@ -175,7 +172,7 @@
       "apps/api/src/lib/account-deletion-steps.ts": 4,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
-      "apps/api/src/lib/auth.ts": 2,
+      "apps/api/src/lib/auth.ts": 4,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/deepl/client.ts": 3,
       "apps/api/src/lib/document-reference.ts": 2,
@@ -184,6 +181,8 @@
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/errors/utils.ts": 1,
       "apps/api/src/lib/file-scan/scanner.ts": 1,
+      "apps/api/src/lib/flows/flow-run-worker.ts": 2,
+      "apps/api/src/lib/flows/maybe-start-upload-triggered-flows.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 2,
       "apps/api/src/lib/legal-search/corpus-index-provider.ts": 1,
       "apps/api/src/lib/mcp-upstream/connections.ts": 5,
@@ -206,7 +205,6 @@
       "apps/api/src/lib/workflow/streaming-answer.ts": 1,
       "apps/api/src/lib/workflow/verdict-engine.ts": 1,
       "apps/api/src/mcp/capability-tools.ts": 1,
-      "apps/api/src/mcp/document-tools.ts": 1,
       "apps/api/src/mcp/egress.ts": 1,
       "apps/api/src/mcp/gateway/skills.ts": 1,
       "apps/api/src/mcp/server-core.ts": 1,
@@ -291,6 +289,7 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-queries.ts": 1,
       "apps/web/src/routes/_protected.knowledge/clauses.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 1,
       "apps/web/src/routes/_protected.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 1,
@@ -341,7 +340,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 514,
+    "count": 528,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -448,6 +447,7 @@
       "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/fill-clauses-section.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/flow-editor.tsx": 4,
       "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx": 5,
       "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet.tsx": 1,
@@ -465,7 +465,9 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/templates.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/tools.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/workflows.tsx": 3,
       "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx": 2,
       "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx": 1,
@@ -492,13 +494,15 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/editable-field.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx": 4,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-detail.tsx": 6,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/justification.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx": 4,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/members-section.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx": 6,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx": 7,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/parties-section.tsx": 7,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx": 7,
@@ -510,8 +514,6 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx": 3,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 5,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts": 3,
@@ -530,6 +532,7 @@
       "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/-mutations.ts": 1,
       "apps/web/src/routes/_protected.workspaces/index.tsx": 2,
+      "apps/web/src/routes/agent-claim.tsx": 1,
       "apps/web/src/routes/auth/error.tsx": 1,
       "apps/web/src/routes/auth/organization.tsx": 1,
       "apps/web/src/routes/auth/otp.tsx": 1,
@@ -548,7 +551,7 @@
     }
   },
   "cross-handler-imports": {
-    "count": 255,
+    "count": 253,
     "files": {
       "apps/api/src/handlers/catalogue/bundled-skill-resources.ts": 1,
       "apps/api/src/handlers/catalogue/install-skill.ts": 1,
@@ -586,7 +589,6 @@
       "apps/api/src/handlers/entities/create-from-buffer.ts": 4,
       "apps/api/src/handlers/entities/create-from-legal-source.ts": 1,
       "apps/api/src/handlers/entities/create.ts": 1,
-      "apps/api/src/handlers/entities/delete-version.ts": 2,
       "apps/api/src/handlers/entities/delete.ts": 2,
       "apps/api/src/handlers/entities/desktop-edit-session-utils.ts": 1,
       "apps/api/src/handlers/entities/download-zip.ts": 1,
@@ -654,7 +656,7 @@
     }
   },
   "cross-route-private-imports": {
-    "count": 215,
+    "count": 217,
     "files": {
       "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 8,
@@ -727,6 +729,7 @@
       "apps/web/src/routes/_protected.dev_.autocomplete.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/flow-editor.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-field-mention-extension.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-prefill-panel.tsx": 1,
@@ -747,6 +750,7 @@
       "apps/web/src/routes/_protected.todos/index.tsx": 4,
       "apps/web/src/routes/_protected.tsx": 4,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/members-section.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/parties-section.tsx": 2,

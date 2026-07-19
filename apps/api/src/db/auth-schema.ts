@@ -3,6 +3,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -28,6 +29,7 @@ export const user = pgTable(
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
     wordEditShortcut: text("word_edit_shortcut"),
+    twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
     deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -58,6 +60,7 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   timezoneId: "timezone_id",
   preferredName: "preferred_name",
   wordEditShortcut: "word_edit_shortcut",
+  twoFactorEnabled: "two_factor_enabled",
   deletedAt: "deleted_at",
   createdAt: "created_at",
   updatedAt: "updated_at",
@@ -138,6 +141,44 @@ export const verification = pgTable(
   },
   (table) => [
     index("verification_identifier_idx").on(table.identifier),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+// TOTP secret + backup codes are encrypted by Better Auth before storage
+// (secret always; backupCodes per the plugin's default `storeBackupCodes:
+// "encrypted"`), but the columns are still treated as auth secrets: deny
+// the scoped `stella` role entirely, mirroring `session` / `account`.
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").default(true).notNull(),
+    // Account-lockout bookkeeping written by Better Auth's 2FA verification
+    // path (see node_modules/better-auth/dist/plugins/two-factor/schema.mjs and
+    // verify-two-factor.mjs): `failedVerificationCount` is incremented per
+    // failed factor check and reset on success; `lockedUntil` holds the
+    // lockout expiry once the failure budget is spent. The plugin's default
+    // `accountLockout` is enabled, so these columns must exist for it to work.
+    failedVerificationCount: integer("failed_verification_count")
+      .default(0)
+      .notNull(),
+    lockedUntil: timestamp("locked_until"),
+  },
+  (table) => [
+    // UNIQUE, not a plain index: Better Auth's `/two-factor/enable` does a
+    // (non-atomic) delete-all-then-insert per user, so two enable requests
+    // racing (two tabs, or another client while the settings dialog is open)
+    // can both insert and leave the account with multiple secrets/backup-code
+    // sets — verification/sign-in then reads only one row, so the QR the user
+    // scanned may not be the row used to verify. The uniqueness serializes
+    // enrollment: the losing insert fails instead of duplicating the row.
+    uniqueIndex("two_factor_user_id_uidx").on(table.userId),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -365,6 +406,7 @@ export const authSchema = {
   session,
   account,
   verification,
+  twoFactor,
   organization,
   member,
   invitation,
@@ -400,6 +442,7 @@ export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
       from: r.user.id,
       to: r.oauthConsent.userId,
     }),
+    twoFactors: r.many.twoFactor({ from: r.user.id, to: r.twoFactor.userId }),
   },
   session: {
     user: r.one.user({ from: r.session.userId, to: r.user.id }),
@@ -414,6 +457,9 @@ export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
   },
   account: {
     user: r.one.user({ from: r.account.userId, to: r.user.id }),
+  },
+  twoFactor: {
+    user: r.one.user({ from: r.twoFactor.userId, to: r.user.id }),
   },
   organization: {
     members: r.many.member({

@@ -4,7 +4,7 @@ import { and, asc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { infoSoudTrackedCases } from "@/api/db/schema";
-import { createInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
+import { getInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   buildInfoSoudAgendaItems,
@@ -20,7 +20,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
   logger,
   signal,
 }) => {
-  const client = createInfoSoudClient();
+  const client = getInfoSoudClient();
   const syncStartedAt = new Date();
   let synced = 0;
   let failed = 0;

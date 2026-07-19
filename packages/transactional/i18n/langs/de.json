@@ -28,7 +28,8 @@
     "ignore": "Wenn Sie diesen Code nicht angefordert haben, können Sie diese E-Mail ignorieren.",
     "preview": "Verwenden Sie diesen Code zur Bestätigung Ihrer Identität",
     "signIn": "Verwenden Sie diesen Code, um sich bei Ihrem stella-Konto anzumelden.",
-    "subject": "Ihr stella-Bestätigungscode"
+    "subject": "Ihr stella-Bestätigungscode",
+    "twoFactorManage": "Verwenden Sie diesen Code, um Änderungen an Ihren Einstellungen für die Zwei-Faktor-Authentifizierung zu bestätigen."
   },
   "reportExportStatus": {
     "action": "stella öffnen",

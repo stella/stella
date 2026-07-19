@@ -12,6 +12,21 @@
       "unknownDevice": "Nieznane urządzenie"
     }
   },
+  "agentClaim": {
+    "access": "Uzyskany dostęp",
+    "accessReadSearch": "Dostęp do odczytu i wyszukiwania",
+    "approve": "Zatwierdź",
+    "codeLabel": "Wprowadź kod wyświetlony przez Twojego agenta",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Możesz wrócić do swojego agenta.",
+    "connectedTitle": "Agent połączony",
+    "description": "Agent AI prosi o dostęp do Twojego obszaru roboczego stella w Twoim imieniu. Zatwierdź tylko wtedy, gdy sam to rozpocząłeś.",
+    "error": "Coś poszło nie tak. Spróbuj ponownie.",
+    "errorExpired": "To żądanie wygasło. Rozpocznij połączenie ponownie ze swojego agenta.",
+    "errorInvalid": "Ten kod wygląda na nieprawidłowy. Sprawdź go i spróbuj ponownie.",
+    "errorNotFound": "Nie znaleźliśmy oczekującego żądania dla tego kodu. Sprawdź kod i spróbuj ponownie.",
+    "title": "Połącz swojego agenta"
+  },
   "ai": {
     "analyzeWithAI": "Analizuj z AI",
     "editWithAI": "Edytuj z AI",
@@ -96,6 +111,17 @@
     "signInBeforeInvitation": "Musisz się zalogować, zanim będziesz mógł przyjąć zaproszenie do organizacji.",
     "signInWithPassword": "Zaloguj się hasłem",
     "subtitle": "Dokumenty, orzecznictwo i przegląd pod kontrolą. Z pomocą AI.",
+    "twoFactor": {
+      "backupCodePlaceholder": "Wprowadź kod zapasowy",
+      "enterAuthenticatorCode": "Wprowadź kod weryfikacyjny z aplikacji uwierzytelniającej.",
+      "enterBackupCode": "Wprowadź jeden ze swoich kodów zapasowych.",
+      "invalidBackupCode": "Nieprawidłowy kod zapasowy. Spróbuj ponownie.",
+      "invalidCode": "Nieprawidłowy kod weryfikacyjny. Spróbuj ponownie.",
+      "title": "Zweryfikuj swoją tożsamość",
+      "trustDevice": "Ufaj temu urządzeniu przez 30 dni",
+      "useAuthenticatorApp": "Użyj zamiast tego aplikacji uwierzytelniającej",
+      "useBackupCode": "Użyj zamiast tego kodu zapasowego"
+    },
     "useDifferentEmail": "Użyj innego adresu e-mail",
     "weSentCodeTo": "Wysłaliśmy kod na adres <email>{emailAddress}</email>"
   },
@@ -936,7 +962,8 @@
     "user": "Użytkownik",
     "verify": "Zweryfikuj",
     "version": "Wersja",
-    "versionLabel": "Wersja {version}"
+    "versionLabel": "Wersja {version}",
+    "workflows": "Przepływy pracy"
   },
   "consent": {
     "allow": "Zezwól",
@@ -1292,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Utwórz przepływ pracy",
+    "created": "Utworzono przepływ pracy",
+    "deleteFailed": "Nie udało się usunąć przepływu pracy.",
+    "deleteFlow": "Usuń przepływ pracy",
+    "deleted": "Usunięto przepływ pracy",
+    "descriptionPlaceholder": "Co robi ten przepływ pracy",
+    "disableFlow": "Wyłącz przepływ pracy",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "Brak przepływów pracy",
+    "emptyDescription": "Utwórz przepływ pracy, aby z dokumentów i celu utworzyć gotowy rezultat.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Włącz przepływ pracy",
+    "enabledDescription": "Wyłączonych przepływów pracy nie można uruchomić ani wyzwolić.",
+    "enabledLabel": "Włączony",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "Wszystkie sprawy",
+      "anyExtension": "Dowolny typ pliku",
+      "extensions": "Typy plików",
+      "extensionsPlaceholder": "Dodaj typ pliku (np. pdf) i naciśnij Enter"
+    },
+    "loadFailed": "Nie udało się załadować przepływów pracy.",
+    "loading": "Ładowanie przepływu pracy…",
+    "namePlaceholder": "np. Przegląd przyjęcia NDA",
+    "nameRequired": "Wprowadź nazwę przepływu pracy.",
+    "runs": {
+      "activeSublabel": "aktywne",
+      "cancel": "Anuluj uruchomienie",
+      "cancelFailed": "Nie udało się anulować uruchomienia.",
+      "cancelled": "Anulowano uruchomienie",
+      "confirmCancel": "Anulować to uruchomienie? Ukończone kroki zostaną zachowane.",
+      "createdDocument": "Utworzony dokument",
+      "empty": "Brak uruchomień",
+      "emptyDescription": "Rozpoczęte uruchomienia pojawią się tutaj.",
+      "history": "Historia uruchomień",
+      "inputDocuments": "Dokumenty wejściowe",
+      "launch": "Uruchom przepływ pracy",
+      "loadFailed": "Nie udało się załadować tego uruchomienia.",
+      "noEnabledFlows": "Brak włączonych przepływów pracy. Utwórz go w Wiedza › Przepływy pracy.",
+      "openDocument": "Otwórz dokument",
+      "review": {
+        "approve": "Zatwierdź",
+        "approved": "Zatwierdzono",
+        "failed": "Nie udało się przesłać przeglądu.",
+        "note": "Notatka (opcjonalnie)",
+        "notePlaceholder": "Dodaj notatkę do rejestru",
+        "priorOutput": "Poprzedni wynik",
+        "reject": "Odrzuć",
+        "rejected": "Odrzucono",
+        "title": "Wymagany przegląd"
+      },
+      "selectFlow": "Wybierz przepływ pracy",
+      "start": "Rozpocznij",
+      "startFailed": "Nie udało się uruchomić przepływu pracy.",
+      "started": "Uruchomiono przepływ pracy",
+      "stepProgress": "Krok {current} z {total}",
+      "tooManyInputDocuments": "Wybierz maksymalnie {max} dokumentów, aby uruchomić ten przepływ pracy."
+    },
+    "saveFailed": "Nie udało się zapisać przepływu pracy.",
+    "schedule": {
+      "daily": "Codziennie",
+      "dayOfMonth": "Dzień miesiąca",
+      "dayOfWeek": "Dzień tygodnia",
+      "frequency": "Częstotliwość",
+      "hour": "Godzina (UTC)",
+      "monthly": "Miesięcznie",
+      "selectWorkspace": "Wybierz sprawę",
+      "utcHint": "Zaplanowane godziny są w UTC.",
+      "weekly": "Tygodniowo",
+      "workspaceRequired": "Wybierz sprawę dla harmonogramu."
+    },
+    "status": {
+      "awaitingReview": "Oczekuje na przegląd",
+      "cancelled": "Anulowano",
+      "completed": "Ukończono",
+      "failed": "Niepowodzenie",
+      "pending": "Oczekuje",
+      "running": "W toku",
+      "skipped": "Pominięto"
+    },
+    "stepCount": "{count, plural, one {# krok} few {# kroki} many {# kroków} other {# kroku}}",
+    "steps": {
+      "add": "Dodaj krok:",
+      "ai": "Krok AI",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Utwórz dokument",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Tytuł dokumentu",
+      "documentTitlePlaceholder": "np. Notatka podsumowująca",
+      "documentTitleRequired": "Wprowadź tytuł dokumentu.",
+      "empty": "Dodaj co najmniej jeden krok.",
+      "includeDocuments": "Uwzględnij dokumenty wejściowe",
+      "instructions": "Instrukcje",
+      "instructionsPlaceholder": "Co ma sprawdzić recenzent",
+      "namePlaceholder": "Nazwa kroku",
+      "nameRequired": "Wprowadź nazwę dla każdego kroku.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Instrukcje dla kroku AI",
+      "promptRequired": "Wprowadź prompt dla kroku AI.",
+      "required": "Dodaj co najmniej jeden krok.",
+      "reviewGate": "Punkt przeglądu",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Kroki"
+    },
+    "trigger": {
+      "fileUpload": "Przesłanie pliku",
+      "manual": "Ręczny",
+      "manualHint": "Uruchom ten przepływ pracy na żądanie ze sprawy.",
+      "schedule": "Harmonogram",
+      "title": "Wyzwalacz",
+      "typeLabel": "Typ wyzwalacza"
+    },
+    "updated": "Zaktualizowano przepływ pracy"
   },
   "folio": {
     "acceptChange": "Przyjmij zmianę",
@@ -1808,6 +1986,9 @@
       "tools": {
         "description": "Połącz stella z rejestrami publicznymi i innymi źródłami",
         "title": "Narzędzia"
+      },
+      "workflows": {
+        "description": "Zautomatyzuj pracę z dokumentami za pomocą wielokrokowych przepływów pracy wielokrotnego użytku."
       }
     },
     "skills": {
@@ -2190,6 +2371,33 @@
       "timezoneDescription": "Używana w datach i godzinach w powiadomieniach i e-mailach",
       "timezoneSaved": "Zaktualizowano strefę czasową",
       "title": "Konto",
+      "twoFactor": {
+        "backupCodesDescription": "Przechowuj je w bezpiecznym miejscu. Każdego kodu można użyć raz do zalogowania się, jeśli utracisz dostęp do aplikacji uwierzytelniającej.",
+        "backupCodesRegenerated": "Wygenerowano nowe kody zapasowe",
+        "backupCodesSavedConfirm": "Zapisałem/-am te kody",
+        "backupCodesTitle": "Zapisz swoje kody zapasowe",
+        "copyAllCodes": "Kopiuj wszystkie kody",
+        "description": "Wymagaj kodu weryfikacyjnego z aplikacji uwierzytelniającej podczas logowania.",
+        "disable": "Wyłącz uwierzytelnianie dwuskładnikowe",
+        "disableConfirmDescription": "Podczas logowania nie będziesz już proszony o kod weryfikacyjny.",
+        "disableConfirmTitle": "Wyłączyć uwierzytelnianie dwuskładnikowe?",
+        "disableOtpDescription": "Wysłaliśmy kod weryfikacyjny na Twój adres e-mail. Wprowadź go poniżej, aby potwierdzić wyłączenie uwierzytelniania dwuskładnikowego.",
+        "disabledStatus": "Wyłączone",
+        "disabledSuccess": "Uwierzytelnianie dwuskładnikowe wyłączone",
+        "downloadCodes": "Pobierz jako plik tekstowy",
+        "enable": "Włącz uwierzytelnianie dwuskładnikowe",
+        "enabledStatus": "Włączone",
+        "enabledSuccess": "Uwierzytelnianie dwuskładnikowe włączone",
+        "enterCodeToConfirm": "Aby potwierdzić konfigurację, wprowadź kod weryfikacyjny z aplikacji uwierzytelniającej.",
+        "manualSetupKey": "Klucz konfiguracji",
+        "regenerateBackupCodes": "Wygeneruj nowe kody zapasowe",
+        "regenerateConfirmDescription": "Twoje obecne kody zapasowe natychmiast przestaną działać.",
+        "regenerateConfirmTitle": "Wygenerować nowe kody zapasowe?",
+        "regenerateOtpDescription": "Wysłaliśmy kod weryfikacyjny na Twój adres e-mail. Wprowadź go poniżej, aby potwierdzić wygenerowanie nowych kodów zapasowych.",
+        "scanQrDescription": "Zeskanuj ten kod QR aplikacją uwierzytelniającą lub wprowadź klucz konfiguracji ręcznie.",
+        "setupTitle": "Skonfiguruj uwierzytelnianie dwuskładnikowe",
+        "title": "Uwierzytelnianie dwuskładnikowe"
+      },
       "wordEditIdentitySaved": "Zaktualizowano tożsamość do edycji w programie Word",
       "wordEditShortcut": "Skrót do edycji w programie Word",
       "wordEditShortcutDescription": "Krótki znacznik z Twoimi inicjałami przy edycji w programie Word.",

@@ -28,7 +28,8 @@
     "ignore": "Ak ste o tento kód nežiadali, tento e-mail môžete ignorovať.",
     "preview": "Použite tento kód na overenie vašej identity",
     "signIn": "Použite tento kód na prihlásenie do svojho účtu stella.",
-    "subject": "Váš overovací kód stella"
+    "subject": "Váš overovací kód stella",
+    "twoFactorManage": "Použite tento kód na potvrdenie zmien v nastaveniach dvojfaktorového overenia."
   },
   "reportExportStatus": {
     "action": "Otvoriť stella",

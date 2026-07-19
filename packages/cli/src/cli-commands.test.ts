@@ -92,10 +92,12 @@ const writeCredentials = async ({
   configHome,
   url,
   token,
+  expiresAt,
 }: {
   configHome: string;
   url: string;
   token: string;
+  expiresAt?: number | undefined;
 }): Promise<void> => {
   const dir = path.join(configHome, "stella");
   await mkdir(dir, { recursive: true });
@@ -111,7 +113,7 @@ const writeCredentials = async ({
         accessToken: token,
         scope: "stella:read",
         tokenType: "Bearer",
-        expiresAt: now + 3_600_000,
+        expiresAt: expiresAt ?? now + 3_600_000,
         createdAt: now,
         updatedAt: now,
       },
@@ -128,17 +130,19 @@ const runCli = async ({
   token,
   stdin,
   signedIn = true,
+  expiresAt,
 }: {
   args: readonly string[];
   url: string;
   token: string;
   stdin?: string;
   signedIn?: boolean;
+  expiresAt?: number | undefined;
 }): Promise<RunResult> => {
   const configHome = await mkdtemp(path.join(tmpdir(), "stella-cli-"));
   tempDirs.push(configHome);
   if (signedIn) {
-    await writeCredentials({ configHome, url, token });
+    await writeCredentials({ configHome, url, token, expiresAt });
   }
 
   const proc = Bun.spawn({
@@ -202,6 +206,29 @@ describe("auth and scope gating (S4)", () => {
     server.stop();
     expect(result.exitCode).toBe(3);
     expect(result.stderr).toContain("stella:matters_write");
+    expect(server.requests).toHaveLength(0);
+  });
+
+  test("an expired credential with no refresh token surfaces the specific refresh-failed reason, not just 'Not signed in'", async () => {
+    const server = startMockServer(() => ({ toolPayload: {} }));
+    const result = await runCli({
+      args: ["matter", "list"],
+      url: server.url,
+      token: READ,
+      // No refresh token is ever written by `writeCredentials`, so an
+      // already-expired token fails closed without any network call
+      // (see `resolveAccessToken`'s "Expired and unrefreshable" branch).
+      expiresAt: Date.now() - 1000,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(3);
+    expect(result.stderr).toContain("Not signed in");
+    // The specific reason (the stored token expired and has no refresh
+    // token) must reach the user instead of being silently discarded by
+    // `resolvePreamble`.
+    expect(result.stderr).toContain(
+      "no refresh token is available. Run `stella auth login` again.",
+    );
     expect(server.requests).toHaveLength(0);
   });
 });

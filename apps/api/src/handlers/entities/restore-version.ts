@@ -1,8 +1,11 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
-import { buildVersionStamp } from "@/api/handlers/entities/version-utils";
+import {
+  buildVersionStamp,
+  nextEntityVersionNumber,
+} from "@/api/handlers/entities/version-utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -35,6 +38,7 @@ export default createSafeHandler(
             id: { eq: params.versionId },
             entityId: { eq: params.entityId },
             workspaceId: { eq: workspaceId },
+            deletedAt: { isNull: true },
           },
           columns: { id: true, versionNumber: true },
           with: {
@@ -50,24 +54,6 @@ export default createSafeHandler(
       );
     }
 
-    // Get the current highest version number
-    const latestVersion = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ versionNumber: entityVersions.versionNumber })
-          .from(entityVersions)
-          .where(
-            and(
-              eq(entityVersions.entityId, params.entityId),
-              eq(entityVersions.workspaceId, workspaceId),
-            ),
-          )
-          .orderBy(desc(entityVersions.versionNumber))
-          .limit(1),
-      ),
-    );
-
-    const nextVersionNumber = (latestVersion.at(0)?.versionNumber ?? 0) + 1;
     const nextVersionId = createSafeId<"entityVersion">();
 
     // Get entity info for stamp
@@ -102,15 +88,55 @@ export default createSafeHandler(
       ),
     );
 
-    const nextVersionStamp = buildVersionStamp({
-      docSequence: entity?.docSequence ?? null,
-      versionNumber: nextVersionNumber,
-      workspaceReference: workspace?.reference ?? null,
-    });
-
     // Create a new version (copy-to-top) with all fields from the source version
-    yield* Result.await(
+    const restoreOutcome = yield* Result.await(
       safeDb(async (tx) => {
+        // Serialize with delete-version (which tombstones under the same entity
+        // FOR UPDATE) and re-verify the source version is still live before
+        // cloning its content into a new version. The pre-read liveness check
+        // above races: a delete committing between it and this mutation could
+        // tombstone the source mid-restore, and resurrecting a withdrawn
+        // version's content would defeat the withdrawal. Rechecking under the
+        // lock makes the delete and the restore run one at a time.
+        await tx
+          .select({ id: entities.id })
+          .from(entities)
+          .where(
+            and(
+              eq(entities.id, params.entityId),
+              eq(entities.workspaceId, workspaceId),
+            ),
+          )
+          .for("update");
+        const sourceLive = await tx
+          .select({ id: entityVersions.id })
+          .from(entityVersions)
+          .where(
+            and(
+              eq(entityVersions.id, params.versionId),
+              eq(entityVersions.entityId, params.entityId),
+              eq(entityVersions.workspaceId, workspaceId),
+              isNull(entityVersions.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (sourceLive.length === 0) {
+          return { restored: false as const };
+        }
+
+        // Allocate from MAX over all versions (incl. tombstoned) under the
+        // entity lock, not source/current + 1, and inside the mutation tx so
+        // concurrent restores serialize instead of racing to the same number.
+        const nextVersionNumber = await nextEntityVersionNumber(tx, {
+          entityId: params.entityId,
+          workspaceId,
+        });
+        const nextVersionStamp = buildVersionStamp({
+          docSequence: entity?.docSequence ?? null,
+          versionNumber: nextVersionNumber,
+          workspaceReference: workspace?.reference ?? null,
+        });
+
         await tx.insert(entityVersions).values({
           createdBy: userId,
           entityId: params.entityId,
@@ -182,8 +208,16 @@ export default createSafeHandler(
             },
           },
         ]);
+
+        return { restored: true as const, versionNumber: nextVersionNumber };
       }),
     );
+
+    if (!restoreOutcome.restored) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Version not found" }),
+      );
+    }
 
     broadcast(workspaceId, {
       type: "invalidate-query",
@@ -192,7 +226,7 @@ export default createSafeHandler(
 
     return Result.ok({
       versionId: nextVersionId,
-      versionNumber: nextVersionNumber,
+      versionNumber: restoreOutcome.versionNumber,
     });
   },
 );

@@ -20,10 +20,13 @@ export type Context = CommandContext & {
   /** Resolved server origin (`--server`/env/config; see `auth/server-resolution.ts`), if any. */
   readonly serverUrl: string | undefined;
   /**
-   * The default org's stored access token for `serverUrl`, if signed in.
-   * Not proactively refreshed here — a Phase 3+ HTTP client wrapper should
-   * call `auth/ensure-fresh-credential.ts` reactively on a 401, matching
-   * `stella auth whoami`'s "no extra server calls unless needed" stance.
+   * The default org's live access token for `serverUrl`, if signed in.
+   * Resolved through `auth/resolve-access-token.ts`, which proactively
+   * refreshes (and persists) an expired/near-expiry credential before the
+   * command runs; `undefined` when there is no credential or a refresh failed,
+   * in which case the command falls back to the "Not signed in" / exit-`auth`
+   * path. A comfortably-valid credential is returned without any server call,
+   * keeping startup offline-instant.
    */
   readonly token: string | undefined;
 };

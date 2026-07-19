@@ -230,6 +230,15 @@ const envApi = createEnv({
     FEATURE_WEB_SEARCH: featureFlagSchema,
 
     /**
+     * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)
+     * path: autonomous, no-human-at-Stella registration that can
+     * auto-provision an account from an externally-signed assertion.
+     * Default-off; even when on, `agent_trusted_issuer` ships empty so
+     * no issuer is accepted until an operator explicitly trusts one.
+     */
+    FEATURE_AGENT_ID_JAG: featureFlagSchema,
+
+    /**
      * Web search backend. Only Tavily is wired today; add a new
      * picklist entry alongside its WebSearchProvider implementation.
      * Leave unset to disable the tool even when FEATURE_WEB_SEARCH=true.

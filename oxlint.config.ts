@@ -1668,6 +1668,7 @@ export default defineConfig({
       // Explicit route-boundary exceptions: public/protocol/auth/dev/SSE
       // surfaces do not fit the normal safe-handler endpoint shape.
       files: [
+        "apps/api/src/handlers/agent-auth/routes.ts",
         "apps/api/src/handlers/ai-config/routes.ts",
         "apps/api/src/handlers/auth/routes.ts",
         "apps/api/src/handlers/auth/ui-routes.ts",
@@ -1685,6 +1686,16 @@ export default defineConfig({
       ],
       rules: {
         "require-safe-route-handlers/require-safe-route-handlers": "off",
+      },
+    },
+    {
+      // Agent-auth control-plane handlers write through rootDb (which bypasses
+      // RLS), so their safe-handler generators have no safeDb Result to
+      // `yield*`. They stay `async function*` to satisfy the
+      // createSafeRootHandler contract, so require-yield does not apply.
+      files: ["apps/api/src/handlers/agent-auth/**/*.ts"],
+      rules: {
+        "require-yield": "off",
       },
     },
     {

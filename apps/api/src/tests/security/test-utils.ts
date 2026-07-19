@@ -2,6 +2,7 @@ import { pushSchema } from "drizzle-kit/api-postgres";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
@@ -18,6 +19,7 @@ import {
 const allSchema = {
   ...schema,
   ...authSchema,
+  ...agentAuthSchema,
   ...rlsExports,
 };
 
@@ -42,6 +44,11 @@ const AUTH_TABLES_SQL = [
   "oauth_refresh_token",
   "oauth_access_token",
   "oauth_consent",
+  "two_factor",
+  "agent_registration",
+  "agent_trusted_issuer",
+  "agent_delegation",
+  "agent_assertion_replay",
 ]
   .map(quoteSqlIdentifier)
   .join(", ");

@@ -48,6 +48,16 @@ export const LIMITS = {
   playbookDefinitionsCount: 100,
   playbookDefinitionsPageSizeDefault: 50,
   playbookDefinitionsPageSizeMax: 100,
+  /** Per-org cap on saved flow (Workflows) definitions. Per-definition size
+   *  is bounded by MAX_FLOW_STEPS in flow-types.ts. */
+  flowDefinitionsCount: 100,
+  flowDefinitionsPageSizeDefault: 50,
+  flowDefinitionsPageSizeMax: 100,
+  /** Page size for a workspace's flow-run history (newest first). */
+  flowRunsPageSizeDefault: 50,
+  flowRunsPageSizeMax: 100,
+  /** Max input documents a single flow run may be launched against. */
+  flowRunInputEntitiesMax: 50,
   /** Per-org cap on the editable document-type taxonomy. The taxonomy is
    *  inherently bounded (a few dozen contract categories), so the list
    *  endpoint returns a plain ordered array rather than a paginated page. */
@@ -347,6 +357,13 @@ export const API_RATE_LIMITS = {
    *  against unauthenticated input, so the budget is intentionally
    *  much tighter than the general API. */
   folioCollab: { duration: 60_000, max: 30 },
+  /** Agent-auth registration + claim-grant poll endpoints: 60 req/min
+   *  per IP. These are unauthenticated and pollable (RFC 8628 device
+   *  flow), so they get a dedicated, tight budget separate from the
+   *  general API. The poll interval is enforced server-side per
+   *  registration; this IP cap bounds an attacker registering or
+   *  polling in bulk. */
+  agentAuth: { duration: 60_000, max: 60 },
   /** Document translation: 30 req/min per IP. Each call ships a
    *  full document to the external translation provider and
    *  consumes the org's paid character quota, so this stays well
@@ -362,4 +379,7 @@ export const API_RATE_LIMITS = {
   hostedUsageWebhook: { duration: 60_000, max: 300 },
   /** Delete account OTP email request limit: 5 requests per minute. */
   deleteAccountOtp: { duration: 60_000, max: 5 },
+  /** Two-factor management (enable/disable/get-totp-uri/regenerate-backup-codes)
+   *  confirmation OTP email request limit: 5 requests per minute. */
+  twoFactorManageOtp: { duration: 60_000, max: 5 },
 } as const;

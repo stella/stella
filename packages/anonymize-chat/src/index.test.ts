@@ -43,7 +43,6 @@ describe("chat anonymization pipeline contract", () => {
       enableNameCorpus: true,
       enableDenyList: false,
       enableGazetteer: true,
-      enableNer: false,
       enableConfidenceBoost: false,
       enableCoreference: true,
       enableLegalForms: true,

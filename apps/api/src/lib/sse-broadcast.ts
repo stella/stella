@@ -18,6 +18,8 @@ type RedisPayload =
       scope: "organization";
       id: string;
       event: SSEEvent;
+      originInstanceId?: string | undefined;
+      deliveredInline?: boolean | undefined;
     }
   | {
       scope: "session";
@@ -29,7 +31,23 @@ type RedisPayload =
       scope: "workspace";
       id: string;
       event: SSEEvent;
+      originInstanceId?: string | undefined;
+      deliveredInline?: boolean | undefined;
     };
+
+/**
+ * Origin metadata for workspace/organization broadcasts. `originInstanceId`
+ * identifies the publishing instance and `deliveredInline` records whether that
+ * instance already delivered the event to its local clients inline (during a
+ * subscriber attach window). A receiver drops its own looped-back copy only
+ * when both hold, keeping own events exactly-once without dropping other
+ * instances' events. Both are optional so a message from an
+ * older-format publisher during a rolling deploy still delivers.
+ */
+type PublishOptions = {
+  originInstanceId?: string | undefined;
+  deliveredInline?: boolean | undefined;
+};
 
 export class SSEBroadcastError extends TaggedError("SSEBroadcastError")<{
   message: string;
@@ -81,6 +99,10 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
       typeof parsed.originInstanceId === "string"
         ? parsed.originInstanceId
         : undefined,
+    deliveredInline:
+      "deliveredInline" in parsed && typeof parsed.deliveredInline === "boolean"
+        ? parsed.deliveredInline
+        : undefined,
   };
 };
 
@@ -106,22 +128,28 @@ const publishRedisPayload = async (payload: RedisPayload): Promise<void> => {
 export const publishWorkspaceEvent = async (
   workspaceId: SafeId<"workspace">,
   event: SSEEvent,
+  options: PublishOptions = {},
 ): Promise<void> => {
   await publishRedisPayload({
     scope: "workspace",
     id: workspaceId,
     event,
+    originInstanceId: options.originInstanceId,
+    deliveredInline: options.deliveredInline,
   });
 };
 
 export const publishOrganizationEvent = async (
   organizationId: SafeId<"organization">,
   event: SSEEvent,
+  options: PublishOptions = {},
 ): Promise<void> => {
   await publishRedisPayload({
     scope: "organization",
     id: organizationId,
     event,
+    originInstanceId: options.originInstanceId,
+    deliveredInline: options.deliveredInline,
   });
 };
 

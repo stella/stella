@@ -25,7 +25,11 @@ import { InboxQuickJump } from "@/components/auth/inbox-quick-jump";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { usePulse } from "@/hooks/use-pulse";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
+import {
+  authClient,
+  HTTP_TOO_MANY_REQUESTS,
+  isTwoFactorRedirect,
+} from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
@@ -120,10 +124,11 @@ export function OTPPanel({
       email: string;
       otp: string;
     }) => {
-      const { error: signInError } = await authClient.signIn.emailOtp({
-        email: emailArg,
-        otp: otpArg,
-      });
+      const { data: signInData, error: signInError } =
+        await authClient.signIn.emailOtp({
+          email: emailArg,
+          otp: otpArg,
+        });
 
       if (signInError) {
         setOtp("");
@@ -137,6 +142,14 @@ export function OTPPanel({
           });
         }
         throw toAuthClientError(signInError);
+      }
+
+      if (isTwoFactorRedirect(signInData)) {
+        await navigate({
+          to: "/auth/two-factor",
+          search: { redirectTo },
+        });
+        return;
       }
 
       authClient

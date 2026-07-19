@@ -28,7 +28,8 @@
     "ignore": "Ha nem Ön kérte ezt a kódot, figyelmen kívül hagyhatja ezt az e-mailt.",
     "preview": "Használja ezt a kódot személyazonossága igazolásához",
     "signIn": "Használja ezt a kódot a stella fiókjába való bejelentkezéshez.",
-    "subject": "Az Ön stella ellenőrző kódja"
+    "subject": "Az Ön stella ellenőrző kódja",
+    "twoFactorManage": "Használja ezt a kódot a kétfaktoros hitelesítés beállításainak módosítására vonatkozó megerősítéshez."
   },
   "reportExportStatus": {
     "action": "stella megnyitása",

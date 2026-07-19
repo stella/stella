@@ -12,6 +12,21 @@
       "unknownDevice": "Appareil inconnu"
     }
   },
+  "agentClaim": {
+    "access": "Accès qu'il obtiendra",
+    "accessReadSearch": "Accès en lecture et recherche",
+    "approve": "Approuver",
+    "codeLabel": "Saisissez le code affiché par votre agent",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Vous pouvez retourner à votre agent.",
+    "connectedTitle": "Agent connecté",
+    "description": "Un agent IA demande l'accès à votre espace de travail stella en votre nom. N'approuvez que si vous en êtes à l'origine.",
+    "error": "Une erreur s'est produite. Veuillez réessayer.",
+    "errorExpired": "Cette demande a expiré. Relancez la connexion depuis votre agent.",
+    "errorInvalid": "Ce code ne semble pas correct. Vérifiez-le et réessayez.",
+    "errorNotFound": "Nous n'avons trouvé aucune demande en attente pour ce code. Vérifiez le code et réessayez.",
+    "title": "Connectez votre agent"
+  },
   "ai": {
     "analyzeWithAI": "Analyser avec l’IA",
     "editWithAI": "Modifier avec l’IA",
@@ -96,6 +111,17 @@
     "signInBeforeInvitation": "Vous devez vous connecter avant de pouvoir accepter une invitation à une organisation.",
     "signInWithPassword": "Se connecter avec un mot de passe",
     "subtitle": "Documents, jurisprudence et revue sous contrôle. Avec l'aide de l'IA.",
+    "twoFactor": {
+      "backupCodePlaceholder": "Saisir un code de secours",
+      "enterAuthenticatorCode": "Saisissez le code de vérification de votre application d’authentification.",
+      "enterBackupCode": "Saisissez l’un de vos codes de secours.",
+      "invalidBackupCode": "Code de secours invalide. Réessayez.",
+      "invalidCode": "Code de vérification invalide. Réessayez.",
+      "title": "Vérifiez votre identité",
+      "trustDevice": "Faire confiance à cet appareil pendant 30 jours",
+      "useAuthenticatorApp": "Utiliser plutôt votre application d’authentification",
+      "useBackupCode": "Utiliser plutôt un code de secours"
+    },
     "useDifferentEmail": "Utiliser une autre adresse e-mail",
     "weSentCodeTo": "Nous avons envoyé un code à <email>{emailAddress}</email>"
   },
@@ -936,7 +962,8 @@
     "user": "Utilisateur",
     "verify": "Vérifier",
     "version": "Version",
-    "versionLabel": "Version {version}"
+    "versionLabel": "Version {version}",
+    "workflows": "Flux de travail"
   },
   "consent": {
     "allow": "Autoriser",
@@ -1292,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Créer un flux de travail",
+    "created": "Flux de travail créé",
+    "deleteFailed": "Impossible de supprimer le flux de travail.",
+    "deleteFlow": "Supprimer le flux de travail",
+    "deleted": "Flux de travail supprimé",
+    "descriptionPlaceholder": "Ce que fait ce flux de travail",
+    "disableFlow": "Désactiver le flux de travail",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "Aucun flux de travail pour l’instant",
+    "emptyDescription": "Créez un flux de travail pour transformer des documents et un objectif en un livrable finalisé.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Activer le flux de travail",
+    "enabledDescription": "Les flux de travail désactivés ne peuvent pas être exécutés ni déclenchés.",
+    "enabledLabel": "Activé",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "Tous les dossiers",
+      "anyExtension": "Tout type de fichier",
+      "extensions": "Types de fichier",
+      "extensionsPlaceholder": "Ajoutez un type de fichier (p. ex. pdf) et appuyez sur Entrée"
+    },
+    "loadFailed": "Impossible de charger les flux de travail.",
+    "loading": "Chargement du flux de travail…",
+    "namePlaceholder": "p. ex. Examen de réception d’un NDA",
+    "nameRequired": "Saisissez un nom de flux de travail.",
+    "runs": {
+      "activeSublabel": "actif",
+      "cancel": "Annuler l’exécution",
+      "cancelFailed": "Impossible d’annuler l’exécution.",
+      "cancelled": "Exécution annulée",
+      "confirmCancel": "Annuler cette exécution ? Les étapes terminées sont conservées.",
+      "createdDocument": "Document créé",
+      "empty": "Aucune exécution pour l’instant",
+      "emptyDescription": "Les exécutions que vous lancez apparaîtront ici.",
+      "history": "Historique des exécutions",
+      "inputDocuments": "Documents d’entrée",
+      "launch": "Exécuter un flux de travail",
+      "loadFailed": "Impossible de charger cette exécution.",
+      "noEnabledFlows": "Aucun flux de travail activé. Créez-en un dans Connaissances › Flux de travail.",
+      "openDocument": "Ouvrir le document",
+      "review": {
+        "approve": "Approuver",
+        "approved": "Approuvé",
+        "failed": "Impossible de soumettre la revue.",
+        "note": "Note (facultatif)",
+        "notePlaceholder": "Ajoutez une note au dossier",
+        "priorOutput": "Résultat précédent",
+        "reject": "Rejeter",
+        "rejected": "Rejeté",
+        "title": "Revue requise"
+      },
+      "selectFlow": "Choisissez un flux de travail",
+      "start": "Démarrer",
+      "startFailed": "Impossible de démarrer le flux de travail.",
+      "started": "Flux de travail démarré",
+      "stepProgress": "Étape {current} sur {total}",
+      "tooManyInputDocuments": "Sélectionnez jusqu'à {max} documents pour exécuter ce flux de travail."
+    },
+    "saveFailed": "Impossible d’enregistrer le flux de travail.",
+    "schedule": {
+      "daily": "Quotidien",
+      "dayOfMonth": "Jour du mois",
+      "dayOfWeek": "Jour de la semaine",
+      "frequency": "Fréquence",
+      "hour": "Heure (UTC)",
+      "monthly": "Mensuel",
+      "selectWorkspace": "Sélectionnez un dossier",
+      "utcHint": "Les horaires programmés sont en UTC.",
+      "weekly": "Hebdomadaire",
+      "workspaceRequired": "Sélectionnez un dossier pour la planification."
+    },
+    "status": {
+      "awaitingReview": "En attente de revue",
+      "cancelled": "Annulé",
+      "completed": "Terminé",
+      "failed": "Échoué",
+      "pending": "En attente",
+      "running": "En cours",
+      "skipped": "Ignoré"
+    },
+    "stepCount": "{count, plural, one {# étape} other {# étapes}}",
+    "steps": {
+      "add": "Ajouter une étape :",
+      "ai": "Étape IA",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Créer un document",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Titre du document",
+      "documentTitlePlaceholder": "p. ex. Note de synthèse",
+      "documentTitleRequired": "Saisissez un titre de document.",
+      "empty": "Ajoutez au moins une étape.",
+      "includeDocuments": "Inclure les documents d’entrée",
+      "instructions": "Instructions",
+      "instructionsPlaceholder": "Ce que le relecteur doit vérifier",
+      "namePlaceholder": "Nom de l’étape",
+      "nameRequired": "Saisissez un nom pour chaque étape.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Instructions pour l’étape IA",
+      "promptRequired": "Saisissez un prompt pour l’étape IA.",
+      "required": "Ajoutez au moins une étape.",
+      "reviewGate": "Point de contrôle",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Étapes"
+    },
+    "trigger": {
+      "fileUpload": "Téléversement de fichier",
+      "manual": "Manuel",
+      "manualHint": "Exécutez ce flux de travail à la demande depuis un dossier.",
+      "schedule": "Planification",
+      "title": "Déclencheur",
+      "typeLabel": "Type de déclencheur"
+    },
+    "updated": "Flux de travail mis à jour"
   },
   "folio": {
     "acceptChange": "Accepter la modification",
@@ -1808,6 +1986,9 @@
       "tools": {
         "description": "Connectez stella aux registres publics et autres sources",
         "title": "Outils"
+      },
+      "workflows": {
+        "description": "Automatisez le travail documentaire avec des flux de travail réutilisables en plusieurs étapes."
       }
     },
     "skills": {
@@ -2190,6 +2371,33 @@
       "timezoneDescription": "Utilisé pour les horodatages dans les notifications et les e-mails",
       "timezoneSaved": "Fuseau horaire mis à jour",
       "title": "Compte",
+      "twoFactor": {
+        "backupCodesDescription": "Conservez-les en lieu sûr. Chaque code peut être utilisé une fois pour vous connecter si vous perdez l’accès à votre application d’authentification.",
+        "backupCodesRegenerated": "Codes de secours régénérés",
+        "backupCodesSavedConfirm": "J’ai enregistré ces codes",
+        "backupCodesTitle": "Enregistrez vos codes de secours",
+        "copyAllCodes": "Copier tous les codes",
+        "description": "Exiger un code de vérification d’une application d’authentification lors de la connexion.",
+        "disable": "Désactiver l’authentification à deux facteurs",
+        "disableConfirmDescription": "Il ne vous sera plus demandé de code de vérification lors de la connexion.",
+        "disableConfirmTitle": "Désactiver l’authentification à deux facteurs ?",
+        "disableOtpDescription": "Nous avons envoyé un code de vérification à votre adresse e-mail. Saisissez-le ci-dessous pour confirmer la désactivation de l'authentification à deux facteurs.",
+        "disabledStatus": "Désactivée",
+        "disabledSuccess": "Authentification à deux facteurs désactivée",
+        "downloadCodes": "Télécharger sous forme de fichier texte",
+        "enable": "Activer l’authentification à deux facteurs",
+        "enabledStatus": "Activée",
+        "enabledSuccess": "Authentification à deux facteurs activée",
+        "enterCodeToConfirm": "Saisissez le code de vérification de votre application d’authentification pour confirmer la configuration.",
+        "manualSetupKey": "Clé de configuration",
+        "regenerateBackupCodes": "Régénérer les codes de secours",
+        "regenerateConfirmDescription": "Vos codes de secours actuels cesseront immédiatement de fonctionner.",
+        "regenerateConfirmTitle": "Régénérer les codes de secours ?",
+        "regenerateOtpDescription": "Nous avons envoyé un code de vérification à votre adresse e-mail. Saisissez-le ci-dessous pour confirmer la régénération de vos codes de secours.",
+        "scanQrDescription": "Scannez ce code QR avec votre application d’authentification, ou saisissez la clé de configuration manuellement.",
+        "setupTitle": "Configurer l’authentification à deux facteurs",
+        "title": "Authentification à deux facteurs"
+      },
       "wordEditIdentitySaved": "Identité d’édition Word mise à jour",
       "wordEditShortcut": "Initiales d’édition Word",
       "wordEditShortcutDescription": "Tag court pour vos initiales sur les modifications Word.",

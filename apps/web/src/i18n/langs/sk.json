@@ -12,6 +12,21 @@
       "unknownDevice": "Neznáme zariadenie"
     }
   },
+  "agentClaim": {
+    "access": "Získa prístup",
+    "accessReadSearch": "Prístup na čítanie a vyhľadávanie",
+    "approve": "Schváliť",
+    "codeLabel": "Zadajte kód zobrazený vaším agentom",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Môžete sa vrátiť k svojmu agentovi.",
+    "connectedTitle": "Agent pripojený",
+    "description": "Agent s umelou inteligenciou žiada o prístup do vášho pracovného priestoru stella vo vašom mene. Schváľte iba vtedy, ak ste to spustili vy.",
+    "error": "Niečo sa pokazilo. Skúste to znova.",
+    "errorExpired": "Platnosť tejto požiadavky vypršala. Spustite pripojenie znova zo svojho agenta.",
+    "errorInvalid": "Tento kód nevyzerá správne. Skontrolujte ho a skúste to znova.",
+    "errorNotFound": "Pre tento kód sme nenašli žiadnu čakajúcu požiadavku. Skontrolujte kód a skúste to znova.",
+    "title": "Pripojte svojho agenta"
+  },
   "ai": {
     "analyzeWithAI": "Analyzovať pomocou AI",
     "editWithAI": "Upraviť pomocou AI",
@@ -96,6 +111,17 @@
     "signInBeforeInvitation": "Na prijatie pozvánky do organizácie sa musíte najprv prihlásiť.",
     "signInWithPassword": "Prihlásiť sa heslom",
     "subtitle": "Dokumenty, judikatúra aj revízie pod kontrolou. S pomocou AI.",
+    "twoFactor": {
+      "backupCodePlaceholder": "Zadajte záložný kód",
+      "enterAuthenticatorCode": "Zadajte overovací kód z overovacej aplikácie.",
+      "enterBackupCode": "Zadajte jeden zo svojich záložných kódov.",
+      "invalidBackupCode": "Neplatný záložný kód. Skúste to znova.",
+      "invalidCode": "Neplatný overovací kód. Skúste to znova.",
+      "title": "Overte svoju identitu",
+      "trustDevice": "Dôverovať tomuto zariadeniu po dobu 30 dní",
+      "useAuthenticatorApp": "Použiť namiesto toho overovaciu aplikáciu",
+      "useBackupCode": "Použiť namiesto toho záložný kód"
+    },
     "useDifferentEmail": "Použiť iný e-mail",
     "weSentCodeTo": "Odoslali sme kód na <email>{emailAddress}</email>"
   },
@@ -936,7 +962,8 @@
     "user": "Používateľ",
     "verify": "Overiť",
     "version": "Verzia",
-    "versionLabel": "Verzia {version}"
+    "versionLabel": "Verzia {version}",
+    "workflows": "Pracovné postupy"
   },
   "consent": {
     "allow": "Povoliť",
@@ -1292,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Vytvoriť pracovný postup",
+    "created": "Pracovný postup vytvorený",
+    "deleteFailed": "Pracovný postup sa nepodarilo odstrániť.",
+    "deleteFlow": "Odstrániť pracovný postup",
+    "deleted": "Pracovný postup odstránený",
+    "descriptionPlaceholder": "Čo tento pracovný postup robí",
+    "disableFlow": "Zakázať pracovný postup",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "Zatiaľ žiadne pracovné postupy",
+    "emptyDescription": "Vytvorte pracovný postup, ktorý z dokumentov a cieľa vytvorí hotový výstup.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Povoliť pracovný postup",
+    "enabledDescription": "Zakázané pracovné postupy nie je možné spustiť ani vyvolať.",
+    "enabledLabel": "Povolené",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "Všetky spisy",
+      "anyExtension": "Akýkoľvek typ súboru",
+      "extensions": "Typy súborov",
+      "extensionsPlaceholder": "Pridajte typ súboru (napr. pdf) a stlačte Enter"
+    },
+    "loadFailed": "Pracovné postupy sa nepodarilo načítať.",
+    "loading": "Načítava sa pracovný postup…",
+    "namePlaceholder": "napr. Kontrola prijatia NDA",
+    "nameRequired": "Zadajte názov pracovného postupu.",
+    "runs": {
+      "activeSublabel": "aktívny",
+      "cancel": "Zrušiť spustenie",
+      "cancelFailed": "Spustenie sa nepodarilo zrušiť.",
+      "cancelled": "Spustenie zrušené",
+      "confirmCancel": "Zrušiť toto spustenie? Dokončené kroky zostanú zachované.",
+      "createdDocument": "Vytvorený dokument",
+      "empty": "Zatiaľ žiadne spustenia",
+      "emptyDescription": "Spustenia, ktoré začnete, sa zobrazia tu.",
+      "history": "História spustení",
+      "inputDocuments": "Vstupné dokumenty",
+      "launch": "Spustiť pracovný postup",
+      "loadFailed": "Toto spustenie sa nepodarilo načítať.",
+      "noEnabledFlows": "Žiadne povolené pracovné postupy. Vytvorte ho v Znalosti › Pracovné postupy.",
+      "openDocument": "Otvoriť dokument",
+      "review": {
+        "approve": "Schváliť",
+        "approved": "Schválené",
+        "failed": "Kontrolu sa nepodarilo odoslať.",
+        "note": "Poznámka (voliteľné)",
+        "notePlaceholder": "Pridajte poznámku do záznamu",
+        "priorOutput": "Predchádzajúci výstup",
+        "reject": "Zamietnuť",
+        "rejected": "Zamietnuté",
+        "title": "Vyžaduje sa kontrola"
+      },
+      "selectFlow": "Vyberte pracovný postup",
+      "start": "Spustiť",
+      "startFailed": "Pracovný postup sa nepodarilo spustiť.",
+      "started": "Pracovný postup spustený",
+      "stepProgress": "Krok {current} z {total}",
+      "tooManyInputDocuments": "Vyberte najviac {max} dokumentov na spustenie tohto pracovného postupu."
+    },
+    "saveFailed": "Pracovný postup sa nepodarilo uložiť.",
+    "schedule": {
+      "daily": "Denne",
+      "dayOfMonth": "Deň v mesiaci",
+      "dayOfWeek": "Deň v týždni",
+      "frequency": "Frekvencia",
+      "hour": "Hodina (UTC)",
+      "monthly": "Mesačne",
+      "selectWorkspace": "Vyberte spis",
+      "utcHint": "Naplánované časy sú v UTC.",
+      "weekly": "Týždenne",
+      "workspaceRequired": "Vyberte spis pre plán."
+    },
+    "status": {
+      "awaitingReview": "Čaká na kontrolu",
+      "cancelled": "Zrušené",
+      "completed": "Dokončené",
+      "failed": "Zlyhalo",
+      "pending": "Čaká",
+      "running": "Prebieha",
+      "skipped": "Preskočené"
+    },
+    "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
+    "steps": {
+      "add": "Pridať krok:",
+      "ai": "Krok AI",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Vytvoriť dokument",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Názov dokumentu",
+      "documentTitlePlaceholder": "napr. Súhrnná správa",
+      "documentTitleRequired": "Zadajte názov dokumentu.",
+      "empty": "Pridajte aspoň jeden krok.",
+      "includeDocuments": "Zahrnúť vstupné dokumenty",
+      "instructions": "Pokyny",
+      "instructionsPlaceholder": "Čo má kontrolór skontrolovať",
+      "namePlaceholder": "Názov kroku",
+      "nameRequired": "Zadajte názov pre každý krok.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Pokyny pre krok AI",
+      "promptRequired": "Zadajte prompt pre krok AI.",
+      "required": "Pridajte aspoň jeden krok.",
+      "reviewGate": "Kontrolný bod",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Kroky"
+    },
+    "trigger": {
+      "fileUpload": "Nahranie súboru",
+      "manual": "Ručne",
+      "manualHint": "Spustite tento pracovný postup na požiadanie zo spisu.",
+      "schedule": "Plán",
+      "title": "Spúšťač",
+      "typeLabel": "Typ spúšťača"
+    },
+    "updated": "Pracovný postup aktualizovaný"
   },
   "folio": {
     "acceptChange": "Prijať zmenu",
@@ -1808,6 +1986,9 @@
       "tools": {
         "description": "Pripojte stella k verejným registrom a ďalším zdrojom",
         "title": "Nástroje"
+      },
+      "workflows": {
+        "description": "Automatizujte prácu s dokumentmi pomocou opakovane použiteľných viackrokových pracovných postupov."
       }
     },
     "skills": {
@@ -2190,6 +2371,33 @@
       "timezoneDescription": "Použité pre časové údaje v notifikáciách a e-mailoch",
       "timezoneSaved": "Časové pásmo aktualizované",
       "title": "Účet",
+      "twoFactor": {
+        "backupCodesDescription": "Uložte si ich na bezpečné miesto. Každý kód možno použiť raz na prihlásenie, ak stratíte prístup k overovacej aplikácii.",
+        "backupCodesRegenerated": "Záložné kódy obnovené",
+        "backupCodesSavedConfirm": "Uložil(a) som si tieto kódy",
+        "backupCodesTitle": "Uložte si záložné kódy",
+        "copyAllCodes": "Kopírovať všetky kódy",
+        "description": "Vyžadovať pri prihlásení overovací kód z overovacej aplikácie.",
+        "disable": "Vypnúť dvojfaktorové overenie",
+        "disableConfirmDescription": "Pri prihlasovaní už nebudete žiadaní o overovací kód.",
+        "disableConfirmTitle": "Vypnúť dvojfaktorové overenie?",
+        "disableOtpDescription": "Na váš e-mail sme odoslali overovací kód. Pre potvrdenie vypnutia dvojfaktorového overenia ho zadajte nižšie.",
+        "disabledStatus": "Vypnuté",
+        "disabledSuccess": "Dvojfaktorové overenie vypnuté",
+        "downloadCodes": "Stiahnuť ako textový súbor",
+        "enable": "Zapnúť dvojfaktorové overenie",
+        "enabledStatus": "Zapnuté",
+        "enabledSuccess": "Dvojfaktorové overenie zapnuté",
+        "enterCodeToConfirm": "Na potvrdenie nastavenia zadajte overovací kód z overovacej aplikácie.",
+        "manualSetupKey": "Kľúč nastavenia",
+        "regenerateBackupCodes": "Obnoviť záložné kódy",
+        "regenerateConfirmDescription": "Vaše existujúce záložné kódy okamžite prestanú fungovať.",
+        "regenerateConfirmTitle": "Obnoviť záložné kódy?",
+        "regenerateOtpDescription": "Na váš e-mail sme odoslali overovací kód. Pre potvrdenie obnovenia záložných kódov ho zadajte nižšie.",
+        "scanQrDescription": "Naskenujte tento QR kód overovacou aplikáciou alebo zadajte kľúč nastavenia manuálne.",
+        "setupTitle": "Nastaviť dvojfaktorové overenie",
+        "title": "Dvojfaktorové overenie"
+      },
       "wordEditIdentitySaved": "Identita pre úpravy vo Worde aktualizovaná",
       "wordEditShortcut": "Skratka pre úpravy vo Worde",
       "wordEditShortcutDescription": "Krátka značka pre vaše iniciály pri úpravách vo Worde.",

@@ -24,9 +24,18 @@ export type ChatUIToolsFor<TTools extends ChatToolMap> = {
   };
 };
 
+type InferToolNeedsApproval<TTool> = TTool extends {
+  needsApproval?: infer TNeedsApproval;
+}
+  ? TNeedsApproval extends true
+    ? true
+    : false
+  : false;
+
 type ChatClientToolFor<
   TName extends string,
   TTool extends ChatTool,
+  TApprovalNames extends string,
 > = ClientTool<
   TTool extends { inputSchema?: infer TInput extends SchemaInput }
     ? TInput
@@ -34,23 +43,33 @@ type ChatClientToolFor<
   TTool extends { outputSchema?: infer TOutput extends SchemaInput }
     ? TOutput
     : SchemaInput,
-  TName
+  TName,
+  unknown,
+  TName extends TApprovalNames ? true : InferToolNeedsApproval<TTool>
 >;
 
-type ChatClientToolUnionFor<TTools extends ChatToolMap> = {
+type ChatClientToolUnionFor<
+  TTools extends ChatToolMap,
+  TApprovalNames extends string,
+> = {
   [TName in keyof TTools & string]: DefinedChatTool<TTools[TName]> extends never
     ? never
-    : ChatClientToolFor<TName, DefinedChatTool<TTools[TName]>>;
+    : ChatClientToolFor<TName, DefinedChatTool<TTools[TName]>, TApprovalNames>;
 }[keyof TTools & string];
 
 type ExternalMcpClientTool = ClientTool<
   SchemaInput,
   SchemaInput,
-  `mcp__${string}`
+  `mcp__${string}`,
+  unknown,
+  true
 >;
 
-export type ChatClientToolsFor<TTools extends ChatToolMap> = readonly (
-  | ChatClientToolUnionFor<TTools>
+export type ChatClientToolsFor<
+  TTools extends ChatToolMap,
+  TApprovalNames extends string = never,
+> = readonly (
+  | ChatClientToolUnionFor<TTools, TApprovalNames>
   | ExternalMcpClientTool
 )[];
 

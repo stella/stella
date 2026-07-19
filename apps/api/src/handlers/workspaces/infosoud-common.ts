@@ -4,6 +4,7 @@ import {
   InfoSoudAPIError,
   InfoSoudClient,
   InfoSoudParseError,
+  InfoSoudPragueCourtResolutionError,
   InfoSoudRequestError,
 } from "@stll/infosoud";
 
@@ -14,7 +15,28 @@ export const infosoudLookupBodySchema = t.Object({
   spisZn: t.String({ minLength: 1, maxLength: 64 }),
 });
 
-export const createInfoSoudClient = () => new InfoSoudClient({ cache: false });
+let sharedClient: InfoSoudClient | undefined;
+
+/**
+ * One process-wide InfoSoud client, created lazily on first use.
+ *
+ * A single instance is required for the client's politeness throttle to pace
+ * concurrent callers, since the throttle is per-instance; a per-request client
+ * would defeat it. Caching is enabled only for the courts list (its default
+ * 24h TTL), which is identical for every workspace and rarely changes.
+ * Per-case reads keep a 0ms TTL so lookups and the tracked-case sync always
+ * see live registry data.
+ */
+export const getInfoSoudClient = (): InfoSoudClient => {
+  sharedClient ??= new InfoSoudClient({
+    cache: {
+      caseTtlMs: 0,
+      eventDetailTtlMs: 0,
+      hearingsTtlMs: 0,
+    },
+  });
+  return sharedClient;
+};
 
 export const toInfoSoudLookupError = (error: unknown): HandlerError => {
   if (error instanceof InfoSoudParseError) {
@@ -36,15 +58,15 @@ export const toInfoSoudLookupError = (error: unknown): HandlerError => {
     });
   }
 
-  if (error instanceof InfoSoudRequestError) {
-    if (error.message.startsWith("Cannot resolve Prague district court")) {
-      return new HandlerError({
-        status: 404,
-        message: "InfoSoud case not found",
-        cause: error,
-      });
-    }
+  if (error instanceof InfoSoudPragueCourtResolutionError) {
+    return new HandlerError({
+      status: 404,
+      message: "InfoSoud case not found",
+      cause: error,
+    });
+  }
 
+  if (error instanceof InfoSoudRequestError) {
     return new HandlerError({
       status: 502,
       message: "InfoSoud request failed",

@@ -12,6 +12,21 @@
       "unknownDevice": "Ismeretlen eszköz"
     }
   },
+  "agentClaim": {
+    "access": "Megkapott hozzáférés",
+    "accessReadSearch": "Olvasási és keresési hozzáférés",
+    "approve": "Jóváhagyás",
+    "codeLabel": "Adja meg az ügynöke által megjelenített kódot",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Visszatérhet az ügynökéhez.",
+    "connectedTitle": "Az ügynök csatlakoztatva",
+    "description": "Egy MI-ügynök az Ön nevében hozzáférést kér a stella munkaterületéhez. Csak akkor hagyja jóvá, ha Ön kezdeményezte.",
+    "error": "Valami hiba történt. Kérjük, próbálja újra.",
+    "errorExpired": "Ez a kérés lejárt. Indítsa újra a csatlakozást az ügynökéből.",
+    "errorInvalid": "Ez a kód nem tűnik helyesnek. Ellenőrizze, és próbálja újra.",
+    "errorNotFound": "Nem találtunk függőben lévő kérést ehhez a kódhoz. Ellenőrizze a kódot, és próbálja újra.",
+    "title": "Csatlakoztassa ügynökét"
+  },
   "ai": {
     "analyzeWithAI": "Elemzés AI-val",
     "editWithAI": "Szerkesztés AI-val",
@@ -96,6 +111,17 @@
     "signInBeforeInvitation": "A szervezeti meghívó elfogadásához először be kell jelentkeznie.",
     "signInWithPassword": "Bejelentkezés jelszóval",
     "subtitle": "Dokumentumok, ítélkezési gyakorlat és felülvizsgálat kézben tartva. AI segítségével.",
+    "twoFactor": {
+      "backupCodePlaceholder": "Adja meg a biztonsági kódot",
+      "enterAuthenticatorCode": "Adja meg a hitelesítő alkalmazásából származó ellenőrző kódot.",
+      "enterBackupCode": "Adja meg az egyik biztonsági kódját.",
+      "invalidBackupCode": "Érvénytelen biztonsági kód. Próbálja újra.",
+      "invalidCode": "Érvénytelen ellenőrző kód. Próbálja újra.",
+      "title": "Igazolja a személyazonosságát",
+      "trustDevice": "Megbízom ebben az eszközben 30 napig",
+      "useAuthenticatorApp": "Inkább hitelesítő alkalmazás használata",
+      "useBackupCode": "Inkább biztonsági kód használata"
+    },
     "useDifferentEmail": "Másik e-mail-cím használata",
     "weSentCodeTo": "Kódot küldtünk a következő címre: <email>{emailAddress}</email>"
   },
@@ -936,7 +962,8 @@
     "user": "Felhasználó",
     "verify": "Ellenőrzés",
     "version": "Verzió",
-    "versionLabel": "{version}. verzió"
+    "versionLabel": "{version}. verzió",
+    "workflows": "Munkafolyamatok"
   },
   "consent": {
     "allow": "Engedélyezés",
@@ -1292,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Munkafolyamat létrehozása",
+    "created": "Munkafolyamat létrehozva",
+    "deleteFailed": "A munkafolyamatot nem sikerült törölni.",
+    "deleteFlow": "Munkafolyamat törlése",
+    "deleted": "Munkafolyamat törölve",
+    "descriptionPlaceholder": "Mit csinál ez a munkafolyamat",
+    "disableFlow": "Munkafolyamat letiltása",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "Még nincsenek munkafolyamatok",
+    "emptyDescription": "Hozzon létre munkafolyamatot, amely a dokumentumokból és egy célból kész eredményt készít.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Munkafolyamat engedélyezése",
+    "enabledDescription": "A letiltott munkafolyamatokat nem lehet futtatni vagy elindítani.",
+    "enabledLabel": "Engedélyezve",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "Minden ügy",
+      "anyExtension": "Bármilyen fájltípus",
+      "extensions": "Fájltípusok",
+      "extensionsPlaceholder": "Adjon meg egy fájltípust (pl. pdf), és nyomja meg az Entert"
+    },
+    "loadFailed": "A munkafolyamatokat nem sikerült betölteni.",
+    "loading": "Munkafolyamat betöltése…",
+    "namePlaceholder": "pl. NDA befogadási ellenőrzés",
+    "nameRequired": "Adjon meg egy munkafolyamatnevet.",
+    "runs": {
+      "activeSublabel": "aktív",
+      "cancel": "Futtatás megszakítása",
+      "cancelFailed": "A futtatást nem sikerült megszakítani.",
+      "cancelled": "Futtatás megszakítva",
+      "confirmCancel": "Megszakítja ezt a futtatást? A befejezett lépések megmaradnak.",
+      "createdDocument": "Létrehozott dokumentum",
+      "empty": "Még nincsenek futtatások",
+      "emptyDescription": "Az elindított futtatások itt jelennek meg.",
+      "history": "Futtatási előzmények",
+      "inputDocuments": "Bemeneti dokumentumok",
+      "launch": "Munkafolyamat futtatása",
+      "loadFailed": "Ezt a futtatást nem sikerült betölteni.",
+      "noEnabledFlows": "Nincsenek engedélyezett munkafolyamatok. Hozzon létre egyet itt: Tudásbázis › Munkafolyamatok.",
+      "openDocument": "Dokumentum megnyitása",
+      "review": {
+        "approve": "Jóváhagyás",
+        "approved": "Jóváhagyva",
+        "failed": "Az ellenőrzést nem sikerült elküldeni.",
+        "note": "Megjegyzés (nem kötelező)",
+        "notePlaceholder": "Adjon hozzá megjegyzést a nyilvántartáshoz",
+        "priorOutput": "Előző eredmény",
+        "reject": "Elutasítás",
+        "rejected": "Elutasítva",
+        "title": "Ellenőrzés szükséges"
+      },
+      "selectFlow": "Válasszon munkafolyamatot",
+      "start": "Indítás",
+      "startFailed": "A munkafolyamatot nem sikerült elindítani.",
+      "started": "Munkafolyamat elindítva",
+      "stepProgress": "{current}/{total}. lépés",
+      "tooManyInputDocuments": "Válasszon ki legfeljebb {max} dokumentumot a munkafolyamat futtatásához."
+    },
+    "saveFailed": "A munkafolyamatot nem sikerült menteni.",
+    "schedule": {
+      "daily": "Naponta",
+      "dayOfMonth": "A hónap napja",
+      "dayOfWeek": "A hét napja",
+      "frequency": "Gyakoriság",
+      "hour": "Óra (UTC)",
+      "monthly": "Havonta",
+      "selectWorkspace": "Válasszon ügyet",
+      "utcHint": "Az ütemezett időpontok UTC szerint értendők.",
+      "weekly": "Hetente",
+      "workspaceRequired": "Válasszon ügyet az ütemezéshez."
+    },
+    "status": {
+      "awaitingReview": "Ellenőrzésre vár",
+      "cancelled": "Megszakítva",
+      "completed": "Befejezve",
+      "failed": "Sikertelen",
+      "pending": "Függőben",
+      "running": "Fut",
+      "skipped": "Kihagyva"
+    },
+    "stepCount": "{count, plural, one {# lépés} other {# lépés}}",
+    "steps": {
+      "add": "Lépés hozzáadása:",
+      "ai": "AI-lépés",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Dokumentum létrehozása",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Dokumentum címe",
+      "documentTitlePlaceholder": "pl. Összefoglaló feljegyzés",
+      "documentTitleRequired": "Adja meg a dokumentum címét.",
+      "empty": "Adjon hozzá legalább egy lépést.",
+      "includeDocuments": "Bemeneti dokumentumok belefoglalása",
+      "instructions": "Utasítások",
+      "instructionsPlaceholder": "Mit ellenőrizzen az ellenőr",
+      "namePlaceholder": "Lépés neve",
+      "nameRequired": "Adjon nevet minden lépésnek.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Utasítások az AI-lépéshez",
+      "promptRequired": "Adjon meg egy promptot az AI-lépéshez.",
+      "required": "Adjon hozzá legalább egy lépést.",
+      "reviewGate": "Ellenőrzési pont",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Lépések"
+    },
+    "trigger": {
+      "fileUpload": "Fájlfeltöltés",
+      "manual": "Kézi",
+      "manualHint": "Futtassa ezt a munkafolyamatot igény szerint egy ügyből.",
+      "schedule": "Ütemezés",
+      "title": "Eseményindító",
+      "typeLabel": "Eseményindító típusa"
+    },
+    "updated": "Munkafolyamat frissítve"
   },
   "folio": {
     "acceptChange": "Módosítás elfogadása",
@@ -1808,6 +1986,9 @@
       "tools": {
         "description": "Kapcsolja össze stella-t nyilvános nyilvántartásokkal és más forrásokkal",
         "title": "Eszközök"
+      },
+      "workflows": {
+        "description": "Automatizálja a dokumentumokkal végzett munkát újrafelhasználható, többlépéses munkafolyamatokkal."
       }
     },
     "skills": {
@@ -2190,6 +2371,33 @@
       "timezoneDescription": "Az értesítések és e-mailek időbélyegeihez használjuk",
       "timezoneSaved": "Időzóna frissítve",
       "title": "Fiók",
+      "twoFactor": {
+        "backupCodesDescription": "Tárolja ezeket biztonságos helyen. Minden kód egyszer használható bejelentkezésre, ha elveszíti a hozzáférést a hitelesítő alkalmazásához.",
+        "backupCodesRegenerated": "Biztonsági kódok újragenerálva",
+        "backupCodesSavedConfirm": "Elmentettem ezeket a kódokat",
+        "backupCodesTitle": "Mentse el a biztonsági kódjait",
+        "copyAllCodes": "Az összes kód másolása",
+        "description": "A bejelentkezéshez kérjen ellenőrző kódot egy hitelesítő alkalmazásból.",
+        "disable": "Kétfaktoros hitelesítés kikapcsolása",
+        "disableConfirmDescription": "A bejelentkezéshez többé nem kérünk Öntől ellenőrző kódot.",
+        "disableConfirmTitle": "Kikapcsolja a kétfaktoros hitelesítést?",
+        "disableOtpDescription": "Küldtünk egy ellenőrző kódot az e-mail címére. A kétfaktoros hitelesítés kikapcsolásának megerősítéséhez adja meg alább.",
+        "disabledStatus": "Kikapcsolva",
+        "disabledSuccess": "Kétfaktoros hitelesítés kikapcsolva",
+        "downloadCodes": "Letöltés szöveges fájlként",
+        "enable": "Kétfaktoros hitelesítés bekapcsolása",
+        "enabledStatus": "Bekapcsolva",
+        "enabledSuccess": "Kétfaktoros hitelesítés bekapcsolva",
+        "enterCodeToConfirm": "A beállítás megerősítéséhez adja meg a hitelesítő alkalmazásából származó ellenőrző kódot.",
+        "manualSetupKey": "Beállítási kulcs",
+        "regenerateBackupCodes": "Biztonsági kódok újragenerálása",
+        "regenerateConfirmDescription": "A meglévő biztonsági kódjai azonnal érvényüket vesztik.",
+        "regenerateConfirmTitle": "Újragenerálja a biztonsági kódokat?",
+        "regenerateOtpDescription": "Küldtünk egy ellenőrző kódot az e-mail címére. A biztonsági kódok újragenerálásának megerősítéséhez adja meg alább.",
+        "scanQrDescription": "Olvassa be ezt a QR-kódot a hitelesítő alkalmazásával, vagy adja meg manuálisan a beállítási kulcsot.",
+        "setupTitle": "Kétfaktoros hitelesítés beállítása",
+        "title": "Kétfaktoros hitelesítés"
+      },
       "wordEditIdentitySaved": "Word-szerkesztési azonosító frissítve",
       "wordEditShortcut": "Word-szerkesztési rövidítés",
       "wordEditShortcutDescription": "Rövid jelölés a Word-szerkesztéseknél megjelenő monogramjához.",

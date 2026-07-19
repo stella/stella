@@ -66,6 +66,13 @@ export const brandPersistedPlaybookDefinitionId = (
 ): SafeId<"playbookDefinition"> =>
   toSafeId<"playbookDefinition">(playbookDefinitionId);
 
+export const brandPersistedFlowDefinitionId = (
+  flowDefinitionId: string,
+): SafeId<"flowDefinition"> => toSafeId<"flowDefinition">(flowDefinitionId);
+
+export const brandPersistedFlowRunId = (flowRunId: string): SafeId<"flowRun"> =>
+  toSafeId<"flowRun">(flowRunId);
+
 export const brandPersistedUserFileId = (
   userFileId: string,
 ): SafeId<"userFile"> => toSafeId<"userFile">(userFileId);

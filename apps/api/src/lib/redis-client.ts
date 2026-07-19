@@ -8,13 +8,52 @@ import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 
 class ConfiguredRedisClient extends RedisClient implements BunRedisRawClient {
+  readonly #connectHandlers = new Set<() => void>();
+
   override onclose: (error?: Error) => void = () => undefined;
+  // Declared as a non-null field so the class satisfies `BunRedisRawClient`
+  // (Bun types the inherited `onconnect` as nullable). The field's own-property
+  // is removed in the constructor before the real callback is registered — see
+  // there for why the runtime path cannot be a plain field assignment.
   override onconnect: () => void = () => undefined;
   readonly url: string;
 
   constructor(url = env.REDIS_URL, overrides?: RedisOptions) {
     super(url, { ...redisConnectionOptions(url), ...overrides });
     this.url = url;
+    // Register one owned dispatcher on Bun's native `onconnect` setter so a
+    // pub/sub subscriber can observe reconnects. Two facts (both verified
+    // against a mock RESP3 server) shape this: (1) `onconnect` must be reached
+    // through `[[Set]]` so Bun registers the callback — the class field above
+    // defines an own data property that shadows the prototype setter, and a
+    // callback stored that way never fires; deleting the own property first
+    // makes the setter reachable. (2) Bun's RedisClient is not an EventTarget,
+    // so a direct `this.onconnect = …` is the only real option, but the
+    // prefer-add-event-listener lint rule bans that syntax — `Reflect.set`
+    // performs the same `[[Set]]` without the banned member-assignment form.
+    // The dispatcher fans every (re)connection out to the handlers registered
+    // via `onReconnect`.
+    Reflect.deleteProperty(this, "onconnect");
+    Reflect.set(this, "onconnect", () => {
+      for (const handler of this.#connectHandlers) {
+        handler();
+      }
+    });
+  }
+
+  /**
+   * Register `handler` to run on every (re)connection of this client,
+   * including reconnects after a transient drop. Bun's RedisClient auto-
+   * reconnects but does NOT re-issue SUBSCRIBE, so a pub/sub subscriber must
+   * observe reconnects to re-establish its subscription (see sse.ts). Register
+   * after the initial subscribe so the handler sees only genuine reconnects.
+   * Returns a disposer that removes the handler.
+   */
+  onReconnect(handler: () => void): () => void {
+    this.#connectHandlers.add(handler);
+    return () => {
+      this.#connectHandlers.delete(handler);
+    };
   }
 }
 

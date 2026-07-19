@@ -12,7 +12,7 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 
 import {
-  createInfoSoudClient,
+  getInfoSoudClient,
   infosoudLookupBodySchema,
   toInfoSoudLookupError,
 } from "./infosoud-common";
@@ -38,7 +38,7 @@ const infosoudImportAgenda = createSafeHandler(
     const lookupResult = yield* Result.await(
       Result.tryPromise({
         try: async () => {
-          const client = createInfoSoudClient();
+          const client = getInfoSoudClient();
           return await client.searchCaseWithHearings({
             courtCode,
             signal: request.signal,

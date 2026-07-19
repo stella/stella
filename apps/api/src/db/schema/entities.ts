@@ -265,6 +265,15 @@ export const entityVersions = p.pgTable(
     /** User who created this version (uploader, desktop editor, or restorer). */
     createdBy: p.text("created_by"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    /**
+     * Chain-of-custody tombstone. A non-null `deletedAt` hides the version
+     * from every read / list / restore / download path while its row and S3
+     * objects are retained under legal hold: version history must never be
+     * hard-deleted. `deletedBy` mirrors `createdBy` (plain user id, no FK) so
+     * the actor survives a user deletion.
+     */
+    deletedAt: p.timestamp("deleted_at"),
+    deletedBy: p.text("deleted_by"),
   },
   (table) => [
     p.index("entity_versions_entity_id_idx").on(table.entityId),

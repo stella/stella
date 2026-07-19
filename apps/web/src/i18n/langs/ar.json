@@ -12,6 +12,21 @@
       "unknownDevice": "جهاز غير معروف"
     }
   },
+  "agentClaim": {
+    "access": "الصلاحيات التي سيحصل عليها",
+    "accessReadSearch": "صلاحية القراءة والبحث",
+    "approve": "الموافقة",
+    "codeLabel": "أدخل الرمز الذي يعرضه وكيلك",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "يمكنك العودة إلى وكيلك الآن.",
+    "connectedTitle": "تم ربط الوكيل",
+    "description": "يطلب وكيل ذكاء اصطناعي الوصول إلى مساحة عمل stella نيابةً عنك. وافق فقط إذا كنت أنت من بدأ هذا الطلب.",
+    "error": "حدث خطأ ما. يُرجى المحاولة مرة أخرى.",
+    "errorExpired": "انتهت صلاحية هذا الطلب. ابدأ عملية الربط مرة أخرى من وكيلك.",
+    "errorInvalid": "يبدو أن الرمز غير صحيح. تحقق منه وحاول مرة أخرى.",
+    "errorNotFound": "لم نتمكن من العثور على طلب معلّق بهذا الرمز. تحقق من الرمز وحاول مرة أخرى.",
+    "title": "اربط وكيلك"
+  },
   "ai": {
     "analyzeWithAI": "التحليل باستخدام AI",
     "editWithAI": "التعديل باستخدام AI",
@@ -96,6 +111,17 @@
     "signInBeforeInvitation": "يجب تسجيل الدخول قبل أن تتمكن من قبول دعوة للانضمام إلى مؤسسة.",
     "signInWithPassword": "تسجيل الدخول بكلمة المرور",
     "subtitle": "المستندات والسوابق القضائية والمراجعة تحت السيطرة. مدعومة بالذكاء الاصطناعي.",
+    "twoFactor": {
+      "backupCodePlaceholder": "أدخل رمزًا احتياطيًا",
+      "enterAuthenticatorCode": "أدخل رمز التحقق من تطبيق المصادقة الخاص بك.",
+      "enterBackupCode": "أدخل أحد الرموز الاحتياطية الخاصة بك.",
+      "invalidBackupCode": "رمز احتياطي غير صالح. حاول مرة أخرى.",
+      "invalidCode": "رمز تحقق غير صالح. حاول مرة أخرى.",
+      "title": "تحقق من هويتك",
+      "trustDevice": "الوثوق بهذا الجهاز لمدة 30 يومًا",
+      "useAuthenticatorApp": "استخدام تطبيق المصادقة بدلاً من ذلك",
+      "useBackupCode": "استخدام رمز احتياطي بدلاً من ذلك"
+    },
     "useDifferentEmail": "استخدام بريد إلكتروني مختلف",
     "weSentCodeTo": "أرسلنا رمزًا إلى <email>{emailAddress}</email>"
   },
@@ -936,7 +962,8 @@
     "user": "المستخدم",
     "verify": "تحقّق",
     "version": "الإصدار",
-    "versionLabel": "الإصدار {version}"
+    "versionLabel": "الإصدار {version}",
+    "workflows": "مسارات العمل"
   },
   "consent": {
     "allow": "السماح",
@@ -1292,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "يبدأ بـ"
+  },
+  "flows": {
+    "createFlow": "إنشاء مسار عمل",
+    "created": "تم إنشاء مسار العمل",
+    "deleteFailed": "تعذّر حذف مسار العمل.",
+    "deleteFlow": "حذف مسار العمل",
+    "deleted": "تم حذف مسار العمل",
+    "descriptionPlaceholder": "ما الذي يقوم به مسار العمل هذا",
+    "disableFlow": "تعطيل مسار العمل",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "لا توجد مسارات عمل بعد",
+    "emptyDescription": "أنشئ مسار عمل لتحويل المستندات وهدف محدد إلى مُخرَج نهائي.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "تفعيل مسار العمل",
+    "enabledDescription": "لا يمكن تشغيل مسارات العمل المعطّلة أو تفعيل مشغّلاتها.",
+    "enabledLabel": "مُفعَّل",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "جميع الملفات",
+      "anyExtension": "أي نوع ملف",
+      "extensions": "أنواع الملفات",
+      "extensionsPlaceholder": "أضف نوع ملف (مثل pdf) واضغط Enter"
+    },
+    "loadFailed": "تعذّر تحميل مسارات العمل.",
+    "loading": "جارٍ تحميل مسار العمل…",
+    "namePlaceholder": "مثال: مراجعة استلام اتفاقية عدم إفصاح",
+    "nameRequired": "أدخل اسم مسار العمل.",
+    "runs": {
+      "activeSublabel": "نشط",
+      "cancel": "إلغاء التشغيل",
+      "cancelFailed": "تعذّر إلغاء التشغيل.",
+      "cancelled": "تم إلغاء التشغيل",
+      "confirmCancel": "هل تريد إلغاء هذا التشغيل؟ يتم الاحتفاظ بالخطوات المكتملة.",
+      "createdDocument": "المستند المُنشأ",
+      "empty": "لا توجد عمليات تشغيل بعد",
+      "emptyDescription": "ستظهر هنا عمليات التشغيل التي تبدأها.",
+      "history": "سجل عمليات التشغيل",
+      "inputDocuments": "مستندات الإدخال",
+      "launch": "تشغيل مسار عمل",
+      "loadFailed": "تعذّر تحميل هذا التشغيل.",
+      "noEnabledFlows": "لا توجد مسارات عمل مُفعَّلة. أنشئ واحدًا في المعرفة › مسارات العمل.",
+      "openDocument": "فتح المستند",
+      "review": {
+        "approve": "موافقة",
+        "approved": "تمت الموافقة",
+        "failed": "تعذّر إرسال المراجعة.",
+        "note": "ملاحظة (اختياري)",
+        "notePlaceholder": "أضف ملاحظة للسجل",
+        "priorOutput": "المُخرَج السابق",
+        "reject": "رفض",
+        "rejected": "تم الرفض",
+        "title": "المراجعة مطلوبة"
+      },
+      "selectFlow": "اختر مسار عمل",
+      "start": "بدء",
+      "startFailed": "تعذّر بدء مسار العمل.",
+      "started": "تم بدء مسار العمل",
+      "stepProgress": "الخطوة {current} من {total}",
+      "tooManyInputDocuments": "اختر حتى {max} مستند لتشغيل مسار العمل هذا."
+    },
+    "saveFailed": "تعذّر حفظ مسار العمل.",
+    "schedule": {
+      "daily": "يوميًا",
+      "dayOfMonth": "يوم من الشهر",
+      "dayOfWeek": "يوم من الأسبوع",
+      "frequency": "التكرار",
+      "hour": "الساعة (بالتوقيت العالمي المنسّق)",
+      "monthly": "شهريًا",
+      "selectWorkspace": "اختر ملفًا",
+      "utcHint": "الأوقات المجدولة بالتوقيت العالمي المنسّق (UTC).",
+      "weekly": "أسبوعيًا",
+      "workspaceRequired": "اختر ملفًا للجدولة."
+    },
+    "status": {
+      "awaitingReview": "في انتظار المراجعة",
+      "cancelled": "أُلغي",
+      "completed": "اكتمل",
+      "failed": "فشل",
+      "pending": "قيد الانتظار",
+      "running": "قيد التشغيل",
+      "skipped": "تم التخطي"
+    },
+    "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
+    "steps": {
+      "add": "إضافة خطوة:",
+      "ai": "خطوة AI",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "إنشاء مستند",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "عنوان المستند",
+      "documentTitlePlaceholder": "مثال: مذكرة ملخّص",
+      "documentTitleRequired": "أدخل عنوان المستند.",
+      "empty": "أضف خطوة واحدة على الأقل.",
+      "includeDocuments": "تضمين مستندات الإدخال",
+      "instructions": "التعليمات",
+      "instructionsPlaceholder": "ما الذي ينبغي أن يتحقق منه المراجع",
+      "namePlaceholder": "اسم الخطوة",
+      "nameRequired": "أدخل اسمًا لكل خطوة.",
+      "prompt": "المُوجَّه",
+      "promptPlaceholder": "تعليمات لخطوة AI",
+      "promptRequired": "أدخل مُوجَّهًا لخطوة AI.",
+      "required": "أضف خطوة واحدة على الأقل.",
+      "reviewGate": "بوابة المراجعة",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "الخطوات"
+    },
+    "trigger": {
+      "fileUpload": "رفع ملف",
+      "manual": "يدوي",
+      "manualHint": "شغّل مسار العمل هذا عند الطلب من أحد الملفات.",
+      "schedule": "جدولة",
+      "title": "المُشغّل",
+      "typeLabel": "نوع المُشغّل"
+    },
+    "updated": "تم تحديث مسار العمل"
   },
   "folio": {
     "acceptChange": "قبول التغيير",
@@ -1808,6 +1986,9 @@
       "tools": {
         "description": "المهارات، والأنظمة المدمجة، والأدوات المتاحة دائماً والتي يمكن للذكاء الاصطناعي استخدامها لمعالجة الاستفسارات",
         "title": "الأدوات"
+      },
+      "workflows": {
+        "description": "أتمتة العمل على المستندات باستخدام مسارات عمل قابلة لإعادة الاستخدام ومتعددة الخطوات."
       }
     },
     "skills": {
@@ -2190,6 +2371,33 @@
       "timezoneDescription": "تُستخدَم للطوابع الزمنية في الإشعارات ورسائل البريد الإلكتروني",
       "timezoneSaved": "تم تحديث المنطقة الزمنية",
       "title": "الحساب",
+      "twoFactor": {
+        "backupCodesDescription": "احتفظ بها في مكان آمن. يمكن استخدام كل رمز مرة واحدة لتسجيل الدخول إذا فقدت الوصول إلى تطبيق المصادقة الخاص بك.",
+        "backupCodesRegenerated": "تمت إعادة إنشاء الرموز الاحتياطية",
+        "backupCodesSavedConfirm": "لقد حفظت هذه الرموز",
+        "backupCodesTitle": "احفظ الرموز الاحتياطية الخاصة بك",
+        "copyAllCodes": "نسخ جميع الرموز",
+        "description": "طلب رمز تحقق من تطبيق مصادقة عند تسجيل الدخول.",
+        "disable": "تعطيل المصادقة الثنائية",
+        "disableConfirmDescription": "لن يُطلب منك بعد الآن إدخال رمز تحقق عند تسجيل الدخول.",
+        "disableConfirmTitle": "تعطيل المصادقة الثنائية؟",
+        "disableOtpDescription": "أرسلنا رمز تحقق إلى بريدك الإلكتروني. أدخله أدناه لتأكيد تعطيل المصادقة الثنائية.",
+        "disabledStatus": "غير مُفعَّلة",
+        "disabledSuccess": "تم تعطيل المصادقة الثنائية",
+        "downloadCodes": "تنزيل كملف نصي",
+        "enable": "تفعيل المصادقة الثنائية",
+        "enabledStatus": "مُفعَّلة",
+        "enabledSuccess": "تم تفعيل المصادقة الثنائية",
+        "enterCodeToConfirm": "أدخل رمز التحقق من تطبيق المصادقة لتأكيد الإعداد.",
+        "manualSetupKey": "مفتاح الإعداد",
+        "regenerateBackupCodes": "إعادة إنشاء الرموز الاحتياطية",
+        "regenerateConfirmDescription": "ستتوقف رموزك الاحتياطية الحالية عن العمل فورًا.",
+        "regenerateConfirmTitle": "إعادة إنشاء الرموز الاحتياطية؟",
+        "regenerateOtpDescription": "أرسلنا رمز تحقق إلى بريدك الإلكتروني. أدخله أدناه لتأكيد إعادة إنشاء الرموز الاحتياطية.",
+        "scanQrDescription": "امسح رمز الاستجابة السريعة (QR) هذا باستخدام تطبيق المصادقة، أو أدخل مفتاح الإعداد يدويًا.",
+        "setupTitle": "إعداد المصادقة الثنائية",
+        "title": "المصادقة الثنائية"
+      },
       "wordEditIdentitySaved": "تم تحديث هوية تحرير Word",
       "wordEditShortcut": "اختصار تحرير Word",
       "wordEditShortcutDescription": "وسم قصير للأحرف الأولى من اسمك في تحريرات Word.",

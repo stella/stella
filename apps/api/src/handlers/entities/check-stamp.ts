@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -113,7 +113,12 @@ const lookupByVerificationCode = async (
           eq(workspaces.organizationId, organizationId),
         ),
       )
-      .where(eq(entityVersions.verificationCode, verificationCode))
+      .where(
+        and(
+          eq(entityVersions.verificationCode, verificationCode),
+          isNull(entityVersions.deletedAt),
+        ),
+      )
       .limit(1);
     const row = rows.at(0);
 
@@ -174,7 +179,9 @@ const lookupByStamp = async (
           eq(workspaces.organizationId, organizationId),
         ),
       )
-      .where(eq(entityVersions.stamp, stamp))
+      .where(
+        and(eq(entityVersions.stamp, stamp), isNull(entityVersions.deletedAt)),
+      )
       .orderBy(desc(entityVersions.createdAt))
       .limit(1);
     const row = rows.at(0);

@@ -14,6 +14,7 @@
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
+import { logger } from "@/api/lib/observability/logger";
 
 const SMOKE_USER = {
   id: "smoke-user-stella",
@@ -115,6 +116,17 @@ export const mintSmokeSession = async (): Promise<SmokeSession> => {
   const signature = new Bun.CryptoHasher("sha256", env.BETTER_AUTH_SECRET)
     .update(token)
     .digest("base64");
+
+  // Emit an alertable signal on every mint. This endpoint issues a real
+  // owner session (scoped to the fixed synthetic org, never a real tenant),
+  // guarded only by SMOKE_SESSION_SECRET; a structured event lets an operator
+  // detect a mint firing in an environment where synthetic monitoring is not
+  // expected — the belt-and-suspenders the secret gate alone cannot provide.
+  logger.warn("smoke.session_minted", {
+    "smoke.org_id": SMOKE_ORG.id,
+    "smoke.is_dev": env.isDev,
+    "smoke.session_expires_at": expiresAt.toISOString(),
+  });
 
   return {
     cookieName: smokeCookieName(),

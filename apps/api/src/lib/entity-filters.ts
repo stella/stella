@@ -730,6 +730,7 @@ const internalSortExpr = (
       const sub = sql`(
         SELECT COUNT(*) FROM ${entityVersions}
         WHERE ${entityVersions.entityId} = ${entities.id}
+          AND ${entityVersions.deletedAt} IS NULL
       )`;
       return dir(sub);
     }

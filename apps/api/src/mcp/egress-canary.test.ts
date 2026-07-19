@@ -711,17 +711,19 @@ describe("MCP anonymization canary corpus", () => {
             workspaceId: "ws_1",
             kind: "document",
             name: nameSeed,
-            currentVersionId: "ver_current",
-          }),
-        },
-        fields: {
-          findMany: async () => [
-            {
-              id: "field_1",
-              propertyId: "prop_1",
-              content: { version: 1, type: "text", value: fieldValueSeed },
+            // readEntityByIdHandler reads the current version's fields via the
+            // `currentVersion` relation (folded into one tombstone-safe query).
+            currentVersion: {
+              id: "ver_current",
+              fields: [
+                {
+                  id: "field_1",
+                  propertyId: "prop_1",
+                  content: { version: 1, type: "text", value: fieldValueSeed },
+                },
+              ],
             },
-          ],
+          }),
         },
       },
       select: () =>
@@ -764,10 +766,11 @@ describe("MCP anonymization canary corpus", () => {
             workspaceId: "ws_1",
             kind: "document",
             name: "Doc",
-            currentVersionId: "ver_current",
           }),
         },
         entityVersions: {
+          // The version_id branch folds the version's fields into the
+          // tombstone-checked version query via the `fields` relation.
           findFirst: async () => ({
             id: "ver_1",
             versionNumber: 1,
@@ -775,20 +778,18 @@ describe("MCP anonymization canary corpus", () => {
             label: null,
             description: null,
             createdAt: new Date("2026-01-01"),
-          }),
-        },
-        fields: {
-          findMany: async () => [
-            {
-              id: "field_2",
-              propertyId: "prop_2",
-              content: {
-                version: 1,
-                type: "text",
-                value: versionFieldValueSeed,
+            fields: [
+              {
+                id: "field_2",
+                propertyId: "prop_2",
+                content: {
+                  version: 1,
+                  type: "text",
+                  value: versionFieldValueSeed,
+                },
               },
-            },
-          ],
+            ],
+          }),
         },
       },
     };

@@ -90,8 +90,19 @@ const createSafeDb = (
   const tx = {
     query: {
       entityVersions: {
-        findFirst: async ({ where }: { where: { id: { eq: string } } }) =>
-          versionsById[where.id.eq],
+        findFirst: async ({ where }: { where: { id: { eq: string } } }) => {
+          const version = versionsById[where.id.eq];
+          if (!version) {
+            return undefined;
+          }
+          // resolveVersionDocx now reads the active file field via the version's
+          // `fields` relation (folded into the tombstone-checked version query),
+          // so answer that relation here.
+          return {
+            ...version,
+            fields: fieldsByVersionId[where.id.eq] ?? defaultFields,
+          };
+        },
       },
       fields: {
         findFirst: async ({

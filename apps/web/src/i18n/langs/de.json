@@ -12,6 +12,21 @@
       "unknownDevice": "Unbekanntes Gerät"
     }
   },
+  "agentClaim": {
+    "access": "Erhält Zugriff",
+    "accessReadSearch": "Lese- und Suchzugriff",
+    "approve": "Genehmigen",
+    "codeLabel": "Geben Sie den von Ihrem Agenten angezeigten Code ein",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Sie können zu Ihrem Agenten zurückkehren.",
+    "connectedTitle": "Agent verbunden",
+    "description": "Ein KI-Agent fordert in Ihrem Namen Zugriff auf Ihren stella-Arbeitsbereich an. Genehmigen Sie nur, wenn Sie dies veranlasst haben.",
+    "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+    "errorExpired": "Diese Anfrage ist abgelaufen. Starten Sie die Verbindung erneut über Ihren Agenten.",
+    "errorInvalid": "Dieser Code sieht nicht richtig aus. Überprüfen Sie ihn und versuchen Sie es erneut.",
+    "errorNotFound": "Für diesen Code wurde keine ausstehende Anfrage gefunden. Überprüfen Sie den Code und versuchen Sie es erneut.",
+    "title": "Verbinden Sie Ihren Agenten"
+  },
   "ai": {
     "analyzeWithAI": "Mit KI analysieren",
     "editWithAI": "Mit KI bearbeiten",
@@ -96,6 +111,17 @@
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
     "signInWithPassword": "Mit Passwort anmelden",
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
+    "twoFactor": {
+      "backupCodePlaceholder": "Wiederherstellungscode eingeben",
+      "enterAuthenticatorCode": "Geben Sie den Bestätigungscode aus Ihrer Authenticator-App ein.",
+      "enterBackupCode": "Geben Sie einen Ihrer Wiederherstellungscodes ein.",
+      "invalidBackupCode": "Ungültiger Wiederherstellungscode. Versuchen Sie es erneut.",
+      "invalidCode": "Ungültiger Bestätigungscode. Versuchen Sie es erneut.",
+      "title": "Bestätigen Sie Ihre Identität",
+      "trustDevice": "Diesem Gerät für 30 Tage vertrauen",
+      "useAuthenticatorApp": "Stattdessen Authenticator-App verwenden",
+      "useBackupCode": "Stattdessen Wiederherstellungscode verwenden"
+    },
     "useDifferentEmail": "Andere E-Mail verwenden",
     "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },
@@ -936,7 +962,8 @@
     "user": "Benutzer",
     "verify": "Bestätigen",
     "version": "Version",
-    "versionLabel": "Version {version}"
+    "versionLabel": "Version {version}",
+    "workflows": "Workflows"
   },
   "consent": {
     "allow": "Zulassen",
@@ -1292,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Workflow erstellen",
+    "created": "Workflow erstellt",
+    "deleteFailed": "Der Workflow konnte nicht gelöscht werden.",
+    "deleteFlow": "Workflow löschen",
+    "deleted": "Workflow gelöscht",
+    "descriptionPlaceholder": "Was dieser Workflow tut",
+    "disableFlow": "Workflow deaktivieren",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "Noch keine Workflows",
+    "emptyDescription": "Erstellen Sie einen Workflow, um aus Dokumenten und einem Ziel ein fertiges Ergebnis zu erstellen.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Workflow aktivieren",
+    "enabledDescription": "Deaktivierte Workflows können nicht ausgeführt oder ausgelöst werden.",
+    "enabledLabel": "Aktiviert",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "Alle Akten",
+      "anyExtension": "Beliebiger Dateityp",
+      "extensions": "Dateitypen",
+      "extensionsPlaceholder": "Dateityp hinzufügen (z. B. pdf) und Enter drücken"
+    },
+    "loadFailed": "Workflows konnten nicht geladen werden.",
+    "loading": "Workflow wird geladen…",
+    "namePlaceholder": "z. B. NDA-Eingangsprüfung",
+    "nameRequired": "Geben Sie einen Workflow-Namen ein.",
+    "runs": {
+      "activeSublabel": "aktiv",
+      "cancel": "Ausführung abbrechen",
+      "cancelFailed": "Die Ausführung konnte nicht abgebrochen werden.",
+      "cancelled": "Ausführung abgebrochen",
+      "confirmCancel": "Diese Ausführung abbrechen? Abgeschlossene Schritte bleiben erhalten.",
+      "createdDocument": "Erstelltes Dokument",
+      "empty": "Noch keine Ausführungen",
+      "emptyDescription": "Von Ihnen gestartete Ausführungen erscheinen hier.",
+      "history": "Ausführungsverlauf",
+      "inputDocuments": "Eingabedokumente",
+      "launch": "Workflow ausführen",
+      "loadFailed": "Diese Ausführung konnte nicht geladen werden.",
+      "noEnabledFlows": "Keine aktivierten Workflows. Erstellen Sie einen unter Wissen › Workflows.",
+      "openDocument": "Dokument öffnen",
+      "review": {
+        "approve": "Genehmigen",
+        "approved": "Genehmigt",
+        "failed": "Die Prüfung konnte nicht übermittelt werden.",
+        "note": "Notiz (optional)",
+        "notePlaceholder": "Notiz für die Akte hinzufügen",
+        "priorOutput": "Vorheriges Ergebnis",
+        "reject": "Ablehnen",
+        "rejected": "Abgelehnt",
+        "title": "Prüfung erforderlich"
+      },
+      "selectFlow": "Workflow auswählen",
+      "start": "Starten",
+      "startFailed": "Der Workflow konnte nicht gestartet werden.",
+      "started": "Workflow gestartet",
+      "stepProgress": "Schritt {current} von {total}",
+      "tooManyInputDocuments": "Wählen Sie bis zu {max} Dokumente aus, um diesen Workflow auszuführen."
+    },
+    "saveFailed": "Der Workflow konnte nicht gespeichert werden.",
+    "schedule": {
+      "daily": "Täglich",
+      "dayOfMonth": "Tag des Monats",
+      "dayOfWeek": "Wochentag",
+      "frequency": "Häufigkeit",
+      "hour": "Stunde (UTC)",
+      "monthly": "Monatlich",
+      "selectWorkspace": "Akte auswählen",
+      "utcHint": "Geplante Zeiten sind in UTC.",
+      "weekly": "Wöchentlich",
+      "workspaceRequired": "Wählen Sie eine Akte für den Zeitplan aus."
+    },
+    "status": {
+      "awaitingReview": "Warten auf Prüfung",
+      "cancelled": "Abgebrochen",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "pending": "Ausstehend",
+      "running": "Läuft",
+      "skipped": "Übersprungen"
+    },
+    "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
+    "steps": {
+      "add": "Schritt hinzufügen:",
+      "ai": "AI-Schritt",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Dokument erstellen",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Dokumenttitel",
+      "documentTitlePlaceholder": "z. B. Zusammenfassung",
+      "documentTitleRequired": "Geben Sie einen Dokumenttitel ein.",
+      "empty": "Fügen Sie mindestens einen Schritt hinzu.",
+      "includeDocuments": "Eingabedokumente einbeziehen",
+      "instructions": "Anweisungen",
+      "instructionsPlaceholder": "Was der Prüfer kontrollieren soll",
+      "namePlaceholder": "Schrittname",
+      "nameRequired": "Geben Sie für jeden Schritt einen Namen ein.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Anweisungen für den AI-Schritt",
+      "promptRequired": "Geben Sie einen Prompt für den AI-Schritt ein.",
+      "required": "Fügen Sie mindestens einen Schritt hinzu.",
+      "reviewGate": "Prüfschritt",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Schritte"
+    },
+    "trigger": {
+      "fileUpload": "Datei-Upload",
+      "manual": "Manuell",
+      "manualHint": "Führen Sie diesen Workflow bei Bedarf aus einer Akte aus.",
+      "schedule": "Zeitplan",
+      "title": "Auslöser",
+      "typeLabel": "Auslösertyp"
+    },
+    "updated": "Workflow aktualisiert"
   },
   "folio": {
     "acceptChange": "Änderung annehmen",
@@ -1808,6 +1986,9 @@
       "tools": {
         "description": "Verbinden Sie stella mit öffentlichen Registern und anderen Quellen",
         "title": "Tools"
+      },
+      "workflows": {
+        "description": "Automatisieren Sie die Dokumentenarbeit mit wiederverwendbaren, mehrstufigen Workflows."
       }
     },
     "skills": {
@@ -2190,6 +2371,33 @@
       "timezoneDescription": "Wird für Zeitstempel in Benachrichtigungen und E-Mails verwendet",
       "timezoneSaved": "Zeitzone aktualisiert",
       "title": "Konto",
+      "twoFactor": {
+        "backupCodesDescription": "Bewahren Sie diese an einem sicheren Ort auf. Jeder Code kann einmal zum Anmelden verwendet werden, falls Sie den Zugriff auf Ihre Authenticator-App verlieren.",
+        "backupCodesRegenerated": "Wiederherstellungscodes neu generiert",
+        "backupCodesSavedConfirm": "Ich habe diese Codes gespeichert",
+        "backupCodesTitle": "Speichern Sie Ihre Wiederherstellungscodes",
+        "copyAllCodes": "Alle Codes kopieren",
+        "description": "Beim Anmelden einen Bestätigungscode aus einer Authenticator-App verlangen.",
+        "disable": "Zwei-Faktor-Authentifizierung deaktivieren",
+        "disableConfirmDescription": "Sie werden beim Anmelden nicht mehr nach einem Bestätigungscode gefragt.",
+        "disableConfirmTitle": "Zwei-Faktor-Authentifizierung deaktivieren?",
+        "disableOtpDescription": "Wir haben einen Bestätigungscode an Ihre E-Mail-Adresse gesendet. Geben Sie ihn unten ein, um die Deaktivierung der Zwei-Faktor-Authentifizierung zu bestätigen.",
+        "disabledStatus": "Deaktiviert",
+        "disabledSuccess": "Zwei-Faktor-Authentifizierung deaktiviert",
+        "downloadCodes": "Als Textdatei herunterladen",
+        "enable": "Zwei-Faktor-Authentifizierung aktivieren",
+        "enabledStatus": "Aktiviert",
+        "enabledSuccess": "Zwei-Faktor-Authentifizierung aktiviert",
+        "enterCodeToConfirm": "Geben Sie den Bestätigungscode aus Ihrer Authenticator-App ein, um die Einrichtung zu bestätigen.",
+        "manualSetupKey": "Einrichtungsschlüssel",
+        "regenerateBackupCodes": "Wiederherstellungscodes neu generieren",
+        "regenerateConfirmDescription": "Ihre bestehenden Wiederherstellungscodes funktionieren danach sofort nicht mehr.",
+        "regenerateConfirmTitle": "Wiederherstellungscodes neu generieren?",
+        "regenerateOtpDescription": "Wir haben einen Bestätigungscode an Ihre E-Mail-Adresse gesendet. Geben Sie ihn unten ein, um die Neugenerierung Ihrer Wiederherstellungscodes zu bestätigen.",
+        "scanQrDescription": "Scannen Sie diesen QR-Code mit Ihrer Authenticator-App oder geben Sie den Einrichtungsschlüssel manuell ein.",
+        "setupTitle": "Zwei-Faktor-Authentifizierung einrichten",
+        "title": "Zwei-Faktor-Authentifizierung"
+      },
       "wordEditIdentitySaved": "Word-Bearbeitungsidentität aktualisiert",
       "wordEditShortcut": "Word-Bearbeitungskürzel",
       "wordEditShortcutDescription": "Kurzes Kürzel für Ihre Initialen bei Word-Bearbeitungen.",

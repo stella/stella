@@ -34,7 +34,6 @@ const buildPipelineConfig = (
     enableNameCorpus: true,
     enableDenyList: false,
     enableGazetteer: false,
-    enableNer: false,
     enableConfidenceBoost: false,
     enableCoreference: true,
     enableLegalForms: true,

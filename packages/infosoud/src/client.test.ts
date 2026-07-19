@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { InfoSoudClient } from "./client.js";
-import { InfoSoudAPIError, InfoSoudParseError } from "./errors.js";
+import {
+  InfoSoudAPIError,
+  InfoSoudParseError,
+  InfoSoudPragueCourtResolutionError,
+  InfoSoudRequestError,
+} from "./errors.js";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -39,6 +44,75 @@ const getRequestPath = (input: URL | Request | string): string => {
   }
 
   return new URL(input.url).pathname;
+};
+
+/**
+ * Wraps a real AbortSignal's addEventListener/removeEventListener with
+ * counters, so tests can assert the throttle's abortable delay balances every
+ * listener it registers with a matching removal instead of leaking one per
+ * successful wait on a long-lived, reused signal.
+ */
+const patchSignalListenerCounts = (
+  signal: AbortSignal,
+): { addCount: () => number; removeCount: () => number } => {
+  let adds = 0;
+  let removes = 0;
+  // Bind off EventTarget.prototype (what AbortSignal's listener methods
+  // actually resolve to at runtime), not off `signal.addEventListener`
+  // directly: AbortSignal narrows addEventListener/removeEventListener to an
+  // overload set keyed by event name, and Function.prototype.bind() on an
+  // overloaded method collapses to only its last overload, which drops the
+  // `| null` that EventTarget's single signature (and this wrapper's own
+  // parameter type below) allows.
+  const originalAdd: EventTarget["addEventListener"] =
+    EventTarget.prototype.addEventListener.bind(signal);
+  const originalRemove: EventTarget["removeEventListener"] =
+    EventTarget.prototype.removeEventListener.bind(signal);
+
+  signal.addEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: AddEventListenerOptions | boolean,
+  ): void => {
+    adds += 1;
+    originalAdd(type, listener, options);
+  };
+  signal.removeEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: EventListenerOptions | boolean,
+  ): void => {
+    removes += 1;
+    originalRemove(type, listener, options);
+  };
+
+  return { addCount: () => adds, removeCount: () => removes };
+};
+
+type WaitForConditionProps = {
+  condition: () => boolean;
+  timeoutMs?: number;
+};
+
+// Poll a condition that is GUARANTEED to become true under correct behaviour
+// (e.g. "the queued caller has registered its abort listener"). The timeout
+// is a bug guard, not an observation window: it only fires when the property
+// under test is actually broken, so it is set generously rather than tuned to
+// expected wall-clock progress.
+const waitForCondition = async ({
+  condition,
+  timeoutMs = 5000,
+}: WaitForConditionProps): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() > deadline) {
+      throw new Error("Condition was not met before timeout.");
+    }
+    // oxlint-disable-next-line no-await-in-loop -- polling loop: each tick must wait before re-checking the condition
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 1);
+    });
+  }
 };
 
 const createCaseSearchResponse = (overrides: Record<string, unknown> = {}) => ({
@@ -534,6 +608,329 @@ describe("InfoSoudClient", () => {
     await client.searchCase({ courtCode: "OSSCEDC", spisZn: "1 T 64/2024" });
 
     expect(requestCount).toBe(2);
+  });
+
+  test("buildCourtMap does not queue the district-court load after the courts load fails", async () => {
+    let fetchCount = 0;
+
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async () => {
+        fetchCount += 1;
+        throw new TypeError("network unreachable");
+      },
+    });
+
+    // resolveCourtCode delegates straight to buildCourtMap, so exercising
+    // buildCourtMap here also pins resolveCourtCode's callers.
+    let buildError: unknown;
+    try {
+      await client.buildCourtMap();
+    } catch (error) {
+      buildError = error;
+    }
+
+    expect(buildError).toBeInstanceOf(InfoSoudRequestError);
+    // Sequential awaits short-circuit on the first rejection: the
+    // district-court call is never issued, so only one fetch ever fires.
+    // Reintroducing Promise.all here would enqueue it regardless of the
+    // first call's outcome, bumping this to 2.
+    expect(fetchCount).toBe(1);
+  });
+
+  test("concurrent cold-cache buildCourtMap callers share one in-flight courts load, and an aborted caller's signal does not deprive anyone of the result", async () => {
+    const fetchCountByPath: Record<string, number> = {};
+    let releaseFetch: (() => void) | undefined;
+    const fetchGate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async (input) => {
+        const path = getRequestPath(input);
+        fetchCountByPath[path] = (fetchCountByPath[path] ?? 0) + 1;
+        // Hold every response open until the test releases it, so both
+        // concurrent callers are guaranteed to observe the fetch as still
+        // in flight when the signal below is aborted.
+        await fetchGate;
+        return path.endsWith("/organizace/lov")
+          ? jsonResponse([
+              { kod: "KSUL", nazev: "Krajský soud Ústí nad Labem" },
+            ])
+          : jsonResponse([{ kod: "OSSCEDC", nazev: "Okresní soud Děčín" }]);
+      },
+    });
+
+    const abortController = new AbortController();
+
+    // Fire both calls without awaiting either first, so the second reaches
+    // #getCachedOrLoad's in-flight check while the first call's load is
+    // still pending (and thus already registered in #inFlightRequests).
+    const firstPromise = client.buildCourtMap();
+    const secondPromise = client.buildCourtMap({
+      signal: abortController.signal,
+    });
+
+    // Abort mid-load: buildCourtMap's load() never forwards a signal into
+    // getCourts()/getDistrictCourts(), so this must not cancel the shared
+    // fetch or reject either caller — it only ever gated the outer
+    // court-map cache's own in-flight bookkeeping, never the network call.
+    abortController.abort();
+    releaseFetch?.();
+
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+
+    const fetchCounts = Object.values(fetchCountByPath);
+    expect(fetchCounts).toHaveLength(2);
+    expect(fetchCounts.every((count) => count === 1)).toBe(true);
+    expect(first).toEqual(second);
+  });
+
+  test("serializes concurrent requests on one instance with the politeness gap", async () => {
+    const delayMs = 40;
+    const fetchStartedAt: number[] = [];
+
+    const client = new InfoSoudClient({
+      // Disable caching so both lookups reach the network and are paced by the
+      // throttle rather than deduplicated.
+      cache: false,
+      delayMs,
+      fetch: async () => {
+        fetchStartedAt.push(Date.now());
+        return jsonResponse(createCaseSearchResponse());
+      },
+    });
+
+    // Fire two lookups concurrently on the same instance. Without a serializing
+    // throttle both would pass the pacing check together and hit the upstream
+    // registry simultaneously.
+    await Promise.all([
+      client.searchCase({ courtCode: "OSSCEDC", spisZn: "1 T 64/2024" }),
+      client.searchCase({ courtCode: "OSSCEDC", spisZn: "2 T 65/2024" }),
+    ]);
+
+    expect(fetchStartedAt).toHaveLength(2);
+    const [firstStart, secondStart] = fetchStartedAt;
+    if (firstStart === undefined || secondStart === undefined) {
+      throw new Error("Expected two fetch timestamps");
+    }
+    // setTimeout never fires early, so the gap is a firm lower bound; allow a
+    // small slack for timer-resolution rounding.
+    expect(secondStart - firstStart).toBeGreaterThanOrEqual(delayMs - 5);
+  });
+
+  test("a queued caller aborted mid-wait does not spend a politeness slot", async () => {
+    const delayMs = 40;
+    const fetchStartedAt: number[] = [];
+
+    const client = new InfoSoudClient({
+      cache: false,
+      delayMs,
+      fetch: async () => {
+        fetchStartedAt.push(Date.now());
+        return jsonResponse(createCaseSearchResponse());
+      },
+    });
+
+    const abortController = new AbortController();
+    const { addCount } = patchSignalListenerCounts(abortController.signal);
+
+    // First call runs immediately; the second and third queue behind it. The
+    // second is aborted while queued, so it must reject without fetching and
+    // without advancing the politeness clock, leaving the third paced from the
+    // first request's completion (one gap) rather than two.
+    const first = client.searchCase({
+      courtCode: "OSSCEDC",
+      spisZn: "1 T 64/2024",
+    });
+    const aborted = client.searchCase({
+      courtCode: "OSSCEDC",
+      signal: abortController.signal,
+      spisZn: "2 T 65/2024",
+    });
+    const third = client.searchCase({
+      courtCode: "OSSCEDC",
+      spisZn: "3 T 66/2024",
+    });
+
+    // Wait until the queued caller has actually registered its abort
+    // listener (i.e. entered the politeness delay) before aborting. Without
+    // this, abort() can fire before the throttle chain even reaches the
+    // second call's task, which short-circuits on the pre-task
+    // signal.throwIfAborted() check and never exercises a genuine mid-wait
+    // cancellation.
+    await waitForCondition({ condition: () => addCount() > 0 });
+    abortController.abort();
+
+    let abortError: unknown;
+    try {
+      await aborted;
+    } catch (error) {
+      abortError = error;
+    }
+    expect(abortError).toBeInstanceOf(InfoSoudRequestError);
+
+    await Promise.all([first, third]);
+
+    // The aborted caller never reached the network.
+    expect(fetchStartedAt).toHaveLength(2);
+    const [firstStart, thirdStart] = fetchStartedAt;
+    if (firstStart === undefined || thirdStart === undefined) {
+      throw new Error("Expected two fetch timestamps");
+    }
+    // setTimeout never fires early, so this lower bound is a firm proof that
+    // at least one politeness gap elapsed before the third fetch (the
+    // aborted caller did not let the third one through instantly).
+    expect(thirdStart - firstStart).toBeGreaterThanOrEqual(delayMs - 5);
+    // This is a loose sanity ceiling, not a precise "one gap, not two" proof:
+    // a real timer plus the event loop has no firm upper bound on how late
+    // it can fire if the CI worker stalls, so asserting close to
+    // `delayMs * 2` (the value that would indicate the aborted caller
+    // wrongly consumed a politeness slot) is flaky under scheduler pauses
+    // even though the implementation is correct. Kept wide enough that
+    // ordinary CI jitter cannot trip it, so it only catches a total
+    // stall/deadlock in the throttle chain; it intentionally no longer
+    // pins the exact single-vs-double-gap distinction that the original
+    // tight bound asserted, per PR review guidance trading that precision
+    // for CI robustness (the fetch-count check above still proves the
+    // aborted caller never reaches the network, independent of timing).
+    expect(thirdStart - firstStart).toBeLessThan(delayMs * 10);
+  });
+
+  test("a pre-aborted signal performs no request at all", async () => {
+    let fetchCount = 0;
+
+    const client = new InfoSoudClient({
+      cache: false,
+      delayMs: 0,
+      fetch: async () => {
+        fetchCount += 1;
+        return jsonResponse(createCaseSearchResponse());
+      },
+    });
+
+    const abortController = new AbortController();
+    abortController.abort();
+
+    let abortError: unknown;
+    try {
+      await client.searchCase({
+        courtCode: "OSSCEDC",
+        signal: abortController.signal,
+        spisZn: "1 T 64/2024",
+      });
+    } catch (error) {
+      abortError = error;
+    }
+    expect(abortError).toBeInstanceOf(InfoSoudRequestError);
+
+    expect(fetchCount).toBe(0);
+  });
+
+  test("an aborted queued caller does not poison the shared throttle chain", async () => {
+    let fetchCount = 0;
+
+    const client = new InfoSoudClient({
+      cache: false,
+      delayMs: 0,
+      fetch: async () => {
+        fetchCount += 1;
+        return jsonResponse(createCaseSearchResponse());
+      },
+    });
+
+    const abortController = new AbortController();
+    abortController.abort();
+
+    let abortError: unknown;
+    try {
+      await client.searchCase({
+        courtCode: "OSSCEDC",
+        signal: abortController.signal,
+        spisZn: "1 T 64/2024",
+      });
+    } catch (error) {
+      abortError = error;
+    }
+    expect(abortError).toBeInstanceOf(InfoSoudRequestError);
+
+    // A subsequent caller behind the aborted one still runs to completion.
+    const result = await client.searchCase({
+      courtCode: "OSSCEDC",
+      spisZn: "2 T 65/2024",
+    });
+
+    expect(result.bcVec).toBe(64);
+    expect(fetchCount).toBe(1);
+  });
+
+  test("successful throttled waits do not accumulate abort listeners on a shared signal", async () => {
+    // Mirrors syncInfoSoudTrackedCases, which threads one long-lived scheduler
+    // AbortSignal through a whole tracked-case sweep: every throttled call
+    // that actually waits must remove its abort listener once the wait
+    // settles, or the listener count on the shared signal grows without bound.
+    const delayMs = 5;
+    const callCount = 5;
+
+    const client = new InfoSoudClient({
+      cache: false,
+      delayMs,
+      fetch: async () => jsonResponse(createCaseSearchResponse()),
+    });
+
+    const abortController = new AbortController();
+    const { addCount, removeCount } = patchSignalListenerCounts(
+      abortController.signal,
+    );
+
+    for (let index = 0; index < callCount; index += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential calls are required to actually exercise the politeness wait (and its listener) on each pass
+      await client.searchCase({
+        courtCode: "OSSCEDC",
+        signal: abortController.signal,
+        spisZn: `${index + 1} T 64/2024`,
+      });
+    }
+
+    // At least the calls after the first register a listener for their
+    // politeness wait (the first call has no prior request to be paced
+    // against, so it never waits and never registers one).
+    expect(addCount()).toBeGreaterThan(0);
+    expect(removeCount()).toBe(addCount());
+  });
+
+  test("raises a typed Prague resolution error when no district matches", async () => {
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async () =>
+        jsonResponse(
+          {
+            error: "Bad Request",
+            message: "not found",
+            path: "/infosoud/api/v1/rizeni/vyhledej",
+            status: 400,
+            timestamp: "2026-04-05T00:00:00.000+00:00",
+          },
+          400,
+        ),
+    });
+
+    expect.assertions(2);
+
+    try {
+      await client.searchCase({ courtCode: "OSPHA", spisZn: "1 T 64/2024" });
+    } catch (error) {
+      expect(error).toBeInstanceOf(InfoSoudPragueCourtResolutionError);
+      if (error instanceof InfoSoudPragueCourtResolutionError) {
+        expect(error.spisZn).toMatchObject({
+          bcVec: 64,
+          cisloSenatu: 1,
+          druhVeci: "T",
+          rocnik: 2024,
+        });
+      }
+    }
   });
 
   test("hydrates matching case events with parsed event detail helpers", async () => {

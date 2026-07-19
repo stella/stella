@@ -1,5 +1,16 @@
 import { panic, Result } from "better-result";
-import { and, asc, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import * as v from "valibot";
 
 import { roles } from "@stll/permissions";
@@ -60,6 +71,7 @@ import {
   ensureWorkspaceAccess,
   enumProp,
   errorResult,
+  internalFailureResult,
   intProp,
   isToolErrorResult,
   MAX_LIST_LIMIT,
@@ -1017,6 +1029,7 @@ const loadVersionHistory = async ({
         and(
           eq(entityVersions.entityId, entityId),
           eq(entityVersions.workspaceId, workspaceId),
+          isNull(entityVersions.deletedAt),
           keyset,
         ),
       )
@@ -1091,7 +1104,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(baseResult)) {
-      return errorResult(baseResult.error.message);
+      return internalFailureResult(baseResult.error);
     }
     const targetResult = await Result.gen(() =>
       loadEntityVersionDocxText({
@@ -1103,7 +1116,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (Result.isError(targetResult)) {
-      return errorResult(targetResult.error.message);
+      return internalFailureResult(targetResult.error);
     }
 
     const segments = buildLineDiffSegments(
@@ -1127,12 +1140,18 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
   // Specific version metadata + field values.
   if (parsed.output.version_id !== undefined) {
     const versionId = brandPersistedEntityVersionId(parsed.output.version_id);
+    // Read the version metadata and its fields in one tombstone-checked query.
+    // Loading the fields separately (keyed only by entityVersionId) after the
+    // version's `deletedAt IS NULL` check left a TOCTOU window: a tombstone
+    // landing between the two reads would still hand a withdrawn version's
+    // field content back through the tool.
     const versionRow = await context.scopedDb((tx) =>
       tx.query.entityVersions.findFirst({
         where: {
           id: { eq: versionId },
           entityId: { eq: entityId },
           workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
         },
         columns: {
           id: true,
@@ -1142,26 +1161,23 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
           description: true,
           createdAt: true,
         },
+        with: {
+          // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via
+          // the unique (propertyId, entityVersionId) index.
+          fields: { columns: { id: true, propertyId: true, content: true } },
+        },
       }),
     );
     if (!versionRow) {
       return notFoundResult("Version not found");
     }
-    const versionFields = await context.scopedDb((tx) =>
-      // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via the
-      // unique (propertyId, entityVersionId) index.
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.fields.findMany({
-        where: { entityVersionId: { eq: versionId } },
-        columns: { id: true, propertyId: true, content: true },
-      }),
-    );
+    const { fields: versionFields, ...versionMeta } = versionRow;
 
     const payload = {
       entityId,
       name: owner.name,
       version: {
-        ...versionRow,
+        ...versionMeta,
         createdAt: versionRow.createdAt.toISOString(),
         fields: versionFields,
       },
@@ -1178,7 +1194,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
     readEntityByIdHandler({ safeDb: context.safeDb, workspaceId, entityId }),
   );
   if (Result.isError(currentResult)) {
-    return errorResult(currentResult.error.message);
+    return internalFailureResult(currentResult.error);
   }
   const current = currentResult.value;
 
@@ -1387,7 +1403,7 @@ const createDocumentEntity = async ({
     }),
   );
   if (Result.isError(created)) {
-    return errorResult(created.error.message);
+    return internalFailureResult(created.error);
   }
 
   return textResult({ entityId: created.value.entityId });
@@ -1438,6 +1454,7 @@ const validateUpdateDocumentTargets = async ({
           id: { eq: versionId },
           entityId: { eq: entityId },
           workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
         },
         columns: { id: true },
       }),
@@ -1479,7 +1496,7 @@ const applyVersionAnnotations = async ({
       }),
     );
     if (Result.isError(labelled)) {
-      return errorResult(labelled.error.message);
+      return internalFailureResult(labelled.error);
     }
   }
   if (description !== undefined) {
@@ -1494,7 +1511,7 @@ const applyVersionAnnotations = async ({
       }),
     );
     if (Result.isError(described)) {
-      return errorResult(described.error.message);
+      return internalFailureResult(described.error);
     }
   }
   return null;
@@ -1565,7 +1582,7 @@ const updateDocumentEntity = async ({
       }),
     );
     if (Result.isError(renamed)) {
-      return errorResult(renamed.error.message);
+      return internalFailureResult(renamed.error);
     }
   }
 
@@ -1579,7 +1596,7 @@ const updateDocumentEntity = async ({
       }),
     );
     if (Result.isError(moved)) {
-      return errorResult(moved.error.message);
+      return internalFailureResult(moved.error);
     }
   }
 
@@ -1661,15 +1678,15 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
     const deleted = await Result.gen(() =>
       deleteEntityVersionHandler({
         safeDb: context.safeDb,
-        organizationId: context.organizationId,
         workspaceId,
         entityId,
         versionId,
+        deletedByUserId: context.userId,
         recordAuditEvent,
       }),
     );
     if (Result.isError(deleted)) {
-      return errorResult(deleted.error.message);
+      return internalFailureResult(deleted.error);
     }
     return textResult({ deleted: true });
   }
@@ -1687,7 +1704,7 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(deleted)) {
-    return errorResult(deleted.error.message);
+    return internalFailureResult(deleted.error);
   }
   return textResult({ deleted: true });
 };
@@ -1905,7 +1922,7 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
     }),
   );
   if (Result.isError(result)) {
-    return errorResult(result.error.message);
+    return internalFailureResult(result.error);
   }
 
   return textResult({});

@@ -1,11 +1,11 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 
 import { env } from "@/api/env";
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
+import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import {
   checkUserOrganizationOwnership,
-  createDeleteAccountOtp,
   getUserEmail,
 } from "@/api/lib/delete-account";
 import { sendOTPEmail } from "@/api/lib/email/email";
@@ -40,19 +40,12 @@ const deleteAccountSendOtp = createSafeSessionHandler(
       );
     }
 
-    // 3. Generate a cryptographically secure 6-digit OTP
-    const array = new Uint32Array(1);
-    crypto.getRandomValues(array);
-    const [val] = array;
-    if (val === undefined) {
-      panic("Failed to generate random value");
-    }
-    const otp = (100_000 + (val % 900_000)).toString();
+    // 3. Generate and store a cryptographically secure 6-digit OTP
+    const otp = yield* Result.await(
+      createConfirmationOtp({ purpose: "delete-account", email: emailStr }),
+    );
 
-    // 4. Store OTP in verification table
-    yield* Result.await(createDeleteAccountOtp(emailStr, otp));
-
-    // 5. Send email (log to console and fallback in development)
+    // 4. Send email (log to console and fallback in development)
     const lang = extractLangFromRequest(request);
     const emailResult = await Result.tryPromise({
       try: async () =>

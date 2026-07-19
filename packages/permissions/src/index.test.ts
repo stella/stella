@@ -131,6 +131,25 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("staff can author, run, and review workflows; intern and external cannot", () => {
+    for (const role of ["owner", "admin", "member"] as const) {
+      for (const action of [
+        "create",
+        "update",
+        "delete",
+        "run",
+        "review",
+      ] as const) {
+        expect(roles[role].authorize({ flow: [action] }).success).toBe(true);
+      }
+    }
+    for (const role of ["intern", "external"] as const) {
+      expect(roles[role].authorize({ flow: ["run"] }).success).toBe(false);
+      expect(roles[role].authorize({ flow: ["create"] }).success).toBe(false);
+      expect(roles[role].authorize({ flow: ["review"] }).success).toBe(false);
+    }
+  });
+
   test("every role can read its workspace", () => {
     for (const role of [
       "owner",

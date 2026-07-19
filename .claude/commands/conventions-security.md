@@ -16,9 +16,18 @@ handling, or external APIs. Stella handles privileged legal data
   validated and sanitised before processing.
 - **Workspace isolation** — data from one workspace must never
   leak to another.
-- **Ethical walls** — workspace boundaries enforce Chinese walls.
-  Zero visibility into unassigned workspaces: no names, no
-  members, no metadata. Absolute confidentiality.
+- **Ethical walls** — workspace (matter) boundaries enforce
+  information barriers for the `member` role at the RLS layer (not
+  just the UI): a member has zero visibility into workspaces they
+  are not assigned to via `workspace_members` — no names, no
+  members, no metadata. **Known limitation:** org `owner`/`admin`
+  roles carry a deliberate firm-admin override granting access to
+  every client matter (`client_id IS NOT NULL`) regardless of
+  assignment, and there is no per-matter screening to wall a
+  specific admin out of a specific matter. Do not describe admin
+  access as "absolute confidentiality." Screening a matter from an
+  admin requires a matter-level exclusion consulted by the RLS
+  view (`stella_authorized_workspaces`), which is not yet built.
 - **Access control** — every endpoint enforces auth and
   authorisation. No "internal-only" endpoints without guards.
 - **Dependency hygiene** — minimal, pinned, audited.

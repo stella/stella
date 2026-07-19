@@ -19,6 +19,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
@@ -285,25 +286,23 @@ const processPdfDerivativeJob = async ({
     }),
   );
 
-  if (
-    !row ||
-    row.content.type !== "file" ||
-    row.content.pdfFileId !== null ||
-    !isPendingPdfDerivative(row.content)
-  ) {
+  const action = decidePdfDerivativeAction(row?.content);
+  if (action.type === "skip") {
     return;
   }
 
-  const content = row.content;
-  if (
-    !shouldGeneratePdfDerivative({
-      encrypted: content.encrypted,
-      mimeType: content.mimeType,
-    })
-  ) {
+  if (action.type === "extract-only") {
+    // The derivative is already `ready`; only search extraction/indexing is
+    // outstanding (a retry after it threw). Re-run it so the document is not
+    // permanently missing from search. If it keeps failing, BullMQ exhausts
+    // the job and the `failed` handler captures the error; the derivative
+    // stays `ready` because the PDF preview itself genuinely succeeded.
+    // Broadcasts already fired on the ready flip, so they are not repeated.
+    await processExtraction(brandedEntityId);
     return;
   }
 
+  const content = action.content;
   const sourceKey = createFileKey({
     organizationId: branded.organizationId,
     workspaceId: branded.workspaceId,
@@ -386,13 +385,6 @@ const processPdfDerivativeJob = async ({
 
 const getS3File = async (key: string): Promise<ArrayBuffer> =>
   await getS3().file(key).arrayBuffer();
-
-const isPendingPdfDerivative = (
-  content: Extract<FieldContent, { type: "file" }>,
-): boolean =>
-  content.pdfDerivative?.status !== "not-required" &&
-  content.pdfDerivative?.status !== "ready" &&
-  content.pdfDerivative?.status !== "failed";
 
 const readyPdfDerivativeContent = (pdfFileId: string) =>
   sql<FieldContent>`jsonb_set(

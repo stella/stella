@@ -20,7 +20,10 @@ import {
   createChatHistoryTools,
   SEARCH_CHAT_HISTORY_TOOL_NAME,
 } from "@/api/handlers/chat/tools/chat-history-tools";
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
+import type {
+  ChatToolMap,
+  ChatUIToolsFor,
+} from "@/api/handlers/chat/tools/chat-tool-types";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -196,6 +199,12 @@ type BuiltInChatTools = OrgTools &
   SubagentTools;
 
 export type ChatTools = BuiltInChatTools;
+
+export type ChatBuiltinApprovalToolName = Exclude<
+  keyof ChatUIToolsFor<BuiltInChatTools>,
+  "ask-user" | "create-document"
+>;
+
 type BuiltInChatToolPolicyName =
   | keyof BuiltInChatTools
   | CurrentSkillEditToolName;
@@ -404,9 +413,11 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   save_time_entry: CHAT_TOOL_POLICY_KIND.mutation,
   set_field_value: CHAT_TOOL_POLICY_KIND.mutation,
   set_practice_jurisdictions: CHAT_TOOL_POLICY_KIND.mutation,
-  // The whole delegation is approved as a unit (Option A): once the user
-  // approves `spawn_subagents`, the subagents' own projected tools (writes
-  // included) run under that single grant, with no further per-call approval.
+  // `spawn_subagents` itself is approval-gated at the top level. A subagent's
+  // own writes are NOT executed under that grant: `projectToolMapForSubagent`
+  // replaces every approval-requiring tool with a non-executing proposal that
+  // is surfaced back to the top-level loop for per-write user approval
+  // (buffered approval).
   [SPAWN_SUBAGENTS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
 } as const satisfies Record<
   BuiltInChatToolPolicyName,
@@ -617,13 +628,14 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const delegationDepth = props.delegationDepth ?? 0;
   const subagentTools = areSubagentToolsRegistered({ delegationDepth })
     ? createSpawnSubagentsTool({
-        buildSubagentToolset: () =>
+        buildSubagentToolset: (proposalSink) =>
           projectToolMapForSubagent(
             getChatTools({
               ...props,
               hasActiveDocxEditClient: false,
               delegationDepth: delegationDepth + 1,
             }),
+            proposalSink,
           ),
         organizationId,
         orgAIConfig,

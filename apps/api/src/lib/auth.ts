@@ -1,13 +1,19 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
+import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import {
+  APIError,
+  createAuthMiddleware,
+  getSessionFromCtx,
+} from "better-auth/api";
 import {
   bearer,
   emailOTP,
   jwt,
   lastLoginMethod,
   organization,
+  twoFactor,
 } from "better-auth/plugins";
 import { Result } from "better-result";
 import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
@@ -31,6 +37,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { isUuid, tUuid } from "@/api/lib/custom-schema";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
@@ -82,6 +89,143 @@ const NEW_SESSION_SECURITY_PATHS = new Set([
 ]);
 const PREFERRED_NAME_MAX_LENGTH = 120;
 const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
+
+/** Passwordless email-OTP sign-in path (not a better-auth credential path). */
+const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
+
+/**
+ * Better Auth handles every social provider (`/callback/google`,
+ * `/callback/microsoft`, ...) through the `/callback/:id` endpoint. The MCP
+ * OAuth provider plugin uses `/oauth2/*` paths instead, so this prefix
+ * matches only social sign-in callbacks.
+ */
+const isSocialSignInCallbackPath = (path: string | undefined): boolean =>
+  path?.startsWith("/callback/") ?? false;
+
+const isStellaTwoFactorSignInGatePath = (path: string | undefined): boolean =>
+  path === SIGN_IN_EMAIL_OTP_PATH || isSocialSignInCallbackPath(path);
+
+/**
+ * Frontend route that presents the second-factor challenge (mirrors the path
+ * the email-OTP sign-in step navigates to on `twoFactorRedirect`). Its search
+ * schema defaults `redirectTo`, so no query string is required here.
+ */
+const TWO_FACTOR_CHALLENGE_PATH = "/auth/two-factor";
+
+/**
+ * True when a sign-in endpoint's response body is the two-factor plugin's
+ * "challenge pending" marker (`{ twoFactorRedirect: true }`). Narrowed
+ * structurally because the marker is injected by the plugin's after-hook and
+ * is not part of any endpoint's declared response type.
+ */
+export const isTwoFactorRedirectResponse = (value: unknown): boolean =>
+  typeof value === "object" &&
+  value !== null &&
+  "twoFactorRedirect" in value &&
+  value.twoFactorRedirect === true;
+
+/**
+ * The two-factor plugin's own management endpoints only require an active
+ * (fresh) session — see node_modules/better-auth/dist/plugins/two-factor/index.mjs
+ * (enable, disable) and its totp/backup-codes sub-plugins (get-totp-uri,
+ * generate-backup-codes). A hijacked session could otherwise silently strip
+ * 2FA, re-enable it to rotate the secret out from under the real owner,
+ * read back the current TOTP secret to clone the authenticator, or mint
+ * fresh backup codes, so these paths are additionally gated on a fresh
+ * email verification code (see `requireTwoFactorManageOtp`), mirroring the
+ * delete-account flow.
+ */
+export const TWO_FACTOR_MANAGE_PATHS = new Set([
+  "/two-factor/enable",
+  "/two-factor/disable",
+  "/two-factor/get-totp-uri",
+  "/two-factor/generate-backup-codes",
+]);
+const SIX_DIGIT_OTP_PATTERN = /^\d{6}$/u;
+
+export const isSixDigitOtpBody = (body: unknown): body is { otp: string } =>
+  typeof body === "object" &&
+  body !== null &&
+  "otp" in body &&
+  typeof body.otp === "string" &&
+  SIX_DIGIT_OTP_PATTERN.test(body.otp);
+
+/**
+ * Structural shape `requireTwoFactorManageOtp` needs off the hook context.
+ * Not `HookEndpointContext`: `createAuthMiddleware`'s single-argument
+ * overload — used for this app's top-level `hooks.before` — infers its own
+ * middleware context type, which is a structurally different (and
+ * stricter-in-places) shape than the per-plugin `HookEndpointContext`. This
+ * narrower type lets the function stay unit-testable with a minimal stub
+ * instead of a fully constructed better-auth context of either shape.
+ */
+type TwoFactorManageHookCtx = { path: string; body: unknown };
+
+/**
+ * Requires a fresh, single-use email verification code before letting any
+ * path in `TWO_FACTOR_MANAGE_PATHS` proceed, so a hijacked session cannot
+ * silently disable 2FA, rotate the TOTP secret via re-enable, read back the
+ * current TOTP secret, or mint fresh backup codes with nothing but the
+ * session cookie.
+ *
+ * Resolves the session itself (this runs as a global `before` hook, ahead of
+ * each endpoint's own session middleware) and no-ops when there is no
+ * session (the endpoint's own middleware will reject the request) or the
+ * user does not currently have 2FA enabled — first-time enrollment
+ * (`/two-factor/enable` for a user without 2FA yet) is then left ungated as
+ * a no-op for the plugin.
+ */
+const requireTwoFactorManageOtp = async (
+  ctx: TwoFactorManageHookCtx,
+): Promise<void> => {
+  // `getSessionFromCtx` wants a `GenericEndpointContext`, which requires
+  // `request` to always be present. better-auth's own middleware context
+  // types `request` as optional to also cover programmatic `auth.api.*`
+  // calls made without an HTTP request, but this hook only ever runs from
+  // HTTP dispatch (see dispatch.mjs), where `request` is always set.
+  // `getSessionFromCtx` only reads headers/cookies off `ctx`, so the
+  // narrower structural shape here is sound at runtime.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see comment above; ctx always carries a real Request when this hook fires
+  const genericCtx = ctx as unknown as Parameters<typeof getSessionFromCtx>[0];
+  const session = await getSessionFromCtx(genericCtx);
+  if (!session) {
+    return;
+  }
+
+  if (session.user["twoFactorEnabled"] !== true) {
+    return;
+  }
+
+  if (!isSixDigitOtpBody(ctx.body)) {
+    throw new APIError("BAD_REQUEST", {
+      message:
+        "Verification code required to change two-factor authentication settings",
+    });
+  }
+
+  const verifyResult = await verifyConfirmationOtp({
+    purpose: "two-factor-manage",
+    email: session.user.email,
+    code: ctx.body.otp,
+  });
+
+  if (Result.isError(verifyResult)) {
+    // Only wrong/expired codes are a client error. An infrastructure failure
+    // (e.g. the database is down) surfaces as a 500 from verifyConfirmationOtp;
+    // preserve that so it is not misreported to the user as an invalid code.
+    if (verifyResult.error.status >= 500) {
+      throw new APIError("INTERNAL_SERVER_ERROR", {
+        message: "Could not verify the two-factor settings change",
+      });
+    }
+    throw new APIError("BAD_REQUEST", {
+      message: "Invalid verification code",
+    });
+  }
+};
+
+/** TOTP issuer label shown in authenticator apps (e.g. "Stella (user@example.com)"). */
+const TWO_FACTOR_ISSUER = "Stella";
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -247,11 +391,100 @@ const getNewDeviceLoginDateTimeFormat = (lang: string): Intl.DateTimeFormat => {
   return formatter;
 };
 
+/**
+ * Extends every `hooks.after` matcher on a plugin so it also fires for the
+ * sign-in paths Stella supports that better-auth's two-factor plugin does not
+ * gate out of the box, in addition to whatever paths the plugin already
+ * matches.
+ *
+ * better-auth's two-factor plugin only gates the credential sign-in paths
+ * (`/sign-in/email`, `/sign-in/username`, `/sign-in/phone-number` — see
+ * node_modules/better-auth/dist/plugins/two-factor/index.mjs). Stella also
+ * signs users in via passwordless email-OTP (`/sign-in/email-otp`) and social
+ * providers (the `/callback/:id` OAuth callback), neither of which the
+ * plugin's matcher sees, so its after-hook would never challenge for a second
+ * factor on those flows. The handler itself is path-agnostic — it reads
+ * `ctx.context.newSession`, honors the trust-device cookie, deletes the
+ * pending session, and sets the two-factor challenge cookie — so extending the
+ * matcher makes it do its security work on these paths too. The social
+ * callback additionally needs the JSON response turned into a browser redirect
+ * (see `socialSignInTwoFactorRedirectPlugin`).
+ *
+ * Generic over `T` (rather than hardcoded to the two-factor plugin's
+ * concrete return type) so it stays independently unit-testable with a
+ * minimal stub instead of a fully constructed better-auth plugin.
+ */
+export const withStellaTwoFactorSignInGate = <
+  T extends {
+    hooks: { after: { matcher: (ctx: HookEndpointContext) => boolean }[] };
+  },
+>(
+  plugin: T,
+): T => ({
+  ...plugin,
+  hooks: {
+    ...plugin.hooks,
+    after: plugin.hooks.after.map((hook) => ({
+      ...hook,
+      matcher: (ctx: HookEndpointContext) =>
+        hook.matcher(ctx) || isStellaTwoFactorSignInGatePath(ctx.path),
+    })),
+  },
+});
+
+/**
+ * Turns the two-factor plugin's pending-challenge JSON response into a 302
+ * redirect for the social sign-in callback.
+ *
+ * The two-factor after-hook (now matching `/callback/:id` via
+ * `withStellaTwoFactorSignInGate`) does the security work on an enrolled
+ * user's social sign-in: it deletes the freshly created session and sets the
+ * two-factor challenge cookie, then returns `{ twoFactorRedirect: true }`. For
+ * credential / email-OTP sign-in that JSON body is read by the client fetch,
+ * but the social callback is a top-level browser navigation, so the browser
+ * would render raw JSON instead of continuing to the challenge. This plugin's
+ * after-hook runs after the two-factor hook (it is registered later in the
+ * `plugins` array) and, only when a challenge is now pending, replaces the
+ * response with a redirect to the frontend two-factor page. The challenge
+ * cookie the two-factor hook set is accumulated on the shared response headers,
+ * so it rides along on the redirect. When no challenge is pending the original
+ * OAuth redirect is left untouched.
+ */
+const socialSignInTwoFactorRedirectPlugin = {
+  id: "stella-social-two-factor-redirect",
+  hooks: {
+    after: [
+      {
+        matcher: (ctx: HookEndpointContext) =>
+          isSocialSignInCallbackPath(ctx.path),
+        // eslint-disable-next-line require-await -- createAuthMiddleware requires a Promise-returning handler; this one only reads a synchronous flag and throws a redirect, with no work to await (sync and non-async-promise variants trip promise-function-async / TS2345 instead).
+        handler: createAuthMiddleware(async (ctx) => {
+          if (!isTwoFactorRedirectResponse(ctx.context.returned)) {
+            return;
+          }
+          throw ctx.redirect(`${env.FRONTEND_URL}${TWO_FACTOR_CHALLENGE_PATH}`);
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
 const createAuth = () => {
+  const twoFactorPlugin = twoFactor({
+    // Stella is passwordless (email OTP is the first factor), so 2FA
+    // enable/disable/verify never require a password fallback.
+    allowPasswordless: true,
+    issuer: TWO_FACTOR_ISSUER,
+  });
+
+  const twoFactorWithSignInGate = withStellaTwoFactorSignInGate(
+    twoFactorPlugin,
+  ) satisfies BetterAuthPlugin;
+
   const auth = betterAuth({
     trustedOrigins: [
       ...frontendOrigins({
@@ -304,6 +537,17 @@ const createAuth = () => {
         "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
         "/forget-password": AUTH_RATE_LIMITS.forgetPassword,
         "/reset-password": AUTH_RATE_LIMITS.resetPassword,
+        // The two-factor plugin's own built-in rate limit is a single
+        // shared bucket across every `/two-factor/*` path (10s window,
+        // max 3 — see node_modules/better-auth/dist/plugins/two-factor/index.mjs).
+        // Sustained over a minute that is weaker than this app's other
+        // brute-force-sensitive endpoints, so verify-totp/verify-backup-code
+        // (guessable 6-digit / short codes) and enable/disable (session-gated
+        // but still sensitive) get the same posture as sign-in/verifyOtp.
+        "/two-factor/verify-totp": AUTH_RATE_LIMITS.verifyOtp,
+        "/two-factor/verify-backup-code": AUTH_RATE_LIMITS.verifyOtp,
+        "/two-factor/enable": AUTH_RATE_LIMITS.signIn,
+        "/two-factor/disable": AUTH_RATE_LIMITS.signIn,
       },
     },
     emailAndPassword: isSelfhostLocalPasswordAuthEnabled()
@@ -376,6 +620,14 @@ const createAuth = () => {
       jwt({ disableSettingJwtHeader: true }),
       lastLoginMethod(),
       emailOTP({
+        // Pin the security-relevant OTP parameters explicitly rather than
+        // inheriting library defaults, so a better-auth upgrade cannot
+        // silently widen the guessing window. These match the current
+        // defaults (6 digits, 5-minute expiry, 3 attempts before the code
+        // is invalidated); change deliberately, not by dependency drift.
+        otpLength: 6,
+        expiresIn: 5 * 60,
+        allowedAttempts: 3,
         async sendVerificationOTP({ email, otp, type }, ctx) {
           if (env.isDev) {
             // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
@@ -394,10 +646,18 @@ const createAuth = () => {
           await sendOTPEmail({ email, otp, type, lang });
         },
       }),
+      twoFactorWithSignInGate,
+      // Must be registered after `twoFactorWithSignInGate` so its after-hook
+      // runs after the two-factor hook has set the pending-challenge response.
+      socialSignInTwoFactorRedirectPlugin,
       organization({
         ac,
         roles,
         membershipLimit: LIMITS.organizationMembersCount,
+        // Pin the invitation lifetime explicitly (48h) so a dependency
+        // upgrade cannot silently extend how long an invite token stays
+        // valid. Single-use is enforced by the plugin's invitation status.
+        invitationExpiresIn: 60 * 60 * 48,
         organizationHooks: {
           async afterRemoveMember({
             member: removedMember,
@@ -500,6 +760,12 @@ const createAuth = () => {
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
+
+        if (TWO_FACTOR_MANAGE_PATHS.has(ctx.path)) {
+          await requireTwoFactorManageOtp(ctx);
+          return;
+        }
+
         if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
           return;
         }

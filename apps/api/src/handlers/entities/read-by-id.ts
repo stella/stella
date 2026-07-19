@@ -22,6 +22,15 @@ export const readEntityByIdHandler = async function* ({
   workspaceId,
   entityId,
 }: ReadEntityByIdHandlerProps) {
+  // Read the entity, its current version, and that version's fields in ONE
+  // query via the `currentVersion` relation. Reading currentVersionId here and
+  // its fields in a separate query keyed by that value left a TOCTOU window: a
+  // concurrent version delete promotes currentVersionId to the next live
+  // version and tombstones the old one, so a fields read keyed by the
+  // now-stale value could surface the withdrawn version's content. The relation
+  // read is atomic, and currentVersionId is an invariant-live version (delete
+  // promotes it off any withdrawn row), so this can only ever return live
+  // content.
   const entity = yield* Result.await(
     safeDb((tx) =>
       tx.query.entities.findFirst({
@@ -32,9 +41,20 @@ export const readEntityByIdHandler = async function* ({
           },
         },
         columns: {
-          currentVersionId: true,
           kind: true,
           name: true,
+        },
+        with: {
+          currentVersion: {
+            columns: { id: true },
+            with: {
+              // SAFETY: fields of one entity version, bounded by
+              // properties-per-workspace (LIMITS.propertiesCount).
+              fields: {
+                columns: { id: true, propertyId: true, content: true },
+              },
+            },
+          },
         },
       }),
     ),
@@ -46,7 +66,7 @@ export const readEntityByIdHandler = async function* ({
     );
   }
 
-  if (!entity.currentVersionId) {
+  if (!entity.currentVersion) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -55,30 +75,11 @@ export const readEntityByIdHandler = async function* ({
     );
   }
 
-  const currentVersionId = entity.currentVersionId;
-
-  const fields = yield* Result.await(
-    safeDb((tx) =>
-      // SAFETY: fields of one entity version, bounded by properties-per-workspace (LIMITS.propertiesCount)
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.fields.findMany({
-        where: {
-          entityVersionId: { eq: currentVersionId },
-        },
-        columns: {
-          id: true,
-          propertyId: true,
-          content: true,
-        },
-      }),
-    ),
-  );
-
   return Result.ok({
     entityId,
     kind: entity.kind,
     name: entity.name,
-    fields,
+    fields: entity.currentVersion.fields,
   });
 };
 

@@ -21,8 +21,8 @@ import {
   oauthRefreshToken,
   organization,
   session,
+  twoFactor,
   user,
-  verification,
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -101,66 +101,6 @@ export const lockUserRowForDeletion = async (
     .from(user)
     .where(eq(user.id, currentUserId))
     .for("update");
-};
-
-export type VerifyDeletionOtpParams = {
-  tx: Transaction;
-  identifier: string;
-  code: string;
-};
-
-/**
- * Fetches and validates the delete-account OTP. Deletes the OTP record on
- * an incorrect or expired attempt (but not on success — the caller deletes
- * it after the ownership check below, once deletion is confirmed to
- * proceed).
- */
-export const verifyDeletionOtp = async ({
-  tx,
-  identifier,
-  code,
-}: VerifyDeletionOtpParams) => {
-  const verificationRow = await tx
-    .select()
-    .from(verification)
-    .where(eq(verification.identifier, identifier))
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!verificationRow) {
-    throw new HandlerError({
-      code: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
-      status: 400,
-      message: "Invalid verification code",
-    });
-  }
-
-  if (verificationRow.value !== code) {
-    // Prevent brute force by deleting the OTP on the first incorrect attempt
-    await tx
-      .delete(verification)
-      .where(eq(verification.identifier, identifier));
-
-    throw new HandlerError({
-      code: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
-      status: 400,
-      message: "Invalid verification code",
-    });
-  }
-
-  if (verificationRow.expiresAt.getTime() < Date.now()) {
-    await tx
-      .delete(verification)
-      .where(eq(verification.identifier, identifier));
-
-    throw new HandlerError({
-      code: ACCOUNT_DELETION_ERROR_CODE.otpExpired,
-      status: 400,
-      message: "Verification code has expired",
-    });
-  }
-
-  return verificationRow;
 };
 
 /**
@@ -244,11 +184,19 @@ export type RevokeAuthCredentialsParams = {
 export const REVOKE_AUTH_CREDENTIALS_TABLES = [
   account,
   session,
+  twoFactor,
   invitation,
 ] as const satisfies readonly PgTable[];
 
 /**
- * 1. Auth credentials, sessions, and invitations (auth-schema tables).
+ * 1. Auth credentials, sessions, two-factor secrets, and invitations
+ * (auth-schema tables).
+ *
+ * The `two_factor` FK to `user` is `onDelete: "cascade"`, but account
+ * deletion soft-deletes the user row (see `finalizeDeletedUserRecord`) and
+ * never hard-deletes it, so that cascade never fires. The encrypted TOTP
+ * secret and backup codes must therefore be purged explicitly here, the same
+ * way `session` and `account` are.
  */
 export const revokeAuthCredentialsAndInvitations = async ({
   tx,
@@ -258,6 +206,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
   await tx.delete(account).where(eq(account.userId, currentUserId));
   // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth session artifacts.
   await tx.delete(session).where(eq(session.userId, currentUserId));
+  await tx.delete(twoFactor).where(eq(twoFactor.userId, currentUserId));
   // Delete invitations sent by the user, and also invitations sent to the user's email
   await tx.delete(invitation).where(eq(invitation.inviterId, currentUserId));
   await tx.delete(invitation).where(eq(invitation.email, email));

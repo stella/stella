@@ -17,17 +17,16 @@ import { Result } from "better-result";
 
 import packageJson from "../package.json" with { type: "json" };
 import { defaultConfigDir } from "./auth/cli-config.js";
-import {
-  findDefaultCredential,
-  readCredentialFile,
-} from "./auth/credential-store.js";
+import { resolveAccessToken } from "./auth/resolve-access-token.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
 import { buildGeneratedRoutes, buildResourceRoutes } from "./build-cli-tree.js";
+import { commandNeedsRegistry } from "./command-locality.js";
 import { authRoute } from "./commands/auth.js";
 import { compatibilityRoute } from "./commands/compatibility.js";
 import type { Context } from "./context.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
 import { generatedResourceTree } from "./generated/resource-tree.js";
+import { reportFatalError } from "./main-error-boundary.js";
 import {
   refreshRegistryCache,
   resolveCommandTree,
@@ -107,10 +106,30 @@ const resolvePreamble = async (): Promise<{
   const serverUrl = Result.isOk(serverUrlResult)
     ? serverUrlResult.value
     : undefined;
-  const token = serverUrl
-    ? findDefaultCredential(await readCredentialFile(configDir), serverUrl)
-        ?.accessToken
-    : undefined;
+  if (serverUrl === undefined) {
+    return { configDir, serverUrl: undefined, token: undefined };
+  }
+
+  // The single choke point where a stored credential becomes a request token:
+  // an expired/near-expiry access token is refreshed (and the rotation
+  // persisted) before use, so a valid refresh token keeps commands working
+  // without a re-login. A refresh failure (or no credential) yields no token,
+  // so the command path's established "Not signed in" / exit-`auth` contract
+  // still applies, and the startup registry refresh below is skipped rather
+  // than firing a doomed request that 401-warns on a stale token.
+  const resolved = await resolveAccessToken({ configDir, serverUrl });
+  if (resolved.status === "refresh-failed") {
+    // Surface the specific reason (e.g. "no refresh token, run `stella auth
+    // login` again") instead of letting the command path's generic "Not
+    // signed in" message stand in for it.
+    process.stderr.write(`${resolved.error.message}\n`);
+  }
+  if (resolved.status === "ok" && resolved.persistWarning !== undefined) {
+    // The refresh succeeded but couldn't be saved to disk (read-only config
+    // dir, full disk); the token below is still valid for this command.
+    process.stderr.write(`${resolved.persistWarning}\n`);
+  }
+  const token = resolved.status === "ok" ? resolved.token : undefined;
   return { configDir, serverUrl, token };
 };
 
@@ -129,6 +148,10 @@ const stricliProcess = process as unknown as StricliProcess & typeof process;
 const main = async (): Promise<void> => {
   const argv = process.argv.slice(2);
   const isAuthLogin = argv.at(0) === "auth" && argv.at(1) === "login";
+  // Purely local commands (`--help`, `auth whoami`, `tools list`, ...) read no
+  // server registry, so they must not pay the `tools/list` round-trip; only a
+  // command that consumes the command tree triggers the pre-dispatch refresh.
+  const needsRegistry = commandNeedsRegistry(argv);
   // A named slice of the env (read through `env.ts`) so the cache module never
   // touches the full `ProcessEnv` (whose index signature would not narrow to
   // `CacheEnv`).
@@ -138,7 +161,7 @@ const main = async (): Promise<void> => {
   // Keep an EXISTING per-origin cache current before building the tree; a
   // missing cache stays offline-instant (seeded at `auth login` below). Any
   // transport/trust failure warns and falls back to the baked-in tree (S5.5).
-  if (serverUrl !== undefined && token !== undefined && !isAuthLogin) {
+  if (serverUrl !== undefined && token !== undefined && needsRegistry) {
     const outcome = await refreshRegistryCache({
       serverOrigin: serverUrl,
       token,
@@ -190,4 +213,6 @@ const main = async (): Promise<void> => {
   }
 };
 
-void main();
+// Top-level boundary: map anything that escapes startup I/O to the CLI's
+// exit-code contract instead of letting it surface as an unhandled rejection.
+main().catch((error: unknown) => reportFatalError(error, process));

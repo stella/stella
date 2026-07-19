@@ -140,6 +140,21 @@ const allSchemaExports: Record<string, unknown> = {
 const userTableName = getTableConfig(authSchema.user).name;
 
 /**
+ * Names of every Better Auth (`auth-schema.ts`) table. Account deletion
+ * soft-deletes the `user` row (anonymize + `deletedAt`) and never hard-deletes
+ * it, so a `cascade`/`set null` FK to `user` on an auth table never fires — its
+ * rows (sessions, tokens, encrypted 2FA secrets) would silently outlive the
+ * account. Auth tables must therefore be purged by an explicit deletion step,
+ * not left to the database. Non-auth tables can still rely on DB cascade when
+ * their cleanup hangs off a parent row that is actually hard-deleted.
+ */
+const authSchemaTableNames = new Set(
+  Object.values(authSchema as Record<string, unknown>)
+    .filter(isPgTable)
+    .map((table) => getTableConfig(table).name),
+);
+
+/**
  * Every direct foreign key in the schema whose referenced table is `user`.
  * Enumerated purely from Drizzle table metadata — no DB connection needed.
  */
@@ -196,7 +211,11 @@ describe("account deletion FK coverage", () => {
     );
 
     const uncovered = userForeignKeys.filter((fk) => {
-      if (isAutoCoveredByDb(fk.onDelete)) {
+      // Auth-schema tables must be purged by an explicit step: their cascade
+      // to `user` never fires because the user row is soft-deleted, so DB
+      // cascade does not count as coverage for them.
+      const requiresManualPurge = authSchemaTableNames.has(fk.tableName);
+      if (!requiresManualPurge && isAutoCoveredByDb(fk.onDelete)) {
         return false;
       }
       if (manualTableNames.has(fk.tableName)) {
@@ -228,6 +247,29 @@ describe("account deletion FK coverage", () => {
         "billing record), add it to ACCOUNT_DELETION_KNOWN_GAPS in account-deletion-coverage.test.ts with a " +
         "documented reason instead of leaving it unhandled.",
     );
+  });
+
+  test("auth-schema tables with a user FK are purged by an explicit step, not left to a cascade that never fires", () => {
+    // The user row is soft-deleted, so an auth table's `onDelete: cascade`
+    // never runs. Every auth-schema table that references `user` must appear
+    // in a deletion step (ACCOUNT_DELETION_MANUAL_TABLES). This is the guard
+    // that would have caught `two_factor` shipping without cleanup.
+    const manualTableNames = new Set(
+      ACCOUNT_DELETION_MANUAL_TABLES.map((table) => getTableConfig(table).name),
+    );
+    const authTablesReferencingUser = new Set(
+      findUserForeignKeys()
+        .map((fk) => fk.tableName)
+        .filter((tableName) => authSchemaTableNames.has(tableName)),
+    );
+
+    // Sanity: the encrypted 2FA secret table must be one of them.
+    expect(authTablesReferencingUser.has("two_factor")).toBe(true);
+
+    const unpurged = [...authTablesReferencingUser].filter(
+      (tableName) => !manualTableNames.has(tableName),
+    );
+    expect(unpurged).toEqual([]);
   });
 
   test("every table in ACCOUNT_DELETION_MANUAL_TABLES still has a foreign key to the user table", () => {
