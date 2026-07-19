@@ -235,6 +235,50 @@ STELLA_API_HOST_PORT=8080 docker compose --env-file apps/api/.env -f docker-comp
 - S3-compatible object storage (AWS S3, MinIO, Cloudflare R2)
 - 2 GB RAM minimum
 
+## Operator observability
+
+Instance operators sometimes need to confirm that recent account
+registrations went through — for example after inviting colleagues — without
+opening a database shell. The API exposes a token-gated, read-only endpoint
+for exactly that:
+
+```
+GET /operator/registrations?since=<ISO 8601 date-time>&limit=<n>
+Authorization: Bearer <OPERATOR_METRICS_TOKEN>
+```
+
+- `since` (required): return accounts created at or after this instant. Must
+  be within the last 90 days.
+- `limit` (optional): page size, default 50, maximum 200.
+- `cursor` (optional): opaque pagination cursor from a previous response.
+
+The response is the standard page envelope with only four fields per account:
+
+```json
+{
+  "items": [
+    {
+      "id": "…",
+      "email": "…",
+      "name": "…",
+      "createdAt": "2026-07-18T09:30:00.000Z"
+    }
+  ],
+  "nextCursor": null,
+  "limit": 50
+}
+```
+
+Enable it by setting `OPERATOR_METRICS_TOKEN` in `apps/api/.env` to a long
+random value (32+ characters, e.g. `openssl rand -hex 32`). When the variable
+is unset the endpoint is disabled and returns 404; a wrong token returns 401.
+Example:
+
+```bash
+curl -H "Authorization: Bearer $OPERATOR_METRICS_TOKEN" \
+  "https://api.stella.example.com/operator/registrations?since=2026-07-01T00:00:00Z"
+```
+
 ## Stay informed about updates
 
 stella publishes a [GitHub Release](https://github.com/stella/stella/releases)

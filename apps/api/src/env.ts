@@ -126,6 +126,14 @@ const envApi = createEnv({
      * "production" regardless of this value.
      */
     SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
+    /**
+     * Bearer token for the operator registrations endpoint
+     * (handlers/operator): lets an instance operator list recent
+     * account registrations over HTTP instead of opening a database
+     * shell. Unset disables the endpoint entirely (requests return
+     * 404), mirroring how other optional operational surfaces behave.
+     */
+    OPERATOR_METRICS_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
     EMAIL_PROVIDER: v.pipe(
       v.optional(v.picklist(["ses", "smtp"])),
       v.transform(inferEmailProvider),

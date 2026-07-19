@@ -48,6 +48,7 @@ import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { meRoute } from "@/api/handlers/me/routes";
+import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
@@ -428,6 +429,7 @@ const api = new Elysia()
   .use(feedbackPublicRoute)
   .use(devPublicRoute)
   .use(smokeRoute)
+  .use(operatorRoute)
   .mount(getAuth().handler)
   .group("/v1", (app) =>
     app
