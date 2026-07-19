@@ -46,13 +46,21 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
   const invalidate = async () =>
     await queryClient.invalidateQueries({ queryKey: options.invalidate });
 
+  // Fire-and-forget: awaiting invalidation here would keep the mutation
+  // `isPending` until the refetch resolves, delaying the success toast and
+  // re-enabling of the triggering control. The `.catch` on the same line
+  // keeps this out of the detached-promise ratchet and routes a failed
+  // refetch to telemetry instead of an unhandled rejection.
+  const invalidateInBackground = () =>
+    void invalidate().catch((error: unknown) => analytics.captureError(error));
+
   const invalidatesOnSettle = options.invalidateOn === "settled";
 
   return useMutation({
     mutationFn: options.mutationFn,
-    onSuccess: async (data, variables) => {
+    onSuccess: (data, variables) => {
       if (!invalidatesOnSettle) {
-        await invalidate();
+        invalidateInBackground();
       }
       if (options.successToast) {
         stellaToast.add({
@@ -67,8 +75,8 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
     },
     ...(invalidatesOnSettle
       ? {
-          onSettled: async () => {
-            await invalidate();
+          onSettled: () => {
+            invalidateInBackground();
           },
         }
       : {}),

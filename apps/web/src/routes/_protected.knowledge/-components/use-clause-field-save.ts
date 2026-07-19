@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
@@ -39,23 +40,33 @@ export const useClauseFieldSave = ({
 }: UseClauseFieldSaveOptions) => {
   const t = useTranslations();
 
+  // Single funnel for both failure channels: a thrown `persist` (network
+  // failure) and an `.error` Eden response both revert the draft and show
+  // the same localized toast.
+  const fail = (description: string) => {
+    onError?.();
+    stellaToast.add({
+      type: "error",
+      title: t("clauses.saveFailed"),
+      description,
+    });
+  };
+
   return async (rawText: string) => {
     const next = rawText.trim() || null;
     if (next === (value ?? null)) {
       return;
     }
 
-    const response = await persist(next);
+    const result = await Result.tryPromise(async () => await persist(next));
+    if (Result.isError(result)) {
+      fail(t("common.unexpectedError"));
+      return;
+    }
+
+    const response = result.value;
     if (response.error) {
-      onError?.();
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.saveFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
+      fail(userErrorMessage(response.error, t("common.unexpectedError")));
       return;
     }
 
