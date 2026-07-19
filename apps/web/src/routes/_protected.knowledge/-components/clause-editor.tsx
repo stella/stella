@@ -166,6 +166,9 @@ export const ClauseEditor = ({
       await onReviewResolved?.(body);
     },
   );
+  const hasReviewResolvedHandler = useLatestCallback(
+    () => onReviewResolved !== undefined,
+  );
 
   const updateInstruction = (value: string) => {
     setAiEdit((prev) => {
@@ -252,19 +255,28 @@ export const ClauseEditor = ({
         e.setEditable(true);
         setHunkMenu(null);
         setAiEdit({ status: "idle" });
-        emitReviewStatus(reviewResolutionStatus(changed));
+        const persistHandlerPresent = hasReviewResolvedHandler();
+        emitReviewStatus(
+          reviewResolutionStatus(changed, persistHandlerPresent),
+        );
         if (changed) {
           emitChange(resolvedBody);
-          // The accepted body still has to reach the server: keep
-          // version-save actions gated on "persisting" until it does. The
-          // persist call (onReviewResolved) reports "resolved" itself once
-          // it actually succeeds; a failure surfaces its own toast and
-          // leaves the gate blocked for a later successful retry (see
-          // settleReviewPersist's doc for the full contract) instead of
-          // unblocking unconditionally here.
-          void settleReviewPersist(async () => {
-            await emitReviewResolved(resolvedBody);
-          });
+          if (persistHandlerPresent) {
+            // The accepted body still has to reach the server: keep
+            // version-save actions gated on "persisting" until it does. The
+            // persist call (onReviewResolved) reports "resolved" itself once
+            // it actually succeeds; a failure surfaces its own toast and
+            // leaves the gate blocked for a later successful retry (see
+            // settleReviewPersist's doc for the full contract) instead of
+            // unblocking unconditionally here.
+            void settleReviewPersist(async () => {
+              await emitReviewResolved(resolvedBody);
+            });
+          }
+          // Without onReviewResolved there is no incremental persist to wait
+          // on — reviewResolutionStatus already reported "resolved" above,
+          // and the caller's own save flow (e.g. the create/edit dialog's
+          // form submit) persists the accepted body later, by design.
         }
         return;
       }

@@ -495,14 +495,28 @@ describe("review resolution → persist gating", () => {
   // the stale pre-AI body. `reviewResolutionStatus` + `settleReviewPersist`
   // together keep the caller's reported status at "persisting" (which
   // version-save actions must treat identically to "pending") until the
-  // persist settles.
+  // persist settles — but only for callers that actually have an
+  // incremental persist path (`onReviewResolved`); see below for the
+  // no-handler case.
 
-  test("a changed resolution reports 'persisting', not 'resolved' — the caller must still gate on it", () => {
-    expect(reviewResolutionStatus(true)).toBe("persisting");
+  test("a changed resolution reports 'persisting' when a persist handler exists — the caller must still gate on it", () => {
+    expect(reviewResolutionStatus(true, true)).toBe("persisting");
   });
 
-  test("an unchanged resolution (e.g. reject-all back to baseline) needs no persist", () => {
-    expect(reviewResolutionStatus(false)).toBe("resolved");
+  test("an unchanged resolution (e.g. reject-all back to baseline) needs no persist, handler or not", () => {
+    expect(reviewResolutionStatus(false, true)).toBe("resolved");
+    expect(reviewResolutionStatus(false, false)).toBe("resolved");
+  });
+
+  // Regression for `ClauseFormDialog`: it has no `onReviewResolved` (the
+  // form persists the body later, on submit), but the last round moved the
+  // "resolved" emission into that handler's own persist call. With no
+  // handler to ever call it, a changed resolution reported "persisting" and
+  // nothing lifted it — the dialog's Save button stayed disabled forever.
+  // Without a persist handler there is no async persist to gate on, so a
+  // changed resolution must report "resolved" immediately.
+  test("a changed resolution reports 'resolved' immediately when there is no persist handler", () => {
+    expect(reviewResolutionStatus(true, false)).toBe("resolved");
   });
 
   // `settleReviewPersist` only runs `persist` and swallows an unexpected
@@ -528,7 +542,10 @@ describe("review resolution → persist gating", () => {
       });
 
     // Mirrors the caller: report "persisting" synchronously on resolution...
-    let reported: "resolved" | "persisting" = reviewResolutionStatus(true);
+    let reported: "resolved" | "persisting" = reviewResolutionStatus(
+      true,
+      true,
+    );
     expect(reported).toBe("persisting");
 
     const settled = settleReviewPersist(persist);
@@ -552,14 +569,20 @@ describe("review resolution → persist gating", () => {
     // a failure surfaces its own toast and never reaches that line, so
     // `reported` must stay at "persisting" even once `settleReviewPersist`
     // has swallowed the rejection and settled.
-    const reported: "resolved" | "persisting" = reviewResolutionStatus(true);
+    const reported: "resolved" | "persisting" = reviewResolutionStatus(
+      true,
+      true,
+    );
     await settleReviewPersist(persist);
 
     expect(reported).toBe("persisting");
   });
 
   test("no permanent wedge: a later successful retry through the same persist path lifts a gate stranded by an earlier failure", async () => {
-    let reported: "resolved" | "persisting" = reviewResolutionStatus(true);
+    let reported: "resolved" | "persisting" = reviewResolutionStatus(
+      true,
+      true,
+    );
     expect(reported).toBe("persisting");
 
     // First attempt fails (e.g. the initial accept-all flush) — the toast

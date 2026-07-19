@@ -158,14 +158,21 @@ export const nonHistoricalDispatch = (
  * Status to report the instant the last tracked-change hunk resolves. A
  * resolution that leaves the body unchanged (e.g. rejecting everything back
  * to the pre-AI text) needs no persist and is immediately safe. A changed
- * resolution isn't safe to snapshot into a version yet: the accepted body
- * still has to reach the server, so callers must stay gated on "persisting"
- * until their own persist call reports success (see {@link
+ * resolution isn't safe to snapshot into a version yet only when the caller
+ * has an incremental persist path (`onReviewResolved`): the accepted body
+ * still has to reach the server, so those callers must stay gated on
+ * "persisting" until their own persist call reports success (see {@link
  * settleReviewPersist}) — a failed persist must NOT report "resolved".
+ * Without `onReviewResolved`, nothing incrementally persists the body — the
+ * caller's own save flow (e.g. a create/edit dialog's form submit) persists
+ * it later, by design — so there is no async gate to wait on and a changed
+ * resolution is immediately "resolved".
  */
 export const reviewResolutionStatus = (
   changed: boolean,
-): "resolved" | "persisting" => (changed ? "persisting" : "resolved");
+  hasPersistHandler: boolean,
+): "resolved" | "persisting" =>
+  changed && hasPersistHandler ? "persisting" : "resolved";
 
 /**
  * Fires the persist of an accepted AI body, swallowing an unexpected
