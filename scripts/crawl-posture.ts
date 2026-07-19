@@ -621,7 +621,7 @@ const checkApp = (appsRoot: string, app: string): AppReport => {
   );
   const posture =
     typeof pkg === "object" && pkg !== null && "crawlPosture" in pkg
-      ? (pkg as { crawlPosture: unknown }).crawlPosture
+      ? pkg.crawlPosture
       : undefined;
 
   if (posture === undefined) {
