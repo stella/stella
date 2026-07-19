@@ -394,40 +394,38 @@ const gradients = [
 
   <script is:inline>
     // Copy boilerplate paragraph
-    document.querySelectorAll(".copy-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const targetId = btn.getAttribute("data-copy-target");
-        if (!targetId) return;
-        const el = document.getElementById(targetId);
-        if (!el?.textContent) return;
-        navigator.clipboard.writeText(el.textContent.trim()).then(() => {
-          const label = btn.querySelector(".copy-label");
-          if (!label) return;
-          const original = label.textContent;
-          label.textContent = "Copied";
-          setTimeout(() => {
-            label.textContent = original;
-          }, 1500);
-        });
+    for (const btn of document.querySelectorAll(".copy-btn")) {
+      btn.addEventListener("click", async () => {
+        const targetId = btn.dataset.copyTarget;
+        if (!targetId) {return;}
+        const el = document.querySelector(`#${targetId}`);
+        if (!el?.textContent) {return;}
+        await navigator.clipboard.writeText(el.textContent.trim());
+        const label = btn.querySelector(".copy-label");
+        if (!label) {return;}
+        const original = label.textContent;
+        label.textContent = "Copied";
+        setTimeout(() => {
+          label.textContent = original;
+        }, 1500);
       });
-    });
+    }
 
     // Copy hex on click
-    document.querySelectorAll(".copy-hex").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const hex = btn.getAttribute("data-hex");
-        if (!hex) return;
-        navigator.clipboard.writeText(hex).then(() => {
-          const fb = btn.querySelector(".copy-hex-feedback");
-          if (!fb) return;
-          fb.classList.remove("opacity-0");
-          fb.classList.add("opacity-100");
-          setTimeout(() => {
-            fb.classList.add("opacity-0");
-            fb.classList.remove("opacity-100");
-          }, 1200);
-        });
+    for (const btn of document.querySelectorAll(".copy-hex")) {
+      btn.addEventListener("click", async () => {
+        const hex = btn.dataset.hex;
+        if (!hex) {return;}
+        await navigator.clipboard.writeText(hex);
+        const fb = btn.querySelector(".copy-hex-feedback");
+        if (!fb) {return;}
+        fb.classList.remove("opacity-0");
+        fb.classList.add("opacity-100");
+        setTimeout(() => {
+          fb.classList.add("opacity-0");
+          fb.classList.remove("opacity-100");
+        }, 1200);
       });
-    });
+    }
   </script>
 </Base>

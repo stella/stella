@@ -99,9 +99,19 @@ export function App() {
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
   const [zoom, setZoom] = useState(ZOOM_INITIAL);
 
-  // Load a ?file= fixture from /fixtures/*.docx (served by Vite's public dir)
-  // for visual regression tests. Non-fixture initial state is derived during
-  // render by readInitialFixture, so no synchronous setState is needed here.
+  // Load a ?file= fixture from /fixtures/*.docx for visual regression tests.
+  //
+  // The /fixtures directory is intentionally NOT committed:
+  // apps/playground/public/fixtures is a git-ignored symlink into folio's
+  // visual-test fixtures (packages/folio/tests/visual/fixtures in a local folio
+  // checkout). Create it yourself, e.g.:
+  //   ln -s <path-to-folio>/packages/folio/tests/visual/fixtures \
+  //     apps/playground/public/fixtures
+  // When the symlink is absent the fetch below 404s and the UI surfaces an
+  // explicit "fixture not found" message rather than silently loading nothing.
+  //
+  // Non-fixture initial state is derived during render by readInitialFixture,
+  // so no synchronous setState is needed here.
   useEffect(() => {
     const fixtureFile = new URLSearchParams(window.location.search).get("file");
     if (!fixtureFile) {
@@ -112,7 +122,9 @@ export function App() {
         setStatus("Loading fixture...");
         const response = await fetch(`/fixtures/${fixtureFile}`);
         if (!response.ok) {
-          setStatus(`Fixture not found: ${fixtureFile}`);
+          setStatus(
+            `Fixture "${fixtureFile}" not found (HTTP ${response.status}). Is apps/playground/public/fixtures linked? See the comment in App.tsx.`,
+          );
           return;
         }
         const buffer = await response.arrayBuffer();
