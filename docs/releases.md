@@ -40,8 +40,10 @@ should lag the release that stopped using the old data.
 ## Creating A Release
 
 1. Ensure CI is green on `main`.
-2. Generate and review any required migration files.
-3. In one commit, bump `VERSION` and optionally add the matching manual
+2. Review the landing showcase scenes for staleness and re-record any that
+   the release made inaccurate (see `docs/showcase-scenes.md`).
+3. Generate and review any required migration files.
+4. In one commit, bump `VERSION` and optionally add the matching manual
    changelog note:
 
    ```bash
@@ -54,14 +56,14 @@ should lag the release that stopped using the old data.
    For RCs, use matching values such as `VERSION=1.2.3-rc.1` and
    `docs/changelog/v1.2.3-rc.1.md`.
 
-4. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow pushes
+5. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow pushes
    the matching `vX.Y.Z` tag automatically. The tag then triggers
    `release.yml`.
-5. Wait for the release workflow to publish the image, manifest, and GitHub
+6. Wait for the release workflow to publish the image, manifest, and GitHub
    release notes. Stable releases are promoted automatically; the workflow does
    not succeed until `https://api.stll.app/health` reports the exact release
    commit. RCs continue to target staging.
-6. After a stable release succeeds, `publish-npm.yml` checks out the same
+7. After a stable release succeeds, `publish-npm.yml` checks out the same
    release commit, packs the CLI, installs that exact tarball under plain Node,
    and runs its unauthenticated compatibility canary against production. Only
    then can the hardened npm publishing job publish `@stll/cli`.
