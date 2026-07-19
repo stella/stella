@@ -88,19 +88,31 @@ const createFakeRedis = (state: FakeRedisState) => ({
       }
       return removed;
     }
+    if (command === "SET") {
+      // Only the ["key", "1", "EX", "<sec>"] shape `resetCompletionState`
+      // issues for the set-mode marker is exercised here.
+      const key = arg(args, 0);
+      const value = arg(args, 1);
+      state.strings.set(key, value);
+      if (arg(args, 2) === "EX") {
+        state.ttlSec.set(key, Number(arg(args, 3)));
+      }
+      return "OK";
+    }
     if (command !== "EVAL" || arg(args, 0) !== COMPLETE_ENTITY_SCRIPT) {
       throw new TypeError(`Unexpected Redis command: ${command}`);
     }
-    // KEYS[1..5] then ARGV[1..4]; KEYS start at index 2 (after script + numkeys).
+    // KEYS[1..6] then ARGV[1..4]; KEYS start at index 2 (after script + numkeys).
     const requestIdKey = arg(args, 2);
     const runningKey = arg(args, 3);
     const completedEntitiesKey = arg(args, 4);
     const totalKey = arg(args, 5);
     const legacyCompletedKey = arg(args, 6);
-    const activeRequestId = arg(args, 7);
-    const legacyRunningLockValue = arg(args, 8);
-    const entityId = arg(args, 9);
-    const runStateTtlSec = Number(arg(args, 10));
+    const setModeKey = arg(args, 7);
+    const activeRequestId = arg(args, 8);
+    const legacyRunningLockValue = arg(args, 9);
+    const entityId = arg(args, 10);
+    const runStateTtlSec = Number(arg(args, 11));
 
     const currentRequestId = state.strings.get(requestIdKey) ?? null;
     const runningValue = state.strings.get(runningKey) ?? null;
@@ -120,10 +132,19 @@ const createFakeRedis = (state: FakeRedisState) => ({
     state.sets.set(completedEntitiesKey, completedSet);
     state.ttlSec.set(completedEntitiesKey, runStateTtlSec);
 
-    // Deploy-transition compat: a pre-set run's finished entities live in the
-    // legacy INCR counter, absent from the set. Add them so the run reaches total.
-    const legacyCompleted =
-      Number(state.strings.get(legacyCompletedKey) ?? "0") || 0;
+    // Deploy-transition compat, gated to runs that never set the set-mode
+    // marker: a pre-set run's finished entities live in the legacy INCR
+    // counter, absent from the set. Add them so the run reaches total. A
+    // run with the marker present (started under this code) never adds the
+    // legacy counter, even if a straggler old-code replica repopulated it.
+    const setMode = state.strings.has(setModeKey);
+    let legacyCompleted = 0;
+    if (setMode) {
+      state.ttlSec.set(setModeKey, runStateTtlSec);
+    } else {
+      legacyCompleted =
+        Number(state.strings.get(legacyCompletedKey) ?? "0") || 0;
+    }
     const total = Number(state.strings.get(totalKey) ?? "0") || 0;
     return [1, completedSet.size + legacyCompleted, total];
   },
@@ -136,6 +157,7 @@ describe("recordEntityCompletion", () => {
     completedEntities: "workflow:ws_1:completed-entities",
     total: "workflow:ws_1:total",
     legacyCompleted: "workflow:ws_1:completed",
+    setMode: "workflow:ws_1:set-mode",
   };
   const activeRequestId = "req_1";
   const legacyRunningLockValue = "1";
@@ -222,6 +244,8 @@ describe("recordEntityCompletion", () => {
       redis: createFakeRedis(state),
       completedEntitiesKey: keys.completedEntities,
       legacyCompletedKey: keys.legacyCompleted,
+      setModeKey: keys.setMode,
+      runStateTtlSec: 3600,
     });
     expect(state.sets.get(keys.completedEntities)).toBeUndefined();
 
@@ -243,13 +267,17 @@ describe("recordEntityCompletion", () => {
     expect(state.sets.get(keys.completedEntities)).toBeUndefined();
   });
 
-  test("finalizes an in-flight run that straddled a deploy", async () => {
+  test("finalizes an in-flight run that straddled a deploy (no set-mode marker)", async () => {
     // The class of bug: a deploy lands mid-run. The pre-set code recorded
     // finished entities in the legacy `completed` INCR counter; those entities
     // never enter the new set. Counting the set alone would leave `completed`
-    // permanently below `total`, so the run would never finalize.
+    // permanently below `total`, so the run would never finalize. This run
+    // predates the code that writes the set-mode marker (it never called
+    // `resetCompletionState` under this code), so the marker key is absent
+    // and the legacy counter still applies.
     const state = seedActiveRun(3);
     state.strings.set(keys.legacyCompleted, "2"); // 2 entities finished pre-deploy
+    expect(state.strings.has(keys.setMode)).toBe(false);
 
     // The remaining entity finishes post-deploy under the new set path.
     const result = await complete(state, "entity_c");
@@ -260,10 +288,11 @@ describe("recordEntityCompletion", () => {
   });
 
   test("accepts the narrow overshoot when a pre-deploy entity retries post-deploy", async () => {
-    // Documented, accepted window: an entity counted in the legacy counter is
-    // retried post-deploy and also lands in the set, so it is counted twice
-    // (legacy 2 + set 1 = 3 == total). Finalizing one completion early beats a
-    // run that never finalizes; still no blind counting of post-deploy work.
+    // Documented, accepted window for runs without a set-mode marker: an
+    // entity counted in the legacy counter is retried post-deploy and also
+    // lands in the set, so it is counted twice (legacy 2 + set 1 = 3 ==
+    // total). Finalizing one completion early beats a run that never
+    // finalizes; still no blind counting of post-deploy work.
     const state = seedActiveRun(3);
     state.strings.set(keys.legacyCompleted, "2");
 
@@ -272,10 +301,13 @@ describe("recordEntityCompletion", () => {
     expect(result).toEqual({ matched: true, completed: 3, total: 3 });
   });
 
-  test("reset clears the legacy counter so fresh runs count the set alone", async () => {
+  test("reset clears the legacy counter and writes the set-mode marker", async () => {
     // Guards that the compat path dies with the transition: a stale legacy
     // counter left by a prior run must not inflate a fresh run's count and
-    // finalize it early. resetCompletionState deletes it under the run lock.
+    // finalize it early. resetCompletionState deletes it under the run lock
+    // and marks this run as set-mode so the legacy path can never apply to
+    // it again, even if the key reappears later (see the straggler test
+    // below).
     const state = seedActiveRun(2);
     state.strings.set(keys.legacyCompleted, "5");
 
@@ -283,10 +315,53 @@ describe("recordEntityCompletion", () => {
       redis: createFakeRedis(state),
       completedEntitiesKey: keys.completedEntities,
       legacyCompletedKey: keys.legacyCompleted,
+      setModeKey: keys.setMode,
+      runStateTtlSec: 3600,
     });
     expect(state.strings.get(keys.legacyCompleted)).toBeUndefined();
+    expect(state.strings.get(keys.setMode)).toBe("1");
+    expect(state.ttlSec.get(keys.setMode)).toBe(3600);
 
     const first = await complete(state, "entity_a");
     expect(first).toEqual({ matched: true, completed: 1, total: 2 });
+  });
+
+  test("CLASS GUARD: ignores a legacy counter a straggler old-code replica repopulates mid fresh-run", async () => {
+    // The bug this round's fix closes: during a rolling deploy, queue
+    // topology lets an old-code replica keep draining jobs from the shared
+    // queue even for runs that started after the deploy. If that replica
+    // dequeues one of THIS run's entity jobs, its old `onEntityCompleted`
+    // logic blindly INCRs the legacy `completed` key — recreating it for a
+    // run that already started fresh under set-mode tracking. Without the
+    // marker gate, a subsequent new-code completion would add that
+    // straggler value into the count and could finalize the run early
+    // while other entities are still pending — reintroducing the exact bug
+    // this PR exists to fix, on every rolling deploy.
+    const state = seedActiveRun(3);
+    await resetCompletionState({
+      redis: createFakeRedis(state),
+      completedEntitiesKey: keys.completedEntities,
+      legacyCompletedKey: keys.legacyCompleted,
+      setModeKey: keys.setMode,
+      runStateTtlSec: 3600,
+    });
+
+    // entity_a finishes normally under new code.
+    const first = await complete(state, "entity_a");
+    expect(first).toEqual({ matched: true, completed: 1, total: 3 });
+
+    // A straggler old-code replica processes entity_b and blindly INCRs the
+    // legacy counter, recreating a key resetCompletionState had deleted.
+    state.strings.set(keys.legacyCompleted, "1");
+
+    // entity_c finishes under new code. If the legacy value leaked in, the
+    // effective count would misread as SCARD(2) + legacy(1) = 3 == total
+    // and finalize early — but entity_b never actually completed under new
+    // code, so that would be wrong. The marker gate must keep the legacy
+    // value out entirely.
+    const third = await complete(state, "entity_c");
+
+    // completed(2) < total(3): the run correctly stays open.
+    expect(third).toEqual({ matched: true, completed: 2, total: 3 });
   });
 });

@@ -120,6 +120,12 @@ const WORKFLOW_RUN_STATE_FIELDS = [
   // its counter deleted on finish/skip/orphan, and so the compat path dies
   // with the transition.
   "completed",
+  // Marker written by `resetCompletionState` for every run started under
+  // this code. Gates the completion script's legacy-counter read so a
+  // straggler old-code replica cannot contaminate a run that provably
+  // started under set-mode tracking (see completion-tracking.ts guarantee
+  // 3). Cleaned up here like every sibling run-state key.
+  "set-mode",
   "plan-properties",
   "request-id",
   "scoped",
@@ -553,16 +559,22 @@ export const startWorkflow = async ({
       return { status: "skipped" };
     }
 
-    // Start from an empty completion set. It grows lazily via SADD, so a
-    // prior run whose run-state outlived it (worker death between the
-    // completion script's EXPIRE and the sibling-key refresh, a manual lock
-    // deletion, a TTL discrepancy) could leave stale members that inflate
-    // this run's SCARD and finalize it early. We hold the run lock (NX)
-    // here, so no live run shares the key.
+    // Start from an empty completion set and mark this run as set-mode. The
+    // set grows lazily via SADD, so a prior run whose run-state outlived it
+    // (worker death between the completion script's EXPIRE and the
+    // sibling-key refresh, a manual lock deletion, a TTL discrepancy) could
+    // leave stale members that inflate this run's SCARD and finalize it
+    // early. The set-mode marker gates the completion script's legacy
+    // counter out of this run's count entirely, even if a straggler
+    // old-code replica recreates the legacy counter for one of this run's
+    // entities mid-rollout (see completion-tracking.ts guarantee 3). We
+    // hold the run lock (NX) here, so no live run shares these keys.
     await resetCompletionState({
       redis,
       completedEntitiesKey: workflowKey(workspaceId, "completed-entities"),
       legacyCompletedKey: workflowKey(workspaceId, "completed"),
+      setModeKey: workflowKey(workspaceId, "set-mode"),
+      runStateTtlSec: runLockTtlSec,
     });
 
     // Store entity count for completion tracking. Carries the run-lock TTL
@@ -1915,6 +1927,7 @@ const onEntityCompleted = async ({
       completedEntities: workflowKey(workspaceId, "completed-entities"),
       total: workflowKey(workspaceId, "total"),
       legacyCompleted: workflowKey(workspaceId, "completed"),
+      setMode: workflowKey(workspaceId, "set-mode"),
     },
     activeRequestId: requestId,
     legacyRunningLockValue: LEGACY_RUNNING_LOCK_VALUE,
@@ -1934,7 +1947,8 @@ const onEntityCompleted = async ({
   // completed entity refreshes them back to the full window so progress
   // keeps the lock alive instead of letting a slow batch fall back to the
   // "freshen everything" path, admit a parallel run, or leak `total`. The
-  // completed-entities set is refreshed inside the completion script above.
+  // completed-entities set and the set-mode marker are both refreshed
+  // inside the completion script above.
   await Promise.all([
     redis.expire(workflowKey(workspaceId, "running"), runLockTtlSec),
     redis.expire(workflowKey(workspaceId, "plan-properties"), runLockTtlSec),
