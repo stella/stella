@@ -1,4 +1,5 @@
 import type { JSONContent } from "@tiptap/react";
+import type { Transaction } from "prosemirror-state";
 
 import { diffWordSegments } from "@stll/folio-react";
 
@@ -119,6 +120,19 @@ type TrackedChangeDoc = {
   doc: JSONContent;
   revisionIds: number[];
 };
+
+/**
+ * Wrap a ProseMirror `dispatch` so the resulting transaction never lands in
+ * the undo stack. Resolving a tracked change (accept/reject one hunk, or
+ * accept/reject all) is a system action, not a user edit: leaving it
+ * undoable lets Cmd+Z bring the insertion/deletion marks back after the
+ * editor has already returned to normal (non-reviewing, editable) mode,
+ * where the plain `onUpdate` path would serialize them as resolved text.
+ */
+export const nonHistoricalDispatch = (
+  dispatch: ((tr: Transaction) => void) | undefined,
+): ((tr: Transaction) => void) | undefined =>
+  dispatch && ((tr) => dispatch(tr.setMeta("addToHistory", false)));
 
 export const hasAlignedClauseStructure = (
   baseline: readonly ClauseParagraph[],

@@ -1,17 +1,20 @@
 import type { JSONContent } from "@tiptap/react";
 import { describe, expect, test } from "bun:test";
+import { closeHistory, history, undo, undoDepth } from "prosemirror-history";
 import { Schema } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 import type { Command } from "prosemirror-state";
 
 import {
   acceptAIEditRevision,
+  acceptAllChanges,
   rejectAIEditRevision,
 } from "@stll/folio-core/prosemirror/commands/comments";
 
 import {
   buildTrackedChangeDoc,
   hasAlignedClauseStructure,
+  nonHistoricalDispatch,
 } from "./clause-ai-tracked-changes";
 import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
@@ -399,5 +402,85 @@ describe("buildTrackedChangeDoc", () => {
     expect(
       runs.some((run) => run.mark !== null && run.text.includes("Lead in")),
     ).toBe(false);
+  });
+});
+
+describe("undo history around AI review resolution", () => {
+  test("resolving a review leaves nothing to undo — the resolved state persists", () => {
+    const original: ClauseParagraph[] = [{ text: "Original sentence." }];
+    const revisedByAi: ClauseParagraph[] = [{ text: "Revised sentence." }];
+
+    let state = EditorState.create({
+      schema: trackedChangeSchema,
+      doc: trackedChangeSchema.nodeFromJSON(clauseBodyToTipTap(original)),
+      plugins: [history()],
+    });
+    expect(undoDepth(state)).toBe(0);
+
+    // Entering review replaces the whole doc with the tracked-change doc.
+    // That transaction must be excluded from history (closeHistory forces
+    // a fresh group so a real-world time gap — the in-flight AI request —
+    // can't accidentally merge it with anything else).
+    const { doc: trackedDoc, revisionIds } = buildTrackedChangeDoc(
+      original,
+      revisedByAi,
+    );
+    expect(revisionIds.length).toBeGreaterThan(0);
+    state = state.apply(
+      closeHistory(state.tr)
+        .replaceWith(
+          0,
+          state.doc.content.size,
+          trackedChangeSchema.nodeFromJSON(trackedDoc),
+        )
+        .setMeta("addToHistory", false),
+    );
+    expect(undoDepth(state)).toBe(0);
+
+    // Resolve (accept all) through the same dispatch-wrapping helper the
+    // editor's resolve commands use — also excluded from history.
+    const beforeResolve = state;
+    let resolved = state;
+    const applied = acceptAllChanges()(
+      beforeResolve,
+      nonHistoricalDispatch((tr) => {
+        resolved = beforeResolve.apply(closeHistory(tr));
+      }),
+    );
+    expect(applied).toBe(true);
+    state = resolved;
+    expect(tipTapToClauseBody(state.doc.toJSON())).toEqual(revisedByAi);
+
+    // The whole review round-trip (entering it and resolving it) left
+    // nothing undoable: Cmd+Z right after resolving does nothing, so the
+    // resolved state persists instead of restoring the tracked-change doc.
+    expect(undoDepth(state)).toBe(0);
+    const noopUndo = undo(state, () => {
+      throw new Error("undo should not have found anything to dispatch");
+    });
+    expect(noopUndo).toBe(false);
+
+    // A real edit made after resolving is a normal, historical event: it
+    // undoes on its own, without resurrecting any tracked-change marks.
+    const afterResolve = state;
+    state = state.apply(
+      state.tr.insertText(" User note.", state.doc.content.size - 1),
+    );
+    expect(tipTapToClauseBody(state.doc.toJSON())).toEqual([
+      { text: "Revised sentence. User note." },
+    ]);
+    expect(undoDepth(state)).toBe(1);
+
+    let undone = state;
+    const undoApplied = undo(state, (tr) => {
+      undone = state.apply(tr);
+    });
+    expect(undoApplied).toBe(true);
+    expect(tipTapToClauseBody(undone.doc.toJSON())).toEqual(
+      tipTapToClauseBody(afterResolve.doc.toJSON()),
+    );
+    expect(
+      trackedRuns(undone.doc.toJSON()).every((run) => run.mark === null),
+    ).toBe(true);
   });
 });

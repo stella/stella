@@ -54,6 +54,7 @@ import { userErrorMessage } from "@/lib/errors/user-safe";
 import {
   buildTrackedChangeDoc,
   hasAlignedClauseStructure,
+  nonHistoricalDispatch,
 } from "./clause-ai-tracked-changes";
 import { ClauseDirectiveNode } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
@@ -265,9 +266,11 @@ export const ClauseEditor = ({
         emitReviewStatus("resolved");
         editor.setEditable(true);
         setHunkMenu(null);
-        editor.commands.setContent(clauseBodyToTipTap(content), {
-          emitUpdate: false,
-        });
+        editor
+          .chain()
+          .setMeta("addToHistory", false)
+          .setContent(clauseBodyToTipTap(content), { emitUpdate: false })
+          .run();
         lastEmittedKeyRef.current = contentKey;
       }
       return undefined;
@@ -293,6 +296,13 @@ export const ClauseEditor = ({
     const requestId = rewriteRequestIdRef.current + 1;
     rewriteRequestIdRef.current = requestId;
     setAiEdit(generatingState);
+    // Lock the editor for the request's duration: `baseline` is captured
+    // now, and the tracked-change doc built below is index-aligned to it.
+    // A concurrent keystroke while the rewrite streams would desync the
+    // live doc from `baseline` and corrupt that alignment.
+    if (isUsableEditor(editor)) {
+      editor.setEditable(false);
+    }
     const response = await api.clauses["ai-rewrite"].post({
       body: baseline,
       instruction: trimmed,
@@ -301,10 +311,15 @@ export const ClauseEditor = ({
     });
 
     if (requestId !== rewriteRequestIdRef.current) {
+      // Superseded by a newer request or a cancel — whichever owns the
+      // current attempt also owns editor editability; don't touch it.
       return;
     }
     if (bodyKey(getContent()) !== bodyKey(baseline)) {
       setAiEdit({ status: "idle" });
+      if (isUsableEditor(editor)) {
+        editor.setEditable(true);
+      }
       return;
     }
     if (response.error) {
@@ -317,6 +332,9 @@ export const ClauseEditor = ({
         ),
       });
       setAiEdit({ status: "prompting", instruction: trimmed });
+      if (isUsableEditor(editor)) {
+        editor.setEditable(true);
+      }
       return;
     }
     if (!isUsableEditor(editor)) {
@@ -332,6 +350,7 @@ export const ClauseEditor = ({
         description: t("clauses.aiStructureChanged"),
       });
       setAiEdit({ status: "prompting", instruction: trimmed });
+      editor.setEditable(true);
       return;
     }
 
@@ -343,6 +362,7 @@ export const ClauseEditor = ({
         description: t("clauses.noChanges"),
       });
       setAiEdit({ status: "idle" });
+      editor.setEditable(true);
       return;
     }
 
@@ -351,7 +371,11 @@ export const ClauseEditor = ({
       instruction: trimmed,
       baseline,
     } as const;
-    editor.commands.setContent(doc, { emitUpdate: false });
+    editor
+      .chain()
+      .setMeta("addToHistory", false)
+      .setContent(doc, { emitUpdate: false })
+      .run();
     editor.setEditable(false);
     setHunkMenu(null);
     setAiEdit(reviewingState);
@@ -364,9 +388,11 @@ export const ClauseEditor = ({
     }
     const baseline = aiEdit.status === "prompting" ? content : aiEdit.baseline;
     if (aiEdit.status === "reviewing" && isUsableEditor(editor)) {
-      editor.commands.setContent(clauseBodyToTipTap(baseline), {
-        emitUpdate: false,
-      });
+      editor
+        .chain()
+        .setMeta("addToHistory", false)
+        .setContent(clauseBodyToTipTap(baseline), { emitUpdate: false })
+        .run();
       editor.setEditable(true);
       setHunkMenu(null);
       emitReviewStatus("resolved");
@@ -379,7 +405,9 @@ export const ClauseEditor = ({
       return;
     }
     setHunkMenu(null);
-    editor.commands.command(({ state, dispatch }) => command(state, dispatch));
+    editor.commands.command(({ state, dispatch }) =>
+      command(state, nonHistoricalDispatch(dispatch)),
+    );
   };
 
   const acceptAll = () => runResolveCommand(acceptAllChanges());
@@ -398,8 +426,14 @@ export const ClauseEditor = ({
       rejectAll();
       return;
     }
+    // Cancel a prompt or an in-flight generation. Bumping the request id
+    // makes runRewrite's stale-response check skip restoring editability,
+    // so this is the only place that does it for a cancelled generation.
     rewriteRequestIdRef.current += 1;
     setAiEdit({ status: "idle" });
+    if (isUsableEditor(editor)) {
+      editor.setEditable(true);
+    }
   };
 
   const toggleBold = () => {
@@ -462,6 +496,10 @@ export const ClauseEditor = ({
   const canRedo = editorReady && editor.can().redo();
   const reviewing = aiEdit.status === "reviewing";
   const aiActive = aiEdit.status !== "idle";
+  // Formatting/undo commands dispatch transactions directly, bypassing
+  // TipTap's `editable: false` (which only blocks direct DOM interaction),
+  // so the toolbar must disable them itself during review and generation.
+  const editingLocked = reviewing || aiEdit.status === "generating";
 
   return (
     // Stop modifier key combos from propagating to global
@@ -480,7 +518,7 @@ export const ClauseEditor = ({
       <div className="flex items-center gap-0.5 border-b px-1 py-0.5">
         <Button
           aria-label={t("folio.undo")}
-          disabled={!canUndo || reviewing}
+          disabled={!canUndo || editingLocked}
           onClick={undo}
           size="icon-xs"
           title={t("folio.undo")}
@@ -491,7 +529,7 @@ export const ClauseEditor = ({
         </Button>
         <Button
           aria-label={t("folio.redo")}
-          disabled={!canRedo || reviewing}
+          disabled={!canRedo || editingLocked}
           onClick={redo}
           size="icon-xs"
           title={t("folio.redo")}
@@ -506,7 +544,7 @@ export const ClauseEditor = ({
           className={
             editorReady && editor.isActive("bold") ? "bg-muted" : undefined
           }
-          disabled={!editorReady || reviewing}
+          disabled={!editorReady || editingLocked}
           onClick={toggleBold}
           size="icon-xs"
           type="button"
@@ -519,7 +557,7 @@ export const ClauseEditor = ({
           className={
             editorReady && editor.isActive("italic") ? "bg-muted" : undefined
           }
-          disabled={!editorReady || reviewing}
+          disabled={!editorReady || editingLocked}
           onClick={toggleItalic}
           size="icon-xs"
           type="button"
@@ -535,7 +573,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || reviewing}
+          disabled={!editorReady || editingLocked}
           onClick={() => toggleHeading(1)}
           size="icon-xs"
           type="button"
@@ -550,7 +588,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || reviewing}
+          disabled={!editorReady || editingLocked}
           onClick={() => toggleHeading(2)}
           size="icon-xs"
           type="button"
@@ -565,7 +603,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || reviewing}
+          disabled={!editorReady || editingLocked}
           onClick={() => toggleHeading(3)}
           size="icon-xs"
           type="button"
@@ -581,7 +619,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || reviewing}
+          disabled={!editorReady || editingLocked}
           onClick={toggleBulletList}
           size="icon-xs"
           type="button"
@@ -596,7 +634,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || reviewing}
+          disabled={!editorReady || editingLocked}
           onClick={toggleOrderedList}
           size="icon-xs"
           type="button"
