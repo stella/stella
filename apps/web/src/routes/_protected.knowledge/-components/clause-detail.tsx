@@ -72,6 +72,7 @@ import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import {
+  canReviewFlushReportResolved,
   type ClauseEditorReviewStatus,
   shouldKeepBodyPanelMounted,
 } from "@/routes/_protected.knowledge/-components/clause-ai-tracked-changes";
@@ -654,8 +655,16 @@ const ClauseBodyEditor = ({
 }) => {
   const t = useTranslations();
 
+  // Epoch for the review's own flush save (see `canReviewFlushReportResolved`):
+  // bumped only inside `onReviewResolved`, below. Ordinary autosaves
+  // (blur/debounced) never touch this ref and never pass a token into
+  // `saveBody`, so they can never report the review gate "resolved" — only
+  // the save this epoch was minted for can, and only while it's still the
+  // current one.
+  const reviewFlushEpochRef = useRef(0);
+
   const saveBody = useCallback(
-    async (body: ClauseParagraph[]) => {
+    async (body: ClauseParagraph[], reviewFlushToken?: number) => {
       // Head-only autosave: persists the working copy without snapshotting a
       // version. The version snapshot happens on explicit save / leave.
       const response = await api.clauses({ clauseId }).post({ body });
@@ -678,10 +687,20 @@ const ClauseBodyEditor = ({
         return;
       }
 
-      // Any successful persist through this function means the server body
-      // is in sync, so it's always safe to report "resolved" here — a no-op
-      // outside a review, and the gate-lifting signal after one.
-      onReviewStatusChange("resolved");
+      // Only the review's own flush (the caller that captured
+      // `reviewFlushToken` from `reviewFlushEpochRef` when the review
+      // resolved) may lift the gate. A plain autosave — blur or the
+      // keystroke debounce — never passes a token, so a stale one that
+      // started before a review began but settles after can't clear a
+      // gate it knows nothing about.
+      if (
+        canReviewFlushReportResolved(
+          reviewFlushToken,
+          reviewFlushEpochRef.current,
+        )
+      ) {
+        onReviewStatusChange("resolved");
+      }
       onRefresh();
     },
     [clauseId, t, onRefresh, onReviewStatusChange],
@@ -717,11 +736,16 @@ const ClauseBodyEditor = ({
         onReviewResolved={async (body) => {
           // An accepted/rejected AI review is a decisive action, like blur:
           // flush immediately instead of waiting on the keystroke debounce.
-          // saveBody reports "resolved" itself on success; on failure it
-          // toasts and leaves the "persisting" gate blocked for a later
-          // successful autosave to lift.
+          // Mint a fresh epoch token for this flush so `saveBody` can tell
+          // it apart from an unrelated autosave settling in the same
+          // window — only the save carrying the *current* token may report
+          // "resolved" (see `canReviewFlushReportResolved`). saveBody
+          // reports "resolved" itself on success; on failure it toasts and
+          // leaves the "persisting" gate blocked for a later successful
+          // autosave to lift.
           debouncedSave.cancel();
-          await saveBody(body);
+          const reviewFlushToken = (reviewFlushEpochRef.current += 1);
+          await saveBody(body, reviewFlushToken);
         }}
         onReviewStatusChange={onReviewStatusChange}
         title={detail.title}

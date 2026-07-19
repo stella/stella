@@ -13,6 +13,8 @@ import {
 
 import {
   buildTrackedChangeDoc,
+  canReviewFlushReportResolved,
+  type ClauseEditorReviewStatus,
   hasAlignedClauseStructure,
   isRewriteStale,
   nonHistoricalDispatch,
@@ -681,6 +683,66 @@ describe("review resolution → persist gating", () => {
     await settleReviewPersist(async () => {
       reported = "resolved";
     });
+    expect(reported).toBe("resolved");
+  });
+});
+
+describe("canReviewFlushReportResolved", () => {
+  // Regression for `ClauseBodyEditor.saveBody`'s unconditional
+  // `onReviewStatusChange("resolved")` on any successful persist (bug
+  // introduced when that emission moved into `saveBody`): a plain
+  // debounced/blur autosave that started *before* a review begins can
+  // settle *after* the editor already reports "pending"/"persisting", and
+  // used to clear the review gate through that same success path even
+  // though it has nothing to do with the review. `saveBody` now only
+  // touches the gate for the save carrying the current review-flush epoch
+  // token, minted once, inside `onReviewResolved`.
+
+  test("(a) a stale autosave carries no token, so it never reports resolved, no matter the current epoch", () => {
+    expect(canReviewFlushReportResolved(undefined, 0)).toBe(false);
+    expect(canReviewFlushReportResolved(undefined, 3)).toBe(false);
+  });
+
+  test("(b) the review's own flush — token matching the current epoch — reports resolved", () => {
+    expect(canReviewFlushReportResolved(1, 1)).toBe(true);
+  });
+
+  test("a review flush superseded by a second review resolving before the first's persist settles no longer reports resolved — only the newest flush wins", () => {
+    // First review resolves: mint token 1 and start its persist.
+    const firstFlushToken = 1;
+    // A second review resolves before the first's persist settles: mint
+    // token 2. The epoch the caller compares against has moved on.
+    const currentEpoch = 2;
+
+    expect(canReviewFlushReportResolved(firstFlushToken, currentEpoch)).toBe(
+      false,
+    );
+    expect(canReviewFlushReportResolved(2, currentEpoch)).toBe(true);
+  });
+
+  // End-to-end simulation of the full race using the same call shape as
+  // `ClauseBodyEditor.saveBody`: a settling save only flips a caller-side
+  // `reported` flag when it's allowed to.
+  test("a pre-review autosave settling mid-review leaves the gate untouched, and the review's own flush still resolves it correctly", async () => {
+    let reviewFlushEpoch = 0;
+    let reported: ClauseEditorReviewStatus = "pending";
+
+    const settleSave = (reviewFlushToken: number | undefined) => {
+      if (canReviewFlushReportResolved(reviewFlushToken, reviewFlushEpoch)) {
+        reported = "resolved";
+      }
+    };
+
+    // A blur/debounced autosave kicked off before the review began finally
+    // settles now, while the review is still "pending" — it carries no
+    // token.
+    settleSave(undefined);
+    expect(reported).toBe("pending");
+
+    // The review resolves: `onReviewResolved` mints the epoch's token and
+    // its own flush settles successfully.
+    const reviewFlushToken = (reviewFlushEpoch += 1);
+    settleSave(reviewFlushToken);
     expect(reported).toBe("resolved");
   });
 });

@@ -201,6 +201,35 @@ export const settleReviewPersist = async (
   }
 };
 
+/**
+ * Whether a settling `saveBody` call may report the review gate "resolved".
+ *
+ * `saveBody` is the single persist path behind three very different
+ * triggers: the keystroke-debounced autosave, blur, and the review's own
+ * flush (`onReviewResolved`). Only the last of those may clear the review
+ * gate. Without this guard, a normal autosave that started *before* a review
+ * began but settles *after* the editor has already reported
+ * "pending"/"persisting" hits `saveBody`'s unconditional success path and
+ * flips the gate back to "resolved" while tracked-change hunks are still
+ * open (or the real review persist is still in flight) — version-save and
+ * leave actions read that gate, so they'd unblock against a stale body.
+ *
+ * The caller captures a fresh `reviewFlushToken` (an incrementing epoch,
+ * same shape as `rewriteRequestIdRef` in `ClauseEditor`) only inside
+ * `onReviewResolved`, and threads it into that one `saveBody` invocation.
+ * Ordinary autosaves never carry a token, so they always resolve to `false`
+ * here. Comparing against the *current* epoch (not just checking the token
+ * is present) also means a superseded review flush — one review resolves,
+ * then a second starts and resolves again before the first's persist
+ * settles — can't win a race against the newer one.
+ */
+export const canReviewFlushReportResolved = (
+  reviewFlushToken: number | undefined,
+  currentReviewFlushEpoch: number,
+): boolean =>
+  reviewFlushToken !== undefined &&
+  reviewFlushToken === currentReviewFlushEpoch;
+
 /** Stable identity of a body for detecting external resets vs. the editor's
  *  own round-tripped edits (text + formatting + directive kind/expression). */
 export const bodyKey = (body: readonly ClauseParagraph[]): string =>
