@@ -69,9 +69,10 @@ describe("validateRegistrationsFilter", () => {
       },
       new Date(),
     );
-    expect(reason).toBe(
-      `since must be within the last ${OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS} days`,
-    );
+    expect(reason).toEqual({
+      ok: false,
+      message: `since must be within the last ${OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS} days`,
+    });
   });
 
   test("accepts a since inside the lookback window", () => {
@@ -83,8 +84,30 @@ describe("validateRegistrationsFilter", () => {
           ).toISOString(),
         },
         new Date(),
-      ),
-    ).toBeNull();
+      ).ok,
+    ).toBe(true);
+  });
+
+  test("rejects a missing since", () => {
+    expect(validateRegistrationsFilter({}, new Date())).toEqual({
+      ok: false,
+      message: "since is required",
+    });
+  });
+
+  test("rejects a malformed since instead of bypassing the lookback check", () => {
+    expect(
+      validateRegistrationsFilter({ since: "not-a-date" }, new Date()),
+    ).toEqual({ ok: false, message: "since must be an ISO date-time" });
+  });
+
+  test("rejects a non-integer limit", () => {
+    expect(
+      validateRegistrationsFilter(
+        { since: daysAgo(1).toISOString(), limit: "many" },
+        new Date(),
+      ).ok,
+    ).toBe(false);
   });
 
   test("rejects a malformed cursor", () => {
@@ -93,7 +116,7 @@ describe("validateRegistrationsFilter", () => {
         { since: daysAgo(1).toISOString(), cursor: "not-a-cursor" },
         new Date(),
       ),
-    ).toBe("Invalid cursor");
+    ).toEqual({ ok: false, message: "Invalid cursor" });
   });
 });
 
@@ -158,10 +181,14 @@ describe("queryRegistrationsPage", () => {
 
   const runPage = async (
     safeDb: SafeDb,
-    query: { since: string; limit?: number; cursor?: string },
+    query: { since: string; limit?: string; cursor?: string },
   ) => {
+    const validated = validateRegistrationsFilter(query, new Date());
+    if (!validated.ok) {
+      throw new Error(validated.message);
+    }
     const result = await Result.gen(() =>
-      queryRegistrationsPage({ safeDb, query }),
+      queryRegistrationsPage({ safeDb, filter: validated.filter }),
     );
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) {
@@ -174,7 +201,7 @@ describe("queryRegistrationsPage", () => {
     await withSeededRegistrations(async (safeDb) => {
       const since = daysAgo(10).toISOString();
 
-      const firstPage = await runPage(safeDb, { since, limit: 2 });
+      const firstPage = await runPage(safeDb, { since, limit: "2" });
       expect(firstPage.limit).toBe(2);
       expect(firstPage.items.map((item) => item.id)).toEqual([
         "op-reg-a",
@@ -202,10 +229,10 @@ describe("queryRegistrationsPage", () => {
         throw new Error("expected a next cursor");
       }
       expect(
-        validateRegistrationsFilter({ since, cursor }, new Date()),
-      ).toBeNull();
+        validateRegistrationsFilter({ since, cursor }, new Date()).ok,
+      ).toBe(true);
 
-      const secondPage = await runPage(safeDb, { since, limit: 2, cursor });
+      const secondPage = await runPage(safeDb, { since, limit: "2", cursor });
       expect(secondPage.items.at(0)?.id).toBe("op-reg-c");
     });
   });
@@ -215,7 +242,7 @@ describe("queryRegistrationsPage", () => {
       // A wide limit that still cannot reach op-reg-outside (before since).
       const page = await runPage(safeDb, {
         since: daysAgo(10).toISOString(),
-        limit: 50,
+        limit: "50",
       });
       const ids = page.items.map((item) => item.id);
       expect(ids).not.toContain("op-reg-outside");

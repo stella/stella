@@ -66,12 +66,17 @@ export const createReadRegistrationsEndpoint = ({
       );
     }
 
-    const invalid = validateRegistrationsFilter(query, new Date());
-    if (invalid !== null) {
-      return Result.err(new HandlerError({ status: 400, message: invalid }));
+    const validated = validateRegistrationsFilter(query, new Date());
+    if (!validated.ok) {
+      return Result.err(
+        new HandlerError({ status: 400, message: validated.message }),
+      );
     }
 
-    const page = yield* queryRegistrationsPage({ safeDb, query });
+    const page = yield* queryRegistrationsPage({
+      safeDb,
+      filter: validated.filter,
+    });
     if (Result.isOk(page)) {
       // Counts only: registration emails/names must never reach logs.
       logger.info("operator.registrations_read", {

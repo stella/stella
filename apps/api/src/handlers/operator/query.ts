@@ -7,7 +7,6 @@ import { timingSafeEqual } from "node:crypto";
 
 import { user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
-import { tPaginationLimit } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -33,9 +32,16 @@ const registrationCursor = createTimestampIdCursorCodec({
   isIdPart: isUserIdCursorPart,
 });
 
+/**
+ * Route-level schema is deliberately permissive: Elysia validates the query
+ * before the handler's token gate runs, so a strict schema would emit 422s
+ * to unauthenticated probes — leaking both the endpoint's existence (which
+ * must read as 404 while unconfigured) and its parameter shape. All real
+ * validation happens post-authorization in `validateRegistrationsFilter`.
+ */
 export const readRegistrationsQuerySchema = t.Object({
-  since: t.String({ format: "date-time" }),
-  limit: t.Optional(tPaginationLimit(LIMITS.operatorRegistrationsPageSizeMax)),
+  since: t.Optional(t.String()),
+  limit: t.Optional(t.String()),
   cursor: t.Optional(t.String()),
 });
 
@@ -93,18 +99,52 @@ export const authorizeOperatorAccess = ({
  * (`since` outside the lookback window, malformed cursor). Returns the
  * human-readable reason, or null when the filter is valid.
  */
+export type RegistrationsFilter = {
+  since: Date;
+  limit: number;
+  cursor: string | undefined;
+};
+
+export type RegistrationsFilterResult =
+  | { ok: true; filter: RegistrationsFilter }
+  | { ok: false; message: string };
+
 export const validateRegistrationsFilter = (
   query: ReadRegistrationsQuery,
   now: Date,
-): string | null => {
+): RegistrationsFilterResult => {
+  if (query.since === undefined) {
+    return { ok: false, message: "since is required" };
+  }
   const since = new Date(query.since);
+  if (Number.isNaN(since.getTime())) {
+    return { ok: false, message: "since must be an ISO date-time" };
+  }
   if (now.getTime() - since.getTime() > MAX_LOOKBACK_MS) {
-    return `since must be within the last ${OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS} days`;
+    return {
+      ok: false,
+      message: `since must be within the last ${OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS} days`,
+    };
   }
-  if (query.cursor && !registrationCursor.decode(query.cursor)) {
-    return "Invalid cursor";
+  let limit: number = LIMITS.operatorRegistrationsPageSizeDefault;
+  if (query.limit !== undefined) {
+    const parsed = Number(query.limit);
+    if (
+      !Number.isInteger(parsed) ||
+      parsed < 1 ||
+      parsed > LIMITS.operatorRegistrationsPageSizeMax
+    ) {
+      return {
+        ok: false,
+        message: `limit must be an integer between 1 and ${LIMITS.operatorRegistrationsPageSizeMax}`,
+      };
+    }
+    limit = parsed;
   }
-  return null;
+  if (query.cursor !== undefined && !registrationCursor.decode(query.cursor)) {
+    return { ok: false, message: "Invalid cursor" };
+  }
+  return { ok: true, filter: { since, limit, cursor: query.cursor } };
 };
 
 /**
@@ -115,16 +155,16 @@ export const validateRegistrationsFilter = (
  */
 export const queryRegistrationsPage = async function* ({
   safeDb,
-  query,
+  filter,
 }: {
   safeDb: SafeDb;
-  query: ReadRegistrationsQuery;
+  filter: RegistrationsFilter;
 }) {
-  const limit = query.limit ?? LIMITS.operatorRegistrationsPageSizeDefault;
+  const { limit } = filter;
 
-  const conditions: SQL[] = [gte(user.createdAt, new Date(query.since))];
-  if (query.cursor) {
-    const cursor = registrationCursor.decode(query.cursor);
+  const conditions: SQL[] = [gte(user.createdAt, filter.since)];
+  if (filter.cursor) {
+    const cursor = registrationCursor.decode(filter.cursor);
     if (cursor) {
       const cursorCondition = registrationCursor.keysetAfter({
         cursor,

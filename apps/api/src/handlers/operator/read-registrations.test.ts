@@ -77,6 +77,31 @@ describe("GET /operator/registrations", () => {
     expect(response.status).toBe(404);
   });
 
+  test("404 on an unconfigured deployment even when the query is malformed — schema validation must never run before the token gate", async () => {
+    const app = buildApp({ configuredToken: undefined });
+    const response = await app.handle(registrationsRequest({}, {}));
+    expect(response.status).toBe(404);
+  });
+
+  test("401 (not 422) on a wrong token with a malformed query — parameter shape must not leak to unauthenticated probes", async () => {
+    const app = buildApp({ configuredToken: TOKEN });
+    const response = await app.handle(
+      registrationsRequest(
+        { since: "not-a-date", limit: "many" },
+        { authorization: "Bearer wrong" },
+      ),
+    );
+    expect(response.status).toBe(401);
+  });
+
+  test("400 when since is missing on an authorized request", async () => {
+    const app = buildApp({ configuredToken: TOKEN });
+    const response = await app.handle(
+      registrationsRequest({}, { authorization: `Bearer ${TOKEN}` }),
+    );
+    expect(response.status).toBe(400);
+  });
+
   test("401 with the standard error envelope on a wrong token", async () => {
     const app = buildApp({ configuredToken: TOKEN });
     const response = await app.handle(
