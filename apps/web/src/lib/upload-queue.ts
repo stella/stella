@@ -21,6 +21,18 @@ type FailedUpload = {
   error: Error;
 };
 
+/**
+ * A file waiting in the pending queue, tagged with the retry
+ * attempt it should run as. Carrying the attempt on the queue
+ * entry lets `pump()` stay the single place that admits work
+ * against the concurrency cap: retries re-enter through the
+ * pending queue rather than calling `processFile` directly.
+ */
+type QueuedUpload = {
+  file: File;
+  attempt: number;
+};
+
 type ProgressEvent = {
   completed: number;
   failed: number;
@@ -58,12 +70,24 @@ const sleep = async (ms: number) =>
  */
 export class UploadQueue<T> {
   private state: UploadState = "idle";
-  private pending: File[] = [];
+  private pending: QueuedUpload[] = [];
   private readonly inflight = new Map<File, AbortController>();
   private completed: T[] = [];
   private failed: FailedUpload[] = [];
   private total = 0;
   private retrying = 0;
+  // Bumped on every enqueue()/retryFailed() to give each run a distinct
+  // identity. Every processFile() call (in flight or sleeping through
+  // retry backoff) captures the run it was admitted under; if the run has
+  // moved on (cancel() followed by a new enqueue()/retryFailed() run) by
+  // the time that call settles, the settlement is dropped instead of
+  // leaking into a batch it does not belong to. This also covers the
+  // case where cancel() aborts a controller but the underlying promise
+  // still settles (successfully or not) after a new run has started:
+  // `this.state` alone can no longer distinguish "still that cancelled
+  // run" from "a fresh run happens to be running now".
+  private runId = 0;
+  private readonly fileRunIds = new Map<File, number>();
   private readonly concurrency: number;
   private readonly uploadFn: UploadFn<T>;
   private rateLimitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -128,11 +152,14 @@ export class UploadQueue<T> {
       return;
     }
 
-    this.pending = [...files];
+    this.runId++;
+    this.fileRunIds.clear();
+    this.pending = files.map((file) => ({ file, attempt: 0 }));
     this.inflight.clear();
     this.completed = [];
     this.failed = [];
     this.total = files.length;
+    this.retrying = 0;
 
     this.setState("running");
     this.emitProgress();
@@ -180,6 +207,7 @@ export class UploadQueue<T> {
     }
     this.inflight.clear();
     this.pending = [];
+    this.retrying = 0;
 
     this.setState("cancelled");
     this.emit("done", {
@@ -196,11 +224,13 @@ export class UploadQueue<T> {
     if (this.state !== "done" && this.state !== "cancelled") {
       return;
     }
-    const filesToRetry = this.failed.map((f) => f.file);
+    this.runId++;
+    this.fileRunIds.clear();
+    this.pending = this.failed.map(({ file }) => ({ file, attempt: 0 }));
+    this.total = this.pending.length;
     this.failed = [];
-    this.pending = filesToRetry;
-    this.total = filesToRetry.length;
     this.completed = [];
+    this.retrying = 0;
 
     this.setState("running");
     this.emitProgress();
@@ -232,9 +262,10 @@ export class UploadQueue<T> {
     }
 
     while (this.inflight.size < this.concurrency && this.pending.length > 0) {
-      const file = this.pending.shift();
-      if (file) {
-        this.processFile(file).catch(() => {
+      const next = this.pending.shift();
+      if (next) {
+        this.fileRunIds.set(next.file, this.runId);
+        this.processFile(next.file, next.attempt).catch(() => {
           // Errors are handled inside processFile
         });
       }
@@ -245,11 +276,27 @@ export class UploadQueue<T> {
     const controller = new AbortController();
     this.inflight.set(file, controller);
 
+    // Captured once, at admission, so every settlement path below can be
+    // gated on the same run identity. cancel() aborts the controller but
+    // does not stop the underlying promise from settling; if retryFailed()
+    // starts a fresh run before that stale settlement lands, `this.state`
+    // is back to "running" and can no longer tell the two runs apart, so
+    // the comparison must be against the run this call was admitted under,
+    // not against transient state alone.
+    const admittedRunId = this.fileRunIds.get(file);
+    const isStaleSettlement = () =>
+      this.state === "cancelled" || this.runId !== admittedRunId;
+
     try {
       const result = await this.uploadFn(file, controller.signal);
       this.inflight.delete(file);
 
-      if (this.state === "cancelled") {
+      if (isStaleSettlement()) {
+        // Belongs to a superseded run: drop it from accounting, but still
+        // pump() so the freed slot (and, for the current run, a possible
+        // "done") is picked up immediately rather than waiting for the
+        // next unrelated event.
+        this.pump();
         return;
       }
 
@@ -259,11 +306,8 @@ export class UploadQueue<T> {
     } catch (error) {
       this.inflight.delete(file);
 
-      if (this.state === "cancelled") {
-        return;
-      }
-
-      if (controller.signal.aborted) {
+      if (isStaleSettlement()) {
+        this.pump();
         return;
       }
 
@@ -271,7 +315,7 @@ export class UploadQueue<T> {
 
       if (status === HTTP_TOO_MANY_REQUESTS) {
         // Put the file back at the front of the queue
-        this.pending.unshift(file);
+        this.pending.unshift({ file, attempt: 0 });
         this.handleRateLimit(error);
         return;
       }
@@ -290,22 +334,38 @@ export class UploadQueue<T> {
         this.pump();
 
         await sleep(delay);
-        this.retrying--;
 
-        // State may have changed during sleep (cancel,
-        // pause). Only continue if still running.
-        if (this.getState() !== "running") {
-          // If cancelled, don't push back to pending
-          // (already cleared by cancel()).
-          if (this.getState() !== "cancelled") {
-            this.pending.unshift(file);
-          }
+        // Only decrement if this sleeper's run is still the current one.
+        // cancel()/enqueue()/retryFailed() all reset `retrying` to 0 as
+        // part of starting or tearing down a run; a sleeper admitted
+        // under an earlier, superseded run must not touch a fresh run's
+        // counter (or drive an already-reset counter negative) just
+        // because it happens to wake up after the reset.
+        if (this.runId === admittedRunId) {
+          this.retrying--;
+        }
+
+        // Cancelled during backoff: cancel() already cleared
+        // the pending queue and emitted done; drop the retry.
+        // Same if a new run (retryFailed() from "cancelled")
+        // started while this retry was asleep: the run that
+        // admitted it is gone, so re-admitting now would leak
+        // this file into a batch it does not belong to. Either
+        // way, still call pump() so the current run (if any) can
+        // notice `retrying` dropped and reach "done"; pump() is a
+        // no-op while cancelled.
+        if (isStaleSettlement()) {
+          this.pump();
           return;
         }
 
-        this.processFile(file, attempt + 1).catch(() => {
-          // Errors are handled inside processFile
-        });
+        // Re-admit the retry through the pending queue so pump()
+        // remains the single gate that checks it against the
+        // concurrency cap. If the queue is paused or rate-limited,
+        // the entry waits in pending until the next pump() (on
+        // resume) admits it; its attempt count is preserved.
+        this.pending.unshift({ file, attempt: attempt + 1 });
+        this.pump();
         return;
       }
 

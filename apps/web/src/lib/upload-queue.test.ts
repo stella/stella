@@ -71,6 +71,14 @@ class ScriptedUploader {
   totalCalls = 0;
   readonly callsByFile = new Map<string, number>();
   sawConcurrentDoubleUpload = false;
+  /**
+   * File names that should survive `controller.abort()` instead of
+   * auto-rejecting. Models the race where cancel() aborts a request that
+   * has already gone far enough (or whose transport ignores the signal)
+   * that it settles on its own later, well after the abort call: the
+   * queue's controller is aborted, but the underlying promise is not.
+   */
+  readonly ignoreAbortFor = new Set<string>();
 
   private readonly live: PendingUpload[] = [];
   private readonly settled = new WeakSet<PendingUpload>();
@@ -98,7 +106,7 @@ class ScriptedUploader {
         },
       };
       signal.addEventListener("abort", () => {
-        if (this.settled.has(entry)) {
+        if (this.settled.has(entry) || this.ignoreAbortFor.has(file.name)) {
           return;
         }
         // Mirror fetch(): an aborted request rejects. The queue checks
@@ -624,17 +632,14 @@ describe("interleaving table (deterministic scheduling coverage)", () => {
   }
 });
 
-describe("KNOWN BUG: retry re-injection oversubscribes the concurrency cap", () => {
+describe("retry re-injection respects the concurrency cap", () => {
   // The retry path frees the file's slot (deletes it from `inflight`) and
-  // then calls pump() to fill that slot with the next pending file *before*
-  // awaiting the backoff. When the backoff elapses, processFile() re-inserts
-  // the retried file directly into `inflight` without re-checking the cap, so
-  // the in-flight count transiently exceeds `concurrency`.
-  //
-  // This test documents the CURRENT (buggy) behaviour so a future fix has a
-  // regression anchor; the assertion below flips once the cap is respected.
-  // See report: no product-code fix is made in this tests-only change.
-  test("in-flight count reaches cap + 1 when a retry resumes into a full pipe", async () => {
+  // then calls pump() to fill that slot with the next pending file while the
+  // backoff runs. When the backoff elapses, the retry re-enters through the
+  // pending queue, so pump() is the single gate that admits it against the
+  // cap: a retry resuming into a full pipe waits its turn rather than
+  // pushing the in-flight count over `concurrency`.
+  test("a retry resuming into a full pipe does not exceed the cap", async () => {
     jest.useFakeTimers();
     try {
       const uploader = new ScriptedUploader();
@@ -651,23 +656,319 @@ describe("KNOWN BUG: retry re-injection oversubscribes the concurrency cap", () 
       expect(uploader.liveNamesList()).toEqual(["filler"]);
       expect(uploader.active).toBe(1);
 
-      // "filler" is still hanging when the backoff elapses and "retry" resumes.
+      // "filler" is still hanging when the backoff elapses. The retry cannot
+      // barge into the occupied slot; it stays parked until a slot frees.
       jest.advanceTimersByTime(1000);
       await flush();
 
-      // BUG: two uploads are now concurrent under a cap of 1.
-      expect(uploader.active).toBe(2);
-      expect(uploader.maxActive).toBe(cap + 1);
-      // The two live uploads are different files, so this is a cap breach,
-      // not the same file uploaded twice at once.
+      expect(uploader.active).toBe(1);
+      expect(uploader.maxActive).toBe(cap);
+      expect(uploader.liveNamesList()).toEqual(["filler"]);
       expect(uploader.sawConcurrentDoubleUpload).toBe(false);
 
+      // Once "filler" completes, the parked retry is admitted (exactly once).
       uploader.resolveFile("filler");
+      await flush();
+      expect(uploader.liveNamesList()).toEqual(["retry"]);
+      expect(uploader.active).toBe(1);
+      expect(uploader.callCount("retry")).toBe(2);
+
       uploader.resolveFile("retry");
       await flush();
       expect(queue.getState()).toBe("done");
+      expect(uploader.maxActive).toBe(cap);
     } finally {
       jest.useRealTimers();
     }
+  });
+});
+
+describe("a stale retry does not leak across runs", () => {
+  // retryFailed() is documented and tested to work from the "cancelled"
+  // state (see the state map above). If a file is sleeping through its
+  // retry backoff when cancel() fires, and retryFailed() starts a fresh
+  // run before the backoff elapses, the sleeping retry must not resume
+  // into the new run: it belongs to a run that no longer exists.
+  test("a retry that wakes after cancel+retryFailed is dropped, not re-admitted", async () => {
+    jest.useFakeTimers();
+    try {
+      const uploader = new ScriptedUploader();
+      const cap = 2;
+      const { queue, doneEvents } = harness(uploader, cap);
+
+      queue.enqueue(makeFiles("flaky", "badfile"));
+      await flush();
+      expect(uploader.active).toBe(2);
+
+      // Permanent failure: lands in `failed`, eligible for retryFailed().
+      uploader.rejectFile("badfile", httpError(400));
+      await flush();
+
+      // Retryable failure: frees its inflight slot and starts sleeping
+      // through backoff. It is neither pending, inflight, nor failed
+      // while asleep.
+      uploader.rejectFile("flaky", httpError(500));
+      await flush();
+      expect(uploader.active).toBe(0);
+
+      queue.cancel();
+      await flush();
+      expect(queue.getState()).toBe("cancelled");
+      expect(doneEvents).toHaveLength(1);
+      expect(doneEvents[0]!.cancelled).toBe(true);
+
+      // Starts a new run scoped to the previously-failed file only.
+      queue.retryFailed();
+      await flush();
+      expect(queue.getState()).toBe("running");
+      expect(uploader.liveNamesList()).toEqual(["badfile"]);
+
+      // "flaky"'s backoff from the cancelled run elapses mid-way through
+      // the new run.
+      jest.advanceTimersByTime(1000);
+      await flush();
+
+      // Dropped: never re-admitted into the new run's pending queue or
+      // re-uploaded.
+      expect(uploader.callCount("flaky")).toBe(1);
+      expect(uploader.liveNamesList()).toEqual(["badfile"]);
+      expect(queue.getState()).toBe("running");
+
+      uploader.resolveFile("badfile");
+      await flush();
+
+      expect(queue.getState()).toBe("done");
+      expect(doneEvents).toHaveLength(2);
+      expect(doneEvents[1]!.cancelled).toBe(false);
+      expect(doneEvents[1]!.completed).toHaveLength(1);
+      expect(doneEvents[1]!.failed).toHaveLength(0);
+      expect(uploader.sawConcurrentDoubleUpload).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("a stale retry waking with nothing else pending does not block or re-block the new run", async () => {
+    jest.useFakeTimers();
+    try {
+      const uploader = new ScriptedUploader();
+      const { queue, doneEvents } = harness(uploader, 1);
+
+      queue.enqueue(makeFiles("flaky"));
+      await flush();
+
+      uploader.rejectFile("flaky", httpError(500));
+      await flush();
+
+      queue.cancel();
+      await flush();
+      expect(doneEvents).toHaveLength(1);
+
+      // No failed files to retry: the new run starts empty, with only the
+      // stale sleeping retry outstanding. cancel()/retryFailed() reset the
+      // retry counter on their own run transition, so the empty run has
+      // nothing left to wait on and reaches "done" immediately, without
+      // sitting "running" until the stale sleeper's backoff elapses.
+      queue.retryFailed();
+      await flush();
+      expect(queue.getState()).toBe("done");
+      expect(doneEvents).toHaveLength(2);
+      expect(doneEvents[1]!.completed).toHaveLength(0);
+      expect(doneEvents[1]!.failed).toHaveLength(0);
+
+      // The stale retry then wakes, well after the run that admitted it is
+      // gone. It must be dropped silently: no re-upload, no extra `done`,
+      // and no corruption of the counter a later run would depend on.
+      jest.advanceTimersByTime(1000);
+      await flush();
+
+      expect(queue.getState()).toBe("done");
+      expect(doneEvents).toHaveLength(2);
+      expect(uploader.callCount("flaky")).toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("the new run reaches done as soon as its own work drains, without waiting for a stale sleeper", async () => {
+    jest.useFakeTimers();
+    try {
+      const uploader = new ScriptedUploader();
+      const cap = 2;
+      const { queue, doneEvents } = harness(uploader, cap);
+
+      queue.enqueue(makeFiles("flaky", "badfile"));
+      await flush();
+      expect(uploader.active).toBe(2);
+
+      // Permanent failure: lands in `failed`, eligible for retryFailed().
+      uploader.rejectFile("badfile", httpError(400));
+      await flush();
+
+      // Retryable failure: frees its inflight slot and starts sleeping
+      // through backoff, bumping the (then-)global `retrying` counter.
+      uploader.rejectFile("flaky", httpError(500));
+      await flush();
+
+      queue.cancel();
+      await flush();
+      expect(doneEvents).toHaveLength(1);
+
+      // New run scoped to "badfile" only. "flaky"'s retry is still asleep,
+      // with a full 1000ms left on its backoff.
+      queue.retryFailed();
+      await flush();
+      expect(uploader.liveNamesList()).toEqual(["badfile"]);
+
+      // The new run's only file finishes well before the stale sleeper
+      // wakes. The run has no other pending or in-flight work, so it must
+      // reach "done" right away instead of waiting on a counter left over
+      // from a run that no longer exists.
+      uploader.resolveFile("badfile", "ok:badfile");
+      await flush();
+
+      expect(queue.getState()).toBe("done");
+      expect(doneEvents).toHaveLength(2);
+      expect(doneEvents[1]!.cancelled).toBe(false);
+      expect(doneEvents[1]!.completed).toEqual(["ok:badfile"]);
+      expect(doneEvents[1]!.failed).toHaveLength(0);
+
+      // "flaky"'s stale backoff now elapses. It must be dropped silently:
+      // no re-upload, no extra `done`, and no corruption of the (already
+      // reset) counter that a THIRD run would depend on.
+      jest.advanceTimersByTime(1000);
+      await flush();
+
+      expect(uploader.callCount("flaky")).toBe(1);
+      expect(doneEvents).toHaveLength(2);
+      expect(queue.getState()).toBe("done");
+
+      // A third run must not be blocked or corrupted by the long-dead
+      // sleeper either.
+      queue.enqueue(makeFiles("third"));
+      await flush();
+      uploader.resolveFile("third", "ok:third");
+      await flush();
+
+      expect(queue.getState()).toBe("done");
+      expect(doneEvents).toHaveLength(3);
+      expect(doneEvents[2]!.completed).toEqual(["ok:third"]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+describe("a stale in-flight settlement does not leak across runs", () => {
+  // cancel() aborts every in-flight controller, but aborting a controller
+  // does not stop the underlying promise from settling: the request may
+  // already be far enough along (or the transport may not honour the
+  // signal promptly) that it resolves or rejects on its own after
+  // retryFailed() has already started a fresh run. The stale settlement
+  // must not be counted into the new run's completed/failed/total
+  // bookkeeping or its `done` event.
+  test("an in-flight file that resolves after cancel+retryFailed is dropped from the new run", async () => {
+    const uploader = new ScriptedUploader();
+    const cap = 2;
+    const { queue, doneEvents } = harness(uploader, cap);
+
+    // "stale" is never allowed to auto-reject on abort, so it stays live
+    // through cancel() to model the resolve-after-abort race.
+    uploader.ignoreAbortFor.add("stale");
+
+    queue.enqueue(makeFiles("stale", "badfile"));
+    await flush();
+    expect(uploader.active).toBe(2);
+
+    // Permanent failure: lands in `failed`, eligible for retryFailed().
+    uploader.rejectFile("badfile", httpError(400));
+    await flush();
+
+    queue.cancel();
+    await flush();
+    expect(queue.getState()).toBe("cancelled");
+    expect(doneEvents).toHaveLength(1);
+    // Aborted, but ignoreAbortFor kept the promise alive.
+    expect(uploader.liveNamesList()).toEqual(["stale"]);
+
+    // Starts a new run scoped to the previously-failed file only.
+    queue.retryFailed();
+    await flush();
+    expect(queue.getState()).toBe("running");
+    expect(queue.getProgress().total).toBe(1);
+    expect(uploader.liveNamesList()).toEqual(["stale", "badfile"]);
+
+    // The cancelled run's request finally resolves, well after the new
+    // run started.
+    uploader.resolveFile("stale", "ok:stale");
+    await flush();
+
+    // Dropped: not counted as completed, total unaffected, new run still
+    // running (only "badfile" outstanding).
+    expect(queue.getProgress().completed).toBe(0);
+    expect(queue.getProgress().total).toBe(1);
+    expect(queue.getState()).toBe("running");
+    expect(doneEvents).toHaveLength(1);
+
+    uploader.resolveFile("badfile", "ok:badfile");
+    await flush();
+
+    expect(queue.getState()).toBe("done");
+    expect(doneEvents).toHaveLength(2);
+    expect(doneEvents[1]!.cancelled).toBe(false);
+    expect(doneEvents[1]!.completed).toEqual(["ok:badfile"]);
+    expect(doneEvents[1]!.failed).toHaveLength(0);
+    expect(uploader.callCount("stale")).toBe(1);
+    expect(uploader.sawConcurrentDoubleUpload).toBe(false);
+  });
+
+  test("an in-flight file that rejects after cancel+retryFailed is dropped from the new run", async () => {
+    const uploader = new ScriptedUploader();
+    const cap = 2;
+    const { queue, doneEvents } = harness(uploader, cap);
+
+    // "stale" is never allowed to auto-reject on abort, so the test
+    // controls exactly when (and how) it settles, after the new run has
+    // already started.
+    uploader.ignoreAbortFor.add("stale");
+
+    queue.enqueue(makeFiles("stale", "badfile"));
+    await flush();
+    expect(uploader.active).toBe(2);
+
+    uploader.rejectFile("badfile", httpError(400));
+    await flush();
+
+    queue.cancel();
+    await flush();
+    expect(doneEvents).toHaveLength(1);
+    expect(uploader.liveNamesList()).toEqual(["stale"]);
+
+    queue.retryFailed();
+    await flush();
+    expect(queue.getState()).toBe("running");
+    expect(uploader.liveNamesList()).toEqual(["stale", "badfile"]);
+
+    // The cancelled run's request finally rejects (server error, i.e. one
+    // that would normally be retryable) well after the new run started.
+    uploader.rejectFile("stale", httpError(500));
+    await flush();
+
+    // Dropped: not counted as failed, not scheduled for a retry, total
+    // unaffected, new run still running.
+    expect(queue.getProgress().failed).toBe(0);
+    expect(queue.getProgress().total).toBe(1);
+    expect(queue.getState()).toBe("running");
+    expect(doneEvents).toHaveLength(1);
+
+    uploader.resolveFile("badfile", "ok:badfile");
+    await flush();
+
+    expect(queue.getState()).toBe("done");
+    expect(doneEvents).toHaveLength(2);
+    expect(doneEvents[1]!.completed).toEqual(["ok:badfile"]);
+    expect(doneEvents[1]!.failed).toHaveLength(0);
+    expect(uploader.callCount("stale")).toBe(1);
+    expect(uploader.sawConcurrentDoubleUpload).toBe(false);
   });
 });
