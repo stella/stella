@@ -3,7 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { readCredentialFile, upsertCredential } from "./credential-store.js";
+import {
+  readCredentialFile,
+  upsertCredential,
+  writeCredentialFile,
+} from "./credential-store.js";
 import type { CredentialFile, StoredCredential } from "./credential-store.js";
 import { ensureFreshCredential } from "./ensure-fresh-credential.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
@@ -23,6 +27,23 @@ const buildCredential = (
   updatedAt: 0,
   ...overrides,
 });
+
+const EMPTY_FILE: CredentialFile = {
+  credentials: [],
+  defaultOrgByServer: {},
+  version: 1,
+};
+
+/** Seeds `configDir`'s `credentials.json` with `credential`, as a real caller would have loaded it from. */
+const seedCredential = async (
+  configDir: string,
+  credential: StoredCredential,
+): Promise<void> => {
+  await writeCredentialFile(
+    configDir,
+    upsertCredential(EMPTY_FILE, credential),
+  );
+};
 
 /** A mock `/oauth2/token` endpoint whose response depends on the test scenario, plus a request counter. */
 const startMockProvider = (
@@ -56,13 +77,11 @@ const startMockProvider = (
 
 describe("ensureFreshCredential", () => {
   let configDir: string;
-  let credentialFile: CredentialFile;
 
   beforeEach(async () => {
     configDir = await mkdtemp(
       path.join(os.tmpdir(), "stella-cli-refresh-test-"),
     );
-    credentialFile = { credentials: [], defaultOrgByServer: {}, version: 1 };
   });
 
   afterEach(async () => {
@@ -75,16 +94,17 @@ describe("ensureFreshCredential", () => {
     );
     try {
       const credential = buildCredential({ expiresAt: Date.now() + 60_000 });
+      await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,
-        credentialFile,
         metadata: provider.metadata,
       });
 
       expect(result.status).toBe("ok");
       if (result.status === "ok") {
-        expect(result.value).toEqual(credential);
+        expect(result.value.credential).toEqual(credential);
+        expect(result.value.persistWarning).toBeUndefined();
       }
       expect(provider.getRequestCount()).toBe(0);
     } finally {
@@ -114,20 +134,21 @@ describe("ensureFreshCredential", () => {
 
     try {
       const credential = buildCredential({ expiresAt: Date.now() - 1000 });
+      await seedCredential(configDir, credential);
       const now = Date.now();
       const result = await ensureFreshCredential({
         configDir,
         credential,
-        credentialFile: upsertCredential(credentialFile, credential),
         metadata: provider.metadata,
         now,
       });
 
       expect(result.status).toBe("ok");
       if (result.status === "ok") {
-        expect(result.value.accessToken).toBe("new-access-token");
-        expect(result.value.refreshToken).toBe("new-refresh-token");
-        expect(result.value.expiresAt).toBe(now + 900 * 1000);
+        expect(result.value.credential.accessToken).toBe("new-access-token");
+        expect(result.value.credential.refreshToken).toBe("new-refresh-token");
+        expect(result.value.credential.expiresAt).toBe(now + 900 * 1000);
+        expect(result.value.persistWarning).toBeUndefined();
       }
       expect(provider.getRequestCount()).toBe(1);
 
@@ -149,10 +170,10 @@ describe("ensureFreshCredential", () => {
 
     try {
       const credential = buildCredential({ expiresAt: Date.now() - 1000 });
+      await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,
-        credentialFile: upsertCredential(credentialFile, credential),
         metadata: provider.metadata,
       });
 
@@ -175,10 +196,10 @@ describe("ensureFreshCredential", () => {
         expiresAt: Date.now() - 1000,
         refreshToken: undefined,
       });
+      await seedCredential(configDir, credential);
       const result = await ensureFreshCredential({
         configDir,
         credential,
-        credentialFile: upsertCredential(credentialFile, credential),
         metadata: provider.metadata,
       });
 

@@ -17,10 +17,7 @@ import { Result } from "better-result";
 
 import packageJson from "../package.json" with { type: "json" };
 import { defaultConfigDir } from "./auth/cli-config.js";
-import {
-  findDefaultCredential,
-  readCredentialFile,
-} from "./auth/credential-store.js";
+import { resolveAccessToken } from "./auth/resolve-access-token.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
 import { buildGeneratedRoutes, buildResourceRoutes } from "./build-cli-tree.js";
 import { authRoute } from "./commands/auth.js";
@@ -107,10 +104,30 @@ const resolvePreamble = async (): Promise<{
   const serverUrl = Result.isOk(serverUrlResult)
     ? serverUrlResult.value
     : undefined;
-  const token = serverUrl
-    ? findDefaultCredential(await readCredentialFile(configDir), serverUrl)
-        ?.accessToken
-    : undefined;
+  if (serverUrl === undefined) {
+    return { configDir, serverUrl: undefined, token: undefined };
+  }
+
+  // The single choke point where a stored credential becomes a request token:
+  // an expired/near-expiry access token is refreshed (and the rotation
+  // persisted) before use, so a valid refresh token keeps commands working
+  // without a re-login. A refresh failure (or no credential) yields no token,
+  // so the command path's established "Not signed in" / exit-`auth` contract
+  // still applies, and the startup registry refresh below is skipped rather
+  // than firing a doomed request that 401-warns on a stale token.
+  const resolved = await resolveAccessToken({ configDir, serverUrl });
+  if (resolved.status === "refresh-failed") {
+    // Surface the specific reason (e.g. "no refresh token, run `stella auth
+    // login` again") instead of letting the command path's generic "Not
+    // signed in" message stand in for it.
+    process.stderr.write(`${resolved.error.message}\n`);
+  }
+  if (resolved.status === "ok" && resolved.persistWarning !== undefined) {
+    // The refresh succeeded but couldn't be saved to disk (read-only config
+    // dir, full disk); the token below is still valid for this command.
+    process.stderr.write(`${resolved.persistWarning}\n`);
+  }
+  const token = resolved.status === "ok" ? resolved.token : undefined;
   return { configDir, serverUrl, token };
 };
 
