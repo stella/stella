@@ -62,6 +62,9 @@
     "titleLine1": "Jogi munkaterület.",
     "titleLine2": "Nyílt forráskód."
   },
+  "home": {
+    "ctaTitle": "Az Ön ügyei. Az Ön rendszere. Az Ön szabályai."
+  },
   "nav": {
     "aiFactSheet": "AI-adatlap",
     "aiFactSheetBlurb": "A stella géppel olvasható formában.",
@@ -70,5 +73,39 @@
     "changelog": "Változásnapló",
     "product": "Termék",
     "security": "Biztonság"
+  },
+  "story": {
+    "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és hivatkozott bizonyítékokat ad vissza. Használja a stellában, a Microsoft Teamsben vagy MCP-n és parancssoron keresztül; a kérést ugyanazok a jogosultságok és források kísérik.",
+    "agentEyebrow": "Ügynöki munkafolyamatok",
+    "agentTitle": "Kérdezzen egyszer. Dolgozzon az összes dokumentumon.",
+    "controlEyebrow": "Irányításra tervezve",
+    "controlTitle": "Tartsa kézben a rendszerét.",
+    "dataBody": "Keressen hivatalos jogforrásokban, emelje be a nyilvántartási adatokat az ügybe, tekintse át a dokumentumkészleteket strukturált táblázatokként, és anonimizálja az azonosító adatokat, mielőtt érzékeny anyag kerülne egy AI-munkafolyamatba.",
+    "dataEyebrow": "Jogi adatok",
+    "dataInsetAlt": "Átvilágítási kivonat kitakart azonosító adatokkal a stellában",
+    "dataMainAlt": "Egy hivatalos szlovák bírósági határozat a stellában megnyitva",
+    "dataTitle": "Hozza magával a jogot és az adatokat.",
+    "deploySubtitle": "Kezdje a felhőben, vagy telepítse ugyanazt a nyílt forráskódú munkaterületet saját infrastruktúrájára.",
+    "deployTitle": "Futtassa nálunk. Vagy üzemeltesse saját maga.",
+    "exploreAgent": "AI-ügynök felfedezése",
+    "exploreAnonymization": "Anonimizálás felfedezése",
+    "explorePublicData": "Nyilvános adatok felfedezése",
+    "exploreWorkspace": "Munkaterület felfedezése",
+    "eyebrow": "Egy összekapcsolt munkaterület",
+    "intro": "Az ügy ugyanazon az összekapcsolt rendszeren halad végig: a forrásanyagoktól a felülvizsgálaton és a szövegezésen át a megalapozott válaszig vagy műveletig.",
+    "openEditor": "Szerkesztő megnyitása",
+    "proofByokBody": "Az AI-funkciókhoz használja saját szolgáltatói kulcsait.",
+    "proofByokTitle": "Saját modellek használata",
+    "proofOpenSourceBody": "Vizsgálja meg a kódot, és tartson meg egy hordozható rendszert.",
+    "proofOpenSourceTitle": "Nyílt forráskód",
+    "proofPermissionsBody": "A kérések a felhasználóra és a munkaterületre korlátozódnak.",
+    "proofPermissionsTitle": "Tiszteletben tartja a jogosultságokat",
+    "proofSelfHostBody": "Futtassa a stellát olyan infrastruktúrán, amelyet Ön felügyel.",
+    "proofSelfHostTitle": "Saját szerveren üzemeltethető",
+    "selfHostGuide": "Saját üzemeltetési útmutató elolvasása",
+    "title": "Egy ügy. A munka minden része.",
+    "workspaceBody": "A dokumentumok, a határidők, a strukturált felülvizsgálat és a szövegezés együtt maradnak. Nyisson meg egy ügyet, lássa a munkát a maga kontextusában, és lépjen a táblázatból az alapul szolgáló dokumentumra anélkül, hogy újra össze kellene raknia az előzményeket.",
+    "workspaceEyebrow": "Az ügy munkaterülete",
+    "workspaceTitle": "Az ügy az elsődleges nyilvántartás."
   }
 }

@@ -36,7 +36,7 @@
   "footer": {
     "agent": "Agent IA",
     "anonymization": "Anonymisation",
-    "clarity": "La clarté pour chaque affaire.",
+    "clarity": "La clarté pour chaque dossier.",
     "connect": "Nous rejoindre",
     "contact": "Nous contacter",
     "documentation": "Documentation",
@@ -62,6 +62,9 @@
     "titleLine1": "Espace de travail juridique.",
     "titleLine2": "Code source ouvert."
   },
+  "home": {
+    "ctaTitle": "Vos dossiers. Votre infrastructure. Vos règles."
+  },
   "nav": {
     "aiFactSheet": "Fiche technique IA",
     "aiFactSheetBlurb": "stella sous forme lisible par machine.",
@@ -70,5 +73,39 @@
     "changelog": "Journal des modifications",
     "product": "Produit",
     "security": "Sécurité"
+  },
+  "story": {
+    "agentBody": "L'agent recherche dans le dossier, lit le texte pertinent et renvoie des preuves reliées aux sources. Utilisez-le dans stella, Microsoft Teams ou via MCP et la CLI ; les mêmes permissions et les mêmes sources suivent la demande.",
+    "agentEyebrow": "Flux de travail de l'agent",
+    "agentTitle": "Demandez une fois. Travaillez sur l'ensemble des documents.",
+    "controlEyebrow": "Conçu pour garder le contrôle",
+    "controlTitle": "Gardez le contrôle de votre infrastructure.",
+    "dataBody": "Recherchez dans les sources juridiques officielles, importez les données des registres dans le dossier, examinez des ensembles de documents sous forme de tableaux structurés et anonymisez les éléments identifiants avant qu'un contenu sensible n'entre dans un flux de travail IA.",
+    "dataEyebrow": "Données juridiques",
+    "dataInsetAlt": "Un extrait de due diligence avec les éléments identifiants caviardés dans stella",
+    "dataMainAlt": "Une décision de justice slovaque officielle ouverte dans stella",
+    "dataTitle": "Emportez le droit et les données avec vous.",
+    "deploySubtitle": "Commencez dans le cloud ou déployez le même espace de travail open source sur votre infrastructure.",
+    "deployTitle": "Exécutez-la chez nous. Ou hébergez-la vous-même.",
+    "exploreAgent": "Découvrir l'agent IA",
+    "exploreAnonymization": "Découvrir l'anonymisation",
+    "explorePublicData": "Découvrir les données publiques",
+    "exploreWorkspace": "Découvrir l'espace de travail",
+    "eyebrow": "Un espace de travail connecté",
+    "intro": "Un dossier avance dans un même système connecté : des documents sources, en passant par la revue et la rédaction, jusqu'à une réponse ou une action fondée.",
+    "openEditor": "Ouvrir l'éditeur",
+    "proofByokBody": "Utilisez vos propres clés de fournisseur pour les fonctions IA.",
+    "proofByokTitle": "Apportez vos propres modèles",
+    "proofOpenSourceBody": "Inspectez le code et conservez un système portable.",
+    "proofOpenSourceTitle": "Code source ouvert",
+    "proofPermissionsBody": "Les requêtes restent limitées à l'utilisateur et à son espace de travail.",
+    "proofPermissionsTitle": "Respecte les permissions",
+    "proofSelfHostBody": "Exécutez stella sur une infrastructure que vous contrôlez.",
+    "proofSelfHostTitle": "Auto-hébergeable",
+    "selfHostGuide": "Lire le guide d'auto-hébergement",
+    "title": "Un dossier. Chaque étape du travail.",
+    "workspaceBody": "Documents, échéances, revue structurée et rédaction restent ensemble. Ouvrez un dossier, visualisez le travail dans son contexte et passez d'un tableau au document sous-jacent sans reconstituer le fil.",
+    "workspaceEyebrow": "L'espace du dossier",
+    "workspaceTitle": "Le dossier est la source de référence."
   }
 }

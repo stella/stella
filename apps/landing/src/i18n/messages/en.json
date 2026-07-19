@@ -62,6 +62,9 @@
     "titleLine1": "Put AI to work",
     "titleLine2": "on every matter."
   },
+  "home": {
+    "ctaTitle": "Your matters. Your stack. Your terms."
+  },
   "nav": {
     "aiFactSheet": "AI fact sheet",
     "aiFactSheetBlurb": "stella in machine-readable form.",
@@ -70,5 +73,39 @@
     "changelog": "Changelog",
     "product": "Product",
     "security": "Security"
+  },
+  "story": {
+    "agentBody": "The agent searches the matter, reads the relevant text, and returns linked evidence. Use it in stella, Microsoft Teams, or through MCP and the CLI; the same permissions and sources follow the request.",
+    "agentEyebrow": "Agent workflows",
+    "agentTitle": "Ask once. Work across every document.",
+    "controlEyebrow": "Built for control",
+    "controlTitle": "Keep control of the stack.",
+    "dataBody": "Search official legal sources, bring registry data into the matter, review document sets as structured tables, and anonymize identifying details before sensitive material enters an AI workflow.",
+    "dataEyebrow": "Legal data",
+    "dataInsetAlt": "A due diligence extract with identifying details redacted in stella",
+    "dataMainAlt": "An official Slovak court decision open in stella",
+    "dataTitle": "Bring the law and the data with you.",
+    "deploySubtitle": "Start in the cloud or deploy the same open-source workspace on your infrastructure.",
+    "deployTitle": "Run it with us. Or run it yourself.",
+    "exploreAgent": "Explore AI agent",
+    "exploreAnonymization": "Explore Anonymization",
+    "explorePublicData": "Explore Public data",
+    "exploreWorkspace": "Explore Workspace",
+    "eyebrow": "One connected workspace",
+    "intro": "A matter moves through the same connected system: from source material, through review and drafting, to a grounded answer or action.",
+    "openEditor": "Open Editor",
+    "proofByokBody": "Use your own provider keys for AI features.",
+    "proofByokTitle": "Bring your own models",
+    "proofOpenSourceBody": "Inspect the code and keep a portable system.",
+    "proofOpenSourceTitle": "Open source",
+    "proofPermissionsBody": "Requests remain scoped to the user and workspace.",
+    "proofPermissionsTitle": "Permission-aware",
+    "proofSelfHostBody": "Run stella on infrastructure you control.",
+    "proofSelfHostTitle": "Self-hostable",
+    "selfHostGuide": "Read self-hosting guide",
+    "title": "One matter. Every part of the work.",
+    "workspaceBody": "Documents, deadlines, structured review, and drafting stay together. Open a matter, see the work in context, and move from a table to the underlying document without rebuilding the trail.",
+    "workspaceEyebrow": "Matter workspace",
+    "workspaceTitle": "The matter is the system of record."
   }
 }

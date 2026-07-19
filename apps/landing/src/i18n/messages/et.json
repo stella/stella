@@ -62,6 +62,9 @@
     "titleLine1": "Õiguslik tööruum.",
     "titleLine2": "Avatud lähtekood."
   },
+  "home": {
+    "ctaTitle": "Sinu toimikud. Sinu taristu. Sinu reeglid."
+  },
   "nav": {
     "aiFactSheet": "Tehisintellekti teabeleht",
     "aiFactSheetBlurb": "stella masinloetaval kujul.",
@@ -70,5 +73,39 @@
     "changelog": "Muudatuste logi",
     "product": "Toode",
     "security": "Turvalisus"
+  },
+  "story": {
+    "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja tagastab lingitud tõendid. Kasuta seda stellas, Microsoft Teamsis või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
+    "agentEyebrow": "Agendi töövood",
+    "agentTitle": "Küsi üks kord. Tööta üle kõigi dokumentide.",
+    "controlEyebrow": "Loodud kontrolli hoidmiseks",
+    "controlTitle": "Hoia taristu enda kontrolli all.",
+    "dataBody": "Otsi ametlikest õigusallikatest, too registriandmed toimikusse, vaata dokumendikogumeid üle struktureeritud tabelitena ja anonüümi tuvastavad andmed enne, kui tundlik materjal jõuab tehisintellekti töövoogu.",
+    "dataEyebrow": "Õigusandmed",
+    "dataInsetAlt": "Hoolsusauditi väljavõte stellas, tuvastavad andmed varjatud",
+    "dataMainAlt": "Slovakkia kohtu ametlik lahend, avatud stellas",
+    "dataTitle": "Võta seadus ja andmed endaga kaasa.",
+    "deploySubtitle": "Alusta pilves või paigalda seesama avatud lähtekoodiga tööruum enda taristule.",
+    "deployTitle": "Käita seda meiega. Või täiesti ise.",
+    "exploreAgent": "Tutvu tehisintellekti agendiga",
+    "exploreAnonymization": "Tutvu anonüümimisega",
+    "explorePublicData": "Tutvu avalike andmetega",
+    "exploreWorkspace": "Tutvu tööruumiga",
+    "eyebrow": "Üks ühendatud tööruum",
+    "intro": "Toimik liigub läbi ühe ja sama ühendatud süsteemi: lähtematerjalist läbi ülevaatuse ja koostamise kuni põhjendatud vastuse või toiminguni.",
+    "openEditor": "Ava redaktor",
+    "proofByokBody": "Kasuta tehisintellekti funktsioonideks enda teenusepakkuja võtmeid.",
+    "proofByokTitle": "Kasuta oma mudeleid",
+    "proofOpenSourceBody": "Uuri koodi ja hoia süsteem ülekantav.",
+    "proofOpenSourceTitle": "Avatud lähtekood",
+    "proofPermissionsBody": "Päringud püsivad kasutaja ja tööruumi piires.",
+    "proofPermissionsTitle": "Arvestab õigustega",
+    "proofSelfHostBody": "Käita stellat taristul, mida ise kontrollid.",
+    "proofSelfHostTitle": "Ise majutatav",
+    "selfHostGuide": "Loe ise majutamise juhendit",
+    "title": "Üks toimik. Kõik töö osad.",
+    "workspaceBody": "Dokumendid, tähtajad, struktureeritud ülevaatus ja koostamine püsivad koos. Ava toimik, näe tööd kontekstis ja liigu tabelist aluseks oleva dokumendini, ilma et peaksid rada uuesti kokku panema.",
+    "workspaceEyebrow": "Toimiku keskkond",
+    "workspaceTitle": "Toimik on ainus tõeallikas."
   }
 }

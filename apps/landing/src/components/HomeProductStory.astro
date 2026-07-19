@@ -1,38 +1,62 @@
 ---
+import type { TranslationKey } from "../data/site-nav";
+import { defaultLocale, isLocale } from "../i18n/config";
+import { getTranslations } from "../i18n/utils";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import ThemeImage from "./ThemeImage.astro";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+
+// Copy is referenced by TranslationKey (not literal strings) so a renamed or
+// removed message key fails typecheck instead of rendering the raw key.
+type StoryChapter = {
+  id: "workspace" | "agent" | "data";
+  eyebrowKey: TranslationKey;
+  titleKey: TranslationKey;
+  bodyKey: TranslationKey;
+  links: readonly { labelKey: TranslationKey; href: string }[];
+};
 
 const chapters = [
   {
     id: "workspace",
-    eyebrow: "Matter workspace",
-    title: "The matter is the system of record.",
-    body: "Documents, deadlines, structured review, and drafting stay together. Open a matter, see the work in context, and move from a table to the underlying document without rebuilding the trail.",
+    eyebrowKey: "story.workspaceEyebrow",
+    titleKey: "story.workspaceTitle",
+    bodyKey: "story.workspaceBody",
     links: [
-      { label: "Explore Workspace", href: "/product/workspace" },
-      { label: "Open Editor", href: "/product/editor" },
+      { labelKey: "story.exploreWorkspace", href: "/product/workspace" },
+      { labelKey: "story.openEditor", href: "/product/editor" },
     ],
   },
   {
     id: "agent",
-    eyebrow: "Agent workflows",
-    title: "Ask once. Work across every document.",
-    body: "The agent searches the matter, reads the relevant text, and returns linked evidence. Use it in stella, Microsoft Teams, or through MCP and the CLI; the same permissions and sources follow the request.",
+    eyebrowKey: "story.agentEyebrow",
+    titleKey: "story.agentTitle",
+    bodyKey: "story.agentBody",
     links: [
-      { label: "Explore AI agent", href: "/product/agent" },
+      { labelKey: "story.exploreAgent", href: "/product/agent" },
     ],
   },
   {
     id: "data",
-    eyebrow: "Legal data",
-    title: "Bring the law and the data with you.",
-    body: "Search official legal sources, bring registry data into the matter, review document sets as structured tables, and anonymize identifying details before sensitive material enters an AI workflow.",
+    eyebrowKey: "story.dataEyebrow",
+    titleKey: "story.dataTitle",
+    bodyKey: "story.dataBody",
     links: [
-      { label: "Explore Public data", href: "/product/public-data" },
-      { label: "Explore Anonymization", href: "/product/anonymization" },
+      { labelKey: "story.explorePublicData", href: "/product/public-data" },
+      { labelKey: "story.exploreAnonymization", href: "/product/anonymization" },
     ],
   },
-] as const;
+] as const satisfies readonly StoryChapter[];
+
+const proofItems = [
+  { titleKey: "story.proofOpenSourceTitle", bodyKey: "story.proofOpenSourceBody" },
+  { titleKey: "story.proofSelfHostTitle", bodyKey: "story.proofSelfHostBody" },
+  { titleKey: "story.proofByokTitle", bodyKey: "story.proofByokBody" },
+  { titleKey: "story.proofPermissionsTitle", bodyKey: "story.proofPermissionsBody" },
+] as const satisfies readonly { titleKey: TranslationKey; bodyKey: TranslationKey }[];
 ---
 
 <section class="home-product-story px-4 py-20 sm:px-6 lg:py-28" aria-labelledby="product-story-title">
@@ -43,7 +67,7 @@ const chapters = [
         class="text-xs font-medium uppercase tracking-[0.2em]"
         style="color: var(--muted-foreground)"
       >
-        One connected workspace
+        {t("story.eyebrow")}
       </p>
       <h2
         data-reveal
@@ -51,15 +75,14 @@ const chapters = [
         style="--reveal-delay: 80ms"
         class="mt-3 max-w-4xl text-balance font-display text-4xl font-medium leading-[1.04] sm:text-5xl lg:text-6xl"
       >
-        One matter. Every part of the work.
+        {t("story.title")}
       </h2>
       <p
         data-reveal
         style="--reveal-delay: 160ms; color: var(--muted-foreground)"
         class="mt-5 max-w-2xl text-pretty text-base leading-7 sm:text-lg sm:leading-8"
       >
-        A matter moves through the same connected system: from source material,
-        through review and drafting, to a grounded answer or action.
+        {t("story.intro")}
       </p>
     </div>
 
@@ -84,21 +107,21 @@ const chapters = [
                 class="text-xs font-medium uppercase tracking-[0.2em]"
                 style="color: var(--muted-foreground)"
               >
-                {chapter.eyebrow}
+                {t(chapter.eyebrowKey)}
               </p>
               <h3 class="mt-3 text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl">
-                {chapter.title}
+                {t(chapter.titleKey)}
               </h3>
               <p
                 class="mt-5 text-pretty text-base leading-7"
                 style="color: var(--muted-foreground)"
               >
-                {chapter.body}
+                {t(chapter.bodyKey)}
               </p>
-              <nav class="mt-6 flex flex-wrap gap-x-5 gap-y-1" aria-label={chapter.eyebrow}>
+              <nav class="mt-6 flex flex-wrap gap-x-5 gap-y-1" aria-label={t(chapter.eyebrowKey)}>
                 {chapter.links.map((link) => (
                   <a class="story-link group inline-flex min-h-11 items-center gap-2 text-sm font-medium" href={link.href}>
-                    <span>{link.label}</span>
+                    <span>{t(link.labelKey)}</span>
                     <span
                       aria-hidden="true"
                       class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
@@ -144,7 +167,7 @@ const chapters = [
                     <ThemeImage
                       lightSrc="/media/products/story-public-data.png"
                       darkSrc="/media/products/story-public-data-dark.png"
-                      alt="An official Slovak court decision open in stella"
+                      alt={t("story.dataMainAlt")}
                       class="h-full w-full object-cover object-top"
                       loading="lazy"
                       decoding="async"
@@ -155,7 +178,7 @@ const chapters = [
                     <ThemeImage
                       lightSrc="/media/products/anonymization.png"
                       darkSrc="/media/products/anonymization-dark.png"
-                      alt="A due diligence extract with identifying details redacted in stella"
+                      alt={t("story.dataInsetAlt")}
                       class="h-full w-full object-cover object-top"
                       loading="lazy"
                       decoding="async"
@@ -180,36 +203,28 @@ const chapters = [
           class="text-xs font-medium uppercase tracking-[0.2em]"
           style="color: var(--muted-foreground)"
         >
-          Built for control
+          {t("story.controlEyebrow")}
         </p>
         <h2 id="control-title" class="mt-3 text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl">
-          Keep control of the stack.
+          {t("story.controlTitle")}
         </h2>
       </div>
       <ul class="proof-list grid sm:grid-cols-2" data-reveal style="--reveal-delay: 100ms">
-        <li>
-          <strong>Open source</strong>
-          <span>Inspect the code and keep a portable system.</span>
-        </li>
-        <li>
-          <strong>Self-hostable</strong>
-          <span>Run stella on infrastructure you control.</span>
-        </li>
-        <li>
-          <strong>Bring your own models</strong>
-          <span>Use your own provider keys for AI features.</span>
-        </li>
-        <li>
-          <strong>Permission-aware</strong>
-          <span>Requests remain scoped to the user and workspace.</span>
-        </li>
+        {
+          proofItems.map((item) => (
+            <li>
+              <strong>{t(item.titleKey)}</strong>
+              <span>{t(item.bodyKey)}</span>
+            </li>
+          ))
+        }
       </ul>
     </div>
     <div class="deployment-band flex flex-col gap-6 px-7 py-6 sm:px-9 lg:flex-row lg:items-center lg:justify-between lg:px-12">
       <div>
-        <h3 class="font-display text-xl font-medium">Run it with us. Or run it yourself.</h3>
+        <h3 class="font-display text-xl font-medium">{t("story.deployTitle")}</h3>
         <p class="mt-1 text-sm leading-6" style="color: var(--muted-foreground)">
-          Start in the cloud or deploy the same open-source workspace on your infrastructure.
+          {t("story.deploySubtitle")}
         </p>
       </div>
       <div class="flex shrink-0 flex-wrap items-center gap-3">
@@ -219,14 +234,14 @@ const chapters = [
           rel="noopener noreferrer"
           class="inline-flex min-h-11 items-center rounded-[0.75rem] px-4 text-sm font-medium transition-opacity hover:opacity-75"
         >
-          Read self-hosting guide
+          {t("story.selfHostGuide")}
         </a>
         <a
           href="https://my.stll.app"
           class="inline-flex min-h-11 items-center rounded-[0.75rem] px-5 text-sm font-medium transition-opacity hover:opacity-90"
           style="background: var(--primary); color: var(--primary-foreground)"
         >
-          Start free
+          {t("common.startFree")}
         </a>
       </div>
     </div>

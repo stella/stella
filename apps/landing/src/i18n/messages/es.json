@@ -36,7 +36,7 @@
   "footer": {
     "agent": "Agente de IA",
     "anonymization": "Anonimización",
-    "clarity": "Claridad en cada caso.",
+    "clarity": "Claridad en cada asunto.",
     "connect": "Conectar",
     "contact": "Contáctanos",
     "documentation": "Documentación",
@@ -62,6 +62,9 @@
     "titleLine1": "Espacio de trabajo legal.",
     "titleLine2": "Código abierto."
   },
+  "home": {
+    "ctaTitle": "Tus asuntos. Tu infraestructura. Tus reglas."
+  },
   "nav": {
     "aiFactSheet": "Ficha para IA",
     "aiFactSheetBlurb": "stella en formato legible por máquinas.",
@@ -70,5 +73,39 @@
     "changelog": "Novedades",
     "product": "Producto",
     "security": "Seguridad"
+  },
+  "story": {
+    "agentBody": "El agente busca en el asunto, lee el texto relevante y devuelve evidencia enlazada. Úsalo en stella, Microsoft Teams o a través de MCP y la CLI; los mismos permisos y fuentes acompañan cada solicitud.",
+    "agentEyebrow": "Flujos de trabajo del agente",
+    "agentTitle": "Pregunta una vez. Trabaja en todos los documentos.",
+    "controlEyebrow": "Diseñado para el control",
+    "controlTitle": "Mantén el control de la infraestructura.",
+    "dataBody": "Busca en fuentes jurídicas oficiales, incorpora datos registrales al asunto, revisa conjuntos de documentos como tablas estructuradas y anonimiza los datos identificativos antes de que el material sensible entre en un flujo de trabajo con IA.",
+    "dataEyebrow": "Datos jurídicos",
+    "dataInsetAlt": "Un extracto de due diligence con los datos identificativos ocultados en stella",
+    "dataMainAlt": "Una resolución judicial oficial eslovaca abierta en stella",
+    "dataTitle": "Lleva contigo la ley y los datos.",
+    "deploySubtitle": "Empieza en la nube o despliega el mismo espacio de trabajo de código abierto en tu infraestructura.",
+    "deployTitle": "Ejecútalo con nosotros. O hazlo por tu cuenta.",
+    "exploreAgent": "Explorar el agente de IA",
+    "exploreAnonymization": "Explorar la anonimización",
+    "explorePublicData": "Explorar los datos públicos",
+    "exploreWorkspace": "Explorar el espacio de trabajo",
+    "eyebrow": "Un espacio de trabajo conectado",
+    "intro": "Un asunto avanza por el mismo sistema conectado: del material de origen, pasando por la revisión y la redacción, hasta una respuesta o acción fundamentada.",
+    "openEditor": "Abrir el editor",
+    "proofByokBody": "Usa tus propias claves de proveedor para las funciones de IA.",
+    "proofByokTitle": "Trae tus propios modelos",
+    "proofOpenSourceBody": "Inspecciona el código y conserva un sistema portable.",
+    "proofOpenSourceTitle": "Código abierto",
+    "proofPermissionsBody": "Las solicitudes quedan limitadas al usuario y su espacio de trabajo.",
+    "proofPermissionsTitle": "Respeta los permisos",
+    "proofSelfHostBody": "Ejecuta stella en una infraestructura que controlas tú.",
+    "proofSelfHostTitle": "Autoalojable",
+    "selfHostGuide": "Leer la guía de autoalojamiento",
+    "title": "Un asunto. Cada parte del trabajo.",
+    "workspaceBody": "Documentos, plazos, revisión estructurada y redacción permanecen juntos. Abre un asunto, ve el trabajo en contexto y pasa de una tabla al documento subyacente sin reconstruir el recorrido.",
+    "workspaceEyebrow": "Espacio de trabajo del asunto",
+    "workspaceTitle": "El asunto es la única fuente de verdad."
   }
 }

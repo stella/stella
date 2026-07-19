@@ -62,6 +62,9 @@
     "titleLine1": "Teisinė darbo erdvė.",
     "titleLine2": "Atviro kodo."
   },
+  "home": {
+    "ctaTitle": "Jūsų bylos. Jūsų infrastruktūra. Jūsų taisyklės."
+  },
   "nav": {
     "aiFactSheet": "DI duomenų lapas",
     "aiFactSheetBlurb": "stella mašinai skaitomu formatu.",
@@ -70,5 +73,39 @@
     "changelog": "Pakeitimų žurnalas",
     "product": "Produktas",
     "security": "Saugumas"
+  },
+  "story": {
+    "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir grąžina susietus įrodymus. Naudokite jį stella, Microsoft Teams arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
+    "agentEyebrow": "Agento darbo eigos",
+    "agentTitle": "Paklauskite kartą. Dirbkite su visais dokumentais.",
+    "controlEyebrow": "Sukurta kontrolei",
+    "controlTitle": "Išlaikykite infrastruktūros kontrolę.",
+    "dataBody": "Ieškokite oficialiuose teisės šaltiniuose, perkelkite registrų duomenis į bylą, peržiūrėkite dokumentų rinkinius kaip struktūruotas lenteles ir anonimizuokite tapatybę atskleidžiančius duomenis prieš jautriai medžiagai patenkant į DI darbo eigą.",
+    "dataEyebrow": "Teisiniai duomenys",
+    "dataInsetAlt": "Išsamaus patikrinimo ištrauka su uždengtais tapatybės duomenimis programoje stella",
+    "dataMainAlt": "Oficialus Slovakijos teismo sprendimas, atvertas programoje stella",
+    "dataTitle": "Pasiimkite teisę ir duomenis su savimi.",
+    "deploySubtitle": "Pradėkite debesyje arba įdiekite tą pačią atvirojo kodo darbo erdvę savo infrastruktūroje.",
+    "deployTitle": "Paleiskite ją su mumis. Arba patys.",
+    "exploreAgent": "Susipažinti su DI agentu",
+    "exploreAnonymization": "Susipažinti su anonimizavimu",
+    "explorePublicData": "Susipažinti su viešaisiais duomenimis",
+    "exploreWorkspace": "Susipažinti su darbo erdve",
+    "eyebrow": "Viena susieta darbo erdvė",
+    "intro": "Byla juda per tą pačią susietą sistemą: nuo šaltinių medžiagos per peržiūrą ir rengimą iki pagrįsto atsakymo ar veiksmo.",
+    "openEditor": "Atverti redaktorių",
+    "proofByokBody": "DI funkcijoms naudokite savo tiekėjų raktus.",
+    "proofByokTitle": "Naudokite savo modelius",
+    "proofOpenSourceBody": "Peržiūrėkite kodą ir turėkite perkeliamą sistemą.",
+    "proofOpenSourceTitle": "Atviras kodas",
+    "proofPermissionsBody": "Užklausos lieka apribotos naudotoju ir darbo erdve.",
+    "proofPermissionsTitle": "Paiso teisių",
+    "proofSelfHostBody": "Paleiskite stella savo valdomoje infrastruktūroje.",
+    "proofSelfHostTitle": "Galima talpinti patiems",
+    "selfHostGuide": "Skaityti savarankiško talpinimo gidą",
+    "title": "Viena byla. Kiekviena darbo dalis.",
+    "workspaceBody": "Dokumentai, terminai, struktūruota peržiūra ir rengimas lieka kartu. Atverkite bylą, matykite darbą kontekste ir iš lentelės pereikite prie pirminio dokumento iš naujo neatkurdami sekos.",
+    "workspaceEyebrow": "Bylos darbo erdvė",
+    "workspaceTitle": "Byla yra pagrindinis įrašų šaltinis."
   }
 }

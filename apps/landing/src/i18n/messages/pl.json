@@ -62,6 +62,9 @@
     "titleLine1": "Środowisko pracy dla prawników.",
     "titleLine2": "Otwarte źródło."
   },
+  "home": {
+    "ctaTitle": "Twoje sprawy. Twoja infrastruktura. Twoje zasady."
+  },
   "nav": {
     "aiFactSheet": "Karta informacyjna AI",
     "aiFactSheetBlurb": "stella w formie czytelnej dla maszyn.",
@@ -70,5 +73,39 @@
     "changelog": "Dziennik zmian",
     "product": "Produkt",
     "security": "Bezpieczeństwo"
+  },
+  "story": {
+    "agentBody": "Agent przeszukuje sprawę, czyta istotny tekst i zwraca powiązane dowody. Używaj go w stelli, Microsoft Teams albo przez MCP i CLI; za żądaniem podążają te same uprawnienia i źródła.",
+    "agentEyebrow": "Przepływy pracy agenta",
+    "agentTitle": "Zapytaj raz. Pracuj na wszystkich dokumentach.",
+    "controlEyebrow": "Zbudowane z myślą o kontroli",
+    "controlTitle": "Zachowaj kontrolę nad infrastrukturą.",
+    "dataBody": "Przeszukuj oficjalne źródła prawa, wprowadzaj dane rejestrowe do sprawy, przeglądaj zestawy dokumentów jako ustrukturyzowane tabele i anonimizuj dane identyfikujące, zanim wrażliwy materiał trafi do przepływu pracy z AI.",
+    "dataEyebrow": "Dane prawne",
+    "dataInsetAlt": "Fragment due diligence z zaczernionymi danymi identyfikującymi w stelli",
+    "dataMainAlt": "Oficjalne orzeczenie słowackiego sądu otwarte w stelli",
+    "dataTitle": "Zabierz ze sobą prawo i dane.",
+    "deploySubtitle": "Zacznij w chmurze albo wdróż tę samą otwartą przestrzeń roboczą na własnej infrastrukturze.",
+    "deployTitle": "Uruchom ją z nami. Albo samodzielnie.",
+    "exploreAgent": "Poznaj agenta AI",
+    "exploreAnonymization": "Poznaj anonimizację",
+    "explorePublicData": "Poznaj dane publiczne",
+    "exploreWorkspace": "Poznaj przestrzeń roboczą",
+    "eyebrow": "Jedna połączona przestrzeń robocza",
+    "intro": "Sprawa przechodzi przez ten sam połączony system: od materiałów źródłowych, przez przegląd i redagowanie, po ugruntowaną odpowiedź lub działanie.",
+    "openEditor": "Otwórz edytor",
+    "proofByokBody": "Używaj własnych kluczy dostawców do funkcji AI.",
+    "proofByokTitle": "Własne modele",
+    "proofOpenSourceBody": "Przejrzyj kod i zachowaj przenośny system.",
+    "proofOpenSourceTitle": "Otwarty kod źródłowy",
+    "proofPermissionsBody": "Żądania pozostają ograniczone do użytkownika i przestrzeni roboczej.",
+    "proofPermissionsTitle": "Z poszanowaniem uprawnień",
+    "proofSelfHostBody": "Uruchamiaj stellę na infrastrukturze, którą kontrolujesz.",
+    "proofSelfHostTitle": "Możliwość samodzielnego hostowania",
+    "selfHostGuide": "Przeczytaj przewodnik po samodzielnym hostingu",
+    "title": "Jedna sprawa. Każda część pracy.",
+    "workspaceBody": "Dokumenty, terminy, ustrukturyzowany przegląd i redagowanie pozostają razem. Otwórz sprawę, zobacz pracę w kontekście i przejdź z tabeli do dokumentu źródłowego bez ponownego odtwarzania ścieżki.",
+    "workspaceEyebrow": "Przestrzeń robocza sprawy",
+    "workspaceTitle": "Sprawa jest jedynym źródłem prawdy."
   }
 }

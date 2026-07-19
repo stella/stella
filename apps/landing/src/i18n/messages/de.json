@@ -36,7 +36,7 @@
   "footer": {
     "agent": "KI-Agent",
     "anonymization": "Anonymisierung",
-    "clarity": "Klarheit für jeden Fall.",
+    "clarity": "Klarheit für jede Akte.",
     "connect": "Kontakt",
     "contact": "Kontakt aufnehmen",
     "documentation": "Dokumentation",
@@ -62,6 +62,9 @@
     "titleLine1": "Juristischer Arbeitsbereich.",
     "titleLine2": "Open Source."
   },
+  "home": {
+    "ctaTitle": "Ihre Akten. Ihr Stack. Ihre Regeln."
+  },
   "nav": {
     "aiFactSheet": "KI-Faktenblatt",
     "aiFactSheetBlurb": "stella in maschinenlesbarer Form.",
@@ -70,5 +73,39 @@
     "changelog": "Änderungsprotokoll",
     "product": "Produkt",
     "security": "Sicherheit"
+  },
+  "story": {
+    "agentBody": "Der Agent durchsucht die Akte, liest den relevanten Text und liefert verknüpfte Belege. Nutzen Sie ihn in stella, Microsoft Teams oder über MCP und die CLI; dieselben Berechtigungen und Quellen gelten für jede Anfrage.",
+    "agentEyebrow": "Agenten-Workflows",
+    "agentTitle": "Einmal fragen. Über alle Dokumente hinweg arbeiten.",
+    "controlEyebrow": "Auf Kontrolle ausgelegt",
+    "controlTitle": "Behalten Sie die Kontrolle über Ihren Stack.",
+    "dataBody": "Durchsuchen Sie offizielle Rechtsquellen, holen Sie Registerdaten in die Akte, prüfen Sie Dokumentsätze als strukturierte Tabellen und anonymisieren Sie identifizierende Angaben, bevor sensibles Material in einen KI-Workflow gelangt.",
+    "dataEyebrow": "Juristische Daten",
+    "dataInsetAlt": "Ein Due-Diligence-Auszug mit geschwärzten identifizierenden Angaben in stella",
+    "dataMainAlt": "Eine offizielle slowakische Gerichtsentscheidung, geöffnet in stella",
+    "dataTitle": "Nehmen Sie das Recht und die Daten mit.",
+    "deploySubtitle": "Starten Sie in der Cloud oder bringen Sie denselben Open-Source-Arbeitsbereich auf Ihre eigene Infrastruktur.",
+    "deployTitle": "Betreiben Sie stella mit uns. Oder ganz in Eigenregie.",
+    "exploreAgent": "KI-Agent entdecken",
+    "exploreAnonymization": "Anonymisierung entdecken",
+    "explorePublicData": "Öffentliche Daten entdecken",
+    "exploreWorkspace": "Arbeitsbereich entdecken",
+    "eyebrow": "Ein vernetzter Arbeitsbereich",
+    "intro": "Eine Akte durchläuft dasselbe vernetzte System: vom Ausgangsmaterial über Prüfung und Entwurf bis zur fundierten Antwort oder Aktion.",
+    "openEditor": "Editor öffnen",
+    "proofByokBody": "Nutzen Sie für KI-Funktionen Ihre eigenen Anbieter-Schlüssel.",
+    "proofByokTitle": "Eigene Modelle nutzen",
+    "proofOpenSourceBody": "Prüfen Sie den Code und behalten Sie ein portables System.",
+    "proofOpenSourceTitle": "Open Source",
+    "proofPermissionsBody": "Anfragen bleiben auf Nutzer und Arbeitsbereich beschränkt.",
+    "proofPermissionsTitle": "Respektiert Berechtigungen",
+    "proofSelfHostBody": "Betreiben Sie stella auf Infrastruktur, die Sie kontrollieren.",
+    "proofSelfHostTitle": "Selbst hostbar",
+    "selfHostGuide": "Self-Hosting-Anleitung lesen",
+    "title": "Eine Akte. Jeder Teil der Arbeit.",
+    "workspaceBody": "Dokumente, Fristen, strukturierte Prüfung und Entwürfe bleiben beisammen. Öffnen Sie eine Akte, sehen Sie die Arbeit im Kontext und wechseln Sie von der Tabelle zum zugrunde liegenden Dokument, ohne den Weg neu nachvollziehen zu müssen.",
+    "workspaceEyebrow": "Arbeitsbereich für Akten",
+    "workspaceTitle": "Die Akte ist das führende System."
   }
 }

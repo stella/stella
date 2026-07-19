@@ -62,6 +62,9 @@
     "titleLine1": "Espaço de trabalho jurídico.",
     "titleLine2": "Código aberto."
   },
+  "home": {
+    "ctaTitle": "Seus casos. Sua infraestrutura. Suas regras."
+  },
   "nav": {
     "aiFactSheet": "Ficha para IA",
     "aiFactSheetBlurb": "stella em formato legível por máquinas.",
@@ -70,5 +73,39 @@
     "changelog": "Novidades",
     "product": "Produto",
     "security": "Segurança"
+  },
+  "story": {
+    "agentBody": "O agente pesquisa no caso, lê o texto relevante e retorna evidências vinculadas. Use-o na stella, no Microsoft Teams ou via MCP e CLI; as mesmas permissões e fontes acompanham cada solicitação.",
+    "agentEyebrow": "Fluxos de trabalho do agente",
+    "agentTitle": "Pergunte uma vez. Trabalhe em todos os documentos.",
+    "controlEyebrow": "Feito para o controle",
+    "controlTitle": "Mantenha o controle da infraestrutura.",
+    "dataBody": "Pesquise em fontes jurídicas oficiais, traga dados de registros para o caso, revise conjuntos de documentos como tabelas estruturadas e anonimize dados identificadores antes que material sensível entre em um fluxo de trabalho com IA.",
+    "dataEyebrow": "Dados jurídicos",
+    "dataInsetAlt": "Um trecho de due diligence com dados identificadores tarjados na stella",
+    "dataMainAlt": "Uma decisão judicial oficial eslovaca aberta na stella",
+    "dataTitle": "Leve a lei e os dados com você.",
+    "deploySubtitle": "Comece na nuvem ou implante o mesmo espaço de trabalho de código aberto na sua infraestrutura.",
+    "deployTitle": "Rode conosco. Ou rode por conta própria.",
+    "exploreAgent": "Explorar o agente de IA",
+    "exploreAnonymization": "Explorar a anonimização",
+    "explorePublicData": "Explorar os dados públicos",
+    "exploreWorkspace": "Explorar o espaço de trabalho",
+    "eyebrow": "Um espaço de trabalho conectado",
+    "intro": "Um caso percorre o mesmo sistema conectado: do material de origem, passando pela revisão e redação, até uma resposta ou ação fundamentada.",
+    "openEditor": "Abrir o editor",
+    "proofByokBody": "Use suas próprias chaves de provedor para os recursos de IA.",
+    "proofByokTitle": "Traga seus próprios modelos",
+    "proofOpenSourceBody": "Inspecione o código e mantenha um sistema portátil.",
+    "proofOpenSourceTitle": "Código aberto",
+    "proofPermissionsBody": "As solicitações ficam restritas ao usuário e ao espaço de trabalho.",
+    "proofPermissionsTitle": "Respeita as permissões",
+    "proofSelfHostBody": "Execute a stella em uma infraestrutura que você controla.",
+    "proofSelfHostTitle": "Auto-hospedável",
+    "selfHostGuide": "Ler o guia de auto-hospedagem",
+    "title": "Um caso. Cada parte do trabalho.",
+    "workspaceBody": "Documentos, prazos, revisão estruturada e redação ficam juntos. Abra um caso, veja o trabalho em contexto e vá de uma tabela ao documento subjacente sem reconstruir o caminho.",
+    "workspaceEyebrow": "Espaço de trabalho do caso",
+    "workspaceTitle": "O caso é a fonte única da verdade."
   }
 }

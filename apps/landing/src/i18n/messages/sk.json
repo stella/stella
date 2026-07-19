@@ -36,7 +36,7 @@
   "footer": {
     "agent": "AI agent",
     "anonymization": "Anonymizácia",
-    "clarity": "Jasno v každom prípade.",
+    "clarity": "Jasno v každom spise.",
     "connect": "Spojte sa s nami",
     "contact": "Kontaktujte nás",
     "documentation": "Dokumentácia",
@@ -62,6 +62,9 @@
     "titleLine1": "Právny pracovný priestor.",
     "titleLine2": "Otvorený zdroj."
   },
+  "home": {
+    "ctaTitle": "Vaše spisy. Vaše technológie. Vaše pravidlá."
+  },
   "nav": {
     "aiFactSheet": "Prehľad pre AI",
     "aiFactSheetBlurb": "stella v strojovo čitateľnej podobe.",
@@ -70,5 +73,39 @@
     "changelog": "Zoznam zmien",
     "product": "Produkt",
     "security": "Bezpečnosť"
+  },
+  "story": {
+    "agentBody": "Agent prehľadá spis, prečíta relevantný text a vráti prepojené dôkazy. Použite ho v stelle, v Microsoft Teams alebo cez MCP a CLI; s požiadavkou putujú rovnaké oprávnenia aj zdroje.",
+    "agentEyebrow": "Pracovné postupy agenta",
+    "agentTitle": "Spýtajte sa raz. Pracujte naprieč všetkými dokumentmi.",
+    "controlEyebrow": "Navrhnuté pre plnú kontrolu",
+    "controlTitle": "Majte technológie pod kontrolou.",
+    "dataBody": "Prehľadávajte oficiálne právne zdroje, prenášajte dáta z registrov do spisu, posudzujte sady dokumentov ako štruktúrované tabuľky a anonymizujte identifikačné údaje skôr, než sa citlivý materiál dostane do pracovného postupu s AI.",
+    "dataEyebrow": "Právne dáta",
+    "dataInsetAlt": "Výňatok z due diligence so začiernenými identifikačnými údajmi v stelle",
+    "dataMainAlt": "Oficiálne rozhodnutie slovenského súdu otvorené v stelle",
+    "dataTitle": "Vezmite si právo aj dáta so sebou.",
+    "deploySubtitle": "Začnite v cloude alebo nasaďte ten istý open source pracovný priestor na vlastnej infraštruktúre.",
+    "deployTitle": "Prevádzkujte ju s nami. Alebo sami.",
+    "exploreAgent": "Preskúmať AI agenta",
+    "exploreAnonymization": "Preskúmať anonymizáciu",
+    "explorePublicData": "Preskúmať verejné dáta",
+    "exploreWorkspace": "Preskúmať pracovný priestor",
+    "eyebrow": "Jeden prepojený pracovný priestor",
+    "intro": "Spis prechádza jedným prepojeným systémom: od zdrojových podkladov cez posudzovanie a prípravu dokumentov až po podloženú odpoveď alebo akciu.",
+    "openEditor": "Otvoriť editor",
+    "proofByokBody": "Pre AI funkcie používajte vlastné kľúče od poskytovateľov.",
+    "proofByokTitle": "Vlastné AI modely",
+    "proofOpenSourceBody": "Nahliadnite do kódu a majte systém, ktorý si môžete preniesť.",
+    "proofOpenSourceTitle": "Otvorený zdrojový kód",
+    "proofPermissionsBody": "Požiadavky zostávajú obmedzené na daného používateľa a pracovný priestor.",
+    "proofPermissionsTitle": "Rešpektuje oprávnenia",
+    "proofSelfHostBody": "Prevádzkujte stellu na infraštruktúre, ktorú máte pod kontrolou.",
+    "proofSelfHostTitle": "Možnosť vlastného hostingu",
+    "selfHostGuide": "Prečítať návod na vlastný hosting",
+    "title": "Jeden spis. Každá časť práce.",
+    "workspaceBody": "Dokumenty, termíny, štruktúrované posudzovanie aj príprava dokumentov zostávajú pokope. Otvoríte spis, vidíte prácu v kontexte a z tabuľky prejdete priamo k podkladovému dokumentu bez toho, aby ste museli súvislosti hľadať odznova.",
+    "workspaceEyebrow": "Pracovný priestor spisu",
+    "workspaceTitle": "Spis je jediný zdroj pravdy."
   }
 }

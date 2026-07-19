@@ -62,6 +62,9 @@
     "titleLine1": "Juridiska darbvieta.",
     "titleLine2": "Atvērtā pirmkoda."
   },
+  "home": {
+    "ctaTitle": "Jūsu lietas. Jūsu infrastruktūra. Jūsu noteikumi."
+  },
   "nav": {
     "aiFactSheet": "AI faktu lapa",
     "aiFactSheetBlurb": "stella mašīnlasāmā formā.",
@@ -70,5 +73,39 @@
     "changelog": "Izmaiņu žurnāls",
     "product": "Produkts",
     "security": "Drošība"
+  },
+  "story": {
+    "agentBody": "Aģents meklē lietā, izlasa būtisko tekstu un atgriež sasaistītus pierādījumus. Izmantojiet to stella, Microsoft Teams vai ar MCP un komandrindas palīdzību; pieprasījumam seko tās pašas atļaujas un avoti.",
+    "agentEyebrow": "Aģenta darbplūsmas",
+    "agentTitle": "Pajautājiet vienreiz. Strādājiet ar visiem dokumentiem.",
+    "controlEyebrow": "Radīts kontrolei",
+    "controlTitle": "Saglabājiet kontroli pār infrastruktūru.",
+    "dataBody": "Meklējiet oficiālajos tiesību avotos, ienesiet reģistru datus lietā, pārskatiet dokumentu kopas kā strukturētas tabulas un anonimizējiet identificējošas ziņas, pirms sensitīvs materiāls nonāk AI darbplūsmā.",
+    "dataEyebrow": "Juridiskie dati",
+    "dataInsetAlt": "Padziļinātās izpētes izraksts ar aizklātām identificējošām ziņām lietotnē stella",
+    "dataMainAlt": "Oficiāls Slovākijas tiesas nolēmums, atvērts lietotnē stella",
+    "dataTitle": "Paņemiet līdzi tiesības un datus.",
+    "deploySubtitle": "Sāciet mākonī vai izvietojiet to pašu atvērtā pirmkoda darba vidi savā infrastruktūrā.",
+    "deployTitle": "Darbiniet to pie mums. Vai paši.",
+    "exploreAgent": "Iepazīt AI aģentu",
+    "exploreAnonymization": "Iepazīt anonimizāciju",
+    "explorePublicData": "Iepazīt publiskos datus",
+    "exploreWorkspace": "Iepazīt darbvietu",
+    "eyebrow": "Viena savienota darba vide",
+    "intro": "Lieta virzās pa vienu un to pašu savienoto sistēmu: no avota materiāliem cauri pārskatīšanai un sagatavošanai līdz pamatotai atbildei vai darbībai.",
+    "openEditor": "Atvērt redaktoru",
+    "proofByokBody": "AI funkcijām izmantojiet savas pakalpojumu sniedzēja atslēgas.",
+    "proofByokTitle": "Izmantojiet savus modeļus",
+    "proofOpenSourceBody": "Pārbaudiet kodu un saglabājiet pārnesamu sistēmu.",
+    "proofOpenSourceTitle": "Atvērts pirmkods",
+    "proofPermissionsBody": "Pieprasījumi paliek lietotāja un darbvietas ietvaros.",
+    "proofPermissionsTitle": "Ievēro atļaujas",
+    "proofSelfHostBody": "Darbiniet stella infrastruktūrā, ko pārvaldāt paši.",
+    "proofSelfHostTitle": "Iespējams mitināt pašiem",
+    "selfHostGuide": "Lasīt pašmitināšanas ceļvedi",
+    "title": "Viena lieta. Katra darba daļa.",
+    "workspaceBody": "Dokumenti, termiņi, strukturēta pārskatīšana un sagatavošana paliek kopā. Atveriet lietu, skatiet darbu kontekstā un pārejiet no tabulas uz pamatā esošo dokumentu, nezaudējot izsekojamību.",
+    "workspaceEyebrow": "Lietas darba vide",
+    "workspaceTitle": "Lieta ir galvenais ierakstu avots."
   }
 }
