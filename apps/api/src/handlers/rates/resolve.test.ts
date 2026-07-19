@@ -12,13 +12,17 @@ import fc from "fast-check";
 
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { cents } from "@/api/lib/money";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
   setupRlsTestData,
@@ -81,9 +85,14 @@ afterAll(async () => {
 });
 
 // safeDb authorized for wsA1 (owns the default table) and wsA2 (has no rate
-// table at all, exercising the "no default table -> null" branch).
-const scopedSafeDb = () =>
-  createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1);
+// table at all, exercising the "no default table -> null" branch). PGlite's
+// transaction type is structurally distinct from the production `Transaction`
+// (different QueryResultHKT); asTestRaw is the established cast for bridging
+// a PGlite-backed safeDb into a prod-typed handler context.
+const scopedSafeDb = (): SafeDb =>
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+  );
 
 const runResolve = async (input: {
   workspaceId: SafeId<"workspace">;
@@ -184,8 +193,8 @@ describe("effective-dated rate resolution", () => {
 
   beforeAll(async () => {
     const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
-    const validated = await scoped((tx) =>
-      validateOrgUserId(tx, ids.userA1, ids.orgA),
+    const validated = await scoped(async (tx) =>
+      validateOrgUserId(asTestRaw<Transaction>(tx), ids.userA1, ids.orgA),
     );
     if (!validated) {
       throw new Error("Expected userA1 to be a member of orgA");
@@ -214,7 +223,7 @@ describe("effective-dated rate resolution", () => {
                   workspaceId: ids.wsA1,
                   rateTableId: defaultTableId,
                   userId: row.userId,
-                  hourlyRate: row.rate,
+                  hourlyRate: cents(row.rate),
                   effectiveFrom: row.fromIso,
                   effectiveTo: row.toIso,
                 })),
@@ -260,7 +269,7 @@ describe("resolveRate HTTP handler", () => {
         workspaceId: ids.wsA1,
         rateTableId: defaultTableId,
         userId: ids.userA1,
-        hourlyRate: USER_RATE,
+        hourlyRate: cents(USER_RATE),
         effectiveFrom: "2025-01-01",
       },
       {
@@ -268,7 +277,7 @@ describe("resolveRate HTTP handler", () => {
         workspaceId: ids.wsA1,
         rateTableId: defaultTableId,
         userId: null,
-        hourlyRate: DEFAULT_RATE,
+        hourlyRate: cents(DEFAULT_RATE),
         effectiveFrom: "2024-01-01",
       },
     ]);

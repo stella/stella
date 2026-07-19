@@ -68,7 +68,7 @@ const DEFAULT_WORKSPACE_ID = toSafeId<"workspace">("workspace_test");
 const DEFAULT_ORGANIZATION_ID = toSafeId<"organization">("org_test");
 const DEFAULT_USER_ID = toSafeId<"user">("user_test");
 
-const noopAuditRecorder: AuditRecorder = () => Promise.resolve();
+const noopAuditRecorder: AuditRecorder = async () => await Promise.resolve();
 
 // A handler that reaches for the database without the test providing one is a
 // test bug, not an empty result: fail loudly instead of silently returning
@@ -87,16 +87,23 @@ const createBaseContext = (): BaseTestHandlerContext => ({
   scopedDb: unconfiguredDb,
   recordAuditEvent: noopAuditRecorder,
   createAuditRecorder: () => noopAuditRecorder,
-  getActiveWorkspaceIds: () => Promise.resolve([DEFAULT_WORKSPACE_ID]),
-  getAccessibleWorkspaces: () =>
-    Promise.resolve([{ id: DEFAULT_WORKSPACE_ID, status: "active" }]),
-  getWorkspaceAccess: (workspaceId) =>
-    Promise.resolve(
+  getActiveWorkspaceIds: async () =>
+    await Promise.resolve([DEFAULT_WORKSPACE_ID]),
+  getAccessibleWorkspaces: async () =>
+    await Promise.resolve([{ id: DEFAULT_WORKSPACE_ID, status: "active" }]),
+  getWorkspaceAccess: async (workspaceId) =>
+    await Promise.resolve(
       workspaceId === DEFAULT_WORKSPACE_ID
         ? { id: workspaceId, status: "active" }
         : null,
     ),
-  pinServerValidatedWorkspaceId: () => true,
+  // Mirrors the accessible set encoded above (getWorkspaceAccess /
+  // getActiveWorkspaceIds): only the default workspace is pinnable out of
+  // the box, matching production's rejection of IDs outside the validated
+  // set. Callers exercising cross-workspace/pinning rejection paths must
+  // override this alongside the accessible-workspace fields.
+  pinServerValidatedWorkspaceId: (workspaceId) =>
+    workspaceId === DEFAULT_WORKSPACE_ID,
   orgAIConfig: null,
   promptCachingEnabled: false,
   request: new Request("https://example.test/handler-context"),
@@ -108,6 +115,7 @@ const createBaseContext = (): BaseTestHandlerContext => ({
  * type (`Parameters<typeof handler.handler>[0]`); pass it so the result slots
  * into the handler call without a further cast.
  */
+// eslint-disable-next-line typescript/no-unnecessary-type-parameters -- the type parameter IS the API: callers pin the handler's own context type per call
 export const createTestHandlerContext = <TContext = BaseTestHandlerContext>(
   overrides: TestHandlerContextOverrides = {},
 ): TContext => {

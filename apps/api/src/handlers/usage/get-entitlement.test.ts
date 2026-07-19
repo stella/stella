@@ -8,6 +8,8 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   USAGE_ENTITLEMENT_STATUSES,
   usageAllocations,
@@ -20,6 +22,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
   setupRlsTestData,
@@ -102,10 +105,18 @@ const setEntitlementStatus = async (status: UsageEntitlementStatus) => {
     .where(eq(usageEntitlements.organizationId, ids.orgA));
 };
 
+// PGlite's transaction type is structurally distinct from the production
+// `Transaction` (different QueryResultHKT); asTestRaw is the established cast
+// for bridging a PGlite-backed tx into prod-typed lib functions.
 const assertForOrgA = async (required: number, asOf = AS_OF) => {
   const scoped = createScopedDb(testDb, [], ids.orgA, ids.userAdmin);
-  return await scoped((tx) =>
-    assertUsageAvailable({ tx, organizationId: ids.orgA, required, asOf }),
+  return await scoped(async (tx) =>
+    assertUsageAvailable({
+      tx: asTestRaw<Transaction>(tx),
+      organizationId: ids.orgA,
+      required,
+      asOf,
+    }),
   );
 };
 
@@ -148,8 +159,12 @@ describe("usage entitlement gating boundary", () => {
 
   test("rejects an organization with no entitlement", async () => {
     const scoped = createScopedDb(testDb, [], ids.orgB, ids.userB1);
-    const result = await scoped((tx) =>
-      assertUsageAvailable({ tx, organizationId: ids.orgB, required: 1 }),
+    const result = await scoped(async (tx) =>
+      assertUsageAvailable({
+        tx: asTestRaw<Transaction>(tx),
+        organizationId: ids.orgB,
+        required: 1,
+      }),
     );
     expect(result.ok).toBe(false);
     if (result.ok) {
@@ -190,7 +205,9 @@ describe("get-entitlement handler", () => {
       memberRole: { role },
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
-      safeDb: createSafeDb(testDb, [], ids.orgA, ids.userAdmin),
+      safeDb: asTestRaw<SafeDb>(
+        createSafeDb(testDb, [], ids.orgA, ids.userAdmin),
+      ),
     });
 
   test("returns entitlement, policy, and remaining units for a manager", async () => {
