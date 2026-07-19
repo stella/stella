@@ -20,11 +20,13 @@ import { defaultConfigDir } from "./auth/cli-config.js";
 import { resolveAccessToken } from "./auth/resolve-access-token.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
 import { buildGeneratedRoutes, buildResourceRoutes } from "./build-cli-tree.js";
+import { commandNeedsRegistry } from "./command-locality.js";
 import { authRoute } from "./commands/auth.js";
 import { compatibilityRoute } from "./commands/compatibility.js";
 import type { Context } from "./context.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
 import { generatedResourceTree } from "./generated/resource-tree.js";
+import { reportFatalError } from "./main-error-boundary.js";
 import {
   refreshRegistryCache,
   resolveCommandTree,
@@ -146,6 +148,10 @@ const stricliProcess = process as unknown as StricliProcess & typeof process;
 const main = async (): Promise<void> => {
   const argv = process.argv.slice(2);
   const isAuthLogin = argv.at(0) === "auth" && argv.at(1) === "login";
+  // Purely local commands (`--help`, `auth whoami`, `tools list`, ...) read no
+  // server registry, so they must not pay the `tools/list` round-trip; only a
+  // command that consumes the command tree triggers the pre-dispatch refresh.
+  const needsRegistry = commandNeedsRegistry(argv);
   // A named slice of the env (read through `env.ts`) so the cache module never
   // touches the full `ProcessEnv` (whose index signature would not narrow to
   // `CacheEnv`).
@@ -155,7 +161,7 @@ const main = async (): Promise<void> => {
   // Keep an EXISTING per-origin cache current before building the tree; a
   // missing cache stays offline-instant (seeded at `auth login` below). Any
   // transport/trust failure warns and falls back to the baked-in tree (S5.5).
-  if (serverUrl !== undefined && token !== undefined && !isAuthLogin) {
+  if (serverUrl !== undefined && token !== undefined && needsRegistry) {
     const outcome = await refreshRegistryCache({
       serverOrigin: serverUrl,
       token,
@@ -207,4 +213,6 @@ const main = async (): Promise<void> => {
   }
 };
 
-void main();
+// Top-level boundary: map anything that escapes startup I/O to the CLI's
+// exit-code contract instead of letting it surface as an unhandled rejection.
+main().catch((error: unknown) => reportFatalError(error, process));
