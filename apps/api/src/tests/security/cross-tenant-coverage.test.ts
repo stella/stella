@@ -78,6 +78,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   auth: WAIVER_REASON.noTenantReadSurface,
   dev: WAIVER_REASON.noTenantReadSurface,
   "external-preview": WAIVER_REASON.noTenantReadSurface,
+  // Deployment-token-gated instance observability; reads the instance-wide
+  // registration list, so there is no per-tenant boundary to isolate.
+  operator: WAIVER_REASON.noTenantReadSurface,
   feedback: WAIVER_REASON.noTenantReadSurface,
   "folio-collab": WAIVER_REASON.noTenantReadSurface,
   health: WAIVER_REASON.noTenantReadSurface,
