@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -30,8 +31,7 @@ import {
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorRedirect,
 } from "@/lib/auth";
-import { APIError } from "@/lib/errors/api";
-import { AuthClientError, toAuthClientError } from "@/lib/errors/auth";
+import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
@@ -59,18 +59,14 @@ type VerifyOtpError = {
   message?: string | undefined;
 };
 
-const verifyErrorTitle = (
-  error: VerifyOtpError,
-  t: ReturnType<typeof useTranslations>,
-): string => {
-  if (error.status === HTTP_TOO_MANY_REQUESTS) {
-    return t("auth.rateLimitExceeded");
-  }
-  if (error.message === OTP_EXPIRED_MESSAGE) {
-    return t("auth.oneTimeCodeExpired");
-  }
-  return error.message ?? t("errors.actionFailed");
-};
+// Thrown instead of the raw signIn error once its toast has already been
+// shown, so `onError` below can tell "already surfaced" apart from an
+// unreported failure (network drop, session-refresh error, …) without
+// blanket-skipping every AuthClientError/APIError that reaches it.
+class AlreadyToastedError extends TaggedError("AlreadyToastedError")<{
+  message: string;
+  cause: unknown;
+}>() {}
 
 export function OTPPanel({
   className,
@@ -88,6 +84,25 @@ export function OTPPanel({
   const invalidateSession = useInvalidateSession();
   const isOtpComplete = otp.length === OTP_LENGTH;
   const { isPulsing: isOtpPulsing, pulse: pulseOtp } = usePulse(600);
+
+  // A closure over `t` (not a parameter) so its type is never written out:
+  // annotating a parameter as `ReturnType<typeof useTranslations>` blows up
+  // overload resolution against the full namespaced-key union badly enough
+  // to hit TS's type-complexity ceiling (TS2590) at the call site below.
+  //
+  // Takes the already-converted `cause` (not the raw signIn error) for the
+  // fallback branch: `userErrorFromThrown` only ever surfaces a vetted,
+  // localized message, never the untrusted raw `error.message` from the
+  // server response.
+  const verifyErrorTitle = (error: VerifyOtpError, cause: unknown): string => {
+    if (error.status === HTTP_TOO_MANY_REQUESTS) {
+      return t("auth.rateLimitExceeded");
+    }
+    if (error.message === OTP_EXPIRED_MESSAGE) {
+      return t("auth.oneTimeCodeExpired");
+    }
+    return userErrorFromThrown(cause, t("errors.actionFailed"));
+  };
 
   const handleUseDifferentEmail = () => {
     if (onUseDifferentEmail) {
@@ -151,11 +166,10 @@ export function OTPPanel({
 
       if (signInError) {
         setOtp("");
-        stellaToast.add({
-          title: verifyErrorTitle(signInError, t),
-          type: "error",
-        });
-        throw toAuthClientError(signInError);
+        const cause = toAuthClientError(signInError);
+        const title = verifyErrorTitle(signInError, cause);
+        stellaToast.add({ title, type: "error" });
+        throw new AlreadyToastedError({ message: title, cause });
       }
 
       if (isTwoFactorRedirect(signInData)) {
@@ -187,11 +201,15 @@ export function OTPPanel({
       await onVerified?.();
     },
     onError: (error) => {
-      analytics.captureError(error);
-      // Structured sign-in errors already surfaced a toast in the
-      // mutationFn; only unexpected throws (network failures, session
-      // invalidation) reach here without one, so toast those too.
-      if (AuthClientError.is(error) || APIError.is(error)) {
+      analytics.captureError(
+        AlreadyToastedError.is(error) ? error.cause : error,
+      );
+      // Only the structured sign-in error already toasted a message in the
+      // mutationFn (marked by AlreadyToastedError); every other throw
+      // reaching here — network failures, a session-refresh error from
+      // invalidateSession, an onVerified failure — has never been surfaced,
+      // so it always gets a toast.
+      if (AlreadyToastedError.is(error)) {
         return;
       }
       stellaToast.add({
