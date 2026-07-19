@@ -5,6 +5,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // This suite pins the OAuth/token-refresh connection lifecycle in
 // `connections.ts` against faked crypto, OAuth, transport, and DB
@@ -101,7 +102,7 @@ const cachedTool = {
 const makeSafeDb = (): SafeDb => {
   const chain: Record<string, (arg?: unknown) => unknown> = {
     set: (value?: unknown) => {
-      state.dbSets.push(value as Record<string, unknown>);
+      state.dbSets.push(asTestRaw<Record<string, unknown>>(value));
       return chain;
     },
     update: () => chain,
@@ -109,10 +110,10 @@ const makeSafeDb = (): SafeDb => {
   };
   // SAFETY: test double; the module only ever calls update().set().where()
   // and awaits the returned Result, none of which touches a real Transaction.
-  return (async (fn: (tx: unknown) => unknown) => {
+  return asTestRaw<SafeDb>(async (fn: (tx: unknown) => unknown) => {
     await fn(chain);
     return Result.ok(undefined);
-  }) as unknown as SafeDb;
+  });
 };
 
 const oauthRow = (
@@ -249,16 +250,23 @@ describe("MCP upstream connection lifecycle", () => {
       throw new Error("upstream timeout: the operation was aborted");
     };
 
-    await expect(
-      proxyMcpToolCall({
-        args: {},
-        cachedTool,
-        organizationId,
-        row: oauthRow(),
-        safeDb: makeSafeDb(),
-        userId,
-      }),
-    ).rejects.toThrow("upstream timeout");
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection = await proxyMcpToolCall({
+      args: {},
+      cachedTool,
+      organizationId,
+      row: oauthRow(),
+      safeDb: makeSafeDb(),
+      userId,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error ? rejection.message : "").toContain(
+      "upstream timeout",
+    );
     // The `finally` still closes the client, so the connection does not leak.
     expect(state.closes).toBeGreaterThan(0);
   });
@@ -272,16 +280,23 @@ describe("MCP upstream connection lifecycle", () => {
       },
     ];
 
-    await expect(
-      proxyMcpToolCall({
-        args: {},
-        cachedTool,
-        organizationId,
-        row: oauthRow(),
-        safeDb: makeSafeDb(),
-        userId,
-      }),
-    ).rejects.toThrow("ECONNRESET");
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection = await proxyMcpToolCall({
+      args: {},
+      cachedTool,
+      organizationId,
+      row: oauthRow(),
+      safeDb: makeSafeDb(),
+      userId,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error ? rejection.message : "").toContain(
+      "ECONNRESET",
+    );
     expect(state.closes).toBeGreaterThan(0);
   });
 
