@@ -242,13 +242,18 @@ export const MATTER_TOOL_DEFINITIONS = [
         ),
       },
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_matter",
     scope: "stella:matters_write",
   },
   {
-    annotations: { destructiveHint: true },
+    annotations: {
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       "Permanently delete a matter and all its documents, tasks, fields, and " +
       "chat history. This is irreversible.",
@@ -293,13 +298,18 @@ export const MATTER_TOOL_DEFINITIONS = [
         notes: nullableStringProp("Free-text notes; pass null to clear"),
       },
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_contact",
     scope: "stella:matters_write",
   },
   {
-    annotations: { destructiveHint: true },
+    annotations: {
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       "Permanently delete a contact from the organization address book. " +
       "Rejected while the contact is still the client of any matter. This is " +
@@ -318,7 +328,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: true },
     description:
       "Look up a company in a public business register (ARES, Brreg, " +
       "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
@@ -346,7 +356,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "List tasks in a matter, or read one task in detail. Pass task_id to " +
       "get a single task's fields, assignees, and linked entities. Otherwise " +
@@ -427,6 +437,7 @@ export const MATTER_TOOL_DEFINITIONS = [
         unlink_link_id: stringProp("Entity-link ID to remove"),
       },
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_task",
@@ -458,6 +469,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       },
       required: ["matter_id"],
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "link_matter_contact",

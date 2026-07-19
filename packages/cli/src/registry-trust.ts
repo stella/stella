@@ -41,6 +41,8 @@ export const TOOL_NAME_PATTERN: RegExp = /^[a-z][a-z0-9_]{0,63}$/u;
 const ALLOWED_ANNOTATION_KEYS: ReadonlySet<string> = new Set([
   "readOnlyHint",
   "destructiveHint",
+  "idempotentHint",
+  "openWorldHint",
 ]);
 
 /** The success/failure result of validating a fetched tools/list body. */
@@ -161,12 +163,23 @@ const projectListing = (
   if (!isRecord(rawAnnotations)) {
     return { name, description, inputSchema };
   }
-  const annotations: { readOnlyHint?: boolean; destructiveHint?: boolean } = {};
+  const annotations: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  } = {};
   if (typeof rawAnnotations["readOnlyHint"] === "boolean") {
     annotations.readOnlyHint = rawAnnotations["readOnlyHint"];
   }
   if (typeof rawAnnotations["destructiveHint"] === "boolean") {
     annotations.destructiveHint = rawAnnotations["destructiveHint"];
+  }
+  if (typeof rawAnnotations["idempotentHint"] === "boolean") {
+    annotations.idempotentHint = rawAnnotations["idempotentHint"];
+  }
+  if (typeof rawAnnotations["openWorldHint"] === "boolean") {
+    annotations.openWorldHint = rawAnnotations["openWorldHint"];
   }
   return { name, description, inputSchema, annotations };
 };

@@ -230,7 +230,7 @@ const getCompatFetchPayload = ({
 
 export const COMPAT_TOOL_DEFINITIONS = [
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     access: "read",
     anonymized: {
       exposure: "anonymize",
@@ -259,7 +259,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
     scope: "stella:search",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     access: "read",
     anonymized: {
       exposure: "anonymize",

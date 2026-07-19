@@ -607,7 +607,7 @@ const playbookDetailTextFieldSpecs = (
 
 export const KNOWLEDGE_TOOL_DEFINITIONS = [
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "List the clause library for this organization, or read one clause in " +
       "detail. Pass clause_id to get a clause's body, description, usage notes, " +
@@ -695,13 +695,18 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         },
       },
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_clause",
     scope: "stella:knowledge_write",
   },
   {
-    annotations: { destructiveHint: true },
+    annotations: {
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       "Permanently delete a clause and all its variants and versions from the " +
       "organization's clause library. This is irreversible.",
@@ -719,7 +724,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     scope: "stella:knowledge_write",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "List the review playbooks in this organization, or read one in detail. " +
       "Pass playbook_id to get a playbook's positions (the issues it reviews, " +
@@ -768,6 +773,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       },
       required: ["matter_id", "playbook_id"],
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "run_playbook",

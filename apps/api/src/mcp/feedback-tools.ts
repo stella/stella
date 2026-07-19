@@ -67,6 +67,7 @@ export const FEEDBACK_TOOL_DEFINITIONS = [
       },
       required: ["kind", "title", "body"],
     },
+    annotations: { idempotentHint: false, openWorldHint: true },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "send_feedback",

@@ -208,6 +208,79 @@ describe("MCP registry access coherence", () => {
   });
 });
 
+/**
+ * The two behavioural MCP annotations (`openWorldHint`, `idempotentHint`) must
+ * be declared coherently with each tool's `access` classification, so an agent
+ * client reasoning off the hints can never be misled by a missing or
+ * contradictory declaration. Like the access-coherence block above, these are
+ * deterministic cross-checks over the static registry: a new tool that omits
+ * `openWorldHint`, forgets `idempotentHint` on a write, declares it on a read,
+ * or ships a `delete_*` that is not idempotent fails the build.
+ */
+describe("MCP registry annotation coherence", () => {
+  test("every tool declares openWorldHint explicitly (boolean)", () => {
+    for (const tool of defaultTools) {
+      expect(
+        typeof tool.annotations?.openWorldHint,
+        `Tool ${tool.name} must declare annotations.openWorldHint explicitly`,
+      ).toBe("boolean");
+    }
+  });
+
+  test('every access: "write" tool declares idempotentHint explicitly (boolean)', () => {
+    for (const tool of defaultTools) {
+      if (tool.access !== "write") {
+        continue;
+      }
+      expect(
+        typeof tool.annotations?.idempotentHint,
+        `Tool ${tool.name} is access: "write" but does not declare annotations.idempotentHint`,
+      ).toBe("boolean");
+    }
+  });
+
+  test('read-only (access: "read") tools do not declare idempotentHint', () => {
+    for (const tool of defaultTools) {
+      if (tool.access !== "read") {
+        continue;
+      }
+      expect(
+        tool.annotations?.idempotentHint,
+        `Tool ${tool.name} is access: "read"; idempotentHint is meaningless and must be omitted`,
+      ).toBeUndefined();
+    }
+  });
+
+  test("every delete_* tool is idempotentHint true", () => {
+    for (const tool of defaultTools) {
+      if (!tool.name.startsWith("delete_")) {
+        continue;
+      }
+      expect(
+        tool.annotations?.idempotentHint,
+        `Tool ${tool.name} is a delete_* tool and must be idempotentHint true`,
+      ).toBe(true);
+    }
+  });
+
+  test("the anonymized projection carries annotations through unchanged", () => {
+    const defaultByName = new Map(
+      defaultTools.map((tool) => [tool.name, tool]),
+    );
+    for (const tool of anonymizedTools) {
+      const source = defaultByName.get(tool.name);
+      expect(
+        source,
+        `Anonymized tool ${tool.name} has no default-surface counterpart`,
+      ).toBeDefined();
+      expect(
+        tool.annotations,
+        `Anonymized tool ${tool.name} annotations diverge from the default surface`,
+      ).toEqual(source?.annotations);
+    }
+  });
+});
+
 describe("MCP static tool-set coherence", () => {
   test("each static tool set binds exactly one handler per advertised definition", () => {
     for (const toolSet of DEFAULT_MCP_TOOL_SETS) {
