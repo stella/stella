@@ -1681,7 +1681,7 @@ const BindingSourceConfigControl = ({
 }) => {
   const t = useTranslations();
   const { data } = useQuery(bindingCatalogOptions());
-  const sources = data?.sources ?? [];
+  const sources = optionalArray(data?.sources);
   const firstSource = sources.at(0);
 
   // A binding is a derived value source, mutually exclusive with every other
