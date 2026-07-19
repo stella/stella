@@ -332,6 +332,25 @@ export const TIME_ENTRY_SOURCE = {
   TIMER: "timer",
 } as const satisfies Record<string, TimeEntrySource>;
 
+/**
+ * Provenance of a chat thread's title. A three-state discriminator (not a
+ * boolean) so background AI title generation can never clobber a title the
+ * user chose:
+ *   - "default": the placeholder title a freshly created thread starts with;
+ *     the only source the background generator is allowed to replace.
+ *   - "user": the user renamed the thread; a rename stamps this, and it is
+ *     never overwritten by AI titling.
+ *   - "ai": the background generator wrote the title; it stamps this after
+ *     replacing a "default" title and never regenerates over its own result.
+ */
+export const CHAT_TITLE_SOURCES = ["default", "user", "ai"] as const;
+export type ChatTitleSource = (typeof CHAT_TITLE_SOURCES)[number];
+export const CHAT_TITLE_SOURCE = {
+  DEFAULT: "default",
+  USER: "user",
+  AI: "ai",
+} as const satisfies Record<string, ChatTitleSource>;
+
 // -- Contacts --
 
 export {

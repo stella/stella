@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatThreads } from "@/api/db/schema";
+import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
+import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -19,6 +20,7 @@ const TITLE_MAX_OUTPUT_TOKENS = 32;
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
 
 type GenerateThreadTitleProps = {
+  initialTitle: string;
   messages: [ChatMessage, ChatMessage]; // [userMessage, AIMessage]
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
@@ -31,6 +33,7 @@ type GenerateThreadTitleProps = {
 };
 
 export const generateThreadTitle = async ({
+  initialTitle,
   messages,
   organizationId,
   orgAIConfig,
@@ -97,17 +100,35 @@ Assistant: ${assistantText}`,
         },
       });
 
-      if (!currentThread || currentThread.titleSource !== "user") {
+      // Only replace a still-default placeholder title whose text still
+      // matches what this request set at creation. A "user" rename or a
+      // prior "ai" title is left untouched: the generator writes once, and a
+      // rename that raced this fire-and-forget path must win.
+      //
+      // The title-text comparison (not just titleSource) also covers a
+      // rolling-deploy window: an old API task's rename-thread implementation
+      // predates titleSource and only writes `title`, so a rename it serves
+      // leaves titleSource="default" behind. Requiring the title to still
+      // equal initialTitle catches that stale-column case too, since any
+      // rename necessarily changes the text.
+      if (
+        !currentThread ||
+        !aiTitlingMayReplace(currentThread.titleSource) ||
+        currentThread.title !== initialTitle
+      ) {
         return false;
       }
 
       const updatedRows = await tx
         .update(chatThreads)
-        .set({ title, titleSource: "ai" })
+        .set({ title, titleSource: CHAT_TITLE_SOURCE.AI })
         .where(
           and(
             eq(chatThreads.id, threadId),
-            eq(chatThreads.titleSource, "user"),
+            // Re-check inside the UPDATE so a rename committing between the
+            // read above and this write cannot be clobbered.
+            eq(chatThreads.titleSource, CHAT_TITLE_SOURCE.DEFAULT),
+            eq(chatThreads.title, initialTitle),
           ),
         )
         .returning({ id: chatThreads.id });
@@ -123,7 +144,10 @@ Assistant: ${assistantText}`,
         workspaceId: threadWorkspaceId,
         changes: {
           title: { old: currentThread.title, new: title },
-          titleSource: { old: currentThread.titleSource, new: "ai" },
+          titleSource: {
+            old: currentThread.titleSource,
+            new: CHAT_TITLE_SOURCE.AI,
+          },
         },
       });
 

@@ -20,6 +20,7 @@ import {
 import type {
   ChatCompactionSummary,
   ChatMessageRole,
+  ChatTitleSource,
   PersistedChatMessageContent,
 } from "./common";
 import { workspaces } from "./contacts";
@@ -44,11 +45,15 @@ export const chatThreads = p.pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     title: p.varchar({ length: 255 }).notNull(),
+    // Provenance of `title`; gates whether background AI titling may replace it.
+    // See ChatTitleSource in ./common. New threads start "default"; a rename
+    // stamps "user"; the generator only replaces "default" and stamps "ai".
+    // Length fits the longest value ("default").
     titleSource: p
-      .varchar("title_source", { length: 4 })
-      .$type<"ai" | "user">()
+      .varchar("title_source", { length: 7 })
+      .$type<ChatTitleSource>()
       .notNull()
-      .default("user"),
+      .default("default"),
     /**
      * A successful mutation adopts a newly created thread, preventing the
      * creating request's disconnect compensation from deleting changed state.
