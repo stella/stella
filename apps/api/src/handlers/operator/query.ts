@@ -5,6 +5,9 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
+import { DAY_IN_MS } from "@stll/time";
+
+// eslint-disable-next-line security-guards/no-unscoped-user-query -- operator observability is deliberately instance-wide: the endpoint is token-gated at the deployment level and lists registrations across the whole instance, so there is no organization to scope by.
 import { user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -19,8 +22,7 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
  */
 export const OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS = 90;
 
-const MAX_LOOKBACK_MS =
-  OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+const MAX_LOOKBACK_MS = OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS * DAY_IN_MS;
 
 /** Better Auth user ids are text (not UUIDs); mirror `tUserId`'s bounds. */
 const isUserIdCursorPart = (value: unknown): value is string =>
@@ -152,6 +154,8 @@ export const validateRegistrationsFilter = (
  * `since`, oldest first, keyset-paged on `(created_at, id)`. Callers must
  * invoke `validateRegistrationsFilter` first. Returns only the four
  * operator-visible fields (id, email, name, createdAt).
+ *
+ * @yields SafeDb errors out to the safe-handler runner.
  */
 export const queryRegistrationsPage = async function* ({
   safeDb,

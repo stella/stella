@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 
-import { rootDb } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
+import { operatorReadDb } from "@/api/lib/operator-read-db";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
@@ -19,15 +19,6 @@ const config = {
   mcp: { type: "internal", reason: "health_infra" },
   query: readRegistrationsQuerySchema,
 } satisfies TokenHandlerConfig;
-
-/**
- * The Better Auth `user` table is instance-wide infrastructure with no
- * workspace/organization scoping, so the read goes through the owner-level
- * handle (the same handle Better Auth itself uses), wrapped in the SafeDb
- * contract for structured error capture.
- */
-const rootSafeDb: SafeDb = async (fn) =>
-  await Result.tryPromise(async () => await rootDb.transaction(fn));
 
 export type ReadRegistrationsDeps = {
   getConfiguredToken: () => string | undefined;
@@ -88,7 +79,7 @@ export const createReadRegistrationsEndpoint = ({
 
 const readRegistrations = createReadRegistrationsEndpoint({
   getConfiguredToken: () => env.OPERATOR_METRICS_TOKEN,
-  safeDb: rootSafeDb,
+  safeDb: operatorReadDb,
 });
 
 export default readRegistrations;

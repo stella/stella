@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import Elysia from "elysia";
+import * as v from "valibot";
 
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -7,6 +8,12 @@ import { OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS } from "./query";
 import { createReadRegistrationsEndpoint } from "./read-registrations";
 
 const TOKEN = "operator-test-token-0123456789abcdef";
+
+const pageBodySchema = v.object({
+  items: v.array(v.record(v.string(), v.unknown())),
+  nextCursor: v.nullable(v.string()),
+  limit: v.number(),
+});
 
 const daysAgo = (days: number): Date =>
   new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -61,7 +68,7 @@ const registrationsRequest = (
   headers: Record<string, string> = {},
 ): Request =>
   new Request(
-    `http://localhost/operator/registrations?${new URLSearchParams(params)}`,
+    `http://localhost/operator/registrations?${new URLSearchParams(params).toString()}`,
     { headers },
   );
 
@@ -152,11 +159,7 @@ describe("GET /operator/registrations", () => {
     );
     expect(response.status).toBe(200);
 
-    const page = (await response.json()) as {
-      items: Record<string, unknown>[];
-      nextCursor: string | null;
-      limit: number;
-    };
+    const page = v.parse(pageBodySchema, await response.json());
     expect(page.limit).toBe(2);
     // Two rows for limit 2 means no third row was fetched: last page.
     expect(page.nextCursor).toBeNull();
@@ -191,10 +194,7 @@ describe("GET /operator/registrations", () => {
     );
     expect(response.status).toBe(200);
 
-    const page = (await response.json()) as {
-      items: unknown[];
-      nextCursor: string | null;
-    };
+    const page = v.parse(pageBodySchema, await response.json());
     expect(page.items).toHaveLength(2);
     expect(page.nextCursor).not.toBeNull();
   });
