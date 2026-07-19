@@ -76,6 +76,13 @@ export class UploadQueue<T> {
   private failed: FailedUpload[] = [];
   private total = 0;
   private retrying = 0;
+  // Bumped on every enqueue()/retryFailed() to give each run a distinct
+  // identity. A retry sleeping through backoff captures the run it was
+  // admitted under; if the run has moved on (cancel() followed by a new
+  // retryFailed() run) by the time it wakes, it is dropped instead of
+  // leaking into a batch it does not belong to.
+  private runId = 0;
+  private readonly fileRunIds = new Map<File, number>();
   private readonly concurrency: number;
   private readonly uploadFn: UploadFn<T>;
   private rateLimitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -140,6 +147,8 @@ export class UploadQueue<T> {
       return;
     }
 
+    this.runId++;
+    this.fileRunIds.clear();
     this.pending = files.map((file) => ({ file, attempt: 0 }));
     this.inflight.clear();
     this.completed = [];
@@ -208,6 +217,8 @@ export class UploadQueue<T> {
     if (this.state !== "done" && this.state !== "cancelled") {
       return;
     }
+    this.runId++;
+    this.fileRunIds.clear();
     this.pending = this.failed.map(({ file }) => ({ file, attempt: 0 }));
     this.total = this.pending.length;
     this.failed = [];
@@ -245,6 +256,7 @@ export class UploadQueue<T> {
     while (this.inflight.size < this.concurrency && this.pending.length > 0) {
       const next = this.pending.shift();
       if (next) {
+        this.fileRunIds.set(next.file, this.runId);
         this.processFile(next.file, next.attempt).catch(() => {
           // Errors are handled inside processFile
         });
@@ -292,6 +304,7 @@ export class UploadQueue<T> {
       const isRetryable = status >= HTTP_SERVER_ERROR_MIN || status === 0;
       if (isRetryable && attempt < MAX_RETRIES) {
         const delay = RETRY_BACKOFF_MS[attempt] ?? 4000;
+        const expectedRunId = this.fileRunIds.get(file);
         this.retrying++;
 
         // Fill the freed concurrency slot while this file
@@ -305,7 +318,15 @@ export class UploadQueue<T> {
 
         // Cancelled during backoff: cancel() already cleared
         // the pending queue and emitted done; drop the retry.
-        if (this.getState() === "cancelled") {
+        // Same if a new run (retryFailed() from "cancelled")
+        // started while this retry was asleep: the run that
+        // admitted it is gone, so re-admitting now would leak
+        // this file into a batch it does not belong to. Either
+        // way, still call pump() so the current run (if any) can
+        // notice `retrying` dropped and reach "done"; pump() is a
+        // no-op while cancelled.
+        if (this.getState() === "cancelled" || this.runId !== expectedRunId) {
+          this.pump();
           return;
         }
 
