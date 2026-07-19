@@ -1,0 +1,14 @@
+{
+  "baseVersionNumber": 0,
+  "entityId": "44444444-4444-4444-8444-444444444444",
+  "fileName": "settlement-draft.docx",
+  "filePath": "/Users/jane/Stella/settlement-draft.docx",
+  "id": "55555555-5555-4555-8555-555555555555",
+  "lastError": null,
+  "lastCheckpointAt": null,
+  "pendingFinalize": true,
+  "propertyId": "66666666-6666-4666-8666-666666666666",
+  "status": "syncing",
+  "takeoverDetected": true,
+  "workspaceId": "77777777-7777-4777-8777-777777777777"
+}
