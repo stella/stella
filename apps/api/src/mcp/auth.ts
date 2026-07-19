@@ -90,6 +90,11 @@ export const classifyMcpTokenVerificationError = (
   if (error instanceof McpAuthenticationError) {
     return error;
   }
+  // Already-classified faults are returned as-is so re-classification is
+  // idempotent and never nests a verification error inside another one.
+  if (error instanceof McpTokenVerificationError) {
+    return error;
+  }
   if (isTokenRejectionError(error)) {
     return new McpAuthenticationError({
       message: "Invalid or expired token",

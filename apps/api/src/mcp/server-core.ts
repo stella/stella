@@ -230,10 +230,12 @@ export const createMcpHttpRequestHandler = ({
       try {
         definition = await getMcpToolDefinition(toolName, context, mode);
       } catch (error) {
-        if (error instanceof McpGatewayLoadError) {
-          return retryableToolErrorResult();
+        // A gateway load fault is already captured at the load site; anything
+        // else is unexpected here and must be captured before it degrades to a
+        // generic retryable result.
+        if (!(error instanceof McpGatewayLoadError)) {
+          captureError(error, { phase: "tools/call", mode, source: "mcp" });
         }
-        captureError(error, { phase: "tools/call", mode, source: "mcp" });
         return retryableToolErrorResult();
       }
       if (!definition) {

@@ -90,6 +90,16 @@ describe("classifyMcpTokenVerificationError", () => {
     expect(classifyMcpTokenVerificationError(claimError)).toBe(claimError);
   });
 
+  test("returns an existing verification error as-is (idempotent)", () => {
+    const verificationError = new McpTokenVerificationError({
+      message: "Token verification is temporarily unavailable",
+    });
+
+    expect(classifyMcpTokenVerificationError(verificationError)).toBe(
+      verificationError,
+    );
+  });
+
   test("maps a JWKS fetch outage to a retryable verification error", () => {
     // `verifyAccessToken` re-throws a JWKS fetch/network failure as a plain
     // Error (no UNAUTHORIZED status), so it must not present as a bad token.

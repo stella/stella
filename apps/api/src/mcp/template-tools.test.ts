@@ -112,6 +112,9 @@ const createScopedDb = (templates: unknown[] = []) =>
       const builder = {
         select: () => builder,
         from: () => builder,
+        // The gateway connector load joins two tables; model the step so its
+        // read resolves to the (empty by default) seed instead of erroring.
+        innerJoin: () => builder,
         where: () => builder,
         orderBy: () => builder,
         limit: async () => templates,

@@ -149,9 +149,16 @@ describe("external MCP gateway tools", () => {
     // A DB outage must not be mistaken for "no connectors": the loader throws a
     // distinct fault so tools/list fails loudly rather than silently dropping
     // every external tool.
-    await expect(listGatewayExternalMcpTools({ context })).rejects.toThrow(
-      McpGatewayLoadError,
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection: unknown = await listGatewayExternalMcpTools({
+      context,
+    }).then(
+      () => null,
+      (error: unknown) => error,
     );
+
+    expect(rejection).toBeInstanceOf(McpGatewayLoadError);
   });
 
   test("answers a call with a retryable internal_error, not unknown_tool, when the load fails", async () => {
