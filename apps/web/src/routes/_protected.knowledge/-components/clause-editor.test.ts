@@ -17,6 +17,7 @@ import {
   type ClauseEditorReviewStatus,
   hasAlignedClauseStructure,
   isRewriteStale,
+  isStaleSaveSettlement,
   nextRetryPendingToken,
   nonHistoricalDispatch,
   resolveRewriteBaseline,
@@ -24,6 +25,7 @@ import {
   reviewResolutionStatus,
   settleReviewPersist,
   shouldKeepBodyPanelMounted,
+  shouldReissueAfterStaleSettlement,
 } from "./clause-ai-tracked-changes";
 import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
@@ -962,5 +964,172 @@ describe("shouldKeepBodyPanelMounted", () => {
 
   test("does not pin the panel outside a review", () => {
     expect(shouldKeepBodyPanelMounted("resolved")).toBe(false);
+  });
+});
+
+describe("isStaleSaveSettlement / shouldReissueAfterStaleSettlement", () => {
+  // Regression for the write-side counterpart of the epoch/token race above:
+  // a body autosave that started *before* an AI review is accepted can
+  // still be in flight when the review's own flush persists the accepted
+  // body. `saveBody` aborts the older request when the newer one starts,
+  // but abort can't recall a write that had already reached the server —
+  // these two functions are the guard that holds regardless of how that
+  // network race resolves.
+
+  test("nothing has settled yet: never stale", () => {
+    expect(isStaleSaveSettlement(1, undefined)).toBe(false);
+  });
+
+  test("this settlement is the newest so far: not stale", () => {
+    expect(isStaleSaveSettlement(2, 1)).toBe(false);
+  });
+
+  test("a strictly newer save already settled: stale", () => {
+    expect(isStaleSaveSettlement(1, 2)).toBe(true);
+  });
+
+  test("reissue only when the stale request actually reached the server (settled successfully)", () => {
+    expect(shouldReissueAfterStaleSettlement(true, true)).toBe(true);
+    expect(shouldReissueAfterStaleSettlement(true, false)).toBe(false);
+    expect(shouldReissueAfterStaleSettlement(false, true)).toBe(false);
+    expect(shouldReissueAfterStaleSettlement(false, false)).toBe(false);
+  });
+});
+
+describe("write-ordering matrix: saveBody vs. a stale in-flight save", () => {
+  // End-to-end simulation of `ClauseBodyEditor.saveBody`'s write-ordering
+  // guard, using the same call shape as the real function: each `startSave`
+  // mints a sequence, aborts the previous in-flight controller (mirroring
+  // `inFlightSaveAbortRef`), and returns a `settle` the test drives by hand
+  // so settlement order — the actual load-bearing variable in this race —
+  // is fully controllable rather than left to real network timing.
+
+  type FakeResponse = { error?: { message: string } };
+
+  const makeSaveHarness = () => {
+    let sequenceCounter = 0;
+    let inFlightAbort: AbortController | null = null;
+    let latestSettled: { sequence: number; body: string } | undefined;
+    const toasts: string[] = [];
+    const gateReports: string[] = [];
+    const reissuedBodies: string[] = [];
+
+    const startSave = (body: string) => {
+      const sequence = (sequenceCounter += 1);
+      inFlightAbort?.abort();
+      const controller = new AbortController();
+      inFlightAbort = controller;
+
+      const settle = (response: FakeResponse) => {
+        const isStale = isStaleSaveSettlement(
+          sequence,
+          latestSettled?.sequence,
+        );
+
+        if (controller.signal.aborted || isStale) {
+          // Superseded: no toast, no gate report — matching `saveBody`'s
+          // early return before either side effect.
+          if (
+            shouldReissueAfterStaleSettlement(isStale, !response.error) &&
+            latestSettled
+          ) {
+            reissuedBodies.push(latestSettled.body);
+          }
+          return;
+        }
+
+        if (response.error) {
+          toasts.push(response.error.message);
+          return;
+        }
+
+        latestSettled = { sequence, body };
+        gateReports.push(body);
+      };
+
+      return { sequence, controller, settle };
+    };
+
+    return {
+      startSave,
+      toasts,
+      gateReports,
+      reissuedBodies,
+      getLatestSettled: () => latestSettled,
+    };
+  };
+
+  test("the reported P1 race: a pre-review autosave still in flight at accept time, settling after the accepted flush, is discarded and the accepted body is re-persisted", () => {
+    const h = makeSaveHarness();
+
+    // A debounced autosave starts first, carrying the pre-AI body.
+    const stale = h.startSave("pre-AI body");
+    expect(stale.controller.signal.aborted).toBe(false);
+
+    // The AI review is accepted while that autosave is still in flight:
+    // `onReviewResolved` flushes the accepted body — starting this new save
+    // aborts the still-pending autosave's controller.
+    const accepted = h.startSave("accepted AI body");
+    expect(stale.controller.signal.aborted).toBe(true);
+
+    // The accepted-body flush reaches the server and settles first (this is
+    // exactly what the review comment describes: the review's own flush
+    // completes while the older autosave is still outstanding).
+    accepted.settle({});
+    expect(h.gateReports).toEqual(["accepted AI body"]);
+
+    // The stale autosave's request had already reached the server before
+    // the local `abort()` could cut it off, so it still comes back with a
+    // "successful" response once it finally settles.
+    stale.settle({});
+
+    // It must not be treated as the current save: no error toast, no gate
+    // report for the stale body — and because its write did land (proven by
+    // settling without an error) after the accepted body's own write, the
+    // accepted body gets defensively re-persisted once.
+    expect(h.toasts).toEqual([]);
+    expect(h.gateReports).toEqual(["accepted AI body"]);
+    expect(h.reissuedBodies).toEqual(["accepted AI body"]);
+  });
+
+  test("abort surfaces no error toast even when the superseded request genuinely fails", () => {
+    const h = makeSaveHarness();
+
+    const first = h.startSave("draft 1");
+    const second = h.startSave("draft 2");
+
+    // The superseded request settles with a real network-level failure
+    // (e.g. the connection was actually torn down before completing) —
+    // still no toast, and nothing to repair since the write never landed.
+    first.settle({ error: { message: "network aborted" } });
+    expect(h.toasts).toEqual([]);
+    expect(h.reissuedBodies).toEqual([]);
+
+    second.settle({});
+    expect(h.gateReports).toEqual(["draft 2"]);
+  });
+
+  test("normal sequential saves (no overlap) are unaffected — each reports as the current save", () => {
+    const h = makeSaveHarness();
+
+    const a = h.startSave("v1");
+    a.settle({});
+    expect(h.gateReports).toEqual(["v1"]);
+
+    const b = h.startSave("v2");
+    b.settle({});
+    expect(h.gateReports).toEqual(["v1", "v2"]);
+    expect(h.toasts).toEqual([]);
+    expect(h.reissuedBodies).toEqual([]);
+  });
+
+  test("a genuine failure of the current (non-superseded) save still toasts normally", () => {
+    const h = makeSaveHarness();
+
+    const a = h.startSave("v1");
+    a.settle({ error: { message: "server error" } });
+
+    expect(h.toasts).toEqual(["server error"]);
+    expect(h.gateReports).toEqual([]);
   });
 });

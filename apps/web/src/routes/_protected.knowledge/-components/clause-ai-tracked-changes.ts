@@ -276,6 +276,51 @@ export const nextRetryPendingToken = (
     ? currentReviewFlushEpoch
     : undefined;
 
+/**
+ * Write-ordering guard for `ClauseBodyEditor.saveBody`, covering the
+ * complementary write-side race to the gate machinery above: a body
+ * autosave that started *before* an AI review is accepted can still be in
+ * flight when the review's own flush persists the accepted body. If that
+ * stale autosave's POST settles on the server *after* the accepted-body
+ * POST, the server's last-write-wins semantics let it silently restore the
+ * pre-AI body underneath the gate the caller already reported "resolved".
+ *
+ * `saveBody` mints a strictly increasing `sequence` for every call (any
+ * trigger — debounce, blur, or review flush) and aborts the previous
+ * in-flight call's `AbortController` before issuing its own request. Abort
+ * is the fast path: cancelling the fetch stops that older call from ever
+ * reaching this guard's caller with a response to act on. It is
+ * deliberately not the *only* guard, though — an aborted signal races the
+ * network independently of the server: if the older request had already
+ * reached the server and applied its write before `abort()` ran, cancelling
+ * the client's view of it can't recall that write. `isStaleSaveSettlement`
+ * is the guard that holds regardless of how that race resolves: it looks
+ * purely at settlement order (does a strictly newer save's sequence appear
+ * in `latestSettledSequence` already?), which is unaffected by whether the
+ * older request's connection was actually torn down in time.
+ */
+export const isStaleSaveSettlement = (
+  settlingSequence: number,
+  latestSettledSequence: number | undefined,
+): boolean =>
+  latestSettledSequence !== undefined &&
+  latestSettledSequence > settlingSequence;
+
+/**
+ * Whether a stale settlement needs the newer body defensively re-persisted.
+ * A stale settlement that failed (aborted before completing, or a genuine
+ * network error) never reached the server, so there's nothing to repair.
+ * A stale settlement that *succeeded* proves its write did land — after the
+ * accepted body's own write, per `isStaleSaveSettlement` — so the caller
+ * must re-issue the last known-good body once to make the server's last
+ * write match the UI again. The server payload itself can't be recalled;
+ * only a fresh write can undo it.
+ */
+export const shouldReissueAfterStaleSettlement = (
+  isStale: boolean,
+  staleSettlementSucceeded: boolean,
+): boolean => isStale && staleSettlementSucceeded;
+
 /** Stable identity of a body for detecting external resets vs. the editor's
  *  own round-tripped edits (text + formatting + directive kind/expression). */
 export const bodyKey = (body: readonly ClauseParagraph[]): string =>

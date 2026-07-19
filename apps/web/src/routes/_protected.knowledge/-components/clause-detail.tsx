@@ -74,9 +74,11 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   canReviewFlushReportResolved,
   type ClauseEditorReviewStatus,
+  isStaleSaveSettlement,
   nextRetryPendingToken,
   reviewFlushTokenForSave,
   shouldKeepBodyPanelMounted,
+  shouldReissueAfterStaleSettlement,
 } from "@/routes/_protected.knowledge/-components/clause-ai-tracked-changes";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 import { diffClauseBodies } from "@/routes/_protected.knowledge/-components/clause-diff";
@@ -674,6 +676,42 @@ const ClauseBodyEditor = ({
   // the original stale-autosave race stays fixed.
   const retryPendingTokenRef = useRef<number | undefined>(undefined);
 
+  // Monotonic id for every saveBody call (debounce, blur, or review flush).
+  // Paired with `inFlightSaveAbortRef` and `latestSettledSaveRef` below to
+  // close the write-side counterpart of the epoch/token race above: a body
+  // autosave that started before a review is accepted can still be in
+  // flight when the review's own flush persists the accepted body. See
+  // `isStaleSaveSettlement` for why sequence order — not just aborting the
+  // older request — is the guard that actually holds.
+  const saveSequenceRef = useRef(0);
+
+  // The AbortController for the currently in-flight saveBody call, if any.
+  // Every call aborts the previous one before issuing its own request: the
+  // fast path for the stale-autosave race, cancelling the older request
+  // before its response can reach this function at all.
+  const inFlightSaveAbortRef = useRef<AbortController | null>(null);
+
+  // Sequence + body of the most recently *settled* successful save. Lets a
+  // late-arriving stale settlement recognize it lost the race
+  // (`isStaleSaveSettlement`) and, if its write still reached the server
+  // despite being aborted, re-issue this body to reclaim the last write
+  // (`shouldReissueAfterStaleSettlement`).
+  const latestSettledSaveRef = useRef<
+    { sequence: number; body: ClauseParagraph[] } | undefined
+  >(undefined);
+
+  // Mirrors `saveBody` itself, assigned right after its declaration below.
+  // The reissue path recurses into `saveBody`, but a `const` closure
+  // referencing its own not-yet-initialized binding trips the React
+  // Compiler's self-reference check; going through this ref instead breaks
+  // that cycle while still always calling the latest `saveBody`.
+  const saveBodyRef = useRef<
+    (body: ClauseParagraph[], explicitReviewFlushToken?: number) => void
+  >(() => {
+    // Overwritten immediately below, before any caller can reach this —
+    // `saveBody`'s own definition never invokes it during render.
+  });
+
   const saveBody = useCallback(
     async (body: ClauseParagraph[], explicitReviewFlushToken?: number) => {
       const reviewFlushToken = reviewFlushTokenForSave(
@@ -682,9 +720,39 @@ const ClauseBodyEditor = ({
       );
       retryPendingTokenRef.current = undefined;
 
+      const sequence = (saveSequenceRef.current += 1);
+      inFlightSaveAbortRef.current?.abort();
+      const controller = new AbortController();
+      inFlightSaveAbortRef.current = controller;
+
       // Head-only autosave: persists the working copy without snapshotting a
       // version. The version snapshot happens on explicit save / leave.
-      const response = await api.clauses({ clauseId }).post({ body });
+      const response = await api
+        .clauses({ clauseId })
+        .post({ body }, { fetch: { signal: controller.signal } });
+
+      const isStale = isStaleSaveSettlement(
+        sequence,
+        latestSettledSaveRef.current?.sequence,
+      );
+
+      if (controller.signal.aborted || isStale) {
+        // Superseded by a newer save — whether cancelled locally or simply
+        // out-ordered on the server, this settlement must not surface a
+        // toast or touch the retry/review gate; only the current save's own
+        // outcome is authoritative for the UI.
+        if (shouldReissueAfterStaleSettlement(isStale, !response.error)) {
+          // This stale save's write still reached the server (the local
+          // abort couldn't recall a request that had already landed) *and*
+          // landed after the body we know is current — re-issue that body
+          // once so the server's last write matches the UI again.
+          const current = latestSettledSaveRef.current;
+          if (current) {
+            saveBodyRef.current(current.body);
+          }
+        }
+        return;
+      }
 
       if (response.error) {
         // Leave the review-status gate exactly where it was (e.g.
@@ -710,6 +778,8 @@ const ClauseBodyEditor = ({
         return;
       }
 
+      latestSettledSaveRef.current = { sequence, body };
+
       // Only a save carrying the current epoch's token — the review's own
       // flush, or a later retry of it — may lift the gate. A plain autosave
       // that never picked up a retry token still carries none, so a stale
@@ -727,6 +797,10 @@ const ClauseBodyEditor = ({
     },
     [clauseId, t, onRefresh, onReviewStatusChange],
   );
+  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: lets the reissue path above call the current `saveBody` without a self-referential closure the compiler rejects
+  saveBodyRef.current = (body, explicitReviewFlushToken) => {
+    void saveBody(body, explicitReviewFlushToken);
+  };
 
   const debouncedSave = useDebouncedCallback((body: ClauseParagraph[]) => {
     void saveBody(body);
