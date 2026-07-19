@@ -153,11 +153,21 @@ describe("pg-fts tsquery robustness", () => {
         fc.array(metaChar, { maxLength: 12 }).map((parts) => parts.join(" ")),
       );
 
+      // numRuns is capped at 60 (not the 200-1000 typical of pure in-memory
+      // property tests, see src/handlers/rates/resolve.test.ts for the same
+      // convention): every run does 3 real round-trips against the process-
+      // wide shared PGlite singleton (test-utils.ts `getTestDb`), and PGlite's
+      // WASM linear memory only ever grows for the life of an instance, never
+      // shrinks. That singleton is reused by ~20 other test files across the
+      // suite's single shared-process `bun test` run, so numRuns here adds
+      // directly to the permanent memory floor for the rest of that run, not
+      // just this file's own footprint. PR CI stays at this budget; the
+      // nightly sweep still gets full depth via PROPERTY_TEST_NUM_RUNS_FACTOR.
       await fc.assert(
         fc.asyncProperty(queryArb, async (query) => {
           await runQuery(query);
         }),
-        propertyConfig({ numRuns: 300 }),
+        propertyConfig({ numRuns: 60 }),
       );
     },
     propertyTestTimeout(30_000),
