@@ -468,7 +468,9 @@ export const CliMcpPreview = ({
                 </span>
               </div>
 
-              <div className="story-step story-step-visible mt-[clamp(.2rem,.4vw,.35rem)] space-y-[clamp(.15rem,.32vw,.28rem)] text-[.42rem] leading-[1.3] sm:text-[clamp(.4rem,.53vw,.56rem)]">
+              {/* min-h-0 + overflow-hidden: under height pressure the results
+                  clip instead of pushing the idle prompt into the status bar. */}
+              <div className="story-step story-step-visible mt-[clamp(.2rem,.4vw,.35rem)] min-h-0 space-y-[clamp(.15rem,.32vw,.28rem)] overflow-hidden text-[.42rem] leading-[1.3] sm:text-[clamp(.4rem,.53vw,.56rem)]">
                 <div
                   className="cli-result flex items-start gap-2.5"
                   style={{ animationDelay: "1.7s" }}
@@ -532,7 +534,7 @@ export const CliMcpPreview = ({
 
               <div
                 aria-hidden="true"
-                className="cli-idle-prompt mt-auto hidden min-h-[clamp(1.6rem,2.4vw,2rem)] items-center rounded-md border px-2 text-[.46rem] sm:flex sm:text-[clamp(.4rem,.56vw,.56rem)]"
+                className="cli-idle-prompt mt-auto hidden min-h-[clamp(1.6rem,2.4vw,2rem)] shrink-0 items-center rounded-md border px-2 text-[.46rem] sm:flex sm:text-[clamp(.4rem,.56vw,.56rem)]"
                 style={{
                   borderColor:
                     "color-mix(in srgb, var(--terminal-foreground) 14%, transparent)",
@@ -846,22 +848,22 @@ const SCENARIOS: readonly CliScenario[] = [
     usage: "Completed in 0.8s · 9 results",
     steps: [
       { label: CLI_DEMO_TOOLS.searchAcrossMatters, meta: "18 documents" },
-      { label: "Matched cited passages", meta: "9 hits" },
-      { label: "Printed text and JSON output", meta: "ready" },
+      { label: "Matched passages", meta: "9 hits" },
+      { label: "Printed results", meta: "text · json" },
     ],
   },
   {
     id: "template",
     type: "cli",
-    command: "stella template fill supply-agreement --matter 2026/031",
+    command: "stella template fill supply-agreement",
     result: "Drafted Supply_Agreement.docx",
     detail: "with 12 resolved fields",
     executionLabel: "Ran 1 CLI command",
     usage: "Completed in 2.1s · 12 fields",
     steps: [
-      { label: CLI_DEMO_TOOLS.fillTemplate, meta: "supply-agreement" },
-      { label: "Resolved fields from the matter", meta: "12 values" },
-      { label: "Wrote the draft into the matter", meta: "complete" },
+      { label: CLI_DEMO_TOOLS.fillTemplate, meta: "2026/031" },
+      { label: "Resolved matter fields", meta: "12 values" },
+      { label: "Saved draft to matter", meta: "complete" },
     ],
   },
   {
