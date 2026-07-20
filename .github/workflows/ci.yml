@@ -193,11 +193,17 @@ jobs:
 
       - name: Prepare environment
         if: needs.ci-changes.outputs.package_checks_required == 'true'
+        # `cp`, not `mv`: renaming the tracked .env.example dirties the
+        # working tree in apps/api and apps/web, and `turbo --affected`
+        # counts working-tree changes — so every PR (even web-only ones)
+        # ran the api AND web test suites concurrently and could OOM the
+        # runner (exit 137). The copy leaves the tree clean; .env is
+        # gitignored and invisible to affected-detection.
         run: |
           cd ./apps/api
-          mv .env.example .env
+          cp .env.example .env
           cd ../web
-          mv .env.example .env
+          cp .env.example .env
 
       - name: Compute affected flag
         if: needs.ci-changes.outputs.package_checks_required == 'true'
@@ -522,9 +528,9 @@ jobs:
       - name: Prepare environment
         run: |
           cd ./apps/api
-          mv .env.example .env
+          cp .env.example .env
           cd ../web
-          mv .env.example .env
+          cp .env.example .env
 
       - name: Compute affected flag
         id: affected
@@ -670,7 +676,7 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: |
           cd ./apps/web
-          mv .env.example .env
+          cp .env.example .env
 
       - name: Build web
         if: steps.changed.outputs.run == 'true'
@@ -849,9 +855,9 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: |
           cd ./apps/api
-          mv .env.example .env
+          cp .env.example .env
           cd ../web
-          mv .env.example .env
+          cp .env.example .env
 
       - name: Check Docker Hub credentials
         id: dockerhub
