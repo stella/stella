@@ -37,7 +37,6 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
-import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -400,17 +399,14 @@ const enqueueStorageCleanupOrLog = async (
       deletionRequestId,
     });
 
-    detached(
-      processAccountDeletionCleanupRequest(deletionRequestId).catch(
-        (cleanupError: unknown) => {
-          captureError(cleanupError, { deletionRequestId });
-          logger.error("account_deletion_cleanup.inline_failed", {
-            "error.type": errorTag(cleanupError),
-            deletionRequestId,
-          });
-        },
-      ),
-      "enqueueStorageCleanupOrLog",
+    processAccountDeletionCleanupRequest(deletionRequestId).catch(
+      (cleanupError: unknown) => {
+        captureError(cleanupError, { deletionRequestId });
+        logger.error("account_deletion_cleanup.inline_failed", {
+          "error.type": errorTag(cleanupError),
+          deletionRequestId,
+        });
+      },
     );
   }
 };

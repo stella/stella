@@ -12,7 +12,6 @@ import {
 } from "@/hooks/external-file-drop.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { detached } from "@/lib/detached";
 import { ClientOperationError } from "@/lib/errors/client";
 
 type ExternalFileDropOptions = {
@@ -101,33 +100,30 @@ export const useExternalFileDrop = ({
         if (location.current.dropTargets[0]?.element !== self.element) {
           return;
         }
-        detached(
-          collectDroppedFileTree(source)
-            .then((tree) => {
-              if (tree.files.length === 0 && tree.directoryPaths.length === 0) {
-                return undefined;
-              }
-
-              handleDroppedTree(tree);
+        collectDroppedFileTree(source)
+          .then((tree) => {
+            if (tree.files.length === 0 && tree.directoryPaths.length === 0) {
               return undefined;
-            })
-            .catch((error: unknown) => {
-              const normalized =
-                error instanceof Error
-                  ? error
-                  : new ClientOperationError({
-                      action: "read-dropped-files",
-                      message: "Failed to read dropped files",
-                      cause: error,
-                    });
-              handleDropError(normalized);
-              stellaToast.add({
-                title: t("errors.uploadFailed"),
-                type: "error",
-              });
-            }),
-          "onDrop",
-        );
+            }
+
+            handleDroppedTree(tree);
+            return undefined;
+          })
+          .catch((error: unknown) => {
+            const normalized =
+              error instanceof Error
+                ? error
+                : new ClientOperationError({
+                    action: "read-dropped-files",
+                    message: "Failed to read dropped files",
+                    cause: error,
+                  });
+            handleDropError(normalized);
+            stellaToast.add({
+              title: t("errors.uploadFailed"),
+              type: "error",
+            });
+          });
       },
     });
   }, [enabled, ref, t, handleDropError, handleDroppedTree]);

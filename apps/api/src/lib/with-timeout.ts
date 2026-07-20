@@ -1,4 +1,3 @@
-import { detached } from "@/api/lib/detached";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 
 type WithTimeoutOptions = {
@@ -47,9 +46,6 @@ export const withTimeout = async <T>(
     // If the timeout won the race, `op` is still pending; swallow its
     // eventual settlement so a late rejection is not reported as an
     // unhandled rejection.
-    detached(
-      op.catch(() => undefined),
-      "withTimeout",
-    );
+    op.catch(() => undefined);
   }
 };
