@@ -34,7 +34,8 @@ import { isRecord } from "@/api/lib/type-guards";
  * Flow:
  * 1. SPARQL query with date filter to list ECLIs + CELEX
  *    numbers for the cursor date range.
- * 2. For each decision, fetch fulltext from EUR-Lex HTML.
+ * 2. For each available language, fetch the XHTML manifestation directly
+ *    from Cellar's machine-to-machine content endpoint.
  *
  * Cursor format: ISO date string (YYYY-MM-DD). Each page
  * covers one day; null cursor starts 7 days ago.
@@ -45,6 +46,11 @@ import { isRecord } from "@/api/lib/type-guards";
  */
 
 const SPARQL_URL = "https://publications.europa.eu/webapi/rdf/sparql";
+const CELLAR_RESOURCE_PREFIX = "http://publications.europa.eu/resource/cellar/";
+const CELLAR_LANGUAGE_PREFIX =
+  "http://publications.europa.eu/resource/authority/language/";
+const CELLAR_MANIFESTATION_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d{4}\.\d{2}$/u;
 
 /**
  * All 24 official EU languages. EUR-Lex publishes CJEU
@@ -80,13 +86,34 @@ export const ECJ_LANGUAGES = [
 
 type EcjLanguage = (typeof ECJ_LANGUAGES)[number];
 
-const eurLexHtmlUrl = (lang: EcjLanguage, celex: string) =>
-  `https://eur-lex.europa.eu/legal-content/${lang}` +
-  `/TXT/HTML/?uri=CELEX:${celex}`;
-
 const eurLexSourceUrl = (lang: EcjLanguage, celex: string) =>
   `https://eur-lex.europa.eu/legal-content/${lang}` +
   `/ALL/?uri=CELEX:${celex}`;
+
+const toEcjLanguage = (languageUri: string): EcjLanguage | undefined => {
+  if (!languageUri.startsWith(CELLAR_LANGUAGE_PREFIX)) {
+    return undefined;
+  }
+  const cellarCode = languageUri.slice(CELLAR_LANGUAGE_PREFIX.length);
+  if (!/^[A-Z]{3}$/u.test(cellarCode)) {
+    return undefined;
+  }
+  const language = new Intl.Locale(
+    cellarCode.toLowerCase(),
+  ).language.toUpperCase();
+  return ECJ_LANGUAGES.find((supported) => supported === language);
+};
+
+const toCellarContentUrl = (manifestationUri: string): string | undefined => {
+  if (!manifestationUri.startsWith(CELLAR_RESOURCE_PREFIX)) {
+    return undefined;
+  }
+  const manifestationId = manifestationUri.slice(CELLAR_RESOURCE_PREFIX.length);
+  if (!CELLAR_MANIFESTATION_ID.test(manifestationId)) {
+    return undefined;
+  }
+  return `https://publications.europa.eu/resource/cellar/${manifestationId}/DOC_1`;
+};
 
 // -- SPARQL --
 
@@ -100,6 +127,8 @@ type SparqlResult = {
   date: SparqlBinding;
   celex: SparqlBinding;
   type: SparqlBinding;
+  language: SparqlBinding;
+  manifestation: SparqlBinding;
 };
 
 type SparqlResponse = {
@@ -118,7 +147,9 @@ const isSparqlResult = (value: unknown): value is SparqlResult =>
   isSparqlBinding(value["ecli"]) &&
   isSparqlBinding(value["date"]) &&
   isSparqlBinding(value["celex"]) &&
-  isSparqlBinding(value["type"]);
+  isSparqlBinding(value["type"]) &&
+  isSparqlBinding(value["language"]) &&
+  isSparqlBinding(value["manifestation"]);
 
 const isSparqlResponse = (value: unknown): value is SparqlResponse =>
   isRecord(value) &&
@@ -131,7 +162,10 @@ const SPARQL_LIMIT = 10_000;
 const CDM_TYPE_MAP: Record<string, string> = {
   "http://publications.europa.eu/ontology/cdm#judgement": "judgment",
   "http://publications.europa.eu/ontology/cdm#order": "order",
+  "http://publications.europa.eu/ontology/cdm#order_cjeu": "order",
   "http://publications.europa.eu/ontology/cdm#opinion_advocate_general":
+    "opinion",
+  "http://publications.europa.eu/ontology/cdm#opinion_advocate-general":
     "opinion",
 };
 
@@ -162,21 +196,28 @@ const queryDecisions = async ({
 
   const query = `
 PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
-SELECT DISTINCT ?ecli ?date ?celex ?type
+SELECT DISTINCT ?ecli ?date ?celex ?type ?language ?manifestation
 WHERE {
   ?doc cdm:case-law_ecli ?ecli .
   ?doc cdm:work_date_document ?date .
   ?doc cdm:resource_legal_id_celex ?celex .
   ?doc a ?type .
+  ?expression cdm:expression_belongs_to_work ?doc .
+  ?expression cdm:expression_uses_language ?language .
+  ?manifestation cdm:manifestation_manifests_expression ?expression .
+  ?manifestation cdm:manifestation_type ?manifestationType .
   FILTER(?type IN (
     cdm:judgement,
     cdm:order,
-    cdm:opinion_advocate_general
+    cdm:order_cjeu,
+    cdm:opinion_advocate_general,
+    cdm:opinion_advocate-general
   ))
+  FILTER(STR(?manifestationType) = "xhtml")
   FILTER(STR(?date) >= "${dateFrom}")
   FILTER(STR(?date) <= "${dateTo}")
 }
-ORDER BY ASC(?date) ASC(?celex)
+ORDER BY ASC(?date) ASC(?celex) ASC(?language)
 LIMIT ${SPARQL_LIMIT}`.trim();
 
   const response = await fetchWithTimeout(SPARQL_URL, {
@@ -261,16 +302,24 @@ export const celexToCaseNumber = (celex: string): string => {
 // -- Fulltext --
 
 /**
- * Fetch fulltext from EUR-Lex HTML endpoint.
+ * Fetch fulltext from a validated Cellar XHTML content stream.
  * Returns stripped text or undefined on failure.
  */
-const fetchFulltext = async (
-  celex: string,
-  lang: EcjLanguage,
-  signal: AbortSignal,
-): Promise<string | undefined> => {
+type FetchFulltextOptions = {
+  contentUrl: string;
+  celex: string;
+  lang: EcjLanguage;
+  signal: AbortSignal;
+};
+
+const fetchFulltext = async ({
+  contentUrl,
+  celex,
+  lang,
+  signal,
+}: FetchFulltextOptions): Promise<string | undefined> => {
   try {
-    const response = await fetchWithTimeout(eurLexHtmlUrl(lang, celex), {
+    const response = await fetchWithTimeout(contentUrl, {
       signal,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       headers: { "User-Agent": INGESTION_USER_AGENT },
@@ -369,6 +418,8 @@ export const euEcjAdapter: SourceAdapter = {
         });
 
         const decisions: IngestionResult[] = [];
+        const completedVariants = new Set<string>();
+        let previousCelex: string | undefined;
 
         // 2. Process each SPARQL result
         for (const binding of bindings) {
@@ -377,57 +428,72 @@ export const euEcjAdapter: SourceAdapter = {
           const date = binding.date.value;
           const caseNumber = celexToCaseNumber(celex);
           const decisionType = CDM_TYPE_MAP[binding.type.value] ?? "unknown";
+          const lang = toEcjLanguage(binding.language.value);
+          const documentUrl = toCellarContentUrl(binding.manifestation.value);
+
+          if (!lang || !documentUrl) {
+            continue;
+          }
+
+          const variantKey = `${celex}:${lang}`;
+          if (completedVariants.has(variantKey)) {
+            continue;
+          }
+
+          if (
+            previousCelex &&
+            previousCelex !== celex &&
+            !abortSignal.aborted
+          ) {
+            // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between decisions; language variants within one decision remain contiguous and unslept
+            await Bun.sleep(500);
+          }
+          previousCelex = celex;
 
           const court = ecli.includes(":T:")
             ? "General Court"
             : "Court of Justice";
 
-          // 3. Fetch fulltext in each language
-          for (const lang of ECJ_LANGUAGES) {
-            // oxlint-disable-next-line no-await-in-loop -- rate-limited external call: EUR-Lex fulltext fetches are throttled (minRequestIntervalMs) per adapter, so per-language requests stay sequential rather than fanning out
-            const fulltext = await fetchFulltext(
-              celex,
-              lang,
-              AbortSignal.any([
-                abortSignal,
-                AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-              ]),
-            );
+          // 3. Fetch the language-specific XHTML stream from Cellar. The
+          // human-facing EUR-Lex HTML endpoint is WAF-protected and may return
+          // a challenge instead of document content to server-side callers.
+          // oxlint-disable-next-line no-await-in-loop -- rate-limited external calls stay sequential instead of fanning out across every language manifestation
+          const fulltext = await fetchFulltext({
+            contentUrl: documentUrl,
+            celex,
+            lang,
+            signal: AbortSignal.any([
+              abortSignal,
+              AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+            ]),
+          });
 
-            // Skip languages where text is unavailable
-            if (!fulltext) {
-              continue;
-            }
-
-            const langLower = lang.toLowerCase();
-            const raw = `${celex}|${ecli}|${date}|${langLower}|${fulltext}`;
-
-            decisions.push({
-              caseNumber,
-              ecli,
-              court,
-              country: "EU",
-              language: langLower,
-              decisionDate: date,
-              decisionType,
-              fulltext,
-              sourceUrl: eurLexSourceUrl(lang, celex),
-              documentUrl: eurLexHtmlUrl(lang, celex),
-              metadata: { celex },
-              rawHash: hashContent(raw),
-              parserVersion: PARSER_VERSION,
-              // Court-specific AST parsing is not available for EUR-Lex yet.
-              documentAst: EMPTY_AST,
-              sourceRaw: undefined,
-            });
+          if (!fulltext) {
+            continue;
           }
 
-          // Rate-limit per decision (not per language) to
-          // keep total sleep within the page timeout budget.
-          if (!abortSignal.aborted) {
-            // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between sequential per-decision fetches against EUR-Lex
-            await Bun.sleep(500);
-          }
+          const langLower = lang.toLowerCase();
+          const raw = `${celex}|${ecli}|${date}|${langLower}|${fulltext}`;
+
+          decisions.push({
+            caseNumber,
+            ecli,
+            court,
+            country: "EU",
+            language: langLower,
+            decisionDate: date,
+            decisionType,
+            fulltext,
+            sourceUrl: eurLexSourceUrl(lang, celex),
+            documentUrl,
+            metadata: { celex },
+            rawHash: hashContent(raw),
+            parserVersion: PARSER_VERSION,
+            // Court-specific AST parsing is not available for Cellar yet.
+            documentAst: EMPTY_AST,
+            sourceRaw: undefined,
+          });
+          completedVariants.add(variantKey);
         }
 
         // If the page was aborted mid-iteration, retry
