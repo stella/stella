@@ -231,6 +231,34 @@ const compactMenus = [
     // guard each element so it is never double-bound.
     const setupMegaTriggers = () => {
       for (const dd of document.querySelectorAll("[data-nav-dropdown]")) {
+        // Hover-open on fine-pointer devices; a short close delay keeps the
+        // menu from flickering on the way to its pane. Click and keyboard
+        // behaviour (summary toggle, Escape, outside click) stay unchanged
+        // for touch and assistive tech.
+        if (!dd.__hoverBound) {
+          dd.__hoverBound = true;
+          let closeTimer = null;
+          dd.addEventListener("pointerenter", () => {
+            if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+              return;
+            }
+            if (closeTimer !== null) {
+              clearTimeout(closeTimer);
+              closeTimer = null;
+            }
+            dd.setAttribute("open", "");
+          });
+          dd.addEventListener("pointerleave", () => {
+            if (!dd.open) {
+              return;
+            }
+            closeTimer = setTimeout(() => {
+              closeTimer = null;
+              dd.removeAttribute("open");
+            }, 180);
+          });
+        }
+
         const triggers = dd.querySelectorAll("[data-mega-trigger]");
         const panes = dd.querySelectorAll(".nav-mega-pane");
         if (!triggers.length || !panes.length) {
