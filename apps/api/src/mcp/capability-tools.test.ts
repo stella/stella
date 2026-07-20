@@ -360,6 +360,56 @@ describe("invoke_capability gates", () => {
     expect(error.message).toContain("stella:knowledge_write");
   });
 
+  // Scope-gate outcome for a read capability under a given granted-scope set.
+  // validateOnly stops after the scope + destructive gates, so the result is
+  // never the handler's DB execution: it is `missing_scope` when the gate
+  // rejects, and anything else (validation payload / validation_error) when the
+  // gate is satisfied.
+  const scopeGateCode = async (
+    capability: string,
+    grantedScopes: readonly string[],
+  ): Promise<string> => {
+    const result = await handleMcpToolCall({
+      args: { capability, input: {}, validateOnly: true },
+      context: createContext({ grantedScopes }),
+      toolName: "invoke_capability",
+    });
+    const payload = parseToolPayload(result);
+    if (typeof payload === "object" && payload !== null && "error" in payload) {
+      return asTestRaw<{ error: { code: string } }>(payload).error.code;
+    }
+    return "ok";
+  };
+
+  test("write implies read in-domain: matters_write satisfies a matters read", async () => {
+    // entities.get is a matters-domain read (scope stella:read) elevated by
+    // stella:matters_write. A token holding ONLY the domain write scope must
+    // satisfy the read gate.
+    expect(
+      await scopeGateCode("entities.get", ["stella:matters_write"]),
+    ).not.toBe("missing_scope");
+  });
+
+  test("write elevation is domain-scoped: billing_write cannot read matters", async () => {
+    // The elevator is entities.get's OWN domain write scope only; an unrelated
+    // domain's write grant must not satisfy the read gate.
+    expect(await scopeGateCode("entities.get", ["stella:billing_write"])).toBe(
+      "missing_scope",
+    );
+  });
+
+  test("stella:read alone reads across domains", async () => {
+    // The whole point of the fix: a read-only credential can invoke read
+    // capabilities in every domain, not just the read-only ones.
+    const ids = ["entities.get", "time-entries.list", "clauses.list"];
+    const codes = await Promise.all(
+      ids.map(async (id) => await scopeGateCode(id, ["stella:read"])),
+    );
+    for (const code of codes) {
+      expect(code).not.toBe("missing_scope");
+    }
+  });
+
   test("destructive capability without confirm -> confirmation_required", async () => {
     const result = await call("invoke_capability", {
       capability: "clauses.categories-delete",
