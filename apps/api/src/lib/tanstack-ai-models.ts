@@ -1128,10 +1128,16 @@ const tanStackOpenAIModelOptionsForRole = ({
   role,
   modelId,
 }: TanStackModelOptionsForRoleInput<"openai">): StellaOpenAITextProviderOptions => {
-  if (role !== "reasoning") {
-    return { temperature: 0 };
-  }
+  // OpenAI reasoning models reject any `temperature` other than the
+  // default (a 400, mirroring the Anthropic fixed-sampling class): a
+  // catalogued effort ladder marks such a model, so omit sampling for
+  // it and only send `temperature: 0` for models with no reasoning
+  // control (uncatalogued/custom deployments, where the deterministic
+  // default is still the safe request).
   const effort = resolveReasoningEffort({ modelId, requested: "medium" });
+  if (role !== "reasoning") {
+    return effort === null ? { temperature: 0 } : {};
+  }
   return effort === null ? {} : { reasoning: { effort } };
 };
 

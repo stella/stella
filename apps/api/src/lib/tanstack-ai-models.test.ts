@@ -677,6 +677,33 @@ describe("tanStackModelOptionsForRole", () => {
 
     expect(options).not.toHaveProperty("temperature");
   });
+
+  test("omits sampling for OpenAI reasoning models in non-reasoning roles", () => {
+    // gpt-5.x reject any temperature but the default (a 400); a
+    // catalogued effort ladder marks such a model, so no role may emit
+    // `temperature` for it.
+    const options = tanStackModelOptionsForRole({
+      role: "chat",
+      provider: "openai",
+      modelId: "gpt-5.4",
+      organizationId: null,
+    });
+
+    expect(options).not.toHaveProperty("temperature");
+  });
+
+  test("keeps deterministic sampling for uncatalogued OpenAI models", () => {
+    // Custom deployments / env overrides have no declared reasoning
+    // control; the deterministic default stays the safe request.
+    const options = tanStackModelOptionsForRole({
+      role: "chat",
+      provider: "openai",
+      modelId: "some-custom-openai-model",
+      organizationId: null,
+    });
+
+    expect(options).toEqual({ temperature: 0 });
+  });
 });
 
 const orgConfigForProvider = (
