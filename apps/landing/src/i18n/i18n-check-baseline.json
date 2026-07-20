@@ -66,6 +66,12 @@
       "pl",
       "pt-BR",
       "sk"
+    ],
+    "story.proofOpenSourceTitle": [
+      "cs",
+      "fr",
+      "pl",
+      "sk"
     ]
   }
 }
