@@ -1131,15 +1131,60 @@ export const compareScopeStrictness = ({
   return firstTier > secondTier ? "first-stricter" : "second-stricter";
 };
 
+/**
+ * The five write-only OAuth grants. A capability whose `access` is `read` must
+ * never resolve to one of these — a read-only credential (`stella:read` /
+ * `stella:admin_read`) would then be unable to invoke it. Enforced structurally
+ * by the exporter's read-scope guard AND the `read-capabilities-with-write-scope`
+ * ratchet, so the class stays impossible even if the resolver is later changed.
+ */
+export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set([
+  "stella:admin_write",
+  "stella:billing_write",
+  "stella:documents_write",
+  "stella:knowledge_write",
+  "stella:matters_write",
+]);
+
+/**
+ * The read-tier scope a domain's write/consent scope downgrades to for a READ
+ * capability. The write-tiered buckets each pair with the read grant their
+ * curated read tools already use: the workspace/billing/knowledge/document
+ * write buckets all read under `stella:read`, and the admin write bucket reads
+ * under `stella:admin_read`. A scope that is not a write-tiered bucket (already
+ * a read/consent grant such as `stella:read`, `stella:chat`, `stella:skills`,
+ * `stella:templates`, `stella:admin_read`, ...) maps to itself: read == write
+ * there, and that is correct.
+ */
+const READ_SCOPE_BY_DOMAIN_SCOPE: Record<string, string> = {
+  "stella:admin_write": "stella:admin_read",
+  "stella:billing_write": "stella:read",
+  "stella:documents_write": "stella:read",
+  "stella:knowledge_write": "stella:read",
+  "stella:matters_write": "stella:read",
+};
+
+/**
+ * The read-tier scope for a domain's (or entry override's) write/consent scope.
+ * Write-tiered buckets downgrade per `READ_SCOPE_BY_DOMAIN_SCOPE`; every other
+ * scope is its own read scope.
+ */
+export const readScopeForDomainScope = (domainScope: string): string =>
+  READ_SCOPE_BY_DOMAIN_SCOPE[domainScope] ?? domainScope;
+
 export type ScopeResolution =
-  | { status: "resolved"; scope: string }
+  | { status: "resolved"; readScope: string; writeScope: string }
   | { status: "acknowledged-unmapped" }
   | { status: "unmapped" };
 
 /**
- * Resolve the MCP OAuth scope for a domain. A domain must either map to an
- * existing scope or be explicitly acknowledged as unmappable; an unknown domain
- * fails the export so a new domain cannot ship without a scope decision.
+ * Resolve the MCP OAuth scope pair for a domain. The `scopeTable` value is the
+ * domain's WRITE/consent scope; the read scope is derived from it
+ * (`readScopeForDomainScope`), so scope resolves from (access, domain) rather
+ * than domain alone: a read capability takes `readScope`, a write capability
+ * `writeScope`. A domain must either map to an existing scope or be explicitly
+ * acknowledged as unmappable; an unknown domain fails the export so a new domain
+ * cannot ship without a scope decision.
  */
 export const resolveScope = ({
   domain,
@@ -1150,9 +1195,13 @@ export const resolveScope = ({
   scopeTable: Record<string, string>;
   unmappedDomains: ReadonlySet<string>;
 }): ScopeResolution => {
-  const scope = scopeTable[domain];
-  if (scope !== undefined) {
-    return { status: "resolved", scope };
+  const writeScope = scopeTable[domain];
+  if (writeScope !== undefined) {
+    return {
+      status: "resolved",
+      readScope: readScopeForDomainScope(writeScope),
+      writeScope,
+    };
   }
   if (unmappedDomains.has(domain)) {
     return { status: "acknowledged-unmapped" };

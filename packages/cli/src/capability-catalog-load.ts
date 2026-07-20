@@ -23,6 +23,7 @@ const catalogEntrySchema = v.looseObject({
   access: v.picklist(["read", "write"]),
   destructive: v.boolean(),
   scope: v.string(),
+  elevatedByScope: v.optional(v.string()),
   requiresFileInput: v.optional(v.boolean()),
   returnsFileResponse: v.optional(v.boolean()),
   inputSchemaTruncated: v.optional(v.boolean()),
@@ -57,6 +58,9 @@ export const parseCapabilityCatalog = (
     };
     if (entry.description !== undefined) {
       projected.description = entry.description;
+    }
+    if (entry.elevatedByScope !== undefined) {
+      projected.elevatedByScope = entry.elevatedByScope;
     }
     if (entry.requiresFileInput !== undefined) {
       projected.requiresFileInput = entry.requiresFileInput;

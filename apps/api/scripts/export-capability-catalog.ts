@@ -62,6 +62,7 @@ import {
   isAllowedActionVerb,
   isDestructiveName,
   isWellFormedCapabilityId,
+  readScopeForDomainScope,
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
@@ -72,6 +73,7 @@ import {
   serializeCatalog,
   serializeCoverageDoc,
   serializeDispatchModule,
+  WRITE_ONLY_SCOPES,
 } from "./lib/capability-catalog";
 import {
   discoverSafeHandlers,
@@ -144,12 +146,16 @@ const formatGeneratedArtifact = async (
 };
 
 /**
- * MCP OAuth scope per capability domain (the first id segment). One scope per
- * domain: writes reuse their domain's write consent bucket, read-only domains
- * map to the read/admin-read scope their curated tools already use. A domain
- * that appears in the catalog but is absent here (and from UNMAPPED_DOMAINS)
- * fails the export, so a new domain cannot ship without a scope decision. Every
- * value must be a real scope in `apps/api/src/mcp/constants.ts`.
+ * MCP OAuth WRITE/consent scope per capability domain (the first id segment).
+ * Each value is the scope a WRITE capability in that domain requires; a READ
+ * capability resolves to the scope's read tier (`readScopeForDomainScope`), so
+ * a read-only credential is never forced to hold a write grant. Writes reuse
+ * their domain's write consent bucket; read-only domains map to the
+ * read/admin-read scope their curated tools already use (read == write there).
+ * A domain that appears in the catalog but is absent here (and from
+ * UNMAPPED_DOMAINS) fails the export, so a new domain cannot ship without a
+ * scope decision. Every value must be a real scope in
+ * `apps/api/src/mcp/constants.ts`.
  */
 const DOMAIN_SCOPE: Record<string, string> = {
   "audit-logs": "stella:admin_read",
@@ -513,6 +519,14 @@ type CapabilityEntry = {
   access: "read" | "write";
   destructive: boolean;
   scope: string;
+  /**
+   * For a READ capability whose domain has a distinct write/consent scope: that
+   * write scope. It elevates the read (write implies read within the SAME
+   * domain), so the runtime scope gate is satisfied by either `scope` or this.
+   * Absent on writes and on reads whose domain read scope equals its write scope
+   * (non-tiered domains, where holding `scope` already suffices).
+   */
+  elevatedByScope?: string;
   /** REST route uses `validateWorkspaceAccessIncludingArchived` (fix-4). */
   allowsArchivedWorkspace?: true;
   /** Success payload is a file: a `Response` or raw binary bytes (fix-6). */
@@ -629,22 +643,21 @@ type EntryScopeResult =
  * Final scope for a `tool`/`covered` entry: the entry must never advertise a
  * weaker consent than the curated tool that backs it, or the generic capability
  * path would gate the same operation behind less consent than the tool. The
- * domain scope (or an ENTRY_SCOPE_OVERRIDES pin) is kept when it is at least as
- * strict as the covering tool's scope, the tool's scope is inherited when
- * stricter, and an incomparable/unknown pairing fails the export.
+ * entry's access-resolved base scope (its read-tier scope for a read capability,
+ * its write/consent scope for a write) is kept when it is at least as strict as
+ * the covering tool's scope, the tool's scope is inherited when stricter, and an
+ * incomparable/unknown pairing fails the export.
  */
 const resolveEntryScopeAgainstTool = ({
   id,
-  domainScope,
+  base,
   toolName,
   toolScope,
-  override,
 }: {
   id: string;
-  domainScope: string;
+  base: string;
   toolName: string;
   toolScope: string | undefined;
-  override: string | undefined;
 }): EntryScopeResult => {
   if (toolScope === undefined) {
     return {
@@ -652,7 +665,6 @@ const resolveEntryScopeAgainstTool = ({
       message: `capability "${id}" names covering tool "${toolName}", which is not in the static registry`,
     };
   }
-  const base = override ?? domainScope;
   const comparison = compareScopeStrictness({
     first: base,
     second: toolScope,
@@ -703,6 +715,8 @@ type BuildCatalogEntryOptions = {
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
   scope: string;
+  /** Write scope elevating a read capability (see CapabilityEntry). */
+  elevatedByScope: string | undefined;
   hasPermissions: boolean;
   permissions: unknown;
   /** Live (pre-cap) input schema; flag derivation must see the full schema. */
@@ -724,6 +738,7 @@ const buildCatalogEntry = ({
   kind,
   access,
   scope,
+  elevatedByScope,
   hasPermissions,
   permissions,
   inputSchema,
@@ -737,6 +752,7 @@ const buildCatalogEntry = ({
   access: access.access,
   destructive: access.destructive,
   scope,
+  ...(elevatedByScope === undefined ? {} : { elevatedByScope }),
   ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
     ? { allowsArchivedWorkspace: true as const }
     : {}),
@@ -778,6 +794,20 @@ const collectClassGuardErrors = ({
 }): string[] => {
   const errors: string[] = [];
   const capabilityIdSet = new Set(entries.map((entry) => entry.id));
+
+  // Read-scope guard: a READ capability must never require a write-only scope,
+  // or a read-only credential (`stella:read` / `stella:admin_read`) could not
+  // invoke it. The access-keyed resolver above already downgrades reads to their
+  // domain read tier, so this can only fire if that resolver is later broken —
+  // which is exactly when it must fail the export (companion to the
+  // `read-capabilities-with-write-scope` ratchet over the committed mirrors).
+  for (const entry of entries) {
+    if (entry.access === "read" && WRITE_ONLY_SCOPES.has(entry.scope)) {
+      errors.push(
+        `read capability "${entry.id}" resolves to write-only scope "${entry.scope}"; a read-only credential could never invoke it. A read must resolve to its domain read scope (see readScopeForDomainScope): fix DOMAIN_SCOPE / the access-keyed scope resolver, do not pin a write scope onto a read`,
+      );
+    }
+  }
 
   const fidelity = scanContextFidelity({
     entries: entrySources,
@@ -1118,7 +1148,22 @@ const buildCatalog = async (): Promise<BuildResult> => {
       );
       continue;
     }
-    let scope = override ?? scopeResolution.scope;
+    const isRead = accessResolution.access === "read";
+    // The write/consent scope for this entry: an ENTRY_SCOPE_OVERRIDES pin names
+    // a stricter consent family for a specific endpoint, else the domain's write
+    // bucket. A READ capability resolves to that scope's read tier; a WRITE to
+    // the scope itself, so scope depends on (access, domain), not domain alone.
+    const consentScope = override ?? scopeResolution.writeScope;
+    const accessBaseScope = isRead
+      ? readScopeForDomainScope(consentScope)
+      : consentScope;
+    // The base the domain resolves to WITHOUT the override, for the stale-pin
+    // check below (a pin that changes nothing is fail-open clutter).
+    const domainBaseScope = isRead
+      ? scopeResolution.readScope
+      : scopeResolution.writeScope;
+
+    let scope = accessBaseScope;
     if (
       endpoint.exposure.type === "tool" ||
       endpoint.exposure.type === "covered"
@@ -1129,10 +1174,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
           : endpoint.exposure.by;
       const entryScope = resolveEntryScopeAgainstTool({
         id,
-        domainScope: scopeResolution.scope,
+        base: accessBaseScope,
         toolName,
         toolScope: toolScopeByName.get(toolName),
-        override,
       });
       if (entryScope.status === "error") {
         errors.push(entryScope.message);
@@ -1140,14 +1184,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
       }
       scope = entryScope.scope;
       if (override !== undefined) {
-        // The pin is "used" only when it changed the outcome; a pin the
-        // domain scope would have resolved identically without is stale.
+        // The pin is "used" only when it changed the outcome; a pin the domain
+        // scope would have resolved identically without is stale.
         const withoutPin = resolveEntryScopeAgainstTool({
           id,
-          domainScope: scopeResolution.scope,
+          base: domainBaseScope,
           toolName,
           toolScope: toolScopeByName.get(toolName),
-          override: undefined,
         });
         if (
           withoutPin.status === "error" ||
@@ -1156,9 +1199,17 @@ const buildCatalog = async (): Promise<BuildResult> => {
           scopeOverrideUses.add(id);
         }
       }
-    } else if (override !== undefined && override !== scopeResolution.scope) {
+    } else if (override !== undefined && accessBaseScope !== domainBaseScope) {
       scopeOverrideUses.add(id);
     }
+
+    // Write-implies-read, domain-scoped: a READ capability whose resolved scope
+    // is weaker than its domain write/consent scope carries that write scope as
+    // an elevator, so holding the domain's write grant also satisfies the read
+    // gate (see capability-tools.ts). Absent when the read scope already equals
+    // the consent scope (non-tiered domains).
+    const elevatedByScope =
+      isRead && scope !== consentScope ? consentScope : undefined;
 
     const inputSchema = buildInputSchema(endpoint.config);
     const capped = capInputSchema(inputSchema);
@@ -1179,6 +1230,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         kind: kindResolution.kind,
         access: accessResolution,
         scope,
+        elevatedByScope,
         hasPermissions,
         permissions,
         inputSchema,
