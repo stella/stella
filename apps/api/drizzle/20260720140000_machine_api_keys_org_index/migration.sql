@@ -1,6 +1,3 @@
-SET lock_timeout = '1s';--> statement-breakpoint
-SET statement_timeout = '5s';--> statement-breakpoint
-
 -- Machine-key lifecycle (list/rotate/revoke) is organization-scoped, not
 -- caller-scoped, so every one of those reads filters on the owning organization
 -- id. That id lives inside the plugin's `metadata` JSON column, and filtering an
@@ -16,7 +13,23 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- `(metadata::jsonb ->> 'organizationId')` is immutable, so it is indexable.
 -- Rows written by this codebase always carry valid JSON metadata; the partial
 -- predicate keeps NULL-metadata rows out of the index rather than casting them.
-CREATE INDEX "apikey_metadata_organization_id_idx" ON "apikey" (((metadata::jsonb ->> 'organizationId'))) WHERE metadata IS NOT NULL;--> statement-breakpoint
-
+--
+-- Drizzle wraps pending migrations in one transaction, while PostgreSQL requires
+-- CREATE INDEX CONCURRENTLY to run outside a transaction block. Split the
+-- migrator transaction, build both indexes without write-blocking locks, then
+-- reopen a transaction for Drizzle's migration row (same shape as
+-- 20260605143000_workflow_pending_fields_index). A plain CREATE INDEX holds a
+-- write lock on `apikey` for its duration, which would stall every machine
+-- credential verification while it ran.
+--
+-- The lock/statement timeouts the other migrations set are deliberately omitted:
+-- a concurrent build is expected to outlive a 5s statement_timeout, and it takes
+-- no lock those timeouts would protect against.
+COMMIT;
+--> statement-breakpoint
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "apikey_metadata_organization_id_idx" ON "apikey" (((metadata::jsonb ->> 'organizationId'))) WHERE metadata IS NOT NULL;
+--> statement-breakpoint
 -- Keyset pagination for the organization-scoped list orders by (created_at, id).
-CREATE INDEX "apikey_org_keyset_idx" ON "apikey" (((metadata::jsonb ->> 'organizationId')), "created_at" DESC, "id" DESC) WHERE metadata IS NOT NULL;
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "apikey_org_keyset_idx" ON "apikey" (((metadata::jsonb ->> 'organizationId')), "created_at" DESC, "id" DESC) WHERE metadata IS NOT NULL;
+--> statement-breakpoint
+BEGIN;

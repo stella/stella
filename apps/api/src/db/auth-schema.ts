@@ -317,6 +317,22 @@ export const apikey = pgTable(
     uniqueIndex("apikey_key_uidx").on(table.key),
     index("apikey_reference_id_idx").on(table.referenceId),
     index("apikey_config_id_idx").on(table.configId),
+    // Declared here so the generated schema matches the migration: machine-key
+    // lifecycle reads filter on the owning organization, which lives inside
+    // `metadata`, and an unindexed JSON filter is what `/conventions-db`
+    // forbids. Both are partial on `metadata IS NOT NULL` and built
+    // CONCURRENTLY by the migration, since a plain build would lock out every
+    // credential verification while it ran.
+    index("apikey_metadata_organization_id_idx")
+      .on(sql`((${table.metadata}::jsonb ->> 'organizationId'))`)
+      .where(sql`${table.metadata} IS NOT NULL`),
+    index("apikey_org_keyset_idx")
+      .on(
+        sql`((${table.metadata}::jsonb ->> 'organizationId'))`,
+        sql`${table.createdAt} DESC`,
+        sql`${table.id} DESC`,
+      )
+      .where(sql`${table.metadata} IS NOT NULL`),
     ...denyStellaAccessPolicies(),
   ],
 );
