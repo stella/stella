@@ -108,15 +108,19 @@ export const ContactCustomFieldsEditor = ({
         {t("contacts.customFields.title")}
       </h2>
       <div className="space-y-3">
-        {customFields.map((field) => (
-          <CustomFieldRow
-            disabled={isPending}
-            field={field}
-            key={field.id}
-            onRemove={() => removeCustomField(field.id)}
-            onSave={async (patch) => await updateCustomField(field.id, patch)}
-          />
-        ))}
+        {customFields.map((field) => {
+          const handleSave = async (patch: ContactCustomField) =>
+            await updateCustomField(field.id, patch);
+          return (
+            <CustomFieldRow
+              disabled={isPending}
+              field={field}
+              key={field.id}
+              onRemove={() => removeCustomField(field.id)}
+              onSave={handleSave}
+            />
+          );
+        })}
         {customFields.length === 0 && (
           <p className="text-muted-foreground text-sm">
             {t("contacts.customFields.empty")}

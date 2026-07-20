@@ -12,14 +12,13 @@ import { captureError } from "@/api/lib/analytics/capture";
  * identifiers, so it stays a safe correlation tag in telemetry.
  */
 export const detached = (
-  // A thenable to attach a catch to, or a synchronous/absent (void/undefined)
-  // value we simply ignore — parity with the `void` operator this helper
-  // replaces. `Promise.resolve` below normalises either shape.
-  // eslint-disable-next-line typescript/no-invalid-void-type
-  promise: PromiseLike<unknown> | void,
+  // Accept any fire-and-forget operand: a thenable to attach a catch to, or a
+  // synchronous/absent value we simply ignore. This mirrors the `void` operator
+  // this helper replaces; `Promise.resolve` below normalises whatever comes in.
+  operation: unknown,
   context: string,
 ): void => {
-  Promise.resolve(promise).catch((error: unknown) => {
+  Promise.resolve(operation).catch((error: unknown) => {
     captureError(error, { detached: context });
   });
 };
