@@ -125,8 +125,11 @@ export const authClient = createAuthClient({
   baseURL: env.VITE_API_URL,
   plugins: authClientPlugins,
   fetchOptions: {
-    customFetchImpl: (input, init) =>
-      fetchWithTimeout(input, {
+    // `async`/`await` look redundant around a call that already returns a
+    // promise, but `promise-function-async` is type-aware and rejects the
+    // bare arrow form here.
+    customFetchImpl: async (input, init) =>
+      await fetchWithTimeout(input, {
         ...init,
         signal: init?.signal ?? undefined,
         timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
