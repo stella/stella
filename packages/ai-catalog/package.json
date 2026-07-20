@@ -21,6 +21,9 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/ai-catalog",
     "format": "oxfmt ."
   },
+  "dependencies": {
+    "valibot": "catalog:"
+  },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@tanstack/ai-anthropic": "catalog:",

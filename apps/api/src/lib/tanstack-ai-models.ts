@@ -17,6 +17,7 @@ import {
   type OpenRouterTextModelOptions,
 } from "@tanstack/ai-openrouter";
 import { Result, panic } from "better-result";
+import * as v from "valibot";
 
 import {
   AI_PROVIDERS,
@@ -103,9 +104,14 @@ type StellaAnthropicTextProviderOptions = Omit<
   thinking?: StellaAnthropicThinking | undefined;
 };
 
-declare const resolvedGoogleThinkingLevelBrand: unique symbol;
+const GOOGLE_THINKING_LEVELS = ["MINIMAL", "LOW", "MEDIUM", "HIGH"] as const;
 
-type GoogleThinkingLevel = "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
+type GoogleThinkingLevel = (typeof GOOGLE_THINKING_LEVELS)[number];
+
+const resolvedGoogleThinkingLevelSchema = v.pipe(
+  v.picklist(GOOGLE_THINKING_LEVELS),
+  v.brand("ResolvedGoogleThinkingLevel"),
+);
 
 /**
  * A Gemini thinking level derived from a capability-checked reasoning
@@ -113,9 +119,9 @@ type GoogleThinkingLevel = "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
  * literal level the model may reject cannot be written into
  * `thinkingConfig` directly.
  */
-type ResolvedGoogleThinkingLevel = GoogleThinkingLevel & {
-  readonly [resolvedGoogleThinkingLevelBrand]: true;
-};
+type ResolvedGoogleThinkingLevel = v.InferOutput<
+  typeof resolvedGoogleThinkingLevelSchema
+>;
 
 type StellaGeminiThinkingConfig = Omit<
   NonNullable<GeminiTextProviderOptions["thinkingConfig"]>,
@@ -1040,29 +1046,30 @@ type TanStackModelOptionsForRoleInput<TProvider extends TanStackTextProvider> =
     organizationId: SafeId<"organization"> | null;
   };
 
-// SAFETY: sole constructor of the ResolvedGoogleThinkingLevel brand;
-// the input effort is already capability-checked, and every branch
-// maps into the Gemini thinking-level vocabulary.
+const GOOGLE_THINKING_LEVEL_BY_EFFORT: Record<
+  ReasoningEffort,
+  GoogleThinkingLevel
+> = {
+  none: "MINIMAL",
+  minimal: "MINIMAL",
+  low: "LOW",
+  medium: "MEDIUM",
+  high: "HIGH",
+  xhigh: "HIGH",
+  max: "HIGH",
+};
+
+// Sole constructor of the ResolvedGoogleThinkingLevel brand; the
+// input effort is already capability-checked, the mapping is
+// exhaustive over the effort ladder, and the parse revalidates it.
 const googleThinkingLevelForEffort = (
   effort: ResolvedReasoningEffort,
 ): ResolvedGoogleThinkingLevel => {
-  const widened: ReasoningEffort = effort;
-  const level: GoogleThinkingLevel = (() => {
-    switch (widened) {
-      case "none":
-      case "minimal":
-        return "MINIMAL";
-      case "low":
-        return "LOW";
-      case "medium":
-        return "MEDIUM";
-      case "high":
-      case "xhigh":
-      case "max":
-        return "HIGH";
-    }
-  })();
-  return level as ResolvedGoogleThinkingLevel;
+  const requested: ReasoningEffort = effort;
+  return v.parse(
+    resolvedGoogleThinkingLevelSchema,
+    GOOGLE_THINKING_LEVEL_BY_EFFORT[requested],
+  );
 };
 
 const GOOGLE_REASONING_EFFORT_BY_ROLE = {

@@ -1,3 +1,7 @@
+import type { AnthropicModelInputModalitiesByName } from "@tanstack/ai-anthropic";
+import type { BedrockModelInputModalitiesByName } from "@tanstack/ai-bedrock";
+import type { GeminiModelInputModalitiesByName } from "@tanstack/ai-gemini";
+import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
 /**
  * Canonical AI provider and model catalog.
  *
@@ -9,7 +13,9 @@
  *
  * Pure data: no provider SDKs, no env access, no side effects. This is
  * deliberate so scripts (the nightly upstream-validation check) and
- * both apps can import it cheaply. Keep it that way.
+ * both apps can import it cheaply. Keep it that way. The only runtime
+ * dependency is valibot, used solely to construct branded types the
+ * same way the rest of the repo does.
  *
  * Model IDs go stale when providers rename or retire models. The
  * nightly `model-catalog-upstream` check
@@ -17,10 +23,7 @@
  * ID here against live provider/aggregator listings so a retired model
  * fails CI instead of 400-ing a user at runtime.
  */
-import type { AnthropicModelInputModalitiesByName } from "@tanstack/ai-anthropic";
-import type { BedrockModelInputModalitiesByName } from "@tanstack/ai-bedrock";
-import type { GeminiModelInputModalitiesByName } from "@tanstack/ai-gemini";
-import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
+import * as v from "valibot";
 
 /**
  * Logical model roles. Call sites declare *what* they need, not
@@ -404,7 +407,10 @@ export const REASONING_EFFORTS = [
 
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
-declare const resolvedReasoningEffortBrand: unique symbol;
+const resolvedReasoningEffortSchema = v.pipe(
+  v.picklist(REASONING_EFFORTS),
+  v.brand("ResolvedReasoningEffort"),
+);
 
 /**
  * A reasoning effort proven to be accepted by the model it targets.
@@ -413,9 +419,9 @@ declare const resolvedReasoningEffortBrand: unique symbol;
  * (e.g. `"none"` to a model whose reasoning cannot be disabled) —
  * that mistake now fails typecheck instead of 502-ing at runtime.
  */
-export type ResolvedReasoningEffort = ReasoningEffort & {
-  readonly [resolvedReasoningEffortBrand]: true;
-};
+export type ResolvedReasoningEffort = v.InferOutput<
+  typeof resolvedReasoningEffortSchema
+>;
 
 type OfferedBYOKModelId = BYOKModelIdByProvider[BYOKProvider];
 
@@ -505,12 +511,12 @@ export const getModelReasoningEfforts = (
 ): readonly ReasoningEffort[] | null =>
   MODEL_REASONING_EFFORTS_BY_ID[modelId] ?? null;
 
-// SAFETY: sole constructor of the ResolvedReasoningEffort brand; every
-// call site below has already established membership in the model's
-// declared effort set.
+// Sole constructor of the ResolvedReasoningEffort brand; every call
+// site below has already established membership in the model's
+// declared effort set, and the parse revalidates it at runtime.
 const asResolvedReasoningEffort = (
   effort: ReasoningEffort,
-): ResolvedReasoningEffort => effort as ResolvedReasoningEffort;
+): ResolvedReasoningEffort => v.parse(resolvedReasoningEffortSchema, effort);
 
 export type ResolveReasoningEffortOptions = {
   modelId: string;
