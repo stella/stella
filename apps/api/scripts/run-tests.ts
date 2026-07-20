@@ -7,8 +7,52 @@ const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
 const PROPERTY_TEST_MARKER = "fc.assert";
-const REGULAR_TEST_BATCH_SIZE = 100;
-const MODULE_MOCK_TEST_BATCH_SIZE = 20;
+const REGULAR_TEST_BATCH_SIZE = 50;
+// Isolated (--isolate) runs accumulate a per-file module registry in one
+// process; on the Linux runners 20 mock files measured 6.3 GB. Keep these
+// batches small.
+const MODULE_MOCK_TEST_BATCH_SIZE = 4;
+// The test database is embedded PGlite. Measured behavior (per-file solo
+// sweep, 2026-07-20): ANY process that connects pays a ~2.2 GB peak during
+// the per-suite drizzle schema push, and each further DB file in the same
+// process adds ~0.2-0.3 GB (WASM memory never shrinks). DB-touching tests
+// therefore run in small dedicated batches so a process stays near the
+// floor; pure-logic tests keep the larger batch size (they stay in the
+// hundreds of MB). Follow-up that would collapse the floor itself: build
+// the schema once and boot each process from a PGlite dumpDataDir
+// snapshot instead of re-pushing.
+//
+// A test connects iff it VALUE-imports one of the connection entry modules
+// (type-only imports are erased and connect nothing; handlers receive their
+// db via context, and module-level singletons are lazy per the side-effect
+// conventions). The path fallback catches integration suites that reach the
+// db through their own local setup.
+const DB_TEST_BATCH_SIZE = 4;
+const DB_TEST_MARKERS = [
+  "tests/security/rls-helpers",
+  "tests/security/rls-fixture",
+  "tests/security/test-utils",
+  "tests/pglite-schema",
+  "@/api/db/root",
+  "@/api/db/scoped",
+  "pglite",
+] as const;
+const DB_TEST_PATH_RE = /\.(?:integration|db)\.test\.tsx?$/u;
+// Spans multi-line type imports (formatters wrap long ones), up to and
+// including the module specifier so it cannot leak into marker matching.
+const TYPE_ONLY_IMPORT_RE =
+  /^\s*import\s+type\b[\s\S]*?from\s+["'][^"']+["']/gmu;
+// Hard per-batch peak-RSS budget. A batch that outgrows it fails the run
+// even when every test passes, so memory growth surfaces here as a readable
+// error instead of an opaque exit-137 kill when the hosted runner's memory
+// runs out. Raising it is a reviewed product decision (like the typecheck
+// and network baselines), not a mechanical way to make CI green.
+// Calibrated from the Linux runners' first measured full run (worst batch
+// 3670 MB; Linux RSS accounting runs hotter than macOS): high enough to
+// absorb near-threshold variance, low enough to leave ~3 GB for a
+// concurrent turbo task on the 7 GB runner.
+const MAX_BATCH_PEAK_RSS_MB = 4096;
+const BYTES_PER_MB = 1024 * 1024;
 
 const apiRoot = path.resolve(import.meta.dir, "..");
 
@@ -59,7 +103,16 @@ const classifiedTests = await Promise.all(
   })),
 );
 
+const isDbTest = (testPath: string, source: string): boolean => {
+  if (DB_TEST_PATH_RE.test(testPath)) {
+    return true;
+  }
+  const valueImportsOnly = source.replace(TYPE_ONLY_IMPORT_RE, "");
+  return DB_TEST_MARKERS.some((marker) => valueImportsOnly.includes(marker));
+};
+
 const regularTests: string[] = [];
+const dbTests: string[] = [];
 const moduleMockTests: string[] = [];
 for (const { source, testPath } of classifiedTests) {
   if (propertyOnly && !source.includes(PROPERTY_TEST_MARKER)) {
@@ -68,6 +121,11 @@ for (const { source, testPath } of classifiedTests) {
 
   if (installsModuleMock(source)) {
     moduleMockTests.push(testPath);
+    continue;
+  }
+
+  if (isDbTest(testPath, source)) {
+    dbTests.push(testPath);
     continue;
   }
 
@@ -104,7 +162,34 @@ const runTests = async (testFiles: string[], isolate: boolean) => {
     stdout: "inherit",
     stderr: "inherit",
   });
-  return await child.exited;
+  const exitCode = await child.exited;
+
+  const usage = child.resourceUsage();
+  if (usage) {
+    // getrusage semantics pass straight through Bun: ru_maxrss is bytes on
+    // macOS but kibibytes on Linux. Normalize before comparing, or the
+    // budget can never trip on the hosted runners.
+    const peakMb =
+      process.platform === "darwin"
+        ? Math.round(usage.maxRSS / BYTES_PER_MB)
+        : Math.round(usage.maxRSS / 1024);
+    console.log(
+      `${executionMode} batch (${testFiles.length} files) peak RSS: ` +
+        `${peakMb} MB (budget ${MAX_BATCH_PEAK_RSS_MB} MB)`,
+    );
+    if (exitCode === 0 && peakMb > MAX_BATCH_PEAK_RSS_MB) {
+      console.error(
+        `Test batch exceeded the ${MAX_BATCH_PEAK_RSS_MB} MB peak-RSS ` +
+          "budget. Find what grew (new fixtures held across files, " +
+          "unclosed pools/servers, oversized in-memory corpora) or split " +
+          "the offending files; raising the budget requires justification " +
+          "in the PR description.",
+      );
+      return 1;
+    }
+  }
+
+  return exitCode;
 };
 
 type RunTestBatchesOptions = {
@@ -148,6 +233,16 @@ const regularExitCode = await runTestBatches({
 });
 if (regularExitCode !== 0) {
   process.exit(regularExitCode);
+}
+
+const dbExitCode = await runTestBatches({
+  batchSize: DB_TEST_BATCH_SIZE,
+  batchStart: 0,
+  isolate: false,
+  testFiles: dbTests,
+});
+if (dbExitCode !== 0) {
+  process.exit(dbExitCode);
 }
 
 process.exit(
