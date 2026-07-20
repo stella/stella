@@ -38,6 +38,7 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
@@ -815,7 +816,22 @@ export const createSafeSessionHandler = <
 ): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
   createSafeDirectHandler(config, handler);
 
-export type TokenHandlerConfig = InputSchema & {
+/**
+ * Config for self-authorizing (token) routes. The `body`, `query`, and
+ * `params` slots only accept the branded permissive schemas from
+ * `permissive-route-schema.ts`: Elysia runs route-schema validation before
+ * the handler's own credential check, so a strict schema here would answer
+ * unauthenticated probes with 422s that leak endpoint existence and
+ * parameter shape. Handlers declare their strict schema separately and
+ * apply it after authorization via `validatePostAuth`.
+ */
+export type TokenHandlerConfig = Omit<
+  InputSchema,
+  "body" | "query" | "params"
+> & {
+  body?: AnyPermissiveRouteSchema;
+  query?: AnyPermissiveRouteSchema;
+  params?: AnyPermissiveRouteSchema;
   mcp: McpExposure;
 };
 

@@ -12,85 +12,81 @@ import {
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
-import { authorizeFolioCollabSession } from "@/api/lib/folio-collab-sessions";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import {
+  permissiveBodySchema,
+  permissiveRouteSchema,
+  validatePostAuth,
+} from "@/api/lib/permissive-route-schema";
 import { getS3 } from "@/api/lib/s3";
 import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
+import { authorizeFolioCollabCredentials } from "./session-credentials";
+
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
-  params: t.Object({
-    sessionId: tSafeId("folioCollabSession"),
-  }),
-  body: t.Object({
-    file: t.File({
-      maxSize: FILE_SIZE_LIMITS.document,
-    }),
-    token: t.String({ minLength: 64, maxLength: 64 }),
+  params: permissiveRouteSchema({ keys: ["sessionId"] }),
+  // The multipart file part is undeclared here on purpose: the permissive
+  // schema passes it through untouched and the strict schema below checks
+  // it after authorization.
+  body: permissiveBodySchema({
+    keys: ["token"],
+    passthroughKeys: ["file"],
   }),
 } satisfies TokenHandlerConfig;
 
+/** Validated after authorization; see `permissive-route-schema.ts`. */
+const strictBodySchema = t.Object({
+  file: t.File({
+    maxSize: FILE_SIZE_LIMITS.document,
+  }),
+});
+
 const checkpointFolioCollabSession = createSafeTokenHandler(
   config,
-  // eslint-disable-next-line require-yield -- token auth + scopedDb returns plain Promises; nothing to Result.await
-  async function* ({
-    body: { file, token },
-    params: { sessionId },
-    request,
-    server,
-  }) {
-    if (file.type !== DOCX_MIME_TYPE) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            "Collaborative checkpoints currently support only DOCX files.",
-        }),
-      );
-    }
-
-    const authorizedSession = await authorizeFolioCollabSession({
+  async function* ({ body, params, request, server }) {
+    const { session: authorizedSession } = yield* Result.await(
+      authorizeFolioCollabCredentials({
+        sessionId: params.sessionId,
+        token: body?.token,
+      }),
+    );
+    const {
+      canEdit,
+      fileName,
+      organizationId,
+      scopedDb,
       sessionId,
-      token,
-    });
-
-    if (authorizedSession.status === "missing") {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Collaborative edit session not found.",
-        }),
-      );
-    }
-    if (authorizedSession.status === "token-expired") {
-      return Result.err(
-        new HandlerError({
-          status: 401,
-          message: "Collaborative edit token expired.",
-        }),
-      );
-    }
-    if (authorizedSession.status === "permission-revoked") {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Collaborative edit permission revoked.",
-        }),
-      );
-    }
-
-    const { canEdit, fileName, organizationId, scopedDb, userId, workspaceId } =
-      authorizedSession.value;
+      userId,
+      workspaceId,
+    } = authorizedSession;
 
     if (!canEdit) {
       return Result.err(
         new HandlerError({
           status: 403,
           message: "Collaborative edit is read-only.",
+        }),
+      );
+    }
+
+    const validatedBody = validatePostAuth(strictBodySchema, body);
+    if (!validatedBody.ok) {
+      return Result.err(
+        new HandlerError({ status: 422, message: validatedBody.message }),
+      );
+    }
+    const { file } = validatedBody.value;
+
+    if (file.type !== DOCX_MIME_TYPE) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            "Collaborative checkpoints currently support only DOCX files.",
         }),
       );
     }

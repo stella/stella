@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { folioCollabSessions } from "@/api/db/schema";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
@@ -10,67 +9,43 @@ import {
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  authorizeFolioCollabSession,
   collectFolioCollabStoredSessionFiles,
   deleteFolioCollabStoredSessionFiles,
 } from "@/api/lib/folio-collab-sessions";
 import type { FolioCollabStoredSessionFile } from "@/api/lib/folio-collab-sessions";
+import {
+  permissiveBodySchema,
+  permissiveRouteSchema,
+} from "@/api/lib/permissive-route-schema";
 import { broadcast } from "@/api/lib/sse";
+
+import { authorizeFolioCollabCredentials } from "./session-credentials";
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
-  params: t.Object({
-    sessionId: tSafeId("folioCollabSession"),
-  }),
-  body: t.Object({
-    token: t.String({ minLength: 64, maxLength: 64 }),
-  }),
+  params: permissiveRouteSchema({ keys: ["sessionId"] }),
+  body: permissiveBodySchema({ keys: ["token"] }),
 } satisfies TokenHandlerConfig;
 
 const cancelFolioCollabSession = createSafeTokenHandler(
   config,
-  // eslint-disable-next-line require-yield -- token auth + scopedDb returns plain Promises; nothing to Result.await
-  async function* ({
-    body: { token },
-    params: { sessionId },
-    request,
-    server,
-  }) {
-    const authorizedSession = await authorizeFolioCollabSession({
+  async function* ({ body, params, request, server }) {
+    const { session: authorizedSession } = yield* Result.await(
+      authorizeFolioCollabCredentials({
+        sessionId: params.sessionId,
+        token: body?.token,
+      }),
+    );
+    const {
+      canEdit,
+      organizationId,
+      scopedDb,
       sessionId,
-      token,
-    });
-
-    if (authorizedSession.status === "missing") {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Collaborative edit session not found.",
-        }),
-      );
-    }
-    if (authorizedSession.status === "token-expired") {
-      return Result.err(
-        new HandlerError({
-          status: 401,
-          message: "Collaborative edit token expired.",
-        }),
-      );
-    }
-    if (authorizedSession.status === "permission-revoked") {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Collaborative edit permission revoked.",
-        }),
-      );
-    }
-
-    const { canEdit, organizationId, scopedDb, userId, workspaceId } =
-      authorizedSession.value;
+      userId,
+      workspaceId,
+    } = authorizedSession;
 
     if (!canEdit) {
       return Result.err(
