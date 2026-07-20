@@ -58586,6 +58586,350 @@ export const generatedRouteMap: RouteNode = {
         },
       },
     },
+    uploads: {
+      kind: "route",
+      children: {
+        create: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["uploads", "create"],
+            capabilityId: "uploads.create",
+            access: "read",
+            flags: [
+              {
+                flag: "--workspace",
+                prop: "workspace",
+                kind: "string",
+                required: true,
+                repeatable: false,
+                part: "params",
+                partPath: "workspaceId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                body: {
+                  anyOf: [
+                    {
+                      type: "object",
+                      required: [
+                        "purpose",
+                        "propertyId",
+                        "name",
+                        "mimeType",
+                        "size",
+                        "sha256Hex",
+                      ],
+                      properties: {
+                        purpose: {
+                          const: "entity_create",
+                          type: "string",
+                        },
+                        propertyId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        parentId: {
+                          nullable: true,
+                          anyOf: [
+                            {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        mimeType: {
+                          minLength: 1,
+                          maxLength: 255,
+                          type: "string",
+                        },
+                        size: {
+                          minimum: 1,
+                          maximum: 52428800,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 52428800,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        sha256Hex: {
+                          type: "RegExp",
+                          source: "^[0-9a-f]{64}$",
+                          flags: "u",
+                        },
+                      },
+                    },
+                    {
+                      type: "object",
+                      required: [
+                        "purpose",
+                        "entityId",
+                        "name",
+                        "mimeType",
+                        "size",
+                        "sha256Hex",
+                      ],
+                      properties: {
+                        purpose: {
+                          const: "entity_version",
+                          type: "string",
+                        },
+                        entityId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        mimeType: {
+                          minLength: 1,
+                          maxLength: 255,
+                          type: "string",
+                        },
+                        size: {
+                          minimum: 1,
+                          maximum: 52428800,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 52428800,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        sha256Hex: {
+                          type: "RegExp",
+                          source: "^[0-9a-f]{64}$",
+                          flags: "u",
+                        },
+                      },
+                    },
+                    {
+                      type: "object",
+                      required: [
+                        "purpose",
+                        "scope",
+                        "name",
+                        "mimeType",
+                        "size",
+                        "sha256Hex",
+                      ],
+                      properties: {
+                        purpose: {
+                          const: "agent_skill",
+                          type: "string",
+                        },
+                        scope: {
+                          default: "team",
+                          type: "string",
+                          enum: ["team", "private"],
+                        },
+                        name: {
+                          minLength: 1,
+                          maxLength: 256,
+                          type: "string",
+                        },
+                        mimeType: {
+                          minLength: 1,
+                          maxLength: 255,
+                          type: "string",
+                        },
+                        size: {
+                          minimum: 1,
+                          maximum: 2097152,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 2097152,
+                              type: "integer",
+                            },
+                          ],
+                        },
+                        sha256Hex: {
+                          type: "RegExp",
+                          source: "^[0-9a-f]{64}$",
+                          flags: "u",
+                        },
+                      },
+                    },
+                  ],
+                },
+                params: {
+                  type: "object",
+                  properties: {
+                    workspaceId: {
+                      type: "string",
+                    },
+                  },
+                  required: ["workspaceId"],
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        delete: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["uploads", "delete"],
+            capabilityId: "uploads.delete",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--upload-id",
+                prop: "uploadId",
+                required: true,
+                part: "params",
+                partPath: "uploadId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: true,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["workspaceId", "uploadId"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                    uploadId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        update: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["uploads", "update"],
+            capabilityId: "uploads.update",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--upload-id",
+                prop: "uploadId",
+                required: true,
+                part: "params",
+                partPath: "uploadId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["workspaceId", "uploadId"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                    uploadId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+      },
+    },
     "view-templates": {
       kind: "route",
       children: {

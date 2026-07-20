@@ -779,6 +779,15 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.update": {
     load: async () => await import("@/api/handlers/time-entries/update"),
   },
+  "uploads.create": {
+    load: async () => await import("@/api/handlers/uploads/create"),
+  },
+  "uploads.delete": {
+    load: async () => await import("@/api/handlers/uploads/delete"),
+  },
+  "uploads.update": {
+    load: async () => await import("@/api/handlers/uploads/update"),
+  },
   "usage.get-entitlement": {
     load: async () => await import("@/api/handlers/usage/get-entitlement"),
   },
