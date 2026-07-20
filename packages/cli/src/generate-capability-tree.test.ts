@@ -68,8 +68,10 @@ describe("capabilityCommandPath", () => {
       "upload",
     ]);
     expect(
-      capabilityCommandPath("entities.read-summaries.readEntitySummariesCount"),
-    ).toEqual(["entities", "read-summaries", "read-entity-summaries-count"]);
+      capabilityCommandPath(
+        "entities.legacy-summaries.readLegacySummariesCount",
+      ),
+    ).toEqual(["entities", "legacy-summaries", "read-legacy-summaries-count"]);
   });
 });
 

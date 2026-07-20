@@ -124,7 +124,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.read-by-id` | read | stella:matters_write | — | curated tool `read_document` |
 | `entities.read-filesystem-tree` | read | stella:matters_write | — | covered by `list_documents` |
 | `entities.read-summaries` | read | stella:matters_write | — | covered by `list_documents` |
-| `entities.read-summaries.readEntitySummariesCount` | read | stella:matters_write | — | covered by `list_documents` |
+| `entities.read-summaries-count` | read | stella:matters_write | — | covered by `list_documents` |
 | `entities.read-version-by-id` | read | stella:matters_write | — | covered by `read_document` |
 | `entities.read-versions` | read | stella:matters_write | — | covered by `read_document` |
 | `entities.read-window` | read | stella:matters_write | — | covered by `read_content_across_matters` |
@@ -412,12 +412,12 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `workspaces.anonymization-allowlist.createWorkspaceAnonymizationAllowlistEntry` | write | stella:matters_write | — | generic invoke → `stella workspaces anonymization-allowlist create-workspace-anonymization-allowlist-entry` |
-| `workspaces.anonymization-allowlist.deleteWorkspaceAnonymizationAllowlistEntry` | write, destructive | stella:matters_write | — | generic invoke → `stella workspaces anonymization-allowlist delete-workspace-anonymization-allowlist-entry` |
-| `workspaces.anonymization-allowlist.readWorkspaceAnonymizationAllowlist` | read | stella:matters_write | — | generic invoke → `stella workspaces anonymization-allowlist read-workspace-anonymization-allowlist` |
-| `workspaces.anonymization-terms.createWorkspaceAnonymizationTerms` | write | stella:matters_write | — | generic invoke → `stella workspaces anonymization-terms create-workspace-anonymization-terms` |
-| `workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm` | write, destructive | stella:matters_write | — | generic invoke → `stella workspaces anonymization-terms delete-workspace-anonymization-term` |
-| `workspaces.anonymization-terms.readWorkspaceAnonymizationTerms` | read | stella:matters_write | — | generic invoke → `stella workspaces anonymization-terms read-workspace-anonymization-terms` |
+| `workspaces.anonymization-allowlist.create` | write | stella:matters_write | — | generic invoke → `stella workspaces anonymization-allowlist create` |
+| `workspaces.anonymization-allowlist.delete` | write, destructive | stella:matters_write | — | generic invoke → `stella workspaces anonymization-allowlist delete` |
+| `workspaces.anonymization-allowlist.read` | read | stella:matters_write | — | generic invoke → `stella workspaces anonymization-allowlist read` |
+| `workspaces.anonymization-terms.create` | write | stella:matters_write | — | generic invoke → `stella workspaces anonymization-terms create` |
+| `workspaces.anonymization-terms.delete` | write, destructive | stella:matters_write | — | generic invoke → `stella workspaces anonymization-terms delete` |
+| `workspaces.anonymization-terms.read` | read | stella:matters_write | — | generic invoke → `stella workspaces anonymization-terms read` |
 | `workspaces.archive` | write | stella:matters_write | — | covered by `save_matter` |
 | `workspaces.cell-retry` | write | stella:matters_write | — | generic invoke → `stella workspaces cell-retry` |
 | `workspaces.create` | write | stella:matters_write | — | curated tool `save_matter` |

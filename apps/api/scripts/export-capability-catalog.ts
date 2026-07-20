@@ -49,6 +49,7 @@ import {
   type AccessClassification,
   type CapabilityDispatchRecord,
   capInputSchema,
+  CAPABILITY_ID_SEGMENT_PATTERN,
   type CapabilityInputSchema,
   compareScopeStrictness,
   deriveCapabilityId,
@@ -57,6 +58,7 @@ import {
   findInlineCapabilityMismatches,
   findStaleAccessOverrides,
   isDestructiveName,
+  isWellFormedCapabilityId,
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
@@ -946,6 +948,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
       file: endpoint.file,
       exportName: endpoint.exportName,
     });
+    if (!isWellFormedCapabilityId(id)) {
+      // Capability ids are public (CLI command paths, `invoke_capability`
+      // arguments), so an id segment must never be an internal identifier. The
+      // only way to produce a non-kebab segment is a NAMED export, whose TS
+      // identifier gets suffixed onto the path-derived id.
+      errors.push(
+        `malformed capability id "${id}" from ${endpoint.file}: every \`.\`-separated segment must be lowercase kebab-case (${CAPABILITY_ID_SEGMENT_PATTERN.source}). Capability ids are public, so give this endpoint its own kebab-case-named file and export it as the file's DEFAULT export instead of a named one`,
+      );
+      continue;
+    }
     const existing = idToFile.get(id);
     if (existing !== undefined) {
       errors.push(

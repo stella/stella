@@ -109,3 +109,35 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
     expect(parseCapabilityCatalog([])).toEqual([]);
   });
 });
+
+// The committed snapshot's ids are PUBLIC: they become CLI command paths and are
+// passed verbatim to MCP's `invoke_capability`. The api-side exporter enforces
+// the shape at derivation time; this asserts it on the artifact the CLI actually
+// ships, so a hand-edited or stale snapshot cannot reintroduce an id whose final
+// segment is an internal handler identifier (e.g. `deleteWorkspaceFooEntry`).
+const CAPABILITY_ID_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+
+describe("committed capability-catalog snapshot", () => {
+  test("every id is dotted lowercase kebab-case", async () => {
+    const catalogUrl = new URL(
+      "generated/capability-catalog.json",
+      import.meta.url,
+    );
+    const catalog: { id: string }[] = await Bun.file(catalogUrl).json();
+    expect(catalog.length).toBeGreaterThan(0);
+
+    const malformed = catalog
+      .map(({ id }) => id)
+      .filter((id) => {
+        const segments = id.split(".");
+        return (
+          segments.length < 2 ||
+          !segments.every((segment) =>
+            CAPABILITY_ID_SEGMENT_PATTERN.test(segment),
+          )
+        );
+      })
+      .sort();
+    expect(malformed).toEqual([]);
+  });
+});

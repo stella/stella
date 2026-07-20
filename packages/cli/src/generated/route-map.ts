@@ -4518,65 +4518,6 @@ export const generatedRouteMap: RouteNode = {
             },
           },
         },
-        entities: {
-          kind: "route",
-          children: {
-            "read-summaries": {
-              kind: "route",
-              children: {
-                "read-entity-summaries-count": {
-                  kind: "capability-leaf",
-                  spec: {
-                    commandPath: [
-                      "capability",
-                      "entities",
-                      "read-summaries",
-                      "read-entity-summaries-count",
-                    ],
-                    capabilityId:
-                      "entities.read-summaries.readEntitySummariesCount",
-                    access: "read",
-                    flags: [
-                      {
-                        flag: "--workspace",
-                        prop: "workspace",
-                        kind: "string",
-                        required: true,
-                        repeatable: false,
-                        part: "params",
-                        partPath: "workspaceId",
-                      },
-                    ],
-                    inputOnly: [],
-                    paginated: false,
-                    destructive: false,
-                    scope: "matters_write",
-                    inputSchema: {
-                      type: "object",
-                      additionalProperties: false,
-                      properties: {
-                        params: {
-                          type: "object",
-                          properties: {
-                            workspaceId: {
-                              type: "string",
-                            },
-                          },
-                          required: ["workspaceId"],
-                        },
-                        query: {
-                          type: "object",
-                          properties: {},
-                        },
-                      },
-                    },
-                    schemaTruncated: false,
-                  },
-                },
-              },
-            },
-          },
-        },
         legislation: {
           kind: "route",
           children: {
@@ -16810,6 +16751,49 @@ export const generatedRouteMap: RouteNode = {
                       ],
                     },
                   },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "read-summaries-count": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["entities", "read-summaries-count"],
+            capabilityId: "entities.read-summaries-count",
+            access: "read",
+            flags: [
+              {
+                flag: "--workspace",
+                prop: "workspace",
+                kind: "string",
+                required: true,
+                repeatable: false,
+                part: "params",
+                partPath: "workspaceId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  properties: {
+                    workspaceId: {
+                      type: "string",
+                    },
+                  },
+                  required: ["workspaceId"],
+                },
+                query: {
+                  type: "object",
+                  properties: {},
                 },
               },
             },
@@ -58559,16 +58543,15 @@ export const generatedRouteMap: RouteNode = {
         "anonymization-allowlist": {
           kind: "route",
           children: {
-            "create-workspace-anonymization-allowlist-entry": {
+            create: {
               kind: "capability-leaf",
               spec: {
                 commandPath: [
                   "workspaces",
                   "anonymization-allowlist",
-                  "create-workspace-anonymization-allowlist-entry",
+                  "create",
                 ],
-                capabilityId:
-                  "workspaces.anonymization-allowlist.createWorkspaceAnonymizationAllowlistEntry",
+                capabilityId: "workspaces.anonymization-allowlist.create",
                 access: "write",
                 flags: [
                   {
@@ -58668,16 +58651,15 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
-            "delete-workspace-anonymization-allowlist-entry": {
+            delete: {
               kind: "capability-leaf",
               spec: {
                 commandPath: [
                   "workspaces",
                   "anonymization-allowlist",
-                  "delete-workspace-anonymization-allowlist-entry",
+                  "delete",
                 ],
-                capabilityId:
-                  "workspaces.anonymization-allowlist.deleteWorkspaceAnonymizationAllowlistEntry",
+                capabilityId: "workspaces.anonymization-allowlist.delete",
                 access: "write",
                 flags: [
                   {
@@ -58732,16 +58714,11 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
-            "read-workspace-anonymization-allowlist": {
+            read: {
               kind: "capability-leaf",
               spec: {
-                commandPath: [
-                  "workspaces",
-                  "anonymization-allowlist",
-                  "read-workspace-anonymization-allowlist",
-                ],
-                capabilityId:
-                  "workspaces.anonymization-allowlist.readWorkspaceAnonymizationAllowlist",
+                commandPath: ["workspaces", "anonymization-allowlist", "read"],
+                capabilityId: "workspaces.anonymization-allowlist.read",
                 access: "read",
                 flags: [
                   {
@@ -58802,16 +58779,11 @@ export const generatedRouteMap: RouteNode = {
         "anonymization-terms": {
           kind: "route",
           children: {
-            "create-workspace-anonymization-terms": {
+            create: {
               kind: "capability-leaf",
               spec: {
-                commandPath: [
-                  "workspaces",
-                  "anonymization-terms",
-                  "create-workspace-anonymization-terms",
-                ],
-                capabilityId:
-                  "workspaces.anonymization-terms.createWorkspaceAnonymizationTerms",
+                commandPath: ["workspaces", "anonymization-terms", "create"],
+                capabilityId: "workspaces.anonymization-terms.create",
                 access: "write",
                 flags: [
                   {
@@ -58882,16 +58854,11 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
-            "delete-workspace-anonymization-term": {
+            delete: {
               kind: "capability-leaf",
               spec: {
-                commandPath: [
-                  "workspaces",
-                  "anonymization-terms",
-                  "delete-workspace-anonymization-term",
-                ],
-                capabilityId:
-                  "workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm",
+                commandPath: ["workspaces", "anonymization-terms", "delete"],
+                capabilityId: "workspaces.anonymization-terms.delete",
                 access: "write",
                 flags: [
                   {
@@ -58946,16 +58913,11 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
-            "read-workspace-anonymization-terms": {
+            read: {
               kind: "capability-leaf",
               spec: {
-                commandPath: [
-                  "workspaces",
-                  "anonymization-terms",
-                  "read-workspace-anonymization-terms",
-                ],
-                capabilityId:
-                  "workspaces.anonymization-terms.readWorkspaceAnonymizationTerms",
+                commandPath: ["workspaces", "anonymization-terms", "read"],
+                capabilityId: "workspaces.anonymization-terms.read",
                 access: "read",
                 flags: [
                   {

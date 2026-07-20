@@ -29,9 +29,8 @@ import readFilesystemTree from "@/api/handlers/entities/read-filesystem-tree";
 import readGroupCounts from "@/api/handlers/entities/read-group-counts";
 import readKanbanGroup from "@/api/handlers/entities/read-kanban-group";
 import readPropertyFacets from "@/api/handlers/entities/read-property-facets";
-import readEntitySummaries, {
-  readEntitySummariesCount,
-} from "@/api/handlers/entities/read-summaries";
+import readEntitySummaries from "@/api/handlers/entities/read-summaries";
+import readEntitySummariesCount from "@/api/handlers/entities/read-summaries-count";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
 import readEntitiesWindow from "@/api/handlers/entities/read-window";

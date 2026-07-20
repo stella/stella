@@ -1,16 +1,12 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
-import {
-  createWorkspaceAnonymizationAllowlistEntry,
-  deleteWorkspaceAnonymizationAllowlistEntry,
-  readWorkspaceAnonymizationAllowlist,
-} from "@/api/handlers/workspaces/anonymization-allowlist";
-import {
-  createWorkspaceAnonymizationTerms,
-  deleteWorkspaceAnonymizationTerm,
-  readWorkspaceAnonymizationTerms,
-} from "@/api/handlers/workspaces/anonymization-terms";
+import createWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/create";
+import deleteWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/delete";
+import readWorkspaceAnonymizationAllowlist from "@/api/handlers/workspaces/anonymization-allowlist/read";
+import createWorkspaceAnonymizationTerms from "@/api/handlers/workspaces/anonymization-terms/create";
+import deleteWorkspaceAnonymizationTerm from "@/api/handlers/workspaces/anonymization-terms/delete";
+import readWorkspaceAnonymizationTerms from "@/api/handlers/workspaces/anonymization-terms/read";
 import archiveWorkspace from "@/api/handlers/workspaces/archive";
 import cellRetry from "@/api/handlers/workspaces/cell-retry";
 import createWorkspaces from "@/api/handlers/workspaces/create";
