@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "The agent searches the matter, reads the relevant text, and returns linked evidence. Use it in stella, Microsoft Teams, or through MCP and the CLI; the same permissions and sources follow the request.",
     "agentEyebrow": "Agent workflows",
-    "agentTitle": "Ask once. Work across every document.",
+    "agentTitle": "Ask once. Every answer cites its source.",
+    "controlBody": "stella is open-source legal software you can self-host: inspect the code, run it your way.",
     "controlEyebrow": "Built for control",
     "controlTitle": "Keep control of the stack.",
     "dataBody": "Search official legal sources, bring registry data into the matter, review document sets as structured tables, and anonymize identifying details before sensitive material enters an AI workflow.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Run stella on infrastructure you control.",
     "proofSelfHostTitle": "Self-hostable",
     "selfHostGuide": "Read self-hosting guide",
+    "sourceOnGitHub": "Source on GitHub",
     "title": "One matter. Every part of the work.",
+    "velocityAll": "Full changelog",
+    "velocityTitle": "What shipped lately.",
     "workspaceBody": "Documents, deadlines, structured review, and drafting stay together. Open a matter, see the work in context, and move from a table to the underlying document without rebuilding the trail.",
     "workspaceEyebrow": "Matter workspace",
-    "workspaceTitle": "The matter is the system of record."
+    "workspaceTitle": "Run the whole matter in one place."
   }
 }

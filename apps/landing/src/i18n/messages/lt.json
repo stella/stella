@@ -57,10 +57,10 @@
   "hero": {
     "badge": "Tobuliname stebėtinai greitai",
     "selfHost": "Talpinkite patys",
-    "subtitle": "Bylos, dokumentai ir peržiūra, taip pat teismų praktika, įmonių registrai ir DI agentas.",
+    "subtitle": "Bylos, dokumentai, peržiūra ir agentas, kuris atsako nurodydamas šaltinius.",
     "subtitle2": "Nemokama naudoti, atvira tikrinti, jūsų pasilikti.",
     "titleLine1": "Teisinė darbo erdvė.",
-    "titleLine2": "Atviro kodo."
+    "titleLine2": "Atvirojo kodo."
   },
   "home": {
     "ctaTitle": "Jūsų bylos. Jūsų infrastruktūra. Jūsų taisyklės."
@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir grąžina susietus įrodymus. Naudokite jį stella, Microsoft Teams arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
     "agentEyebrow": "Agento darbo eigos",
-    "agentTitle": "Paklauskite kartą. Dirbkite su visais dokumentais.",
+    "agentTitle": "Paklauskite kartą. Kiekvienas atsakymas nurodo savo šaltinį.",
+    "controlBody": "stella – atvirojo kodo teisinė programinė įranga, kurią galite talpinti patys: peržiūrėkite kodą ir paleiskite ją savaip.",
     "controlEyebrow": "Sukurta kontrolei",
     "controlTitle": "Išlaikykite infrastruktūros kontrolę.",
     "dataBody": "Ieškokite oficialiuose teisės šaltiniuose, perkelkite registrų duomenis į bylą, peržiūrėkite dokumentų rinkinius kaip struktūruotas lenteles ir anonimizuokite tapatybę atskleidžiančius duomenis prieš jautriai medžiagai patenkant į DI darbo eigą.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Paleiskite stella savo valdomoje infrastruktūroje.",
     "proofSelfHostTitle": "Galima talpinti patiems",
     "selfHostGuide": "Skaityti savarankiško talpinimo gidą",
+    "sourceOnGitHub": "Šaltinio kodas platformoje GitHub",
     "title": "Viena byla. Kiekviena darbo dalis.",
+    "velocityAll": "Visas pakeitimų žurnalas",
+    "velocityTitle": "Ką neseniai išleidome.",
     "workspaceBody": "Dokumentai, terminai, struktūruota peržiūra ir rengimas lieka kartu. Atverkite bylą, matykite darbą kontekste ir iš lentelės pereikite prie pirminio dokumento iš naujo neatkurdami sekos.",
     "workspaceEyebrow": "Bylos darbo erdvė",
-    "workspaceTitle": "Byla yra pagrindinis įrašų šaltinis."
+    "workspaceTitle": "Tvarkykite visą bylą vienoje vietoje."
   }
 }

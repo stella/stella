@@ -3,7 +3,7 @@ import Base from "../layouts/Base.astro";
 import LandingFooter from "./LandingFooter.astro";
 import HomeProductStory from "./HomeProductStory.astro";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
-import { getLatestFeatureRelease } from "../lib/changelog";
+import { getChangelogReleases, getReleaseKind } from "../lib/changelog";
 import { getTranslations } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
 
@@ -11,7 +11,15 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 const isSourceLocale = locale === defaultLocale;
-const latestRelease = getLatestFeatureRelease();
+// Releases are sorted newest-first; the strip shows the last three feature
+// (non-patch) releases, and the hero badge reuses the newest of them.
+const featureReleases = getChangelogReleases()
+  .filter((release) => getReleaseKind(release.tagName) !== "patch")
+  .slice(0, 3);
+const latestRelease = featureReleases.at(0);
+const releaseDateFormatter = new Intl.DateTimeFormat(locale, {
+  dateStyle: "medium",
+});
 
 const appUrl = "https://my.stll.app";
 const githubUrl = "https://github.com/stella/stella";
@@ -142,8 +150,8 @@ const selfHostingDocsUrl =
             {
               isSourceLocale ? (
                 <>
-                  One workspace for matters, documents, research, and agents,
-                  grounded in your sources and permissions.
+                  The open-source legal workspace: matters, documents, review,
+                  and an agent that answers with citations.
                 </>
               ) : (
                 <>
@@ -197,6 +205,70 @@ const selfHostingDocsUrl =
     </div>
 
     <HomeProductStory />
+
+    {/* ——— Velocity strip: the last three feature releases ——— */}
+    <section class="px-6 pb-20 lg:pb-24" aria-labelledby="velocity-title">
+      <div class="mx-auto max-w-300">
+        <p
+          data-reveal
+          class="text-xs font-medium uppercase tracking-[0.2em]"
+          style="color: var(--muted-foreground)"
+        >
+          {t("hero.badge")}
+        </p>
+        <h2
+          data-reveal
+          id="velocity-title"
+          style="--reveal-delay: 80ms"
+          class="mt-3 text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl"
+        >
+          {t("story.velocityTitle")}
+        </h2>
+        <ul class="mt-8">
+          {
+            featureReleases.map((release, index) => (
+              <li
+                data-reveal
+                style={`--reveal-delay: ${120 + index * 60}ms; border-block-start: 1px solid var(--border)`}
+                class="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-4"
+              >
+                <span
+                  class="shrink-0 text-sm font-medium tabular-nums"
+                  style="color: var(--muted-foreground)"
+                >
+                  {release.tagName}
+                </span>
+                <span class="min-w-0 flex-1 font-display text-lg font-medium">
+                  {release.heading ?? release.displayName}
+                </span>
+                {release.publishedAt && (
+                  <time
+                    datetime={release.publishedAt}
+                    class="shrink-0 text-sm tabular-nums"
+                    style="color: var(--muted-foreground)"
+                  >
+                    {releaseDateFormatter.format(new Date(release.publishedAt))}
+                  </time>
+                )}
+              </li>
+            ))
+          }
+        </ul>
+        <a
+          href="/changelog"
+          data-reveal
+          style="--reveal-delay: 300ms"
+          class="group mt-2 inline-flex min-h-11 items-center gap-2 text-sm font-medium transition-opacity hover:opacity-70"
+        >
+          <span>{t("story.velocityAll")}</span>
+          <span
+            aria-hidden="true"
+            class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+            >→</span
+          >
+        </a>
+      </div>
+    </section>
 
     {/* ——— Final CTA ——— */}
     <section class="px-6 pb-20 lg:pb-24">

@@ -57,10 +57,10 @@
   "hero": {
     "badge": "On livre à une vitesse folle",
     "selfHost": "Auto-hébergement",
-    "subtitle": "Dossiers, documents et revue, ainsi que la jurisprudence, les registres d'entreprises et un agent IA.",
+    "subtitle": "Dossiers, documents, revue et un agent qui répond en citant ses sources.",
     "subtitle2": "Libre d'utilisation, ouvert à l'inspection, à vous pour toujours.",
     "titleLine1": "Espace de travail juridique.",
-    "titleLine2": "Code source ouvert."
+    "titleLine2": "Open source."
   },
   "home": {
     "ctaTitle": "Vos dossiers. Votre infrastructure. Vos règles."
@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "L'agent recherche dans le dossier, lit le texte pertinent et renvoie des preuves reliées aux sources. Utilisez-le dans stella, Microsoft Teams ou via MCP et la CLI ; les mêmes permissions et les mêmes sources suivent la demande.",
     "agentEyebrow": "Flux de travail de l'agent",
-    "agentTitle": "Demandez une fois. Travaillez sur l'ensemble des documents.",
+    "agentTitle": "Demandez une fois. Chaque réponse cite sa source.",
+    "controlBody": "stella est un logiciel juridique open source que vous pouvez auto-héberger : inspectez le code et exécutez-le à votre façon.",
     "controlEyebrow": "Conçu pour garder le contrôle",
     "controlTitle": "Gardez le contrôle de votre infrastructure.",
     "dataBody": "Recherchez dans les sources juridiques officielles, importez les données des registres dans le dossier, examinez des ensembles de documents sous forme de tableaux structurés et anonymisez les éléments identifiants avant qu'un contenu sensible n'entre dans un flux de travail IA.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Exécutez stella sur une infrastructure que vous contrôlez.",
     "proofSelfHostTitle": "Auto-hébergeable",
     "selfHostGuide": "Lire le guide d'auto-hébergement",
+    "sourceOnGitHub": "Code source sur GitHub",
     "title": "Un dossier. Chaque étape du travail.",
+    "velocityAll": "Journal des modifications complet",
+    "velocityTitle": "Ce qu'on a livré récemment.",
     "workspaceBody": "Documents, échéances, revue structurée et rédaction restent ensemble. Ouvrez un dossier, visualisez le travail dans son contexte et passez d'un tableau au document sous-jacent sans reconstituer le fil.",
     "workspaceEyebrow": "L'espace du dossier",
-    "workspaceTitle": "Le dossier est la source de référence."
+    "workspaceTitle": "Gérez tout le dossier au même endroit."
   }
 }

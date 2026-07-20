@@ -57,17 +57,17 @@
   "hero": {
     "badge": "Vyvíjíme nezvykle rychle",
     "selfHost": "Vlastní hosting",
-    "subtitle": "Spisy, dokumenty a revize, plus judikatura, obchodní rejstříky a AI agent.",
+    "subtitle": "Spisy, dokumenty, revize a agent, který odpovídá s citacemi.",
     "subtitle2": "Zdarma k užívání, otevřené k nahlédnutí, vaše napořád.",
     "titleLine1": "Právní pracovní prostředí.",
-    "titleLine2": "Otevřený zdroj."
+    "titleLine2": "Open source."
   },
   "home": {
     "ctaTitle": "Vaše spisy. Vaše technologie. Vaše pravidla."
   },
   "meta": {
-    "homeDescription": "Otevřené právní pracovní prostředí pro dokumenty, spisy, revize a rešerše. Provozujte sami, nebo v našem cloudu. AI podle využití, bez závislosti na dodavateli.",
-    "homeTitle": "stella | otevřené právní pracovní prostředí"
+    "homeDescription": "Open source právní pracovní prostředí pro dokumenty, spisy, revize a rešerše. Provozujte sami či v našem cloudu. AI podle využití, bez závislosti na dodavateli.",
+    "homeTitle": "stella | open source právní pracovní prostředí"
   },
   "nav": {
     "aiFactSheet": "Přehled pro AI",
@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "Agent prohledá spis, přečte relevantní text a vrátí odpověď s propojenými důkazy. Použijte ho ve stelle, v Microsoft Teams nebo přes MCP a CLI; s požadavkem putují stejná oprávnění i zdroje.",
     "agentEyebrow": "Pracovní postupy agenta",
-    "agentTitle": "Zeptejte se jednou. Pracujte napříč všemi dokumenty.",
+    "agentTitle": "Zeptejte se jednou. Každá odpověď cituje svůj zdroj.",
+    "controlBody": "stella je open source právní software, který si můžete sami hostovat: nahlédněte do kódu a provozujte ho po svém.",
     "controlEyebrow": "Navrženo pro plnou kontrolu",
     "controlTitle": "Mějte technologie pod kontrolou.",
     "dataBody": "Prohledávejte oficiální právní zdroje, přenášejte data z rejstříků do spisu, procházejte sady dokumentů jako strukturované tabulky a anonymizujte identifikační údaje dřív, než se citlivý materiál dostane do pracovního postupu s AI.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Provozujte stellu na infrastruktuře, kterou máte pod kontrolou.",
     "proofSelfHostTitle": "Možnost vlastního hostingu",
     "selfHostGuide": "Přečíst návod k vlastnímu hostingu",
+    "sourceOnGitHub": "Zdrojový kód na GitHubu",
     "title": "Jeden spis. Každá část práce.",
+    "velocityAll": "Celý seznam změn",
+    "velocityTitle": "Co jsme nedávno vydali.",
     "workspaceBody": "Dokumenty, termíny, strukturovaná revize i příprava dokumentů zůstávají pohromadě. Otevřete spis, vidíte práci v kontextu a z tabulky přejdete rovnou k podkladovému dokumentu, aniž byste museli znovu dohledávat souvislosti.",
     "workspaceEyebrow": "Pracovní prostředí spisu",
-    "workspaceTitle": "Spis je jediný zdroj pravdy."
+    "workspaceTitle": "Veďte celý spis na jednom místě."
   }
 }

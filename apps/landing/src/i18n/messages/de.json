@@ -57,7 +57,7 @@
   "hero": {
     "badge": "Wir liefern irrwitzig schnell",
     "selfHost": "Selbst hosten",
-    "subtitle": "Akten, Dokumente und Prüfung, dazu Rechtsprechung, Handelsregister und ein KI-Agent.",
+    "subtitle": "Akten, Dokumente, Prüfung und ein Agent, der mit Quellenangaben antwortet.",
     "subtitle2": "Kostenlos nutzbar, offen einsehbar, für immer Ihres.",
     "titleLine1": "Juristischer Arbeitsbereich.",
     "titleLine2": "Open Source."
@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "Der Agent durchsucht die Akte, liest den relevanten Text und liefert verknüpfte Belege. Nutzen Sie ihn in stella, Microsoft Teams oder über MCP und die CLI; dieselben Berechtigungen und Quellen gelten für jede Anfrage.",
     "agentEyebrow": "Agenten-Workflows",
-    "agentTitle": "Einmal fragen. Über alle Dokumente hinweg arbeiten.",
+    "agentTitle": "Einmal fragen. Jede Antwort nennt ihre Quelle.",
+    "controlBody": "stella ist juristische Open-Source-Software, die Sie selbst hosten können: Prüfen Sie den Code und betreiben Sie sie auf Ihre Weise.",
     "controlEyebrow": "Auf Kontrolle ausgelegt",
     "controlTitle": "Behalten Sie die Kontrolle über Ihren Stack.",
     "dataBody": "Durchsuchen Sie offizielle Rechtsquellen, holen Sie Registerdaten in die Akte, prüfen Sie Dokumentsätze als strukturierte Tabellen und anonymisieren Sie identifizierende Angaben, bevor sensibles Material in einen KI-Workflow gelangt.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Betreiben Sie stella auf Infrastruktur, die Sie kontrollieren.",
     "proofSelfHostTitle": "Selbst hostbar",
     "selfHostGuide": "Self-Hosting-Anleitung lesen",
+    "sourceOnGitHub": "Quellcode auf GitHub",
     "title": "Eine Akte. Jeder Teil der Arbeit.",
+    "velocityAll": "Vollständiges Änderungsprotokoll",
+    "velocityTitle": "Was wir zuletzt geliefert haben.",
     "workspaceBody": "Dokumente, Fristen, strukturierte Prüfung und Entwürfe bleiben beisammen. Öffnen Sie eine Akte, sehen Sie die Arbeit im Kontext und wechseln Sie von der Tabelle zum zugrunde liegenden Dokument, ohne den Weg neu nachvollziehen zu müssen.",
     "workspaceEyebrow": "Arbeitsbereich für Akten",
-    "workspaceTitle": "Die Akte ist das führende System."
+    "workspaceTitle": "Führen Sie die ganze Akte an einem Ort."
   }
 }

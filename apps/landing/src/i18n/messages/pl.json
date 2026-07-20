@@ -57,17 +57,17 @@
   "hero": {
     "badge": "Wydajemy zaskakująco szybko",
     "selfHost": "Hostuj samodzielnie",
-    "subtitle": "Sprawy, dokumenty i przegląd, a do tego orzecznictwo, rejestry przedsiębiorstw i agent AI.",
+    "subtitle": "Sprawy, dokumenty, przegląd i agent, który odpowiada ze wskazaniem źródeł.",
     "subtitle2": "Darmowa w użyciu, otwarta do wglądu, na zawsze Twoja.",
     "titleLine1": "Środowisko pracy dla prawników.",
-    "titleLine2": "Otwarte źródło."
+    "titleLine2": "Open source."
   },
   "home": {
     "ctaTitle": "Twoje sprawy. Twoja infrastruktura. Twoje zasady."
   },
   "meta": {
-    "homeDescription": "Otwarte środowisko pracy dla prawników: dokumenty, sprawy, przegląd i orzecznictwo. Hostuj samodzielnie albo w naszej chmurze. AI płatna za użycie, bez uzależnienia.",
-    "homeTitle": "stella | otwarte środowisko pracy dla prawników"
+    "homeDescription": "Środowisko pracy open source dla prawników: dokumenty, sprawy, przegląd i orzecznictwo. Hostuj sam albo w naszej chmurze. AI płatna za użycie, bez uzależnienia.",
+    "homeTitle": "stella | środowisko pracy open source dla prawników"
   },
   "nav": {
     "aiFactSheet": "Karta informacyjna AI",
@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "Agent przeszukuje sprawę, czyta istotny tekst i zwraca powiązane dowody. Używaj go w stelli, Microsoft Teams albo przez MCP i CLI; za żądaniem podążają te same uprawnienia i źródła.",
     "agentEyebrow": "Przepływy pracy agenta",
-    "agentTitle": "Zapytaj raz. Pracuj na wszystkich dokumentach.",
+    "agentTitle": "Zapytaj raz. Każda odpowiedź wskazuje swoje źródło.",
+    "controlBody": "stella to prawnicze oprogramowanie open source, które możesz hostować samodzielnie: przejrzyj kod i uruchamiaj je po swojemu.",
     "controlEyebrow": "Zbudowane z myślą o kontroli",
     "controlTitle": "Zachowaj kontrolę nad infrastrukturą.",
     "dataBody": "Przeszukuj oficjalne źródła prawa, wprowadzaj dane rejestrowe do sprawy, przeglądaj zestawy dokumentów jako ustrukturyzowane tabele i anonimizuj dane identyfikujące, zanim wrażliwy materiał trafi do przepływu pracy z AI.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Uruchamiaj stellę na infrastrukturze, którą kontrolujesz.",
     "proofSelfHostTitle": "Możliwość samodzielnego hostowania",
     "selfHostGuide": "Przeczytaj przewodnik po samodzielnym hostingu",
+    "sourceOnGitHub": "Kod źródłowy na GitHubie",
     "title": "Jedna sprawa. Każda część pracy.",
+    "velocityAll": "Pełny dziennik zmian",
+    "velocityTitle": "Co ostatnio wydaliśmy.",
     "workspaceBody": "Dokumenty, terminy, ustrukturyzowany przegląd i redagowanie pozostają razem. Otwórz sprawę, zobacz pracę w kontekście i przejdź z tabeli do dokumentu źródłowego bez ponownego odtwarzania ścieżki.",
     "workspaceEyebrow": "Przestrzeń robocza sprawy",
-    "workspaceTitle": "Sprawa jest jedynym źródłem prawdy."
+    "workspaceTitle": "Prowadź całą sprawę w jednym miejscu."
   }
 }

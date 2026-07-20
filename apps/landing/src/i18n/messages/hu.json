@@ -57,7 +57,7 @@
   "hero": {
     "badge": "Furcsán gyorsan szállítunk",
     "selfHost": "Saját üzemeltetés",
-    "subtitle": "Ügyek, dokumentumok és felülvizsgálat, valamint joggyakorlat, cégnyilvántartások és egy AI-ügynök.",
+    "subtitle": "Ügyek, dokumentumok, felülvizsgálat és egy ügynök, amely forráshivatkozásokkal válaszol.",
     "subtitle2": "Ingyen használható, szabadon átvizsgálható, az öné marad.",
     "titleLine1": "Jogi munkaterület.",
     "titleLine2": "Nyílt forráskód."
@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és hivatkozott bizonyítékokat ad vissza. Használja a stellában, a Microsoft Teamsben vagy MCP-n és parancssoron keresztül; a kérést ugyanazok a jogosultságok és források kísérik.",
     "agentEyebrow": "Ügynöki munkafolyamatok",
-    "agentTitle": "Kérdezzen egyszer. Dolgozzon az összes dokumentumon.",
+    "agentTitle": "Kérdezzen egyszer. Minden válasz megjelöli a forrását.",
+    "controlBody": "A stella nyílt forráskódú jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, és futtassa a maga módján.",
     "controlEyebrow": "Irányításra tervezve",
     "controlTitle": "Tartsa kézben a rendszerét.",
     "dataBody": "Keressen hivatalos jogforrásokban, emelje be a nyilvántartási adatokat az ügybe, tekintse át a dokumentumkészleteket strukturált táblázatokként, és anonimizálja az azonosító adatokat, mielőtt érzékeny anyag kerülne egy AI-munkafolyamatba.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Futtassa a stellát olyan infrastruktúrán, amelyet Ön felügyel.",
     "proofSelfHostTitle": "Saját szerveren üzemeltethető",
     "selfHostGuide": "Saját üzemeltetési útmutató elolvasása",
+    "sourceOnGitHub": "Forráskód a GitHubon",
     "title": "Egy ügy. A munka minden része.",
+    "velocityAll": "Teljes változásnapló",
+    "velocityTitle": "Amit mostanában szállítottunk.",
     "workspaceBody": "A dokumentumok, a határidők, a strukturált felülvizsgálat és a szövegezés együtt maradnak. Nyisson meg egy ügyet, lássa a munkát a maga kontextusában, és lépjen a táblázatból az alapul szolgáló dokumentumra anélkül, hogy újra össze kellene raknia az előzményeket.",
     "workspaceEyebrow": "Az ügy munkaterülete",
-    "workspaceTitle": "Az ügy az elsődleges nyilvántartás."
+    "workspaceTitle": "Intézze az egész ügyet egy helyen."
   }
 }

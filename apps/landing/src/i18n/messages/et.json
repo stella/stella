@@ -57,7 +57,7 @@
   "hero": {
     "badge": "Me arendame imekiiresti",
     "selfHost": "Majuta ise",
-    "subtitle": "Toimikud, dokumendid ja ülevaatus, lisaks kohtupraktika, äriregistrid ja tehisintellekti agent.",
+    "subtitle": "Toimikud, dokumendid, ülevaatus ja agent, kes vastab allikaviidetega.",
     "subtitle2": "Tasuta kasutada, avatud uurida, sinu hoida.",
     "titleLine1": "Õiguslik tööruum.",
     "titleLine2": "Avatud lähtekood."
@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja tagastab lingitud tõendid. Kasuta seda stellas, Microsoft Teamsis või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
     "agentEyebrow": "Agendi töövood",
-    "agentTitle": "Küsi üks kord. Tööta üle kõigi dokumentide.",
+    "agentTitle": "Küsi üks kord. Iga vastus viitab oma allikale.",
+    "controlBody": "stella on avatud lähtekoodiga õigustarkvara, mida saad ise majutada: uuri koodi ja käita seda oma moodi.",
     "controlEyebrow": "Loodud kontrolli hoidmiseks",
     "controlTitle": "Hoia taristu enda kontrolli all.",
     "dataBody": "Otsi ametlikest õigusallikatest, too registriandmed toimikusse, vaata dokumendikogumeid üle struktureeritud tabelitena ja anonüümi tuvastavad andmed enne, kui tundlik materjal jõuab tehisintellekti töövoogu.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Käita stellat taristul, mida ise kontrollid.",
     "proofSelfHostTitle": "Ise majutatav",
     "selfHostGuide": "Loe ise majutamise juhendit",
+    "sourceOnGitHub": "Lähtekood GitHubis",
     "title": "Üks toimik. Kõik töö osad.",
+    "velocityAll": "Kogu muudatuste logi",
+    "velocityTitle": "Mis on viimati valminud.",
     "workspaceBody": "Dokumendid, tähtajad, struktureeritud ülevaatus ja koostamine püsivad koos. Ava toimik, näe tööd kontekstis ja liigu tabelist aluseks oleva dokumendini, ilma et peaksid rada uuesti kokku panema.",
     "workspaceEyebrow": "Toimiku keskkond",
-    "workspaceTitle": "Toimik on ainus tõeallikas."
+    "workspaceTitle": "Halda kogu toimikut ühes kohas."
   }
 }

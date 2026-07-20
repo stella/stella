@@ -57,7 +57,7 @@
   "hero": {
     "badge": "Mēs attīstāmies neticami ātri",
     "selfHost": "Mitināt pašiem",
-    "subtitle": "Lietas, dokumenti un pārskatīšana, kā arī tiesu prakse, uzņēmumu reģistri un AI aģents.",
+    "subtitle": "Lietas, dokumenti, pārskatīšana un aģents, kas atbild, norādot avotus.",
     "subtitle2": "Bezmaksas lietošanai, atvērts pārbaudei, paliek jūsu rokās.",
     "titleLine1": "Juridiska darbvieta.",
     "titleLine2": "Atvērtā pirmkoda."
@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "Aģents meklē lietā, izlasa būtisko tekstu un atgriež sasaistītus pierādījumus. Izmantojiet to stella, Microsoft Teams vai ar MCP un komandrindas palīdzību; pieprasījumam seko tās pašas atļaujas un avoti.",
     "agentEyebrow": "Aģenta darbplūsmas",
-    "agentTitle": "Pajautājiet vienreiz. Strādājiet ar visiem dokumentiem.",
+    "agentTitle": "Pajautājiet vienreiz. Katra atbilde norāda savu avotu.",
+    "controlBody": "stella ir atvērtā pirmkoda juridiskā programmatūra, ko varat mitināt paši: pārbaudiet kodu un darbiniet to pēc saviem noteikumiem.",
     "controlEyebrow": "Radīts kontrolei",
     "controlTitle": "Saglabājiet kontroli pār infrastruktūru.",
     "dataBody": "Meklējiet oficiālajos tiesību avotos, ienesiet reģistru datus lietā, pārskatiet dokumentu kopas kā strukturētas tabulas un anonimizējiet identificējošas ziņas, pirms sensitīvs materiāls nonāk AI darbplūsmā.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Darbiniet stella infrastruktūrā, ko pārvaldāt paši.",
     "proofSelfHostTitle": "Iespējams mitināt pašiem",
     "selfHostGuide": "Lasīt pašmitināšanas ceļvedi",
+    "sourceOnGitHub": "Pirmkods vietnē GitHub",
     "title": "Viena lieta. Katra darba daļa.",
+    "velocityAll": "Pilns izmaiņu žurnāls",
+    "velocityTitle": "Ko nesen esam izlaiduši.",
     "workspaceBody": "Dokumenti, termiņi, strukturēta pārskatīšana un sagatavošana paliek kopā. Atveriet lietu, skatiet darbu kontekstā un pārejiet no tabulas uz pamatā esošo dokumentu, nezaudējot izsekojamību.",
     "workspaceEyebrow": "Lietas darba vide",
-    "workspaceTitle": "Lieta ir galvenais ierakstu avots."
+    "workspaceTitle": "Pārvaldiet visu lietu vienā vietā."
   }
 }

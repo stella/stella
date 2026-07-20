@@ -209,6 +209,12 @@ const proofItems = [
         <h2 id="control-title" class="mt-3 text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl">
           {t("story.controlTitle")}
         </h2>
+        <p
+          class="mt-4 text-pretty text-base leading-7"
+          style="color: var(--muted-foreground)"
+        >
+          {t("story.controlBody")}
+        </p>
       </div>
       <ul class="proof-list grid sm:grid-cols-2" data-reveal style="--reveal-delay: 100ms">
         {
@@ -236,6 +242,14 @@ const proofItems = [
           class="inline-flex min-h-11 items-center rounded-[0.75rem] px-4 text-sm font-medium transition-opacity hover:opacity-75"
         >
           {t("story.selfHostGuide")}
+        </a>
+        <a
+          href="https://github.com/stella/stella"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex min-h-11 items-center rounded-[0.75rem] px-4 text-sm font-medium transition-opacity hover:opacity-75"
+        >
+          {t("story.sourceOnGitHub")}
         </a>
         <a
           href="https://my.stll.app"

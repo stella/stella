@@ -71,6 +71,35 @@ everywhere it appears — page titles, meta descriptions, the footer tagline,
 hero copy. Consistency here is what makes the phrase recognisable to both
 readers and search engines indexing the localized pages.
 
+### "open source" per locale
+
+The term itself is rendered per locale by whichever form that language's
+technical audience dominantly uses — the English loanword where the
+loanword is the standard term, the native compound where the native term
+is. Fixed choices (use these, never a synonym):
+
+| Locale | Rendering |
+| --- | --- |
+| ar | مفتوح المصدر (agree in gender with the noun) |
+| cs | open source (loanword) |
+| de | Open Source / Open-Source- in compounds |
+| es | código abierto |
+| et | avatud lähtekoodiga |
+| fr | open source (loanword) |
+| hu | nyílt forráskódú |
+| lt | atvirojo kodo |
+| lv | atvērtā pirmkoda |
+| pl | open source (loanword) |
+| pt-BR | código aberto |
+| sk | open source (loanword) |
+
+Why not one global rule: "Open Source" is the recognised standard in
+German and the Slavic tech vocabularies, while Spanish, Portuguese, and
+Arabic have fully dominant native terms; forcing either direction
+everywhere reads foreign in half the markets. A plain "open/otevřené/
+otwarte" adjective is NOT a substitute for the technical term in the
+identity phrase.
+
 ## Hero structure differs by locale
 
 The English hero carries the identity in its subtitle. The non-English

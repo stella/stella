@@ -57,7 +57,7 @@
   "hero": {
     "badge": "Lançamos surpreendentemente rápido",
     "selfHost": "Auto-hospedar",
-    "subtitle": "Casos, documentos e revisão, além de jurisprudência, registros de empresas e um agente de IA.",
+    "subtitle": "Casos, documentos, revisão e um agente que responde com citações.",
     "subtitle2": "Grátis para usar, aberto para inspecionar, seu para manter.",
     "titleLine1": "Espaço de trabalho jurídico.",
     "titleLine2": "Código aberto."
@@ -81,7 +81,8 @@
   "story": {
     "agentBody": "O agente pesquisa no caso, lê o texto relevante e retorna evidências vinculadas. Use-o na stella, no Microsoft Teams ou via MCP e CLI; as mesmas permissões e fontes acompanham cada solicitação.",
     "agentEyebrow": "Fluxos de trabalho do agente",
-    "agentTitle": "Pergunte uma vez. Trabalhe em todos os documentos.",
+    "agentTitle": "Pergunte uma vez. Cada resposta cita sua fonte.",
+    "controlBody": "A stella é um software jurídico de código aberto que você pode auto-hospedar: inspecione o código e rode do seu jeito.",
     "controlEyebrow": "Feito para o controle",
     "controlTitle": "Mantenha o controle da infraestrutura.",
     "dataBody": "Pesquise em fontes jurídicas oficiais, traga dados de registros para o caso, revise conjuntos de documentos como tabelas estruturadas e anonimize dados identificadores antes que material sensível entre em um fluxo de trabalho com IA.",
@@ -109,9 +110,12 @@
     "proofSelfHostBody": "Execute a stella em uma infraestrutura que você controla.",
     "proofSelfHostTitle": "Auto-hospedável",
     "selfHostGuide": "Ler o guia de auto-hospedagem",
+    "sourceOnGitHub": "Código-fonte no GitHub",
     "title": "Um caso. Cada parte do trabalho.",
+    "velocityAll": "Todas as novidades",
+    "velocityTitle": "O que lançamos ultimamente.",
     "workspaceBody": "Documentos, prazos, revisão estruturada e redação ficam juntos. Abra um caso, veja o trabalho em contexto e vá de uma tabela ao documento subjacente sem reconstruir o caminho.",
     "workspaceEyebrow": "Espaço de trabalho do caso",
-    "workspaceTitle": "O caso é a fonte única da verdade."
+    "workspaceTitle": "Conduza o caso inteiro em um só lugar."
   }
 }
