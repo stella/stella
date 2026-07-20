@@ -8,7 +8,10 @@ const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
 const PROPERTY_TEST_MARKER = "fc.assert";
 const REGULAR_TEST_BATCH_SIZE = 50;
-const MODULE_MOCK_TEST_BATCH_SIZE = 20;
+// Isolated (--isolate) runs accumulate a per-file module registry in one
+// process; on the Linux runners 20 mock files measured 6.3 GB. Keep these
+// batches small.
+const MODULE_MOCK_TEST_BATCH_SIZE = 4;
 // The test database is embedded PGlite. Measured behavior (per-file solo
 // sweep, 2026-07-20): ANY process that connects pays a ~2.2 GB peak during
 // the per-suite drizzle schema push, and each further DB file in the same
