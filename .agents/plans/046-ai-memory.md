@@ -46,9 +46,10 @@ not just a UX nicety.
   `statements` in `@stll/permissions` are static and checked *before* the handler
   sees the body, so "admin only when `scope=organization`" cannot live on one
   `POST /memories`. Firm-scope writes get their own handler/route
-  (`POST /organization/memories`) gated by a real static permission — reuse
-  `organizationSettings: ["update"]`, or add a `firmMemory` statement + role
-  mappings. User/matter writes stay on the main endpoint. This is the only
+  (`POST /organization/memories`) gated by a dedicated `firmMemory`
+  statement (`create`/`update`, mapped to admin + owner) — never the broader
+  `organizationSettings: ["update"]`, which grants unrelated settings access.
+  User/matter writes stay on the main endpoint. This is the only
   write-path asymmetry across scopes.
 - **Suggest-first learning.** Only explicit user/tool actions commit. Anything
   the AI infers becomes a `status: "suggested"` memory the lawyer accepts
@@ -71,7 +72,10 @@ not just a UX nicety.
   manual discipline).
 - **Archive-only, never delete** (the curator invariant): lifecycle
   `active → stale@30d → archive@90d`, pinned bypasses, `supersededById` for
-  dedup. Reversible by construction.
+  dedup. Reversible by construction. Explicit exception: deleting the parent
+  organization/user/workspace cascades and physically removes memory rows —
+  tenant offboarding must remove data (data minimization); the invariant
+  governs the curator's lifecycle within a living tenant only.
 - **Reuse, don't rebuild:** prompt-injection seam in `chat-prompt.ts`; extraction
   source in `chatThreadCompactions.summaryMarkdown` + thread recaps; background
   runner in `schedulerJobs` / `jobs.ts`; the existing `"fast"` model role on the
@@ -192,7 +196,8 @@ not just a UX nicety.
 
 - `apps/api/src/handlers/memories/list.ts` — `GET /memories?scope=&cursor=&limit=`
   via `createSafeRootHandler` (spans scopes; RLS enforces visibility), returning
-  `Page<T>` (cursor over `(updatedAt, id)`).
+  `Page<T>` (cursor over `(updatedAt, id)`); `limit` is schema-validated with a
+  default and a hard maximum (1–100), so the result set is always bounded.
 - `apps/api/src/handlers/memories/update.ts` — `PATCH /memories/:id`
   (`createSafeRootHandler`) for pin/edit/status (accept suggestion → `active`,
   dismiss → `archived`). Editing a firm memory requires the same firm permission
