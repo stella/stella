@@ -558,6 +558,13 @@
       "packages/cli/src/generated/capability-catalog.json": 3
     }
   },
+  "capabilities-without-description": {
+    "count": 518,
+    "files": {
+      "apps/api/src/mcp/generated/capability-catalog.json": 259,
+      "packages/cli/src/generated/capability-catalog.json": 259
+    }
+  },
   "capability-domain-action-verbs": {
     "count": 163,
     "files": {
