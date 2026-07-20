@@ -10,6 +10,9 @@ export const templates: Product = {
   title: "Build reusable templates, and let AI fill them in.",
   summary:
     "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. Produce a document into the matter and keep editing it.",
+  metaTitle: "Legal document templates with AI drafting | stella",
+  metaDescription:
+    "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. Produce a document into the matter.",
   hero: {
     type: "image",
     src: "/media/products/templates.png",

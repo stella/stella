@@ -7,6 +7,9 @@ export const tabularReview: Product = {
   title: "Turn a pile of documents into a table you can review.",
   summary:
     "Ask questions across a whole document set and get structured answers back as a matter-scoped table — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
+  metaTitle: "Tabular document review for due diligence | stella",
+  metaDescription:
+    "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.",
   hero: {
     type: "story",
     sceneId: "review",

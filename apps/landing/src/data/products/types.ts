@@ -54,6 +54,16 @@ export type Product = {
   eyebrow: string;
   title: string;
   summary: string;
+  /**
+   * SERP title, topic-first with the brand suffix, kept at 60 characters or
+   * fewer. Falls back to `stella | ${eyebrow}` when absent.
+   */
+  metaTitle?: string;
+  /**
+   * SERP description, 140-158 characters distilled from `summary` with the
+   * same claims. Falls back to `summary` when absent.
+   */
+  metaDescription?: string;
   hero: ProductMedia;
   quickAnswer: ProductFaq;
   capabilities: readonly ProductCapability[];

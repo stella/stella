@@ -9,6 +9,9 @@ export const publicData: Product = {
   title: "Official legal data, ready to pull into a matter.",
   summary:
     "Case law and company registries from official public sources, collected and structure-parsed by stella's Legal Atlas stack. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.",
+  metaTitle: "Case law and company registry data | stella",
+  metaDescription:
+    "Case law and company registries from official public sources. Read decisions, look up companies, follow citations, and pull it into a matter or the AI agent.",
   hero: {
     type: "image",
     src: "/media/products/public-data.png",

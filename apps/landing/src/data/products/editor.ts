@@ -6,6 +6,9 @@ export const editor: Product = {
   title: "Edit Word documents without leaving the matter.",
   summary:
     "Open and edit Word .docx files directly in stella. The browser editor preserves the document format, keeps the file connected to its matter, and saves each revision into the document's version history.",
+  metaTitle: "Legal DOCX editor in the browser | stella",
+  metaDescription:
+    "Open and edit Word .docx files in the browser. The editor preserves the document format, keeps the file connected to its matter, and versions each save.",
   hero: {
     type: "story",
     sceneId: "editor",

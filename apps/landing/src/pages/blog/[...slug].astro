@@ -20,13 +20,32 @@ const { post } = Astro.props;
 const { Content } = await render(post);
 const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "long" });
 const publishedAtIso = post.data.publishedAt.toISOString();
+
+// BlogPosting structured data, sourced from the same frontmatter the page
+// renders. Posts are published by the organisation, not individual bylines.
+const blogPostingJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  headline: post.data.title,
+  description: post.data.description,
+  datePublished: publishedAtIso,
+  author: { "@type": "Organization", name: post.data.author },
+  url: new URL(Astro.url.pathname, Astro.site).href,
+};
 ---
 
 <Base
   title={`stella | ${post.data.title}`}
   description={post.data.description}
+  ogType="article"
+  publishedTime={publishedAtIso}
   current="blog"
 >
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify(blogPostingJsonLd)}
+  />
   <div class="flex min-h-dvh flex-col">
     <main class="flex-1 px-6">
       <article class="mx-auto max-w-3xl py-12 lg:py-16">

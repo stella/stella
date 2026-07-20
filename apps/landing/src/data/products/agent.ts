@@ -7,6 +7,9 @@ export const agent: Product = {
   title: "An AI agent that works across your matters, files, and tools.",
   summary:
     "Chat with your matters, documents, registries, and connected tools in one place. The agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.",
+  metaTitle: "AI agent for legal matters | stella",
+  metaDescription:
+    "Chat with your matters, documents, registries, and connected tools. The agent acts with approvals, grounds answers in citations, and extends via skills.",
   hero: {
     type: "story",
     sceneId: "agent",

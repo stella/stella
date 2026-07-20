@@ -29,8 +29,9 @@ const faqJsonLd = {
 ---
 
 <Base
-  title={`stella | ${product.eyebrow}`}
-  description={product.summary}
+  title={product.metaTitle ?? `stella | ${product.eyebrow}`}
+  description={product.metaDescription ?? product.summary}
+  socialImage={`/images/og/${product.slug}.png`}
   current="product"
 >
   <script

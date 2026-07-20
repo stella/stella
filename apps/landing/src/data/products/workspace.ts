@@ -8,6 +8,9 @@ export const workspace: Product = {
   title: "Matters, documents, and tools in one workspace.",
   summary:
     "A web app that brings matters, documents, Word .docx editing, review, research, chat, and knowledge tools together. A desktop app bridges local Office editing, and a stella MCP server exposes your matters, documents, and case law.",
+  metaTitle: "Legal matter management workspace | stella",
+  metaDescription:
+    "A web app bringing matters, documents, Word .docx editing, review, research, and chat together, with a desktop bridge for local Office and an MCP server.",
   hero: {
     type: "story",
     sceneId: "workspace",

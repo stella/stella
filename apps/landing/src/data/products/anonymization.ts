@@ -8,6 +8,9 @@ export const anonymization: Product = {
   title: "Prepare material for AI without exposing identifying details.",
   summary:
     "Rust-powered anonymization for legal AI workflows, compiled to WebAssembly. Prepare material without exposing names, entities, or identifying details, directly from chat and document review.",
+  metaTitle: "Document anonymization for legal AI | stella",
+  metaDescription:
+    "Rust-powered anonymization compiled to WebAssembly. Prepare material for AI without exposing names, entities, or identifying details, from chat and review.",
   hero: {
     type: "image",
     src: "/media/products/anonymization.png",

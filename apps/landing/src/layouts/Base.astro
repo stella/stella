@@ -24,6 +24,10 @@ type Props = {
   robots?: "index" | "noindex";
   /** Canonical path override for pages whose canonical is not themselves. */
   canonicalPath?: string;
+  /** Open Graph object type; blog posts pass "article". */
+  ogType?: "website" | "article";
+  /** ISO publication timestamp; emits article:published_time for articles. */
+  publishedTime?: string;
 };
 
 const {
@@ -37,6 +41,8 @@ const {
   translationScope = "source-only",
   robots = "index",
   canonicalPath = undefined,
+  ogType = "website",
+  publishedTime = undefined,
 } = Astro.props;
 
 const robotsContent =
@@ -83,7 +89,12 @@ const ogAlternates = hasLocalizedAlternates
     }
 
     {/* Open Graph */}
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
+    {
+      publishedTime && (
+        <meta property="article:published_time" content={publishedTime} />
+      )
+    }
     <meta property="og:locale" content={localeConfig.og} />
     {ogAlternates.map((og) => <meta property="og:locale:alternate" content={og} />)}
     <meta property="og:title" content={title} />
