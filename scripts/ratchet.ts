@@ -632,6 +632,36 @@ const countCapabilitiesWithoutDescription = (content: string): number => {
   }).length;
 };
 
+// A capability suppressed from the generic transport because its input carries
+// a `t.File()` field (`requiresFileInput`) or its success value is a web
+// `Response`/raw bytes (`returnsFileResponse`). Suppressed entries are dropped
+// from the CLI tree (`insertCapabilities`) and refused pre-execution by
+// `invoke_capability`, so each one is a capability an agent surface simply
+// cannot reach. This metric freezes that count: a newly file-shaped capability
+// cannot silently disappear from both clients, and the burn-down is a reviewed
+// baseline bump rather than a side effect. An entry flagged BOTH ways counts
+// once — the unit is a suppressed capability, not a suppression flag. Counting
+// the committed artifacts keeps the scan cheap and deterministic; both mirrors
+// are included so drift between them also shows up.
+const countFileTransportSuppressed = (content: string): number => {
+  const parsed: unknown = JSON.parse(content);
+  if (!Array.isArray(parsed)) {
+    return 0;
+  }
+  return parsed.filter((entry) => {
+    if (typeof entry !== "object" || entry === null) {
+      return false;
+    }
+    const read = (key: string): unknown =>
+      Object.hasOwn(entry, key)
+        ? Object.getOwnPropertyDescriptor(entry, key)?.value
+        : undefined;
+    return (
+      read("requiresFileInput") === true || read("returnsFileResponse") === true
+    );
+  }).length;
+};
+
 /**
  * Entries in the reviewed `DOMAIN_ACTION_VERBS` allowlist: capability action
  * verbs outside the canonical `list/get/create/update/delete` set. Each one is a
@@ -794,6 +824,19 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
     count: countCapabilitiesWithoutDescription,
+  },
+  {
+    id: "capability-file-transport-suppressed",
+    description:
+      "capabilities suppressed from the generic transport for file input/output (requiresFileInput or returnsFileResponse): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them (counted across both committed catalog mirrors)",
+    include: [
+      "packages/cli/src/generated/capability-catalog.json",
+      "apps/api/src/mcp/generated/capability-catalog.json",
+    ],
+    // Generated artifacts are the subject here, so the shared source
+    // exclusions (which skip `.gen.`/generated paths) must not apply.
+    exclude: () => false,
+    count: countFileTransportSuppressed,
   },
   {
     id: "capability-domain-action-verbs",
@@ -1268,12 +1311,22 @@ const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
   // whitespace-only one (counted, so a blank string cannot silence the guard).
   { id: "epsilon.list", description: "Lists the epsilons." },
   { id: "zeta.get", description: "   " },
+  // File-transport suppression shapes: input-only, output-only, BOTH (must
+  // count once, not twice), and `false` (must not count at all).
+  { id: "eta.create", requiresFileInput: true },
+  { id: "theta.get", returnsFileResponse: true },
+  { id: "iota.update", requiresFileInput: true, returnsFileResponse: true },
+  { id: "kappa.delete", requiresFileInput: false, returnsFileResponse: false },
 ])}\n`;
 // Two truncated entries in each of the two mirror fixtures.
 const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 4;
 // Five of the six fixture entries lack usable prose (only `epsilon.list` has
 // it), in each of the two mirror fixtures.
-const EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION = 10;
+const EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION = 18;
+// Three suppressed entries (input-only, output-only, and the both-flags entry
+// counted ONCE) in each of the two mirror fixtures; the `false`/`false` entry
+// is excluded.
+const EXPECTED_FILE_TRANSPORT_SUPPRESSED = 6;
 
 const runSelfTest = (): number => {
   const failures: string[] = [];
@@ -1450,6 +1503,14 @@ const runSelfTest = (): number => {
     ) {
       failures.push(
         `capability-schemas-truncated counted ${truncatedCapabilityMetric.count}, expected ${EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS}`,
+      );
+    }
+
+    const fileTransportMetric =
+      snapshot["capability-file-transport-suppressed"];
+    if (fileTransportMetric.count !== EXPECTED_FILE_TRANSPORT_SUPPRESSED) {
+      failures.push(
+        `capability-file-transport-suppressed counted ${fileTransportMetric.count}, expected ${EXPECTED_FILE_TRANSPORT_SUPPRESSED}`,
       );
     }
 

@@ -150,10 +150,10 @@
       "apps/api/src/handlers/templates/fill.ts": 1,
       "apps/api/src/handlers/templates/prepare-template.ts": 1,
       "apps/api/src/handlers/time-entries/split.ts": 1,
-      "apps/api/src/handlers/uploads/abort.ts": 2,
       "apps/api/src/handlers/uploads/agent-skill.ts": 2,
+      "apps/api/src/handlers/uploads/delete.ts": 2,
       "apps/api/src/handlers/uploads/entity-create-tree.ts": 6,
-      "apps/api/src/handlers/uploads/finalize.ts": 4,
+      "apps/api/src/handlers/uploads/update.ts": 4,
       "apps/api/src/handlers/view-templates/create.ts": 1,
       "apps/api/src/handlers/view-templates/properties.ts": 3,
       "apps/api/src/handlers/views/table-export.ts": 2,
@@ -422,10 +422,10 @@
       "apps/api/src/handlers/templates/update.ts": 3,
       "apps/api/src/handlers/templates/versions.ts": 1,
       "apps/api/src/handlers/uploads/agent-skill.ts": 2,
+      "apps/api/src/handlers/uploads/create.ts": 1,
       "apps/api/src/handlers/uploads/entity-create-tree.ts": 1,
       "apps/api/src/handlers/uploads/entity-create.ts": 5,
       "apps/api/src/handlers/uploads/entity-version.ts": 6,
-      "apps/api/src/handlers/uploads/presign.ts": 1,
       "apps/api/src/handlers/user-files/read-thumbnail.ts": 2,
       "apps/api/src/handlers/view-templates/create.ts": 1,
       "apps/api/src/handlers/view-templates/properties.ts": 1,
@@ -563,6 +563,13 @@
     "files": {
       "apps/api/src/mcp/generated/capability-catalog.json": 259,
       "packages/cli/src/generated/capability-catalog.json": 259
+    }
+  },
+  "capability-file-transport-suppressed": {
+    "count": 42,
+    "files": {
+      "apps/api/src/mcp/generated/capability-catalog.json": 21,
+      "packages/cli/src/generated/capability-catalog.json": 21
     }
   },
   "capability-domain-action-verbs": {

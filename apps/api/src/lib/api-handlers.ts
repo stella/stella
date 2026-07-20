@@ -94,6 +94,11 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   plumbing stay `internal` under the same reason.
  * - `chat_thread_ui`: chat-thread rename. Breadcrumb title lookup stays
  *   `internal` under the same reason.
+ * - `file_transport`: the presigned-upload loop (create/update/delete). These
+ *   are the ONLY file-input path an agent surface has: the generic JSON invoke
+ *   cannot carry a `File`, so the multipart endpoints stay unreachable and
+ *   clients drive presign -> PUT -> finalize instead. Bulk tree/preflight
+ *   helpers stay `internal` under `upload_mechanics`.
  */
 export type McpCapabilityReason =
   | "template_authoring_ui"
@@ -108,7 +113,8 @@ export type McpCapabilityReason =
   | "billing_admin"
   | "document_processing"
   | "assistant_chat"
-  | "chat_thread_ui";
+  | "chat_thread_ui"
+  | "file_transport";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -118,7 +124,9 @@ export type McpCapabilityReason =
  * is a deliberate, reviewed addition here.
  *
  * - `auth_plumbing`: better-auth / sign-in / verification / session routes.
- * - `upload_mechanics`: presign / finalize / abort / preflight upload steps.
+ * - `upload_mechanics`: bulk entity-create tree and preflight upload steps.
+ *   The single-file presign / finalize / abort loop is a `capability` under
+ *   `file_transport`.
  * - `realtime_stream`: SSE / event-stream endpoints.
  * - `session_token_exchange`: folio-collab and desktop-edit token/session
  *   exchange handlers that authorize themselves from a body/param token.

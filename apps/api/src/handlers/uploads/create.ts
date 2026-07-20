@@ -126,6 +126,20 @@ const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
 };
 
 const config = {
+  description:
+    "Step 1 of 3 of the file-upload flow: reserve an upload and mint a " +
+    "short-lived presigned S3 PUT URL. This is the ONLY way to get a file " +
+    "into stella from an agent surface; the multipart endpoints cannot be " +
+    "called with JSON. Pass purpose plus the file metadata: name, mimeType, " +
+    "size in bytes, and sha256Hex (lowercase hex SHA-256 of the exact " +
+    "bytes). purpose is entity_create (with propertyId, optional parentId) " +
+    "to add a new document, entity_version (with entityId) to add a version " +
+    "to an existing one, or agent_skill (with scope team or private) for a " +
+    "skill pack. Returns uploadId, url, expiresAt, and headers. Step 2: PUT " +
+    "the bytes to url with those headers verbatim -- the URL is signed " +
+    "against the exact size and checksum, so any deviation is rejected. " +
+    "Step 3: call uploads.update with the uploadId to commit the record. " +
+    "Call uploads.delete instead if the PUT fails.",
   permissions: uploadRoutePermission,
   mcp: { type: "capability", reason: "file_transport" },
   body: presignBodySchema,
