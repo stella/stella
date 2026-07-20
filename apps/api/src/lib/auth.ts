@@ -1,3 +1,4 @@
+import { apiKey } from "@better-auth/api-key";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
@@ -53,6 +54,14 @@ import {
   LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
+import {
+  MACHINE_API_KEY_CONFIG_ID,
+  MACHINE_API_KEY_EXPIRY,
+  MACHINE_API_KEY_LENGTH,
+  MACHINE_API_KEY_PREFIX,
+  MACHINE_API_KEY_RATE_LIMIT,
+  MACHINE_API_KEY_START_LENGTH,
+} from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
@@ -495,7 +504,24 @@ const createAuth = () => {
       ...(env.isDev ? DEV_INSPECTOR_ORIGINS : []),
       ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
     ],
-    disabledPaths: ["/token"],
+    disabledPaths: [
+      "/token",
+      // The API key plugin ships its own HTTP CRUD, and it authorizes on
+      // "is this your key" alone — any signed-in member could mint a key for
+      // themselves carrying arbitrary permissions, with no org-admin check, no
+      // subset validation against their role, and no audit record. Machine-key
+      // lifecycle is only allowed through `handlers/api-keys/`, which enforces
+      // all three.
+      //
+      // `disabledPaths` is applied in the HTTP router's `onRequest` hook, so it
+      // 404s these routes for external callers while leaving the server-side
+      // `auth.api.*` calls those handlers make completely unaffected.
+      "/api-key/create",
+      "/api-key/update",
+      "/api-key/delete",
+      "/api-key/get",
+      "/api-key/list",
+    ],
     user: {
       additionalFields: {
         timezoneId: {
@@ -619,6 +645,42 @@ const createAuth = () => {
       // it when running alongside an oauth provider plugin.
       jwt({ disableSettingJwtHeader: true }),
       lastLoginMethod(),
+      // Machine (CI / agent / CLI) credentials. Lifecycle runs through the
+      // org-scoped handlers in `handlers/api-keys/`, which is where the
+      // permission and audit-log requirements live; this registration only
+      // establishes how a key is minted, stored, and verified.
+      apiKey({
+        configId: MACHINE_API_KEY_CONFIG_ID,
+        // `referenceId` must hold a **user** id. The MCP credential path feeds
+        // it straight into the same member/RLS authorization the JWT path uses,
+        // and that requires a principal with a `member` row. `"organization"`
+        // would store an org id there and leave nothing to authorize as.
+        references: "user",
+        defaultPrefix: MACHINE_API_KEY_PREFIX,
+        defaultKeyLength: MACHINE_API_KEY_LENGTH,
+        startingCharactersConfig: {
+          shouldStore: true,
+          charactersLength: MACHINE_API_KEY_START_LENGTH,
+        },
+        // A key nobody can identify is a key nobody revokes.
+        requireName: true,
+        enableMetadata: true,
+        // Deliberately off. Enabling it would let any `x-api-key` header mint a
+        // mock user session on *every* better-auth endpoint, turning a scoped
+        // machine credential into a full interactive session and bypassing the
+        // explicit scope gating the MCP path applies. The only thing that may
+        // consume one of these keys is `mcp/api-key-auth.ts`, which resolves it
+        // and then re-authorizes it from scratch.
+        enableSessionForAPIKeys: false,
+        // Hashing stays on (the plugin stores a SHA-256 digest): `disableKeyHashing`
+        // would put recoverable secrets in the table.
+        rateLimit: MACHINE_API_KEY_RATE_LIMIT,
+        keyExpiration: {
+          defaultExpiresIn: MACHINE_API_KEY_EXPIRY.defaultSeconds,
+          minExpiresIn: MACHINE_API_KEY_EXPIRY.minDays,
+          maxExpiresIn: MACHINE_API_KEY_EXPIRY.maxDays,
+        },
+      }),
       emailOTP({
         // Pin the security-relevant OTP parameters explicitly rather than
         // inheriting library defaults, so a better-auth upgrade cannot
