@@ -262,7 +262,7 @@ export const CliMcpPreview = ({
       {showCompanions && (
         <div
           className={cn(
-            "cli-client mac-window group bg-card absolute start-[2.5%] top-[8%] hidden h-[30%] w-[15.5%] min-w-0 overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] sm:block",
+            "cli-client mac-window group bg-card absolute start-[2.5%] top-[8%] hidden h-[24%] w-[15.5%] min-w-0 overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] sm:block",
             discoverLabel && selectedWindow === "client" && "cli-selected",
           )}
           onPointerDown={() => activateWindow("client")}
@@ -640,31 +640,11 @@ const TeamsWindow = ({ showAnswer }: { showAnswer: boolean }) => (
               APP
             </span>
           </p>
+          {/* One beat per card: the answer line carries the deviations; the
+              detail lives in the review scene the story flows into. */}
           <p className="text-muted-foreground line-clamp-2">
             {storyTeamsExchange.response}
           </p>
-          <div
-            className={cn(
-              "story-step mt-[clamp(.3rem,.6cqw,.5rem)] rounded-[clamp(.3rem,.6cqw,.5rem)] border p-[clamp(.32rem,.6cqw,.55rem)]",
-              showAnswer && "story-step-visible",
-            )}
-            style={{
-              background:
-                "color-mix(in srgb, var(--card) 86%, var(--teams-accent) 14%)",
-              borderColor:
-                "color-mix(in srgb, var(--teams-accent) 24%, var(--border))",
-            }}
-          >
-            <p className="text-foreground font-semibold">
-              2 playbook deviations
-            </p>
-            <p className="text-muted-foreground mt-0.5 line-clamp-2">
-              {storyTeamsExchange.result}
-            </p>
-            <p className="mt-1 font-medium" style={{ color: AGENT_ACCENT }}>
-              Open in stella →
-            </p>
-          </div>
         </div>
       </div>
     </div>
@@ -917,8 +897,8 @@ const DISCOVER_PRODUCTS: Record<
 // sibling; these values mirror the windows' inset/size classes below and
 // must move together with them.
 const DISCOVER_TAG_POSITIONS: Record<PreviewWindow, CSSProperties> = {
-  // Teams: centred on start 2.5% + half of 15.5%; below top 8% + 30% height.
-  client: { insetInlineStart: "10.25%", top: "calc(38% + 0.55rem)" },
+  // Teams: centred on start 2.5% + half of 15.5%; below top 8% + 24% height.
+  client: { insetInlineStart: "10.25%", top: "calc(32% + 0.55rem)" },
   // Main: centred on start 18.5% + half of 63%; below top 8% + 81% height.
   workspace: { insetInlineStart: "50%", top: "calc(89% + 0.55rem)" },
   // Editor: centred on end 2% + half of 16%; below top 15% + 42% height.
