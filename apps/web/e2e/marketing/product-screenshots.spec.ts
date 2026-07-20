@@ -24,24 +24,6 @@ const captures = [
     readyText: "Export Review - Project Atlas Data Room",
   },
   {
-    name: "story-workspace",
-    path: `/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/`,
-    prepare: "open-table",
-    readyText: "Export Review - Project Atlas Data Room",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
-    name: "story-editor",
-    path:
-      `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
-      "?editing=true" +
-      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
-      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
-    readyText: "Supplier_Agreement.docx",
-    readySelector: ".layout-run-text",
-    clip: { x: 0, y: 0, width: 1440, height: 760 },
-  },
-  {
     name: "story-public-data",
     path: "/law/cases",
     prepare: "open-decision",
