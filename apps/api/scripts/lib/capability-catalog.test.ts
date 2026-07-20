@@ -51,10 +51,10 @@ describe("deriveCapabilityId", () => {
   test("preserves hyphens in directory and file names", () => {
     expect(
       deriveCapabilityId({
-        file: "apps/api/src/handlers/contacts/get.ts",
+        file: "apps/api/src/handlers/contacts/business-registries-lookup.ts",
         exportName: undefined,
       }),
-    ).toBe("contacts.read-by-id");
+    ).toBe("contacts.business-registries-lookup");
   });
 
   test("throws for a path outside the handler tree", () => {

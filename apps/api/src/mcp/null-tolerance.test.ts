@@ -357,8 +357,8 @@ describe("invoke_capability accepts explicit null on nullable fields", () => {
       },
     },
     {
-      label: "contacts.update-by-id body.firstName",
-      capability: "contacts.update-by-id",
+      label: "contacts.update body.firstName",
+      capability: "contacts.update",
       input: {
         params: {
           workspaceId: "ws_1",

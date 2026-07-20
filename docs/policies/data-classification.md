@@ -55,7 +55,7 @@ of whether a source document was previously public.
 
 5. **Short-lived access.** Presigned URLs for file downloads
    expire after 15 minutes
-   (`apps/api/src/handlers/files/read-by-id.ts`). URLs are
+   (`apps/api/src/handlers/files/get.ts`). URLs are
    generated on demand and never persisted.
 
 6. **Private ACL.** All S3 objects are stored with

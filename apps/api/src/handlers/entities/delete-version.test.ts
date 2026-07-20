@@ -226,7 +226,7 @@ describe("delete-version chain-of-custody guard", () => {
             "Whole-entity delete GC: enumerates every version (incl. tombstoned) to collect S3 file refs to release; sees no field content.",
         },
       ],
-      "handlers/workspaces/delete-by-id.ts": [
+      "handlers/workspaces/delete.ts": [
         {
           anchor: "workspaceEntityVersionIds",
           reason:

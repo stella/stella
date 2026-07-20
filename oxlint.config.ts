@@ -1653,7 +1653,7 @@ export default defineConfig({
     {
       files: [
         "apps/api/src/handlers/case-law/decisions/list.ts",
-        "apps/api/src/handlers/case-law/decisions/read-by-id.ts",
+        "apps/api/src/handlers/case-law/decisions/get.ts",
         "apps/api/src/handlers/case-law/decisions/search.ts",
         "apps/api/src/handlers/case-law/decisions/sitemap.ts",
         "apps/api/src/lib/case-law-public-read-db.ts",
