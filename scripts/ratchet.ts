@@ -662,6 +662,45 @@ const countFileTransportSuppressed = (content: string): number => {
   }).length;
 };
 
+// The five write-only OAuth grants (mirrors WRITE_ONLY_SCOPES in
+// apps/api/scripts/lib/capability-catalog.ts; duplicated as a literal so this
+// whole-repo guard has no import into the api package). A READ capability that
+// requires one of these is unreachable by a read-only credential
+// (`stella:read` / `stella:admin_read`): the exporter's read-scope guard
+// prevents it, and this ratchet freezes the count at 0 over the committed
+// mirrors so a regression fails CI even if the exporter guard were bypassed
+// (e.g. a hand-edited JSON). Both mirrors are counted so drift between them
+// also shows up.
+const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set([
+  "stella:admin_write",
+  "stella:billing_write",
+  "stella:documents_write",
+  "stella:knowledge_write",
+  "stella:matters_write",
+]);
+
+const countReadCapabilitiesWithWriteScope = (content: string): number => {
+  const parsed: unknown = JSON.parse(content);
+  if (!Array.isArray(parsed)) {
+    return 0;
+  }
+  return parsed.filter((entry) => {
+    if (typeof entry !== "object" || entry === null) {
+      return false;
+    }
+    const read = (key: string): unknown =>
+      Object.hasOwn(entry, key)
+        ? Object.getOwnPropertyDescriptor(entry, key)?.value
+        : undefined;
+    const scope = read("scope");
+    return (
+      read("access") === "read" &&
+      typeof scope === "string" &&
+      WRITE_ONLY_SCOPES.has(scope)
+    );
+  }).length;
+};
+
 /**
  * Entries in the reviewed `DOMAIN_ACTION_VERBS` allowlist: capability action
  * verbs outside the canonical `list/get/create/update/delete` set. Each one is a
@@ -837,6 +876,19 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
     count: countFileTransportSuppressed,
+  },
+  {
+    id: "read-capabilities-with-write-scope",
+    description:
+      "read capabilities whose required scope is a write-only grant (admin/billing/documents/knowledge/matters _write), unreachable by a read-only credential; the exporter's access-keyed scope resolver keeps this at 0 (counted across both committed catalog mirrors)",
+    include: [
+      "packages/cli/src/generated/capability-catalog.json",
+      "apps/api/src/mcp/generated/capability-catalog.json",
+    ],
+    // Generated artifacts are the subject here, so the shared source
+    // exclusions (which skip `.gen.`/generated paths) must not apply.
+    exclude: () => false,
+    count: countReadCapabilitiesWithWriteScope,
   },
   {
     id: "capability-domain-action-verbs",
@@ -1317,6 +1369,33 @@ const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
   { id: "theta.get", returnsFileResponse: true },
   { id: "iota.update", requiresFileInput: true, returnsFileResponse: true },
   { id: "kappa.delete", requiresFileInput: false, returnsFileResponse: false },
+  // Read-scope shapes (each carries a description so the without-description
+  // count is unaffected): two reads on a write-only scope MUST count, a read on
+  // a read scope and a write on a write scope must NOT.
+  {
+    id: "lambda.list",
+    access: "read",
+    scope: "stella:matters_write",
+    description: "Reads on a write-only scope: counts.",
+  },
+  {
+    id: "mu.get",
+    access: "read",
+    scope: "stella:admin_write",
+    description: "Reads on another write-only scope: counts.",
+  },
+  {
+    id: "nu.get",
+    access: "read",
+    scope: "stella:read",
+    description: "Read on a read scope: excluded.",
+  },
+  {
+    id: "xi.create",
+    access: "write",
+    scope: "stella:matters_write",
+    description: "Write on a write scope: excluded.",
+  },
 ])}\n`;
 // Two truncated entries in each of the two mirror fixtures.
 const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 4;
@@ -1327,6 +1406,10 @@ const EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION = 18;
 // counted ONCE) in each of the two mirror fixtures; the `false`/`false` entry
 // is excluded.
 const EXPECTED_FILE_TRANSPORT_SUPPRESSED = 6;
+// Two read-on-write-scope entries (`lambda.list`, `mu.get`) in each of the two
+// mirror fixtures; the read-on-read-scope and write-on-write-scope entries, and
+// every earlier fixture entry lacking access/scope, are excluded.
+const EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE = 4;
 
 const runSelfTest = (): number => {
   const failures: string[] = [];
@@ -1511,6 +1594,15 @@ const runSelfTest = (): number => {
     if (fileTransportMetric.count !== EXPECTED_FILE_TRANSPORT_SUPPRESSED) {
       failures.push(
         `capability-file-transport-suppressed counted ${fileTransportMetric.count}, expected ${EXPECTED_FILE_TRANSPORT_SUPPRESSED}`,
+      );
+    }
+
+    const readWriteScopeMetric = snapshot["read-capabilities-with-write-scope"];
+    if (
+      readWriteScopeMetric.count !== EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE
+    ) {
+      failures.push(
+        `read-capabilities-with-write-scope counted ${readWriteScopeMetric.count}, expected ${EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE}`,
       );
     }
 

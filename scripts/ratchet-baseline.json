@@ -572,6 +572,10 @@
       "packages/cli/src/generated/capability-catalog.json": 21
     }
   },
+  "read-capabilities-with-write-scope": {
+    "count": 0,
+    "files": {}
+  },
   "capability-domain-action-verbs": {
     "count": 163,
     "files": {
