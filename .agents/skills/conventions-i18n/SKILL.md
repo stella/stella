@@ -76,3 +76,15 @@ When introducing a NEW concept (or changing a preferred term):
    forbidden renderings; fix the translations, or — only for
    genuine pre-existing debt — grandfather with
    `i18n-lint <dir> --write-baseline` and flag for native review.
+
+## Landing (marketing) catalogs
+
+The landing app has its own catalogs (`apps/landing/src/i18n/messages/`)
+with the same glossary enforcement plus marketing-specific rules —
+register per locale, the identity phrase, hero structure differences,
+meta-string length budgets, cognate policy, and brand handling. Before
+translating landing strings, read
+`apps/landing/src/i18n/TRANSLATION.md`; it explains the intent behind
+each rule so translations stay coherent rather than merely passing the
+checks. Landing gates: `bun run i18n:sync` and `bun run i18n:check`
+from `apps/landing`.
