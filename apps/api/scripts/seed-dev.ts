@@ -446,6 +446,470 @@ export const createMockDocx = async (
   return buf;
 };
 
+// ─── Supplier Agreement (negotiated redline) ────────────
+
+// The negotiated Supplier Agreement filmed by the marketing editor scenes
+// (apps/web/e2e/marketing/record-product-story.ts) and mirrored by the
+// landing page's DOM mocks (apps/landing/src/data/product-story.ts:
+// storyTeamsExchange + storyEditorDocument). Unlike the generic mock DOCX
+// files, this one carries real OOXML tracked changes (w:ins / w:del) and
+// margin comments so the editor renders an actual redline: clause 12's
+// liability cap is redlined from 300% of fees to the playbook cap of 100%
+// of annual fees, and clause 14.1's thirty-day termination notice is the
+// second playbook deviation. Keep the clause 12 wording in sync with
+// storyEditorDocument.
+const SUPPLIER_AGREEMENT_DOC_NAME = "Supplier_Agreement.docx";
+
+// Reviewer identity stamped on the tracked changes and margin comments;
+// Clara Novak is a seeded colleague (clara@stella.dev).
+const SUPPLIER_AGREEMENT_REVIEWER = {
+  author: "Clara Novak",
+  date: "2026-07-16T09:30:00Z",
+  initials: "CN",
+} as const;
+
+type SupplierAgreementComment = {
+  id: number;
+  text: string;
+};
+
+const SUPPLIER_AGREEMENT_COMMENTS: SupplierAgreementComment[] = [
+  {
+    id: 1,
+    text:
+      "Above the approved liability cap: the Procurement Playbook allows at " +
+      "most 100% of annual fees. Redlined to the playbook position; needs " +
+      "Legal sign-off.",
+  },
+  {
+    id: 2,
+    text:
+      "Playbook requires at least ninety (90) days' termination notice for " +
+      "supply-critical agreements. Second deviation flagged for Legal " +
+      "review.",
+  },
+];
+
+type SupplierAgreementRun =
+  | { kind: "deleted"; text: string }
+  | { kind: "inserted"; text: string }
+  | { kind: "text"; text: string };
+
+type SupplierAgreementParagraph = {
+  /** Margin comment (id in SUPPLIER_AGREEMENT_COMMENTS) anchored to the paragraph. */
+  commentId?: number;
+  runs: SupplierAgreementRun[];
+  style: "body" | "heading" | "title";
+};
+
+const body = (text: string): SupplierAgreementParagraph => ({
+  runs: [{ kind: "text", text }],
+  style: "body",
+});
+
+const heading = (text: string): SupplierAgreementParagraph => ({
+  runs: [{ kind: "text", text }],
+  style: "heading",
+});
+
+const SUPPLIER_AGREEMENT_PARAGRAPHS: SupplierAgreementParagraph[] = [
+  { runs: [{ kind: "text", text: "Supplier Agreement" }], style: "title" },
+  body("NEGOTIATION DRAFT v4 — CONTAINS TRACKED CHANGES"),
+  body(
+    "This Supplier Agreement (the “Agreement”) is entered into as of 1 July " +
+      "2026 (the “Effective Date”) by and between:",
+  ),
+  body(
+    "(1) Northstar Robotics, Inc., a Delaware corporation with offices at " +
+      "548 Market Street, San Francisco, California 94104, United States " +
+      "(the “Customer”); and",
+  ),
+  body(
+    "(2) Meridian Precision Components GmbH, a company organised under the " +
+      "laws of Germany with registered offices at Werkstrasse 12, 80339 " +
+      "Munich, Germany (the “Supplier”),",
+  ),
+  body("each a “Party” and together the “Parties”."),
+  body(
+    "WHEREAS the Customer designs and manufactures autonomous mobile robots " +
+      "and requires a reliable supply of precision drive components; and " +
+      "WHEREAS the Supplier manufactures harmonic drive gears, actuator " +
+      "housings and related components meeting the Specifications; NOW, " +
+      "THEREFORE, the Parties agree as follows.",
+  ),
+  heading("1. Definitions and interpretation"),
+  body(
+    "1.1 In this Agreement: “Affiliate” means any entity that directly or " +
+      "indirectly controls, is controlled by, or is under common control " +
+      "with a Party; “Annual Fees” means the aggregate fees paid or payable " +
+      "by the Customer under this Agreement during the twelve (12) months " +
+      "immediately preceding the event giving rise to the relevant claim; " +
+      "“Business Day” means a day other than a Saturday, Sunday or public " +
+      "holiday in San Francisco or Munich; “Order” means a purchase order " +
+      "issued by the Customer under Clause 3; “Products” means the " +
+      "components listed in Annex 1; and “Specifications” means the " +
+      "technical specifications set out in Annex 1, as amended in " +
+      "accordance with Clause 2.3.",
+  ),
+  body(
+    "1.2 Headings are for convenience only and do not affect " +
+      "interpretation. References to Clauses and Annexes are to the clauses " +
+      "of, and annexes to, this Agreement.",
+  ),
+  heading("2. Supply of products"),
+  body(
+    "2.1 The Supplier shall manufacture and supply the Products in " +
+      "accordance with the Specifications, the agreed quality standards and " +
+      "the terms of this Agreement.",
+  ),
+  body(
+    "2.2 The Supplier shall maintain sufficient production capacity to " +
+      "satisfy the Customer's rolling forecast, up to one hundred and " +
+      "twenty per cent (120%) of the most recent quarterly forecast volume.",
+  ),
+  body(
+    "2.3 Neither Party may change the Specifications without the prior " +
+      "written approval of the other Party. The Supplier shall give the " +
+      "Customer at least twelve (12) months' written notice before " +
+      "discontinuing any Product.",
+  ),
+  heading("3. Forecasts and orders"),
+  body(
+    "3.1 The Customer shall provide a rolling twelve (12) month forecast, " +
+      "updated monthly. The first three (3) months of each forecast are " +
+      "binding on the Customer.",
+  ),
+  body(
+    "3.2 The Customer shall order Products by issuing an Order stating " +
+      "quantities, delivery dates and delivery locations. The Supplier " +
+      "shall accept or reject an Order within five (5) Business Days; an " +
+      "Order not rejected within that period is deemed accepted.",
+  ),
+  body(
+    "3.3 The Customer may cancel or reschedule an accepted Order more than " +
+      "sixty (60) days before the scheduled delivery date at no charge.",
+  ),
+  heading("4. Delivery, title and risk"),
+  body(
+    "4.1 The Supplier shall deliver the Products DAP (Incoterms 2020) to " +
+      "the Customer's facility identified in the Order. Delivery dates are " +
+      "of the essence.",
+  ),
+  body(
+    "4.2 If the Supplier fails to deliver by the confirmed delivery date, " +
+      "the Customer is entitled to a delay credit of 0.5% of the Order " +
+      "value per commenced week of delay, up to 5% of the Order value.",
+  ),
+  body(
+    "4.3 Title to and risk in the Products pass to the Customer on " +
+      "completed delivery under Clause 4.1.",
+  ),
+  heading("5. Prices and payment"),
+  body(
+    "5.1 Prices are set out in Annex 2 and are fixed until 31 December " +
+      "2026. Price changes thereafter require ninety (90) days' written " +
+      "notice and the Customer's written agreement.",
+  ),
+  body(
+    "5.2 The Supplier shall invoice monthly in arrears. Undisputed invoices " +
+      "are payable within forty-five (45) days of receipt of a correct " +
+      "invoice.",
+  ),
+  body(
+    "5.3 The Parties shall review prices annually in good faith, targeting " +
+      "a productivity improvement of two per cent (2%) per year.",
+  ),
+  heading("6. Quality, inspection and non-conforming products"),
+  body(
+    "6.1 The Supplier shall maintain a quality management system certified " +
+      "to ISO 9001 (or equivalent) and shall retain quality records for " +
+      "each Product lot for at least ten (10) years.",
+  ),
+  body(
+    "6.2 The Customer may perform incoming inspection within ten (10) " +
+      "Business Days of delivery. Rejection of non-conforming Products " +
+      "within that period does not limit the Customer's warranty rights.",
+  ),
+  body(
+    "6.3 For non-conforming Products the Supplier shall, at the Customer's " +
+      "election, replace the Products or refund the price, in each case " +
+      "within ten (10) Business Days of notice.",
+  ),
+  heading("7. Warranties"),
+  body(
+    "7.1 The Supplier warrants that for twenty-four (24) months from " +
+      "delivery each Product conforms to the Specifications, is free from " +
+      "defects in materials and workmanship, and complies with applicable " +
+      "law.",
+  ),
+  body(
+    "7.2 The remedies in Clause 6.3 apply to any breach of the warranty in " +
+      "Clause 7.1, without prejudice to the Customer's other rights under " +
+      "this Agreement.",
+  ),
+  heading("8. Intellectual property"),
+  body(
+    "8.1 Each Party retains all rights in its background intellectual " +
+      "property. Tooling, designs and Specifications provided by the " +
+      "Customer remain the Customer's property and may be used by the " +
+      "Supplier solely to perform this Agreement.",
+  ),
+  heading("9. Confidentiality"),
+  body(
+    "9.1 Each Party shall keep the other Party's confidential information " +
+      "secret, use it solely to perform this Agreement, and disclose it " +
+      "only to personnel and advisers who need it and are bound by " +
+      "equivalent obligations. This Clause survives for five (5) years " +
+      "after termination.",
+  ),
+  heading("10. Data protection and security"),
+  body(
+    "10.1 Each Party shall comply with applicable data protection law in " +
+      "connection with this Agreement and shall implement appropriate " +
+      "technical and organisational measures to protect personal data it " +
+      "processes for the other Party.",
+  ),
+  heading("11. Insurance"),
+  body(
+    "11.1 The Supplier shall maintain product liability insurance of at " +
+      "least EUR 5,000,000 per occurrence with a reputable insurer and " +
+      "shall provide certificates of insurance on request.",
+  ),
+  heading("12. Limitation of liability"),
+  body(
+    "12.1 Nothing in this Agreement excludes or limits either Party's " +
+      "liability for death or personal injury caused by negligence, for " +
+      "fraud or fraudulent misrepresentation, or for any other liability " +
+      "that may not be excluded or limited as a matter of law. Each party " +
+      "remains responsible for its obligations under this Agreement.",
+  ),
+  {
+    commentId: 1,
+    runs: [
+      {
+        kind: "text",
+        text: "12.2 The Supplier’s aggregate liability shall not exceed ",
+      },
+      { kind: "deleted", text: "300% of the fees" },
+      { kind: "inserted", text: "100% of the annual fees" },
+      { kind: "text", text: " paid under this Agreement." },
+    ],
+    style: "body",
+  },
+  body(
+    "12.3 Neither Party is liable for loss of profits, loss of revenue, " +
+      "loss of data, or any indirect or consequential loss, however " +
+      "arising.",
+  ),
+  body(
+    "12.4 The exclusions in this section survive termination of the Agreement.",
+  ),
+  heading("13. Indemnities"),
+  body(
+    "13.1 The Supplier shall indemnify the Customer against third-party " +
+      "claims that a Product as delivered infringes intellectual property " +
+      "rights, provided the Customer notifies the Supplier promptly and " +
+      "gives the Supplier control of the defence.",
+  ),
+  heading("14. Term and termination"),
+  {
+    commentId: 2,
+    runs: [
+      {
+        kind: "text",
+        text:
+          "14.1 This Agreement starts on the Effective Date and continues " +
+          "for an initial term of three (3) years, renewing automatically " +
+          "for successive one (1) year periods. Either Party may terminate " +
+          "this Agreement for convenience by giving the other Party thirty " +
+          "(30) days' prior written notice.",
+      },
+    ],
+    style: "body",
+  },
+  body(
+    "14.2 Either Party may terminate this Agreement with immediate effect " +
+      "by written notice if the other Party undergoes a change of control " +
+      "without the terminating Party's prior written approval, becomes " +
+      "insolvent, or commits a material breach that remains uncured thirty " +
+      "(30) days after written notice of the breach.",
+  ),
+  body(
+    "14.3 Termination does not affect accrued rights. On termination the " +
+      "Supplier shall return the Customer's tooling, designs and " +
+      "confidential information, and shall support an orderly transition " +
+      "of supply for up to six (6) months.",
+  ),
+  heading("15. Force majeure"),
+  body(
+    "15.1 Neither Party is liable for delay or failure to perform caused " +
+      "by events beyond its reasonable control, provided it notifies the " +
+      "other Party without undue delay and uses reasonable efforts to " +
+      "mitigate. If a force majeure event continues for more than sixty " +
+      "(60) days, either Party may terminate affected Orders.",
+  ),
+  heading("16. General"),
+  body(
+    "16.1 This Agreement is governed by the laws of England and Wales, and " +
+      "the courts of London have exclusive jurisdiction.",
+  ),
+  body(
+    "16.2 This Agreement, including its Annexes, is the entire agreement " +
+      "between the Parties regarding its subject matter. Amendments must " +
+      "be in writing and signed by both Parties. Notices must be in " +
+      "writing to the addresses above.",
+  ),
+  body("SIGNED for and on behalf of NORTHSTAR ROBOTICS, INC."),
+  body("Elena Park, Chief Executive Officer"),
+  body("SIGNED for and on behalf of MERIDIAN PRECISION COMPONENTS GMBH"),
+  body("Katrin Vogel, Managing Director"),
+];
+
+/**
+ * Plain-text rendition of the Supplier Agreement with the tracked changes
+ * applied (insertions kept, deletions dropped): the single source for
+ * extracted content and the search index, same as `documentTexts` entries.
+ */
+const buildSupplierAgreementText = (): string =>
+  SUPPLIER_AGREEMENT_PARAGRAPHS.filter(
+    (paragraph) => paragraph.style !== "title",
+  )
+    .map((paragraph) =>
+      paragraph.runs
+        .filter((run) => run.kind !== "deleted")
+        .map((run) => run.text)
+        .join(""),
+    )
+    .join("\n\n");
+
+/**
+ * Build the Supplier Agreement DOCX with real tracked changes and margin
+ * comments. Mirrors `createMockDocx`'s minimal OOXML package, plus a
+ * `word/comments.xml` part (folio reads it by path) and its content-type
+ * override and relationship for Word compatibility.
+ */
+const createSupplierAgreementDocx = async (): Promise<Buffer> => {
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+  const { author, date } = SUPPLIER_AGREEMENT_REVIEWER;
+
+  zip.file(
+    "[Content_Types].xml",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>' +
+      "</Types>",
+  );
+
+  zip
+    .folder("_rels")
+    ?.file(
+      ".rels",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+        "</Relationships>",
+    );
+
+  let revisionId = 100;
+  const runXml = (run: SupplierAgreementRun, bold: boolean): string => {
+    const boldXml = bold ? "<w:b/>" : "";
+    const sizeXml = '<w:sz w:val="22"/>';
+    const runProps = `<w:rPr>${boldXml}${sizeXml}</w:rPr>`;
+    const escaped = xmlEscape(run.text);
+    if (run.kind === "deleted") {
+      revisionId++;
+      return (
+        `<w:del w:id="${revisionId}" w:author="${xmlEscape(author)}" w:date="${date}">` +
+        `<w:r>${runProps}<w:delText xml:space="preserve">${escaped}</w:delText></w:r>` +
+        "</w:del>"
+      );
+    }
+    if (run.kind === "inserted") {
+      revisionId++;
+      return (
+        `<w:ins w:id="${revisionId}" w:author="${xmlEscape(author)}" w:date="${date}">` +
+        `<w:r>${runProps}<w:t xml:space="preserve">${escaped}</w:t></w:r>` +
+        "</w:ins>"
+      );
+    }
+    return `<w:r>${runProps}<w:t xml:space="preserve">${escaped}</w:t></w:r>`;
+  };
+
+  const paragraphXml = (paragraph: SupplierAgreementParagraph): string => {
+    if (paragraph.style === "title") {
+      const titleRuns = paragraph.runs
+        .map((run) => runXml(run, false))
+        .join("");
+      return `<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr>${titleRuns}</w:p>`;
+    }
+    const isHeading = paragraph.style === "heading";
+    const spacing = isHeading
+      ? '<w:spacing w:before="360" w:after="160"/>'
+      : '<w:spacing w:after="140"/>';
+    const runProps = isHeading ? '<w:rPr><w:b/><w:sz w:val="26"/></w:rPr>' : "";
+    const paragraphProps = `<w:pPr>${spacing}${runProps}</w:pPr>`;
+    const runsXml = paragraph.runs
+      .map((run) => runXml(run, isHeading))
+      .join("");
+    if (paragraph.commentId === undefined) {
+      return `<w:p>${paragraphProps}${runsXml}</w:p>`;
+    }
+    return (
+      `<w:p>${paragraphProps}<w:commentRangeStart w:id="${paragraph.commentId}"/>${ 
+      runsXml 
+      }<w:commentRangeEnd w:id="${paragraph.commentId}"/>` +
+      `<w:r><w:commentReference w:id="${paragraph.commentId}"/></w:r>` +
+      `</w:p>`
+    );
+  };
+
+  const paragraphs = SUPPLIER_AGREEMENT_PARAGRAPHS.map(paragraphXml).join("");
+
+  zip
+    .folder("word")
+    ?.file(
+      "document.xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+        `<w:body>${paragraphs}</w:body>` +
+        "</w:document>",
+    );
+
+  const commentsXml = SUPPLIER_AGREEMENT_COMMENTS.map(
+    (comment) =>
+      `<w:comment w:id="${comment.id}" w:author="${xmlEscape(author)}" ` +
+      `w:initials="${SUPPLIER_AGREEMENT_REVIEWER.initials}" w:date="${date}">` +
+      `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(comment.text)}</w:t></w:r></w:p>` +
+      "</w:comment>",
+  ).join("");
+  zip
+    .folder("word")
+    ?.file(
+      "comments.xml",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+        `${commentsXml}</w:comments>`,
+    );
+
+  zip
+    .folder("word")
+    ?.folder("_rels")
+    ?.file(
+      "document.xml.rels",
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>' +
+        "</Relationships>",
+    );
+
+  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  return buf;
+};
+
 // ─── Document names per workspace ───────────────────────
 
 const buildHeavyMatterDocNames = (): string[] => {
@@ -685,6 +1149,7 @@ const workspaceDocNames: Record<string, string[]> = {
     "Znalecky_posudek_hodnota.pdf",
     "Internal_SAFE_Agreement.docx",
     "Redacted_Due_Diligence_Extract.docx",
+    SUPPLIER_AGREEMENT_DOC_NAME,
   ],
   "ws-stavebni-spor": [
     "Zaloba_o_nahradu_skody.pdf",
@@ -859,6 +1324,8 @@ By: Elena Park, Chief Executive Officer
 NORTHSTAR SEED FUND I, L.P.
 
 By: Marcus Chen, General Partner`,
+
+  [SUPPLIER_AGREEMENT_DOC_NAME]: buildSupplierAgreementText(),
 
   "Redacted_Due_Diligence_Extract.docx": `CONFIDENTIAL — REDACTED REVIEW COPY
 
@@ -2949,6 +3416,12 @@ const buildFields = (
 
   for (let i = 0; i < docs.length; i++) {
     const doc = at(docs, i);
+    // The Supplier Agreement redline is mid-negotiation: pin its status and
+    // note to the review story instead of the rotating generic values, so
+    // the filmed files view matches the landing mock's framing.
+    const isSupplierAgreement =
+      wsLabel === AKVIZICE_MATTER_LABEL &&
+      doc.name === SUPPLIER_AGREEMENT_DOC_NAME;
 
     // Status field
     result.push({
@@ -2959,7 +3432,9 @@ const buildFields = (
       content: {
         version: 1,
         type: "single-select",
-        value: at(statuses, i % statuses.length),
+        value: isSupplierAgreement
+          ? "In Review"
+          : at(statuses, i % statuses.length),
       },
     });
 
@@ -2990,7 +3465,9 @@ const buildFields = (
       content: {
         version: 1,
         type: "text",
-        value: at(notes, noteIndex),
+        value: isSupplierAgreement
+          ? "Two positions outside playbook"
+          : at(notes, noteIndex),
       },
     });
 
@@ -4652,7 +5129,14 @@ export async function seed(organizationId?: string, userId?: string) {
   const pdfTwinCount = 0;
   let extractedCount = 0;
 
-  const allDocNames = Object.values(workspaceDocNames).flat();
+  // Pool for the extra workspaces' pseudo-random doc picks. The Supplier
+  // Agreement is excluded twice over: including it would reshuffle every
+  // previously seeded extra workspace's picks (they index into this list
+  // modulo its length), and the redlined marketing document should not be
+  // cloned into unrelated matters.
+  const allDocNames = Object.values(workspaceDocNames)
+    .flat()
+    .filter((name) => name !== SUPPLIER_AGREEMENT_DOC_NAME);
 
   /** Seed all document content for a single workspace. */
   const seedDocumentsForWorkspace = async (
@@ -4678,10 +5162,19 @@ export async function seed(organizationId?: string, userId?: string) {
       const docText = documentTexts[fileName];
 
       // ── S3 file ──
-      const content = isDocx
-        ? // oxlint-disable-next-line no-await-in-loop -- bounded memory: build one document's bytes at a time
-          await createMockDocx(title, docText)
-        : createMockPdf(title, docText);
+      // The Supplier Agreement ships real tracked changes and comments, so
+      // it has a dedicated builder instead of the generic paragraph mock.
+      const buildContent = async () => {
+        if (fileName === SUPPLIER_AGREEMENT_DOC_NAME) {
+          return await createSupplierAgreementDocx();
+        }
+        if (isDocx) {
+          return await createMockDocx(title, docText);
+        }
+        return createMockPdf(title, docText);
+      };
+      // oxlint-disable-next-line no-await-in-loop -- bounded memory: build one document's bytes at a time
+      const content = await buildContent();
 
       const sha256Hex = new Bun.CryptoHasher("sha256")
         .update(content)

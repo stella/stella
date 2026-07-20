@@ -38,6 +38,14 @@ const EMAIL = "test@stella.dev";
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 const NORTHSTAR_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
+// The negotiated Supplier Agreement in the Northstar matter (seed-dev.ts:
+// `ws-akvizice-energo-doc-7` / `ws-akvizice-energo-field-file-6`): the docx
+// with the clause-12 liability-cap redline and playbook margin comments
+// that the editor scenes film, matching the landing DOM mock
+// (storyEditorDocument in apps/landing/src/data/product-story.ts).
+const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
+const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
+const SUPPLIER_AGREEMENT_FILE_NAME = "Supplier_Agreement.docx";
 // The wide/hero/portrait viewports and the capture matrix live in
 // ./captures.ts so the staleness check (scripts/check-marketing-recordings.ts)
 // shares one source of truth with the recorder.
@@ -73,6 +81,23 @@ type MarketingViewRoutes = {
   agent: string;
   files: string;
   table: string;
+};
+
+// The clause-12 redline as painted on the page. Scoped to the painted layout
+// layer (`.layout-run-text`): once the edit session unlocks, folio also
+// mirrors the document into a hidden off-screen ProseMirror layer whose runs
+// carry `.docx-insertion` too, and scrolling that mirror moves nothing.
+const PAINTED_REDLINE_SELECTOR = ".layout-run-text.docx-insertion";
+
+// Shared prepare for both editor scenes: wait for the Supplier Agreement to
+// lay out, require the clause-12 redline (folio's tracked-insertion run) so
+// a build that lost the tracked change can never ship a clean-document
+// recording, then close the inspector so the page fills the frame.
+const prepareEditorScene = async (page: Page) => {
+  await page.getByText(SUPPLIER_AGREEMENT_FILE_NAME).first().waitFor();
+  await page.locator(".layout-run-text").first().waitFor();
+  await page.locator(PAINTED_REDLINE_SELECTOR).first().waitFor();
+  await closeInspectorIfOpen(page);
 };
 
 const scenes = [
@@ -120,35 +145,27 @@ const scenes = [
     path: () =>
       `/workspaces/${NORTHSTAR_WORKSPACE_ID}/all/document` +
       "?editing=true" +
-      "&entity=c3596565-1663-57fe-81aa-e69a56675a27" +
-      "&field=6a22b489-4a08-5c91-8cda-ec83ff6ef8e7",
+      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
+      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
     durationSeconds: 3.5,
-    prepare: async (page) => {
-      await page.getByText("Internal_SAFE_Agreement.docx").first().waitFor();
-      await page.locator(".layout-run-text").first().waitFor();
-      await closeInspectorIfOpen(page);
-    },
+    prepare: prepareEditorScene,
   },
   {
     // Portrait-only document scene for the floating editor side window: the
-    // same seeded SAFE in the document full view (the route the inspector's
-    // "Full view" button opens), with the app sidebar collapsed so the Word
-    // page fills the narrow frame. Cursor hidden for the same reason as the
-    // wide editor scene: the loop is scroll-only.
+    // same seeded Supplier Agreement in the document full view (the route
+    // the inspector's "Full view" button opens), with the app sidebar
+    // collapsed so the Word page fills the narrow frame. Cursor hidden for
+    // the same reason as the wide editor scene: the loop is scroll-only.
     id: "editor-doc",
     collapsedSidebar: true,
     cursor: "hidden",
     path: () =>
       `/workspaces/${NORTHSTAR_WORKSPACE_ID}/all/document` +
       "?editing=true" +
-      "&entity=c3596565-1663-57fe-81aa-e69a56675a27" +
-      "&field=6a22b489-4a08-5c91-8cda-ec83ff6ef8e7",
+      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
+      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
     durationSeconds: 3.5,
-    prepare: async (page) => {
-      await page.getByText("Internal_SAFE_Agreement.docx").first().waitFor();
-      await page.locator(".layout-run-text").first().waitFor();
-      await closeInspectorIfOpen(page);
-    },
+    prepare: prepareEditorScene,
   },
   {
     id: "agent",
@@ -1106,6 +1123,34 @@ const scrollDocumentTo = async (page: Page, top: number) => {
     }, top);
 };
 
+// Scroll the document so the clause-12 liability-cap redline (the first
+// painted tracked insertion) sits mid-frame. The editor loop pauses here, so
+// the tracked change is on screen around the loop's midpoint.
+const scrollDocumentToRedline = async (page: Page) => {
+  await page
+    .locator(PAINTED_REDLINE_SELECTOR)
+    .first()
+    .evaluate((redline) => {
+      let scrollParent = redline.parentElement;
+      while (scrollParent) {
+        if (scrollParent.scrollHeight > scrollParent.clientHeight + 40) {
+          const parentBox = scrollParent.getBoundingClientRect();
+          const redlineBox = redline.getBoundingClientRect();
+          const centered =
+            scrollParent.scrollTop +
+            (redlineBox.top - parentBox.top) -
+            scrollParent.clientHeight / 2;
+          scrollParent.scrollTo({
+            behavior: "smooth",
+            top: Math.max(0, centered),
+          });
+          return;
+        }
+        scrollParent = scrollParent.parentElement;
+      }
+    });
+};
+
 // Loop-friendly motion: every scene returns to (or near) its frame-0 state by
 // the end of the cut so the video loops without a jarring jump. The hover
 // loops end on the row the prepare step left hovered; the document scroll
@@ -1122,8 +1167,12 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
     return;
   }
   if (captureId === "editor" || captureId === "editor-doc") {
-    await scrollDocumentTo(page, 180);
-    await page.waitForTimeout(1700);
+    // Glide down through the body text to the clause-12 redline, hold long
+    // enough to read the tracked change (mid-loop), then return to the top
+    // so the loop closes on frame 0. The glide spans ~3 pages (~1.1s each
+    // way), so the hold is what keeps the return inside the 3.5s cut.
+    await scrollDocumentToRedline(page);
+    await page.waitForTimeout(1300);
     await scrollDocumentTo(page, 0);
     return;
   }

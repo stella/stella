@@ -3,6 +3,10 @@ import type { APIRequestContext } from "@playwright/test";
 
 const AKVIZICE_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
+// Seeded Supplier Agreement redline in the Northstar matter; keep in sync
+// with record-product-story.ts (seed-dev.ts `ws-akvizice-energo-doc-7`).
+const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
+const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 const requestedCapture = process.env["MARKETING_CAPTURE"];
 
 const captures = [
@@ -30,9 +34,9 @@ const captures = [
     path:
       `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
       "?editing=true" +
-      "&entity=c3596565-1663-57fe-81aa-e69a56675a27" +
-      "&field=6a22b489-4a08-5c91-8cda-ec83ff6ef8e7",
-    readyText: "Internal_SAFE_Agreement.docx",
+      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
+      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
+    readyText: "Supplier_Agreement.docx",
     readySelector: ".layout-run-text",
     clip: { x: 0, y: 0, width: 1440, height: 760 },
   },
@@ -48,9 +52,9 @@ const captures = [
     path:
       `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
       "?editing=true" +
-      "&entity=c3596565-1663-57fe-81aa-e69a56675a27" +
-      "&field=6a22b489-4a08-5c91-8cda-ec83ff6ef8e7",
-    readyText: "Internal_SAFE_Agreement.docx",
+      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
+      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
+    readyText: "Supplier_Agreement.docx",
     readySelector: ".layout-run-text",
   },
   { name: "agent", path: "/chat/new", readyText: "Chat" },

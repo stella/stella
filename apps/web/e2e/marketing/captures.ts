@@ -8,10 +8,10 @@
 
 export type CaptureViewport = { height: number; width: number };
 
-// "editor-doc" is the portrait-only scene: the same seeded SAFE document
-// opened in the document full view with the app sidebar collapsed, so the
-// floating editor side window shows the docx page rather than the whole app
-// squeezed narrow.
+// "editor-doc" is the portrait-only scene: the same seeded Supplier
+// Agreement opened in the document full view with the app sidebar collapsed,
+// so the floating editor side window shows the docx page rather than the
+// whole app squeezed narrow.
 export type StoryCaptureId =
   | "agent"
   | "editor"
@@ -71,10 +71,11 @@ const SCENE_WATCHED_PATHS: Record<StoryCaptureId, readonly string[]> = {
   workspace: ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
   // Table view of the same workspace.
   review: ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
-  // DOCX editor over the seeded Northstar SAFE ($viewId.document.tsx and
-  // -components/docx live inside the workspace slice).
+  // DOCX editor over the seeded Supplier Agreement redline
+  // ($viewId.document.tsx and -components/docx live inside the workspace
+  // slice).
   editor: ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
-  // Document full view of the same SAFE, sidebar collapsed.
+  // Document full view of the same Supplier Agreement, sidebar collapsed.
   "editor-doc": ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
   // Seeded agent thread in the chat surface.
   agent: [
