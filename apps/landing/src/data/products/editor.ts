@@ -5,10 +5,10 @@ export const editor: Product = {
   eyebrow: "Editor",
   title: "Edit Word documents without leaving the matter.",
   summary:
-    "Open and edit Word .docx files directly in stella. The browser editor preserves the document format, keeps the file connected to its matter, and saves each revision into the document's version history.",
+    "Open and edit Word .docx files directly in stella. The browser editor preserves the document format and its track changes, keeps the file connected to its matter, and saves each revision into the document's version history.",
   metaTitle: "Legal DOCX editor in the browser | stella",
   metaDescription:
-    "Open and edit Word .docx files in the browser. The editor preserves the document format, keeps the file connected to its matter, and versions each save.",
+    "Open and edit Word .docx files in the browser. The editor preserves the format, renders track changes, keeps the file in its matter, and versions each save.",
   hero: {
     type: "story",
     sceneId: "editor",
@@ -26,6 +26,10 @@ export const editor: Product = {
     {
       title: "Native .docx editing",
       body: "Work on Word documents in the browser instead of converting them into a separate proprietary format.",
+    },
+    {
+      title: "Track changes",
+      body: "Tracked insertions and deletions render in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
     },
     {
       title: "Matter context stays visible",
@@ -46,6 +50,7 @@ export const editor: Product = {
       bullets: [
         "Open a .docx directly from a matter",
         "Edit the document with familiar page and formatting controls",
+        "Review track changes in place, including edits proposed by AI",
         "Keep the original Word file format",
         "Save changes into the document's version history",
       ],
@@ -77,6 +82,11 @@ export const editor: Product = {
       question: "Does stella convert the document to another format?",
       answer:
         "No. The browser editor works with the .docx document and saves the result back as a Word file.",
+    },
+    {
+      question: "Does the editor support track changes?",
+      answer:
+        "Yes. Tracked insertions and deletions render in place, the way Word shows them. When stella's AI proposes edits, they arrive as tracked changes you accept or reject before they become part of the document.",
     },
     {
       question: "Can I still edit in Microsoft Word?",
@@ -117,6 +127,12 @@ export const editor: Product = {
       path: "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx",
       contains: ["DocxBrowserEditor", "app-docx-editor"],
     },
+    {
+      type: "source",
+      path: "apps/web/src/components/ai-suggestions/docx-suggestion-persistence.ts",
+      contains: ["resolveDocxSuggestionRequest", "revertDocxSuggestionRequest"],
+    },
+    { type: "capability", id: "entities.read-versions" },
   ],
   cta: {
     heading: "Edit a Word document in its matter.",

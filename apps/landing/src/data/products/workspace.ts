@@ -5,24 +5,24 @@ import { frameAccents, type Product } from "./types";
 export const workspace: Product = {
   slug: "workspace",
   eyebrow: "Workspace",
-  title: "Matters, documents, and tools in one workspace.",
+  title: "Matters, documents, review, and chat in one workspace.",
   summary:
-    "A web app that brings matters, documents, Word .docx editing, review, research, chat, and knowledge tools together. A desktop app bridges local Office editing, and a stella MCP server exposes your matters, documents, and case law.",
+    "The workspace holds a matter's documents, Word .docx editing, review, research, and chat in one place, so the work stays in context from source material to answer.",
   metaTitle: "Legal matter management workspace | stella",
   metaDescription:
-    "A web app bringing matters, documents, Word .docx editing, review, research, and chat together, with a desktop bridge for local Office and an MCP server.",
+    "Matters, documents, Word .docx editing, review, research, and chat in one legal workspace. The work stays in context from source material to answer.",
   hero: {
     type: "story",
     sceneId: "workspace",
     aspect: "16 / 10",
   },
-  // Frame rhythm down the page: bloom, wash, bloom, ripple.
+  // Frame rhythm down the page: bloom, wash, bloom.
   heroFrameVariant: "bloom",
   frameAccent: frameAccents.iris,
   quickAnswer: {
     question: "What is the stella workspace?",
     answer:
-      "A web app that holds matters, documents, Word .docx editing, review, research, chat, and knowledge tools in one place. A companion desktop app acts as a local bridge for editing Office documents, and a stella MCP server exposes matters, documents, and case law.",
+      "A web app that holds matters, documents, Word .docx editing, review, research, and chat in one place. Everything added to a matter stays attached to it, so the context is there when you return. A companion desktop app acts as a local bridge when a document needs Microsoft Word.",
   },
   capabilities: [
     {
@@ -46,8 +46,8 @@ export const workspace: Product = {
       body: "A desktop app acts as a local bridge for editing Office documents from stella.",
     },
     {
-      title: "MCP server",
-      body: "A stella MCP server exposes matters, documents, and case law to connected tools.",
+      title: "Version history",
+      body: "Saved edits and uploads become document revisions, so the current file and its history stay together.",
     },
   ],
   sections: [
@@ -79,21 +79,6 @@ export const workspace: Product = {
       },
       frameVariant: "bloom",
     },
-    {
-      heading: "Connect stella to your tools",
-      bullets: [
-        "A stella MCP server exposes matters, documents, and case law",
-        "Reach the workspace from MCP-compatible tools and the agent",
-        "Use the same workspace from the web app, desktop bridge, and connected tools",
-      ],
-      media: {
-        type: "story",
-        sceneId: "cli",
-        showCompanions: true,
-        aspect: "2.03",
-      },
-      frameVariant: "ripple",
-    },
   ],
   faqs: [
     {
@@ -102,9 +87,14 @@ export const workspace: Product = {
         "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your machine.",
     },
     {
-      question: "What does the MCP server expose?",
+      question: "What lives inside a matter?",
       answer:
-        "A stella MCP server gives connected tools and the agent access to your matters, documents, and case law.",
+        "Documents, contacts, review tables, chat threads, and document history. Everything added to a matter stays attached to it, so the context is there when you return.",
+    },
+    {
+      question: "Can other tools reach the workspace?",
+      answer:
+        "Yes. The stella CLI and MCP server expose the same matters, documents, and case law to connected tools, under the same permissions. See CLI & MCP for details.",
     },
   ],
   adjacent: [
@@ -119,9 +109,9 @@ export const workspace: Product = {
       body: "Turn a document set into a matter-scoped table you can sort, filter, and trace.",
     },
     {
-      title: "Anonymization",
-      href: "/product/anonymization",
-      body: "Prepare material for AI without exposing names, entities, or identifying details.",
+      title: "CLI & MCP",
+      href: "/product/cli-mcp",
+      body: "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools.",
     },
     {
       title: "AI fact sheet",
@@ -134,6 +124,7 @@ export const workspace: Product = {
     { type: "capability", id: "entities.read" },
     { type: "capability", id: "entities.upload" },
     { type: "capability", id: "views.read" },
+    { type: "capability", id: "entities.read-versions" },
     {
       type: "source",
       path: "apps/desktop/src/mainview/App.tsx",
