@@ -70,8 +70,8 @@ const selfHostingDocsUrl =
           <a
             href="/changelog"
             data-reveal
-            style="--reveal-delay: 120ms; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
-            class="group mb-7 inline-flex max-w-[calc(100%-3rem)] items-center gap-2.5 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-transform hover:-translate-y-0.5"
+            style="background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
+            class="reveal-fast group mb-7 inline-flex max-w-[calc(100%-3rem)] items-center gap-2.5 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-transform hover:-translate-y-0.5"
           >
             <span
               class="hero-beta-dot h-2 w-2 shrink-0 rounded-full"
@@ -109,9 +109,10 @@ const selfHostingDocsUrl =
               >
             </span>
           </a>
+          {/* No entrance animation on the headline or subtitle: the H1 is
+              the LCP element, and hiding it behind choreography delays both
+              perceived and measured paint. */}
           <h1
-            data-reveal
-            style="--reveal-delay: 240ms"
             class="max-w-[90rem] text-balance text-center font-display text-5xl font-medium leading-[1.02] sm:text-6xl lg:text-7xl xl:text-[5.5rem]"
           >
             {
@@ -135,8 +136,7 @@ const selfHostingDocsUrl =
             }
           </h1>
           <p
-            data-reveal
-            style="--reveal-delay: 360ms; color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground))"
+            style="color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground))"
             class="mt-6 max-w-2xl text-balance text-center text-lg leading-[1.55] sm:text-xl"
           >
             {
@@ -156,8 +156,7 @@ const selfHostingDocsUrl =
           </p>
           <div
             data-reveal
-            style="--reveal-delay: 440ms"
-            class="mt-8 flex flex-row items-center gap-3"
+            class="reveal-fast mt-8 flex flex-row items-center gap-3"
           >
             <a
               href={selfHostingDocsUrl}

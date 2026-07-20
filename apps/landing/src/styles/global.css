@@ -157,6 +157,13 @@ astro-dev-toolbar {
   transform: translate3d(0, 0, 0);
 }
 
+/* Fast variant for above-the-fold accents (hero badge, hero CTAs): one
+   quick fade, no stagger, so load never reads as slow. */
+.js-reveal [data-reveal].reveal-fast {
+  transition-duration: 150ms;
+  transition-delay: 0ms;
+}
+
 .reveal-without-motion [data-reveal] {
   transition: none !important;
 }
