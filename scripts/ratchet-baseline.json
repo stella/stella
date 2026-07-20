@@ -329,7 +329,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 527,
+    "count": 519,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -398,7 +398,6 @@
       "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 4,
       "apps/web/src/hooks/use-external-file-drop.ts": 1,
       "apps/web/src/i18n/i18n-store.ts": 1,
-      "apps/web/src/lib/dev-store.ts": 8,
       "apps/web/src/lib/pdf/hooks/use-pdf-document.ts": 1,
       "apps/web/src/lib/prompts/use-saved-prompts.ts": 1,
       "apps/web/src/lib/react-query.ts": 1,
