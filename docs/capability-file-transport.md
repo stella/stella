@@ -158,6 +158,35 @@ There is no CLI-only server endpoint.
   `auditedPresignDownload`; the materialized object inherits the existing tmp
   lifecycle expiry.
 
+## Implementation notes
+
+**Naming.** The three endpoints are `uploads.create` / `uploads.update` /
+`uploads.delete`, not `presign` / `finalize` / `abort`. The exporter enforces
+canonical action verbs, and its `DOMAIN_ACTION_VERBS` escape hatch is ratcheted
+downward (`capability-domain-action-verbs`), so adding three verbs there would
+have regressed a guard to buy nicer names. The handler files were renamed
+instead; the REST paths (`/presign`, `/:uploadId/finalize`,
+`/:uploadId/abort`) are unchanged, so no HTTP client is affected. Each
+capability carries a description that states its step number and names the next
+call, which is what an agent reads.
+
+**Rate limiting.** `invoke_capability` bypasses the Elysia route middleware, so
+the `upload-presigned` limiter (500/min, `API_RATE_LIMITS.upload`) does not
+apply on the generic path. These capabilities inherit
+`DEFAULT_INVOKE_RATE_LIMIT` (60/min per organization per capability), which is
+**stricter** than the route, so the invariant in `capability-rate-limit.ts`
+("never looser than the route it stands in for") holds without an override
+entry. At two invokes per file that caps generic-path bulk upload at ~30
+files/min; if that proves too tight, the fix is an explicit
+`INVOKE_RATE_LIMIT_OVERRIDES` entry, not removing the default.
+
+**Access classification.** The entries derive `access: "read"` from the
+route-level `{ workspace: ["read"] }` permission. That does not weaken the
+archived-workspace gate, which is blanket in `capability-tools.ts` and mirrors
+`validateWorkspaceAccess` for reads and writes alike; the real per-purpose
+permission (`entity:create` / `entity:update` / `agentSkill:create`) is still
+checked by `authorizeUploadPurpose` inside the handler.
+
 ## Suppression accounting
 
 `suppressed` must mean "cannot work over a file transport", not "nobody has done
