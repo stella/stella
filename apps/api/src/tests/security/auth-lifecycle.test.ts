@@ -35,6 +35,9 @@ describe("organization member auth lifecycle", () => {
     expect(helperSource).toContain("delete(sessionTable)");
     expect(helperSource).toContain("referenceId");
     expect(helperSource).toContain("activeOrganizationId");
+    // Machine API keys are part of the same lifecycle boundary: a credential
+    // that outlives its membership comes back to life on re-invitation.
+    expect(helperSource).toContain("update(apikey)");
   });
 
   test("lint rule catches auth artifact deletes through schema member access", () => {

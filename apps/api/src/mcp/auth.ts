@@ -2,6 +2,8 @@ import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resourc
 import type { JWTPayload } from "jose";
 
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
+import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import type { McpMode } from "@/api/mcp/constants";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
@@ -107,10 +109,31 @@ export const classifyMcpTokenVerificationError = (
   });
 };
 
+/**
+ * Authenticate an MCP request from its bearer credential.
+ *
+ * Two credential types are accepted and they are told apart by shape, not by
+ * fallback: a machine API key carries a fixed prefix that a JWT (three
+ * base64url segments) can never produce, so each credential takes exactly one
+ * verification path and a failure on that path is final. Nothing is retried
+ * against the other verifier — that would turn either verifier's rejection into
+ * a second chance at the other.
+ *
+ * Both paths produce the same `McpSession`, which `resolveMcpSessionContext`
+ * then authorizes identically: same member lookup, same RLS identity.
+ */
 export const authenticateMcpRequest = async (
   bearerToken: string,
   mode: McpMode = "default",
 ): Promise<McpSession> => {
+  if (isMachineApiKeyCredential(bearerToken)) {
+    try {
+      return await resolveMachineApiKeySession(bearerToken);
+    } catch (error) {
+      throw classifyMcpTokenVerificationError(error);
+    }
+  }
+
   try {
     const payload = await getVerifyAccessToken()(
       bearerToken,

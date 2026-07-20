@@ -1,7 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
+  apikey,
   oauthAccessToken,
   oauthConsent,
   oauthRefreshToken,
@@ -9,14 +12,43 @@ import {
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
+import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
+
+/** A statement that is awaited for its effect; no caller here reads the rows. */
+type ExecutableWhereStep = {
+  where: (condition: SQL | undefined) => PromiseLike<unknown>;
+};
+
+/**
+ * The transaction shape this module needs, stated as a structural constraint
+ * over the driver rather than as the production `Transaction` alias.
+ *
+ * Drizzle threads the driver's query-result type through every builder, so the
+ * Bun SQL transaction production runs on and the PGlite transaction the
+ * security tests run on are not assignable to one another, even though every
+ * statement below is identical for both. Nothing here reads a query result, so
+ * the driver genuinely is irrelevant; saying that in the type is what lets
+ * these revocations be tested against real SQL instead of a mocked transaction,
+ * which for a tenant-scoping predicate is the only test worth having.
+ *
+ * This is a constraint, not an escape hatch: the table and the `.set()` payload
+ * stay fully typed, so a column typo or a wrong-table filter still fails to
+ * compile.
+ */
+type AuthArtifactTransaction = {
+  delete: (table: PgTable) => ExecutableWhereStep;
+  update: <TTable extends PgTable>(
+    table: TTable,
+  ) => { set: (values: PgUpdateSetSource<TTable>) => ExecutableWhereStep };
+};
 
 type RevokeOrganizationMemberAuthArtifactsOptions = {
-  organizationId: string;
-  userId: string;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 };
 
 export const revokeOrganizationMemberAuthArtifacts = async (
-  tx: Transaction,
+  tx: AuthArtifactTransaction,
   { organizationId, userId }: RevokeOrganizationMemberAuthArtifactsOptions,
 ): Promise<void> => {
   await tx
@@ -76,6 +108,45 @@ export const revokeOrganizationMemberAuthArtifacts = async (
       and(
         eq(agentDelegation.userId, userId),
         eq(agentDelegation.organizationId, organizationId),
+      ),
+    );
+
+  // Machine API keys the departing member holds *in this organization*.
+  //
+  // Without this the keys only stop working incidentally: `api-key-auth.ts`
+  // resolves the owner's `member` row and rejects the credential when there is
+  // none. Re-invite the same person and that row comes back, and with it every
+  // machine key they ever minted here — an offboarding that silently undoes
+  // itself, and a leaked key that revocation-by-removal never actually killed.
+  //
+  // Disabled, not deleted, matching `handlers/api-keys/revoke.ts`: the row
+  // carries the audit trail and the `start` prefix an operator needs to match a
+  // leaked credential back to the key that leaked, and a deleted row takes both
+  // with it. `resolveMachineApiKeySession` checks `enabled` before it looks at
+  // membership, so a disabled key stays dead across a re-invite. (Account
+  // deletion is the one path that does delete these rows: there the owner is
+  // gone entirely and there is no operator left to audit on behalf of.)
+  //
+  // The scope is both halves and must stay both halves: `referenceId` is the
+  // owner (the plugin runs with `references: "user"`) and the metadata
+  // predicate is the organization. A member of two organizations who leaves one
+  // keeps working in the other, so narrowing to either half alone is wrong in a
+  // different direction — owner-only would revoke keys in organizations they
+  // are still a member of, organization-only would revoke their colleagues'.
+  // The organization half is applied in SQL via the shared scope helper, never
+  // post-filtered: `apikey` denies the scoped `stella` role, so these rows
+  // arrive with no RLS behind them and the `WHERE` clause is the only tenant
+  // boundary there is.
+  await tx
+    .update(apikey)
+    .set({ enabled: false, updatedAt: new Date() })
+    .where(
+      and(
+        eq(apikey.referenceId, userId),
+        machineApiKeyOrganizationScope(organizationId),
+        // Already-revoked rows are left alone so `updated_at` keeps pointing at
+        // the revocation that actually happened.
+        eq(apikey.enabled, true),
       ),
     );
 };

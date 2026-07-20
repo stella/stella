@@ -22,6 +22,10 @@ import { writeCliConfig } from "./cli-config.js";
 const setEnvServerUrl = (value: string | undefined): void => {
   void mock.module("../env.js", () => ({
     HOME: undefined,
+    // Kept in step with the real `env.ts`: this mock replaces the whole module
+    // process-wide, so an omitted export silently becomes `undefined` for any
+    // other test file that happens to run after this one.
+    STELLA_API_KEY: undefined,
     STELLA_SERVER_URL: value,
     XDG_CACHE_HOME: undefined,
     XDG_CONFIG_HOME: undefined,

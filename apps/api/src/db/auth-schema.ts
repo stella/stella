@@ -263,6 +263,80 @@ export const jwks = pgTable(
   () => [...denyStellaAccessPolicies()],
 );
 
+/**
+ * Storage for `@better-auth/api-key`. Every column name here mirrors a field the
+ * plugin declares (see `apiKeySchema` in the package): the drizzle adapter maps
+ * the plugin's camelCase field names onto these object keys, so renaming a key
+ * silently breaks the plugin at runtime rather than at build time.
+ *
+ * `referenceId` carries a **user** id, not an organization id: the plugin is
+ * configured with `references: "user"` (see the `apiKey(...)` registration in
+ * `lib/auth.ts`), which is what lets a key resolve to a real principal that
+ * holds a `member` row and therefore an RLS identity. The owning organization
+ * travels in `metadata`.
+ *
+ * The cascade below covers a hard user delete, but it is NOT the revocation
+ * path that matters: account deletion soft-deletes the `user` row (anonymize +
+ * `deletedAt`) and never hard-deletes it, so this cascade does not fire for a
+ * closed account. Machine keys are purged explicitly in
+ * `revokeAuthCredentialsAndInvitations` (`lib/account-deletion-steps.ts`), and
+ * `account-deletion-coverage.test.ts` fails if that step is ever dropped.
+ */
+export const apikey = pgTable(
+  "apikey",
+  {
+    id: text("id").primaryKey(),
+    configId: text("config_id").default("default").notNull(),
+    name: text("name"),
+    start: text("start"),
+    prefix: text("prefix"),
+    key: text("key").notNull(),
+    referenceId: text("reference_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    refillInterval: integer("refill_interval"),
+    refillAmount: integer("refill_amount"),
+    lastRefillAt: timestamp("last_refill_at"),
+    enabled: boolean("enabled").default(true).notNull(),
+    rateLimitEnabled: boolean("rate_limit_enabled").default(true).notNull(),
+    rateLimitTimeWindow: integer("rate_limit_time_window"),
+    rateLimitMax: integer("rate_limit_max"),
+    requestCount: integer("request_count").default(0).notNull(),
+    remaining: integer("remaining"),
+    lastRequest: timestamp("last_request"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    permissions: text("permissions"),
+    metadata: text("metadata"),
+  },
+  (table) => [
+    // Unique rather than the plugin's plain index: `key` holds a SHA-256 digest
+    // and the verification path resolves a credential by it, so two rows sharing
+    // one digest is a corruption we want the database to refuse outright.
+    uniqueIndex("apikey_key_uidx").on(table.key),
+    index("apikey_reference_id_idx").on(table.referenceId),
+    index("apikey_config_id_idx").on(table.configId),
+    // Declared here so the generated schema matches the migration: machine-key
+    // lifecycle reads filter on the owning organization, which lives inside
+    // `metadata`, and an unindexed JSON filter is what `/conventions-db`
+    // forbids. Both are partial on `metadata IS NOT NULL` and built
+    // CONCURRENTLY by the migration, since a plain build would lock out every
+    // credential verification while it ran.
+    index("apikey_metadata_organization_id_idx")
+      .on(sql`((${table.metadata}::jsonb ->> 'organizationId'))`)
+      .where(sql`${table.metadata} IS NOT NULL`),
+    index("apikey_org_keyset_idx")
+      .on(
+        sql`((${table.metadata}::jsonb ->> 'organizationId'))`,
+        sql`${table.createdAt} DESC`,
+        sql`${table.id} DESC`,
+      )
+      .where(sql`${table.metadata} IS NOT NULL`),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
 export const oauthClient = pgTable(
   "oauth_client",
   {
@@ -416,6 +490,7 @@ export const authSchema = {
   member,
   invitation,
   jwks,
+  apikey,
   oauthClient,
   oauthAccessToken,
   oauthRefreshToken,

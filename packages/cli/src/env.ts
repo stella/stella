@@ -12,6 +12,13 @@ export const XDG_CONFIG_HOME: string | undefined =
 export const STELLA_SERVER_URL: string | undefined =
   process.env["STELLA_SERVER_URL"];
 
+/**
+ * Machine (CI / agent) credential. When set, it is used verbatim as the bearer
+ * token for every command and the stored `credentials.json` is not consulted at
+ * all; see `auth/resolve-access-token.ts` for the precedence rationale.
+ */
+export const STELLA_API_KEY: string | undefined = process.env["STELLA_API_KEY"];
+
 /** XDG cache base for the per-origin registry cache; see `registry-cache.ts`. */
 export const XDG_CACHE_HOME: string | undefined = process.env["XDG_CACHE_HOME"];
 
