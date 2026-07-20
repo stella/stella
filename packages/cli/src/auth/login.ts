@@ -174,11 +174,25 @@ const awaitAuthorizationCode = async (
 ): Promise<Result<AuthorizationCode, CliAuthError>> => {
   io.print("Opening the stella sign-in page in your browser:");
   io.print(`  ${authorizeUrl}`);
-  void openInBrowser(authorizeUrl);
+  // Awaiting is safe (and required to react to a failed launch): the loopback
+  // listener is already bound by the time we get here, so a redirect that
+  // arrives while the opener is still settling is queued, not missed.
+  const browserOpened = await openInBrowser(authorizeUrl);
 
   if (!listener) {
     io.print(
       "Could not start a local listener; complete sign-in in any browser, then paste the redirected URL (or just the code) below.",
+    );
+    return awaitManualCode(io, redirectUri, expectedState);
+  }
+
+  if (!browserOpened) {
+    // No browser on this machine (headless server, SSH session, container,
+    // agent sandbox). Waiting out the full loopback timeout first would strand
+    // the user for minutes on a callback that can never arrive, so fall back to
+    // the manual paste immediately.
+    io.print(
+      "Could not open a browser on this machine; complete sign-in in any browser, then paste the redirected URL (or just the code) below.",
     );
     return awaitManualCode(io, redirectUri, expectedState);
   }
