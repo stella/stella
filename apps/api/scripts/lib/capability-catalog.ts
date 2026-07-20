@@ -41,6 +41,32 @@ export const deriveCapabilityId = ({
   return exportName === undefined ? base : `${base}.${exportName}`;
 };
 
+/**
+ * The one legal shape for a capability-id segment: lowercase kebab-case. Ids are
+ * PUBLIC — the CLI derives its command path from them and MCP's
+ * `invoke_capability` takes them verbatim — so they must never leak an internal
+ * identifier. `deriveCapabilityId` suffixes a NAMED export's identifier, which is
+ * a TS identifier and therefore camelCase; that is exactly how ids such as
+ * `workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm` were minted.
+ * Enforcing this pattern over every segment makes that class of id impossible:
+ * a capability endpoint must live in its own kebab-case-named file and be the
+ * file's DEFAULT export, so the id is derived purely from the handler path.
+ */
+export const CAPABILITY_ID_SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+
+/** Whether every `.`-separated segment of an id is lowercase kebab-case. */
+export const isWellFormedCapabilityId = (id: string): boolean => {
+  const segments = id.split(".");
+  return (
+    segments.length > 1 &&
+    segments.every((segment) => CAPABILITY_ID_SEGMENT_PATTERN.test(segment))
+  );
+};
+
+/** Ids failing `isWellFormedCapabilityId`, sorted (empty when all are well-formed). */
+export const findMalformedCapabilityIds = (ids: readonly string[]): string[] =>
+  [...ids].filter((id) => !isWellFormedCapabilityId(id)).sort();
+
 /** The domain of a capability id: its first `.`-separated segment. */
 export const deriveDomain = (id: string): string => {
   const domain = id.split(".").at(0);
@@ -376,17 +402,19 @@ export type CapabilityDispatchRecord = {
  * value, nothing a crafted handler path or export name contains can alter the
  * generated module's structure.
  *
- * - id: dot-joined path segments plus an optional camelCase export-name segment
- *   (e.g. `entities.read-summaries.readEntitySummariesCount`); segments allow
- *   no dots at all (the id is split ON dots, so an empty segment already
- *   fails), which structurally rules out `.`/`..` shapes.
+ * - id: dot-joined lowercase kebab-case path segments (e.g.
+ *   `workspaces.anonymization-terms.delete`), reusing
+ *   `CAPABILITY_ID_SEGMENT_PATTERN` so the emitted dispatch keys cannot drift
+ *   from the catalog's id shape; segments allow no dots at all (the id is split
+ *   ON dots, so an empty segment already fails), which structurally rules out
+ *   `.`/`..` shapes.
  * - import path: the fixed `@/api/` alias prefix plus lowercase path segments;
  *   a segment must start and end with an alphanumeric, so a dots-only segment
  *   (`.`, `..`, `...` — the path-traversal shape) can never round-trip into the
  *   emitted `import(...)` specifier.
  * - export name: a single plain TS identifier (no dots representable).
  */
-const DISPATCH_ID_SEGMENT_PATTERN = /^[a-zA-Z0-9-]+$/u;
+const DISPATCH_ID_SEGMENT_PATTERN = CAPABILITY_ID_SEGMENT_PATTERN;
 const DISPATCH_IMPORT_SEGMENT_PATTERN = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/u;
 const DISPATCH_EXPORT_NAME_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/u;
 const DISPATCH_IMPORT_PREFIX = "@/api/";

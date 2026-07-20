@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
@@ -8,7 +8,6 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -22,44 +21,7 @@ const termSchema = t.Object({
   ),
 });
 
-const readConfig = {
-  permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
-} satisfies HandlerConfig;
-
-/**
- * Read workspace-scoped anonymization terms only. Org-wide
- * defaults are fetched separately via the
- * organization-settings endpoint.
- */
-export const readWorkspaceAnonymizationTerms = createSafeHandler(
-  readConfig,
-  async function* ({ safeDb, workspaceId }) {
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            id: anonymizationBlacklistEntries.id,
-            label: anonymizationBlacklistEntries.label,
-            canonical: anonymizationBlacklistEntries.canonical,
-            variants: anonymizationBlacklistEntries.variants,
-            enabled: anonymizationBlacklistEntries.enabled,
-            createdBy: anonymizationBlacklistEntries.createdBy,
-            createdAt: anonymizationBlacklistEntries.createdAt,
-          })
-          .from(anonymizationBlacklistEntries)
-          .where(eq(anonymizationBlacklistEntries.workspaceId, workspaceId))
-          // SAFETY: one workspace's blacklist terms, loaded fully for masking/management correctness; the set is bounded by the per-workspace write cap (LIMITS.anonymizationBlacklistEntriesPerWorkspace) enforced in createWorkspaceAnonymizationTerms.
-          // eslint-disable-next-line require-query-limit/require-query-limit
-          .orderBy(asc(anonymizationBlacklistEntries.canonical)),
-      ),
-    );
-
-    return Result.ok({ entries: rows });
-  },
-);
-
-const createConfig = {
+const config = {
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   body: t.Object({
@@ -73,8 +35,8 @@ const createConfig = {
  * left alone (idempotent re-add). Returns the number of
  * newly inserted rows.
  */
-export const createWorkspaceAnonymizationTerms = createSafeHandler(
-  createConfig,
+const createWorkspaceAnonymizationTerms = createSafeHandler(
+  config,
   async function* ({
     body,
     safeDb,
@@ -168,60 +130,4 @@ export const createWorkspaceAnonymizationTerms = createSafeHandler(
   },
 );
 
-const deleteConfig = {
-  permissions: { workspace: ["update"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
-  params: t.Object({
-    workspaceId: tSafeId("workspace"),
-    entryId: tSafeId("anonymizationBlacklistEntry"),
-  }),
-} satisfies HandlerConfig;
-
-/**
- * Delete a single workspace-scoped term. The WHERE clause
- * scopes the delete to the request's workspace so an org-wide
- * row with the same ID (impossible by design but cheap to
- * guard) can never be removed via this endpoint.
- */
-export const deleteWorkspaceAnonymizationTerm = createSafeHandler(
-  deleteConfig,
-  async function* ({
-    params: { entryId },
-    safeDb,
-    workspaceId,
-    recordAuditEvent,
-  }) {
-    yield* Result.await(
-      safeDb(async (tx) => {
-        const deleted = await tx
-          .delete(anonymizationBlacklistEntries)
-          .where(
-            and(
-              eq(anonymizationBlacklistEntries.id, entryId),
-              eq(anonymizationBlacklistEntries.workspaceId, workspaceId),
-            ),
-          )
-          .returning({
-            id: anonymizationBlacklistEntries.id,
-            canonical: anonymizationBlacklistEntries.canonical,
-            label: anonymizationBlacklistEntries.label,
-          });
-
-        if (deleted.length > 0) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-            resourceId: workspaceId,
-            changes: {
-              anonymizationTerms: {
-                old: { removed: deleted.at(0) },
-                new: null,
-              },
-            },
-          });
-        }
-      }),
-    );
-    return Result.ok({ success: true as const });
-  },
-);
+export default createWorkspaceAnonymizationTerms;

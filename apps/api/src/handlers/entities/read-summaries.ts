@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, count, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -39,8 +39,6 @@ type ReadEntitySummariesHandlerProps = {
   cursor: string | undefined;
   limit: number;
 };
-
-const readEntitySummariesCountQuerySchema = t.Object({});
 
 const parseSummaryCursor = (cursor: string | undefined) => {
   if (cursor === undefined) {
@@ -122,35 +120,10 @@ const readEntitySummariesHandler = async function* ({
   });
 };
 
-const readEntitySummariesCountHandler = async function* ({
-  safeDb,
-  workspaceId,
-}: {
-  safeDb: SafeDb;
-  workspaceId: SafeId<"workspace">;
-}) {
-  const counts = yield* await safeDb((tx) =>
-    tx
-      .select({ total: count() })
-      .from(entities)
-      .where(eq(entities.workspaceId, workspaceId)),
-  );
-
-  return Result.ok({
-    totalCount: counts.at(0)?.total ?? 0,
-  });
-};
-
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_documents" },
   query: readEntitySummariesQuerySchema,
-} satisfies HandlerConfig;
-
-const countConfig = {
-  permissions: { workspace: ["read"] },
-  mcp: { type: "covered", by: "list_documents" },
-  query: readEntitySummariesCountQuerySchema,
 } satisfies HandlerConfig;
 
 const readEntitySummaries = createSafeHandler(
@@ -162,13 +135,6 @@ const readEntitySummaries = createSafeHandler(
       cursor: query.cursor,
       limit: query.limit ?? LIMITS.entitySummariesPageSize,
     });
-  },
-);
-
-export const readEntitySummariesCount = createSafeHandler(
-  countConfig,
-  async function* ({ safeDb, workspaceId }) {
-    return yield* readEntitySummariesCountHandler({ safeDb, workspaceId });
   },
 );
 

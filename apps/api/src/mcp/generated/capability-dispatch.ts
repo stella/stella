@@ -235,9 +235,9 @@ export const CAPABILITY_DISPATCH = {
   "entities.read-summaries": {
     load: async () => await import("@/api/handlers/entities/read-summaries"),
   },
-  "entities.read-summaries.readEntitySummariesCount": {
-    load: async () => await import("@/api/handlers/entities/read-summaries"),
-    exportName: "readEntitySummariesCount",
+  "entities.read-summaries-count": {
+    load: async () =>
+      await import("@/api/handlers/entities/read-summaries-count"),
   },
   "entities.read-version-by-id": {
     load: async () =>
@@ -818,37 +818,29 @@ export const CAPABILITY_DISPATCH = {
   "views.update": {
     load: async () => await import("@/api/handlers/views/update"),
   },
-  "workspaces.anonymization-allowlist.createWorkspaceAnonymizationAllowlistEntry":
-    {
-      load: async () =>
-        await import("@/api/handlers/workspaces/anonymization-allowlist"),
-      exportName: "createWorkspaceAnonymizationAllowlistEntry",
-    },
-  "workspaces.anonymization-allowlist.deleteWorkspaceAnonymizationAllowlistEntry":
-    {
-      load: async () =>
-        await import("@/api/handlers/workspaces/anonymization-allowlist"),
-      exportName: "deleteWorkspaceAnonymizationAllowlistEntry",
-    },
-  "workspaces.anonymization-allowlist.readWorkspaceAnonymizationAllowlist": {
+  "workspaces.anonymization-allowlist.create": {
     load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-allowlist"),
-    exportName: "readWorkspaceAnonymizationAllowlist",
+      await import("@/api/handlers/workspaces/anonymization-allowlist/create"),
   },
-  "workspaces.anonymization-terms.createWorkspaceAnonymizationTerms": {
+  "workspaces.anonymization-allowlist.delete": {
     load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-terms"),
-    exportName: "createWorkspaceAnonymizationTerms",
+      await import("@/api/handlers/workspaces/anonymization-allowlist/delete"),
   },
-  "workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm": {
+  "workspaces.anonymization-allowlist.read": {
     load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-terms"),
-    exportName: "deleteWorkspaceAnonymizationTerm",
+      await import("@/api/handlers/workspaces/anonymization-allowlist/read"),
   },
-  "workspaces.anonymization-terms.readWorkspaceAnonymizationTerms": {
+  "workspaces.anonymization-terms.create": {
     load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-terms"),
-    exportName: "readWorkspaceAnonymizationTerms",
+      await import("@/api/handlers/workspaces/anonymization-terms/create"),
+  },
+  "workspaces.anonymization-terms.delete": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/anonymization-terms/delete"),
+  },
+  "workspaces.anonymization-terms.read": {
+    load: async () =>
+      await import("@/api/handlers/workspaces/anonymization-terms/read"),
   },
   "workspaces.archive": {
     load: async () => await import("@/api/handlers/workspaces/archive"),

@@ -11,8 +11,10 @@ import {
   detectContextFidelityFeatures,
   finalIdSegment,
   findInlineCapabilityMismatches,
+  findMalformedCapabilityIds,
   findStaleAccessOverrides,
   isDestructiveName,
+  isWellFormedCapabilityId,
   MAX_CAPABILITY_SCHEMA_BYTES,
   resolveAccess,
   resolveHandlerKind,
@@ -62,6 +64,82 @@ describe("deriveCapabilityId", () => {
         exportName: undefined,
       }),
     ).toThrow();
+  });
+});
+
+describe("isWellFormedCapabilityId", () => {
+  test("accepts dotted lowercase kebab-case ids", () => {
+    expect(isWellFormedCapabilityId("time-entries.create")).toBe(true);
+    expect(
+      isWellFormedCapabilityId("workspaces.anonymization-terms.delete"),
+    ).toBe(true);
+    expect(isWellFormedCapabilityId("entities.read-summaries-count")).toBe(
+      true,
+    );
+  });
+
+  test("rejects a camelCase segment: the shape a named export's identifier produces", () => {
+    expect(
+      isWellFormedCapabilityId(
+        "workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm",
+      ),
+    ).toBe(false);
+    expect(
+      isWellFormedCapabilityId(
+        "entities.read-summaries.readEntitySummariesCount",
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects underscores, empty segments, and single-segment ids", () => {
+    expect(isWellFormedCapabilityId("time_entries.create")).toBe(false);
+    expect(isWellFormedCapabilityId("time-entries..create")).toBe(false);
+    expect(isWellFormedCapabilityId("time-entries.")).toBe(false);
+    expect(isWellFormedCapabilityId("-leading.create")).toBe(false);
+    expect(isWellFormedCapabilityId("trailing-.create")).toBe(false);
+    expect(isWellFormedCapabilityId("create")).toBe(false);
+  });
+
+  test("every id derived from a default-export handler path is well-formed", () => {
+    // The structural claim: a kebab-case-named file exported as its module
+    // default cannot produce a malformed id, so the guard only ever fires on a
+    // named export (or a non-kebab file/directory name).
+    expect(
+      isWellFormedCapabilityId(
+        deriveCapabilityId({
+          file: "apps/api/src/handlers/workspaces/anonymization-terms/delete.ts",
+          exportName: undefined,
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isWellFormedCapabilityId(
+        deriveCapabilityId({
+          file: "apps/api/src/handlers/workspaces/anonymization-terms/delete.ts",
+          exportName: "deleteWorkspaceAnonymizationTerm",
+        }),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("findMalformedCapabilityIds", () => {
+  test("returns only the malformed ids, sorted", () => {
+    expect(
+      findMalformedCapabilityIds([
+        "time-entries.create",
+        "entities.read-summaries.readEntitySummariesCount",
+        "workspaces.anonymization-terms.delete",
+        "billing_codes.create",
+      ]),
+    ).toEqual([
+      "billing_codes.create",
+      "entities.read-summaries.readEntitySummariesCount",
+    ]);
+  });
+
+  test("is empty for an all-kebab catalog", () => {
+    expect(findMalformedCapabilityIds(["a.b", "a.b-c", "a.b-c.d"])).toEqual([]);
   });
 });
 
@@ -238,9 +316,10 @@ describe("isDestructiveName", () => {
     expect(isDestructiveName("document-types.delete-by-id")).toBe(true);
     expect(isDestructiveName("invoices.remove-entries")).toBe(true);
     expect(
-      isDestructiveName(
-        "workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm",
-      ),
+      // A named-export id shape: no longer possible for a CATALOG id (see
+      // isWellFormedCapabilityId), but the route-hook scan still derives ids
+      // this way for named-export handlers, so the tokenizer must handle it.
+      isDestructiveName("workspaces.legacy-terms.deleteWorkspaceLegacyTerm"),
     ).toBe(true);
   });
 
@@ -665,7 +744,7 @@ describe("serializeDispatchModule", () => {
         exportName: undefined,
       },
       {
-        id: "views.export.readViewExport",
+        id: "views.export.read",
         importPath: "@/api/handlers/views/export",
         exportName: "readViewExport",
       },
@@ -674,7 +753,7 @@ describe("serializeDispatchModule", () => {
       '"time-entries.create": { load: async () => await import("@/api/handlers/time-entries/create") },',
     );
     expect(out).toContain(
-      '"views.export.readViewExport": { load: async () => await import("@/api/handlers/views/export"), exportName: "readViewExport" },',
+      '"views.export.read": { load: async () => await import("@/api/handlers/views/export"), exportName: "readViewExport" },',
     );
     expect(out).toContain("export const CAPABILITY_DISPATCH");
     expect(out.endsWith("\n")).toBe(true);
@@ -696,6 +775,18 @@ describe("serializeDispatchModule", () => {
     expect(() =>
       serializeDispatchModule([
         { id: "a b", importPath: "@/api/handlers/x/y", exportName: undefined },
+      ]),
+    ).toThrow(/unsafe id/u);
+    // Second layer of the id-shape guard: a camelCase segment (the shape a
+    // named export's identifier produces) cannot reach the generated module
+    // even if it somehow got past the exporter's own check.
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "entities.read-summaries.readEntitySummariesCount",
+          importPath: "@/api/handlers/entities/read-summaries",
+          exportName: "readEntitySummariesCount",
+        },
       ]),
     ).toThrow(/unsafe id/u);
   });
@@ -1051,22 +1142,22 @@ const openRoute = new Elysia({ prefix: "/case" })
 
   test("resolves a named-export handler mount to its capability id", () => {
     const source = `
-import { readEntitySummariesCount } from "@/api/handlers/entities/read-summaries";
+import { readLegacySummariesCount } from "@/api/handlers/entities/legacy-summaries";
 const r = new Elysia()
   .beforeHandle(() => undefined)
-  .get("/count", readEntitySummariesCount.handler, {});
+  .get("/count", readLegacySummariesCount.handler, {});
 `;
     const scan = scanRouteHookGuards({
       routeFiles: [{ id: "entities/routes.ts", source }],
       capabilityIds: new Set([
-        "entities.read-summaries.readEntitySummariesCount",
+        "entities.legacy-summaries.readLegacySummariesCount",
       ]),
       waivedIds: new Set(),
     });
     expect(scan.violations).toEqual([
       {
         routeFile: "entities/routes.ts",
-        id: "entities.read-summaries.readEntitySummariesCount",
+        id: "entities.legacy-summaries.readLegacySummariesCount",
       },
     ]);
   });
@@ -1109,7 +1200,7 @@ describe("serializeCoverageDoc", () => {
       mcp: { type: "capability" as const, reason: "billing_admin" },
     },
     {
-      id: "entities.readSummariesCount",
+      id: "entities.read-summaries-count",
       access: "read" as const,
       destructive: false,
       scope: "stella:matters_write",
@@ -1123,12 +1214,12 @@ describe("serializeCoverageDoc", () => {
   };
 
   // The REAL generated command path per capability id, as buildCliRouteTree
-  // would produce it. `entities.readSummariesCount` is deliberately given a
+  // would produce it. `entities.read-summaries-count` is deliberately given a
   // collision-fallback path (relocated under `capability …`) to prove the doc
   // renders the map's path, never an id-derived guess.
   const cliCommandPathById = new Map<string, readonly string[]>([
     [
-      "entities.readSummariesCount",
+      "entities.read-summaries-count",
       ["capability", "entities", "read-summaries-count"],
     ],
   ]);
@@ -1171,7 +1262,7 @@ describe("serializeCoverageDoc", () => {
   test("renders the generated (collision-aware) command path, not an id-derived one", () => {
     const doc = render();
     expect(doc).toContain(
-      "| `entities.readSummariesCount` | read | stella:matters_write | — | generic invoke → `stella capability entities read-summaries-count` |",
+      "| `entities.read-summaries-count` | read | stella:matters_write | — | generic invoke → `stella capability entities read-summaries-count` |",
     );
     // The naive id-derived path must not appear anywhere.
     expect(doc).not.toContain("`stella entities read-summaries-count`");
