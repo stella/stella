@@ -15,11 +15,34 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { env } from "@/env";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 import { createSecretTokenBoundary } from "@/lib/secret-token";
 import type { SecretToken } from "@/lib/secret-token";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
+
+/**
+ * Stall budget for every auth request.
+ *
+ * `require-fetch-timeout` only reaches first-party `fetch()` calls, so the
+ * auth client's own transport is the one hole in that invariant: a wedged
+ * connection (laptop sleep, network switch) leaves its promise pending
+ * forever. `_protected.tsx`'s `beforeLoad` awaits the role query through
+ * that transport, so an unbounded request there parks the route in its
+ * pending component — a full-screen loader with nothing logged.
+ *
+ * Bounding the request rather than racing the promise matters: an abort
+ * *settles* the query (as an error the prefetch swallows), so shell chrome
+ * still mounts against a resolved cache instead of a still-in-flight one.
+ *
+ * Deliberately below `CRITICAL_QUERY_TIMEOUT_MS` (10s) so the transport
+ * settles first and that outer race stays a backstop rather than the
+ * mechanism. Note this budget only bounds a single attempt: the boot
+ * queries in `routes/-queries.ts` opt out of retries so the worst case
+ * stays one budget rather than four plus backoff.
+ */
+const AUTH_REQUEST_TIMEOUT_MS = 8000;
 const SESSION_REVOCATION_TOKEN = "better-auth-session-revocation";
 const sessionRevocationTokenBoundary = createSecretTokenBoundary(
   SESSION_REVOCATION_TOKEN,
@@ -102,6 +125,15 @@ export const authClient = createAuthClient({
   baseURL: env.VITE_API_URL,
   plugins: authClientPlugins,
   fetchOptions: {
+    // `async`/`await` look redundant around a call that already returns a
+    // promise, but `promise-function-async` is type-aware and rejects the
+    // bare arrow form here.
+    customFetchImpl: async (input, init) =>
+      await fetchWithTimeout(input, {
+        ...init,
+        signal: init?.signal ?? undefined,
+        timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
+      }),
     headers: {
       get "Accept-Language"() {
         return useI18nStore.getState().lang;
