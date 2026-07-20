@@ -462,11 +462,11 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing         | 2     |
 | mcp_transport          | 11    |
 | native_tool_ui         | 3     |
-| provider_secret        | 10    |
+| provider_secret        | 14    |
 | realtime_stream        | 2     |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 5     |
 | upload_mechanics       | 4     |
 | url_preview            | 2     |
 
-Total: 83
+Total: 87
