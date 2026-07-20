@@ -21,15 +21,21 @@ const selfHostingDocsUrl =
 
 <Base translationScope="all-locales">
   <main>
-    {/* ——— Hero + opening product story: one shared background surface ——— */}
-    <div class="relative overflow-hidden">
+    {/* ——— Hero + opening product story: one shared background surface ———
+        overflow-clip, not overflow-hidden: hidden would make this a scroll
+        container and capture the scene's view() timeline, disabling the
+        scroll-staged companion reveal. */}
+    <div class="relative overflow-clip">
       <section
         class="relative flex min-h-[34rem] flex-col pt-6 sm:min-h-[36rem] sm:pt-8 lg:min-h-[38rem]"
       >
         {/* Extends past the hero so the gradient continues behind the scene
-            below, resolving to the page background at its own bottom edge. */}
+            below, resolving to the page background at its own bottom edge.
+            Stretched tall on purpose: the artwork ramps from transparent at
+            its top, so a bigger surface keeps the headline calm and pushes
+            the visible ripples down to bloom behind the scene. */}
         <div
-          class="absolute inset-x-0 top-0 h-[145%] overflow-hidden"
+          class="absolute inset-x-0 top-0 h-[215%] overflow-hidden"
           id="gradient-bg"
         >
           <div
@@ -42,9 +48,11 @@ const selfHostingDocsUrl =
             class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"
           >
           </div>
+          {/* Fade completes at 85% of this band so the art is fully resolved
+              to background before the wrapper's clip line. */}
           <div
             class="pointer-events-none absolute inset-x-0 bottom-0 h-1/3"
-            style="background: linear-gradient(to bottom, transparent, var(--background))"
+            style="background: linear-gradient(to bottom, transparent, var(--background) 85%)"
           >
           </div>
         </div>
@@ -170,7 +178,7 @@ const selfHostingDocsUrl =
       </section>
 
       {/* ——— Opening product story ——— */}
-      <section class="relative overflow-hidden" id="opening-product-story">
+      <section class="relative overflow-clip" id="opening-product-story">
         <div class="relative aspect-[4/5] w-full sm:aspect-[2.03]">
           <CliMcpPreview
             client:load

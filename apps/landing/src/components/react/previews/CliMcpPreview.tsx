@@ -213,7 +213,10 @@ export const CliMcpPreview = ({
     <div
       ref={story}
       className={cn(
-        "cli-story relative h-full w-full overflow-hidden",
+        // overflow-clip, not hidden: a hidden box is a scroll container and
+        // would capture the companions' view() reveal timeline (see the
+        // scroll-staged reveal below), leaving them permanently visible.
+        "cli-story relative h-full w-full overflow-clip",
         backdrop === "wash" && "bg-background",
         backdrop === "transparent" && "cli-story-transparent",
         isAutoPlaying && "cli-story-auto",
@@ -234,7 +237,7 @@ export const CliMcpPreview = ({
         <div
           aria-label="Bring Microsoft Teams conversation to front"
           aria-pressed={focusedWindow === "client"}
-          className="cli-client mac-window bg-card focus-visible:outline-ring absolute start-[2.4%] top-[6.5%] hidden h-[38%] w-[23%] min-w-0 cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none"
+          className="cli-client mac-window bg-card focus-visible:outline-ring absolute start-[3%] top-[7%] hidden h-[32%] w-[19.5%] min-w-0 cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none"
           onFocus={() => activateWindow("client")}
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("client"))
@@ -271,7 +274,7 @@ export const CliMcpPreview = ({
       <div
         aria-label="Bring stella workspace to front"
         aria-pressed={focusedWindow === "workspace"}
-        className="cli-main-window mac-window bg-card focus-visible:outline-ring absolute start-[16%] top-[7%] h-[86%] w-[67%] cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_42px_110px_-54px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="cli-main-window mac-window bg-card focus-visible:outline-ring absolute start-[18.5%] top-[8%] h-[81%] w-[63%] cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_42px_110px_-54px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2"
         onFocus={() => activateWindow("workspace")}
         onKeyDown={(event) =>
           activateWindowFromKeyboard(event, () => activateWindow("workspace"))
@@ -302,7 +305,7 @@ export const CliMcpPreview = ({
         <div
           aria-label="Bring stella Editor to front"
           aria-pressed={focusedWindow === "source"}
-          className="cli-response mac-window bg-card focus-visible:outline-ring absolute end-[0.8%] top-[18%] hidden h-[48%] w-[18.5%] cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none"
+          className="cli-response mac-window bg-card focus-visible:outline-ring absolute end-[1.6%] top-[19%] hidden h-[44.5%] w-[17%] cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none"
           key={activeScenario.id}
           onFocus={() => activateWindow("source")}
           onKeyDown={(event) =>
@@ -343,7 +346,7 @@ export const CliMcpPreview = ({
           aria-label="Bring stella terminal to front"
           aria-live="polite"
           aria-pressed={focusedWindow === "terminal"}
-          className="cli-window mac-window group focus-visible:outline-ring absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 cursor-grab appearance-none flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:start-[5.4%] sm:bottom-[13.8%] sm:h-[40.8%] sm:w-[19.1%] sm:touch-none"
+          className="cli-window mac-window group focus-visible:outline-ring absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 cursor-grab appearance-none flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:start-[6%] sm:bottom-[15%] sm:h-[38%] sm:w-[17.5%] sm:touch-none"
           onFocus={() => activateWindow("terminal")}
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("terminal"))
@@ -1046,17 +1049,23 @@ const CLI_STYLES = `
     0%, 45% { opacity: 1; }
     46%, 100% { opacity: 0; }
   }
+  /* Companions arrive from OUTSIDE the scene (never from behind the main
+     window) and stay fully invisible through the first half of the motion,
+     so a scrubbed mid-state never ghosts over the main window. */
   @keyframes cli-side-start-reveal {
-    from { opacity: .08; filter: blur(3px); transform: translate3d(78%, 20px, 0) scale(.96); }
+    from { opacity: 0; filter: blur(4px); transform: translate3d(-55%, 16px, 0) scale(.97); }
+    55% { opacity: 0; filter: blur(4px); }
     to { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); }
   }
   @keyframes cli-side-end-reveal {
-    from { opacity: .08; filter: blur(3px); transform: translate3d(-76%, 24px, 0) scale(.96); }
+    from { opacity: 0; filter: blur(4px); transform: translate3d(55%, 20px, 0) scale(.97); }
+    55% { opacity: 0; filter: blur(4px); }
     to { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); }
   }
   @keyframes cli-terminal-scroll-reveal {
-    from { opacity: 0; filter: blur(3px); }
-    to { opacity: 1; filter: blur(0); }
+    from { opacity: 0; filter: blur(3px); transform: translate3d(0, 24px, 0); }
+    50% { opacity: 0; filter: blur(3px); }
+    to { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0); }
   }
   .cli-window { animation: cli-window-enter 800ms var(--ease-out-quint) 120ms backwards; }
   .cli-client { animation: cli-side-start-reveal 760ms var(--ease-out-quint) 280ms backwards; }
@@ -1068,23 +1077,38 @@ const CLI_STYLES = `
   .cli-response { animation: cli-side-end-reveal 820ms var(--ease-out-quint) 460ms backwards; }
   .cli-cursor { animation: cli-cursor 900ms steps(1, end) infinite; }
   @supports (animation-timeline: scroll()) {
+    /* Attio-style staging: at page load the main window stands alone,
+       larger and sitting higher; scrolling scrubs it down to its resting
+       size and position while the companions arrive one after another.
+       Pure transform scale, so the recording keeps its aspect. */
+    @keyframes cli-main-scroll-settle {
+      from { transform: translateY(-7%) scale(1.24); }
+      to { transform: translateY(0) scale(1); }
+    }
+    .cli-story-with-scroll-reveal .cli-main-window {
+      transform-origin: 50% 0%;
+      animation: cli-main-scroll-settle linear both;
+      animation-duration: auto;
+      animation-timeline: view(block);
+      animation-range: entry 25% entry 85%;
+    }
     .cli-story-with-scroll-reveal .cli-window {
       animation: cli-terminal-scroll-reveal linear both;
       animation-duration: auto;
       animation-timeline: view(block);
-      animation-range: entry 0% entry 40%;
+      animation-range: entry 45% entry 80%;
     }
     .cli-story-with-scroll-reveal .cli-client {
       animation: cli-side-start-reveal linear both;
       animation-duration: auto;
       animation-timeline: view(block);
-      animation-range: entry 5% entry 52%;
+      animation-range: entry 55% entry 90%;
     }
     .cli-story-with-scroll-reveal .cli-response {
       animation: cli-side-end-reveal linear both;
       animation-duration: auto;
       animation-timeline: view(block);
-      animation-range: entry 14% entry 62%;
+      animation-range: entry 65% entry 100%;
     }
   }
   .nav-mega-pane .cli-window,
@@ -1134,6 +1158,7 @@ const CLI_STYLES = `
     .cli-result,
     .cli-response,
     .cli-client,
+    .cli-main-window,
     .cli-cursor { animation: none; }
     .cli-command-character { opacity: 1; }
     .mac-window::after { display: none; }
