@@ -436,7 +436,7 @@ export const CliMcpPreview = ({
             onPointerMove={handleDragPointerMove}
             onPointerUp={handleDragPointerUp}
           >
-            <WindowChrome label="stella CLI agent" />
+            <WindowChrome label="stella CLI" />
           </div>
 
           <WindowBodyLink
@@ -832,33 +832,36 @@ type CliScenario = {
   steps: readonly { label: string; meta: string }[];
 };
 
+// Every transcript shows real CLI surface: the commands mirror the MCP
+// tool registry the CLI is generated from. Do not script capabilities the
+// CLI does not have (there is no natural-language "ask" command).
 const SCENARIOS: readonly CliScenario[] = [
   {
     id: "search",
-    type: "agent",
-    command: "Compare change-of-control clauses across this matter",
-    result: "Compared every clause",
-    detail: "and linked 3 cited passages",
-    executionLabel: "Ran 2 MCP tools",
-    usage: "Worked 3s · 3.2K tokens",
+    type: "cli",
+    command: 'stella search matters "change of control"',
+    result: "Found 9 passages",
+    detail: "across 18 documents",
+    executionLabel: "Ran 1 CLI command",
+    usage: "Completed in 0.8s · 9 results",
     steps: [
       { label: CLI_DEMO_TOOLS.searchAcrossMatters, meta: "18 documents" },
-      { label: CLI_DEMO_TOOLS.readDocument, meta: "3 passages" },
-      { label: "Grounded the answer", meta: "3 citations" },
+      { label: "Matched cited passages", meta: "9 hits" },
+      { label: "Printed text and JSON output", meta: "ready" },
     ],
   },
   {
     id: "template",
-    type: "agent",
-    command: "Fill missing SAFE fields from this matter",
-    result: "Created Internal SAFE.docx",
+    type: "cli",
+    command: "stella template fill supply-agreement --matter 2026/031",
+    result: "Drafted Supply_Agreement.docx",
     detail: "with 12 resolved fields",
-    executionLabel: "Ran 3 MCP tools",
-    usage: "Worked 6s · 4.8K tokens",
+    executionLabel: "Ran 1 CLI command",
+    usage: "Completed in 2.1s · 12 fields",
     steps: [
-      { label: CLI_DEMO_TOOLS.listTemplates, meta: "SAFE" },
-      { label: "Read matter and registry fields", meta: "12 values" },
-      { label: CLI_DEMO_TOOLS.fillTemplate, meta: "complete" },
+      { label: CLI_DEMO_TOOLS.fillTemplate, meta: "supply-agreement" },
+      { label: "Resolved fields from the matter", meta: "12 values" },
+      { label: "Wrote the draft into the matter", meta: "complete" },
     ],
   },
   {
