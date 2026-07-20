@@ -7,15 +7,68 @@ import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 
 const querySchema = t.Object({
-  text: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-  title: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-  departmentCode: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  legalRangeCode: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  matterCode: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  dateFrom: t.Optional(t.String({ pattern: "^\\d{8}$" })),
-  dateTo: t.Optional(t.String({ pattern: "^\\d{8}$" })),
-  cursor: t.Optional(t.String({ pattern: "^\\d+$", maxLength: 5 })),
-  limit: t.Optional(t.Numeric({ minimum: 1, maximum: 100 })),
+  text: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 256,
+      description: "Free-text search over consolidated legislation",
+    }),
+  ),
+  title: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 256,
+      description: "Filter search results by title text",
+    }),
+  ),
+  departmentCode: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 32,
+      description: "Filter search results by department code",
+    }),
+  ),
+  legalRangeCode: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 32,
+      description: "Filter search results by legal-range code (law rank)",
+    }),
+  ),
+  matterCode: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 32,
+      description: "Filter search results by subject-matter code",
+    }),
+  ),
+  dateFrom: t.Optional(
+    t.String({
+      pattern: "^\\d{8}$",
+      description: "Only laws published on or after this date (YYYYMMDD)",
+    }),
+  ),
+  dateTo: t.Optional(
+    t.String({
+      pattern: "^\\d{8}$",
+      description: "Only laws published on or before this date (YYYYMMDD)",
+    }),
+  ),
+  cursor: t.Optional(
+    t.String({
+      pattern: "^\\d+$",
+      maxLength: 5,
+      description:
+        "Opaque cursor from a previous search_legislation call for the next page",
+    }),
+  ),
+  limit: t.Optional(
+    t.Numeric({
+      minimum: 1,
+      maximum: 100,
+      description: "Max search results to return",
+    }),
+  ),
 });
 
 const boeSearch = createSafeRootHandler(

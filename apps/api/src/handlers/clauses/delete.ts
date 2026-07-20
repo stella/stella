@@ -13,7 +13,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteClauseParamsSchema = t.Object({
-  clauseId: tSafeId("clause"),
+  clauseId: tSafeId("clause", { description: "Clause id to delete" }),
 });
 
 type DeleteClauseProps = {
@@ -92,6 +92,9 @@ export const deleteClauseHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Permanently delete a clause and all its variants and versions from the " +
+    "organization's clause library. This is irreversible.",
   permissions: { clause: ["delete"] },
   mcp: { type: "tool", name: "delete_clause" },
   params: deleteClauseParamsSchema,

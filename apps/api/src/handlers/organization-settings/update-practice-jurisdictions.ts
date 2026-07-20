@@ -15,16 +15,28 @@ const practiceJurisdictionSchema = t.Object({
     minLength: 2,
     maxLength: 2,
     pattern: "^[A-Za-z]{2}$",
+    description: "ISO 3166-1 alpha-2 country code",
   }),
-  isPrimary: t.Boolean(),
+  isPrimary: t.Boolean({
+    description: "Whether this is the organization's primary jurisdiction",
+  }),
 });
 
 const config = {
+  description:
+    "Set the practice jurisdictions for the user's stella organization. " +
+    "Call this when the org's practice jurisdictions are empty (e.g., the " +
+    "user signed up via an OAuth client and skipped onboarding). Pass an " +
+    "array of {countryCode, isPrimary}; exactly one entry should be primary.",
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "tool", name: "set_practice_jurisdictions" },
   body: t.Object({
     practiceJurisdictions: t.Array(practiceJurisdictionSchema, {
       maxItems: LIMITS.practiceJurisdictionsPerOrganization,
+      description:
+        "Practice jurisdictions for this organization. countryCode is an " +
+        "ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary " +
+        "to true.",
     }),
   }),
 } satisfies HandlerConfig;

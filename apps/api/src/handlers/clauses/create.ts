@@ -11,7 +11,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  tDefaultVarchar,
+  tSafeId,
+  withDescription,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -21,10 +25,17 @@ import { clauseBodySchema } from "./shared-schemas";
 import type { ClauseBody } from "./types";
 
 const createClauseBodySchema = t.Object({
-  title: tDefaultVarchar,
+  title: withDescription(
+    tDefaultVarchar,
+    "Clause title; required when creating",
+  ),
   categoryId: t.Optional(tSafeId("clauseCategory")),
   language: t.Optional(t.String({ maxLength: 10 })),
-  body: clauseBodySchema,
+  body: withDescription(
+    clauseBodySchema,
+    "Ordered clause body paragraphs; required when creating. Each paragraph " +
+      "carries text and optional formatting.",
+  ),
   description: t.Optional(t.String({ maxLength: 2000 })),
   usageNotes: t.Optional(t.String({ maxLength: 2000 })),
   metadata: t.Optional(t.Record(t.String(), t.Unknown())),

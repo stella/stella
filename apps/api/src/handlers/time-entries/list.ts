@@ -20,7 +20,7 @@ import {
 import { timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { tSafeId, tUserId, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -34,14 +34,43 @@ import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 
 const readTimeEntriesQuerySchema = t.Object({
   limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.timeEntriesPageSizeMax }),
+    t.Integer({
+      minimum: 1,
+      maximum: LIMITS.timeEntriesPageSizeMax,
+      description: "Max entries to return",
+    }),
   ),
   cursor: t.Optional(t.String({ maxLength: 512 })),
-  userId: t.Optional(tUserId),
-  matterId: t.Optional(tSafeId("entity")),
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  status: t.Optional(timeEntryStatusSchema),
+  userId: t.Optional(
+    withDescription(tUserId, "List only entries recorded by this user"),
+  ),
+  matterId: t.Optional(
+    tSafeId("entity", {
+      description:
+        "List only entries logged against this entity (document, folder, " +
+        "or task the time is billed to)",
+    }),
+  ),
+  dateFrom: t.Optional(
+    t.String({
+      format: "date",
+      description:
+        "List only entries worked on or after this ISO date (YYYY-MM-DD)",
+    }),
+  ),
+  dateTo: t.Optional(
+    t.String({
+      format: "date",
+      description:
+        "List only entries worked on or before this ISO date (YYYY-MM-DD)",
+    }),
+  ),
+  status: t.Optional(
+    withDescription(
+      timeEntryStatusSchema,
+      "List only entries with this status",
+    ),
+  ),
   source: t.Optional(timeEntrySourceSchema),
   billable: t.Optional(t.BooleanString()),
   hasActiveTimer: t.Optional(t.BooleanString()),
@@ -69,6 +98,12 @@ const decodeTimeEntryCursor = (cursor: string): TimeEntryCursor | null => {
 
 const readTimeEntries = createSafeHandler(
   {
+    description:
+      "List time entries in a matter, optionally filtered by matterId " +
+      "(the item the time was logged against), userId, a date-worked " +
+      "range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each " +
+      "entry's id, entity, user, date, minutes, rate (minor currency " +
+      "units), currency, narrative, and status.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "list_time_entries" },
     query: readTimeEntriesQuerySchema,

@@ -8,9 +8,19 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
+  description:
+    "Run a review playbook over a matter's documents. Materializes the " +
+    "playbook's extraction and verdict columns onto the matter's table and " +
+    "starts the AI review; findings populate asynchronously. Pass " +
+    "workspaceId and playbookId. Returns the number of columns queued for " +
+    "review.",
   permissions: { playbook: ["apply"] },
   mcp: { type: "tool", name: "run_playbook" },
-  params: workspaceParams({ playbookId: tSafeId("playbookDefinition") }),
+  params: workspaceParams({
+    playbookId: tSafeId("playbookDefinition", {
+      description: "Playbook id to run",
+    }),
+  }),
 } satisfies HandlerConfig;
 
 const runPlaybook = createSafeHandler(

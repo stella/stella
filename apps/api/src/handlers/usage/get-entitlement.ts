@@ -11,6 +11,11 @@ import { getRemainingUsageUnits } from "@/api/lib/usage/usage-ledger";
 /** Read the caller organisation's usage entitlement and current state. */
 
 const config = {
+  description:
+    "Read the organization's current usage entitlement: plan, seats, " +
+    "billing period, and how many usage units (AI credits) remain this " +
+    "period. Returns { entitlement: null } when the organization has no " +
+    "active plan. Requires organization-settings management access.",
   // Entitlement state (plan, seats, period, remaining units) is
   // organization billing data, so it is gated to managers — matching the
   // hosted setup/management endpoints and the other organization-settings

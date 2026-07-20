@@ -49,12 +49,35 @@ const agendaRecurrenceSchema = t.Object({
 });
 
 const createTaskBodySchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 255 }),
+  name: t.String({
+    minLength: 1,
+    maxLength: 255,
+    description: "Task name; required when creating",
+  }),
   parentId: t.Optional(tSafeId("entity")),
   agendaKind: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
-  priority: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
-  dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
+  status: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 32,
+      description: "Task status (e.g. open, in_progress, done)",
+    }),
+  ),
+  priority: t.Optional(
+    t.String({
+      minLength: 1,
+      maxLength: 16,
+      description: "Task priority (e.g. none, low, medium, high)",
+    }),
+  ),
+  dueDate: t.Optional(
+    t.Nullable(
+      t.String({
+        format: "date",
+        description: "Due date (ISO YYYY-MM-DD); pass null to clear",
+      }),
+    ),
+  ),
   startAt: t.Optional(agendaDateTimeSchema),
   endAt: t.Optional(agendaDateTimeSchema),
   occurredAt: t.Optional(agendaDateTimeSchema),

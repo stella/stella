@@ -16,16 +16,57 @@ import { cents } from "@/api/lib/money";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const createTimeEntryBodySchema = t.Object({
-  matterId: tSafeId("entity"),
-  dateWorked: t.String({ format: "date" }),
-  timezoneId: t.String({ minLength: 1, maxLength: 64 }),
-  durationMinutes: t.Integer({ minimum: 1 }),
-  rateAtEntry: t.Integer({ minimum: 0 }),
-  currency: t.String({ minLength: 3, maxLength: 3 }),
-  narrative: t.String({ minLength: 1, maxLength: 10_000 }),
-  billable: t.Optional(t.Boolean()),
-  taskCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
-  activityCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
+  matterId: tSafeId("entity", {
+    description:
+      "Entity the time is logged against (document, folder, or task).",
+  }),
+  dateWorked: t.String({
+    format: "date",
+    description: "Date the work was done (ISO YYYY-MM-DD)",
+  }),
+  timezoneId: t.String({
+    minLength: 1,
+    maxLength: 64,
+    description:
+      "IANA time zone the dateWorked is interpreted in (e.g. Europe/Prague)",
+  }),
+  durationMinutes: t.Integer({
+    minimum: 1,
+    description: "Minutes worked (whole minutes)",
+  }),
+  rateAtEntry: t.Integer({
+    minimum: 0,
+    description: "Hourly rate in integer minor currency units (e.g. cents)",
+  }),
+  currency: t.String({
+    minLength: 3,
+    maxLength: 3,
+    description: "3-letter ISO currency code",
+  }),
+  narrative: t.String({
+    minLength: 1,
+    maxLength: 10_000,
+    description: "Description of the work",
+  }),
+  billable: t.Optional(
+    t.Boolean({ description: "Whether the entry is billable to the client" }),
+  ),
+  taskCode: t.Optional(
+    t.Nullable(
+      t.String({
+        maxLength: 20,
+        description: "UTBMS/LEDES task code; pass null to clear",
+      }),
+    ),
+  ),
+  activityCode: t.Optional(
+    t.Nullable(
+      t.String({
+        maxLength: 20,
+        description: "UTBMS/LEDES activity code; pass null to clear",
+      }),
+    ),
+  ),
 });
 
 export type CreateTimeEntryHandlerProps = {
@@ -183,6 +224,11 @@ export const createTimeEntryHandler = async function* ({
 
 const createTimeEntry = createSafeHandler(
   {
+    description:
+      "Create a time entry (matterId, dateWorked, timezoneId, " +
+      "durationMinutes, rateAtEntry, currency, and narrative all required). " +
+      "Rates and amounts are integer minor currency units (e.g. cents); " +
+      "durations are whole minutes. Returns the time entry ID.",
     permissions: { timeEntry: ["create"] },
     mcp: { type: "tool", name: "save_time_entry" },
     body: createTimeEntryBodySchema,

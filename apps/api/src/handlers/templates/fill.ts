@@ -40,7 +40,7 @@ import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 const fillBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
-  values: t.String(),
+  values: t.String({ description: "Map of field path to value." }),
 });
 
 const fillQuerySchema = t.Object({
@@ -424,6 +424,12 @@ export const fillHandler = async ({
 };
 
 const config = {
+  description:
+    "Fill a template with values. 'values' maps each field path to its " +
+    'value, e.g. {"tenant.name": "ACME Sp. z o.o.", "signing_date": ' +
+    '"2026-06-08"}. Registry lookups, composite fields, formula fields, ' +
+    "and AI-fillable fields are resolved automatically; AI-fillable fields " +
+    "are drafted when you omit them.",
   permissions: { template: ["use"] },
   mcp: { type: "tool", name: "fill_template" },
   body: fillBodySchema,

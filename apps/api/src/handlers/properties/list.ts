@@ -6,6 +6,11 @@ import { LIMITS } from "@/api/lib/limits";
 import { deserializeAITool } from "@/api/lib/markdown/ai-tool";
 
 const config = {
+  description:
+    "List the property (column) definitions of a matter. Returns each " +
+    "property's id, name, value type (text, single-select, multi-select, " +
+    "date, or int), and status. Use the returned property id with " +
+    "set_field_value to set a document's value for that property.",
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "list_properties" },
 } satisfies HandlerConfig;

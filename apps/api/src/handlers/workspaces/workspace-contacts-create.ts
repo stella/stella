@@ -30,13 +30,21 @@ const WORKSPACE_CONTACT_ROLES = [
 ] as const;
 
 const createWorkspaceContactBodySchema = t.Object({
-  contactId: tSafeId("contact"),
-  role: t.UnionEnum(WORKSPACE_CONTACT_ROLES),
+  contactId: tSafeId("contact", {
+    description: "Contact ID: with role to link the contact",
+  }),
+  role: t.UnionEnum(WORKSPACE_CONTACT_ROLES, {
+    description: "Party role for the linked contact",
+  }),
   isPrimary: t.Optional(t.Boolean()),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 
 const config = {
+  description:
+    "Link a contact to a matter in a party role (opposing party/counsel, " +
+    "co-counsel, witness, expert witness, third party, judge, mediator, or " +
+    "other). Pass contactId with role to link.",
   permissions: { workspace: ["update"] },
   mcp: { type: "tool", name: "link_matter_contact" },
   body: createWorkspaceContactBodySchema,

@@ -18,12 +18,17 @@ import { tViewSortSchema } from "@/api/lib/views-schema";
 const readEntitiesBodySchema = t.Object({
   filters: t.Optional(t.Array(tConditionNode)),
   sorts: t.Optional(t.Array(tViewSortSchema)),
-  cursor: t.Optional(t.String()),
+  cursor: t.Optional(
+    t.String({
+      description: "Opaque cursor from a previous page to fetch the next page",
+    }),
+  ),
   search: t.Optional(t.String({ maxLength: LIMITS.searchQueryMaxLength })),
   limit: t.Optional(
     t.Integer({
       minimum: 1,
       maximum: LIMITS.entitiesPageSizeMax,
+      description: "Max entities to return",
     }),
   ),
   fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),

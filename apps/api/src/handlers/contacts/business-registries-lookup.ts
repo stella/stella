@@ -18,8 +18,15 @@ import type {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const querySchema = t.Object({
-  registry: t.UnionEnum(BUSINESS_REGISTRY_SLUGS),
-  q: t.String({ minLength: 1, maxLength: 256 }),
+  registry: t.UnionEnum(BUSINESS_REGISTRY_SLUGS, {
+    description: "Business register to query",
+  }),
+  q: t.String({
+    minLength: 1,
+    maxLength: 256,
+    description:
+      "Canonical identifier (e.g. company number, VAT number) or company name",
+  }),
 });
 
 export type LookupBusinessRegistryProps = {
@@ -87,6 +94,13 @@ export const lookupBusinessRegistryShared = async ({
 
 const businessRegistriesLookup = createSafeRootHandler(
   {
+    description:
+      "Look up a company in a public business register (ARES, Brreg, " +
+      "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
+      "or VIES). Pass a canonical identifier (company/registration number, " +
+      "VAT number) for an exact match, or a company name to search where the " +
+      "register supports it. Returns registered names, addresses, and " +
+      "registry-specific details.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "lookup_business_registry" },
     query: querySchema,

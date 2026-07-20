@@ -8,7 +8,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const readEntityByIdParamsSchema = workspaceParams({
-  entityId: tSafeId("entity"),
+  entityId: tSafeId("entity", { description: "Document entity ID" }),
 });
 
 type ReadEntityByIdHandlerProps = {

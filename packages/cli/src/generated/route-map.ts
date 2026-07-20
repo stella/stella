@@ -3650,6 +3650,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["usage", "get-entitlement"],
             capabilityId: "usage.get-entitlement",
+            description:
+              "Read the organization's current usage entitlement: plan, seats, billing period, and how many usage units (AI credits) remain this period. Returns { entitlement: null } when the organization has no active plan. Requires organization-settings management access.",
             access: "read",
             flags: [],
             inputOnly: [],
@@ -4086,6 +4088,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Free-text search over consolidated legislation",
                 flag: "--text",
                 prop: "text",
                 required: false,
@@ -4095,6 +4098,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Filter search results by title text",
                 flag: "--title",
                 prop: "title",
                 required: false,
@@ -4104,6 +4108,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Filter search results by department code",
                 flag: "--department-code",
                 prop: "departmentCode",
                 required: false,
@@ -4113,6 +4118,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "Filter search results by legal-range code (law rank)",
                 flag: "--legal-range-code",
                 prop: "legalRangeCode",
                 required: false,
@@ -4122,6 +4129,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Filter search results by subject-matter code",
                 flag: "--matter-code",
                 prop: "matterCode",
                 required: false,
@@ -4131,6 +4139,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "Only laws published on or after this date (YYYYMMDD)",
                 flag: "--date-from",
                 prop: "dateFrom",
                 required: false,
@@ -4140,6 +4150,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "Only laws published on or before this date (YYYYMMDD)",
                 flag: "--date-to",
                 prop: "dateTo",
                 required: false,
@@ -4163,44 +4175,59 @@ export const generatedRouteMap: RouteNode = {
                     text: {
                       minLength: 1,
                       maxLength: 256,
+                      description:
+                        "Free-text search over consolidated legislation",
                       type: "string",
                     },
                     title: {
                       minLength: 1,
                       maxLength: 256,
+                      description: "Filter search results by title text",
                       type: "string",
                     },
                     departmentCode: {
                       minLength: 1,
                       maxLength: 32,
+                      description: "Filter search results by department code",
                       type: "string",
                     },
                     legalRangeCode: {
                       minLength: 1,
                       maxLength: 32,
+                      description:
+                        "Filter search results by legal-range code (law rank)",
                       type: "string",
                     },
                     matterCode: {
                       minLength: 1,
                       maxLength: 32,
+                      description:
+                        "Filter search results by subject-matter code",
                       type: "string",
                     },
                     dateFrom: {
                       pattern: "^\\d{8}$",
+                      description:
+                        "Only laws published on or after this date (YYYYMMDD)",
                       type: "string",
                     },
                     dateTo: {
                       pattern: "^\\d{8}$",
+                      description:
+                        "Only laws published on or before this date (YYYYMMDD)",
                       type: "string",
                     },
                     cursor: {
                       pattern: "^\\d+$",
                       maxLength: 5,
+                      description:
+                        "Opaque cursor from a previous search_legislation call for the next page",
                       type: "string",
                     },
                     limit: {
                       minimum: 1,
                       maximum: 100,
+                      description: "Max search results to return",
                       anyOf: [
                         {
                           format: "numeric",
@@ -4210,6 +4237,7 @@ export const generatedRouteMap: RouteNode = {
                         {
                           minimum: 1,
                           maximum: 100,
+                          description: "Max search results to return",
                           type: "number",
                         },
                       ],
@@ -6248,6 +6276,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Clause title; required when creating",
                 flag: "--title",
                 prop: "title",
                 required: true,
@@ -6307,6 +6336,7 @@ export const generatedRouteMap: RouteNode = {
                       minLength: 1,
                       maxLength: 256,
                       type: "string",
+                      description: "Clause title; required when creating",
                     },
                     categoryId: {
                       minLength: 36,
@@ -6422,6 +6452,8 @@ export const generatedRouteMap: RouteNode = {
                           },
                         },
                       },
+                      description:
+                        "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting.",
                     },
                     description: {
                       maxLength: 2000,
@@ -6449,11 +6481,14 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "delete"],
             capabilityId: "clauses.delete",
+            description:
+              "Permanently delete a clause and all its variants and versions from the organization's clause library. This is irreversible.",
             access: "write",
             flags: [
               {
                 kind: "string",
                 repeatable: false,
+                description: "Clause id to delete",
                 flag: "--clause-id",
                 prop: "clauseId",
                 required: true,
@@ -6479,6 +6514,7 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description: "Clause id to delete",
                     },
                   },
                 },
@@ -6540,6 +6576,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "List only clauses filed under this category (list mode)",
                 flag: "--category-id",
                 prop: "categoryId",
                 required: false,
@@ -6549,6 +6587,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "Filter clauses by a text query over title and body (list mode)",
                 flag: "--q",
                 prop: "q",
                 required: false,
@@ -6575,14 +6615,19 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description:
+                        "List only clauses filed under this category (list mode)",
                     },
                     q: {
                       minLength: 1,
+                      description:
+                        "Filter clauses by a text query over title and body (list mode)",
                       type: "string",
                     },
                     limit: {
                       minimum: 1,
                       maximum: 200,
+                      description: "Max clauses to return",
                       anyOf: [
                         {
                           format: "integer",
@@ -6592,11 +6637,14 @@ export const generatedRouteMap: RouteNode = {
                         {
                           minimum: 1,
                           maximum: 200,
+                          description: "Max clauses to return",
                           type: "integer",
                         },
                       ],
                     },
                     cursor: {
+                      description:
+                        "Opaque cursor from a previous page to fetch the next page",
                       type: "string",
                     },
                   },
@@ -7779,6 +7827,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contacts", "business-registries-lookup"],
             capabilityId: "contacts.business-registries-lookup",
+            description:
+              "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details.",
             access: "read",
             flags: [
               {
@@ -7797,6 +7847,7 @@ export const generatedRouteMap: RouteNode = {
                   "vies",
                 ],
                 repeatable: false,
+                description: "Business register to query",
                 flag: "--registry",
                 prop: "registry",
                 required: true,
@@ -7806,6 +7857,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "Canonical identifier (e.g. company number, VAT number) or company name",
                 flag: "--q",
                 prop: "q",
                 required: true,
@@ -7827,6 +7880,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     registry: {
                       default: "ares",
+                      description: "Business register to query",
                       type: "string",
                       enum: [
                         "ares",
@@ -7845,6 +7899,8 @@ export const generatedRouteMap: RouteNode = {
                     q: {
                       minLength: 1,
                       maxLength: 256,
+                      description:
+                        "Canonical identifier (e.g. company number, VAT number) or company name",
                       type: "string",
                     },
                   },
@@ -7874,6 +7930,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "enum",
                 enum: ["person", "organization"],
                 repeatable: false,
+                description: "Contact kind; required when creating",
                 flag: "--type",
                 prop: "type",
                 required: true,
@@ -8099,6 +8156,7 @@ export const generatedRouteMap: RouteNode = {
                     },
                     type: {
                       default: "person",
+                      description: "Contact kind; required when creating",
                       type: "string",
                       enum: ["person", "organization"],
                     },
@@ -8473,11 +8531,13 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contacts", "get"],
             capabilityId: "contacts.get",
+            description: "Read a contact by ID.",
             access: "read",
             flags: [
               {
                 kind: "string",
                 repeatable: false,
+                description: "Contact ID",
                 flag: "--contact-id",
                 prop: "contactId",
                 required: true,
@@ -8503,6 +8563,7 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description: "Contact ID",
                     },
                   },
                 },
@@ -9811,6 +9872,8 @@ export const generatedRouteMap: RouteNode = {
                 kind: "enum",
                 enum: ["document", "folder", "task", "message", "link"],
                 repeatable: false,
+                description:
+                  "Entity kind to create; defaults to 'document'. Only valid when creating.",
                 flag: "--kind",
                 prop: "kind",
                 required: false,
@@ -9843,6 +9906,8 @@ export const generatedRouteMap: RouteNode = {
                       default: "document",
                       type: "string",
                       enum: ["document", "folder", "task", "message", "link"],
+                      description:
+                        "Entity kind to create; defaults to 'document'. Only valid when creating.",
                     },
                     parentId: {
                       nullable: true,
@@ -10247,6 +10312,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Document entity ID",
                 flag: "--entity-id",
                 prop: "entityId",
                 required: true,
@@ -10279,6 +10345,7 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description: "Document entity ID",
                     },
                   },
                 },
@@ -13412,6 +13479,8 @@ export const generatedRouteMap: RouteNode = {
                       },
                     },
                     cursor: {
+                      description:
+                        "Opaque cursor from a previous page to fetch the next page",
                       type: "string",
                     },
                     search: {
@@ -13421,6 +13490,7 @@ export const generatedRouteMap: RouteNode = {
                     limit: {
                       minimum: 1,
                       maximum: 500,
+                      description: "Max entities to return",
                       anyOf: [
                         {
                           format: "integer",
@@ -13430,6 +13500,7 @@ export const generatedRouteMap: RouteNode = {
                         {
                           minimum: 1,
                           maximum: 500,
+                          description: "Max entities to return",
                           type: "integer",
                         },
                       ],
@@ -25013,6 +25084,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["fields", "upsert-by-id"],
             capabilityId: "fields.upsert-by-id",
+            description:
+              "Set a document's value for a property (a cell in the matter's table). Pass the document entityId, the propertyId (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
             access: "write",
             flags: [
               {
@@ -25027,6 +25100,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Property ID, as returned by list_properties",
                 flag: "--property-id",
                 prop: "propertyId",
                 required: true,
@@ -25036,6 +25110,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Document entity ID whose cell to set",
                 flag: "--entity-id",
                 prop: "entityId",
                 required: true,
@@ -25061,6 +25136,8 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description:
+                        "Property ID, as returned by list_properties",
                     },
                     entityId: {
                       minLength: 36,
@@ -25068,8 +25145,11 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description: "Document entity ID whose cell to set",
                     },
                     content: {
+                      description:
+                        "The value to set; 'type' must match the property.",
                       anyOf: [
                         {
                           type: "object",
@@ -25080,6 +25160,8 @@ export const generatedRouteMap: RouteNode = {
                               type: "number",
                             },
                             type: {
+                              description:
+                                "Value type; must match the property's value type",
                               const: "text",
                               type: "string",
                             },
@@ -25097,6 +25179,8 @@ export const generatedRouteMap: RouteNode = {
                               type: "number",
                             },
                             type: {
+                              description:
+                                "Value type; must match the property's value type",
                               const: "single-select",
                               type: "string",
                             },
@@ -25122,6 +25206,8 @@ export const generatedRouteMap: RouteNode = {
                               type: "number",
                             },
                             type: {
+                              description:
+                                "Value type; must match the property's value type",
                               const: "multi-select",
                               type: "string",
                             },
@@ -25143,6 +25229,8 @@ export const generatedRouteMap: RouteNode = {
                               type: "number",
                             },
                             type: {
+                              description:
+                                "Value type; must match the property's value type",
                               const: "date",
                               type: "string",
                             },
@@ -25169,6 +25257,8 @@ export const generatedRouteMap: RouteNode = {
                               type: "number",
                             },
                             type: {
+                              description:
+                                "Value type; must match the property's value type",
                               const: "int",
                               type: "string",
                             },
@@ -25190,6 +25280,8 @@ export const generatedRouteMap: RouteNode = {
                                 {
                                   minLength: 3,
                                   maxLength: 3,
+                                  description:
+                                    "For int values only: 3-letter ISO currency code, or null",
                                   type: "string",
                                 },
                                 {
@@ -26778,6 +26870,7 @@ export const generatedRouteMap: RouteNode = {
                     limit: {
                       minimum: 1,
                       maximum: 100,
+                      description: "Max invoices to return",
                       anyOf: [
                         {
                           format: "integer",
@@ -26787,12 +26880,15 @@ export const generatedRouteMap: RouteNode = {
                         {
                           minimum: 1,
                           maximum: 100,
+                          description: "Max invoices to return",
                           type: "integer",
                         },
                       ],
                     },
                     cursor: {
                       maxLength: 512,
+                      description:
+                        "Opaque cursor from a previous list_invoices call to fetch the next page",
                       type: "string",
                     },
                   },
@@ -27420,6 +27516,8 @@ export const generatedRouteMap: RouteNode = {
               "update-practice-jurisdictions",
             ],
             capabilityId: "organization-settings.update-practice-jurisdictions",
+            description:
+              "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {countryCode, isPrimary}; exactly one entry should be primary.",
             access: "write",
             flags: [],
             inputOnly: ["body.practiceJurisdictions"],
@@ -27436,6 +27534,8 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     practiceJurisdictions: {
                       maxItems: 12,
+                      description:
+                        "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true.",
                       type: "array",
                       items: {
                         type: "object",
@@ -27445,9 +27545,12 @@ export const generatedRouteMap: RouteNode = {
                             minLength: 2,
                             maxLength: 2,
                             pattern: "^[A-Za-z]{2}$",
+                            description: "ISO 3166-1 alpha-2 country code",
                             type: "string",
                           },
                           isPrimary: {
+                            description:
+                              "Whether this is the organization's primary jurisdiction",
                             type: "boolean",
                           },
                         },
@@ -31940,6 +32043,7 @@ export const generatedRouteMap: RouteNode = {
                     limit: {
                       minimum: 1,
                       maximum: 100,
+                      description: "Max playbooks to return",
                       anyOf: [
                         {
                           format: "integer",
@@ -31949,12 +32053,15 @@ export const generatedRouteMap: RouteNode = {
                         {
                           minimum: 1,
                           maximum: 100,
+                          description: "Max playbooks to return",
                           type: "integer",
                         },
                       ],
                     },
                     cursor: {
                       maxLength: 512,
+                      description:
+                        "Opaque cursor from a previous list_playbooks call to fetch the next page",
                       type: "string",
                     },
                   },
@@ -32206,6 +32313,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "run"],
             capabilityId: "playbooks.run",
+            description:
+              "Run a review playbook over a matter's documents. Materializes the playbook's extraction and verdict columns onto the matter's table and starts the AI review; findings populate asynchronously. Pass workspaceId and playbookId. Returns the number of columns queued for review.",
             access: "write",
             flags: [
               {
@@ -32220,6 +32329,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Playbook id to run",
                 flag: "--playbook-id",
                 prop: "playbookId",
                 required: true,
@@ -32252,6 +32362,7 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description: "Playbook id to run",
                     },
                   },
                 },
@@ -43382,6 +43493,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["properties", "list"],
             capabilityId: "properties.list",
+            description:
+              "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, or int), and status. Use the returned property id with set_field_value to set a document's value for that property.",
             access: "read",
             flags: [
               {
@@ -47935,6 +48048,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "resolve"],
             capabilityId: "rates.resolve",
+            description:
+              "Resolve the effective hourly rate for a user on a given date in a matter, using the matter's default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
             access: "read",
             flags: [
               {
@@ -47949,6 +48064,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "User ID to resolve the rate for",
                 flag: "--user-id",
                 prop: "userId",
                 required: true,
@@ -47958,6 +48074,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Date to resolve the rate on (ISO YYYY-MM-DD)",
                 flag: "--date",
                 prop: "date",
                 required: true,
@@ -47990,9 +48107,12 @@ export const generatedRouteMap: RouteNode = {
                       minLength: 1,
                       maxLength: 128,
                       type: "string",
+                      description: "User ID to resolve the rate for",
                     },
                     date: {
                       format: "date",
+                      description:
+                        "Date to resolve the rate on (ISO YYYY-MM-DD)",
                       type: "string",
                     },
                   },
@@ -53985,6 +54105,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Task name; required when creating",
                 flag: "--name",
                 prop: "name",
                 required: true,
@@ -54012,6 +54133,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Task status (e.g. open, in_progress, done)",
                 flag: "--status",
                 prop: "status",
                 required: false,
@@ -54021,6 +54143,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Task priority (e.g. none, low, medium, high)",
                 flag: "--priority",
                 prop: "priority",
                 required: false,
@@ -54075,6 +54198,7 @@ export const generatedRouteMap: RouteNode = {
                     name: {
                       minLength: 1,
                       maxLength: 255,
+                      description: "Task name; required when creating",
                       type: "string",
                     },
                     parentId: {
@@ -54092,11 +54216,14 @@ export const generatedRouteMap: RouteNode = {
                     status: {
                       minLength: 1,
                       maxLength: 32,
+                      description: "Task status (e.g. open, in_progress, done)",
                       type: "string",
                     },
                     priority: {
                       minLength: 1,
                       maxLength: 16,
+                      description:
+                        "Task priority (e.g. none, low, medium, high)",
                       type: "string",
                     },
                     dueDate: {
@@ -54104,6 +54231,8 @@ export const generatedRouteMap: RouteNode = {
                       anyOf: [
                         {
                           format: "date",
+                          description:
+                            "Due date (ISO YYYY-MM-DD); pass null to clear",
                           type: "string",
                         },
                         {
@@ -56425,6 +56554,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "list"],
             capabilityId: "templates.list",
+            description:
+              "List the document templates in this organization (NDAs, powers of attorney, leases): each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies.",
             access: "read",
             flags: [],
             inputOnly: ["query.categoryId"],
@@ -57234,6 +57365,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "create"],
             capabilityId: "time-entries.create",
+            description:
+              "Create a time entry (matterId, dateWorked, timezoneId, durationMinutes, rateAtEntry, currency, and narrative all required). Rates and amounts are integer minor currency units (e.g. cents); durations are whole minutes. Returns the time entry ID.",
             access: "write",
             flags: [
               {
@@ -57248,6 +57381,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "Entity the time is logged against (document, folder, or task).",
                 flag: "--matter-id",
                 prop: "matterId",
                 required: true,
@@ -57257,6 +57392,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Date the work was done (ISO YYYY-MM-DD)",
                 flag: "--date-worked",
                 prop: "dateWorked",
                 required: true,
@@ -57266,6 +57402,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "IANA time zone the dateWorked is interpreted in (e.g. Europe/Prague)",
                 flag: "--timezone-id",
                 prop: "timezoneId",
                 required: true,
@@ -57275,6 +57413,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "3-letter ISO currency code",
                 flag: "--currency",
                 prop: "currency",
                 required: true,
@@ -57284,6 +57423,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Description of the work",
                 flag: "--narrative",
                 prop: "narrative",
                 required: true,
@@ -57293,6 +57433,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "boolean",
                 repeatable: false,
+                description: "Whether the entry is billable to the client",
                 flag: "--billable",
                 prop: "billable",
                 required: false,
@@ -57331,18 +57472,24 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description:
+                        "Entity the time is logged against (document, folder, or task).",
                     },
                     dateWorked: {
                       format: "date",
+                      description: "Date the work was done (ISO YYYY-MM-DD)",
                       type: "string",
                     },
                     timezoneId: {
                       minLength: 1,
                       maxLength: 64,
+                      description:
+                        "IANA time zone the dateWorked is interpreted in (e.g. Europe/Prague)",
                       type: "string",
                     },
                     durationMinutes: {
                       minimum: 1,
+                      description: "Minutes worked (whole minutes)",
                       anyOf: [
                         {
                           format: "integer",
@@ -57351,12 +57498,15 @@ export const generatedRouteMap: RouteNode = {
                         },
                         {
                           minimum: 1,
+                          description: "Minutes worked (whole minutes)",
                           type: "integer",
                         },
                       ],
                     },
                     rateAtEntry: {
                       minimum: 0,
+                      description:
+                        "Hourly rate in integer minor currency units (e.g. cents)",
                       anyOf: [
                         {
                           format: "integer",
@@ -57365,6 +57515,8 @@ export const generatedRouteMap: RouteNode = {
                         },
                         {
                           minimum: 0,
+                          description:
+                            "Hourly rate in integer minor currency units (e.g. cents)",
                           type: "integer",
                         },
                       ],
@@ -57372,14 +57524,18 @@ export const generatedRouteMap: RouteNode = {
                     currency: {
                       minLength: 3,
                       maxLength: 3,
+                      description: "3-letter ISO currency code",
                       type: "string",
                     },
                     narrative: {
                       minLength: 1,
                       maxLength: 10000,
+                      description: "Description of the work",
                       type: "string",
                     },
                     billable: {
+                      description:
+                        "Whether the entry is billable to the client",
                       type: "boolean",
                     },
                     taskCode: {
@@ -57387,6 +57543,8 @@ export const generatedRouteMap: RouteNode = {
                       anyOf: [
                         {
                           maxLength: 20,
+                          description:
+                            "UTBMS/LEDES task code; pass null to clear",
                           type: "string",
                         },
                         {
@@ -57399,6 +57557,8 @@ export const generatedRouteMap: RouteNode = {
                       anyOf: [
                         {
                           maxLength: 20,
+                          description:
+                            "UTBMS/LEDES activity code; pass null to clear",
                           type: "string",
                         },
                         {
@@ -57427,6 +57587,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "delete"],
             capabilityId: "time-entries.delete",
+            description:
+              "Delete a time entry. A draft entry is permanently deleted; an approved entry is written off instead (kept for the audit trail, excluded from billing). A billed entry cannot be deleted until its invoice is reverted. Returns whether the entry was hard-deleted.",
             access: "write",
             flags: [
               {
@@ -57441,6 +57603,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Time entry ID to delete or write off",
                 flag: "--id",
                 prop: "id",
                 required: true,
@@ -57466,6 +57629,7 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description: "Time entry ID to delete or write off",
                     },
                   },
                 },
@@ -57749,6 +57913,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "list"],
             capabilityId: "time-entries.list",
+            description:
+              "List time entries in a matter, optionally filtered by matterId (the item the time was logged against), userId, a date-worked range (dateFrom/dateTo, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
             access: "read",
             flags: [
               {
@@ -57763,6 +57929,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "List only entries recorded by this user",
                 flag: "--user-id",
                 prop: "userId",
                 required: false,
@@ -57772,6 +57939,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "List only entries logged against this entity (document, folder, or task the time is billed to)",
                 flag: "--matter-id",
                 prop: "matterId",
                 required: false,
@@ -57781,6 +57950,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "List only entries worked on or after this ISO date (YYYY-MM-DD)",
                 flag: "--date-from",
                 prop: "dateFrom",
                 required: false,
@@ -57790,6 +57961,8 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description:
+                  "List only entries worked on or before this ISO date (YYYY-MM-DD)",
                 flag: "--date-to",
                 prop: "dateTo",
                 required: false,
@@ -57800,6 +57973,7 @@ export const generatedRouteMap: RouteNode = {
                 kind: "enum",
                 enum: ["draft", "approved", "billed", "written_off"],
                 repeatable: false,
+                description: "List only entries with this status",
                 flag: "--status",
                 prop: "status",
                 required: false,
@@ -57842,6 +58016,7 @@ export const generatedRouteMap: RouteNode = {
                     limit: {
                       minimum: 1,
                       maximum: 200,
+                      description: "Max entries to return",
                       anyOf: [
                         {
                           format: "integer",
@@ -57851,6 +58026,7 @@ export const generatedRouteMap: RouteNode = {
                         {
                           minimum: 1,
                           maximum: 200,
+                          description: "Max entries to return",
                           type: "integer",
                         },
                       ],
@@ -57863,6 +58039,7 @@ export const generatedRouteMap: RouteNode = {
                       minLength: 1,
                       maxLength: 128,
                       type: "string",
+                      description: "List only entries recorded by this user",
                     },
                     matterId: {
                       minLength: 36,
@@ -57870,19 +58047,26 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description:
+                        "List only entries logged against this entity (document, folder, or task the time is billed to)",
                     },
                     dateFrom: {
                       format: "date",
+                      description:
+                        "List only entries worked on or after this ISO date (YYYY-MM-DD)",
                       type: "string",
                     },
                     dateTo: {
                       format: "date",
+                      description:
+                        "List only entries worked on or before this ISO date (YYYY-MM-DD)",
                       type: "string",
                     },
                     status: {
                       default: "draft",
                       type: "string",
                       enum: ["draft", "approved", "billed", "written_off"],
+                      description: "List only entries with this status",
                     },
                     source: {
                       default: "manual",
@@ -59343,6 +59527,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "create"],
             capabilityId: "workspaces.create",
+            description:
+              "Create a new matter (name required; pass clientId to attach a client contact). Returns the matter ID.",
             access: "write",
             flags: [
               {
@@ -59357,6 +59543,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Contact ID to attach in the client role",
                 flag: "--client-id",
                 prop: "clientId",
                 required: false,
@@ -59375,6 +59562,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Matter name",
                 flag: "--name",
                 prop: "name",
                 required: true,
@@ -59416,6 +59604,7 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description: "Contact ID to attach in the client role",
                     },
                     memberUserIds: {
                       maxItems: 499,
@@ -59429,6 +59618,7 @@ export const generatedRouteMap: RouteNode = {
                       minLength: 1,
                       maxLength: 256,
                       type: "string",
+                      description: "Matter name",
                     },
                     filePropertyName: {
                       minLength: 1,
@@ -59545,6 +59735,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "list"],
             capabilityId: "workspaces.list",
+            description: "List the matters you can access.",
             access: "read",
             flags: [],
             inputOnly: [],
@@ -60035,6 +60226,8 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "workspace-contacts-create"],
             capabilityId: "workspaces.workspace-contacts-create",
+            description:
+              "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other). Pass contactId with role to link.",
             access: "write",
             flags: [
               {
@@ -60049,6 +60242,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
+                description: "Contact ID: with role to link the contact",
                 flag: "--contact-id",
                 prop: "contactId",
                 required: true,
@@ -60069,6 +60263,7 @@ export const generatedRouteMap: RouteNode = {
                   "other",
                 ],
                 repeatable: false,
+                description: "Party role for the linked contact",
                 flag: "--role",
                 prop: "role",
                 required: true,
@@ -60103,9 +60298,11 @@ export const generatedRouteMap: RouteNode = {
                       pattern:
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
+                      description: "Contact ID: with role to link the contact",
                     },
                     role: {
                       default: "opposing_party",
+                      description: "Party role for the linked contact",
                       type: "string",
                       enum: [
                         "opposing_party",
