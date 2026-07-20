@@ -270,11 +270,17 @@ export const jwks = pgTable(
  * silently breaks the plugin at runtime rather than at build time.
  *
  * `referenceId` carries a **user** id, not an organization id: the plugin is
- * configured with `references: "user"` (see `MACHINE_API_KEY_CONFIG` in
+ * configured with `references: "user"` (see the `apiKey(...)` registration in
  * `lib/auth.ts`), which is what lets a key resolve to a real principal that
  * holds a `member` row and therefore an RLS identity. The owning organization
- * travels in `metadata`. The cascade below makes "a key outliving its user" a
- * structurally impossible state instead of a revocation step someone can forget.
+ * travels in `metadata`.
+ *
+ * The cascade below covers a hard user delete, but it is NOT the revocation
+ * path that matters: account deletion soft-deletes the `user` row (anonymize +
+ * `deletedAt`) and never hard-deletes it, so this cascade does not fire for a
+ * closed account. Machine keys are purged explicitly in
+ * `revokeAuthCredentialsAndInvitations` (`lib/account-deletion-steps.ts`), and
+ * `account-deletion-coverage.test.ts` fails if that step is ever dropped.
  */
 export const apikey = pgTable(
   "apikey",

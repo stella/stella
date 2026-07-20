@@ -13,6 +13,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
   account,
+  apikey,
   invitation,
   member,
   oauthAccessToken,
@@ -186,17 +187,25 @@ export const REVOKE_AUTH_CREDENTIALS_TABLES = [
   session,
   twoFactor,
   invitation,
+  apikey,
 ] as const satisfies readonly PgTable[];
 
 /**
- * 1. Auth credentials, sessions, two-factor secrets, and invitations
- * (auth-schema tables).
+ * 1. Auth credentials, sessions, two-factor secrets, machine API keys, and
+ * invitations (auth-schema tables).
  *
  * The `two_factor` FK to `user` is `onDelete: "cascade"`, but account
  * deletion soft-deletes the user row (see `finalizeDeletedUserRecord`) and
  * never hard-deletes it, so that cascade never fires. The encrypted TOTP
  * secret and backup codes must therefore be purged explicitly here, the same
  * way `session` and `account` are.
+ *
+ * `apikey` is the same trap and a worse outcome: its FK to `user` is also
+ * `cascade`, so a soft-deleted account would leave live machine credentials
+ * behind — long-lived, non-interactive, and belonging to someone who believes
+ * their account is gone. Deleting by `referenceId` is correct because the
+ * plugin is configured with `references: "user"`, so that column holds the
+ * owner's user id.
  */
 export const revokeAuthCredentialsAndInvitations = async ({
   tx,
@@ -207,6 +216,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
   // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth session artifacts.
   await tx.delete(session).where(eq(session.userId, currentUserId));
   await tx.delete(twoFactor).where(eq(twoFactor.userId, currentUserId));
+  await tx.delete(apikey).where(eq(apikey.referenceId, currentUserId));
   // Delete invitations sent by the user, and also invitations sent to the user's email
   await tx.delete(invitation).where(eq(invitation.inviterId, currentUserId));
   await tx.delete(invitation).where(eq(invitation.email, email));
