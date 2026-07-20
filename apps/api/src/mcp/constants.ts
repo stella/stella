@@ -72,8 +72,8 @@ export const MCP_ALLOWED_HEADERS = [
 // Deploy support for a CLI version before publishing it: the production
 // canary checks these inclusive bounds against the exact packed CLI version.
 export const STELLA_MCP_API_CONTRACT_VERSION = 1;
-export const STELLA_CLI_MINIMUM_VERSION = "0.2.0";
-export const STELLA_CLI_MAXIMUM_VERSION = "0.2.0";
+export const STELLA_CLI_MINIMUM_VERSION = "0.3.0";
+export const STELLA_CLI_MAXIMUM_VERSION = "0.3.0";
 export const STELLA_MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version";
 export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 
