@@ -1419,6 +1419,12 @@ const CLI_STYLES = `
     width: 94%;
     height: 94%;
   }
+  /* Frameless embeds: only the main window renders, nothing can stray, so
+     the scene may let the window's shadow breathe instead of clipping it at
+     the container edge. (The hero keeps its clip for drag bounds.) */
+  .cli-story.cli-story-scene-only {
+    overflow: visible;
+  }
   @media (max-width: 639px) {
     .cli-main-window {
       inset: 4% auto auto 3%;

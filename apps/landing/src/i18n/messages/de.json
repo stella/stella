@@ -87,6 +87,7 @@
     "controlTitle": "Behalten Sie die Kontrolle über Ihren Stack.",
     "dataBody": "Durchsuchen Sie offizielle Rechtsquellen, holen Sie Registerdaten in die Akte, prüfen Sie Dokumentsätze als strukturierte Tabellen und anonymisieren Sie identifizierende Angaben, bevor sensibles Material in einen KI-Workflow gelangt.",
     "dataEyebrow": "Juristische Daten",
+    "dataMainAlt": "Eine offizielle slowakische Gerichtsentscheidung, geöffnet in stella",
     "dataTitle": "Nehmen Sie das Recht und die Daten mit.",
     "deploySubtitle": "Starten Sie in der Cloud oder bringen Sie denselben Open-Source-Arbeitsbereich auf Ihre eigene Infrastruktur.",
     "deployTitle": "Betreiben Sie stella mit uns. Oder ganz in Eigenregie.",

@@ -2,9 +2,8 @@
 import type { TranslationKey } from "../data/site-nav";
 import { defaultLocale, isLocale } from "../i18n/config";
 import { getTranslations } from "../i18n/utils";
-import AgentVignette from "./vignettes/AgentVignette.astro";
-import DataVignette from "./vignettes/DataVignette.astro";
-import WorkspaceVignette from "./vignettes/WorkspaceVignette.astro";
+import { CliMcpPreview } from "./react/previews/CliMcpPreview";
+import ThemeImage from "./ThemeImage.astro";
 
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
@@ -147,9 +146,43 @@ const proofItems = [
                 index % 2 === 1 ? "lg:col-start-1 lg:row-start-1" : "lg:col-start-5",
               ]}
             >
-              {chapter.id === "workspace" && <WorkspaceVignette />}
-              {chapter.id === "agent" && <AgentVignette />}
-              {chapter.id === "data" && <DataVignette />}
+              {chapter.id === "workspace" && (
+                <div class="story-window">
+                  <CliMcpPreview
+                    client:visible
+                    backdrop="transparent"
+                    includeStyles={false}
+                    sceneId="workspace"
+                    showCompanions={false}
+                  />
+                </div>
+              )}
+              {chapter.id === "agent" && (
+                <div class="story-window">
+                  <CliMcpPreview
+                    client:visible
+                    backdrop="transparent"
+                    includeStyles={false}
+                    sceneId="agent"
+                    showCompanions={false}
+                  />
+                </div>
+              )}
+              {chapter.id === "data" && (
+                <div class="story-window">
+                  <div class="story-shot-main">
+                    <ThemeImage
+                      lightSrc="/media/products/story-public-data.png"
+                      darkSrc="/media/products/story-public-data-dark.png"
+                      alt={t("story.dataMainAlt")}
+                      class="h-full w-full object-cover object-top"
+                      loading="lazy"
+                      decoding="async"
+                      defer="visible"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </article>
         ))
@@ -228,6 +261,42 @@ const proofItems = [
 <style>
   .home-product-story {
     position: relative;
+  }
+
+  /* Frameless chapter windows: the app window itself (chrome, border, its
+     own shadow) is the only frame; the container just reserves the aspect
+     and lets the shadow breathe. On wide screens the window bleeds slightly
+     past the text container on its outer side (the page-level overflow clip
+     crops at the viewport), so each capability peeks into the page. */
+  .story-window {
+    position: relative;
+    aspect-ratio: 16 / 10;
+  }
+
+  .story-shot-main {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
+    border-radius: 0.9rem;
+    background: var(--background);
+    box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5);
+  }
+
+  @media (min-width: 1024px) {
+    .product-chapter:not(.product-chapter-reverse) .story-window {
+      margin-inline-end: -3.5rem;
+    }
+
+    .product-chapter-reverse .story-window {
+      margin-inline-start: -3.5rem;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .story-window {
+      aspect-ratio: 4 / 3;
+    }
   }
 
   .control-rail {
