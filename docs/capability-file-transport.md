@@ -19,29 +19,29 @@ On the catalog as of `1dd0cc532d` that is **21 of 280** entries.
 
 `IN` = `requiresFileInput`, `OUT` = `returnsFileResponse`.
 
-| Capability | IN | OUT | Class |
-| --- | --- | --- | --- |
-| `entities.upload` | x | | A |
-| `entities.upload-version` | x | | A |
-| `skills.upload` | x | | A |
-| `skills.resources.upload` | x | | B |
-| `entities.check-stamp` | x | | B |
-| `clauses.import` | x | | B |
-| `style-sets.create` | x | | B |
-| `style-sets.replace` | x | | B |
-| `templates.create` | x | | B |
-| `templates.create-from-styles` | x | | B |
-| `templates.discover` | x | | B |
-| `templates.manifest` | x | | B |
-| `templates.prefill` | x | | B |
-| `templates.prepare` | x | | B |
-| `templates.save-document` | x | | B |
-| `templates.fill` | x | x | B + D |
-| `clauses.export` | | x | C |
-| `views.table-export` | | x | C |
-| `entities.download-zip` | | x | D |
-| `templates.fill-by-id` | | x | D |
-| `time-entries.export-pdf` | | x | D |
+| Capability                     | IN  | OUT | Class |
+| ------------------------------ | --- | --- | ----- |
+| `entities.upload`              | x   |     | A     |
+| `entities.upload-version`      | x   |     | A     |
+| `skills.upload`                | x   |     | A     |
+| `skills.resources.upload`      | x   |     | B     |
+| `entities.check-stamp`         | x   |     | B     |
+| `clauses.import`               | x   |     | B     |
+| `style-sets.create`            | x   |     | B     |
+| `style-sets.replace`           | x   |     | B     |
+| `templates.create`             | x   |     | B     |
+| `templates.create-from-styles` | x   |     | B     |
+| `templates.discover`           | x   |     | B     |
+| `templates.manifest`           | x   |     | B     |
+| `templates.prefill`            | x   |     | B     |
+| `templates.prepare`            | x   |     | B     |
+| `templates.save-document`      | x   |     | B     |
+| `templates.fill`               | x   | x   | B + D |
+| `clauses.export`               |     | x   | C     |
+| `views.table-export`           |     | x   | C     |
+| `entities.download-zip`        |     | x   | D     |
+| `templates.fill-by-id`         |     | x   | D     |
+| `time-entries.export-pdf`      |     | x   | D     |
 
 ### Class A — file-in, already served by the presigned slice
 
@@ -50,11 +50,11 @@ coordinator (`routes.ts`, `presign.ts`, `finalize.ts`, `abort.ts`,
 `entity-create-tree.ts`, `preflight-entity-create.ts`). Its `purpose` union
 covers exactly three cases, which map onto the three class-A capabilities:
 
-| Capability | Presign purpose |
-| --- | --- |
-| `entities.upload` | `entity_create` |
+| Capability                | Presign purpose  |
+| ------------------------- | ---------------- |
+| `entities.upload`         | `entity_create`  |
 | `entities.upload-version` | `entity_version` |
-| `skills.upload` | `agent_skill` |
+| `skills.upload`           | `agent_skill`    |
 
 Every one of those five upload endpoints is annotated
 `mcp: { type: "internal", reason: "upload_mechanics" }`, so the whole slice is
