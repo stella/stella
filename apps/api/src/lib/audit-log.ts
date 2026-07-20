@@ -48,6 +48,7 @@ export const AUDIT_RESOURCE_TYPE = {
   FLOW_RUN: "flow_run",
   FOLIO_COLLAB_SESSION: "folio_collab_session",
   INVOICE: "invoice",
+  MACHINE_API_KEY: "machine_api_key",
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",
   ORGANIZATION_SETTINGS: "organization_settings",
   PLAYBOOK: "playbook",
