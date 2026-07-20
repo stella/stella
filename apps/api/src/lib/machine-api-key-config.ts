@@ -143,6 +143,16 @@ export type MachineApiKeyPermissionsParse =
  * that *looks* scoped to something actually be scoped to nothing — a permission
  * set that quietly stops restricting is the failure mode worth failing loudly on.
  */
+/**
+ * Narrows a validated permission record to `PermissionInput`, whose
+ * `RequireAtLeastOne` constraint cannot be reached by ordinary control-flow
+ * narrowing. Stated as a predicate so the non-empty claim is checked at runtime
+ * rather than asserted away.
+ */
+const hasAtLeastOnePermission = (
+  value: Record<string, string[]>,
+): value is PermissionInput => Object.keys(value).length > 0;
+
 export const parseMachineApiKeyPermissions = (
   permissions: Record<string, string[]>,
 ): MachineApiKeyPermissionsParse => {
@@ -162,15 +172,15 @@ export const parseMachineApiKeyPermissions = (
     }
   }
 
-  return {
-    // SAFETY: every key is a `statements` resource and every action is one of
-    // that resource's declared actions (checked immediately above), so the only
-    // gap against `PermissionInput` is its `RequireAtLeastOne` constraint, which
-    // the `entries.length === 0` guard establishes and which no runtime narrowing
-    // can express.
-    permissions: permissions as PermissionInput,
-    type: "valid",
-  };
+  // A type predicate rather than an assertion: every key is a `statements`
+  // resource and every action one of its declared actions (checked immediately
+  // above), so the only remaining gap against `PermissionInput` is its
+  // `RequireAtLeastOne` constraint — which is exactly what the guard states.
+  if (!hasAtLeastOnePermission(permissions)) {
+    return { type: "empty" };
+  }
+
+  return { permissions, type: "valid" };
 };
 
 /**

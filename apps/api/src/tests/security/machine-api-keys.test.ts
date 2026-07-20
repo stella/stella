@@ -63,14 +63,20 @@ const givenMemberRole = (role: string | null): void => {
 };
 
 const expectRejected = async (): Promise<Error> => {
-  const error = await resolveMachineApiKeySession(CREDENTIAL).then(
+  // `: unknown` because a rejection carries no type guarantee. The result is
+  // bound as `rejection` so the callback can keep the `error` name the lint
+  // rule requires without shadowing it.
+  const rejection = await resolveMachineApiKeySession(CREDENTIAL).then(
     () => null,
-    (error: Error) => error,
+    (error: unknown) => error,
   );
-  if (error === null) {
+  if (rejection === null) {
     throw new Error("expected the credential to be rejected");
   }
-  return error;
+  if (!(rejection instanceof Error)) {
+    throw new Error("expected the rejection to be an Error");
+  }
+  return rejection;
 };
 
 beforeEach(() => {
