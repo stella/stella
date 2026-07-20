@@ -65,7 +65,7 @@ export const isWellFormedCapabilityId = (id: string): boolean => {
 
 /** Ids failing `isWellFormedCapabilityId`, sorted (empty when all are well-formed). */
 export const findMalformedCapabilityIds = (ids: readonly string[]): string[] =>
-  [...ids].filter((id) => !isWellFormedCapabilityId(id)).sort();
+  ids.filter((id) => !isWellFormedCapabilityId(id)).sort();
 
 /** The domain of a capability id: its first `.`-separated segment. */
 export const deriveDomain = (id: string): string => {
