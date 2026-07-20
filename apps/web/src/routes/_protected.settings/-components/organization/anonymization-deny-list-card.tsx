@@ -23,6 +23,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
@@ -499,7 +500,7 @@ export const AnonymizationDenyListCard = () => {
                   if (!file) {
                     return;
                   }
-                  void handleImportFile(file);
+                  detached(handleImportFile(file), "AnonymizationDenyListCard");
                   event.target.value = "";
                 }}
                 ref={fileInputRef}

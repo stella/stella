@@ -33,6 +33,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
@@ -146,10 +147,16 @@ const MemberRow = ({
             title: t("success.memberRemoved"),
             type: "success",
           });
-          void queryClient.invalidateQueries({
-            queryKey: workspaceMembersKeys.all(workspaceId),
-          });
-          void queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspaceMembersKeys.all(workspaceId),
+            }),
+            "onSuccess",
+          );
+          detached(
+            queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
+            "onSuccess",
+          );
         },
         onError: () => {
           stellaToast.add({
@@ -264,9 +271,12 @@ export const AddMemberDialog = ({
             title: t("success.memberAdded"),
             type: "success",
           });
-          void queryClient.invalidateQueries({
-            queryKey: workspaceMembersKeys.all(workspaceId),
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspaceMembersKeys.all(workspaceId),
+            }),
+            "onSuccess",
+          );
           setIsOpen(false);
           setSelectedUserId(null);
         },

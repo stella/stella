@@ -49,6 +49,7 @@ import {
   SIDE_RAIL_WIDTH,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { isPublicLawRouteEnabled } from "@/lib/public-law-launch";
 
@@ -230,7 +231,7 @@ function PublicLawSidebar({
                     disabled={authStatus.status === "checking"}
                     onClick={() => {
                       if (authStatus.isAuthenticated) {
-                        void navigate({ to: item.to });
+                        detached(navigate({ to: item.to }), "PublicLawSidebar");
                         return;
                       }
                       requestPrivateFeature(item.to);

@@ -17,6 +17,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -128,37 +129,43 @@ export const TaskDetailPanel = ({
           (a) => a.user?.id === userId,
         );
         if (!alreadyAssigned) {
-          void (async () => {
-            try {
-              const response = await api
-                .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-                .assignees.post({
-                  taskId: toSafeId<"entity">(taskId),
-                  userId: toSafeId<"user">(userId),
-                  queryKey: entitiesKeys.all(workspaceId),
-                });
-              if (response.error) {
-                analytics.captureError(toAPIError(response.error));
-                await queryClient.invalidateQueries({
-                  queryKey: taskKeys.detail(workspaceId, taskId),
-                });
-                return;
+          detached(
+            (async () => {
+              try {
+                const response = await api
+                  .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+                  .assignees.post({
+                    taskId: toSafeId<"entity">(taskId),
+                    userId: toSafeId<"user">(userId),
+                    queryKey: entitiesKeys.all(workspaceId),
+                  });
+                if (response.error) {
+                  analytics.captureError(toAPIError(response.error));
+                  await queryClient.invalidateQueries({
+                    queryKey: taskKeys.detail(workspaceId, taskId),
+                  });
+                  return;
+                }
+                await Promise.all([
+                  queryClient.invalidateQueries({
+                    queryKey: taskKeys.detail(workspaceId, taskId),
+                  }),
+                  queryClient.invalidateQueries({
+                    queryKey: workspacesKeys.overview(workspaceId),
+                  }),
+                ]);
+              } catch (error: unknown) {
+                analytics.captureError(error);
+                detached(
+                  queryClient.invalidateQueries({
+                    queryKey: taskKeys.detail(workspaceId, taskId),
+                  }),
+                  "TaskDetailPanel",
+                );
               }
-              await Promise.all([
-                queryClient.invalidateQueries({
-                  queryKey: taskKeys.detail(workspaceId, taskId),
-                }),
-                queryClient.invalidateQueries({
-                  queryKey: workspacesKeys.overview(workspaceId),
-                }),
-              ]);
-            } catch (error: unknown) {
-              analytics.captureError(error);
-              void queryClient.invalidateQueries({
-                queryKey: taskKeys.detail(workspaceId, taskId),
-              });
-            }
-          })();
+            })(),
+            "TaskDetailPanel",
+          );
         }
       }
     }

@@ -34,13 +34,15 @@ function OTP() {
   });
   const devOtp = Route.useLoaderData({ select: (d) => d.devOtp });
 
+  const handleVerified = async () => {
+    await navigate({ href: redirectTo, replace: true });
+  };
+
   return (
     <OTPPanel
       email={email}
       initialOtp={devOtp ?? undefined}
-      onVerified={async () => {
-        await navigate({ href: redirectTo, replace: true });
-      }}
+      onVerified={handleVerified}
       redirectTo={redirectTo}
     />
   );

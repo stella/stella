@@ -58,6 +58,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import type {
@@ -233,7 +234,7 @@ export const PlaybookFacet = ({
         onChangePlaybook={() => resetSession(entityId, fileFieldId)}
         onRetry={() => {
           if (session.playbookId !== null) {
-            void runReview(session.playbookId);
+            detached(runReview(session.playbookId), "PlaybookFacet");
           }
         }}
       />
@@ -249,7 +250,7 @@ export const PlaybookFacet = ({
         negotiationBySourceId={negotiationBySourceId}
         onAcceptFix={acceptFix}
         onInsertFix={(finding) => {
-          void insertFix(finding);
+          detached(insertFix(finding), "PlaybookFacet");
         }}
         onRejectFix={rejectFix}
         onReviewAgain={() => resetSession(entityId, fileFieldId)}
@@ -265,7 +266,7 @@ export const PlaybookFacet = ({
       playbooks={playbooks}
       initialPlaybookId={session?.playbookId ?? null}
       onReview={(playbookId) => {
-        void runReview(playbookId);
+        detached(runReview(playbookId), "PlaybookFacet");
       }}
     />
   );

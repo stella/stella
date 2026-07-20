@@ -14,6 +14,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -195,7 +196,7 @@ const ClauseFillItem = ({
                   </Button>
                   <Button
                     disabled={adjusting || instruction.trim() === ""}
-                    onClick={() => void handleAdjust()}
+                    onClick={() => detached(handleAdjust(), "ClauseFillItem")}
                     size="sm"
                     type="button"
                   >

@@ -7,6 +7,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { type APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
@@ -129,11 +130,14 @@ export const useChatModelSelection = ({
   const selectModel = (model: string | null) => {
     const promise = persist(model);
     pendingRef.current = promise;
-    void promise.finally(() => {
-      if (pendingRef.current === promise) {
-        pendingRef.current = null;
-      }
-    });
+    detached(
+      promise.finally(() => {
+        if (pendingRef.current === promise) {
+          pendingRef.current = null;
+        }
+      }),
+      "selectModel",
+    );
   };
 
   const awaitPendingSelection = async (): Promise<

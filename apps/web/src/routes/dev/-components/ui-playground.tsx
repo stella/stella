@@ -201,6 +201,7 @@ import {
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
+import { detached } from "@/lib/detached";
 
 const renderPlaygroundAnchor = ({
   children,
@@ -263,15 +264,18 @@ const TABLE_ROWS = [
 ] as const;
 
 const showPromiseToast = () => {
-  void stellaToast.promise(
-    new Promise<string>((resolve) => {
-      setTimeout(() => resolve("complete"), 900);
-    }),
-    {
-      loading: { title: "Saving draft" },
-      success: { title: "Draft saved" },
-      error: { title: "Save failed" },
-    },
+  detached(
+    stellaToast.promise(
+      new Promise<string>((resolve) => {
+        setTimeout(() => resolve("complete"), 900);
+      }),
+      {
+        loading: { title: "Saving draft" },
+        success: { title: "Draft saved" },
+        error: { title: "Save failed" },
+      },
+    ),
+    "showPromiseToast",
   );
 };
 
@@ -980,14 +984,14 @@ export function UiPlayground() {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     onClick={() => {
-                      void stellaToast.success("Saved");
+                      stellaToast.success("Saved");
                     }}
                   >
                     Success
                   </Button>
                   <Button
                     onClick={() => {
-                      void stellaToast.error("Unable to save", {
+                      stellaToast.error("Unable to save", {
                         description: "The server rejected the update.",
                       });
                     }}
@@ -997,11 +1001,11 @@ export function UiPlayground() {
                   </Button>
                   <Button
                     onClick={() => {
-                      void stellaToast.warning("Missing approver", {
+                      stellaToast.warning("Missing approver", {
                         action: {
                           label: "Assign",
                           onClick: () => {
-                            void stellaToast.info("Assignee picker opened");
+                            stellaToast.info("Assignee picker opened");
                           },
                         },
                       });
@@ -1018,7 +1022,7 @@ export function UiPlayground() {
                   </Button>
                   <Button
                     onClick={() => {
-                      void stellaToast.info(
+                      stellaToast.info(
                         "This is a deliberately long notification title that should wrap cleanly inside the toast viewport",
                         {
                           description:

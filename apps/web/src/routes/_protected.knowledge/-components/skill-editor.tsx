@@ -49,6 +49,7 @@ import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -133,12 +134,18 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // Editing happens in the right-side inspector; the editor just invalidates so
   // the catalogue + coaching reflect saves the inspector makes.
   const onChanged = () => {
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.skills.all(activeOrganizationId),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: catalogueKeys.list(activeOrganizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.skills.all(activeOrganizationId),
+      }),
+      "onChanged",
+    );
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: catalogueKeys.list(activeOrganizationId),
+      }),
+      "onChanged",
+    );
   };
 
   // Highlights the row whose file is open in the inspector.
@@ -334,7 +341,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     },
     onSuccess: () => {
       onChanged();
-      void detail.refetch();
+      detached(detail.refetch(), "onSuccess");
     },
     onError: (error) => {
       if (APIError.is(error) && error.status === 409) {
@@ -360,7 +367,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     },
     onSuccess: (data) => {
       onChanged();
-      void detail.refetch();
+      detached(detail.refetch(), "onSuccess");
       // Open straight from the mutation response: the refetch has not landed
       // yet, so the new file is not in `resources` and selectFile would miss
       // it. New files are always .md, so this opens in the main-pane editor.
@@ -382,7 +389,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     },
     onSuccess: (data) => {
       onChanged();
-      void detail.refetch();
+      detached(detail.refetch(), "onSuccess");
       setSelected({
         type: "resource",
         resourceId: data.id,
@@ -422,7 +429,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         closeTab(tabId);
       }
       onChanged();
-      void detail.refetch();
+      detached(detail.refetch(), "onSuccess");
     },
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
@@ -436,7 +443,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     },
     onSuccess: (data, variables) => {
       onChanged();
-      void detail.refetch();
+      detached(detail.refetch(), "onSuccess");
       setRenamingResourceId(null);
       setRenameValue("");
       // Follow the rename: if the renamed row was selected, refresh selection.
@@ -581,7 +588,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const handleUploadFiles = (files: readonly File[]) => {
     const takenPaths = new Set(existingPaths);
     for (const file of files) {
-      void handleUpload(file, takenPaths);
+      detached(handleUpload(file, takenPaths), "handleUploadFiles");
     }
   };
 

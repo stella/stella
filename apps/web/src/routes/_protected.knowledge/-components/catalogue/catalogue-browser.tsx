@@ -51,6 +51,7 @@ import {
 import { useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { compareByLocale } from "@/lib/collation";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
@@ -237,32 +238,44 @@ export const CatalogueBrowser = ({
 
   const queryClient = useQueryClient();
   const onSkillSheetChanged = () => {
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.skills.all(organizationId),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: catalogueKeys.list(organizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.skills.all(organizationId),
+      }),
+      "onSkillSheetChanged",
+    );
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: catalogueKeys.list(organizationId),
+      }),
+      "onSkillSheetChanged",
+    );
   };
 
   // A blueprint instantiates a disabled draft; drop the user straight into the
   // full-screen editor route to customise and publish it.
   const onBlueprintCreated = (skill: BlueprintCreatedSkill) => {
     onSkillSheetChanged();
-    void navigate({
-      to: "/knowledge/tools/$skillId",
-      params: { skillId: skill.id },
-    });
+    detached(
+      navigate({
+        to: "/knowledge/tools/$skillId",
+        params: { skillId: skill.id },
+      }),
+      "onBlueprintCreated",
+    );
   };
 
   const openEditInstalledSkill = (entry: CatalogueEntry) => {
     if (entry.kind !== "skill" || entry.installedSkillId === null) {
       return;
     }
-    void navigate({
-      to: "/knowledge/tools/$skillId",
-      params: { skillId: entry.installedSkillId },
-    });
+    detached(
+      navigate({
+        to: "/knowledge/tools/$skillId",
+        params: { skillId: entry.installedSkillId },
+      }),
+      "openEditInstalledSkill",
+    );
   };
 
   const recommendedFiltered = filtered.filter(

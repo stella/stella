@@ -18,6 +18,7 @@ import {
 import { caseLawDecisionKeys } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
+import { detached } from "@/lib/detached";
 import { fetchWithTimeout } from "@/lib/fetch";
 
 type AnalysisState =
@@ -168,7 +169,7 @@ export const useDecisionAnalysis = (
     // state: refetch the polling query so it picks up a fresh
     // result instead of staying on the cached failure.
     if (isGenerating && hasErrorResult) {
-      void refetch();
+      detached(refetch(), "generate");
       return;
     }
     if (isGenerating) {

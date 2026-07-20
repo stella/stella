@@ -33,6 +33,7 @@ import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
 import { authClient } from "@/lib/auth";
+import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
@@ -376,7 +377,7 @@ const CreateOrganizationForm = ({
           errors={formErrors}
           onSubmit={(event) => {
             event.preventDefault();
-            void form.handleSubmit();
+            detached(form.handleSubmit(), "CreateOrganizationForm");
           }}
         >
           <form.Field name="name">

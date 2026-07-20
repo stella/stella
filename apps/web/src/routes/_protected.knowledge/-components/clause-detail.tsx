@@ -69,6 +69,7 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -177,9 +178,12 @@ export const ClauseDetailView = ({
   const detail = detailQuery.data;
 
   const refreshDetail = () => {
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.clauses.detail(organizationId, clauseId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.clauses.detail(organizationId, clauseId),
+      }),
+      "refreshDetail",
+    );
   };
 
   return (
@@ -527,7 +531,7 @@ const ClauseHeader = ({
           }}
           onChange={setTitleDraft}
           onCommit={() => {
-            void saveTitle();
+            detached(saveTitle(), "ClauseHeader");
           }}
           value={titleDraft}
         />
@@ -550,7 +554,7 @@ const ClauseHeader = ({
         <Select
           disabled={!canEdit}
           onValueChange={(val) => {
-            void saveCategory(val ?? "");
+            detached(saveCategory(val ?? ""), "ClauseHeader");
           }}
           value={detail.categoryId ?? ""}
         >
@@ -574,7 +578,7 @@ const ClauseHeader = ({
             !dirtySinceVersion || savingVersion || reviewStatus !== "resolved"
           }
           onClick={() => {
-            void saveVersion();
+            detached(saveVersion(), "ClauseHeader");
           }}
           size="sm"
           variant="outline"
@@ -626,7 +630,7 @@ const ClauseHeader = ({
         primary={{
           label: t("clauses.saveVersionAndLeave"),
           onClick: () => {
-            void saveVersionAndLeave();
+            detached(saveVersionAndLeave(), "onClick");
           },
         }}
         secondary={{
@@ -829,14 +833,17 @@ const ClauseBodyEditor = ({
   // a stale value.
   useExternalSyncEffect(() => {
     saveBodyRef.current = (body, explicitReviewFlushToken) => {
-      void saveBody(body, explicitReviewFlushToken).catch((error: unknown) => {
-        getAnalytics().captureError(error);
-      });
+      detached(
+        saveBody(body, explicitReviewFlushToken).catch((error: unknown) => {
+          getAnalytics().captureError(error);
+        }),
+        "ClauseBodyEditor",
+      );
     };
   }, [saveBody]);
 
   const debouncedSave = useDebouncedCallback((body: ClauseParagraph[]) => {
-    void saveBody(body);
+    detached(saveBody(body), "ClauseBodyEditor");
   }, 1200);
 
   if (!canEdit) {
@@ -847,13 +854,29 @@ const ClauseBodyEditor = ({
     );
   }
 
+  const handleReviewResolved = async (body: ClauseParagraph[]) => {
+    // An accepted/rejected AI review is a decisive action, like blur:
+    // flush immediately instead of waiting on the keystroke debounce.
+    // Mint a fresh epoch token for this flush so `saveBody` can tell
+    // it apart from an unrelated autosave settling in the same
+    // window — only the save carrying the *current* token may report
+    // "resolved" (see `canReviewFlushReportResolved`). saveBody
+    // reports "resolved" itself on success; on failure it arms
+    // `retryPendingTokenRef` and toasts, leaving the "persisting" gate
+    // blocked until a later successful save — any trigger, no token of
+    // its own required — picks that retry token up and lifts it.
+    debouncedSave.cancel();
+    const reviewFlushToken = (reviewFlushEpochRef.current += 1);
+    await saveBody(body, reviewFlushToken);
+  };
+
   return (
     <div className="mt-4">
       <ClauseEditor
         content={detail.body}
         onBlur={(body) => {
           debouncedSave.cancel();
-          void saveBody(body);
+          detached(saveBody(body), "ClauseBodyEditor");
         }}
         onChange={(body) => {
           // Mark un-versioned the instant the body is edited (not when the
@@ -862,21 +885,7 @@ const ClauseBodyEditor = ({
           onBodyDirty();
           debouncedSave(body);
         }}
-        onReviewResolved={async (body) => {
-          // An accepted/rejected AI review is a decisive action, like blur:
-          // flush immediately instead of waiting on the keystroke debounce.
-          // Mint a fresh epoch token for this flush so `saveBody` can tell
-          // it apart from an unrelated autosave settling in the same
-          // window — only the save carrying the *current* token may report
-          // "resolved" (see `canReviewFlushReportResolved`). saveBody
-          // reports "resolved" itself on success; on failure it arms
-          // `retryPendingTokenRef` and toasts, leaving the "persisting" gate
-          // blocked until a later successful save — any trigger, no token of
-          // its own required — picks that retry token up and lifts it.
-          debouncedSave.cancel();
-          const reviewFlushToken = (reviewFlushEpochRef.current += 1);
-          await saveBody(body, reviewFlushToken);
-        }}
+        onReviewResolved={handleReviewResolved}
         onReviewStatusChange={onReviewStatusChange}
         title={detail.title}
         usageNotes={detail.usageNotes ?? undefined}
@@ -939,7 +948,7 @@ const ClauseInlineTextField = ({
       <Input
         id={`clause-${field}`}
         onBlur={() => {
-          void commit(draft);
+          detached(commit(draft), "ClauseInlineTextField");
         }}
         onChange={(e) => setDraft(e.target.value)}
         placeholder={placeholder}
@@ -1017,7 +1026,7 @@ const ClauseLanguageField = ({
     if (next === value) {
       return;
     }
-    void save(next);
+    detached(save(next), "handleChange");
   };
 
   if (!canEdit) {
@@ -1097,7 +1106,7 @@ const ClauseUsageNotesField = ({
   });
 
   const debouncedSave = useDebouncedCallback((text: string) => {
-    void save(text);
+    detached(save(text), "ClauseUsageNotesField");
   }, 1200);
 
   if (!canEdit) {
@@ -1124,7 +1133,7 @@ const ClauseUsageNotesField = ({
         id="clause-usage-notes"
         onBlur={() => {
           debouncedSave.cancel();
-          void save(draft);
+          detached(save(draft), "ClauseUsageNotesField");
         }}
         onChange={(e) => {
           setDraft(e.target.value);
@@ -1340,7 +1349,7 @@ const VariantRow = ({
             aria-label={t("common.moveUp")}
             disabled={!canMoveUp || reordering}
             onClick={() => {
-              void handleReorder("up");
+              detached(handleReorder("up"), "VariantRow");
             }}
             size="icon-xs"
             variant="ghost"
@@ -1351,7 +1360,7 @@ const VariantRow = ({
             aria-label={t("common.moveDown")}
             disabled={!canMoveDown || reordering}
             onClick={() => {
-              void handleReorder("down");
+              detached(handleReorder("down"), "VariantRow");
             }}
             size="icon-xs"
             variant="ghost"
@@ -1407,7 +1416,7 @@ const VariantRow = ({
             <Button
               disabled={deleting}
               onClick={() => {
-                void handleDelete();
+                detached(handleDelete(), "VariantRow");
               }}
               variant="destructive"
             >
@@ -1432,7 +1441,7 @@ const VariantRow = ({
             <Button
               disabled={promoting}
               onClick={() => {
-                void handlePromote();
+                detached(handlePromote(), "VariantRow");
               }}
             >
               {t("clauses.useAsMainBody")}
@@ -1580,7 +1589,7 @@ const VariantFormDialogBody = ({
         <Button
           disabled={saving || !label.trim()}
           onClick={() => {
-            void handleSave();
+            detached(handleSave(), "VariantFormDialogBody");
           }}
         >
           {t("common.save")}
@@ -1684,7 +1693,7 @@ const HistoryTab = ({
               key={ver.id}
               onRestored={onRefresh}
               onToggleDiff={() => {
-                void handleVersionClick(ver.id);
+                detached(handleVersionClick(ver.id), "HistoryTab");
               }}
               version={ver}
             />
@@ -1810,7 +1819,7 @@ const VersionRow = ({
             <Button
               disabled={restoring}
               onClick={() => {
-                void handleRestore();
+                detached(handleRestore(), "VersionRow");
               }}
             >
               {t("clauses.restoreVersion")}

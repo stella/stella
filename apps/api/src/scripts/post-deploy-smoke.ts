@@ -485,7 +485,7 @@ const readWithDeadline = async (
             "Chat stream did not produce a readable prefix before timeout",
         }),
       );
-      void reader.cancel().catch(() => undefined);
+      reader.cancel().catch(() => undefined);
     }, remainingMs);
   });
 

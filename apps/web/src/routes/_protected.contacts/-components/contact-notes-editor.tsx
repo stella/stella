@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { detached } from "@/lib/detached";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 import { useUpdateContact } from "@/routes/_protected.contacts/-mutations";
@@ -57,10 +58,13 @@ export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          void invalidateContactCaches(queryClient, {
-            activeOrganizationId,
-            contactId: contact.id,
-          });
+          detached(
+            invalidateContactCaches(queryClient, {
+              activeOrganizationId,
+              contactId: contact.id,
+            }),
+            "onSuccess",
+          );
         },
         onError: () => {
           stellaToast.add({

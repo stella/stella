@@ -41,6 +41,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
@@ -555,12 +556,15 @@ export const useTemplateStudioSlashMenu = ({
       });
       return;
     }
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.templates.clauses(
-        activeOrganizationId,
-        templateId,
-      ),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.templates.clauses(
+          activeOrganizationId,
+          templateId,
+        ),
+      }),
+      "linkClauseToSlot",
+    );
   };
 
   const activateSlashClause = (clause: { id: string; title: string }) => {
@@ -585,7 +589,7 @@ export const useTemplateStudioSlashMenu = ({
     view.focus();
     markDirty();
     dismissSlash();
-    void linkClauseToSlot(clause.id, slotName);
+    detached(linkClauseToSlot(clause.id, slotName), "activateSlashClause");
   };
 
   const onSlashMenuKeyAction = (

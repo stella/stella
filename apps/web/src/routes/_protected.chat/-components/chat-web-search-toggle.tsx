@@ -11,6 +11,7 @@ import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -103,7 +104,7 @@ export const ChatWebSearchToggle = ({
     // Reconcile against the server on both paths: confirm the optimistic flip
     // on success, or land the rolled-back truth after an error.
     onSettled: () => {
-      void invalidateChatThread({ queryClient, threadRef });
+      detached(invalidateChatThread({ queryClient, threadRef }), "onSettled");
     },
   });
 

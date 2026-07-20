@@ -24,6 +24,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -331,7 +332,7 @@ const ClauseFormDialogBody = ({
         <Button
           disabled={saving || !form.title.trim() || reviewStatus !== "resolved"}
           onClick={() => {
-            void handleSave();
+            detached(handleSave(), "ClauseFormDialogBody");
           }}
         >
           {t("common.save")}

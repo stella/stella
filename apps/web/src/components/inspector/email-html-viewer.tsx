@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
+import { detached } from "@/lib/detached";
 import { emailHtmlPreviewOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 
 type EmailHtmlViewerProps = {
@@ -39,7 +40,7 @@ export const EmailHtmlViewer = ({
         </p>
         <Button
           onClick={() => {
-            void previewQuery.refetch();
+            detached(previewQuery.refetch(), "EmailHtmlViewer");
           }}
           size="sm"
           variant="outline"

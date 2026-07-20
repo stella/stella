@@ -1,5 +1,7 @@
 import type { AnonymizationTerm } from "@stll/folio-react";
 
+import { detached } from "@/lib/detached";
+
 export type AutosaveStatus = "synced" | "pending" | "syncing";
 
 type ResolveCheckpointAutosaveStatusOptions = {
@@ -121,7 +123,7 @@ export const createTrailingSingleFlight = ({
       queued = true;
       return settled;
     }
-    void drain();
+    detached(drain(), "createTrailingSingleFlight");
     return settled;
   };
 };

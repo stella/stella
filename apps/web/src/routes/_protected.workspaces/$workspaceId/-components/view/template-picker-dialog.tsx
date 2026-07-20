@@ -39,6 +39,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { detached } from "@/lib/detached";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useDeleteViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";
@@ -112,7 +113,7 @@ export const TemplatePickerDialog = ({
           onCreated(newId);
           onOpenChange(false);
           if (hasAITemplateProperty) {
-            void startWorkflow();
+            detached(startWorkflow(), "onSuccess");
           }
         },
         onError: () => {

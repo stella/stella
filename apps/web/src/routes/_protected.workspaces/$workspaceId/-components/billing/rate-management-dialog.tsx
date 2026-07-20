@@ -25,6 +25,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
@@ -326,7 +327,7 @@ const CreateRateTableForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        void form.handleSubmit();
+        detached(form.handleSubmit(), "CreateRateTableForm");
       }}
     >
       <div className="flex gap-3">
@@ -672,7 +673,7 @@ const CreateRateEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        void form.handleSubmit();
+        detached(form.handleSubmit(), "CreateRateEntryForm");
       }}
     >
       <div className="flex flex-col gap-1.5">

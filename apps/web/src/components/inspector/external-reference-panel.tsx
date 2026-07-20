@@ -43,6 +43,7 @@ import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { BoundedSet } from "@/lib/bounded-set";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -716,9 +717,9 @@ export const ExternalReferencePanel = ({
 
     try {
       await navigator.clipboard.writeText(confirmHref);
-      void stellaToast.success(t("common.copied"));
+      stellaToast.success(t("common.copied"));
     } catch {
-      void stellaToast.error(t("common.error"));
+      stellaToast.error(t("common.error"));
     }
   }, [confirmHref, t]);
 
@@ -991,7 +992,7 @@ export const ExternalReferencePanel = ({
           >
             <Button
               onClick={() => {
-                void copyConfirmHref();
+                detached(copyConfirmHref(), "ExternalReferencePanel");
               }}
               variant="outline"
             >

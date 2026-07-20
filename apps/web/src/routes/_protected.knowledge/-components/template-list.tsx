@@ -74,6 +74,7 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { compareByLocale } from "@/lib/collation";
 import { isDocxFile, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -671,22 +672,23 @@ const TemplateRow = ({
     label: t("common.download"),
     icon: <DownloadIcon />,
     onClick: () =>
-      void downloadTemplateSource(template.id, t("common.unexpectedError")),
+      detached(
+        downloadTemplateSource(template.id, t("common.unexpectedError")),
+        "onClick",
+      ),
   });
   if (canUpdateTemplate) {
     const categorySubmenu: ContextMenuAction[] = [
       categoryAction(
         t("common.uncategorized"),
         template.categoryId === null,
-        () => void onAssignCategory(template.id, null),
+        () => detached(onAssignCategory(template.id, null), "TemplateRow"),
       ),
     ];
     for (const category of categories) {
       categorySubmenu.push(
-        categoryAction(
-          category.name,
-          template.categoryId === category.id,
-          () => void onAssignCategory(template.id, category.id),
+        categoryAction(category.name, template.categoryId === category.id, () =>
+          detached(onAssignCategory(template.id, category.id), "TemplateRow"),
         ),
       );
     }
@@ -856,7 +858,7 @@ const TemplateRow = ({
             <Button
               disabled={deleting}
               onClick={() => {
-                void handleDelete();
+                detached(handleDelete(), "TemplateRow");
               }}
               variant="destructive"
             >
@@ -887,7 +889,7 @@ const TemplateRow = ({
       )}
       <CategoryFormDialog
         onCreated={(category) =>
-          void onAssignCategory(template.id, category.id)
+          detached(onAssignCategory(template.id, category.id), "TemplateRow")
         }
         onOpenChange={setCreateCategoryOpen}
         onSaved={onCategoriesChanged}
@@ -1167,7 +1169,7 @@ const TemplateTagsDialogBody = ({
         <Button
           disabled={saving}
           onClick={() => {
-            void handleSave();
+            detached(handleSave(), "TemplateTagsDialogBody");
           }}
         >
           {t("common.save")}
@@ -1283,7 +1285,7 @@ const TemplateGuidanceDialogBody = ({
         <Button
           disabled={saving}
           onClick={() => {
-            void handleSave();
+            detached(handleSave(), "TemplateGuidanceDialogBody");
           }}
         >
           {t("common.save")}

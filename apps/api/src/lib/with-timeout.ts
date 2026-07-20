@@ -46,6 +46,6 @@ export const withTimeout = async <T>(
     // If the timeout won the race, `op` is still pending; swallow its
     // eventual settlement so a late rejection is not reported as an
     // unhandled rejection.
-    void op.catch(() => undefined);
+    op.catch(() => undefined);
   }
 };

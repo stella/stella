@@ -56,13 +56,13 @@ export const useConfigStore = create<ConfigState>()(
       matters: DEFAULT_MATTERS,
 
       updateMatters: (patch) => {
-        void set((s) => ({
+        set((s) => ({
           matters: { ...s.matters, ...patch },
         }));
       },
 
       setMattersFilter: (key, value) => {
-        void set((s) => ({
+        set((s) => ({
           matters: {
             ...s.matters,
             filters: { ...s.matters.filters, [key]: value },
@@ -71,20 +71,20 @@ export const useConfigStore = create<ConfigState>()(
       },
 
       clearMattersFilter: (key) => {
-        void set((s) => {
+        set((s) => {
           const { [key]: _omit, ...rest } = s.matters.filters;
           return { matters: { ...s.matters, filters: rest } };
         });
       },
 
       clearAllMattersFilters: () => {
-        void set((s) => ({
+        set((s) => ({
           matters: { ...s.matters, filters: {} },
         }));
       },
 
       toggleGroupCollapsed: (groupId) => {
-        void set((s) => {
+        set((s) => {
           const current = s.matters.collapsedGroups;
           const next = current.includes(groupId)
             ? current.filter((id) => id !== groupId)
@@ -94,7 +94,7 @@ export const useConfigStore = create<ConfigState>()(
       },
 
       toggleMattersColumn: (id) => {
-        void set((s) => {
+        set((s) => {
           const cur = s.matters.hiddenColumns;
           const isHidden = cur.includes(id);
           const next = isHidden ? cur.filter((c) => c !== id) : [...cur, id];

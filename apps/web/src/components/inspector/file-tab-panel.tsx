@@ -53,6 +53,7 @@ import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, MARKDOWN_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -326,14 +327,17 @@ export const FileTabPanel = ({
         <Button
           aria-label={t("common.download")}
           onClick={() => {
-            void downloadTabOriginalFile({
-              fieldId: tab.id,
-              fileName: tab.fileName,
-              workspaceId: tab.workspaceId,
-              onError: (message) => {
-                stellaToast.add({ title: message, type: "error" });
-              },
-            });
+            detached(
+              downloadTabOriginalFile({
+                fieldId: tab.id,
+                fileName: tab.fileName,
+                workspaceId: tab.workspaceId,
+                onError: (message) => {
+                  stellaToast.add({ title: message, type: "error" });
+                },
+              }),
+              "FileTabPanel",
+            );
           }}
           size="xs"
           variant="ghost"
@@ -450,21 +454,24 @@ export const FileTabPanel = ({
                     justificationFieldId: fieldId,
                     propertyId,
                   });
-                  void navigate({
-                    to: "/workspaces/$workspaceId/$viewId/document",
-                    params: {
-                      workspaceId: tab.workspaceId,
-                      viewId: peekPdfViewId,
-                    },
-                    replace: true,
-                    search: (prev) => ({
-                      ...prev,
-                      entity: tab.entityId,
-                      field: tab.id,
-                      justification: fieldId,
-                      justificationPage: 1,
+                  detached(
+                    navigate({
+                      to: "/workspaces/$workspaceId/$viewId/document",
+                      params: {
+                        workspaceId: tab.workspaceId,
+                        viewId: peekPdfViewId,
+                      },
+                      replace: true,
+                      search: (prev) => ({
+                        ...prev,
+                        entity: tab.entityId,
+                        field: tab.id,
+                        justification: fieldId,
+                        justificationPage: 1,
+                      }),
                     }),
-                  });
+                    "FileTabPanel",
+                  );
                 }}
                 workspaceId={tab.workspaceId}
               />
@@ -608,7 +615,7 @@ export const FileTabPanel = ({
               "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
           )}
           onClick={() => {
-            void handleStartDocxEdit(tab.id);
+            detached(handleStartDocxEdit(tab.id), "FileTabPanel");
           }}
           size="xs"
           variant="ghost"
@@ -737,7 +744,7 @@ export const FileTabPanel = ({
             </p>
             <Button
               onClick={() => {
-                void markdownTextQuery.refetch();
+                detached(markdownTextQuery.refetch(), "FileTabPanel");
               }}
               size="xs"
               variant="secondary"
@@ -932,21 +939,24 @@ export const FileTabPanel = ({
                     justificationFieldId: fieldId,
                     propertyId,
                   });
-                  void navigate({
-                    to: "/workspaces/$workspaceId/$viewId/document",
-                    params: {
-                      workspaceId: tab.workspaceId,
-                      viewId: peekPdfViewId,
-                    },
-                    replace: true,
-                    search: (prev) => ({
-                      ...prev,
-                      entity: tab.entityId,
-                      field: tab.id,
-                      justification: fieldId,
-                      justificationPage: 1,
+                  detached(
+                    navigate({
+                      to: "/workspaces/$workspaceId/$viewId/document",
+                      params: {
+                        workspaceId: tab.workspaceId,
+                        viewId: peekPdfViewId,
+                      },
+                      replace: true,
+                      search: (prev) => ({
+                        ...prev,
+                        entity: tab.entityId,
+                        field: tab.id,
+                        justification: fieldId,
+                        justificationPage: 1,
+                      }),
                     }),
-                  });
+                    "FileTabPanel",
+                  );
                 }}
                 workspaceId={tab.workspaceId}
               />
@@ -1002,19 +1012,22 @@ export const FileTabPanel = ({
                       // takes the user out of the suggestions
                       // flow entirely. Per Codex review on
                       // PR #80.
-                      void navigate({
-                        to: "/workspaces/$workspaceId/$viewId/document",
-                        params: {
-                          workspaceId: tab.workspaceId,
-                          viewId: peekPdfViewId,
-                        },
-                        replace: true,
-                        search: (prev) => ({
-                          ...prev,
-                          entity: tab.entityId,
-                          field: tab.id,
+                      detached(
+                        navigate({
+                          to: "/workspaces/$workspaceId/$viewId/document",
+                          params: {
+                            workspaceId: tab.workspaceId,
+                            viewId: peekPdfViewId,
+                          },
+                          replace: true,
+                          search: (prev) => ({
+                            ...prev,
+                            entity: tab.entityId,
+                            field: tab.id,
+                          }),
                         }),
-                      });
+                        "onMissingEditor",
+                      );
                     },
                   }
                 : {})}

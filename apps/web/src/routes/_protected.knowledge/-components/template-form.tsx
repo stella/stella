@@ -55,6 +55,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -1508,7 +1509,7 @@ const RegistryAutofillControl = ({
             // Guard the Enter path on the same loading state as the button so
             // two quick Enters cannot fire overlapping lookups.
             if (!loading) {
-              void handleLookup();
+              detached(handleLookup(), "RegistryAutofillControl");
             }
           }
         }}
@@ -1517,7 +1518,7 @@ const RegistryAutofillControl = ({
       />
       <Button
         disabled={loading || companyId.trim() === ""}
-        onClick={() => void handleLookup()}
+        onClick={() => detached(handleLookup(), "RegistryAutofillControl")}
         type="button"
         variant="outline"
       >
@@ -2215,7 +2216,10 @@ export const TemplateForm = ({
       if (!confirmEmptyFields("createDocument", values)) {
         return;
       }
-      void fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null);
+      detached(
+        fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null),
+        "handleSubmit",
+      );
       return;
     }
     runDownload("docx");
@@ -2244,7 +2248,10 @@ export const TemplateForm = ({
       return;
     }
     if (saveTarget?.kind === "matter") {
-      void fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null);
+      detached(
+        fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null),
+        "confirmEmptyWarning",
+      );
     }
   };
 
@@ -2524,9 +2531,12 @@ export const TemplateForm = ({
               disabled={matterTarget === null || loading}
               onClick={() => {
                 if (matterTarget !== null) {
-                  void fillToMatter(
-                    matterTarget.workspaceId,
-                    matterTarget.parentId,
+                  detached(
+                    fillToMatter(
+                      matterTarget.workspaceId,
+                      matterTarget.parentId,
+                    ),
+                    "TemplateForm",
                   );
                 }
               }}

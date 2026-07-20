@@ -15,6 +15,7 @@ import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
@@ -162,257 +163,260 @@ export const useFolioCollaborationSession = ({
     };
     setState({ status: "opening", collaboration: null });
 
-    void (async () => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["folio-collab-sessions"].open.post({
-          entityId: toSafeId<"entity">(entityId),
-          propertyId: toSafeId<"property">(propertyId),
-        });
+    detached(
+      (async () => {
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["folio-collab-sessions"].open.post({
+            entityId: toSafeId<"entity">(entityId),
+            propertyId: toSafeId<"property">(propertyId),
+          });
 
-      if (isDisposed()) {
-        return;
-      }
-
-      if (response.error) {
-        setState({
-          status: "error",
-          collaboration: null,
-          message: userErrorMessage(
-            response.error,
-            "Failed to open collaborative editing.",
-          ),
-        });
-        return;
-      }
-
-      const sessionId = response.data.collabSessionId;
-      let token = response.data.token;
-      openingSession = { sessionId, token };
-
-      if (isDisposed()) {
-        await cancelOpeningSession();
-        return;
-      }
-
-      let tokenExpiresAtMs = new Date(response.data.tokenExpiresAt).getTime();
-      const seedDocumentBuffer = await (async () => {
-        if (!response.data.shouldSeed) {
-          return null;
+        if (isDisposed()) {
+          return;
         }
 
-        if (response.data.seedDownloadUrl === null) {
-          panic("Collaborative editing seed file is unavailable.");
+        if (response.error) {
+          setState({
+            status: "error",
+            collaboration: null,
+            message: userErrorMessage(
+              response.error,
+              "Failed to open collaborative editing.",
+            ),
+          });
+          return;
         }
 
-        return await fetchSeedDocumentBuffer(response.data.seedDownloadUrl);
-      })();
+        const sessionId = response.data.collabSessionId;
+        let token = response.data.token;
+        openingSession = { sessionId, token };
 
-      if (isDisposed()) {
-        await cancelOpeningSession();
-        return;
-      }
+        if (isDisposed()) {
+          await cancelOpeningSession();
+          return;
+        }
 
-      const collaborationRuntimeModules =
-        await loadCollaborationRuntimeModules();
-      const { hocuspocus, yProseMirror, yjs } = collaborationRuntimeModules;
+        let tokenExpiresAtMs = new Date(response.data.tokenExpiresAt).getTime();
+        const seedDocumentBuffer = await (async () => {
+          if (!response.data.shouldSeed) {
+            return null;
+          }
 
-      if (isDisposed()) {
-        await cancelOpeningSession();
-        return;
-      }
+          if (response.data.seedDownloadUrl === null) {
+            panic("Collaborative editing seed file is unavailable.");
+          }
 
-      const refreshTokenIfNeeded = async () => {
-        if (
-          Number.isFinite(tokenExpiresAtMs) &&
-          Date.now() < tokenExpiresAtMs - FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS
-        ) {
+          return await fetchSeedDocumentBuffer(response.data.seedDownloadUrl);
+        })();
+
+        if (isDisposed()) {
+          await cancelOpeningSession();
+          return;
+        }
+
+        const collaborationRuntimeModules =
+          await loadCollaborationRuntimeModules();
+        const { hocuspocus, yProseMirror, yjs } = collaborationRuntimeModules;
+
+        if (isDisposed()) {
+          await cancelOpeningSession();
+          return;
+        }
+
+        const refreshTokenIfNeeded = async () => {
+          if (
+            Number.isFinite(tokenExpiresAtMs) &&
+            Date.now() < tokenExpiresAtMs - FOLIO_COLLAB_TOKEN_REFRESH_LEEWAY_MS
+          ) {
+            return token;
+          }
+
+          const refreshed = await api["folio-collab-sessions"][
+            "refresh-token"
+          ].post({
+            sessionId,
+            token,
+          });
+
+          if (refreshed.error) {
+            return null;
+          }
+
+          token = refreshed.data.token;
+          tokenExpiresAtMs = new Date(refreshed.data.tokenExpiresAt).getTime();
           return token;
-        }
+        };
+        const ydoc = new yjs.Doc();
+        const yXmlFragment = ydoc.get("prosemirror", yjs.XmlFragment);
 
-        const refreshed = await api["folio-collab-sessions"][
-          "refresh-token"
-        ].post({
-          sessionId,
-          token,
+        provider = new hocuspocus.HocuspocusProvider({
+          document: ydoc,
+          name: response.data.roomName,
+          token: async () => (await refreshTokenIfNeeded()) ?? "",
+          url: collabUrl,
         });
 
-        if (refreshed.error) {
-          return null;
+        const awareness = provider.awareness;
+        if (!awareness) {
+          await cancelOpeningSession();
+          provider.destroy();
+          setState({
+            status: "error",
+            collaboration: null,
+            message: "Collaboration provider did not expose awareness.",
+          });
+          return;
         }
 
-        token = refreshed.data.token;
-        tokenExpiresAtMs = new Date(refreshed.data.tokenExpiresAt).getTime();
-        return token;
-      };
-      const ydoc = new yjs.Doc();
-      const yXmlFragment = ydoc.get("prosemirror", yjs.XmlFragment);
+        awareness.setLocalStateField("user", {
+          color: user.color,
+          name: user.name,
+        });
 
-      provider = new hocuspocus.HocuspocusProvider({
-        document: ydoc,
-        name: response.data.roomName,
-        token: async () => (await refreshTokenIfNeeded()) ?? "",
-        url: collabUrl,
-      });
+        const invalidateSessionQueries = async () => {
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: entitiesKeys.all(workspaceId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: filesKeys.byFieldId({
+                workspaceId,
+                fieldId,
+                purpose: "native-display",
+              }),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: filesKeys.metadataByFieldId({
+                workspaceId,
+                fieldId,
+                purpose: "native-display",
+              }),
+            }),
+          ]);
+        };
+        const cancel = async () => {
+          const freshToken = await refreshTokenIfNeeded();
+          if (freshToken === null) {
+            return false;
+          }
 
-      const awareness = provider.awareness;
-      if (!awareness) {
-        await cancelOpeningSession();
-        provider.destroy();
+          const cancelled = await api["folio-collab-sessions"]({
+            sessionId,
+          }).cancel.post({ token: freshToken });
+
+          if (cancelled.error) {
+            return false;
+          }
+
+          await invalidateSessionQueries();
+          return true;
+        };
+        const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {
+          const freshToken = await refreshTokenIfNeeded();
+          if (freshToken === null) {
+            return false;
+          }
+
+          const checkpoint = await api["folio-collab-sessions"]({
+            sessionId,
+          }).checkpoint.post({
+            file: new File([docxBuffer], response.data.fileName, {
+              type: DOCX_MIME,
+            }),
+            token: freshToken,
+          });
+
+          return !checkpoint.error;
+        };
+        const finalize = async () => {
+          const freshToken = await refreshTokenIfNeeded();
+          if (freshToken === null) {
+            return null;
+          }
+
+          const finalized = await api["folio-collab-sessions"]({
+            sessionId,
+          }).finalize.post({ token: freshToken });
+
+          if (finalized.error) {
+            return null;
+          }
+
+          const finalizedFieldId =
+            finalized.data.outcome === "finalized"
+              ? finalized.data.fieldId
+              : fieldId;
+          await Promise.all(
+            [
+              invalidateSessionQueries(),
+              finalizedFieldId !== fieldId
+                ? queryClient.invalidateQueries({
+                    queryKey: filesKeys.byFieldId({
+                      workspaceId,
+                      fieldId: finalizedFieldId,
+                      purpose: "native-display",
+                    }),
+                  })
+                : null,
+              finalizedFieldId !== fieldId
+                ? queryClient.invalidateQueries({
+                    queryKey: filesKeys.metadataByFieldId({
+                      workspaceId,
+                      fieldId: finalizedFieldId,
+                      purpose: "native-display",
+                    }),
+                  })
+                : null,
+            ].filter((promise) => promise !== null),
+          );
+
+          return finalized.data;
+        };
+        const collaboration = {
+          awareness,
+          plugins: [
+            yProseMirror.ySyncPlugin(yXmlFragment),
+            yProseMirror.yCursorPlugin(awareness),
+            yProseMirror.yUndoPlugin(),
+          ],
+          shouldSeed: response.data.shouldSeed,
+          yXmlFragment,
+        };
+        openingSession = null;
+
+        setState({
+          status: "ready",
+          sessionId,
+          provider,
+          collaboration,
+          session: {
+            cancel,
+            collaboration,
+            finalize,
+            saveCheckpoint,
+            seedDocumentBuffer,
+            sessionId,
+          },
+        });
+      })().catch((error: unknown) => {
+        detached(cancelOpeningSession(), "FolioCollabSession");
+        if (isDisposed()) {
+          return;
+        }
+
         setState({
           status: "error",
           collaboration: null,
-          message: "Collaboration provider did not expose awareness.",
+          message: userErrorFromThrown(error, t("errors.actionFailed")),
         });
-        return;
-      }
-
-      awareness.setLocalStateField("user", {
-        color: user.color,
-        name: user.name,
-      });
-
-      const invalidateSessionQueries = async () => {
-        await Promise.all([
-          queryClient.invalidateQueries({
-            queryKey: entitiesKeys.all(workspaceId),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: filesKeys.byFieldId({
-              workspaceId,
-              fieldId,
-              purpose: "native-display",
-            }),
-          }),
-          queryClient.invalidateQueries({
-            queryKey: filesKeys.metadataByFieldId({
-              workspaceId,
-              fieldId,
-              purpose: "native-display",
-            }),
-          }),
-        ]);
-      };
-      const cancel = async () => {
-        const freshToken = await refreshTokenIfNeeded();
-        if (freshToken === null) {
-          return false;
-        }
-
-        const cancelled = await api["folio-collab-sessions"]({
-          sessionId,
-        }).cancel.post({ token: freshToken });
-
-        if (cancelled.error) {
-          return false;
-        }
-
-        await invalidateSessionQueries();
-        return true;
-      };
-      const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {
-        const freshToken = await refreshTokenIfNeeded();
-        if (freshToken === null) {
-          return false;
-        }
-
-        const checkpoint = await api["folio-collab-sessions"]({
-          sessionId,
-        }).checkpoint.post({
-          file: new File([docxBuffer], response.data.fileName, {
-            type: DOCX_MIME,
-          }),
-          token: freshToken,
-        });
-
-        return !checkpoint.error;
-      };
-      const finalize = async () => {
-        const freshToken = await refreshTokenIfNeeded();
-        if (freshToken === null) {
-          return null;
-        }
-
-        const finalized = await api["folio-collab-sessions"]({
-          sessionId,
-        }).finalize.post({ token: freshToken });
-
-        if (finalized.error) {
-          return null;
-        }
-
-        const finalizedFieldId =
-          finalized.data.outcome === "finalized"
-            ? finalized.data.fieldId
-            : fieldId;
-        await Promise.all(
-          [
-            invalidateSessionQueries(),
-            finalizedFieldId !== fieldId
-              ? queryClient.invalidateQueries({
-                  queryKey: filesKeys.byFieldId({
-                    workspaceId,
-                    fieldId: finalizedFieldId,
-                    purpose: "native-display",
-                  }),
-                })
-              : null,
-            finalizedFieldId !== fieldId
-              ? queryClient.invalidateQueries({
-                  queryKey: filesKeys.metadataByFieldId({
-                    workspaceId,
-                    fieldId: finalizedFieldId,
-                    purpose: "native-display",
-                  }),
-                })
-              : null,
-          ].filter((promise) => promise !== null),
-        );
-
-        return finalized.data;
-      };
-      const collaboration = {
-        awareness,
-        plugins: [
-          yProseMirror.ySyncPlugin(yXmlFragment),
-          yProseMirror.yCursorPlugin(awareness),
-          yProseMirror.yUndoPlugin(),
-        ],
-        shouldSeed: response.data.shouldSeed,
-        yXmlFragment,
-      };
-      openingSession = null;
-
-      setState({
-        status: "ready",
-        sessionId,
-        provider,
-        collaboration,
-        session: {
-          cancel,
-          collaboration,
-          finalize,
-          saveCheckpoint,
-          seedDocumentBuffer,
-          sessionId,
-        },
-      });
-    })().catch((error: unknown) => {
-      void cancelOpeningSession();
-      if (isDisposed()) {
-        return;
-      }
-
-      setState({
-        status: "error",
-        collaboration: null,
-        message: userErrorFromThrown(error, t("errors.actionFailed")),
-      });
-    });
+      }),
+      "FolioCollabSession",
+    );
 
     return () => {
       disposed = true;
-      void cancelOpeningSession();
+      detached(cancelOpeningSession(), "FolioCollabSession");
       provider?.destroy();
     };
   }, [

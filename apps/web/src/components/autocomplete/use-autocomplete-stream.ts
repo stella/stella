@@ -14,6 +14,7 @@ import {
 } from "@stll/folio-react";
 
 import { apiUrl } from "@/lib/api-url";
+import { detached } from "@/lib/detached";
 import { fetchWithTimeout } from "@/lib/fetch";
 
 export type UseAutocompleteStreamOptions = {
@@ -267,7 +268,7 @@ export const useAutocompleteStream = (
         clearTimeout(debounceTimer);
       }
       debounceTimer = setTimeout(() => {
-        void fireRequest();
+        detached(fireRequest(), "scheduleTrigger");
       }, debounceMs);
     };
 

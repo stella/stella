@@ -66,6 +66,7 @@ import { api } from "@/lib/api";
 import { optionalArray, optionalReadonlyArray } from "@/lib/arrays";
 import { BoundedMap } from "@/lib/bounded-set";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
@@ -190,9 +191,12 @@ export function TemplateStudioInspectorView({
       ownerRouteId: TEMPLATES_ROUTE_ID,
     });
     setNavName(templateId, next);
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.templates.all(activeOrganizationId),
+      }),
+      "commitRename",
+    );
     stellaToast.add({ type: "success", title: t("templates.templateRenamed") });
   };
 
@@ -252,7 +256,7 @@ export function TemplateStudioInspectorView({
           active: rename.active,
           value: rename.value,
           onChange: (value) => setRename({ active: true, value }),
-          onCommit: () => void commitRename(),
+          onCommit: () => detached(commitRename(), "onCommit"),
           onCancel: () => setRename({ active: false, value: "" }),
         }}
       />
@@ -378,7 +382,7 @@ export const StudioSaveAction = () => {
     <Button
       disabled={ui.isSaving}
       onClick={() => {
-        void actions.save();
+        detached(actions.save(), "StudioSaveAction");
       }}
       size="xs"
     >
@@ -469,7 +473,7 @@ export const TemplateFillFacet = ({
             {t("templates.studio.fillStale")}
           </p>
           <Button
-            onClick={() => void fillActions?.save()}
+            onClick={() => detached(fillActions?.save(), "TemplateFillFacet")}
             size="sm"
             variant="outline"
           >
@@ -750,28 +754,31 @@ const queueLookupPreviews = (
   const seq = lookupPreviewSeq;
   clearTimeout(lookupPreviewTimer);
   lookupPreviewTimer = setTimeout(() => {
-    void (async () => {
-      const resolved = await Promise.all(
-        requests.map(async (request) => {
-          const response = await api.templates["lookup-preview"].post({
-            registry: request.registry,
-            number: request.number,
-            format: request.format,
-          });
-          // A miss keeps the raw number in the preview (cached as null so
-          // it is not refetched); the fill submit reports the real error.
-          const rendered =
-            !response.error && !(response.data instanceof Response)
-              ? response.data.rendered
-              : null;
-          rememberLookupRendering(lookupPreviewKey(request), rendered);
-          return rendered !== null;
-        }),
-      );
-      if (seq === lookupPreviewSeq && resolved.some(Boolean)) {
-        onResolved();
-      }
-    })();
+    detached(
+      (async () => {
+        const resolved = await Promise.all(
+          requests.map(async (request) => {
+            const response = await api.templates["lookup-preview"].post({
+              registry: request.registry,
+              number: request.number,
+              format: request.format,
+            });
+            // A miss keeps the raw number in the preview (cached as null so
+            // it is not refetched); the fill submit reports the real error.
+            const rendered =
+              !response.error && !(response.data instanceof Response)
+                ? response.data.rendered
+                : null;
+            rememberLookupRendering(lookupPreviewKey(request), rendered);
+            return rendered !== null;
+          }),
+        );
+        if (seq === lookupPreviewSeq && resolved.some(Boolean)) {
+          onResolved();
+        }
+      })(),
+      "queueLookupPreviews",
+    );
   }, LOOKUP_PREVIEW_DEBOUNCE_MS);
 };
 
@@ -1289,7 +1296,7 @@ export const ClauseDriftPopover = ({
         }),
       });
     }
-    void queryClient.invalidateQueries({ queryKey });
+    detached(queryClient.invalidateQueries({ queryKey }), "handleSyncAll");
   };
 
   return (
@@ -1318,7 +1325,7 @@ export const ClauseDriftPopover = ({
           className="w-full"
           disabled={syncingAll}
           onClick={() => {
-            void handleSyncAll();
+            detached(handleSyncAll(), "ClauseDriftPopover");
           }}
           size="sm"
           variant="outline"
@@ -1428,14 +1435,14 @@ export const GuidanceFields = ({
     <div className="flex flex-col gap-4 p-4">
       <GuidanceNote
         label={t("templates.whenToUse")}
-        onBlur={() => void commit()}
+        onBlur={() => detached(commit(), "GuidanceFields")}
         onChange={setUseText}
         placeholder={t("templates.whenToUsePlaceholder")}
         value={useText}
       />
       <GuidanceNote
         label={t("templates.whenNotToUse")}
-        onBlur={() => void commit()}
+        onBlur={() => detached(commit(), "GuidanceFields")}
         onChange={setNotText}
         placeholder={t("templates.whenNotToUsePlaceholder")}
         value={notText}

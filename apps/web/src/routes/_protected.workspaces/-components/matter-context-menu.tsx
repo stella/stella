@@ -54,6 +54,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
@@ -263,7 +264,10 @@ export const useMatterActions = (
             title: t("success.workspaceDeletedSuccessfully"),
             type: "success",
           });
-          void queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+          detached(
+            queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
+            "onSuccess",
+          );
           onDeleted?.();
         },
         onError: () => {
@@ -292,11 +296,11 @@ export const useMatterActions = (
     isPinned,
     onAddMember: () => setAddMemberOpen(true),
     onCopyLink: () => {
-      void handleCopyLink();
+      detached(handleCopyLink(), "onCopyLink");
     },
     onDelete: () => setDeleteOpen(true),
     onOpenInNewTab: () => {
-      void window.open(`/workspaces/${target.id}`, "_blank");
+      window.open(`/workspaces/${target.id}`, "_blank");
     },
     onRename,
     onTogglePin: () => togglePin(target.id),
@@ -532,10 +536,16 @@ export const AddMemberDialog = ({
             title: t("success.memberAdded"),
             type: "success",
           });
-          void queryClient.invalidateQueries({
-            queryKey: workspaceMembersKeys.all(workspaceId),
-          });
-          void queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspaceMembersKeys.all(workspaceId),
+            }),
+            "onSuccess",
+          );
+          detached(
+            queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
+            "onSuccess",
+          );
           onOpenChange(false);
           setSelectedUserId(null);
         },

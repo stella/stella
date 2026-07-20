@@ -9,6 +9,8 @@ import {
 } from "@stll/ui/components/input-group";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { detached } from "@/lib/detached";
+
 type CopyFieldProps = {
   label: string;
   value: string;
@@ -38,7 +40,7 @@ export const CopyField = ({ label, value }: CopyFieldProps) => {
           <Button
             aria-label={t("common.copy")}
             onClick={() => {
-              void handleCopy();
+              detached(handleCopy(), "CopyField");
             }}
             size="icon-sm"
             type="button"

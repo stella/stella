@@ -55,6 +55,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
 import { dedupeById } from "@/lib/dedupe-by-id";
+import { detached } from "@/lib/detached";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -122,7 +123,7 @@ export const ChatThreadMessages = ({
     if (container) {
       anchorScrollHeightRef.current = container.scrollHeight;
     }
-    void onLoadOlder?.();
+    detached(onLoadOlder?.(), "triggerLoadOlder");
   };
 
   // Drive the trigger from a top sentinel: when it scrolls into view
@@ -849,7 +850,7 @@ export const ChatErrorMessage = ({
             <Button
               disabled={isGenerating}
               onClick={() => {
-                void onSendWithoutAnonymization();
+                detached(onSendWithoutAnonymization(), "ChatErrorMessage");
               }}
               size="sm"
               variant="destructive-outline"
@@ -861,7 +862,7 @@ export const ChatErrorMessage = ({
             <Button
               disabled={isGenerating}
               onClick={() => {
-                void onResend();
+                detached(onResend(), "ChatErrorMessage");
               }}
               size="sm"
               variant="destructive-outline"
@@ -952,7 +953,7 @@ const AssistantMessageActions = ({
           aria-label={t("common.copy")}
           className="text-muted-foreground h-6 px-1.5 text-xs"
           onClick={() => {
-            void handleCopy();
+            detached(handleCopy(), "AssistantMessageActions");
           }}
           size="xs"
           variant="ghost"
@@ -966,7 +967,10 @@ const AssistantMessageActions = ({
           aria-label={t("common.retry")}
           className="text-muted-foreground h-6 px-1.5 text-xs"
           onClick={() => {
-            void onResend?.({ messageId: message.id });
+            detached(
+              onResend?.({ messageId: message.id }),
+              "AssistantMessageActions",
+            );
           }}
           size="xs"
           variant="ghost"
@@ -1223,12 +1227,18 @@ const AssistantMessageParts = ({
               key={part.id}
               {...(onAskUserEditAndRerun && {
                 onEditAndRerun: (toolCallId, output) => {
-                  void onAskUserEditAndRerun(toolCallId, output);
+                  detached(
+                    onAskUserEditAndRerun(toolCallId, output),
+                    "onEditAndRerun",
+                  );
                 },
               })}
               onEditingChange={onAskUserEditingChange}
               onSubmit={(toolCallId, output) => {
-                void onAskUserSubmit(toolCallId, output);
+                detached(
+                  onAskUserSubmit(toolCallId, output),
+                  "AssistantMessageParts",
+                );
               }}
               part={part}
               restorationPairs={restorationPairs}

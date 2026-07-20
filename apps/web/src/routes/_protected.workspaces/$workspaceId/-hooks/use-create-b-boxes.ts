@@ -10,6 +10,7 @@ import { useRouteContext } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
@@ -65,9 +66,12 @@ export const useCreateBBoxes = ({
       return unwrapEden(response);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: workspaceKeys.justifications(workspaceId),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: workspaceKeys.justifications(workspaceId),
+        }),
+        "onSuccess",
+      );
     },
     onSettled: () => {
       inflight.delete(justification.id);

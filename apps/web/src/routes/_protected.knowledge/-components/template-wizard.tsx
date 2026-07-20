@@ -42,6 +42,7 @@ import { useLocale } from "@/i18n/formatting-context";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { bindingCatalogOptions } from "@/routes/_protected.knowledge/-queries/binding-catalog";
@@ -596,7 +597,7 @@ export const ConfigureStep = ({
           <form
             className="flex flex-col gap-5"
             onSubmit={(...args) => {
-              void handleSave(...args);
+              detached(handleSave(...args), "ConfigureStep");
             }}
           >
             <Field>

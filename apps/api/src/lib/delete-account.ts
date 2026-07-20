@@ -399,7 +399,7 @@ const enqueueStorageCleanupOrLog = async (
       deletionRequestId,
     });
 
-    void processAccountDeletionCleanupRequest(deletionRequestId).catch(
+    processAccountDeletionCleanupRequest(deletionRequestId).catch(
       (cleanupError: unknown) => {
         captureError(cleanupError, { deletionRequestId });
         logger.error("account_deletion_cleanup.inline_failed", {

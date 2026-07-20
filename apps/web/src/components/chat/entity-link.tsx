@@ -14,6 +14,7 @@ import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { MatterIcon } from "@/components/matter-icon";
+import { detached } from "@/lib/detached";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
@@ -110,7 +111,9 @@ export const EntityLink = ({
           "underline-offset-2 transition-colors",
           "hover:decoration-foreground cursor-pointer",
         )}
-        onClick={() => void openCaseLawDecision(decisionRef, navigate)}
+        onClick={() =>
+          detached(openCaseLawDecision(decisionRef, navigate), "EntityLink")
+        }
         type="button"
       >
         <LandmarkIcon className="inline size-3 shrink-0" />
@@ -147,28 +150,34 @@ export const EntityLink = ({
 
   const handleClick = () => {
     if (category === "entity") {
-      void (async () => {
-        const result = await openEntityInInspector(
-          id,
-          label,
-          mentionWorkspaceId,
-        );
+      detached(
+        (async () => {
+          const result = await openEntityInInspector(
+            id,
+            label,
+            mentionWorkspaceId,
+          );
 
-        if (result.type === "folder") {
-          await navigateToWorkspaceFolder({
-            folderId: result.entityId,
-            navigate,
-            pathname,
-            targetWorkspaceId: result.workspaceId,
-          });
-        }
-      })();
+          if (result.type === "folder") {
+            await navigateToWorkspaceFolder({
+              folderId: result.entityId,
+              navigate,
+              pathname,
+              targetWorkspaceId: result.workspaceId,
+            });
+          }
+        })(),
+        "handleClick",
+      );
       return;
     }
-    void navigate({
-      to: "/workspaces/$workspaceId",
-      params: { workspaceId: id },
-    });
+    detached(
+      navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: id },
+      }),
+      "handleClick",
+    );
   };
 
   const icon =

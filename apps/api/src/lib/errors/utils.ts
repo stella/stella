@@ -372,7 +372,10 @@ export const errorFingerprint = (error: unknown): ErrorFingerprint => {
 export const logDevError = createDevErrorLogger({
   isDev: envBase.isDev,
   sink: ({ error, context }) => {
-    void appendDevErrorJsonl({ error, context });
+    // Best-effort dev-only file sink. Its own rejection cannot route through
+    // the shared error-capture channel (that path logs back through here,
+    // which would recurse), so it is handled locally and ignored.
+    appendDevErrorJsonl({ error, context }).catch(() => undefined);
   },
 });
 

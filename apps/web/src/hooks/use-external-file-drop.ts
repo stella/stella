@@ -100,7 +100,7 @@ export const useExternalFileDrop = ({
         if (location.current.dropTargets[0]?.element !== self.element) {
           return;
         }
-        void collectDroppedFileTree(source)
+        collectDroppedFileTree(source)
           .then((tree) => {
             if (tree.files.length === 0 && tree.directoryPaths.length === 0) {
               return undefined;

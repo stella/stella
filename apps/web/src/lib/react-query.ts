@@ -9,6 +9,7 @@ import type {
 import { TaggedError } from "better-result";
 
 import { STALE_TIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 
 /**
  * Typed input shape for query option factories.
@@ -61,12 +62,15 @@ const withCriticalQueryTimeout = async <TData>(
       operation(),
       new Promise<never>((_resolve, reject) => {
         timeoutId = setTimeout(() => {
-          void queryClient.cancelQueries(
-            {
-              exact: true,
-              queryKey,
-            },
-            { revert: false },
+          detached(
+            queryClient.cancelQueries(
+              {
+                exact: true,
+                queryKey,
+              },
+              { revert: false },
+            ),
+            "withCriticalQueryTimeout",
           );
           reject(
             new CriticalQueryTimeoutError({

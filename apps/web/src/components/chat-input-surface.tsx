@@ -23,6 +23,7 @@ import {
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 
 type ChatInputSurfaceProps = {
   autoFocus?: boolean;
@@ -311,7 +312,7 @@ export const ChatInputSurface = ({
             canSend={!submitDisabled && canSubmit}
             isGenerating={isGenerating}
             onSend={() => {
-              void submitDraft();
+              detached(submitDraft(), "ChatInputSurface");
             }}
             onStop={onStop}
           />

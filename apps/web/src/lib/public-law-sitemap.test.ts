@@ -675,12 +675,14 @@ describe("public law sitemap", () => {
     // load the persisted locale after first paint; app paths keep the
     // resolve-locale-then-hydrate boot model.
     expect(source).toContain("isPublicSsrPath(window.location.pathname)");
-    expect(source).toContain("void initializeI18n().finally(hydrate);");
+    expect(source).toContain(
+      'detached(initializeI18n().finally(hydrate), "client.i18n");',
+    );
     const ssrBranchIndex = source.indexOf(
       "isPublicSsrPath(window.location.pathname)",
     );
     const appBranchIndex = source.indexOf(
-      "void initializeI18n().finally(hydrate);",
+      'detached(initializeI18n().finally(hydrate), "client.i18n");',
     );
     expect(ssrBranchIndex).toBeGreaterThan(-1);
     expect(appBranchIndex).toBeGreaterThan(ssrBranchIndex);

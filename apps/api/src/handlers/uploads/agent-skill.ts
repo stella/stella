@@ -21,7 +21,6 @@ import {
   installSkill,
 } from "@/api/handlers/skills/install";
 import { parseUploadedSkillPackage } from "@/api/handlers/skills/skill-package";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -192,9 +191,5 @@ export const finalizeAgentSkill = async function* ({
 
   // The audit row is emitted inside `installSkill` against the
   // newly created agentSkills row, so no extra audit call here.
-  void recordAuditEvent;
-  void AUDIT_ACTION;
-  void AUDIT_RESOURCE_TYPE;
-
   return finalizeOk({ finalizedResult: finalized, afterPromote: undefined });
 };

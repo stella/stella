@@ -20,8 +20,8 @@ import {
   getTemplateDirectives,
   setTemplatePreviewValues,
 } from "@stll/folio-react";
-import "@stll/folio-react/editor.css";
 import { isClauseSlotName, isFieldPath } from "@stll/template-conditions";
+import "@stll/folio-react/editor.css";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
@@ -29,11 +29,13 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
+import { forceReflow } from "@/lib/utils";
 import { inputTypeValueKind } from "@/lib/value-types";
-import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
 import "@/routes/_protected.knowledge/-components/template-studio-inspector";
+import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
 import {
   protectedRouteApi,
   TEMPLATE_STUDIO_VIEW,
@@ -102,7 +104,7 @@ const flashDirectiveAt = (view: EditorView, pos: number) => {
         pos < end
       ) {
         delete span.dataset["folioOutlineFlash"];
-        void span.offsetWidth;
+        forceReflow(span);
         span.dataset["folioOutlineFlash"] = "";
         return;
       }
@@ -599,7 +601,10 @@ export const TemplateStudioPage = ({
     view.focus();
     upsertField(path, {});
     if (sibling !== null) {
-      void proposeFieldMirror({ path, sourceText: text, sibling });
+      detached(
+        proposeFieldMirror({ path, sourceText: text, sibling }),
+        "makeField",
+      );
     }
     return path;
   };
@@ -1077,20 +1082,23 @@ export const TemplateStudioPage = ({
       // with the pre-save URL still in its context, discovering the old
       // document's fields. Exclude it here and invalidate it separately once
       // `detail` (and everything else) has settled.
-      void queryClient
-        .invalidateQueries({
-          queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-          predicate: (query) => query.queryKey.at(-1) !== "fill-discover",
-        })
-        .then(
-          async () =>
-            await queryClient.invalidateQueries({
-              queryKey: knowledgeKeys.templates.fillDiscover(
-                activeOrganizationId,
-                templateId,
-              ),
-            }),
-        );
+      detached(
+        queryClient
+          .invalidateQueries({
+            queryKey: knowledgeKeys.templates.all(activeOrganizationId),
+            predicate: (query) => query.queryKey.at(-1) !== "fill-discover",
+          })
+          .then(
+            async () =>
+              await queryClient.invalidateQueries({
+                queryKey: knowledgeKeys.templates.fillDiscover(
+                  activeOrganizationId,
+                  templateId,
+                ),
+              }),
+          ),
+        "handleSave",
+      );
       // Report overall failure when a slot PATCH hard-failed: the document
       // itself saved, but "Save and leave" must stay in the Studio so the
       // still-pending steps (and their retry) are not discarded by the

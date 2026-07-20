@@ -32,6 +32,7 @@ import type {
 } from "@/components/ai-suggestions/review-store";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 const DOCUMENT_OPERATION_CONTRACT_VERSION = 1 as const;
@@ -288,11 +289,14 @@ export const useReviewActions = ({
         async () => await task(),
       );
       docxSuggestionMutationChain.set(id, next);
-      void next.finally(() => {
-        if (docxSuggestionMutationChain.get(id) === next) {
-          docxSuggestionMutationChain.delete(id);
-        }
-      });
+      detached(
+        next.finally(() => {
+          if (docxSuggestionMutationChain.get(id) === next) {
+            docxSuggestionMutationChain.delete(id);
+          }
+        }),
+        "useReviewActions",
+      );
       return await next;
     },
   );
@@ -404,31 +408,34 @@ export const useReviewActions = ({
     // is read post-reconcile, so an accept that raced the create response still
     // fires its resolve here rather than relying on the persist-window replay.
     if (live.persisted === true && outcome.status === "accepted") {
-      void (async () => {
-        const result = await runSerialized(
-          live.id,
-          async () =>
-            await resolveDocxSuggestionRequest({
-              workspaceId,
-              entityId,
-              suggestionId: live.id,
-              status: "accepted",
-              appliedMode: applyMode,
-            }),
-        );
-        if (result === "synced") {
-          return;
-        }
-        // The editor applied the change but the server row is not in
-        // "accepted": rewind the editor + local state so the user sees the
-        // suggestion pending again, matching the server.
-        rollbackAcceptedResolution(live, outcome.undoHandle, result);
-        if (result === "failed") {
-          toastPersistFailed();
-        } else {
-          toastStaleResolution();
-        }
-      })();
+      detached(
+        (async () => {
+          const result = await runSerialized(
+            live.id,
+            async () =>
+              await resolveDocxSuggestionRequest({
+                workspaceId,
+                entityId,
+                suggestionId: live.id,
+                status: "accepted",
+                appliedMode: applyMode,
+              }),
+          );
+          if (result === "synced") {
+            return;
+          }
+          // The editor applied the change but the server row is not in
+          // "accepted": rewind the editor + local state so the user sees the
+          // suggestion pending again, matching the server.
+          rollbackAcceptedResolution(live, outcome.undoHandle, result);
+          if (result === "failed") {
+            toastPersistFailed();
+          } else {
+            toastStaleResolution();
+          }
+        })(),
+        "useReviewActions",
+      );
     }
   });
 
@@ -447,28 +454,31 @@ export const useReviewActions = ({
     // Same reason as accept: don't drop pendingOperation, so the user can
     // revert the rejection and the suggestion goes back to actionable.
     if (claimed.persisted === true) {
-      void (async () => {
-        const result = await runSerialized(
-          claimed.id,
-          async () =>
-            await resolveDocxSuggestionRequest({
-              workspaceId,
-              entityId,
-              suggestionId: claimed.id,
-              status: "rejected",
-              appliedMode: null,
-            }),
-        );
-        if (result === "synced") {
-          return;
-        }
-        rollbackRejectedResolution(claimed, result);
-        if (result === "failed") {
-          toastPersistFailed();
-        } else {
-          toastStaleResolution();
-        }
-      })();
+      detached(
+        (async () => {
+          const result = await runSerialized(
+            claimed.id,
+            async () =>
+              await resolveDocxSuggestionRequest({
+                workspaceId,
+                entityId,
+                suggestionId: claimed.id,
+                status: "rejected",
+                appliedMode: null,
+              }),
+          );
+          if (result === "synced") {
+            return;
+          }
+          rollbackRejectedResolution(claimed, result);
+          if (result === "failed") {
+            toastPersistFailed();
+          } else {
+            toastStaleResolution();
+          }
+        })(),
+        "useReviewActions",
+      );
     }
   });
 
@@ -504,40 +514,43 @@ export const useReviewActions = ({
     if (item.persisted !== true) {
       return;
     }
-    void (async () => {
-      const result = await runSerialized(
-        item.id,
-        async () =>
-          await revertDocxSuggestionRequest({
-            workspaceId,
-            entityId,
-            suggestionId: item.id,
-          }),
-      );
-      // "stale" means the server row was still pending — the same state we
-      // just moved the local suggestion to, so nothing to reconcile and no
-      // toast. "synced" is the happy path.
-      if (result === "synced" || result === "stale") {
-        return;
-      }
-      // "failed": the server row is still terminal, but the local revert
-      // already ran. Restore the prior resolution so they agree again.
-      captureResolveFailure("revert");
-      if (prev.status === "accepted") {
-        // Re-apply to regenerate a fresh undoHandle for the restored
-        // tracked change (the old handle was consumed by the undo above).
-        const outcome = applyPending(item);
-        recordOutcome(item, outcome);
-      } else {
-        updateSuggestion(entityId, item.id, {
-          status: prev.status,
-          revisionIds: prev.revisionIds,
-          undoHandle: prev.undoHandle,
-          applyMode: prev.applyMode,
-        });
-      }
-      toastPersistFailed();
-    })();
+    detached(
+      (async () => {
+        const result = await runSerialized(
+          item.id,
+          async () =>
+            await revertDocxSuggestionRequest({
+              workspaceId,
+              entityId,
+              suggestionId: item.id,
+            }),
+        );
+        // "stale" means the server row was still pending — the same state we
+        // just moved the local suggestion to, so nothing to reconcile and no
+        // toast. "synced" is the happy path.
+        if (result === "synced" || result === "stale") {
+          return;
+        }
+        // "failed": the server row is still terminal, but the local revert
+        // already ran. Restore the prior resolution so they agree again.
+        captureResolveFailure("revert");
+        if (prev.status === "accepted") {
+          // Re-apply to regenerate a fresh undoHandle for the restored
+          // tracked change (the old handle was consumed by the undo above).
+          const outcome = applyPending(item);
+          recordOutcome(item, outcome);
+        } else {
+          updateSuggestion(entityId, item.id, {
+            status: prev.status,
+            revisionIds: prev.revisionIds,
+            undoHandle: prev.undoHandle,
+            applyMode: prev.applyMode,
+          });
+        }
+        toastPersistFailed();
+      })(),
+      "useReviewActions",
+    );
   });
 
   const acceptMany = useLatestCallback(
@@ -580,29 +593,32 @@ export const useReviewActions = ({
       if (toPersist.length === 0) {
         return;
       }
-      void (async () => {
-        const results = await Promise.all(
-          toPersist.map(async ({ item, outcome }) => {
-            const result = await runSerialized(
-              item.id,
-              async () =>
-                await resolveDocxSuggestionRequest({
-                  workspaceId,
-                  entityId,
-                  suggestionId: item.id,
-                  status: "accepted",
-                  appliedMode: applyMode,
-                }),
-            );
-            if (result === "synced") {
+      detached(
+        (async () => {
+          const results = await Promise.all(
+            toPersist.map(async ({ item, outcome }) => {
+              const result = await runSerialized(
+                item.id,
+                async () =>
+                  await resolveDocxSuggestionRequest({
+                    workspaceId,
+                    entityId,
+                    suggestionId: item.id,
+                    status: "accepted",
+                    appliedMode: applyMode,
+                  }),
+              );
+              if (result === "synced") {
+                return result;
+              }
+              rollbackAcceptedResolution(item, outcome.undoHandle, result);
               return result;
-            }
-            rollbackAcceptedResolution(item, outcome.undoHandle, result);
-            return result;
-          }),
-        );
-        surfaceBatchResolveToast(results);
-      })();
+            }),
+          );
+          surfaceBatchResolveToast(results);
+        })(),
+        "useReviewActions",
+      );
     },
   );
 
@@ -631,29 +647,32 @@ export const useReviewActions = ({
     if (toPersist.length === 0) {
       return;
     }
-    void (async () => {
-      const results = await Promise.all(
-        toPersist.map(async (item) => {
-          const result = await runSerialized(
-            item.id,
-            async () =>
-              await resolveDocxSuggestionRequest({
-                workspaceId,
-                entityId,
-                suggestionId: item.id,
-                status: "rejected",
-                appliedMode: null,
-              }),
-          );
-          if (result === "synced") {
+    detached(
+      (async () => {
+        const results = await Promise.all(
+          toPersist.map(async (item) => {
+            const result = await runSerialized(
+              item.id,
+              async () =>
+                await resolveDocxSuggestionRequest({
+                  workspaceId,
+                  entityId,
+                  suggestionId: item.id,
+                  status: "rejected",
+                  appliedMode: null,
+                }),
+            );
+            if (result === "synced") {
+              return result;
+            }
+            rollbackRejectedResolution(item, result);
             return result;
-          }
-          rollbackRejectedResolution(item, result);
-          return result;
-        }),
-      );
-      surfaceBatchResolveToast(results);
-    })();
+          }),
+        );
+        surfaceBatchResolveToast(results);
+      })(),
+      "useReviewActions",
+    );
   });
 
   const navigateTo = useLatestCallback((item: ReviewSuggestion) => {

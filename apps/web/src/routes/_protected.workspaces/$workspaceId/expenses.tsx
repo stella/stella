@@ -12,6 +12,7 @@ import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useLocale } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view";
 import {
@@ -41,12 +42,15 @@ export const Route = createFileRoute(
       new Date(),
       getFormattingLocale(),
     );
-    void prefetchRouteQuery(
-      context.queryClient,
-      expensesOptions(params.workspaceId, { dateFrom, dateTo }),
-      (error: unknown) => {
-        getAnalytics().captureError(error);
-      },
+    detached(
+      prefetchRouteQuery(
+        context.queryClient,
+        expensesOptions(params.workspaceId, { dateFrom, dateTo }),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      ),
+      "loader",
     );
   },
   component: ExpensesPage,

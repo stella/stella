@@ -49,6 +49,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -420,7 +421,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
           <MenuItem
             disabled={exportingFormat !== null}
             onClick={() => {
-              void handleExport("csv");
+              detached(handleExport("csv"), "TableExportMenu");
             }}
           >
             {t("workspaces.views.exportCsv")}
@@ -428,7 +429,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
           <MenuItem
             disabled={exportingFormat !== null}
             onClick={() => {
-              void handleExport("xlsx");
+              detached(handleExport("xlsx"), "TableExportMenu");
             }}
           >
             {t("workspaces.views.exportXlsx")}
@@ -437,7 +438,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
           <MenuItem
             disabled={exportingFormat !== null}
             onClick={() => {
-              void handleExport("docx");
+              detached(handleExport("docx"), "TableExportMenu");
             }}
           >
             {t("workspaces.views.exportDocxPlain")}
@@ -658,7 +659,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
           closeOnClick={false}
           disabled={isRunning}
           onClick={() => {
-            void handleAutoRun();
+            detached(handleAutoRun(), "RunPlaybookControl");
           }}
         >
           <WandSparklesIcon className="size-3.5" />
@@ -685,7 +686,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
             disabled={isRunning}
             key={playbook.id}
             onClick={() => {
-              void handleRun(playbook.id);
+              detached(handleRun(playbook.id), "RunPlaybookControl");
             }}
           >
             {playbook.name}

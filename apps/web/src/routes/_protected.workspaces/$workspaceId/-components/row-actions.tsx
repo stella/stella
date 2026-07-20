@@ -55,6 +55,7 @@ import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { ClientOperationError } from "@/lib/errors/client";
@@ -190,15 +191,18 @@ export const RowActions = ({
         useWorkspaceStore.getState().setPdfViewerState({
           sidebar: "versions",
         });
-        void navigate({
-          to: "/workspaces/$workspaceId/$viewId/document",
-          params: { workspaceId, viewId: "all" },
-          search: {
-            entity: entity.entityId,
-            field: file.fieldId,
-            panel: "versions" as const,
-          },
-        });
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId/$viewId/document",
+            params: { workspaceId, viewId: "all" },
+            search: {
+              entity: entity.entityId,
+              field: file.fieldId,
+              panel: "versions" as const,
+            },
+          }),
+          "RowActions",
+        );
       }
     : undefined;
 
@@ -429,7 +433,7 @@ export const RowActions = ({
       // released lock is a no-op on the API side).
       setTimeout(() => {
         stellaToast.close(toastId);
-        void forceTakeoverWithFeedback();
+        detached(forceTakeoverWithFeedback(), "handleReleaseLock");
       }, 30_000);
     } catch {
       await forceTakeoverWithFeedback();
@@ -646,7 +650,7 @@ export const RowActions = ({
             {canRetryCell && (
               <MenuItem
                 disabled={retryDisabled}
-                onClick={() => void handleRetryCell()}
+                onClick={() => detached(handleRetryCell(), "RowActions")}
               >
                 <RefreshCwIcon />
                 {t("common.retry")}
@@ -677,7 +681,7 @@ export const RowActions = ({
         {!isCellContext && canOpenInDesktop && (
           <MenuItem
             onClick={() => {
-              void handleOpenInDesktop();
+              detached(handleOpenInDesktop(), "RowActions");
             }}
           >
             <LaptopIcon />
@@ -687,7 +691,7 @@ export const RowActions = ({
         {!isCellContext && isDocx && desktopEditLockState !== "unlocked" && (
           <MenuItem
             onClick={() => {
-              void handleReleaseLock();
+              detached(handleReleaseLock(), "RowActions");
             }}
           >
             <LockOpenIcon />
@@ -722,7 +726,7 @@ export const RowActions = ({
             {hasAnyFile && (isBulk || !hasPdfConversion) && (
               <MenuItem
                 onClick={() => {
-                  void handleDownload();
+                  detached(handleDownload(), "RowActions");
                 }}
               >
                 <DownloadIcon />
@@ -738,7 +742,7 @@ export const RowActions = ({
                 <MenuSubPopup>
                   <MenuItem
                     onClick={() => {
-                      void handleDownload();
+                      detached(handleDownload(), "RowActions");
                     }}
                   >
                     <DownloadIcon />
@@ -746,7 +750,7 @@ export const RowActions = ({
                   </MenuItem>
                   <MenuItem
                     onClick={() => {
-                      void handleDownload(true);
+                      detached(handleDownload(true), "RowActions");
                     }}
                   >
                     <FileOutputIcon />
@@ -758,7 +762,7 @@ export const RowActions = ({
             {hasAnyFolder && (
               <MenuItem
                 onClick={() => {
-                  void handleZipDownload();
+                  detached(handleZipDownload(), "RowActions");
                 }}
               >
                 <ArchiveIcon />
@@ -767,7 +771,7 @@ export const RowActions = ({
             )}
             <MenuItem
               onClick={() => {
-                void handleDuplicate();
+                detached(handleDuplicate(), "RowActions");
               }}
             >
               <CopyIcon />

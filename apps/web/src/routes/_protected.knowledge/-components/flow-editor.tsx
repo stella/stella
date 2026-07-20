@@ -48,6 +48,7 @@ import { FlowSwitch } from "@/components/flows/flow-switch";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -437,9 +438,12 @@ const FlowEditorForm = ({
       type: "success",
       title: isEdit ? t("flows.updated") : t("flows.created"),
     });
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.flows.all(organizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.flows.all(organizationId),
+      }),
+      "handleSave",
+    );
     onSaved();
   };
 
@@ -467,9 +471,12 @@ const FlowEditorForm = ({
 
     stellaToast.add({ type: "success", title: t("flows.deleted") });
     setDeleteOpen(false);
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.flows.all(organizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.flows.all(organizationId),
+      }),
+      "handleDelete",
+    );
     onSaved();
   };
 
@@ -509,7 +516,7 @@ const FlowEditorForm = ({
                     <Button
                       disabled={saving}
                       onClick={() => {
-                        void handleDelete();
+                        detached(handleDelete(), "FlowEditorForm");
                       }}
                       variant="destructive"
                     >
@@ -523,7 +530,7 @@ const FlowEditorForm = ({
               disabled={!canSave || saving}
               loading={saving}
               onClick={() => {
-                void handleSave();
+                detached(handleSave(), "FlowEditorForm");
               }}
               type="button"
             >

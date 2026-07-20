@@ -24,6 +24,7 @@ import {
 
 import { useMountEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
+import { detached } from "@/lib/detached";
 import { fetchWithTimeout } from "@/lib/fetch";
 
 const DEBOUNCE_MS = 1500;
@@ -354,7 +355,7 @@ export function AutocompletePlayground() {
         clearTimeout(debounceRef.current);
       }
       debounceRef.current = setTimeout(() => {
-        void triggerRequest();
+        detached(triggerRequest(), "scheduleTrigger");
       }, DEBOUNCE_MS);
     };
 

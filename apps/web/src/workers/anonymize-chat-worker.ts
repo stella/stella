@@ -102,11 +102,18 @@ if (!isDedicatedWorkerScope(globalThis)) {
 const scope = globalThis;
 
 scope.addEventListener("message", (event: MessageEvent<AnonRequest>) => {
-  void handle(event.data).then((response) => {
-    // Worker postMessage doesn't take a targetOrigin (unlike
-    // window.postMessage); the lint rule is window-specific.
-    // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
-    scope.postMessage(response);
-    return;
-  });
+  // Worker-local handling keeps the off-main-thread anonymizer self-contained:
+  // routing through the app's detached()/analytics stack would pull PostHog and
+  // env into every worker cold start. `handle` already converts pipeline
+  // failures into an error `AnonResponse`, so the only residual rejection is a
+  // postMessage failure, which the main-thread client surfaces via `onerror`.
+  handle(event.data)
+    .then((response) => {
+      // Worker postMessage doesn't take a targetOrigin (unlike
+      // window.postMessage); the lint rule is window-specific.
+      // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
+      scope.postMessage(response);
+      return;
+    })
+    .catch(() => undefined);
 });

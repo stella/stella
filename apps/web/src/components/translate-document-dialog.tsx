@@ -46,6 +46,7 @@ import {
   type DeepLTargetLanguageCode,
 } from "@/lib/deepl/languages";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -128,13 +129,16 @@ export const TranslateDocumentDialog = ({
         action: {
           label: t("common.open"),
           onClick: () => {
-            void navigate({
-              to: "/workspaces/$workspaceId/$viewId/document",
-              params: { workspaceId, viewId: data.entityId },
-              // `field` is required by the route guard; without it
-              // `RouteComponent` bounces back to the workspace.
-              search: { entity: data.entityId, field: data.fieldId },
-            });
+            detached(
+              navigate({
+                to: "/workspaces/$workspaceId/$viewId/document",
+                params: { workspaceId, viewId: data.entityId },
+                // `field` is required by the route guard; without it
+                // `RouteComponent` bounces back to the workspace.
+                search: { entity: data.entityId, field: data.fieldId },
+              }),
+              "onClick",
+            );
           },
         },
       });

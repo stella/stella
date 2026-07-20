@@ -31,6 +31,7 @@ import {
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorRedirect,
 } from "@/lib/auth";
+import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
@@ -110,11 +111,14 @@ export function OTPPanel({
       return;
     }
 
-    void navigate({
-      to: "/auth",
-      search: { redirectTo },
-      replace: true,
-    });
+    detached(
+      navigate({
+        to: "/auth",
+        search: { redirectTo },
+        replace: true,
+      }),
+      "handleUseDifferentEmail",
+    );
   };
 
   const resendOtp = useMutation({

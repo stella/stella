@@ -21,6 +21,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
@@ -136,7 +137,7 @@ export const TimeEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        void form.handleSubmit();
+        detached(form.handleSubmit(), "TimeEntryForm");
       }}
     >
       <div className="flex flex-col gap-1.5">

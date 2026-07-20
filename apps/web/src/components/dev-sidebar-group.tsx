@@ -31,6 +31,7 @@ import {
   PROVIDER_LABELS,
 } from "@/components/ai-config-role-models.logic";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 
 /**
@@ -234,7 +235,7 @@ export const DevSidebarGroup = () => {
         <MenuItem
           disabled={seeding}
           onClick={() => {
-            void handleSeed();
+            detached(handleSeed(), "DevSidebarGroup");
           }}
         >
           <DatabaseIcon />
@@ -243,7 +244,7 @@ export const DevSidebarGroup = () => {
         <MenuItem
           disabled={cleaning}
           onClick={() => {
-            void handleClean();
+            detached(handleClean(), "DevSidebarGroup");
           }}
         >
           <Trash2Icon />
@@ -253,7 +254,7 @@ export const DevSidebarGroup = () => {
         <MenuItem
           disabled={clearingCache}
           onClick={() => {
-            void handleClearCache();
+            detached(handleClearCache(), "DevSidebarGroup");
           }}
         >
           <RotateCcwIcon />

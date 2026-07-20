@@ -12,6 +12,7 @@ import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -328,7 +329,7 @@ const uploadPreparedFileEntity = async ({
     // Best-effort cleanup: abortUpload swallows its own errors and its
     // result is never used, so don't block surfacing the original
     // network error on it completing.
-    void abortUpload(workspaceId, uploadId);
+    detached(abortUpload(workspaceId, uploadId), "uploadPreparedFileEntity");
     if (error instanceof Error) {
       throw error;
     }
@@ -685,7 +686,10 @@ export const useCreateFileEntities = (workspaceId: string) => {
     // no-ops (startWorkflow returns `skipped`).
     const newEntityIds = uploaded.map((result) => result.entityId);
     if (newEntityIds.length > 0) {
-      void startWorkflow({ entityIds: newEntityIds });
+      detached(
+        startWorkflow({ entityIds: newEntityIds }),
+        "startWorkflowForUploadedFiles",
+      );
     }
   };
 
@@ -741,12 +745,18 @@ export const useCreateFileEntities = (workspaceId: string) => {
       analytics.captureError(error);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: workspacesKeys.overview(workspaceId),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        "onSettled",
+      );
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overview(workspaceId),
+        }),
+        "onSettled",
+      );
     },
   });
 

@@ -21,6 +21,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -83,13 +84,16 @@ export const PdfViewerControls = ({
   };
 
   const navigateToPage = (pageNumber: number) => {
-    void navigate({
-      replace: true,
-      search: (prev) =>
-        produce(prev, (s) => {
-          s.pdfPage = pageNumber;
-        }),
-    });
+    detached(
+      navigate({
+        replace: true,
+        search: (prev) =>
+          produce(prev, (s) => {
+            s.pdfPage = pageNumber;
+          }),
+      }),
+      "navigateToPage",
+    );
   };
 
   const handleDownload = async () => {
@@ -260,7 +264,7 @@ export const PdfViewerControls = ({
                     !fileMetadata || isDownloading || fieldId.length === 0
                   }
                   onClick={() => {
-                    void handleDownload();
+                    detached(handleDownload(), "PdfViewerControls");
                   }}
                   size="icon-xs"
                   variant="ghost"
@@ -275,7 +279,7 @@ export const PdfViewerControls = ({
                 <Button
                   disabled={printDisabled || isPrinting || fieldId.length === 0}
                   onClick={() => {
-                    void handlePrint();
+                    detached(handlePrint(), "PdfViewerControls");
                   }}
                   size="icon-xs"
                   variant="ghost"

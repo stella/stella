@@ -5,6 +5,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import type { Citation } from "@/lib/citations";
+import { detached } from "@/lib/detached";
 import {
   FOLIO_SCROLL_EVENT,
   type FolioScrollEventDetail,
@@ -95,37 +96,40 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
         isActive && "bg-primary/25 hover:bg-primary/25",
       )}
       onClick={() => {
-        void (async () => {
-          createBoundingBoxes();
-          setActiveJustification({
-            id: justification.id,
-            pageNumber: citation.pageNumber,
-          });
-
-          const boundingBoxes = useWorkspaceStore
-            .getState()
-            .justifications.find(
-              (j) => j.id === justification.id,
-            )?.boundingBoxes;
-          if (pdfFieldId === citation.fileFieldId && pageId && setScrollTo) {
-            setScrollTo({
-              pageId,
-              target: boundingBoxes
-                ? { kind: "justification", id: justification.id }
-                : undefined,
+        detached(
+          (async () => {
+            createBoundingBoxes();
+            setActiveJustification({
+              id: justification.id,
+              pageNumber: citation.pageNumber,
             });
-          }
-          await navigate({
-            replace: true,
-            search: (prev) =>
-              produce(prev, (s) => {
-                s.field = citation.fileFieldId;
-                s.justification = justification.id;
-                s.justificationPage = citation.pageNumber;
-                s.pdfPage = citation.pageNumber;
-              }),
-          });
-        })();
+
+            const boundingBoxes = useWorkspaceStore
+              .getState()
+              .justifications.find(
+                (j) => j.id === justification.id,
+              )?.boundingBoxes;
+            if (pdfFieldId === citation.fileFieldId && pageId && setScrollTo) {
+              setScrollTo({
+                pageId,
+                target: boundingBoxes
+                  ? { kind: "justification", id: justification.id }
+                  : undefined,
+              });
+            }
+            await navigate({
+              replace: true,
+              search: (prev) =>
+                produce(prev, (s) => {
+                  s.field = citation.fileFieldId;
+                  s.justification = justification.id;
+                  s.justificationPage = citation.pageNumber;
+                  s.pdfPage = citation.pageNumber;
+                }),
+            });
+          })(),
+          "PdfChip",
+        );
       }}
       onMouseEnter={() => {
         createBoundingBoxes();

@@ -16,6 +16,7 @@ import type { StyleSelection } from "@/features/style-sets/style-set-picker-dial
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
@@ -261,14 +262,17 @@ function RouteComponent() {
               // a successful save (and the reset itself is gated on !isSaving)
               // keeps the unmount from clobbering an in-flight save. On failure
               // the save toast surfaces and we stay in the detail view.
-              void (async () => {
-                const saved = await useTemplateStudioStore
-                  .getState()
-                  .actions?.save();
-                if (saved) {
-                  exitDetail();
-                }
-              })();
+              detached(
+                (async () => {
+                  const saved = await useTemplateStudioStore
+                    .getState()
+                    .actions?.save();
+                  if (saved) {
+                    exitDetail();
+                  }
+                })(),
+                "onClick",
+              );
             },
           }}
           secondary={{
@@ -314,10 +318,10 @@ function RouteComponent() {
         onCreateBlank={() => setStylePickerOpen(true)}
         onDeleted={invalidateTemplates}
         onDiscovered={(file) => {
-          void openUploadedTemplate(file);
+          detached(openUploadedTemplate(file), "RouteComponent");
         }}
         onLoadMore={() => {
-          void fetchNextPage();
+          detached(fetchNextPage(), "RouteComponent");
         }}
         onSelect={(template) => setView({ kind: "detail", template })}
         selectedCategoryId={selectedCategoryId}

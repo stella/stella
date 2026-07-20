@@ -67,6 +67,7 @@ import {
 } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import type { WorkspaceEntity } from "@/lib/types";
 import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -786,7 +787,10 @@ export const useChatEditor = ({
 
       return await new Promise<ChatMentionOption[]>((resolve) => {
         pendingWorkspaceEntitySearchRef.current = { queryKey: null, resolve };
-        void debouncedFetchWorkspaceEntities({ query, resolve, workspace });
+        detached(
+          debouncedFetchWorkspaceEntities({ query, resolve, workspace }),
+          "useChatEditor",
+        );
       });
     },
     [debouncedFetchWorkspaceEntities, queryClient, threadRef],
@@ -860,7 +864,7 @@ export const useChatEditor = ({
     if (!hasNextSkillPage || isFetchingNextSkillPage) {
       return;
     }
-    void fetchNextSkillPage();
+    detached(fetchNextSkillPage(), "useChatEditor");
   }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
 
   const skillPageRows = skillPages?.pages;
@@ -1103,7 +1107,7 @@ export const useChatEditor = ({
         }
 
         event.preventDefault();
-        void submitHandlerRef.current?.();
+        detached(submitHandlerRef.current?.(), "handleKeyDown");
         return true;
       },
     },

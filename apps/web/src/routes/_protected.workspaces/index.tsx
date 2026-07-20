@@ -43,6 +43,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useLocale } from "@/i18n/formatting-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
@@ -162,9 +163,12 @@ const MattersContent = ({
       return;
     }
     resetMatterVisibilityState(getMatterOrganizationResetPatch());
-    void queryClient.invalidateQueries({
-      queryKey: workspacesKeys.list(activeOrganizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: workspacesKeys.list(activeOrganizationId),
+      }),
+      "MattersContent",
+    );
   });
 
   const workspaces = data.workspaces;
@@ -246,7 +250,10 @@ const MattersContent = ({
       }
     });
 
-    void navigate({ to: "/workspaces", search: {}, replace: true });
+    detached(
+      navigate({ to: "/workspaces", search: {}, replace: true }),
+      "MattersContent",
+    );
   });
 
   // Scroll the company group into view and flash it when arriving from the

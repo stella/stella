@@ -4,6 +4,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
+import { detached } from "@/lib/detached";
 
 const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
@@ -61,7 +62,10 @@ export const useWorkspaceSSE = (
       event.type === INVALIDATE_QUERY_EVENT_TYPE &&
       Array.isArray(event.data)
     ) {
-      void queryClient.invalidateQueries({ queryKey: event.data });
+      detached(
+        queryClient.invalidateQueries({ queryKey: event.data }),
+        "useWorkspaceSSE",
+      );
     }
   });
   const captureClosedConnection = useLatestCallback(() => {

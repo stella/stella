@@ -488,6 +488,13 @@ const RoleCell = ({
 
   const roleData = getRoles(t);
 
+  const handleConfirm = async () => {
+    if (pendingRole) {
+      await updateRole.mutateAsync(pendingRole);
+      setPendingRole(null);
+    }
+  };
+
   return (
     <>
       <Select
@@ -549,12 +556,7 @@ const RoleCell = ({
           email: memberEmail,
         })}
         loading={updateRole.isPending}
-        onConfirm={async () => {
-          if (pendingRole) {
-            await updateRole.mutateAsync(pendingRole);
-            setPendingRole(null);
-          }
-        }}
+        onConfirm={handleConfirm}
         onOpenChange={(open) => {
           if (!open) {
             setPendingRole(null);

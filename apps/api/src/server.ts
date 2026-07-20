@@ -87,6 +87,7 @@ import {
   DB_QUERY_COUNT_HEADER,
 } from "@/api/lib/db-query-counter";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
+import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import {
@@ -638,10 +639,10 @@ const startServer = async (): Promise<void> => {
     process.exit(0);
   };
   process.once("SIGTERM", () => {
-    void shutdownWorkers("SIGTERM");
+    detached(shutdownWorkers("SIGTERM"), "server.shutdown");
   });
   process.once("SIGINT", () => {
-    void shutdownWorkers("SIGINT");
+    detached(shutdownWorkers("SIGINT"), "server.shutdown");
   });
 };
 

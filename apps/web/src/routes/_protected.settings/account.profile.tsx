@@ -53,6 +53,7 @@ import {
 } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -555,7 +556,7 @@ function ProfilePageBody() {
                     loading={isPendingTasksFetching}
                     variant="outline"
                     onClick={() => {
-                      void refetchPendingTasks();
+                      detached(refetchPendingTasks(), "ProfilePageBody");
                     }}
                   >
                     {t("common.retry")}
@@ -839,7 +840,7 @@ const LocalePreferences = () => {
           <Select
             onValueChange={(value) => {
               if (value) {
-                void setLang(value);
+                detached(setLang(value), "LocalePreferences");
               }
             }}
             value={lang}

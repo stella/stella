@@ -60,6 +60,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
@@ -161,9 +162,12 @@ export const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
       : undefined;
 
   const invalidateLinks = () => {
-    void queryClient.invalidateQueries({
-      queryKey: clausesOptions.queryKey,
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: clausesOptions.queryKey,
+      }),
+      "invalidateLinks",
+    );
   };
 
   // Rename a clause slot. Rewrite the `{{@clause:...}}` document markers now
@@ -377,7 +381,7 @@ const SlotSyncButton = ({
     <Button
       disabled={syncing}
       onClick={() => {
-        void handleSync();
+        detached(handleSync(), "SlotSyncButton");
       }}
       size="sm"
       variant="ghost"
@@ -1600,9 +1604,12 @@ const SaveRecipeDialog = ({
       type: "success",
       title: t("templates.studio.recipeSaved"),
     });
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.templateRecipes.all(activeOrganizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.templateRecipes.all(activeOrganizationId),
+      }),
+      "save",
+    );
     setName("");
     onOpenChange(false);
   };
@@ -1633,7 +1640,7 @@ const SaveRecipeDialog = ({
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  void save();
+                  detached(save(), "SaveRecipeDialog");
                 }
               }}
               value={name}
@@ -1646,7 +1653,7 @@ const SaveRecipeDialog = ({
           </DialogClose>
           <Button
             disabled={name.trim() === "" || saving}
-            onClick={() => void save()}
+            onClick={() => detached(save(), "SaveRecipeDialog")}
           >
             {saving ? (
               <Loader2Icon className="animate-spin" />
@@ -1731,11 +1738,11 @@ const ClauseSlotEditor = ({
     <Input
       autoFocus
       className="h-7 font-mono text-xs"
-      onBlur={() => void commit()}
+      onBlur={() => detached(commit(), "ClauseSlotEditor")}
       onChange={(e) => setValue(e.currentTarget.value)}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
-          void commit();
+          detached(commit(), "ClauseSlotEditor");
         }
         if (e.key === "Escape") {
           setValue(slotName);

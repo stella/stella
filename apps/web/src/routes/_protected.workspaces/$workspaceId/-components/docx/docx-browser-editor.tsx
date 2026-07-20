@@ -69,6 +69,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import { detached } from "@/lib/detached";
 import { folioUIComponents } from "@/lib/folio-ui-components";
 import { composeRefs } from "@/lib/utils";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
@@ -81,8 +82,8 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useSyncDocxSuggestions } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions";
 import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
-import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
+import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 
 import {
   getDocxEditBlockReason,
@@ -823,7 +824,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     pendingEditRequestRef.current = false;
-    void requestEditMode();
+    detached(requestEditMode(), "DocxBrowserEditorContent");
   }, [compatibility, previewFile, requestEditMode, state.status]);
 
   // Auto-open when this component is used as a direct editor, or when the
@@ -848,7 +849,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
     didOpenRef.current = true;
     errorToastShownRef.current = false;
-    void open();
+    detached(open(), "DocxBrowserEditorContent");
   }, [
     compatibility,
     collaborationEnabled,
@@ -1021,7 +1022,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   );
 
   const saveChangeCheckpoint = useCallback(() => {
-    void triggerCheckpointSave();
+    detached(triggerCheckpointSave(), "DocxBrowserEditorContent");
   }, [triggerCheckpointSave]);
 
   // Awaitable variant of `saveChangeCheckpoint` for callers that
@@ -1047,7 +1048,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
       e.preventDefault();
       clearQueuedChangeCheckpoint();
-      void triggerCheckpointSave();
+      detached(triggerCheckpointSave(), "handler");
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -1290,7 +1291,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     ) {
       didOpenRef.current = true;
       errorToastShownRef.current = false;
-      void open();
+      detached(open(), "DocxBrowserEditorContent");
     }
   }, [
     canUnlock,
@@ -1318,7 +1319,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       handleUnlock();
       return;
     }
-    void handleFinalize();
+    detached(handleFinalize(), "DocxBrowserEditorContent");
   }, [handleFinalize, handleUnlock, isUnlocked]);
 
   // Registers this render's action handles into the parent-provided ref
@@ -1360,7 +1361,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       cancel: handleCancel,
       finalize: () => {
         if (isCollaborativeEditing || state.status === "editing") {
-          void handleFinalize();
+          detached(handleFinalize(), "finalize");
         }
       },
       flushPendingChanges,
@@ -1368,7 +1369,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         editorRef.current?.print();
       },
       unlock: () => {
-        void requestEditMode();
+        detached(requestEditMode(), "unlock");
       },
     }),
     [

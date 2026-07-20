@@ -50,6 +50,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 
 import {
@@ -64,8 +65,8 @@ import {
   settleReviewPersist,
 } from "./clause-ai-tracked-changes";
 import { ClauseDirectiveNode } from "./clause-directive-extension";
-import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
 import "./clause-editor.css";
+import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
 import type { ClauseBody, ClauseParagraph } from "./clause-editor-types";
 import {
   DELETION_MARK,
@@ -268,10 +269,13 @@ export const ClauseEditor = ({
             const persistReviewedBody = async () => {
               await emitReviewResolved(resolvedBody);
             };
-            void settleReviewPersist(persistReviewedBody).catch(
-              (error: unknown) => {
-                getAnalytics().captureError(error);
-              },
+            detached(
+              settleReviewPersist(persistReviewedBody).catch(
+                (error: unknown) => {
+                  getAnalytics().captureError(error);
+                },
+              ),
+              "onUpdate",
             );
           }
           // Without onReviewResolved there is no incremental persist to wait
@@ -457,7 +461,7 @@ export const ClauseEditor = ({
       setHunkMenu(null);
       emitReviewStatus("resolved");
     }
-    void runRewrite(aiEdit.instruction, baseline);
+    detached(runRewrite(aiEdit.instruction, baseline), "submitAiEdit");
   };
 
   const runResolveCommand = (command: PMCommand) => {

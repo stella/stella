@@ -12,6 +12,7 @@ import { useLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
@@ -132,7 +133,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         },
         {
           onSuccess: () => {
-            void invalidateCalendarTasks();
+            detached(invalidateCalendarTasks(), "CalendarView");
           },
         },
       );
@@ -416,50 +417,56 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return;
     }
     if (datePropertyId === TASK_DATE_IDS[0] && kind === "task") {
-      void (async () => {
-        try {
-          const response = await api
-            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .patch({
-              taskId: toSafeId<"entity">(entityId),
-              queryKey: entitiesKeys.all(workspaceId),
-              dueDate: date,
+      detached(
+        (async () => {
+          try {
+            const response = await api
+              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+              .patch({
+                taskId: toSafeId<"entity">(entityId),
+                queryKey: entitiesKeys.all(workspaceId),
+                dueDate: date,
+              });
+            if (response.error) {
+              throw toAPIError(response.error);
+            }
+          } catch {
+            stellaToast.add({
+              title: t("errors.actionFailed"),
+              type: "error",
             });
-          if (response.error) {
-            throw toAPIError(response.error);
+          } finally {
+            detached(invalidateCalendarTasks(), "CalendarView");
           }
-        } catch {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
-        } finally {
-          void invalidateCalendarTasks();
-        }
-      })();
+        })(),
+        "CalendarView",
+      );
     } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
-      void (async () => {
-        try {
-          const response = await api
-            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .patch({
-              taskId: toSafeId<"entity">(entityId),
-              queryKey: entitiesKeys.all(workspaceId),
-              allDay: true,
-              startAt: toAllDayAgendaDateTime(date),
+      detached(
+        (async () => {
+          try {
+            const response = await api
+              .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+              .patch({
+                taskId: toSafeId<"entity">(entityId),
+                queryKey: entitiesKeys.all(workspaceId),
+                allDay: true,
+                startAt: toAllDayAgendaDateTime(date),
+              });
+            if (response.error) {
+              throw toAPIError(response.error);
+            }
+          } catch {
+            stellaToast.add({
+              title: t("errors.actionFailed"),
+              type: "error",
             });
-          if (response.error) {
-            throw toAPIError(response.error);
+          } finally {
+            detached(invalidateCalendarTasks(), "CalendarView");
           }
-        } catch {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
-        } finally {
-          void invalidateCalendarTasks();
-        }
-      })();
+        })(),
+        "CalendarView",
+      );
     } else if (isTaskDateProperty(datePropertyId)) {
       // Future-proofing for any new built-in task date pseudo-property.
       if (kind !== "task") {
@@ -487,7 +494,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         },
         {
           onSuccess: () => {
-            void invalidateCalendarTasks();
+            detached(invalidateCalendarTasks(), "CalendarView");
           },
         },
       );

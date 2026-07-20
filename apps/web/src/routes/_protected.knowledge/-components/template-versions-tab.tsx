@@ -9,6 +9,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -126,7 +127,7 @@ export const TemplateVersionsTab = ({
               <Button
                 aria-label={t("common.download")}
                 onClick={() => {
-                  void handleDownload(version.id);
+                  detached(handleDownload(version.id), "TemplateVersionsTab");
                 }}
                 size="icon-xs"
                 title={t("common.download")}
@@ -157,7 +158,7 @@ export const TemplateVersionsTab = ({
             className="text-muted-foreground w-full"
             disabled={isFetchingNextPage}
             onClick={() => {
-              void fetchNextPage();
+              detached(fetchNextPage(), "TemplateVersionsTab");
             }}
             size="sm"
             variant="ghost"

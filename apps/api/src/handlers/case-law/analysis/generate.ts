@@ -40,6 +40,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { detached } from "@/api/lib/detached";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
@@ -289,13 +290,16 @@ export const generateAnalysis = async (
   }
 
   // Fire-and-forget generation
-  void runGeneration(
-    decisionId,
-    ast,
-    decision,
-    organizationId,
-    orgAIConfig,
-    promptCachingEnabled,
+  detached(
+    runGeneration(
+      decisionId,
+      ast,
+      decision,
+      organizationId,
+      orgAIConfig,
+      promptCachingEnabled,
+    ),
+    "generateAnalysis",
   );
 
   return Result.ok({ status: "generating" });

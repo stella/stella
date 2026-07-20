@@ -61,6 +61,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { detached } from "@/lib/detached";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 import { shouldShowPromptBarBusyPlaceholder } from "./host.logic";
@@ -906,7 +907,7 @@ export function PromptBar(props: PromptBarProps) {
                 isGenerating={isGenerating}
                 onRetry={retryOffer}
                 onSend={() => {
-                  void submitDraft();
+                  detached(submitDraft(), "PromptBar");
                 }}
                 onStop={onStop}
               />

@@ -19,6 +19,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { env } from "@/env";
 import { authClient } from "@/lib/auth";
+import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { pageTitle } from "@/lib/page-title";
@@ -147,7 +148,7 @@ function AgentClaimPage() {
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              void handleApprove();
+              detached(handleApprove(), "AgentClaimPage");
             }}
           >
             <div className="flex flex-col gap-2">

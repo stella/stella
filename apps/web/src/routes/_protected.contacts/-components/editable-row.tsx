@@ -6,6 +6,7 @@ import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { detached } from "@/lib/detached";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import type {
   ContactData,
@@ -99,11 +100,14 @@ export const EditableRow = ({
         { contactId: contact.id, ...payload },
         {
           onSuccess: () => {
-            void invalidateContactCaches(queryClient, {
-              activeOrganizationId,
-              contactId: contact.id,
-              invalidateWorkspaces: field === "displayName",
-            });
+            detached(
+              invalidateContactCaches(queryClient, {
+                activeOrganizationId,
+                contactId: contact.id,
+                invalidateWorkspaces: field === "displayName",
+              }),
+              "onSuccess",
+            );
           },
           onError: () => {
             stellaToast.add({
@@ -128,7 +132,7 @@ export const EditableRow = ({
           dir={type === "number" ? undefined : "auto"}
           maxLength={maxLength}
           onBlur={() => {
-            void rename.commit();
+            detached(rename.commit(), "EditableRow");
           }}
           onChange={(e) => rename.setDraft(e.target.value)}
           onKeyDown={(e) => {

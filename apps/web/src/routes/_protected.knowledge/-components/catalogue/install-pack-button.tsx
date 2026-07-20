@@ -6,6 +6,8 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { detached } from "@/lib/detached";
+
 import type { CatalogueEntry } from "./catalogue-types";
 import { useInstallEntry } from "./use-install-entry";
 
@@ -75,7 +77,7 @@ export const InstallPackButton = ({
     <Button
       disabled={busy}
       onClick={() => {
-        void onClick();
+        detached(onClick(), "InstallPackButton");
       }}
       size="xs"
       variant="outline"

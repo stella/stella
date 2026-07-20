@@ -13,6 +13,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { catalogueOptions } from "@/routes/_protected.knowledge/-queries/catalogue";
 
@@ -141,10 +142,13 @@ const ToolDetailContent = ({
     if (entry.kind !== "skill" || entry.installedSkillId === null) {
       return;
     }
-    void navigate({
-      to: "/knowledge/tools/$skillId",
-      params: { skillId: entry.installedSkillId },
-    });
+    detached(
+      navigate({
+        to: "/knowledge/tools/$skillId",
+        params: { skillId: entry.installedSkillId },
+      }),
+      "onEditSkill",
+    );
   };
 
   const onInstall = () => {

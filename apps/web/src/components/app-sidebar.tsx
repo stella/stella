@@ -90,6 +90,7 @@ import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -205,7 +206,7 @@ export function AppSidebar(props: AppSidebarProps) {
   // matter route when the matter the user is viewing is the one deleted.
   const handleMatterDeleted = (workspaceId: string) => {
     if (workspaceMatch?.params.workspaceId === workspaceId) {
-      void navigate({ to: "/workspaces" });
+      detached(navigate({ to: "/workspaces" }), "handleMatterDeleted");
     }
   };
 
@@ -341,15 +342,18 @@ export function AppSidebar(props: AppSidebarProps) {
       />
     ),
     onClick: () => {
-      void navigate({
-        to: "/workspaces/$workspaceId",
-        params: { workspaceId: ws.id },
-      });
+      detached(
+        navigate({
+          to: "/workspaces/$workspaceId",
+          params: { workspaceId: ws.id },
+        }),
+        "onClick",
+      );
     },
   });
 
   const openChat = () => {
-    void navigate({ to: "/chat" });
+    detached(navigate({ to: "/chat" }), "openChat");
   };
 
   const knowledgeRecents: ContextAction[] = [];
@@ -369,7 +373,7 @@ export function AppSidebar(props: AppSidebarProps) {
       label: t(s.titleKey),
       icon: <Icon />,
       onClick: () => {
-        void navigate({ to: s.to });
+        detached(navigate({ to: s.to }), "onClick");
       },
     });
   }
@@ -399,7 +403,7 @@ export function AppSidebar(props: AppSidebarProps) {
     },
     matters: {
       action: () => {
-        void navigate({ to: "/workspaces" });
+        detached(navigate({ to: "/workspaces" }), "action");
       },
       contextMenu: {
         primaryAction: {
@@ -413,13 +417,13 @@ export function AppSidebar(props: AppSidebarProps) {
     },
     caseLaw: {
       action: () => {
-        void navigate({ to: "/law/cases" });
+        detached(navigate({ to: "/law/cases" }), "action");
       },
       contextMenu: {},
     },
     knowledge: {
       action: () => {
-        void navigate({ to: "/knowledge" });
+        detached(navigate({ to: "/knowledge" }), "action");
       },
       contextMenu: {
         recents: knowledgeRecents,
@@ -427,7 +431,7 @@ export function AppSidebar(props: AppSidebarProps) {
     },
     contacts: {
       action: () => {
-        void navigate({ to: "/contacts" });
+        detached(navigate({ to: "/contacts" }), "action");
       },
       contextMenu: {
         primaryAction: {
@@ -435,7 +439,7 @@ export function AppSidebar(props: AppSidebarProps) {
           label: t("navigation.contacts"),
           icon: <UsersIcon />,
           onClick: () => {
-            void navigate({ to: "/contacts" });
+            detached(navigate({ to: "/contacts" }), "onClick");
           },
         },
       },
@@ -451,10 +455,13 @@ export function AppSidebar(props: AppSidebarProps) {
     ...pinned.slice(0, 3).map(
       (ws): NavTarget => ({
         action: () => {
-          void navigate({
-            to: "/workspaces/$workspaceId",
-            params: { workspaceId: ws.id },
-          });
+          detached(
+            navigate({
+              to: "/workspaces/$workspaceId",
+              params: { workspaceId: ws.id },
+            }),
+            "action",
+          );
         },
       }),
     ),
@@ -1088,7 +1095,7 @@ const MatterItem = ({
             autoFocus
             className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
             onBlur={() => {
-              void rename.commit();
+              detached(rename.commit(), "MatterItem");
             }}
             onChange={(e) => rename.setDraft(e.currentTarget.value)}
             onKeyDown={(e) => {
@@ -1358,7 +1365,7 @@ const MatterActivityList = ({
           <Button
             className={ACTIVITY_ROW_CLASS}
             onClick={() => {
-              void refetch();
+              detached(refetch(), "MatterActivityList");
             }}
             size="sm"
             variant="ghost"
@@ -1426,7 +1433,7 @@ const MatterActivityList = ({
               <Button
                 className={ACTIVITY_ROW_CLASS}
                 onClick={() => {
-                  void openEntity(item);
+                  detached(openEntity(item), "MatterActivityList");
                 }}
                 size="sm"
                 variant="ghost"
@@ -1446,7 +1453,7 @@ const MatterActivityList = ({
             )}
             disabled={isFetchingNextPage}
             onClick={() => {
-              void fetchNextPage();
+              detached(fetchNextPage(), "MatterActivityList");
             }}
             size="sm"
             variant="ghost"

@@ -5,6 +5,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { useMountEffect } from "@/hooks/use-effect";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 
 // Redirect from a mounted component instead of throwing from
@@ -34,11 +35,14 @@ function NewWorkspaceChatRedirect() {
     }
 
     didRedirectRef.current = true;
-    void navigate({
-      params: { threadId: createChatThreadId(), workspaceId },
-      replace: true,
-      to: "/chat/workspaces/$workspaceId/$threadId",
-    });
+    detached(
+      navigate({
+        params: { threadId: createChatThreadId(), workspaceId },
+        replace: true,
+        to: "/chat/workspaces/$workspaceId/$threadId",
+      }),
+      "NewWorkspaceChatRedirect",
+    );
   });
 
   return <DefaultPendingComponent />;

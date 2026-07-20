@@ -49,6 +49,7 @@ import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store"
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { detached } from "@/lib/detached";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
 
@@ -191,7 +192,7 @@ export const ReviewBar = ({
         if (event.shiftKey) {
           rejectAndAdvance();
         } else {
-          void acceptAndAdvance();
+          detached(acceptAndAdvance(), "ReviewBar");
         }
         return;
       case "ArrowUp":
@@ -271,7 +272,7 @@ export const ReviewBar = ({
       <Button
         className="h-7 px-2.5 text-xs"
         onClick={() => {
-          void acceptAndAdvance();
+          detached(acceptAndAdvance(), "ReviewBar");
         }}
         size="sm"
         tooltip={`${t("common.accept")} · ${SHORTCUT_HINTS.accept}`}

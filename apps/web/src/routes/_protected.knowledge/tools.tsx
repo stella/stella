@@ -16,6 +16,7 @@ import type {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { BoundedSet } from "@/lib/bounded-set";
+import { detached } from "@/lib/detached";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
@@ -214,9 +215,12 @@ function ToolsPage() {
             title: t("knowledge.mcp.connectedToast"),
             type: "success",
           });
-          void queryClient.invalidateQueries({
-            queryKey: catalogueKeys.list(organizationId),
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: catalogueKeys.list(organizationId),
+            }),
+            "ToolsPage",
+          );
           return;
         }
         stellaToast.add({

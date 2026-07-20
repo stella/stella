@@ -18,6 +18,7 @@ import {
   WINDOWS_EXE_URL,
   WINDOWS_MSI_URL,
 } from "@/lib/desktop-downloads";
+import { detached } from "@/lib/detached";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/settings/account/desktop")({
@@ -122,7 +123,7 @@ function DesktopPage() {
                 <Button
                   loading={selfHostConnectStatus === "connecting"}
                   onClick={() => {
-                    void handleConnectSelfHostedDesktop();
+                    detached(handleConnectSelfHostedDesktop(), "DesktopPage");
                   }}
                   size="lg"
                 >

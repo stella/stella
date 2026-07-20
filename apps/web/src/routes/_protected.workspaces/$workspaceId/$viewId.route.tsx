@@ -13,6 +13,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
@@ -103,32 +104,41 @@ export const Route = createFileRoute(
       const prevWeekEnd = new Date(weekStart);
       prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
 
-      void prefetchRouteQuery(
-        queryClient,
-        timeEntriesOptions(workspaceId, {
-          dateFrom: toISODate(weekStart),
-          dateTo: toISODate(weekEnd),
-        }),
-        (error: unknown) => {
-          getAnalytics().captureError(error);
-        },
+      detached(
+        prefetchRouteQuery(
+          queryClient,
+          timeEntriesOptions(workspaceId, {
+            dateFrom: toISODate(weekStart),
+            dateTo: toISODate(weekEnd),
+          }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "loader",
       );
-      void prefetchRouteQuery(
-        queryClient,
-        timeEntriesOptions(workspaceId, {
-          dateFrom: toISODate(prevWeekStart),
-          dateTo: toISODate(prevWeekEnd),
-        }),
-        (error: unknown) => {
-          getAnalytics().captureError(error);
-        },
+      detached(
+        prefetchRouteQuery(
+          queryClient,
+          timeEntriesOptions(workspaceId, {
+            dateFrom: toISODate(prevWeekStart),
+            dateTo: toISODate(prevWeekEnd),
+          }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "loader",
       );
-      void prefetchRouteQuery(
-        queryClient,
-        workspaceMembersOptions(workspaceId),
-        (error: unknown) => {
-          getAnalytics().captureError(error);
-        },
+      detached(
+        prefetchRouteQuery(
+          queryClient,
+          workspaceMembersOptions(workspaceId),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "loader",
       );
       return;
     }
@@ -301,11 +311,14 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
           <ViewSwitcher
             activeViewId={activeView.id}
             onViewChange={(viewId) => {
-              void navigate({
-                to: "/workspaces/$workspaceId/$viewId",
-                params: { workspaceId, viewId },
-                search: { page: undefined },
-              });
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/$viewId",
+                  params: { workspaceId, viewId },
+                  search: { page: undefined },
+                }),
+                "ViewShell",
+              );
             }}
             workspaceId={workspaceId}
           />

@@ -209,7 +209,7 @@ export const desktopEditSessionEventsHandler = async ({
   }
 
   const refreshLivenessInBackground = () => {
-    void refreshLiveness().catch((error: unknown) => {
+    refreshLiveness().catch((error: unknown) => {
       captureError(error, { sessionId });
     });
   };

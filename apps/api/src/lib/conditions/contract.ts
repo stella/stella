@@ -112,5 +112,6 @@ export const tCondition = t.Object({
 // reverse direction is intentionally omitted: TypeBox optionals drop
 // `| undefined` under exactOptionalPropertyTypes, so canonical->mirror would
 // false-positive without guarding anything the spreads don't already.
-const _mirrorToCanonical = (n: Static<typeof tNodeShape>): ConditionNode => n;
-void _mirrorToCanonical;
+true satisfies [Static<typeof tNodeShape>] extends [ConditionNode]
+  ? true
+  : false;

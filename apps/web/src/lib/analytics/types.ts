@@ -8,7 +8,7 @@ export type WebAnalyticsEvent =
   (typeof WEB_ANALYTICS_EVENTS)[keyof typeof WEB_ANALYTICS_EVENTS];
 
 export type Analytics = {
-  captureError: (error: unknown) => void;
+  captureError: (error: unknown, context?: Record<string, string>) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   identifyUser: (user: AnalyticsUserIdentity) => void;
   reset: (options?: AnalyticsResetOptions) => void;

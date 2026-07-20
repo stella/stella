@@ -13,6 +13,7 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { detached } from "@/lib/detached";
 
 export const LanguagePicker = () => {
   const lang = useI18nStore((s) => s.lang);
@@ -32,7 +33,7 @@ export const LanguagePicker = () => {
           {supportedLanguages.map((code) => (
             <MenuRadioItem
               key={code}
-              onClick={() => void setLang(code)}
+              onClick={() => detached(setLang(code), "LanguagePicker")}
               value={code}
             >
               {LANG_ENDONYMS[code]}

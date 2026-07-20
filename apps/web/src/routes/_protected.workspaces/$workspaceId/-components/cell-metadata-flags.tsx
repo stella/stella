@@ -29,6 +29,7 @@ import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -594,9 +595,12 @@ export const useCellMetadataFlags = ({
     },
     scope: { id: `cell-metadata:${workspaceId}:${entityId}:${propertyId}` },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        "onSuccess",
+      );
     },
     onError: (error) => {
       lastSentRef.current = null;

@@ -3,6 +3,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { commandShortcutRowsFromSkillPages } from "@/components/chat-editor-slash-items";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
 
 import type { ChatPrompt } from "./types";
@@ -41,7 +42,7 @@ export const useSavedPrompts = (): ChatPrompt[] => {
     ) {
       return;
     }
-    void fetchNextPage();
+    detached(fetchNextPage(), "useSavedPrompts");
   }, [activeOrganizationId, fetchNextPage, hasNextPage, isFetchingNextPage]);
   const rows = commandShortcutRowsFromSkillPages(skillPages?.pages);
 

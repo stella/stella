@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { workspaceMembersKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
@@ -27,10 +28,16 @@ export const useAddWorkspaceMember = () => {
       return unwrapEden(response);
     },
     onSuccess: (_data, vars) => {
-      void queryClient.invalidateQueries({
-        queryKey: workspaceMembersKeys.all(vars.workspaceId),
-      });
-      void queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: workspaceMembersKeys.all(vars.workspaceId),
+        }),
+        "onSuccess",
+      );
+      detached(
+        queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
+        "onSuccess",
+      );
     },
     onError: (error) => {
       analytics.captureError(error);

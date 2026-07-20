@@ -25,6 +25,7 @@ import { MatterNumberHint } from "@/components/matter-number-hint";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { LeadSection } from "@/routes/_protected.workspaces/$workspaceId/-components/lead-section";
@@ -157,9 +158,12 @@ export const MatterMetadataPanel = ({
       {
         onSuccess: () => {
           setReferenceDirty(false);
-          void queryClient.invalidateQueries({
-            queryKey: workspacesKeys.byId(workspaceId),
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspacesKeys.byId(workspaceId),
+            }),
+            "onSuccess",
+          );
         },
         onError: (error) => {
           if (APIError.is(error) && error.status === 409) {
@@ -196,14 +200,17 @@ export const MatterMetadataPanel = ({
           });
         },
         onSuccess: () => {
-          void (async () => {
-            stellaToast.update(toastId, {
-              title: t("success.workspaceDeletedSuccessfully"),
-              type: "success",
-            });
-            onDeleted?.();
-            await navigate({ to: "/workspaces" });
-          })();
+          detached(
+            (async () => {
+              stellaToast.update(toastId, {
+                title: t("success.workspaceDeletedSuccessfully"),
+                type: "success",
+              });
+              onDeleted?.();
+              await navigate({ to: "/workspaces" });
+            })(),
+            "onSuccess",
+          );
         },
       },
     );
@@ -242,10 +249,13 @@ export const MatterMetadataPanel = ({
             type: "success",
           });
           setDuplicateMode(null);
-          void navigate({
-            to: "/workspaces/$workspaceId",
-            params: { workspaceId: data.workspaceId },
-          });
+          detached(
+            navigate({
+              to: "/workspaces/$workspaceId",
+              params: { workspaceId: data.workspaceId },
+            }),
+            "onSuccess",
+          );
         },
       },
     );

@@ -111,8 +111,7 @@ const validatedToFieldContent = (validated: ValidatedResult): FieldContent => {
         currency: validated.currency,
       };
     default: {
-      const exhaustive: never = validated;
-      void exhaustive;
+      validated satisfies never;
       return panic("Unexpected validated ASK content type");
     }
   }

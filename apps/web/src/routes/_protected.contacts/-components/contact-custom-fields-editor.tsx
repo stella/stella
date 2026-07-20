@@ -9,6 +9,7 @@ import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import { getContactMetadata } from "@/routes/_protected.contacts/-components/contact-metadata";
 import type {
@@ -107,15 +108,19 @@ export const ContactCustomFieldsEditor = ({
         {t("contacts.customFields.title")}
       </h2>
       <div className="space-y-3">
-        {customFields.map((field) => (
-          <CustomFieldRow
-            disabled={isPending}
-            field={field}
-            key={field.id}
-            onRemove={() => removeCustomField(field.id)}
-            onSave={async (patch) => await updateCustomField(field.id, patch)}
-          />
-        ))}
+        {customFields.map((field) => {
+          const handleSave = async (patch: ContactCustomField) =>
+            await updateCustomField(field.id, patch);
+          return (
+            <CustomFieldRow
+              disabled={isPending}
+              field={field}
+              key={field.id}
+              onRemove={() => removeCustomField(field.id)}
+              onSave={handleSave}
+            />
+          );
+        })}
         {customFields.length === 0 && (
           <p className="text-muted-foreground text-sm">
             {t("contacts.customFields.empty")}
@@ -212,7 +217,7 @@ const CustomFieldRow = ({
         disabled={disabled}
         maxLength={128}
         onBlur={() => {
-          void save();
+          detached(save(), "CustomFieldRow");
         }}
         onChange={(event) => setLabelDraft(event.currentTarget.value)}
         value={label}
@@ -222,7 +227,7 @@ const CustomFieldRow = ({
         disabled={disabled}
         maxLength={2000}
         onBlur={() => {
-          void save();
+          detached(save(), "CustomFieldRow");
         }}
         onChange={(event) => setValueDraft(event.currentTarget.value)}
         value={value}

@@ -20,7 +20,9 @@ import { useDecisionAnalysis } from "@/features/case-law/components/case-viewer/
 import { DecisionText } from "@/features/case-law/components/case-viewer/decision-text";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useCaseSearchStore } from "@/lib/case-search-store";
+import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
+import { forceReflow } from "@/lib/utils";
 
 type DecisionWorkspaceDecision = {
   analysis?: unknown;
@@ -194,7 +196,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
 
   useExternalSyncEffect(() => {
     if (aiEnabled && ast && analysisState.status === "idle") {
-      void generate();
+      detached(generate(), "DecisionWorkspace");
     }
   }, [aiEnabled, analysisState.status, ast, generate]);
 
@@ -219,7 +221,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
         {aiEnabled ? (
           <Button
             onClick={() => {
-              void generate();
+              detached(generate(), "DecisionWorkspace");
             }}
             size="sm"
             variant="outline"
@@ -260,7 +262,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
                 behavior: "instant",
               });
               delete el.dataset["highlight"];
-              void el.offsetWidth;
+              forceReflow(el);
               el.dataset["highlight"] = "";
             }}
             resolvePct={(id, container) => {
@@ -306,7 +308,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
                   <Button
                     className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
                     onClick={() => {
-                      void generate();
+                      detached(generate(), "DecisionWorkspace");
                     }}
                     size="sm"
                     variant="ghost"

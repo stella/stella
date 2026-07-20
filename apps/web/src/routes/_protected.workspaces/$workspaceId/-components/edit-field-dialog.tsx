@@ -20,6 +20,7 @@ import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { detached } from "@/lib/detached";
 import { toFormErrors } from "@/lib/schema";
 import type {
   EntityKind,
@@ -181,9 +182,12 @@ export const EditFieldDialog = ({
               return;
             }
 
-            void startWorkflow({
-              entityIds: [entityId],
-            });
+            detached(
+              startWorkflow({
+                entityIds: [entityId],
+              }),
+              "onSuccess",
+            );
           },
           onSettled: () => {
             setIsOpen(false);
@@ -213,7 +217,7 @@ export const EditFieldDialog = ({
               errors={errors}
               onSubmit={(e) => {
                 e.preventDefault();
-                void form.handleSubmit();
+                detached(form.handleSubmit(), "EditFieldDialog");
               }}
             >
               <DialogHeader>

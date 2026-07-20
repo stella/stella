@@ -69,8 +69,7 @@ export const askPresence = (
     case "clip":
       return "present";
     default: {
-      const exhaustive: never = content;
-      void exhaustive;
+      content satisfies never;
       return "missing";
     }
   }
@@ -101,8 +100,7 @@ export const askText = (content: FieldContent | undefined): string | null => {
     case "unsupported":
       return null;
     default: {
-      const exhaustive: never = content;
-      void exhaustive;
+      content satisfies never;
       return null;
     }
   }
@@ -500,8 +498,7 @@ export const computeVerdictBatch = async ({
         break;
       }
       default: {
-        const exhaustive: never = rule;
-        void exhaustive;
+        rule satisfies never;
         break;
       }
     }

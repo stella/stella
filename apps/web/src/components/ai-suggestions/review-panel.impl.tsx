@@ -62,6 +62,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth";
 import { compareByLocale } from "@/lib/collation";
+import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { sessionOptions } from "@/routes/-queries";
 import {
@@ -452,7 +453,7 @@ export const ReviewPanelImpl = ({
                     item={item}
                     key={item.id}
                     onAccept={() => {
-                      void acceptOne(item);
+                      detached(acceptOne(item), "ReviewPanelImpl");
                     }}
                     onNavigate={() => navigateTo(item)}
                     onReject={() => rejectOne(item)}

@@ -20,6 +20,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { MatterIcon } from "@/components/matter-icon";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
@@ -125,16 +126,19 @@ function ContactDetailPage() {
       { contactId },
       {
         onSuccess: () => {
-          void (async () => {
-            stellaToast.add({
-              title: t("success.contactDeleted"),
-              type: "success",
-            });
-            await queryClient.invalidateQueries({
-              queryKey: contactsKeys.all,
-            });
-            await navigate({ to: "/contacts" });
-          })();
+          detached(
+            (async () => {
+              stellaToast.add({
+                title: t("success.contactDeleted"),
+                type: "success",
+              });
+              await queryClient.invalidateQueries({
+                queryKey: contactsKeys.all,
+              });
+              await navigate({ to: "/contacts" });
+            })(),
+            "onSuccess",
+          );
         },
         onError: (error) => {
           stellaToast.add({
@@ -165,7 +169,10 @@ function ContactDetailPage() {
         <Button
           aria-label={t("common.back")}
           onClick={() => {
-            void (async () => await navigate({ to: "/contacts" }))();
+            detached(
+              (async () => await navigate({ to: "/contacts" }))(),
+              "ContactDetailPage",
+            );
           }}
           size="icon-xs"
           variant="ghost"

@@ -44,6 +44,7 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
@@ -645,7 +646,7 @@ export const ExistingFileOrganizerDialog = ({
               }
             }}
             onRegenerate={() => {
-              void requestAiSuggestions();
+              detached(requestAiSuggestions(), "ExistingFileOrganizerDialog");
             }}
             onToggle={() => setShowInstructions((current) => !current)}
             value={userInstructions}
@@ -654,7 +655,7 @@ export const ExistingFileOrganizerDialog = ({
             <FailureBanner
               disabled={false}
               onRetry={() => {
-                void requestAiSuggestions();
+                detached(requestAiSuggestions(), "ExistingFileOrganizerDialog");
               }}
             />
           )}
@@ -693,7 +694,7 @@ export const ExistingFileOrganizerDialog = ({
               className="me-auto"
               disabled={isGeneratingSuggestions || rows.length === 0}
               onClick={() => {
-                void requestAiSuggestions();
+                detached(requestAiSuggestions(), "ExistingFileOrganizerDialog");
               }}
               type="button"
               variant="outline"

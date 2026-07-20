@@ -172,7 +172,7 @@ export const createPostHogAnalytics = (
   });
 
   const analytics: Analytics = {
-    captureError: (error) => {
+    captureError: (error, context) => {
       // Cheap guards before the SDK call: a stray `captureError(null)`
       // or `captureError(undefined)` would otherwise reach PostHog as
       // `Error: "undefined"` noise that the `before_send` filter then
@@ -184,7 +184,7 @@ export const createPostHogAnalytics = (
       ) {
         return;
       }
-      logDevError(error);
+      logDevError(error, context);
       posthog.captureException(toRedactedTelemetryError(error));
     },
     capturePageViewed: ({ path }) => {

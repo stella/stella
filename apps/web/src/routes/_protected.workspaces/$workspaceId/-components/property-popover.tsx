@@ -16,6 +16,7 @@ import { Separator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
@@ -123,9 +124,12 @@ export const PropertyPopover = ({
       return unwrapEden(response);
     },
     onSuccess: (data, { action, scoped, set }) => {
-      void queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        "onSuccess",
+      );
       setIsOpen(false);
       if (!set || data.updatedCount === 0) {
         return;
@@ -227,7 +231,7 @@ export const PropertyPopover = ({
           content: property.content,
           tool: { ...tool, dependencies: nextDependencies },
         });
-        void startWorkflow();
+        detached(startWorkflow(), "replaceDependency");
       } catch {
         stellaToast.add({
           title: t("errors.actionFailed"),
@@ -337,7 +341,7 @@ export const PropertyPopover = ({
                 <Button
                   className="justify-start gap-1.5 font-normal"
                   onClick={() => {
-                    void rerunProperty();
+                    detached(rerunProperty(), "PropertyPopover");
                   }}
                   size="sm"
                   variant="ghost"

@@ -13,6 +13,7 @@ import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -195,7 +196,7 @@ export const SkillResourcePanel = ({
       queue.pending = editorMarkdown;
       return;
     }
-    void runSaveLoop(editorMarkdown);
+    detached(runSaveLoop(editorMarkdown), "persistMarkdown");
   };
 
   return (
@@ -220,7 +221,7 @@ export const SkillResourcePanel = ({
                     aria-label={t("common.save")}
                     disabled={saving || draft === tab.content}
                     onClick={() => {
-                      void save();
+                      detached(save(), "SkillResourcePanel");
                     }}
                     size="xs"
                   >

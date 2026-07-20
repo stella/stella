@@ -261,7 +261,7 @@ const importHandler = async function* ({
     );
 
     for (const c of newClauses) {
-      void updateSearchVector(safeDb, c.id, c.title, c.description, c.body)
+      updateSearchVector(safeDb, c.id, c.title, c.description, c.body)
         .then((searchVectorResult) => {
           if (Result.isError(searchVectorResult)) {
             captureError(searchVectorResult.error, { clauseId: c.id });

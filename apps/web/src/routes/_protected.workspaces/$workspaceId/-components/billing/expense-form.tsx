@@ -18,6 +18,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { detached } from "@/lib/detached";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 
 const EXPENSE_CATEGORIES = [
@@ -108,7 +109,7 @@ export const ExpenseForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        void form.handleSubmit();
+        detached(form.handleSubmit(), "ExpenseForm");
       }}
     >
       <div className="flex flex-col gap-1.5">

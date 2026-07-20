@@ -22,6 +22,7 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
@@ -182,9 +183,12 @@ const InlineEditor = ({
       return unwrapEden(response);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: entitiesKeys.all(workspaceId),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        "onSuccess",
+      );
       // Manual edit on an AI-extraction cell should latch the
       // cell so the next workflow sweep doesn't overwrite what
       // the user just wrote. Manual-input cells pass no callback
@@ -196,7 +200,7 @@ const InlineEditor = ({
         return;
       }
       // Trigger dependent AI columns after manual edit
-      void startWorkflow({ entityIds: [entityId] });
+      detached(startWorkflow({ entityIds: [entityId] }), "onSuccess");
     },
     onError: () => {
       stellaToast.add({

@@ -15,6 +15,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -283,7 +284,7 @@ const CreateCodeForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        void form.handleSubmit();
+        detached(form.handleSubmit(), "CreateCodeForm");
       }}
     >
       <div className="flex gap-3">

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 
@@ -49,11 +50,20 @@ export const useInstallEntry = (organizationId: string) => {
       return unwrapEden(response);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: catalogueKeys.list(organizationId),
-      });
-      void queryClient.invalidateQueries({ queryKey: ["mcp"] });
-      void queryClient.invalidateQueries({ queryKey: ["skills"] });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: catalogueKeys.list(organizationId),
+        }),
+        "onSuccess",
+      );
+      detached(
+        queryClient.invalidateQueries({ queryKey: ["mcp"] }),
+        "onSuccess",
+      );
+      detached(
+        queryClient.invalidateQueries({ queryKey: ["skills"] }),
+        "onSuccess",
+      );
     },
   });
 };

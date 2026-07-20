@@ -23,6 +23,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 // -- Auto-scrolling board container with forgiving column drop --
@@ -331,9 +332,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       },
       {
         onSuccess: () => {
-          void queryClient.invalidateQueries({
-            queryKey: entitiesKeys.all(workspaceId),
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: entitiesKeys.all(workspaceId),
+            }),
+            "onSuccess",
+          );
         },
       },
     );
@@ -579,15 +583,21 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
                 : undefined
             }
             onCreate={(kind) => {
-              void handleCreate({
-                kind,
-                taskStatus:
-                  isStatusGrouping && value !== null ? value : undefined,
-              });
+              detached(
+                handleCreate({
+                  kind,
+                  taskStatus:
+                    isStatusGrouping && value !== null ? value : undefined,
+                }),
+                "KanbanView",
+              );
             }}
             onDrop={(entityId) => handleDrop(value, entityId)}
             onFileUpload={(files) => {
-              void (async () => await handleFileUpload(value, files))();
+              detached(
+                (async () => await handleFileUpload(value, files))(),
+                "KanbanView",
+              );
             }}
             onHideColumn={
               value !== null ? () => handleHideColumn(value) : undefined
@@ -659,7 +669,7 @@ const KanbanGroupColumn = ({
       isLoadingMore={query.isFetchingNextPage}
       onLoadMore={() => {
         if (query.hasNextPage && !query.isFetchingNextPage) {
-          void query.fetchNextPage();
+          detached(query.fetchNextPage(), "KanbanGroupColumn");
         }
       }}
       workspaceId={workspaceId}

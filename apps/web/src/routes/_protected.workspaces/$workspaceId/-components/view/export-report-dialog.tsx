@@ -30,6 +30,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -362,7 +363,7 @@ const ExportReportDialogBody = ({
               className="self-start"
               disabled={customizing}
               onClick={() => {
-                void handleCustomize();
+                detached(handleCustomize(), "ExportReportDialogBody");
               }}
               size="sm"
               type="button"
@@ -439,7 +440,7 @@ const ExportReportDialogBody = ({
         <Button
           disabled={submitting || !resolvedValue}
           onClick={() => {
-            void handleSubmit();
+            detached(handleSubmit(), "ExportReportDialogBody");
           }}
           type="button"
         >

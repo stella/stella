@@ -65,6 +65,7 @@ import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import { modelOptionsOptions } from "@/routes/_protected.chat/-queries";
 import {
@@ -558,7 +559,7 @@ const ComposerSkillsSubmenu = ({
           <MenuItem
             disabled={isFetchingNextPage}
             onClick={() => {
-              void fetchNextPage();
+              detached(fetchNextPage(), "ComposerSkillsSubmenu");
             }}
           >
             {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
@@ -567,10 +568,13 @@ const ComposerSkillsSubmenu = ({
         <MenuSeparator />
         <MenuItem
           onClick={() => {
-            void navigate({
-              to: "/knowledge/tools",
-              search: { kind: "skill" },
-            });
+            detached(
+              navigate({
+                to: "/knowledge/tools",
+                search: { kind: "skill" },
+              }),
+              "ComposerSkillsSubmenu",
+            );
           }}
         >
           {t("chat.composerMenu.openSkills")}
@@ -881,7 +885,10 @@ const ComposerMcpSubmenu = ({
     : connectors;
 
   const openMcpSettings = () => {
-    void navigate({ to: "/knowledge/tools", search: { kind: "mcp" } });
+    detached(
+      navigate({ to: "/knowledge/tools", search: { kind: "mcp" } }),
+      "openMcpSettings",
+    );
   };
 
   const handleToggle = async (connectionId: string, nextEnabled: boolean) => {
@@ -897,9 +904,12 @@ const ComposerMcpSubmenu = ({
       stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
       return;
     }
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.mcp.connections(activeOrganizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.mcp.connections(activeOrganizationId),
+      }),
+      "handleToggle",
+    );
   };
 
   let mcpRowsContent: React.ReactNode;
@@ -931,7 +941,10 @@ const ComposerMcpSubmenu = ({
           closeOnClick={false}
           key={connector.id}
           onClick={() => {
-            void handleToggle(connection.id, !connection.enabled);
+            detached(
+              handleToggle(connection.id, !connection.enabled),
+              "ComposerMcpSubmenu",
+            );
           }}
         >
           <BidiText as="span" className="truncate">

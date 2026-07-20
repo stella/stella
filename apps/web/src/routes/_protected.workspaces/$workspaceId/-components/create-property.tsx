@@ -27,6 +27,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -573,7 +574,7 @@ const PropertyComposerBody = ({
             // the prompt, type, options, or dependencies may have
             // changed; manual properties don't have a workflow.
             if (nextTool.type === "ai-model") {
-              void startWorkflow();
+              detached(startWorkflow(), "onSuccess");
             }
             onClose();
           },
@@ -631,7 +632,7 @@ const PropertyComposerBody = ({
             extractionContext && extractionContext.filePropertyId !== null
               ? { entityIds: [extractionContext.entityId] }
               : undefined;
-          void startWorkflow(workflowArgs);
+          detached(startWorkflow(workflowArgs), "onSuccess");
           onClose();
           onCreated?.(result);
         },
