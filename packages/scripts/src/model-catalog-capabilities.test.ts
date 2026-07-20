@@ -63,6 +63,46 @@ describe("parseUpstreamCapabilities", () => {
     expect(parseUpstreamCapabilities({})).toBeNull();
     expect(parseUpstreamCapabilities("not-an-object")).toBeNull();
   });
+
+  test("folds a toggle option into the effort set as none", () => {
+    // A separate { type: "toggle" } means reasoning can be disabled
+    // even when the effort list omits "none"; without the fold, a
+    // representational shift upstream would read as false drift.
+    expect(
+      parseUpstreamCapabilities({
+        reasoning: true,
+        reasoning_options: [
+          { type: "toggle" },
+          { type: "effort", values: ["low", "medium", "high"] },
+        ],
+      }),
+    ).toEqual({
+      reasoning: true,
+      effortValues: ["none", "low", "medium", "high"],
+      temperature: null,
+    });
+    // Toggle-only models have no effort vocabulary to send.
+    expect(
+      parseUpstreamCapabilities({
+        reasoning: true,
+        reasoning_options: [{ type: "toggle" }],
+      }),
+    ).toEqual({ reasoning: true, effortValues: null, temperature: null });
+    // No duplicate "none" when the effort list already has it.
+    expect(
+      parseUpstreamCapabilities({
+        reasoning: true,
+        reasoning_options: [
+          { type: "toggle" },
+          { type: "effort", values: ["none", "high"] },
+        ],
+      }),
+    ).toEqual({
+      reasoning: true,
+      effortValues: ["none", "high"],
+      temperature: null,
+    });
+  });
 });
 
 describe("validateCapabilities", () => {
@@ -202,5 +242,18 @@ describe("validateCapabilities", () => {
     expect(result.skipped).toEqual([
       { provider: "google", modelId: "gemini-3.5-flash" },
     ]);
+  });
+
+  test("silently skips override-declared ids instead of warning nightly", () => {
+    const result = validateCapabilities({
+      entries: [{ provider: "google", modelId: "gemini-3.5-flash" }],
+      checkableProviders: CHECKABLE,
+      upstream: upstreamOf({}),
+      declaredEfforts: DECLARED_EFFORTS,
+      declaredTemperature: DECLARED_TEMPERATURE,
+      overriddenIds: new Set(["gemini-3.5-flash"]),
+    });
+    expect(result.failures).toEqual([]);
+    expect(result.skipped).toEqual([]);
   });
 });

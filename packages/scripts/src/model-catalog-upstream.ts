@@ -36,6 +36,7 @@
  */
 import {
   BYOK_MODEL_OPTIONS,
+  CAPABILITY_OVERRIDES,
   DEFAULT_MODELS,
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
@@ -95,6 +96,7 @@ const FIRST_PARTY_KEYS = new Set(Object.values(MODELS_DEV_PROVIDER));
 const CAPABILITY_CHECK_PROVIDERS: Record<string, string> = {
   ...MODELS_DEV_PROVIDER,
   openrouter: "openrouter",
+  bedrock: "amazon-bedrock",
 };
 
 /**
@@ -267,7 +269,11 @@ const loadUpstream = async (): Promise<Upstream> => {
       for (const [modelId, modelVal] of Object.entries(providerVal["models"])) {
         canonAll.add(canonical(modelId));
         count += 1;
-        if (isFirstParty || providerKey === "openrouter") {
+        if (
+          isFirstParty ||
+          providerKey === "openrouter" ||
+          providerKey === "amazon-bedrock"
+        ) {
           const reasoning = parseUpstreamCapabilities(modelVal);
           if (reasoning !== null) {
             capabilityMeta.set(`${providerKey}:${modelId}`, reasoning);
@@ -426,12 +432,25 @@ const main = async (): Promise<void> => {
 
   const capabilityFailures: CapabilityFailure[] = [];
   if (upstream.modelsDevReachable) {
+    // Bedrock ids are excluded from the existence/rate entries
+    // (CUSTOM_ID_PROVIDERS) but their generated capability rows come
+    // from the models.dev amazon-bedrock catalog, so include them in
+    // the capability drift check; override-declared ids (absent
+    // upstream by definition) are skipped inside the validator.
+    const capabilityEntries = [
+      ...entries,
+      ...BYOK_MODEL_OPTIONS.bedrock.map((modelId) => ({
+        provider: "bedrock",
+        modelId,
+      })),
+    ];
     const capabilityCheck = validateCapabilities({
-      entries,
+      entries: capabilityEntries,
       checkableProviders: CAPABILITY_CHECK_PROVIDERS,
       upstream: upstream.capabilityMeta,
       declaredEfforts: MODEL_REASONING_EFFORTS,
       declaredTemperature: MODEL_TEMPERATURE_SUPPORT,
+      overriddenIds: new Set(Object.keys(CAPABILITY_OVERRIDES)),
     });
     for (const failure of capabilityCheck.failures) {
       // ACKNOWLEDGED is intentionally empty by default — see the note

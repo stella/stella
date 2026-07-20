@@ -56,10 +56,18 @@ export const parseUpstreamCapabilities = (
   }
   const options = modelVal["reasoning_options"];
   let effortValues: readonly string[] | null = null;
+  let hasToggle = false;
   if (Array.isArray(options)) {
     for (const option of options) {
+      if (!isObject(option)) {
+        continue;
+      }
+      if (option["type"] === "toggle") {
+        hasToggle = true;
+        continue;
+      }
       if (
-        isObject(option) &&
+        effortValues === null &&
         option["type"] === "effort" &&
         Array.isArray(option["values"])
       ) {
@@ -67,9 +75,16 @@ export const parseUpstreamCapabilities = (
           (value): value is string => typeof value === "string",
         );
         effortValues = values.length > 0 ? values : null;
-        break;
       }
     }
+  }
+  // A separate `{ type: "toggle" }` option means reasoning can be
+  // disabled even when the effort list omits "none"; fold it in so a
+  // representational shift upstream does not read as false drift.
+  // Toggle-only models (no effort list) stay `null`: there is no
+  // effort vocabulary to send.
+  if (hasToggle && effortValues !== null && !effortValues.includes("none")) {
+    effortValues = ["none", ...effortValues];
   }
   return {
     reasoning: modelVal["reasoning"],
@@ -104,6 +119,12 @@ export type ValidateCapabilitiesOptions = {
   upstream: ReadonlyMap<string, UpstreamCapabilities>;
   declaredEfforts: Readonly<Record<string, readonly ReasoningEffort[] | null>>;
   declaredTemperature: Readonly<Record<string, boolean>>;
+  /**
+   * Model ids declared via `CAPABILITY_OVERRIDES` because the upstream
+   * source does not cover them; skipped silently instead of being
+   * reported as unverifiable every night.
+   */
+  overriddenIds?: ReadonlySet<string>;
 };
 
 const formatValues = (values: readonly string[] | null): string =>
@@ -115,6 +136,7 @@ export const validateCapabilities = ({
   upstream,
   declaredEfforts,
   declaredTemperature,
+  overriddenIds,
 }: ValidateCapabilitiesOptions): CapabilityCheckResult => {
   const failures: CapabilityFailure[] = [];
   const skipped: CatalogEntry[] = [];
@@ -122,6 +144,9 @@ export const validateCapabilities = ({
   for (const entry of entries) {
     const mdProvider = checkableProviders[entry.provider];
     if (mdProvider === undefined) {
+      continue;
+    }
+    if (overriddenIds?.has(entry.modelId)) {
       continue;
     }
     const efforts = declaredEfforts[entry.modelId];

@@ -216,6 +216,37 @@ describe("TanStack AI structured output generation", () => {
     expect(options).toEqual({ max_tokens: 1000 });
   });
 
+  test("keeps call-site temperature out of Anthropic thinking requests", () => {
+    // Anthropic extended thinking rejects temperature modifications
+    // even on models that accept temperature otherwise
+    // (claude-sonnet-4-6). The builder deliberately omits temperature
+    // for the reasoning role, and the merge must not re-add the
+    // caller's value on top of `thinking`.
+    // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+    // The adapter is irrelevant for this pure option-merge test.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    const model = {
+      adapter: {},
+      keySource: "instance",
+      modelId: "claude-sonnet-4-6",
+      modelOptions: { thinking: { type: "adaptive" } },
+      provider: "anthropic",
+    } as ResolvedTanStackTextModel;
+
+    const options = mergeGenerationOptions({
+      caching: noCaching,
+      maxOutputTokens: 1000,
+      model,
+      serviceTier: "standard",
+      temperature: 0,
+    });
+
+    expect(options).toEqual({
+      max_tokens: 1000,
+      thinking: { type: "adaptive" },
+    });
+  });
+
   test("enables OpenAI prompt caching without sending a model-specific retention value", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge regression test.
@@ -260,7 +291,7 @@ describe("TanStack AI structured output generation", () => {
       adapter: {},
       keySource: "instance",
       modelId: "google/gemini-3.5-flash",
-      modelOptions: {},
+      modelOptions: { temperature: 0 },
       provider: "openrouter",
     } as ResolvedTanStackTextModel;
 
@@ -296,7 +327,7 @@ describe("TanStack AI structured output generation", () => {
       // A catalogued id: caller temperature only survives the
       // capability gate for models with declared support.
       modelId: "gemini-3.1-pro-preview",
-      modelOptions: {},
+      modelOptions: { temperature: 0 },
       provider: "google",
     } as ResolvedTanStackTextModel;
 

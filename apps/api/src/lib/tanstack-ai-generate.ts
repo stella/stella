@@ -9,7 +9,6 @@ import type {
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import * as v from "valibot";
 
-import { supportsTemperature } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 
 import type {
@@ -630,20 +629,26 @@ export const mergeGenerationOptions = ({
   serviceTier: AIRequestServiceTier;
   temperature: number | undefined;
 }): TanStackModelOptions => {
-  // Caller temperature overrides only reach models with declared
-  // temperature support; sampling-rejecting and unknown models keep
-  // provider defaults (same capability gate as the role builders).
-  // The suppression is logged so a caller's explicit setting never
-  // disappears without a trace.
-  const temperatureSupported = supportsTemperature(model.modelId);
-  if (temperature !== undefined && !temperatureSupported) {
+  // Caller temperature overrides only apply where the role builder
+  // itself emitted a temperature. Builder omission is always
+  // deliberate — the model rejects sampling overrides
+  // (`MODEL_TEMPERATURE_SUPPORT`), the id is uncatalogued, or the
+  // role runs a thinking/reasoning mode that is incompatible with
+  // temperature (Anthropic extended thinking rejects it even on
+  // models that accept temperature otherwise). The suppression is
+  // logged so a caller's explicit setting never disappears without a
+  // trace.
+  const builderEmittedTemperature = "temperature" in model.modelOptions;
+  if (temperature !== undefined && !builderEmittedTemperature) {
     logger.debug("tanstack_ai.temperature_suppressed", {
       "ai.model": model.modelId,
       "ai.provider": model.provider,
     });
   }
   const temperatureOverride =
-    temperature !== undefined && temperatureSupported ? { temperature } : {};
+    temperature !== undefined && builderEmittedTemperature
+      ? { temperature }
+      : {};
   switch (model.provider) {
     case "google":
       return {
