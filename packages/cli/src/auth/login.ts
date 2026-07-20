@@ -191,6 +191,11 @@ const awaitAuthorizationCode = async (
     // agent sandbox). Waiting out the full loopback timeout first would strand
     // the user for minutes on a callback that can never arrive, so fall back to
     // the manual paste immediately.
+    //
+    // Closing first is required, not tidiness: the listener is an open
+    // `http.Server` with no `unref()`, so leaving it bound keeps the event loop
+    // alive and the CLI never exits, even once the pasted code succeeds.
+    listener.close();
     io.print(
       "Could not open a browser on this machine; complete sign-in in any browser, then paste the redirected URL (or just the code) below.",
     );
