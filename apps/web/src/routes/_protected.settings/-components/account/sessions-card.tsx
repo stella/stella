@@ -63,7 +63,10 @@ export const SessionsCard = () => {
       <FrameHeader>
         <FrameTitle>{t("common.sessions")}</FrameTitle>
       </FrameHeader>
-      <FramePanel>
+      {/* `p-0`: FramePanel pads by 5 for prose-style panels, which would inset
+          the table. The rows carry their own cell padding, so the panel only
+          needs to supply the card surface. */}
+      <FramePanel className="p-0">
         {hasOtherSessions && (
           <div className="flex justify-end p-4 pb-0">
             <RevokeAllDialog />
