@@ -47,15 +47,16 @@ void mock.module("./loopback-listener.js", () => ({
 // `openCommandFor` intact) and never let this file actually launch a browser.
 const realBrowser = await import("./browser-open.js");
 let onBrowserOpen: (authorizeUrl: string) => void | Promise<void> = () => {};
-// Whether the simulated launch succeeded. `false` models a machine with no
-// usable browser (headless server, SSH, container) where the opener exits
-// nonzero or fails to spawn.
-let browserOpenSucceeds = true;
+// Simulated launch outcome. `failed` models a machine with no usable browser
+// (headless server, SSH, container) where the opener exits nonzero or fails to
+// spawn; `unknown` models an opener that never settled within its timeout, as a
+// slow desktop portal or a long-lived `xdg-open` does.
+let browserLaunchStatus: "opened" | "failed" | "unknown" = "opened";
 void mock.module("./browser-open.js", () => ({
   ...realBrowser,
   openInBrowser: async (url: string) => {
     await onBrowserOpen(url);
-    return browserOpenSucceeds;
+    return { status: browserLaunchStatus };
   },
 }));
 
@@ -193,7 +194,7 @@ describe("login orchestration", () => {
     configDir = await mkdtemp(path.join(os.tmpdir(), "stella-cli-login-"));
     loopbackMode = "real";
     onBrowserOpen = () => {};
-    browserOpenSucceeds = true;
+    browserLaunchStatus = "opened";
   });
 
   afterEach(async () => {
@@ -208,7 +209,7 @@ describe("login orchestration", () => {
   afterAll(() => {
     loopbackMode = "real";
     onBrowserOpen = () => {};
-    browserOpenSucceeds = true;
+    browserLaunchStatus = "opened";
     mock.restore();
   });
 
@@ -270,7 +271,7 @@ describe("login orchestration", () => {
   // redirect that could never arrive until LOGIN_TIMEOUT_MS (5 minutes)
   // elapsed. The failed launch must divert to the manual paste straight away.
   test("falls back to manual paste immediately when the browser cannot be opened", async () => {
-    browserOpenSucceeds = false;
+    browserLaunchStatus = "failed";
     const provider = startProvider();
 
     try {
@@ -284,6 +285,29 @@ describe("login orchestration", () => {
       expect(provider.counts.token).toBe(1);
       // Nowhere near the 5-minute loopback wait the old code would have taken.
       expect(Date.now() - startedAt).toBeLessThan(LOGIN_TIMEOUT_MS);
+    } finally {
+      provider.close();
+    }
+  });
+
+  // The opener returns `unknown` when it has not settled within its own
+  // timeout, which is the normal shape of a slow desktop portal or an
+  // `xdg-open` that lives as long as the browser. A browser almost certainly
+  // did open, so this must NOT divert to the manual paste: doing so would
+  // abandon a loopback redirect that is still on its way.
+  test("keeps waiting on the loopback redirect when the launch is unknown", async () => {
+    browserLaunchStatus = "unknown";
+    const provider = startProvider();
+    onBrowserOpen = driveCallback();
+
+    try {
+      const result = await login(
+        makeProcess(),
+        baseOptions(configDir, provider.url),
+      );
+
+      expect(Result.isOk(result)).toBe(true);
+      expect(provider.counts.token).toBe(1);
     } finally {
       provider.close();
     }

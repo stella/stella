@@ -177,7 +177,7 @@ const awaitAuthorizationCode = async (
   // Awaiting is safe (and required to react to a failed launch): the loopback
   // listener is already bound by the time we get here, so a redirect that
   // arrives while the opener is still settling is queued, not missed.
-  const browserOpened = await openInBrowser(authorizeUrl);
+  const launch = await openInBrowser(authorizeUrl);
 
   if (!listener) {
     io.print(
@@ -186,11 +186,16 @@ const awaitAuthorizationCode = async (
     return awaitManualCode(io, redirectUri, expectedState);
   }
 
-  if (!browserOpened) {
-    // No browser on this machine (headless server, SSH session, container,
-    // agent sandbox). Waiting out the full loopback timeout first would strand
-    // the user for minutes on a callback that can never arrive, so fall back to
-    // the manual paste immediately.
+  if (launch.status === "failed") {
+    // Definitely no usable browser here (headless server, SSH session,
+    // container, agent sandbox). Waiting out the full loopback timeout first
+    // would strand the user for minutes on a callback that can never arrive,
+    // so fall back to the manual paste immediately.
+    //
+    // Only `failed` diverts. An `unknown` launch — the opener had not settled
+    // within its timeout, as a slow desktop portal or an `xdg-open` that lives
+    // as long as the browser both do — very likely DID open a browser, so it
+    // falls through to the loopback wait, which has its own timeout fallback.
     //
     // Closing first is required, not tidiness: the listener is an open
     // `http.Server` with no `unref()`, so leaving it bound keeps the event loop

@@ -18,10 +18,28 @@ export const openCommandFor = (
   return ["xdg-open"];
 };
 
-export const openInBrowser = async (url: string): Promise<boolean> => {
+/**
+ * Outcome of a launch attempt.
+ *
+ * Deliberately three states rather than a boolean: "the opener did not settle
+ * within the timeout" is NOT the same as "there is no browser". A slow desktop
+ * portal or an `xdg-open` that only exits once the browser closes both land in
+ * `unknown`, and the browser is very likely opening anyway — so callers must
+ * keep waiting on the loopback redirect there, and may only fall back to a
+ * manual paste on a definite `failed`.
+ */
+export type BrowserLaunch = {
+  readonly status: "opened" | "failed" | "unknown";
+};
+
+const LAUNCH_OPENED: BrowserLaunch = { status: "opened" };
+const LAUNCH_FAILED: BrowserLaunch = { status: "failed" };
+const LAUNCH_UNKNOWN: BrowserLaunch = { status: "unknown" };
+
+export const openInBrowser = async (url: string): Promise<BrowserLaunch> => {
   const command = openCommandFor(process.platform);
   if (!command) {
-    return false;
+    return LAUNCH_FAILED;
   }
 
   // `command` always has at least one element (see `openCommandFor`); append
@@ -41,14 +59,16 @@ export const openInBrowser = async (url: string): Promise<boolean> => {
   // and bound the wait so a hung opener can never stall the CLI. Each executor
   // resolves exactly once; `Promise.race` takes whichever settles first.
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const exited = new Promise<boolean>((resolve) => {
-    child.on("exit", (code) => resolve(code === 0));
+  const exited = new Promise<BrowserLaunch>((resolve) => {
+    child.on("exit", (code) =>
+      resolve(code === 0 ? LAUNCH_OPENED : LAUNCH_FAILED),
+    );
   });
-  const errored = new Promise<boolean>((resolve) => {
-    child.on("error", () => resolve(false));
+  const errored = new Promise<BrowserLaunch>((resolve) => {
+    child.on("error", () => resolve(LAUNCH_FAILED));
   });
-  const timedOut = new Promise<boolean>((resolve) => {
-    timer = setTimeout(() => resolve(false), OPEN_TIMEOUT_MS);
+  const timedOut = new Promise<BrowserLaunch>((resolve) => {
+    timer = setTimeout(() => resolve(LAUNCH_UNKNOWN), OPEN_TIMEOUT_MS);
   });
 
   try {
