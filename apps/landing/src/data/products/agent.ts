@@ -46,7 +46,7 @@ export const agent: Product = {
     },
     {
       title: "Grounded by citations",
-      body: "Answers link back to the underlying text instead of free-floating summaries.",
+      body: "Answers link back to the source, and a citation opens the document at the exact passage.",
     },
   ],
   sections: [
@@ -59,7 +59,7 @@ export const agent: Product = {
       ],
       media: {
         type: "story",
-        sceneId: "agent",
+        sceneId: "review",
         aspect: "16 / 10",
       },
       frameVariant: "ripple",
@@ -69,12 +69,11 @@ export const agent: Product = {
       bullets: [
         "Each action waits for your approval before it runs",
         "A source preview shows what the agent read for every step",
-        "Answers are grounded by citations you can open and verify",
+        "Citations open the source document at the exact passage",
       ],
       media: {
-        type: "story",
-        sceneId: "agent",
-        aspect: "16 / 10",
+        type: "preview",
+        key: "agent-answer",
       },
       frameVariant: "bloom",
     },
@@ -141,6 +140,11 @@ export const agent: Product = {
       type: "source",
       path: "apps/api/src/handlers/chat/send-message.ts",
       contains: ["export default sendMessage"],
+    },
+    {
+      type: "source",
+      path: "apps/web/src/components/inspector/inspector-store.ts",
+      contains: ["requestBlockScroll", "exact-passage"],
     },
   ],
   cta: {

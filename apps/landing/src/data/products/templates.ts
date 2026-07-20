@@ -74,8 +74,9 @@ export const templates: Product = {
         "One template covers several variants",
       ],
       media: {
-        type: "preview",
-        key: "template-editor",
+        type: "story",
+        sceneId: "templates",
+        aspect: "16 / 10",
       },
       frameVariant: "wash",
     },
@@ -87,8 +88,9 @@ export const templates: Product = {
         "Keep editing the result alongside the matter's files",
       ],
       media: {
-        type: "preview",
-        key: "template-editor",
+        type: "story",
+        sceneId: "editor",
+        aspect: "16 / 10",
       },
       frameVariant: "bloom",
     },
