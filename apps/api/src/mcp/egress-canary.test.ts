@@ -118,7 +118,7 @@ void mock.module("@/api/lib/search/provider", () => ({
   getSearchProvider: () => ({ search: searchProviderSearchMock }),
 }));
 
-void mock.module("@/api/handlers/workspaces/read-by-id", () => ({
+void mock.module("@/api/handlers/workspaces/get", () => ({
   readWorkspaceHandler: readWorkspaceHandlerMock,
 }));
 

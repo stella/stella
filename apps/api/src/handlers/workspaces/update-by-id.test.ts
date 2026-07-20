@@ -4,7 +4,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import updateWorkspace from "./update-by-id";
+import updateWorkspace from "./update";
 
 type UpdateWorkspaceCtx = Parameters<typeof updateWorkspace.handler>[0];
 

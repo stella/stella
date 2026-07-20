@@ -1,10 +1,10 @@
 import Elysia from "elysia";
 
 import createFlowDefinition from "@/api/handlers/flows/create";
-import deleteFlowDefinition from "@/api/handlers/flows/delete-by-id";
-import getFlowDefinition from "@/api/handlers/flows/read-by-id";
-import listFlowDefinitions from "@/api/handlers/flows/read-list";
-import updateFlowDefinition from "@/api/handlers/flows/update-by-id";
+import deleteFlowDefinition from "@/api/handlers/flows/delete";
+import getFlowDefinition from "@/api/handlers/flows/get";
+import listFlowDefinitions from "@/api/handlers/flows/list";
+import updateFlowDefinition from "@/api/handlers/flows/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 /** Org-scoped flow definition CRUD (the "Workflows" recipes). */

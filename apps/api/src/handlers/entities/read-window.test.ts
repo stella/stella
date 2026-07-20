@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import readEntities from "./read";
+import readEntities from "./list";
 import readKanbanGroup from "./read-kanban-group";
 import readEntitiesWindow from "./read-window";
 import { encodeEntitiesWindowCursor } from "./window-cursor";

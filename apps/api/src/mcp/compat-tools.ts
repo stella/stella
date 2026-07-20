@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { entities, extractedContent, fields } from "@/api/db/schema";
-import { readEntityByIdHandler } from "@/api/handlers/entities/read-by-id";
+import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";

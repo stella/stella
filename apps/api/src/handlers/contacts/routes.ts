@@ -2,11 +2,11 @@ import Elysia from "elysia";
 
 import businessRegistriesLookup from "@/api/handlers/contacts/business-registries-lookup";
 import createContact from "@/api/handlers/contacts/create";
-import deleteContactById from "@/api/handlers/contacts/delete-by-id";
-import readContacts from "@/api/handlers/contacts/read";
-import readContactById from "@/api/handlers/contacts/read-by-id";
+import deleteContactById from "@/api/handlers/contacts/delete";
+import readContactById from "@/api/handlers/contacts/get";
+import readContacts from "@/api/handlers/contacts/list";
 import searchContacts from "@/api/handlers/contacts/search";
-import updateContactById from "@/api/handlers/contacts/update-by-id";
+import updateContactById from "@/api/handlers/contacts/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 const contactIdParams = readContactById.config.params;

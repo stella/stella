@@ -4105,11 +4105,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "read-by-id": {
+        get: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["legislation", "read-by-id"],
-            capabilityId: "legislation.read-by-id",
+            commandPath: ["legislation", "get"],
+            capabilityId: "legislation.get",
             access: "read",
             flags: [
               {
@@ -4684,11 +4684,11 @@ export const generatedRouteMap: RouteNode = {
     "audit-logs": {
       kind: "route",
       children: {
-        read: {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["audit-logs", "read"],
-            capabilityId: "audit-logs.read",
+            commandPath: ["audit-logs", "list"],
+            capabilityId: "audit-logs.list",
             access: "read",
             flags: [
               {
@@ -5019,11 +5019,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        read: {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["billing-codes", "read"],
-            capabilityId: "billing-codes.read",
+            commandPath: ["billing-codes", "list"],
+            capabilityId: "billing-codes.list",
             access: "read",
             flags: [
               {
@@ -6223,11 +6223,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "read-by-id": {
+        get: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["clauses", "read-by-id"],
-            capabilityId: "clauses.read-by-id",
+            commandPath: ["clauses", "get"],
+            capabilityId: "clauses.get",
             access: "read",
             flags: [
               {
@@ -6266,11 +6266,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "read-list": {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["clauses", "read-list"],
-            capabilityId: "clauses.read-list",
+            commandPath: ["clauses", "list"],
+            capabilityId: "clauses.list",
             access: "read",
             flags: [
               {
@@ -8157,11 +8157,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "delete-by-id": {
+        delete: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["contacts", "delete-by-id"],
-            capabilityId: "contacts.delete-by-id",
+            commandPath: ["contacts", "delete"],
+            capabilityId: "contacts.delete",
             access: "write",
             flags: [
               {
@@ -8200,11 +8200,54 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        read: {
+        get: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["contacts", "read"],
-            capabilityId: "contacts.read",
+            commandPath: ["contacts", "get"],
+            capabilityId: "contacts.get",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--contact-id",
+                prop: "contactId",
+                required: true,
+                part: "params",
+                partPath: "contactId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["contactId"],
+                  properties: {
+                    contactId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        list: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["contacts", "list"],
+            capabilityId: "contacts.list",
             access: "read",
             flags: [
               {
@@ -8271,49 +8314,6 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "read-by-id": {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["contacts", "read-by-id"],
-            capabilityId: "contacts.read-by-id",
-            access: "read",
-            flags: [
-              {
-                kind: "string",
-                repeatable: false,
-                flag: "--contact-id",
-                prop: "contactId",
-                required: true,
-                part: "params",
-                partPath: "contactId",
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            destructive: false,
-            scope: "matters_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                params: {
-                  type: "object",
-                  required: ["contactId"],
-                  properties: {
-                    contactId: {
-                      minLength: 36,
-                      maxLength: 36,
-                      pattern:
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                      type: "string",
-                    },
-                  },
-                },
-              },
-            },
-            schemaTruncated: false,
-          },
-        },
         search: {
           kind: "capability-leaf",
           spec: {
@@ -8366,11 +8366,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "update-by-id": {
+        update: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["contacts", "update-by-id"],
-            capabilityId: "contacts.update-by-id",
+            commandPath: ["contacts", "update"],
+            capabilityId: "contacts.update",
             access: "write",
             flags: [
               {
@@ -8999,11 +8999,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "delete-by-id": {
+        delete: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["document-types", "delete-by-id"],
-            capabilityId: "document-types.delete-by-id",
+            commandPath: ["document-types", "delete"],
+            capabilityId: "document-types.delete",
             access: "write",
             flags: [
               {
@@ -9042,11 +9042,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "read-list": {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["document-types", "read-list"],
-            capabilityId: "document-types.read-list",
+            commandPath: ["document-types", "list"],
+            capabilityId: "document-types.list",
             access: "read",
             flags: [],
             inputOnly: [],
@@ -9108,11 +9108,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "update-by-id": {
+        update: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["document-types", "update-by-id"],
-            capabilityId: "document-types.update-by-id",
+            commandPath: ["document-types", "update"],
+            capabilityId: "document-types.update",
             access: "write",
             flags: [
               {
@@ -9960,151 +9960,19 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "list-files": {
+        get: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["entities", "list-files"],
-            capabilityId: "entities.list-files",
+            commandPath: ["entities", "get"],
+            capabilityId: "entities.get",
             access: "read",
             flags: [
               {
-                flag: "--workspace",
-                prop: "workspace",
                 kind: "string",
-                required: true,
                 repeatable: false,
-                part: "params",
-                partPath: "workspaceId",
-              },
-            ],
-            inputOnly: [],
-            paginated: true,
-            paginationPart: "query",
-            itemsKey: "items",
-            destructive: false,
-            scope: "matters_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                params: {
-                  type: "object",
-                  properties: {
-                    workspaceId: {
-                      type: "string",
-                    },
-                  },
-                  required: ["workspaceId"],
-                },
-                query: {
-                  type: "object",
-                  properties: {
-                    limit: {
-                      minimum: 1,
-                      maximum: 500,
-                      anyOf: [
-                        {
-                          format: "integer",
-                          default: 0,
-                          type: "string",
-                        },
-                        {
-                          minimum: 1,
-                          maximum: 500,
-                          type: "integer",
-                        },
-                      ],
-                    },
-                    cursor: {
-                      maxLength: 512,
-                      type: "string",
-                    },
-                  },
-                },
-              },
-            },
-            schemaTruncated: false,
-          },
-        },
-        "list-folders": {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["entities", "list-folders"],
-            capabilityId: "entities.list-folders",
-            access: "read",
-            flags: [
-              {
-                flag: "--workspace",
-                prop: "workspace",
-                kind: "string",
+                flag: "--workspace-id",
+                prop: "workspaceId",
                 required: true,
-                repeatable: false,
-                part: "params",
-                partPath: "workspaceId",
-              },
-            ],
-            inputOnly: [],
-            paginated: true,
-            paginationPart: "query",
-            itemsKey: "items",
-            destructive: false,
-            scope: "matters_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                params: {
-                  type: "object",
-                  properties: {
-                    workspaceId: {
-                      type: "string",
-                    },
-                  },
-                  required: ["workspaceId"],
-                },
-                query: {
-                  type: "object",
-                  properties: {
-                    limit: {
-                      minimum: 1,
-                      maximum: 500,
-                      anyOf: [
-                        {
-                          format: "integer",
-                          default: 0,
-                          type: "string",
-                        },
-                        {
-                          minimum: 1,
-                          maximum: 500,
-                          type: "integer",
-                        },
-                      ],
-                    },
-                    cursor: {
-                      maxLength: 512,
-                      type: "string",
-                    },
-                  },
-                },
-              },
-            },
-            schemaTruncated: false,
-          },
-        },
-        move: {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["entities", "move"],
-            capabilityId: "entities.move",
-            access: "write",
-            flags: [
-              {
-                flag: "--workspace",
-                prop: "workspace",
-                kind: "string",
-                required: true,
-                repeatable: false,
                 part: "params",
                 partPath: "workspaceId",
               },
@@ -10114,96 +9982,11 @@ export const generatedRouteMap: RouteNode = {
                 flag: "--entity-id",
                 prop: "entityId",
                 required: true,
-                part: "body",
+                part: "params",
                 partPath: "entityId",
               },
             ],
-            inputOnly: ["body.parentId"],
-            paginated: false,
-            destructive: false,
-            scope: "documents_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                body: {
-                  type: "object",
-                  required: ["entityId", "parentId"],
-                  properties: {
-                    entityId: {
-                      minLength: 36,
-                      maxLength: 36,
-                      pattern:
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                      type: "string",
-                    },
-                    parentId: {
-                      nullable: true,
-                      anyOf: [
-                        {
-                          minLength: 36,
-                          maxLength: 36,
-                          pattern:
-                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                          type: "string",
-                        },
-                        {
-                          type: "null",
-                        },
-                      ],
-                    },
-                  },
-                },
-                params: {
-                  type: "object",
-                  properties: {
-                    workspaceId: {
-                      type: "string",
-                    },
-                  },
-                  required: ["workspaceId"],
-                },
-              },
-            },
-            schemaTruncated: false,
-          },
-        },
-        "organize-suggestions": {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["entities", "organize-suggestions"],
-            capabilityId: "entities.organize-suggestions",
-            access: "read",
-            flags: [
-              {
-                flag: "--workspace",
-                prop: "workspace",
-                kind: "string",
-                required: true,
-                repeatable: false,
-                part: "params",
-                partPath: "workspaceId",
-              },
-              {
-                kind: "string",
-                repeatable: false,
-                flag: "--locale",
-                prop: "locale",
-                required: false,
-                part: "body",
-                partPath: "locale",
-              },
-              {
-                kind: "string",
-                repeatable: false,
-                flag: "--user-instructions",
-                prop: "userInstructions",
-                required: false,
-                part: "body",
-                partPath: "userInstructions",
-              },
-            ],
-            inputOnly: ["body.existingFolders", "body.files"],
+            inputOnly: [],
             paginated: false,
             destructive: false,
             scope: "matters_write",
@@ -10211,89 +9994,36 @@ export const generatedRouteMap: RouteNode = {
               type: "object",
               additionalProperties: false,
               properties: {
-                body: {
-                  type: "object",
-                  required: ["files"],
-                  properties: {
-                    existingFolders: {
-                      maxItems: 500,
-                      type: "array",
-                      items: {
-                        type: "object",
-                        required: ["entityId", "name", "path"],
-                        properties: {
-                          entityId: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                          name: {
-                            minLength: 1,
-                            maxLength: 512,
-                            type: "string",
-                          },
-                          path: {
-                            minLength: 1,
-                            maxLength: 1024,
-                            type: "string",
-                          },
-                        },
-                      },
-                    },
-                    files: {
-                      minItems: 1,
-                      maxItems: 100,
-                      type: "array",
-                      items: {
-                        type: "object",
-                        required: ["entityId", "originalName"],
-                        properties: {
-                          entityId: {
-                            minLength: 36,
-                            maxLength: 36,
-                            pattern:
-                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                            type: "string",
-                          },
-                          originalName: {
-                            minLength: 1,
-                            maxLength: 1024,
-                            type: "string",
-                          },
-                        },
-                      },
-                    },
-                    locale: {
-                      maxLength: 16,
-                      type: "string",
-                    },
-                    userInstructions: {
-                      maxLength: 1500,
-                      type: "string",
-                    },
-                  },
-                },
                 params: {
                   type: "object",
+                  required: ["workspaceId", "entityId"],
                   properties: {
                     workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                    entityId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
                     },
                   },
-                  required: ["workspaceId"],
                 },
               },
             },
             schemaTruncated: false,
           },
         },
-        read: {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["entities", "read"],
-            capabilityId: "entities.read",
+            commandPath: ["entities", "list"],
+            capabilityId: "entities.list",
             access: "read",
             flags: [
               {
@@ -13487,19 +13217,151 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "read-by-id": {
+        "list-files": {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["entities", "read-by-id"],
-            capabilityId: "entities.read-by-id",
+            commandPath: ["entities", "list-files"],
+            capabilityId: "entities.list-files",
             access: "read",
             flags: [
               {
+                flag: "--workspace",
+                prop: "workspace",
                 kind: "string",
-                repeatable: false,
-                flag: "--workspace-id",
-                prop: "workspaceId",
                 required: true,
+                repeatable: false,
+                part: "params",
+                partPath: "workspaceId",
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            paginationPart: "query",
+            itemsKey: "items",
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  properties: {
+                    workspaceId: {
+                      type: "string",
+                    },
+                  },
+                  required: ["workspaceId"],
+                },
+                query: {
+                  type: "object",
+                  properties: {
+                    limit: {
+                      minimum: 1,
+                      maximum: 500,
+                      anyOf: [
+                        {
+                          format: "integer",
+                          default: 0,
+                          type: "string",
+                        },
+                        {
+                          minimum: 1,
+                          maximum: 500,
+                          type: "integer",
+                        },
+                      ],
+                    },
+                    cursor: {
+                      maxLength: 512,
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "list-folders": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["entities", "list-folders"],
+            capabilityId: "entities.list-folders",
+            access: "read",
+            flags: [
+              {
+                flag: "--workspace",
+                prop: "workspace",
+                kind: "string",
+                required: true,
+                repeatable: false,
+                part: "params",
+                partPath: "workspaceId",
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            paginationPart: "query",
+            itemsKey: "items",
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  properties: {
+                    workspaceId: {
+                      type: "string",
+                    },
+                  },
+                  required: ["workspaceId"],
+                },
+                query: {
+                  type: "object",
+                  properties: {
+                    limit: {
+                      minimum: 1,
+                      maximum: 500,
+                      anyOf: [
+                        {
+                          format: "integer",
+                          default: 0,
+                          type: "string",
+                        },
+                        {
+                          minimum: 1,
+                          maximum: 500,
+                          type: "integer",
+                        },
+                      ],
+                    },
+                    cursor: {
+                      maxLength: 512,
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        move: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["entities", "move"],
+            capabilityId: "entities.move",
+            access: "write",
+            flags: [
+              {
+                flag: "--workspace",
+                prop: "workspace",
+                kind: "string",
+                required: true,
+                repeatable: false,
                 part: "params",
                 partPath: "workspaceId",
               },
@@ -13509,29 +13371,22 @@ export const generatedRouteMap: RouteNode = {
                 flag: "--entity-id",
                 prop: "entityId",
                 required: true,
-                part: "params",
+                part: "body",
                 partPath: "entityId",
               },
             ],
-            inputOnly: [],
+            inputOnly: ["body.parentId"],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "documents_write",
             inputSchema: {
               type: "object",
               additionalProperties: false,
               properties: {
-                params: {
+                body: {
                   type: "object",
-                  required: ["workspaceId", "entityId"],
+                  required: ["entityId", "parentId"],
                   properties: {
-                    workspaceId: {
-                      minLength: 36,
-                      maxLength: 36,
-                      pattern:
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                      type: "string",
-                    },
                     entityId: {
                       minLength: 36,
                       maxLength: 36,
@@ -13539,7 +13394,152 @@ export const generatedRouteMap: RouteNode = {
                         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
                     },
+                    parentId: {
+                      nullable: true,
+                      anyOf: [
+                        {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
                   },
+                },
+                params: {
+                  type: "object",
+                  properties: {
+                    workspaceId: {
+                      type: "string",
+                    },
+                  },
+                  required: ["workspaceId"],
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "organize-suggestions": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["entities", "organize-suggestions"],
+            capabilityId: "entities.organize-suggestions",
+            access: "read",
+            flags: [
+              {
+                flag: "--workspace",
+                prop: "workspace",
+                kind: "string",
+                required: true,
+                repeatable: false,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--locale",
+                prop: "locale",
+                required: false,
+                part: "body",
+                partPath: "locale",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--user-instructions",
+                prop: "userInstructions",
+                required: false,
+                part: "body",
+                partPath: "userInstructions",
+              },
+            ],
+            inputOnly: ["body.existingFolders", "body.files"],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                body: {
+                  type: "object",
+                  required: ["files"],
+                  properties: {
+                    existingFolders: {
+                      maxItems: 500,
+                      type: "array",
+                      items: {
+                        type: "object",
+                        required: ["entityId", "name", "path"],
+                        properties: {
+                          entityId: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                          name: {
+                            minLength: 1,
+                            maxLength: 512,
+                            type: "string",
+                          },
+                          path: {
+                            minLength: 1,
+                            maxLength: 1024,
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                    files: {
+                      minItems: 1,
+                      maxItems: 100,
+                      type: "array",
+                      items: {
+                        type: "object",
+                        required: ["entityId", "originalName"],
+                        properties: {
+                          entityId: {
+                            minLength: 36,
+                            maxLength: 36,
+                            pattern:
+                              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                            type: "string",
+                          },
+                          originalName: {
+                            minLength: 1,
+                            maxLength: 1024,
+                            type: "string",
+                          },
+                        },
+                      },
+                    },
+                    locale: {
+                      maxLength: 16,
+                      type: "string",
+                    },
+                    userInstructions: {
+                      maxLength: 1500,
+                      type: "string",
+                    },
+                  },
+                },
+                params: {
+                  type: "object",
+                  properties: {
+                    workspaceId: {
+                      type: "string",
+                    },
+                  },
+                  required: ["workspaceId"],
                 },
               },
             },
@@ -21023,11 +21023,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        read: {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["expenses", "read"],
-            capabilityId: "expenses.read",
+            commandPath: ["expenses", "list"],
+            capabilityId: "expenses.list",
             access: "read",
             flags: [
               {
@@ -25266,11 +25266,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "delete-by-id": {
+        delete: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["flows", "delete-by-id"],
-            capabilityId: "flows.delete-by-id",
+            commandPath: ["flows", "delete"],
+            capabilityId: "flows.delete",
             access: "write",
             flags: [
               {
@@ -25309,11 +25309,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "read-by-id": {
+        get: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["flows", "read-by-id"],
-            capabilityId: "flows.read-by-id",
+            commandPath: ["flows", "get"],
+            capabilityId: "flows.get",
             access: "read",
             flags: [
               {
@@ -25352,11 +25352,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "read-list": {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["flows", "read-list"],
-            capabilityId: "flows.read-list",
+            commandPath: ["flows", "list"],
+            capabilityId: "flows.list",
             access: "read",
             flags: [],
             inputOnly: [],
@@ -25791,11 +25791,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "update-by-id": {
+        update: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["flows", "update-by-id"],
-            capabilityId: "flows.update-by-id",
+            commandPath: ["flows", "update"],
+            capabilityId: "flows.update",
             access: "write",
             flags: [
               {
@@ -26409,11 +26409,70 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        read: {
+        get: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["invoices", "read"],
-            capabilityId: "invoices.read",
+            commandPath: ["invoices", "get"],
+            capabilityId: "invoices.get",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--invoice-id",
+                prop: "invoiceId",
+                required: true,
+                part: "params",
+                partPath: "invoiceId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "billing_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["workspaceId", "invoiceId"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                    invoiceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        list: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["invoices", "list"],
+            capabilityId: "invoices.list",
             access: "read",
             flags: [
               {
@@ -26466,65 +26525,6 @@ export const generatedRouteMap: RouteNode = {
                     },
                     cursor: {
                       maxLength: 512,
-                      type: "string",
-                    },
-                  },
-                },
-              },
-            },
-            schemaTruncated: false,
-          },
-        },
-        "read-by-id": {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["invoices", "read-by-id"],
-            capabilityId: "invoices.read-by-id",
-            access: "read",
-            flags: [
-              {
-                kind: "string",
-                repeatable: false,
-                flag: "--workspace-id",
-                prop: "workspaceId",
-                required: true,
-                part: "params",
-                partPath: "workspaceId",
-              },
-              {
-                kind: "string",
-                repeatable: false,
-                flag: "--invoice-id",
-                prop: "invoiceId",
-                required: true,
-                part: "params",
-                partPath: "invoiceId",
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            destructive: false,
-            scope: "billing_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                params: {
-                  type: "object",
-                  required: ["workspaceId", "invoiceId"],
-                  properties: {
-                    workspaceId: {
-                      minLength: 36,
-                      maxLength: 36,
-                      pattern:
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                      type: "string",
-                    },
-                    invoiceId: {
-                      minLength: 36,
-                      maxLength: 36,
-                      pattern:
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                       type: "string",
                     },
                   },
@@ -26878,6 +26878,25 @@ export const generatedRouteMap: RouteNode = {
     "organization-settings": {
       kind: "route",
       children: {
+        get: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["organization-settings", "get"],
+            capabilityId: "organization-settings.get",
+            access: "read",
+            flags: [],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "admin_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {},
+            },
+            schemaTruncated: false,
+          },
+        },
         preview: {
           kind: "capability-leaf",
           spec: {
@@ -26931,25 +26950,6 @@ export const generatedRouteMap: RouteNode = {
                   },
                 },
               },
-            },
-            schemaTruncated: false,
-          },
-        },
-        read: {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["organization-settings", "read"],
-            capabilityId: "organization-settings.read",
-            access: "read",
-            flags: [],
-            inputOnly: [],
-            paginated: false,
-            destructive: false,
-            scope: "admin_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {},
             },
             schemaTruncated: false,
           },
@@ -31521,11 +31521,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "delete-by-id": {
+        delete: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["playbooks", "delete-by-id"],
-            capabilityId: "playbooks.delete-by-id",
+            commandPath: ["playbooks", "delete"],
+            capabilityId: "playbooks.delete",
             access: "write",
             flags: [
               {
@@ -31598,6 +31598,96 @@ export const generatedRouteMap: RouteNode = {
                       default: "nda",
                       type: "string",
                       enum: ["nda", "dpa", "msa"],
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        get: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["playbooks", "get"],
+            capabilityId: "playbooks.get",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--playbook-id",
+                prop: "playbookId",
+                required: true,
+                part: "params",
+                partPath: "playbookId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "knowledge_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["playbookId"],
+                  properties: {
+                    playbookId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        list: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["playbooks", "list"],
+            capabilityId: "playbooks.list",
+            access: "read",
+            flags: [],
+            inputOnly: [],
+            paginated: true,
+            paginationPart: "query",
+            itemsKey: "items",
+            destructive: false,
+            scope: "knowledge_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                query: {
+                  type: "object",
+                  properties: {
+                    limit: {
+                      minimum: 1,
+                      maximum: 100,
+                      anyOf: [
+                        {
+                          format: "integer",
+                          default: 0,
+                          type: "string",
+                        },
+                        {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      ],
+                    },
+                    cursor: {
+                      maxLength: 512,
+                      type: "string",
                     },
                   },
                 },
@@ -31681,96 +31771,6 @@ export const generatedRouteMap: RouteNode = {
                           type: "integer",
                         },
                       ],
-                    },
-                  },
-                },
-              },
-            },
-            schemaTruncated: false,
-          },
-        },
-        "read-by-id": {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["playbooks", "read-by-id"],
-            capabilityId: "playbooks.read-by-id",
-            access: "read",
-            flags: [
-              {
-                kind: "string",
-                repeatable: false,
-                flag: "--playbook-id",
-                prop: "playbookId",
-                required: true,
-                part: "params",
-                partPath: "playbookId",
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            destructive: false,
-            scope: "knowledge_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                params: {
-                  type: "object",
-                  required: ["playbookId"],
-                  properties: {
-                    playbookId: {
-                      minLength: 36,
-                      maxLength: 36,
-                      pattern:
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                      type: "string",
-                    },
-                  },
-                },
-              },
-            },
-            schemaTruncated: false,
-          },
-        },
-        "read-list": {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["playbooks", "read-list"],
-            capabilityId: "playbooks.read-list",
-            access: "read",
-            flags: [],
-            inputOnly: [],
-            paginated: true,
-            paginationPart: "query",
-            itemsKey: "items",
-            destructive: false,
-            scope: "knowledge_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                query: {
-                  type: "object",
-                  properties: {
-                    limit: {
-                      minimum: 1,
-                      maximum: 100,
-                      anyOf: [
-                        {
-                          format: "integer",
-                          default: 0,
-                          type: "string",
-                        },
-                        {
-                          minimum: 1,
-                          maximum: 100,
-                          type: "integer",
-                        },
-                      ],
-                    },
-                    cursor: {
-                      maxLength: 512,
-                      type: "string",
                     },
                   },
                 },
@@ -31992,11 +31992,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "update-by-id": {
+        update: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["playbooks", "update-by-id"],
-            capabilityId: "playbooks.update-by-id",
+            commandPath: ["playbooks", "update"],
+            capabilityId: "playbooks.update",
             access: "write",
             flags: [
               {
@@ -43050,11 +43050,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "delete-by-id": {
+        delete: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["properties", "delete-by-id"],
-            capabilityId: "properties.delete-by-id",
+            commandPath: ["properties", "delete"],
+            capabilityId: "properties.delete",
             access: "write",
             flags: [
               {
@@ -43103,6 +43103,45 @@ export const generatedRouteMap: RouteNode = {
                       type: "string",
                     },
                   },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        list: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["properties", "list"],
+            capabilityId: "properties.list",
+            access: "read",
+            flags: [
+              {
+                flag: "--workspace",
+                prop: "workspace",
+                kind: "string",
+                required: true,
+                repeatable: false,
+                part: "params",
+                partPath: "workspaceId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  properties: {
+                    workspaceId: {
+                      type: "string",
+                    },
+                  },
+                  required: ["workspaceId"],
                 },
               },
             },
@@ -43247,45 +43286,6 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        read: {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["properties", "read"],
-            capabilityId: "properties.read",
-            access: "read",
-            flags: [
-              {
-                flag: "--workspace",
-                prop: "workspace",
-                kind: "string",
-                required: true,
-                repeatable: false,
-                part: "params",
-                partPath: "workspaceId",
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            destructive: false,
-            scope: "matters_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                params: {
-                  type: "object",
-                  properties: {
-                    workspaceId: {
-                      type: "string",
-                    },
-                  },
-                  required: ["workspaceId"],
-                },
-              },
-            },
-            schemaTruncated: false,
-          },
-        },
         "suggest-prompt": {
           kind: "capability-leaf",
           spec: {
@@ -43396,11 +43396,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "update-by-id": {
+        update: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["properties", "update-by-id"],
-            capabilityId: "properties.update-by-id",
+            commandPath: ["properties", "update"],
+            capabilityId: "properties.update",
             access: "write",
             flags: [
               {
@@ -47596,11 +47596,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        read: {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["rates", "read"],
-            capabilityId: "rates.read",
+            commandPath: ["rates", "list"],
+            capabilityId: "rates.list",
             access: "read",
             flags: [
               {
@@ -54335,11 +54335,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "read-by-id": {
+        get: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["tasks", "read-by-id"],
-            capabilityId: "tasks.read-by-id",
+            commandPath: ["tasks", "get"],
+            capabilityId: "tasks.get",
             access: "read",
             flags: [
               {
@@ -57154,11 +57154,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "delete-by-id": {
+        delete: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["time-entries", "delete-by-id"],
-            capabilityId: "time-entries.delete-by-id",
+            commandPath: ["time-entries", "delete"],
+            capabilityId: "time-entries.delete",
             access: "write",
             flags: [
               {
@@ -57417,11 +57417,70 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        read: {
+        get: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["time-entries", "read"],
-            capabilityId: "time-entries.read",
+            commandPath: ["time-entries", "get"],
+            capabilityId: "time-entries.get",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--id",
+                prop: "id",
+                required: true,
+                part: "params",
+                partPath: "id",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "billing_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["workspaceId", "id"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                    id: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        list: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["time-entries", "list"],
+            capabilityId: "time-entries.list",
             access: "read",
             flags: [
               {
@@ -57585,65 +57644,6 @@ export const generatedRouteMap: RouteNode = {
                           type: "string",
                         },
                       ],
-                    },
-                  },
-                },
-              },
-            },
-            schemaTruncated: false,
-          },
-        },
-        "read-by-id": {
-          kind: "capability-leaf",
-          spec: {
-            commandPath: ["time-entries", "read-by-id"],
-            capabilityId: "time-entries.read-by-id",
-            access: "read",
-            flags: [
-              {
-                kind: "string",
-                repeatable: false,
-                flag: "--workspace-id",
-                prop: "workspaceId",
-                required: true,
-                part: "params",
-                partPath: "workspaceId",
-              },
-              {
-                kind: "string",
-                repeatable: false,
-                flag: "--id",
-                prop: "id",
-                required: true,
-                part: "params",
-                partPath: "id",
-              },
-            ],
-            inputOnly: [],
-            paginated: false,
-            destructive: false,
-            scope: "billing_write",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                params: {
-                  type: "object",
-                  required: ["workspaceId", "id"],
-                  properties: {
-                    workspaceId: {
-                      minLength: 36,
-                      maxLength: 36,
-                      pattern:
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                      type: "string",
-                    },
-                    id: {
-                      minLength: 36,
-                      maxLength: 36,
-                      pattern:
-                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                      type: "string",
                     },
                   },
                 },
@@ -57907,11 +57907,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "update-by-id": {
+        update: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["time-entries", "update-by-id"],
-            capabilityId: "time-entries.update-by-id",
+            commandPath: ["time-entries", "update"],
+            capabilityId: "time-entries.update",
             access: "write",
             flags: [
               {
@@ -58417,11 +58417,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        read: {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["views", "read"],
-            capabilityId: "views.read",
+            commandPath: ["views", "list"],
+            capabilityId: "views.list",
             access: "read",
             flags: [
               {
@@ -58714,11 +58714,11 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
-            read: {
+            list: {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["workspaces", "anonymization-allowlist", "read"],
-                capabilityId: "workspaces.anonymization-allowlist.read",
+                commandPath: ["workspaces", "anonymization-allowlist", "list"],
+                capabilityId: "workspaces.anonymization-allowlist.list",
                 access: "read",
                 flags: [
                   {
@@ -58913,11 +58913,11 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
-            read: {
+            list: {
               kind: "capability-leaf",
               spec: {
-                commandPath: ["workspaces", "anonymization-terms", "read"],
-                capabilityId: "workspaces.anonymization-terms.read",
+                commandPath: ["workspaces", "anonymization-terms", "list"],
+                capabilityId: "workspaces.anonymization-terms.list",
                 access: "read",
                 flags: [
                   {
@@ -59174,11 +59174,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "delete-by-id": {
+        delete: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["workspaces", "delete-by-id"],
-            capabilityId: "workspaces.delete-by-id",
+            commandPath: ["workspaces", "delete"],
+            capabilityId: "workspaces.delete",
             access: "write",
             flags: [
               {
@@ -59270,11 +59270,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        read: {
+        list: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["workspaces", "read"],
-            capabilityId: "workspaces.read",
+            commandPath: ["workspaces", "list"],
+            capabilityId: "workspaces.list",
             access: "read",
             flags: [],
             inputOnly: [],
@@ -59496,11 +59496,11 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
-        "update-by-id": {
+        update: {
           kind: "capability-leaf",
           spec: {
-            commandPath: ["workspaces", "update-by-id"],
-            capabilityId: "workspaces.update-by-id",
+            commandPath: ["workspaces", "update"],
+            capabilityId: "workspaces.update",
             access: "write",
             flags: [
               {

@@ -7,7 +7,7 @@ import createTask from "@/api/handlers/tasks/create";
 import createEntityLink from "@/api/handlers/tasks/entity-links-create";
 import deleteEntityLink from "@/api/handlers/tasks/entity-links-delete";
 import listEntityLinks from "@/api/handlers/tasks/entity-links-read";
-import readTaskById from "@/api/handlers/tasks/read-by-id";
+import readTaskById from "@/api/handlers/tasks/get";
 import updateTask from "@/api/handlers/tasks/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";

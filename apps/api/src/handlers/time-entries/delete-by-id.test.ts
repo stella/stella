@@ -5,7 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import deleteTimeEntryById from "./delete-by-id";
+import deleteTimeEntryById from "./delete";
 
 type DeleteTimeEntryCtx = Parameters<typeof deleteTimeEntryById.handler>[0];
 

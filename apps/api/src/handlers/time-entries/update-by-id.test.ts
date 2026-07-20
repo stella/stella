@@ -6,7 +6,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import updateTimeEntryById from "./update-by-id";
+import updateTimeEntryById from "./update";
 
 type UpdateTimeEntryCtx = Parameters<typeof updateTimeEntryById.handler>[0];
 

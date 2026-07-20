@@ -6,7 +6,7 @@ import createRateEntry from "@/api/handlers/rates/entries-create";
 import deleteRateEntry from "@/api/handlers/rates/entries-delete";
 import readRateEntries from "@/api/handlers/rates/entries-read";
 import updateRateEntry from "@/api/handlers/rates/entries-update";
-import readRateTables from "@/api/handlers/rates/read";
+import readRateTables from "@/api/handlers/rates/list";
 import resolveRate from "@/api/handlers/rates/resolve";
 import updateRateTable from "@/api/handlers/rates/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";

@@ -28,12 +28,12 @@ void mock.module("@/api/handlers/case-law/decisions/search", () => ({
   searchDecisionsHandler: searchDecisionsHandlerMock,
 }));
 
-void mock.module("@/api/handlers/case-law/decisions/read-by-id", () => ({
+void mock.module("@/api/handlers/case-law/decisions/get", () => ({
   readDecisionBySlugHandler: mock(),
   readDecisionHandler: readDecisionHandlerMock,
 }));
 
-void mock.module("@/api/handlers/workspaces/read-by-id", () => ({
+void mock.module("@/api/handlers/workspaces/get", () => ({
   readWorkspaceHandler: mock(),
 }));
 

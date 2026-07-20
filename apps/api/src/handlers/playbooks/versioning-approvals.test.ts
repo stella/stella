@@ -14,7 +14,7 @@ import approvePlaybookDefinition from "@/api/handlers/playbooks/approve";
 import createPlaybookDefinition from "@/api/handlers/playbooks/create";
 import listPlaybookVersions from "@/api/handlers/playbooks/list-versions";
 import restorePlaybookVersion from "@/api/handlers/playbooks/restore-version";
-import updatePlaybookDefinition from "@/api/handlers/playbooks/update-by-id";
+import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";

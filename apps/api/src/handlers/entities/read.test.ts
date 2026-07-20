@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { createReadEntitiesHandler } from "@/api/handlers/entities/read";
+import { createReadEntitiesHandler } from "@/api/handlers/entities/list";
 import { createReadFilesystemTreeHandler } from "@/api/handlers/entities/read-filesystem-tree";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";

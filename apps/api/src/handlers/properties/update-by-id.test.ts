@@ -6,7 +6,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import updateProperty from "./update-by-id";
+import updateProperty from "./update";
 
 type UpdatePropertyCtx = Parameters<typeof updateProperty.handler>[0];
 

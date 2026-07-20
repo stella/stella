@@ -1,6 +1,6 @@
 import Elysia from "elysia";
 
-import readLegislation from "@/api/handlers/legislation/read-by-id";
+import readLegislation from "@/api/handlers/legislation/get";
 import searchLegislation from "@/api/handlers/legislation/search";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
