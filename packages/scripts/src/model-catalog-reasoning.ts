@@ -121,10 +121,9 @@ export const validateReasoning = ({
       skipped.push(entry);
       continue;
     }
-    const upstreamValues =
-      upstreamReasoning.reasoning === false
-        ? null
-        : upstreamReasoning.effortValues;
+    const upstreamValues = upstreamReasoning.reasoning
+      ? upstreamReasoning.effortValues
+      : null;
     const declaredSet = new Set<string>(declaredEfforts);
     const upstreamSet = new Set(upstreamValues);
     const matches =
