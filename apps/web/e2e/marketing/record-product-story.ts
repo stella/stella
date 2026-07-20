@@ -179,12 +179,12 @@ const waitForInspectorPreview = async (
 };
 
 const FIRST_SOURCE_PREVIEW = {
-  bodyMarker: "atlas_001_Corporate_Shareholder_Register",
-  label: "atlas_001_Corporate",
+  bodyMarker: "Aurora_Retail_Shareholder_Register_2018",
+  label: "Aurora_Retail_Shareholder_Register_2018",
 } as const satisfies InspectorPreviewMarker;
 const SECOND_SOURCE_PREVIEW = {
-  bodyMarker: "atlas_005_Finance_Permit",
-  label: "atlas_005_Finance",
+  bodyMarker: "Edison_Bank_Permit_2018",
+  label: "Edison_Bank_Permit_2018",
 } as const satisfies InspectorPreviewMarker;
 
 const scenes = [
@@ -199,7 +199,7 @@ const scenes = [
         .first()
         .waitFor();
       await page
-        .getByText(/atlas_001_Corporate/u)
+        .getByText(/Aurora_Retail_Shareholder_Register_2018/u)
         .first()
         .waitFor();
       // Rest: the second (home) row, matching the frame-0 hover state the
@@ -335,7 +335,7 @@ const scenes = [
       // hovered), and the loop's first eased move starts from a short,
       // natural approach onto that source.
       const firstSource = await locatorCenter(
-        page.getByText(/atlas_001_Corporate/u).first(),
+        page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
       );
       await moveCursorTo(page, {
         x: firstSource.x + 56,
@@ -1365,7 +1365,10 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
   // paint budget (pre-warmed in prepare); a blank pane on camera fails
   // the run, and the budget wait is deducted from the hold so the loop's
   // cadence stays fixed.
-  await clickWithCursor(page, page.getByText(/atlas_001_Corporate/u).first());
+  await clickWithCursor(
+    page,
+    page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
+  );
   const firstPaintStartedAt = Date.now();
   await waitForInspectorPreview(
     page,
@@ -1375,7 +1378,10 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
   await page.waitForTimeout(
     Math.max(0, 2600 - (Date.now() - firstPaintStartedAt)),
   );
-  await clickWithCursor(page, page.getByText(/atlas_005_Finance/u).first());
+  await clickWithCursor(
+    page,
+    page.getByText(/Edison_Bank_Permit_2018/u).first(),
+  );
   await waitForInspectorPreview(
     page,
     SECOND_SOURCE_PREVIEW,

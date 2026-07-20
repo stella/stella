@@ -1016,18 +1016,34 @@ const EXPORT_REVIEW_EVIDENCE_QUALITY = [
   "Conflicting evidence",
 ] as const;
 
+// File names read like a real data room: the row's counterparty and document
+// type joined with a vintage year, e.g. Aurora_Retail_Shareholder_Register_2018.docx.
+// The counterparty/type indices mirror buildExportReviewMetadata exactly so a
+// row's name always matches its metadata columns, and the year advances once
+// per full (type, counterparty) cycle so all names stay unique. The marketing
+// recorder's content markers reference these names; keep them in sync
+// (apps/web/e2e/marketing/record-product-story.ts).
 const buildExportReviewDocNames = (): string[] => {
   const result: string[] = [];
 
   for (let i = 0; i < EXPORT_TABLE_FILE_COUNT; i++) {
-    const folder = at(EXPORT_REVIEW_FOLDERS, i % EXPORT_REVIEW_FOLDERS.length);
     const documentType = at(
       EXPORT_REVIEW_DOCUMENT_TYPES,
       i % EXPORT_REVIEW_DOCUMENT_TYPES.length,
     );
+    const counterparty = at(
+      EXPORT_REVIEW_COUNTERPARTIES,
+      (i * 3) % EXPORT_REVIEW_COUNTERPARTIES.length,
+    );
+    const counterpartyName = counterparty
+      .split(" ")
+      .slice(0, 2)
+      .join("_")
+      .replaceAll(/[^\w]/gu, "");
+    const year = 2018 + Math.floor(i / EXPORT_REVIEW_DOCUMENT_TYPES.length);
     const extension = i % 9 === 0 ? "docx" : "pdf";
     result.push(
-      `atlas_${String(i + 1).padStart(3, "0")}_${folder.replaceAll(" ", "_")}_${documentType.replaceAll(" ", "_")}.${extension}`,
+      `${counterpartyName}_${documentType.replaceAll(" ", "_")}_${year}.${extension}`,
     );
   }
 
@@ -1121,8 +1137,11 @@ export const buildExportReviewDocumentText = (
   index: number,
 ): string => {
   const metadata = buildExportReviewMetadata(index);
-  return `PROJECT ATLAS DATA ROOM REVIEW
+  return `${metadata.documentType.toUpperCase()} — REVIEW EXTRACT
 
+${metadata.counterparty}, based in ${metadata.jurisdiction}, is party to this ${metadata.documentType.toLowerCase()} under review as part of the Project Atlas data room.
+
+Key terms
 Document: ${fileName}
 Document type: ${metadata.documentType}
 Counterparty: ${metadata.counterparty}
@@ -1136,17 +1155,14 @@ Review status: ${metadata.reviewStatus}
 Evidence quality: ${metadata.evidenceQuality}
 Tags: ${metadata.tags.join(", ")}
 
-Key obligation:
+Key obligation
 ${metadata.keyObligation}
 
-Risk finding:
+Risk finding
 ${metadata.riskFinding}
 
-Direct citation text:
-"${metadata.counterparty} must comply with the obligation identified above and the governing law is ${metadata.governingLaw}."
-
-Reviewer note:
-This seeded file exists so table export can be tested with many rows, attached documents, extracted metadata, and direct citations.`;
+Extract under review:
+"${metadata.counterparty} must comply with the obligation identified above and the governing law is ${metadata.governingLaw}."`;
 };
 
 const workspaceDocNames: Record<string, string[]> = {
