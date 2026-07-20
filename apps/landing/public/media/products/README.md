@@ -38,6 +38,19 @@ then converts Playwright's raw video to compact, streaming-friendly H.264 MP4.
 The Microsoft Teams and terminal companion windows remain DOM components so
 their typewriter, focus, and drag interactions stay crisp and interactive.
 
+Each cut is anchored to a ready marker burned into the raw footage: once a
+scene's prepare step fully settles, the recorder flashes a solid magenta
+overlay, and the final cut always starts just after the marker leaves the
+frame (located by per-frame chroma scan, never by wall-clock guesses). After
+encoding, the recorder asserts per output that the duration matches the
+scene's cut length, that the first frame matches a ready-state reference
+screenshot (PSNR floor), and that the poster is pixel-identical to that first
+frame (posters are frame 0 of the cut, so the poster-to-video handoff is
+seamless). Any violation, including raw footage too short for the cut, fails
+the recording run instead of shipping a partial or pre-ready clip. Loops are
+kept short (~3.5s, agent 5.5s) and the choreography returns each scene to its
+frame-0 state so the loop closes without a jump.
+
 ## Scene variants
 
 Each scene is recorded at the aspect of the box it plays in, so the landing

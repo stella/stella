@@ -71,7 +71,7 @@ const scenes = [
   {
     id: "workspace",
     path: ({ files }) => files,
-    durationSeconds: 4.8,
+    durationSeconds: 3.5,
     prepare: async (page) => {
       await page
         .getByText("Export Review - Project Atlas Data Room")
@@ -87,7 +87,7 @@ const scenes = [
   {
     id: "review",
     path: ({ table }) => table,
-    durationSeconds: 4.8,
+    durationSeconds: 3.5,
     prepare: async (page) => {
       await page
         .getByText("Export Review - Project Atlas Data Room")
@@ -104,7 +104,7 @@ const scenes = [
       "?editing=true" +
       "&entity=c3596565-1663-57fe-81aa-e69a56675a27" +
       "&field=6a22b489-4a08-5c91-8cda-ec83ff6ef8e7",
-    durationSeconds: 5.6,
+    durationSeconds: 3.5,
     prepare: async (page) => {
       await page.getByText("Internal_SAFE_Agreement.docx").first().waitFor();
       await page.locator(".layout-run-text").first().waitFor();
@@ -123,7 +123,7 @@ const scenes = [
       "?editing=true" +
       "&entity=c3596565-1663-57fe-81aa-e69a56675a27" +
       "&field=6a22b489-4a08-5c91-8cda-ec83ff6ef8e7",
-    durationSeconds: 5.6,
+    durationSeconds: 3.5,
     prepare: async (page) => {
       await page.getByText("Internal_SAFE_Agreement.docx").first().waitFor();
       await page.locator(".layout-run-text").first().waitFor();
@@ -133,7 +133,7 @@ const scenes = [
   {
     id: "agent",
     path: ({ agent }) => agent,
-    durationSeconds: 8,
+    durationSeconds: 5.5,
     prepare: async (page) => {
       await page
         .getByText("Compare the change-of-control clauses across this matter.")
@@ -158,7 +158,7 @@ const captures: readonly StoryCapture[] = captureDefinitions.map(
         `No scene choreography for capture ${definition.captureId}`,
       );
     }
-    return { ...scene, ...definition};
+    return { ...scene, ...definition };
   },
 );
 
@@ -305,7 +305,6 @@ const recordCapture = async ({
   });
   const page = await context.newPage();
   configurePage(page);
-  const recordingStartedAt = performance.now();
 
   await page.goto(capture.path(views), { waitUntil: "commit" });
   await capture.prepare(page);
@@ -314,10 +313,25 @@ const recordCapture = async ({
     await document.fonts.ready;
   });
   await page.waitForTimeout(450);
-  const trimStartSeconds = (performance.now() - recordingStartedAt) / 1000;
+
+  // Ready marker: wall-clock deltas cannot be trusted against the screencast
+  // timeline (frames only flow once the page paints), so the ready moment is
+  // burned into the footage itself as a solid magenta flash. The final cut
+  // always starts just after the marker leaves the frame, making it
+  // structurally impossible for navigation, loading, or half-ready inspector
+  // states to reach a shipped file.
+  const suffix = theme === "dark" ? "-dark" : "";
+  const referencePath = path.join(
+    RAW_VIDEO_DIR,
+    `${capture.captureId}${suffix}-ready.png`,
+  );
+  await flashReadyMarker(page);
+  await page.screenshot({ path: referencePath, scale: "device" });
 
   await replayCaptureMotion(page, capture.id);
   await page.waitForTimeout(capture.durationSeconds * 1000);
+  // Tail buffer so the marker-anchored cut never runs out of footage.
+  await page.waitForTimeout(600);
 
   const video = page.video();
   if (!video) {
@@ -325,7 +339,6 @@ const recordCapture = async ({
   }
 
   await page.close();
-  const suffix = theme === "dark" ? "-dark" : "";
   const rawPath = path.join(
     RAW_VIDEO_DIR,
     `${capture.captureId}${suffix}.webm`,
@@ -341,14 +354,247 @@ const recordCapture = async ({
   await video.saveAs(rawPath);
   await context.close();
 
+  const label = `${capture.captureId} (${theme})`;
+  const { lastFrameSeconds, markerEndSeconds } = await findReadyMarker(
+    rawPath,
+    label,
+  );
+  const cutStartSeconds = markerEndSeconds + READY_CUT_OFFSET_SECONDS;
+  if (lastFrameSeconds < cutStartSeconds + capture.durationSeconds) {
+    throw new Error(
+      `${label}: raw footage ends at ${lastFrameSeconds.toFixed(2)}s but the ` +
+        `cut needs ${(cutStartSeconds + capture.durationSeconds).toFixed(2)}s; ` +
+        "refusing to ship a shorter or earlier cut",
+    );
+  }
+
   await transcodeVideo({
+    cutStartSeconds,
     durationSeconds: capture.durationSeconds,
     outputPath,
     rawPath,
-    trimStartSeconds,
   });
   await createVideoPoster({ outputPath, posterPath });
+  await assertCaptureInvariants({
+    durationSeconds: capture.durationSeconds,
+    label,
+    outputPath,
+    posterPath,
+    referencePath,
+  });
   process.stdout.write(`recorded ${path.relative(REPO_ROOT, outputPath)}\n`);
+};
+
+const READY_MARKER_ID = "__stella_capture_ready_marker";
+const READY_MARKER_HOLD_MS = 400;
+const READY_MARKER_SETTLE_MS = 300;
+// One screencast frame of headroom past the last magenta frame, plus a hair,
+// so the marker itself can never bleed into the cut.
+const READY_CUT_OFFSET_SECONDS = 0.15;
+// Chroma floor for detecting the pure-magenta marker (U≈212, V≈235); app
+// frames hover around neutral 128.
+const READY_MARKER_MIN_CHROMA = 180;
+const MIN_READY_PSNR_DB = 22;
+const DURATION_TOLERANCE_SECONDS = 0.35;
+
+const flashReadyMarker = async (page: Page) => {
+  await page.evaluate((markerId) => {
+    const marker = document.createElement("div");
+    marker.id = markerId;
+    marker.style.cssText =
+      "position:fixed;inset:0;z-index:2147483647;background:#ff00ff;";
+    document.body.append(marker);
+  }, READY_MARKER_ID);
+  await page.waitForTimeout(READY_MARKER_HOLD_MS);
+  await page.evaluate((markerId) => {
+    document.querySelector(`#${markerId}`)?.remove();
+  }, READY_MARKER_ID);
+  await page.waitForTimeout(READY_MARKER_SETTLE_MS);
+};
+
+type ReadyMarkerLocation = {
+  lastFrameSeconds: number;
+  markerEndSeconds: number;
+};
+
+// Scan the raw footage for the magenta ready marker via per-frame chroma
+// averages; the cut is anchored to the video's own timeline, not wall clock.
+const findReadyMarker = async (
+  rawPath: string,
+  label: string,
+): Promise<ReadyMarkerLocation> => {
+  const { stdout } = await execFileAsync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      `movie=${rawPath},signalstats`,
+      "-show_entries",
+      "frame=pts_time:frame_tags=lavfi.signalstats.UAVG,lavfi.signalstats.VAVG",
+      "-of",
+      "json",
+    ],
+    { maxBuffer: 50 * 1024 * 1024 },
+  );
+  const parsed: unknown = JSON.parse(stdout);
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("frames" in parsed) ||
+    !Array.isArray(parsed.frames)
+  ) {
+    throw new TypeError(`${label}: ffprobe returned no frames for ${rawPath}`);
+  }
+
+  let markerEndSeconds: number | undefined;
+  let lastFrameSeconds = 0;
+  for (const frame of parsed.frames) {
+    if (typeof frame !== "object" || frame === null) {
+      continue;
+    }
+    // SAFETY: shape of ffprobe's `-of json` frame entries; every field is
+    // re-validated numerically before use.
+    const record = frame as {
+      pts_time?: string;
+      tags?: Record<string, string>;
+    };
+    const seconds = Number(record.pts_time);
+    if (!Number.isFinite(seconds)) {
+      continue;
+    }
+    lastFrameSeconds = Math.max(lastFrameSeconds, seconds);
+    const u = Number(record.tags?.["lavfi.signalstats.UAVG"]);
+    const v = Number(record.tags?.["lavfi.signalstats.VAVG"]);
+    if (u >= READY_MARKER_MIN_CHROMA && v >= READY_MARKER_MIN_CHROMA) {
+      markerEndSeconds = seconds;
+    }
+  }
+
+  if (markerEndSeconds === undefined) {
+    throw new Error(
+      `${label}: ready marker not found in raw footage; the recording is ` +
+        "broken, refusing to guess a cut point",
+    );
+  }
+  return { lastFrameSeconds, markerEndSeconds };
+};
+
+type AssertCaptureInvariantsOptions = {
+  durationSeconds: number;
+  label: string;
+  outputPath: string;
+  posterPath: string;
+  referencePath: string;
+};
+
+// Class guard: a shipped cut must be exactly durationSeconds of post-ready
+// footage, its first frame must match the ready-state reference screenshot,
+// and the poster must be that same first frame (pixel-continuous handoff).
+// Any violation fails the recording run.
+const assertCaptureInvariants = async ({
+  durationSeconds,
+  label,
+  outputPath,
+  posterPath,
+  referencePath,
+}: AssertCaptureInvariantsOptions) => {
+  const outputDuration = await probeDurationSeconds(outputPath);
+  if (Math.abs(outputDuration - durationSeconds) > DURATION_TOLERANCE_SECONDS) {
+    throw new Error(
+      `${label}: output duration ${outputDuration.toFixed(2)}s deviates from ` +
+        `the expected ${durationSeconds.toFixed(2)}s`,
+    );
+  }
+
+  const firstFramePath = `${outputPath}.first-frame.png`;
+  await execFileAsync(
+    "ffmpeg",
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-i",
+      outputPath,
+      "-frames:v",
+      "1",
+      firstFramePath,
+    ],
+    { maxBuffer: 10 * 1024 * 1024 },
+  );
+  const firstFramePsnr = await psnrBetween(firstFramePath, referencePath);
+  const posterPsnr = await psnrBetween(posterPath, firstFramePath);
+  await rm(firstFramePath, { force: true });
+
+  if (firstFramePsnr < MIN_READY_PSNR_DB) {
+    throw new Error(
+      `${label}: first frame diverges from the ready reference ` +
+        `(${firstFramePsnr.toFixed(1)}dB < ${MIN_READY_PSNR_DB}dB); the cut ` +
+        "contains pre-ready footage",
+    );
+  }
+  if (posterPsnr < MIN_READY_PSNR_DB) {
+    throw new Error(
+      `${label}: poster diverges from the first frame ` +
+        `(${posterPsnr.toFixed(1)}dB < ${MIN_READY_PSNR_DB}dB)`,
+    );
+  }
+  process.stdout.write(
+    `verified ${label}: ${outputDuration.toFixed(2)}s, first-frame ` +
+      `${formatPsnr(firstFramePsnr)}, poster ${formatPsnr(posterPsnr)}\n`,
+  );
+};
+
+const formatPsnr = (value: number) =>
+  Number.isFinite(value) ? `${value.toFixed(1)}dB` : "identical";
+
+const probeDurationSeconds = async (mediaPath: string) => {
+  const { stdout } = await execFileAsync("ffprobe", [
+    "-v",
+    "error",
+    "-show_entries",
+    "format=duration",
+    "-of",
+    "csv=p=0",
+    mediaPath,
+  ]);
+  const duration = Number(stdout.trim());
+  if (!Number.isFinite(duration)) {
+    throw new TypeError(`Could not probe the duration of ${mediaPath}`);
+  }
+  return duration;
+};
+
+// PSNR between two stills (scale-normalised); parsed from ffmpeg's psnr
+// filter summary. Returns Infinity for identical images.
+const psnrBetween = async (imagePathA: string, imagePathB: string) => {
+  const { stderr } = await execFileAsync(
+    "ffmpeg",
+    [
+      "-hide_banner",
+      "-y",
+      "-i",
+      imagePathA,
+      "-i",
+      imagePathB,
+      "-filter_complex",
+      "[0:v][1:v]scale2ref[a][b];[a][b]psnr",
+      "-f",
+      "null",
+      "-",
+    ],
+    { maxBuffer: 10 * 1024 * 1024 },
+  );
+  const match = /average:(inf|[0-9.]+)/u.exec(stderr);
+  if (!match || match[1] === undefined) {
+    throw new Error(
+      `Could not compute PSNR between ${imagePathA} and ${imagePathB}`,
+    );
+  }
+  return match[1] === "inf" ? Number.POSITIVE_INFINITY : Number(match[1]);
 };
 
 type RecordingContextOptions = {
@@ -660,33 +906,41 @@ const closeInspectorIfOpen = async (page: Page) => {
   await page.waitForTimeout(500);
 };
 
-const animateDocumentScroll = async (page: Page) => {
+const scrollDocumentTo = async (page: Page, top: number) => {
   await page
     .locator(".layout-run-text")
     .first()
-    .evaluate((text) => {
+    .evaluate((text, scrollTop) => {
       let scrollParent = text.parentElement;
       while (scrollParent) {
         if (scrollParent.scrollHeight > scrollParent.clientHeight + 40) {
-          scrollParent.scrollTo({ behavior: "smooth", top: 180 });
+          scrollParent.scrollTo({ behavior: "smooth", top: scrollTop });
           return;
         }
         scrollParent = scrollParent.parentElement;
       }
-    });
+    }, top);
 };
 
+// Loop-friendly motion: every scene returns to (or near) its frame-0 state by
+// the end of the cut so the video loops without a jarring jump. The hover
+// loops end on the row the prepare step left hovered; the document scroll
+// returns to the top. The agent scene is the exception: its two cited-source
+// clicks need room to read, so it keeps a longer cut and ends on the second
+// source.
 const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
   if (captureId === "workspace") {
-    await animateBetweenRows(page, /^Closed$/u, /^Active$/u);
+    await animateRowHoverLoop(page, /^Active$/u, /^Closed$/u);
     return;
   }
   if (captureId === "review") {
-    await animateBetweenRows(page, /^In Review$/u, /^Closed$/u);
+    await animateRowHoverLoop(page, /^Closed$/u, /^In Review$/u);
     return;
   }
   if (captureId === "editor" || captureId === "editor-doc") {
-    await animateDocumentScroll(page);
+    await scrollDocumentTo(page, 180);
+    await page.waitForTimeout(1700);
+    await scrollDocumentTo(page, 0);
     return;
   }
   // Only "agent" remains.
@@ -694,25 +948,38 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
     .getByText(/atlas_001_Corporate/u)
     .first()
     .click();
-  await page.waitForTimeout(2800);
+  await page.waitForTimeout(2600);
   await page
     .getByText(/atlas_005_Finance/u)
     .first()
     .click();
 };
 
+// Hover away, then back home (the row the prepare step ended on, i.e. the
+// frame-0 hover state) so the loop closes cleanly.
+const animateRowHoverLoop = async (
+  page: Page,
+  awayRowText: RegExp,
+  homeRowText: RegExp,
+) => {
+  await page.waitForTimeout(450);
+  await page.getByText(awayRowText).first().hover();
+  await page.waitForTimeout(1600);
+  await page.getByText(homeRowText).first().hover();
+};
+
 type TranscodeVideoOptions = {
+  cutStartSeconds: number;
   durationSeconds: number;
   outputPath: string;
   rawPath: string;
-  trimStartSeconds: number;
 };
 
 const transcodeVideo = async ({
+  cutStartSeconds,
   durationSeconds,
   outputPath,
   rawPath,
-  trimStartSeconds,
 }: TranscodeVideoOptions) => {
   await execFileAsync(
     "ffmpeg",
@@ -722,7 +989,7 @@ const transcodeVideo = async ({
       "error",
       "-y",
       "-ss",
-      trimStartSeconds.toFixed(3),
+      cutStartSeconds.toFixed(3),
       "-i",
       rawPath,
       "-t",
@@ -734,10 +1001,11 @@ const transcodeVideo = async ({
       "libx264",
       "-preset",
       "slow",
-      // CRF 23 keeps 2x UI text legible; the old 1x captures used 27, which
-      // reads soft on the fine strokes of retina-density text.
+      // CRF 26 is the size lever for 2x captures; the 1x-era 27 read soft.
+      // If UI text goes mushy here, 25 is the sanctioned fallback; verify a
+      // mid-motion frame after changing.
       "-crf",
-      "23",
+      "26",
       "-movflags",
       "+faststart",
       outputPath,
@@ -751,6 +1019,8 @@ type CreateVideoPosterOptions = {
   posterPath: string;
 };
 
+// The poster is frame 0 of the final cut, so the poster-to-video handoff is
+// pixel-continuous; assertCaptureInvariants enforces this.
 const createVideoPoster = async ({
   outputPath,
   posterPath,
@@ -762,8 +1032,6 @@ const createVideoPoster = async ({
       "-loglevel",
       "error",
       "-y",
-      "-ss",
-      "0.300",
       "-i",
       outputPath,
       "-frames:v",
