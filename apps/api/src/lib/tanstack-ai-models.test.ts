@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  BYOK_MODEL_OPTIONS,
+  getModelReasoningEfforts,
+  MODEL_ROLES,
+  TANSTACK_AI_PROVIDERS,
+} from "@stll/ai-catalog";
+
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
@@ -305,7 +313,7 @@ describe("TanStack text model resolution", () => {
     });
     expect(model.adapter.name).toBe("openai");
     expect(model.adapter.model).toBe("gpt-5.4");
-    expect(model.modelOptions).toEqual({
+    expect(looseOptions(model.modelOptions)).toEqual({
       reasoning: { effort: "medium" },
     });
   });
@@ -494,6 +502,18 @@ describe("TanStack text model resolution", () => {
   });
 });
 
+// Widen branded reasoning fields to plain strings so tests can
+// assert emitted values with literals.
+type LooseModelOptions = {
+  temperature?: number | null | undefined;
+  reasoning?: { effort: string } | undefined;
+  thinkingConfig?:
+    | { thinkingLevel?: string | undefined; includeThoughts?: boolean }
+    | undefined;
+};
+const looseOptions = (options: TanStackModelOptions): LooseModelOptions =>
+  options;
+
 describe("tanStackModelOptionsForRole", () => {
   test("keeps deterministic sampling for OpenRouter", () => {
     expect(
@@ -506,29 +526,103 @@ describe("tanStackModelOptionsForRole", () => {
     ).toEqual({ temperature: 0 });
   });
 
-  test("preserves OpenRouter per-role reasoning controls", () => {
+  test("clamps the fast-role effort into the model's declared capability", () => {
+    // gemini-3.5-flash cannot disable reasoning ("Reasoning is
+    // mandatory" 502 class): the fast role's "none" request must
+    // degrade to the model's weakest declared tier.
     expect(
-      tanStackModelOptionsForRole({
-        role: "fast",
-        provider: "openrouter",
-        modelId: "google/gemini-3.5-flash",
-        organizationId: null,
-      }),
+      looseOptions(
+        tanStackModelOptionsForRole({
+          role: "fast",
+          provider: "openrouter",
+          modelId: "google/gemini-3.5-flash",
+          organizationId: null,
+        }),
+      ),
+    ).toMatchObject({
+      reasoning: { effort: "minimal" },
+      temperature: 0,
+    });
+    // GPT slugs accept "none"; the request passes through unchanged.
+    expect(
+      looseOptions(
+        tanStackModelOptionsForRole({
+          role: "fast",
+          provider: "openrouter",
+          modelId: "openai/gpt-5.4-mini",
+          organizationId: null,
+        }),
+      ),
     ).toMatchObject({
       reasoning: { effort: "none" },
       temperature: 0,
     });
+  });
+
+  test("preserves OpenRouter reasoning-role effort on capable models", () => {
     expect(
-      tanStackModelOptionsForRole({
-        role: "reasoning",
-        provider: "openrouter",
-        modelId: "google/gemini-3.5-pro",
-        organizationId: null,
-      }),
+      looseOptions(
+        tanStackModelOptionsForRole({
+          role: "reasoning",
+          provider: "openrouter",
+          modelId: "google/gemini-3.1-pro-preview",
+          organizationId: null,
+        }),
+      ),
     ).toMatchObject({
       reasoning: { effort: "high" },
       temperature: 0,
     });
+  });
+
+  test("never emits a reasoning control outside the model's declared capability", () => {
+    // The whole-class invariant behind the "Reasoning is mandatory"
+    // 502: for EVERY offered model and role, any effort (or Gemini
+    // thinking level) the builders emit must be in the model's
+    // declared capability set, and models without one get nothing.
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+        for (const role of MODEL_ROLES) {
+          const options = looseOptions(
+            tanStackModelOptionsForRole({
+              role,
+              provider,
+              modelId,
+              organizationId: null,
+            }),
+          );
+          const declared = getModelReasoningEfforts(modelId);
+          const declaredValues: readonly string[] = declared ?? [];
+          const context = `${provider} / ${modelId} / ${role}`;
+
+          const effort = options.reasoning?.effort;
+          if (effort !== undefined) {
+            expect(declared, context).not.toBeNull();
+            expect(declaredValues, context).toContain(effort);
+          }
+
+          const thinkingLevel = options.thinkingConfig?.thinkingLevel;
+          if (thinkingLevel !== undefined) {
+            expect(declaredValues, context).toContain(
+              thinkingLevel.toLowerCase(),
+            );
+          }
+        }
+      }
+    }
+  });
+
+  test("sends no reasoning field for models outside the catalog", () => {
+    // Unknown IDs (env overrides, retired models) have no declared
+    // capability; the provider default is the only safe request.
+    expect(
+      tanStackModelOptionsForRole({
+        role: "fast",
+        provider: "openrouter",
+        modelId: "some/unknown-model",
+        organizationId: null,
+      }),
+    ).toEqual({ temperature: 0 });
   });
 
   test("uses TanStack Anthropic snake_case thinking options", () => {

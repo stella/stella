@@ -26,11 +26,14 @@ import {
   DEFAULT_MODELS,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
+  resolveReasoningEffort,
 } from "@stll/ai-catalog";
 import type {
   AIProvider,
   BYOKProvider,
   ModelRole,
+  ReasoningEffort,
+  ResolvedReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
 
@@ -49,10 +52,17 @@ const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
 const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
 const BYOK_CACHE_MAX = 64;
 
-type StellaOpenRouterTextModelOptions = OpenRouterTextModelOptions & {
+type StellaOpenRouterTextModelOptions = Omit<
+  OpenRouterTextModelOptions,
+  "reasoning"
+> & {
   // Supported by OpenRouter Chat Completions and its SDK, but currently
   // omitted from @tanstack/ai-openrouter's public model-options type.
   serviceTier?: "default" | "flex" | undefined;
+  // Narrowed from the SDK's open enum: an effort must be proven
+  // against the target model's declared capability
+  // (`resolveReasoningEffort`) before it can be sent.
+  reasoning?: { effort: ResolvedReasoningEffort } | undefined;
 };
 
 const OPENROUTER_CHAT_MODEL_OPTIONS: StellaOpenRouterTextModelOptions = {};
@@ -93,8 +103,40 @@ type StellaAnthropicTextProviderOptions = Omit<
   thinking?: StellaAnthropicThinking | undefined;
 };
 
-type StellaGeminiTextProviderOptions = GeminiTextProviderOptions & {
+declare const resolvedGoogleThinkingLevelBrand: unique symbol;
+
+type GoogleThinkingLevel = "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
+
+/**
+ * A Gemini thinking level derived from a capability-checked reasoning
+ * effort. Only `googleThinkingLevelForEffort` produces it, so a
+ * literal level the model may reject cannot be written into
+ * `thinkingConfig` directly.
+ */
+type ResolvedGoogleThinkingLevel = GoogleThinkingLevel & {
+  readonly [resolvedGoogleThinkingLevelBrand]: true;
+};
+
+type StellaGeminiThinkingConfig = Omit<
+  NonNullable<GeminiTextProviderOptions["thinkingConfig"]>,
+  "thinkingLevel"
+> & {
+  thinkingLevel: ResolvedGoogleThinkingLevel;
+};
+
+type StellaGeminiTextProviderOptions = Omit<
+  GeminiTextProviderOptions,
+  "thinkingConfig"
+> & {
   serviceTier?: "standard" | "flex" | "priority" | undefined;
+  thinkingConfig?: StellaGeminiThinkingConfig | undefined;
+};
+
+type StellaOpenAITextProviderOptions = Omit<
+  OpenAITextProviderOptions,
+  "reasoning"
+> & {
+  reasoning?: { effort: ResolvedReasoningEffort } | undefined;
 };
 
 export type TanStackAIProviderUnsupportedReason =
@@ -114,7 +156,7 @@ type TanStackModelOptionsByProvider = {
   bedrock: BedrockConverseProviderOptions;
   google: StellaGeminiTextProviderOptions;
   mistral: MistralTextProviderOptions;
-  openai: OpenAITextProviderOptions;
+  openai: StellaOpenAITextProviderOptions;
   openrouter: StellaOpenRouterTextModelOptions;
 };
 
@@ -998,16 +1040,63 @@ type TanStackModelOptionsForRoleInput<TProvider extends TanStackTextProvider> =
     organizationId: SafeId<"organization"> | null;
   };
 
+// SAFETY: sole constructor of the ResolvedGoogleThinkingLevel brand;
+// the input effort is already capability-checked, and every branch
+// maps into the Gemini thinking-level vocabulary.
+const googleThinkingLevelForEffort = (
+  effort: ResolvedReasoningEffort,
+): ResolvedGoogleThinkingLevel => {
+  const widened: ReasoningEffort = effort;
+  const level: GoogleThinkingLevel = (() => {
+    switch (widened) {
+      case "none":
+      case "minimal":
+        return "MINIMAL";
+      case "low":
+        return "LOW";
+      case "medium":
+        return "MEDIUM";
+      case "high":
+      case "xhigh":
+      case "max":
+        return "HIGH";
+    }
+  })();
+  return level as ResolvedGoogleThinkingLevel;
+};
+
+const GOOGLE_REASONING_EFFORT_BY_ROLE = {
+  fast: "none",
+  chat: "none",
+  reasoning: "high",
+  pdf: "none",
+} as const satisfies Record<ModelRole, ReasoningEffort>;
+
 const tanStackGoogleModelOptionsForRole = ({
   role,
-}: TanStackModelOptionsForRoleInput<"google">): GeminiTextProviderOptions => ({
-  temperature: 0,
-  thinkingConfig: {
-    thinkingLevel: role === "reasoning" ? "HIGH" : "MINIMAL",
-    includeThoughts: false,
-  },
-  safetySettings: GOOGLE_SAFETY_SETTINGS_BASELINE,
-});
+  modelId,
+}: TanStackModelOptionsForRoleInput<"google">): StellaGeminiTextProviderOptions => {
+  // Clamped into the model's declared capability: Flash models turn a
+  // "none" request into MINIMAL, Pro (whose floor is "low") into LOW.
+  // Unknown models (env overrides, custom IDs) get no thinkingConfig
+  // at all — the provider default is the only universally safe choice.
+  const effort = resolveReasoningEffort({
+    modelId,
+    requested: GOOGLE_REASONING_EFFORT_BY_ROLE[role],
+  });
+  return {
+    temperature: 0,
+    ...(effort === null
+      ? {}
+      : {
+          thinkingConfig: {
+            thinkingLevel: googleThinkingLevelForEffort(effort),
+            includeThoughts: false,
+          },
+        }),
+    safetySettings: GOOGLE_SAFETY_SETTINGS_BASELINE,
+  };
+};
 
 const tanStackAnthropicModelOptionsForRole = ({
   role,
@@ -1030,28 +1119,36 @@ const tanStackAnthropicModelOptionsForRole = ({
 
 const tanStackOpenAIModelOptionsForRole = ({
   role,
-}: TanStackModelOptionsForRoleInput<"openai">): OpenAITextProviderOptions => {
+  modelId,
+}: TanStackModelOptionsForRoleInput<"openai">): StellaOpenAITextProviderOptions => {
   if (role !== "reasoning") {
     return { temperature: 0 };
   }
-  return {
-    reasoning: { effort: "medium" },
-  };
+  const effort = resolveReasoningEffort({ modelId, requested: "medium" });
+  return effort === null ? {} : { reasoning: { effort } };
 };
 
-type OpenRouterReasoningEffort = "none" | "low" | "medium" | "high";
-
+/**
+ * Per-role reasoning-effort *requests* for OpenRouter models. These
+ * are preferences, not what gets sent: `resolveReasoningEffort` clamps
+ * each into the target model's declared capability (so "none" against
+ * a reasoning-mandatory model degrades to its weakest tier instead of
+ * erroring), and `null` sends no reasoning field at all.
+ */
 const OPENROUTER_REASONING_EFFORT_BY_ROLE = {
   fast: "none",
   chat: null,
   reasoning: "high",
   pdf: null,
-} as const satisfies Record<ModelRole, OpenRouterReasoningEffort | null>;
+} as const satisfies Record<ModelRole, ReasoningEffort | null>;
 
 const tanStackOpenRouterModelOptionsForRole = ({
   role,
+  modelId,
 }: TanStackModelOptionsForRoleInput<"openrouter">): StellaOpenRouterTextModelOptions => {
-  const effort = OPENROUTER_REASONING_EFFORT_BY_ROLE[role];
+  const requested = OPENROUTER_REASONING_EFFORT_BY_ROLE[role];
+  const effort =
+    requested === null ? null : resolveReasoningEffort({ modelId, requested });
   return {
     temperature: 0,
     ...(effort === null ? {} : { reasoning: { effort } }),
@@ -1067,7 +1164,7 @@ const tanStackBedrockModelOptionsForRole =
 
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"google">,
-): GeminiTextProviderOptions;
+): StellaGeminiTextProviderOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"anthropic">,
 ): StellaAnthropicTextProviderOptions;
@@ -1079,10 +1176,16 @@ export function tanStackModelOptionsForRole(
 ): MistralTextProviderOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"openai">,
-): OpenAITextProviderOptions;
+): StellaOpenAITextProviderOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"openrouter">,
 ): StellaOpenRouterTextModelOptions;
+// General form for callers iterating over the provider union (e.g.
+// the capability invariant test); the literal-provider overloads
+// above stay the precise path for single-provider call sites.
+export function tanStackModelOptionsForRole(
+  input: TanStackModelOptionsForRoleInput<TanStackTextProvider>,
+): TanStackModelOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<TanStackTextProvider>,
 ): TanStackModelOptions {
