@@ -87,8 +87,6 @@
     "controlTitle": "Tartsa kézben a rendszerét.",
     "dataBody": "Keressen hivatalos jogforrásokban, emelje be a nyilvántartási adatokat az ügybe, tekintse át a dokumentumkészleteket strukturált táblázatokként, és anonimizálja az azonosító adatokat, mielőtt érzékeny anyag kerülne egy AI-munkafolyamatba.",
     "dataEyebrow": "Jogi adatok",
-    "dataInsetAlt": "Átvilágítási kivonat kitakart azonosító adatokkal a stellában",
-    "dataMainAlt": "Egy hivatalos szlovák bírósági határozat a stellában megnyitva",
     "dataTitle": "Hozza magával a jogot és az adatokat.",
     "deploySubtitle": "Kezdje a felhőben, vagy telepítse ugyanazt a nyílt forráskódú munkaterületet saját infrastruktúrájára.",
     "deployTitle": "Futtassa nálunk. Vagy üzemeltesse saját maga.",

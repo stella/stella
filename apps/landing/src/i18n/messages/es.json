@@ -87,8 +87,6 @@
     "controlTitle": "Mantén el control de la infraestructura.",
     "dataBody": "Busca en fuentes jurídicas oficiales, incorpora datos registrales al asunto, revisa conjuntos de documentos como tablas estructuradas y anonimiza los datos identificativos antes de que el material sensible entre en un flujo de trabajo con IA.",
     "dataEyebrow": "Datos jurídicos",
-    "dataInsetAlt": "Un extracto de due diligence con los datos identificativos ocultados en stella",
-    "dataMainAlt": "Una resolución judicial oficial eslovaca abierta en stella",
     "dataTitle": "Lleva contigo la ley y los datos.",
     "deploySubtitle": "Empieza en la nube o despliega el mismo espacio de trabajo de código abierto en tu infraestructura.",
     "deployTitle": "Ejecútalo con nosotros. O hazlo por tu cuenta.",

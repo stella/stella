@@ -224,40 +224,37 @@ const selfHostingDocsUrl =
         >
           {t("story.velocityTitle")}
         </h2>
-        <ul class="mt-8">
+        <ul class="release-grid mt-10 grid sm:grid-cols-3">
           {
             featureReleases.map((release, index) => (
               <li
                 data-reveal
-                style={`--reveal-delay: ${120 + index * 60}ms; border-block-start: 1px solid var(--border)`}
+                style={`--reveal-delay: ${120 + index * 60}ms`}
+                class="release-col"
               >
                 <a
                   href={`/changelog#${release.slug}`}
-                  class="group flex flex-wrap items-baseline gap-x-4 gap-y-1 py-4"
+                  class="group flex h-full flex-col gap-2"
                 >
                   <span
-                    class="shrink-0 text-sm font-medium tabular-nums"
+                    class="flex items-baseline gap-3 text-sm tabular-nums"
                     style="color: var(--muted-foreground)"
                   >
-                    {release.tagName}
+                    {release.publishedAt && (
+                      <time datetime={release.publishedAt}>
+                        {releaseDateFormatter.format(new Date(release.publishedAt))}
+                      </time>
+                    )}
+                    <span>{release.tagName}</span>
                   </span>
-                  <span class="min-w-0 flex-1 font-display text-lg font-medium transition-opacity group-hover:opacity-70">
+                  <span class="font-display text-xl font-medium transition-opacity group-hover:opacity-70">
                     {release.heading ?? release.displayName}
                   </span>
-                  {release.publishedAt && (
-                    <time
-                      datetime={release.publishedAt}
-                      class="shrink-0 text-sm tabular-nums"
-                      style="color: var(--muted-foreground)"
-                    >
-                      {releaseDateFormatter.format(new Date(release.publishedAt))}
-                    </time>
-                  )}
                   <span
-                    aria-hidden="true"
-                    class="shrink-0 text-sm opacity-0 transition-all rtl:-scale-x-100 group-hover:opacity-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+                    class="text-sm leading-6"
+                    style="color: var(--muted-foreground)"
                   >
-                    →
+                    {release.description}
                   </span>
                 </a>
               </li>
@@ -369,6 +366,35 @@ const selfHostingDocsUrl =
       }
     }
 
+    /* Release columns: hairline separators between columns on wide screens
+       (rows on mobile), the changelog-section pattern of date over title over
+       one-line summary. */
+    .release-col a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    @media (min-width: 640px) {
+      .release-col {
+        padding-inline: 1.75rem;
+      }
+
+      .release-col:first-child {
+        padding-inline-start: 0;
+      }
+
+      .release-col + .release-col {
+        border-inline-start: 1px solid var(--border);
+      }
+    }
+
+    @media (max-width: 639px) {
+      .release-col + .release-col {
+        margin-block-start: 1.5rem;
+        border-block-start: 1px solid var(--border);
+        padding-block-start: 1.5rem;
+      }
+    }
   </style>
 
 </Base>

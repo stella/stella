@@ -1,0 +1,112 @@
+---
+// Chrome-less chapter vignette: a matter's file list as a floating styled
+// component (no window frame), with deadline and review chips around it.
+// Decorative facsimile of the product surface; strings stay English like the
+// recorded scenes and preview components, hidden from assistive tech.
+---
+
+<div class="vignette-scene" aria-hidden="true">
+  <div class="vignette-cluster">
+    <div class="vignette-card vignette-matter">
+    <header class="vignette-matter-head">
+      <span class="vignette-matter-name">Meridian supply agreement</span>
+      <span class="vignette-ref">2026/031</span>
+    </header>
+    <ul class="vignette-files">
+      <li>
+        <span class="vignette-file-name">Supplier_Agreement.docx</span>
+        <span class="vignette-pill vignette-pill-accent">Redline</span>
+        <span class="vignette-meta">v4</span>
+      </li>
+      <li>
+        <span class="vignette-file-name">Master_Terms.pdf</span>
+        <span class="vignette-pill">Signed</span>
+        <span class="vignette-meta">v1</span>
+      </li>
+      <li>
+        <span class="vignette-file-name">Order_Schedule.xlsx</span>
+        <span class="vignette-pill">In review</span>
+        <span class="vignette-meta">v2</span>
+      </li>
+      <li>
+        <span class="vignette-file-name">Liability_Comparison.docx</span>
+        <span class="vignette-pill">Draft</span>
+        <span class="vignette-meta">v2</span>
+      </li>
+    </ul>
+    </div>
+    <span class="vignette-chip vignette-chip-a">Deadline · 28 Jul</span>
+    <span class="vignette-chip vignette-chip-b">Review · 12 of 16 clauses</span>
+  </div>
+</div>
+
+<style>
+  .vignette-cluster {
+    inline-size: min(30rem, 86%);
+  }
+
+  .vignette-matter-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-block-end: 0.65rem;
+    border-block-end: 1px solid
+      color-mix(in srgb, var(--border) 70%, transparent);
+  }
+
+  .vignette-matter-name {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  .vignette-ref {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .vignette-files {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .vignette-files li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding-block: 0.55rem;
+    border-block-start: 1px solid
+      color-mix(in srgb, var(--border) 45%, transparent);
+  }
+
+  .vignette-files li:first-child {
+    border-block-start: 0;
+  }
+
+  .vignette-file-name {
+    min-inline-size: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+  }
+
+  .vignette-meta {
+    color: var(--muted-foreground);
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .vignette-chip-a {
+    inset-block-start: -0.9rem;
+    inset-inline-end: -1.5rem;
+  }
+
+  .vignette-chip-b {
+    inset-block-end: -0.9rem;
+    inset-inline-start: -1.5rem;
+  }
+</style>

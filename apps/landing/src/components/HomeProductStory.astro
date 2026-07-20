@@ -1,10 +1,10 @@
 ---
-import { type FrameVariant, frameAccents } from "../data/products/types";
 import type { TranslationKey } from "../data/site-nav";
 import { defaultLocale, isLocale } from "../i18n/config";
 import { getTranslations } from "../i18n/utils";
-import { CliMcpPreview } from "./react/previews/CliMcpPreview";
-import ThemeImage from "./ThemeImage.astro";
+import AgentVignette from "./vignettes/AgentVignette.astro";
+import DataVignette from "./vignettes/DataVignette.astro";
+import WorkspaceVignette from "./vignettes/WorkspaceVignette.astro";
 
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
@@ -56,16 +56,6 @@ const chapters = [
     ],
   },
 ] as const satisfies readonly StoryChapter[];
-
-// Deliberate frame-recipe assignment: three chapters, three recipes, so no
-// two adjacent homepage visuals repeat a background. The agent chapter blooms
-// with the agent scene's own ember accent; the data chapter carries a faint
-// ripple of the hero artwork; the workspace chapter keeps the neutral wash.
-const chapterFrameVariants = {
-  workspace: "wash",
-  agent: "bloom",
-  data: "ripple",
-} as const satisfies Record<StoryChapter["id"], FrameVariant>;
 
 const proofItems = [
   { titleKey: "story.proofOpenSourceTitle", bodyKey: "story.proofOpenSourceBody" },
@@ -151,70 +141,15 @@ const proofItems = [
 
             <div
               data-reveal
-              style={`--reveal-delay: ${120 + index * 30}ms${
-                chapterFrameVariants[chapter.id] === "bloom"
-                  ? `; --frame-accent: ${frameAccents.ember}`
-                  : ""
-              }`}
+              style={`--reveal-delay: ${120 + index * 30}ms`}
               class:list={[
                 "product-chapter-visual lg:col-span-8",
-                chapterFrameVariants[chapter.id] === "bloom" && "chapter-frame-bloom",
-                chapterFrameVariants[chapter.id] === "ripple" && "chapter-frame-ripple",
                 index % 2 === 1 ? "lg:col-start-1 lg:row-start-1" : "lg:col-start-5",
               ]}
             >
-              {chapterFrameVariants[chapter.id] === "ripple" && (
-                <div class="pointer-events-none absolute inset-0" aria-hidden="true">
-                  <div class="chapter-ripple-layer chapter-ripple-light" />
-                  <div class="chapter-ripple-layer chapter-ripple-dark" />
-                </div>
-              )}
-              {chapter.id === "workspace" && (
-                <div class="story-media story-media-workspace">
-                  <CliMcpPreview
-                    client:visible
-                    includeStyles={false}
-                    sceneId="workspace"
-                    showCompanions={false}
-                  />
-                </div>
-              )}
-              {chapter.id === "agent" && (
-                <div class="story-media story-media-agent">
-                  <CliMcpPreview
-                    client:visible
-                    includeStyles={false}
-                    initialScenarioId="template"
-                    revealSideWindowsOnScroll
-                  />
-                </div>
-              )}
-              {chapter.id === "data" && (
-                <div class="story-media story-media-data">
-                  <div class="story-main-screen">
-                    <ThemeImage
-                      lightSrc="/media/products/story-public-data.png"
-                      darkSrc="/media/products/story-public-data-dark.png"
-                      alt={t("story.dataMainAlt")}
-                      class="h-full w-full object-cover object-top"
-                      loading="lazy"
-                      decoding="async"
-                      defer="visible"
-                    />
-                  </div>
-                  <div class="story-inset-screen story-anonymization-screen">
-                    <ThemeImage
-                      lightSrc="/media/products/anonymization.png"
-                      darkSrc="/media/products/anonymization-dark.png"
-                      alt={t("story.dataInsetAlt")}
-                      class="h-full w-full object-cover object-top"
-                      loading="lazy"
-                      decoding="async"
-                      defer="visible"
-                    />
-                  </div>
-                </div>
-              )}
+              {chapter.id === "workspace" && <WorkspaceVignette />}
+              {chapter.id === "agent" && <AgentVignette />}
+              {chapter.id === "data" && <DataVignette />}
             </div>
           </article>
         ))
@@ -295,7 +230,6 @@ const proofItems = [
     position: relative;
   }
 
-  .product-chapter-visual,
   .control-rail {
     background: color-mix(in srgb, var(--card) 82%, transparent);
     box-shadow:
@@ -303,57 +237,6 @@ const proofItems = [
       0 36px 90px -58px color-mix(in srgb, var(--foreground) 38%, transparent);
   }
 
-  .product-chapter-visual {
-    position: relative;
-    overflow: hidden;
-    border-radius: 1.65rem;
-    padding: 0.55rem;
-  }
-
-  .story-media {
-    position: relative;
-    z-index: 1;
-    overflow: hidden;
-    aspect-ratio: 16 / 10;
-    border-radius: 1.1rem;
-    background: var(--background);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 7%, transparent);
-  }
-
-  .story-main-screen {
-    position: absolute;
-    inset: 0;
-  }
-
-  .story-inset-screen {
-    position: absolute;
-    overflow: hidden;
-    border-radius: 0.8rem;
-    background: var(--background);
-    box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent),
-      0 24px 64px -34px color-mix(in srgb, var(--foreground) 52%, transparent);
-  }
-
-  .story-editor-screen {
-    inline-size: 44%;
-    block-size: 64%;
-    inset-block-end: 5%;
-    inset-inline-end: 3.5%;
-  }
-
-  .story-anonymization-screen {
-    inline-size: 48%;
-    block-size: 58%;
-    inset-block-end: 5%;
-    inset-inline-start: 3.5%;
-  }
-
-  .story-media-agent {
-    aspect-ratio: 2.03;
-  }
-
-  .product-chapter-visual::before,
   .control-rail::before {
     position: absolute;
     content: "";
@@ -366,70 +249,6 @@ const proofItems = [
       transparent 72%,
       color-mix(in srgb, var(--auth-gradient-end) 10%, transparent)
     );
-  }
-
-  /* "bloom" chapter recipe: a radial accent glow in the frame's end corner,
-     via logical insets so it mirrors under RTL. ::after paints above the
-     sheen (tree order) but below .story-media (z-index: 1). The same glow
-     repeats inside the media surface, behind the floating scene windows, so
-     the accent reads through the scene, always at a low mix percentage. */
-  .chapter-frame-bloom::after {
-    content: "";
-    position: absolute;
-    pointer-events: none;
-    inset-block-start: -20%;
-    inset-inline-end: -12%;
-    inline-size: 58%;
-    block-size: 76%;
-    background: radial-gradient(
-      closest-side,
-      color-mix(in srgb, var(--frame-accent, var(--auth-gradient-end)) 12%, transparent),
-      transparent
-    );
-  }
-
-  .chapter-frame-bloom .story-media::before {
-    content: "";
-    position: absolute;
-    pointer-events: none;
-    inset-block-start: -18%;
-    inset-inline-end: -10%;
-    inline-size: 58%;
-    block-size: 80%;
-    background: radial-gradient(
-      closest-side,
-      color-mix(in srgb, var(--frame-accent, var(--auth-gradient-end)) 8%, transparent),
-      transparent
-    );
-  }
-
-  /* "ripple" chapter recipe: a faint excerpt of the hero gradient artwork in
-     the frame ring, theme-switched with the same light/dark opacity toggle
-     the hero and footer art use. Static image, no animation. */
-  .chapter-ripple-layer {
-    position: absolute;
-    inset: 0;
-    background-size: cover;
-    background-position: center 30%;
-    transition: opacity 500ms ease;
-  }
-
-  .chapter-ripple-light {
-    background-image: url("/images/gradients/hero-light.svg");
-    opacity: 0.4;
-  }
-
-  .chapter-ripple-dark {
-    background-image: url("/images/gradients/hero-dark.svg");
-    opacity: 0;
-  }
-
-  :global(.dark) .chapter-ripple-light {
-    opacity: 0;
-  }
-
-  :global(.dark) .chapter-ripple-dark {
-    opacity: 0.35;
   }
 
   .story-link {
@@ -503,35 +322,6 @@ const proofItems = [
   }
 
   @media (max-width: 639px) {
-    .story-media {
-      aspect-ratio: 4 / 3;
-    }
-
-    .story-media-agent {
-      aspect-ratio: 4 / 5;
-    }
-
-    .story-editor-screen {
-      display: none;
-    }
-
-    .story-anonymization-screen {
-      inline-size: 72%;
-      block-size: 50%;
-    }
-
-    .story-media-workspace .story-main-screen img {
-      width: 170%;
-      max-width: none;
-      object-position: start top;
-    }
-
-    .story-media-data .story-main-screen img {
-      width: 165%;
-      max-width: none;
-      object-position: center top;
-    }
-
     .proof-list li:nth-child(odd),
     .proof-list li:nth-child(even) {
       padding-inline: 0;
