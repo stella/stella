@@ -65,6 +65,10 @@
   "home": {
     "ctaTitle": "Jūsu lietas. Jūsu infrastruktūra. Jūsu noteikumi."
   },
+  "meta": {
+    "homeDescription": "Atvērtā pirmkoda juridiskā darba vide: dokumenti, lietas, pārskatīšana un izpēte. Mitiniet paši vai izmantojiet mūsu mākoni. AI pēc lietojuma, bez piesaistes.",
+    "homeTitle": "stella | atvērtā pirmkoda juridiskā darba vide"
+  },
   "nav": {
     "aiFactSheet": "AI faktu lapa",
     "aiFactSheetBlurb": "stella mašīnlasāmā formā.",

@@ -68,6 +68,10 @@ type Messages = {
   "home": {
     "ctaTitle": "Your matters. Your stack. Your terms.";
   };
+  "meta": {
+    "homeDescription": "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.";
+    "homeTitle": "stella | open source legal workspace";
+  };
   "nav": {
     "aiFactSheet": "AI fact sheet";
     "aiFactSheetBlurb": "stella in machine-readable form.";

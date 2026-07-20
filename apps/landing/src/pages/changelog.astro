@@ -1,11 +1,28 @@
 ---
 import Base from "../layouts/Base.astro";
-import { getChangelogReleases } from "../lib/changelog";
+import {
+  getChangelogReleases,
+  getReleaseKind,
+  type ChangelogRelease,
+} from "../lib/changelog";
 import LandingFooter from "../components/LandingFooter.astro";
 
 const githubUrl = "https://github.com/stella/stella";
 const releasesUrl = `${githubUrl}/releases`;
-const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug);
+const releases = getChangelogReleases();
+const previewReleaseSlugs = releases.map((release) => release.slug);
+
+// Server-rendered first page of the changelog: real content for crawlers and
+// the no-JS/pre-JS state. The client script below replaces it with the live
+// GitHub feed once fresh data arrives (same page size as the live feed).
+const STATIC_RELEASES_PER_PAGE = 12;
+const staticReleases = releases.slice(0, STATIC_RELEASES_PER_PAGE);
+const releaseUrl = (release: ChangelogRelease) =>
+  `${releasesUrl}/tag/${release.tagName}`;
+const formatReleaseDate = (publishedAt: string) =>
+  new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(
+    new Date(publishedAt),
+  );
 ---
 
 <Base
@@ -51,23 +68,112 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       <section class="px-6 pb-20 lg:pb-24">
         <div class="mx-auto max-w-5xl">
           <div id="changelog-releases" class="space-y-5" aria-live="polite">
-            <article
-              class="rounded-lg p-6"
-              style="background: var(--card); border: 1px solid var(--border)"
-            >
-              <div class="h-3 w-28 rounded-full" style="background: var(--muted)">
-              </div>
-              <div class="mt-5 h-7 w-48 rounded-full" style="background: var(--muted)">
-              </div>
-              <div class="mt-6 space-y-3">
-                <div class="h-3 w-full rounded-full" style="background: var(--muted)">
-                </div>
-                <div class="h-3 w-5/6 rounded-full" style="background: var(--muted)">
-                </div>
-                <div class="h-3 w-2/3 rounded-full" style="background: var(--muted)">
-                </div>
-              </div>
-            </article>
+            {
+              staticReleases.map((release) => {
+                if (getReleaseKind(release.tagName) === "patch") {
+                  return (
+                    <details
+                      id={release.slug}
+                      class="changelog-entry changelog-patch-release rounded-lg"
+                      data-static-release
+                    >
+                      <summary class="changelog-patch-summary flex min-h-14 cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 sm:flex-nowrap sm:px-6">
+                        <span
+                          class="shrink-0 tabular-nums text-sm font-medium"
+                          style="color: var(--muted-foreground)"
+                        >
+                          {release.tagName}
+                        </span>
+                        <h2
+                          class="min-w-0 flex-1 truncate font-display text-base font-medium sm:text-lg"
+                          style="color: var(--foreground)"
+                        >
+                          {release.heading ?? release.displayName}
+                        </h2>
+                        {release.publishedAt && (
+                          <time
+                            datetime={release.publishedAt}
+                            class="shrink-0 text-sm tabular-nums"
+                            style="color: var(--muted-foreground)"
+                          >
+                            {formatReleaseDate(release.publishedAt)}
+                          </time>
+                        )}
+                        <span
+                          class="changelog-patch-marker inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none"
+                          aria-hidden="true"
+                          style="background: var(--muted); color: var(--foreground)"
+                        >
+                          +
+                        </span>
+                      </summary>
+                      <div
+                        class="changelog-body px-5 pb-5 pt-1 sm:px-6"
+                        style="border-top: 1px solid var(--border)"
+                      >
+                        <p>{release.description}</p>
+                        <div class="mt-5 flex flex-wrap items-center gap-3">
+                          <a
+                            href={releaseUrl(release)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap"
+                            style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+                          >
+                            View release on GitHub
+                          </a>
+                        </div>
+                      </div>
+                    </details>
+                  );
+                }
+
+                return (
+                  <article
+                    id={release.slug}
+                    class="changelog-entry changelog-feature-release rounded-lg p-6 sm:p-8"
+                    data-static-release
+                  >
+                    <div
+                      class="flex flex-wrap items-center gap-3 text-sm font-medium"
+                      style="color: var(--muted-foreground)"
+                    >
+                      <h2>
+                        <a
+                          href={releaseUrl(release)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="font-display text-3xl font-medium transition-opacity hover:opacity-70 sm:text-4xl"
+                          style="color: var(--foreground)"
+                        >
+                          {release.heading ?? release.displayName}
+                        </a>
+                      </h2>
+                      {release.publishedAt && (
+                        <time datetime={release.publishedAt}>
+                          {formatReleaseDate(release.publishedAt)}
+                        </time>
+                      )}
+                    </div>
+                    <div class="changelog-body mt-7 space-y-3">
+                      <h3>{release.displayName}</h3>
+                      <p>{release.description}</p>
+                      <div class="mt-5 flex flex-wrap items-center gap-3">
+                        <a
+                          href={releaseUrl(release)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap"
+                          style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+                        >
+                          View release on GitHub
+                        </a>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            }
           </div>
           <nav
             id="changelog-pagination"
@@ -78,12 +184,12 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
           <noscript>
             <div
-              class="rounded-lg p-6"
+              class="mt-6 rounded-lg p-6"
               style="background: var(--card); border: 1px solid var(--border)"
             >
               <p class="text-sm leading-[1.8]" style="color: var(--muted-foreground)">
-                JavaScript is required to load the live changelog feed. You can
-                still read every release on
+                Showing the latest releases. The full history and complete
+                release notes are on
                 <a
                   href={releasesUrl}
                   class="font-medium transition-opacity hover:opacity-70"
@@ -827,8 +933,16 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       activeReleaseLoad = controller;
       const loadPage = currentPage;
 
+      // The server-rendered list is the pre-JS content for page 1: keep it
+      // visible while the live feed loads and only swap once data arrives.
+      // Paginating (or landing on ?page=N) replaces it with the skeleton.
+      const hasStaticList = (container: HTMLElement) =>
+        container.querySelector("[data-static-release]") !== null;
+
       try {
-        loadContainer.replaceChildren(renderLoading());
+        if (loadPage !== 1 || !hasStaticList(loadContainer)) {
+          loadContainer.replaceChildren(renderLoading());
+        }
 
         const releasePage = await fetchStableReleasePage(
           loadPage,
@@ -848,11 +962,14 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
         if (!releasePage) {
           hasNextPage = false;
           renderPagination();
-          loadContainer.replaceChildren(
-            renderMessage(
-              "Release notes could not be loaded right now. Read them directly on",
-            ),
-          );
+          // With the server-rendered list still up, keep it over an error card.
+          if (!hasStaticList(loadContainer)) {
+            loadContainer.replaceChildren(
+              renderMessage(
+                "Release notes could not be loaded right now. Read them directly on",
+              ),
+            );
+          }
           return;
         }
 
@@ -883,11 +1000,13 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
         hasNextPage = false;
         renderPagination();
-        loadContainer.replaceChildren(
-          renderMessage(
-            "Release notes could not be loaded right now. Read them directly on",
-          ),
-        );
+        if (!hasStaticList(loadContainer)) {
+          loadContainer.replaceChildren(
+            renderMessage(
+              "Release notes could not be loaded right now. Read them directly on",
+            ),
+          );
+        }
       } finally {
         if (activeReleaseLoad === controller) {
           activeReleaseLoad = null;

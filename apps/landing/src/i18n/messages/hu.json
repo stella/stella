@@ -65,6 +65,10 @@
   "home": {
     "ctaTitle": "Az Ön ügyei. Az Ön rendszere. Az Ön szabályai."
   },
+  "meta": {
+    "homeDescription": "Nyílt forráskódú jogi munkaterület: dokumentumok, ügyek, felülvizsgálat és kutatás. Futtassa saját szerverén vagy a felhőnkben. Használatalapú AI, bezártság nélkül.",
+    "homeTitle": "stella | nyílt forráskódú jogi munkaterület"
+  },
   "nav": {
     "aiFactSheet": "AI-adatlap",
     "aiFactSheetBlurb": "A stella géppel olvasható formában.",

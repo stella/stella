@@ -65,6 +65,10 @@
   "home": {
     "ctaTitle": "Tus asuntos. Tu infraestructura. Tus reglas."
   },
+  "meta": {
+    "homeDescription": "Espacio de trabajo legal de código abierto: documentos, asuntos, revisión e investigación. Autoalójalo o usa nuestra nube. IA por uso, sin dependencia del proveedor.",
+    "homeTitle": "stella | espacio de trabajo legal de código abierto"
+  },
   "nav": {
     "aiFactSheet": "Ficha para IA",
     "aiFactSheetBlurb": "stella en formato legible por máquinas.",

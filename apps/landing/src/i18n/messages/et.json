@@ -65,6 +65,10 @@
   "home": {
     "ctaTitle": "Sinu toimikud. Sinu taristu. Sinu reeglid."
   },
+  "meta": {
+    "homeDescription": "Avatud lähtekoodiga õigustööruum dokumentide, toimikute, ülevaatuse ja otsingu jaoks. Majuta ise või kasuta meie pilve. Kasutuspõhine tehisintellekt, tarnijalõksuta.",
+    "homeTitle": "stella | avatud lähtekoodiga õiguslik tööruum"
+  },
   "nav": {
     "aiFactSheet": "Tehisintellekti teabeleht",
     "aiFactSheetBlurb": "stella masinloetaval kujul.",

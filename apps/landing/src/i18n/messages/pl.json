@@ -65,6 +65,10 @@
   "home": {
     "ctaTitle": "Twoje sprawy. Twoja infrastruktura. Twoje zasady."
   },
+  "meta": {
+    "homeDescription": "Otwarte środowisko pracy dla prawników: dokumenty, sprawy, przegląd i orzecznictwo. Hostuj samodzielnie albo w naszej chmurze. AI płatna za użycie, bez uzależnienia.",
+    "homeTitle": "stella | otwarte środowisko pracy dla prawników"
+  },
   "nav": {
     "aiFactSheet": "Karta informacyjna AI",
     "aiFactSheetBlurb": "stella w formie czytelnej dla maszyn.",

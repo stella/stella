@@ -33,6 +33,9 @@ export default defineConfig({
   integrations: [
     sitemap({
       changefreq: "weekly",
+      // The /changelog/<release> stubs are noindex link-preview redirect pages;
+      // keep them (and nothing else under /changelog/…) out of the sitemap.
+      filter: (page) => !/\/changelog\/.+/u.test(new URL(page).pathname),
       // Emit localized URLs + hreflang alternates in the sitemap. Keys are the
       // URL path segments (default locale at root keyed "en"); values are the
       // hreflang codes.

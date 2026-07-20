@@ -19,15 +19,22 @@ const selfHostingDocsUrl =
   "https://github.com/stella/stella/blob/main/docs/self-hosting.md";
 ---
 
-<Base translationScope="all-locales">
+<Base
+  title={t("meta.homeTitle")}
+  description={t("meta.homeDescription")}
+  headerOverlay
+  translationScope="all-locales"
+>
   <main>
     {/* ——— Hero + opening product story: one shared background surface ———
         overflow-clip, not overflow-hidden: hidden would make this a scroll
         container and capture the scene's view() timeline, disabling the
         scroll-staged companion reveal. */}
     <div class="relative overflow-clip">
+      {/* pt compensates for the fixed overlay header (which no longer
+          occupies layout space) plus a little extra air above the badge. */}
       <section
-        class="relative flex min-h-[34rem] flex-col pt-6 sm:min-h-[36rem] sm:pt-8 lg:min-h-[38rem]"
+        class="relative flex min-h-[34rem] flex-col pt-16 sm:min-h-[36rem] sm:pt-20 lg:min-h-[38rem]"
       >
         {/* Extends past the hero so the gradient continues behind the scene
             below, resolving to the page background at its own bottom edge.

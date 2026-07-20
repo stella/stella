@@ -65,6 +65,10 @@
   "home": {
     "ctaTitle": "Jūsų bylos. Jūsų infrastruktūra. Jūsų taisyklės."
   },
+  "meta": {
+    "homeDescription": "Atvirojo kodo teisinė darbo erdvė: dokumentai, bylos, peržiūra ir teisinė paieška. Talpinkite patys arba naudokite mūsų debesį. DI pagal naudojimą, be pririšimo.",
+    "homeTitle": "stella | atvirojo kodo teisinė darbo erdvė"
+  },
   "nav": {
     "aiFactSheet": "DI duomenų lapas",
     "aiFactSheetBlurb": "stella mašinai skaitomu formatu.",

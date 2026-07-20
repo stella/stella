@@ -7,9 +7,12 @@ import MobileNav from "./MobileNav.astro";
 import { getTranslations } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
 
-// `current` lets a page mark its own nav entry.
-type Props = { current?: string };
-const { current } = Astro.props;
+// `current` lets a page mark its own nav entry. `overlay` floats the header
+// transparently over the page top (the homepage hero gradient runs to the
+// viewport edge behind it) and solidifies it on first scroll; the default is
+// the always-solid sticky bar used by every other page.
+type Props = { current?: string; overlay?: boolean };
+const { current, overlay = false } = Astro.props;
 
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
@@ -20,8 +23,13 @@ const githubUrl = "https://github.com/stella/stella";
 ---
 
 <header
-  class="sticky top-0 z-50 border-b backdrop-blur-md"
-  style="border-color: var(--border); background: color-mix(in srgb, var(--background) 82%, transparent)"
+  class:list={[
+    "top-0 z-50",
+    overlay
+      ? "site-header-overlay fixed inset-x-0 border-b border-transparent"
+      : "site-header-solid sticky border-b backdrop-blur-md",
+  ]}
+  data-site-header-overlay={overlay ? "" : undefined}
 >
   <nav
     class="mx-auto flex w-full max-w-300 items-center justify-between px-4 py-4 sm:px-6"
@@ -77,3 +85,38 @@ const githubUrl = "https://github.com/stella/stella";
     </div>
   </nav>
 </header>
+
+<style is:global>
+  .site-header-solid {
+    border-color: var(--border);
+    background: color-mix(in srgb, var(--background) 82%, transparent);
+  }
+  .site-header-overlay {
+    background: transparent;
+    transition:
+      background-color 240ms,
+      border-color 240ms,
+      backdrop-filter 240ms;
+  }
+  .site-header-overlay.is-scrolled {
+    border-color: var(--border);
+    background: color-mix(in srgb, var(--background) 82%, transparent);
+    backdrop-filter: blur(12px);
+  }
+</style>
+
+<script is:inline>
+  if (!window.__siteHeaderOverlayBound) {
+    window.__siteHeaderOverlayBound = true;
+    const syncOverlayHeader = () => {
+      const header = document.querySelector("[data-site-header-overlay]");
+      if (!header) {
+        return;
+      }
+      header.classList.toggle("is-scrolled", window.scrollY > 8);
+    };
+    window.addEventListener("scroll", syncOverlayHeader, { passive: true });
+    document.addEventListener("astro:page-load", syncOverlayHeader);
+    syncOverlayHeader();
+  }
+</script>

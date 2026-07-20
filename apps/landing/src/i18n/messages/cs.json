@@ -65,6 +65,10 @@
   "home": {
     "ctaTitle": "Vaše spisy. Vaše technologie. Vaše pravidla."
   },
+  "meta": {
+    "homeDescription": "Otevřené právní pracovní prostředí pro dokumenty, spisy, revize a rešerše. Provozujte sami, nebo v našem cloudu. AI podle využití, bez závislosti na dodavateli.",
+    "homeTitle": "stella | otevřené právní pracovní prostředí"
+  },
   "nav": {
     "aiFactSheet": "Přehled pro AI",
     "aiFactSheetBlurb": "stella ve strojově čitelné podobě.",

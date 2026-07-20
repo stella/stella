@@ -65,6 +65,10 @@
   "home": {
     "ctaTitle": "Seus casos. Sua infraestrutura. Suas regras."
   },
+  "meta": {
+    "homeDescription": "Espaço de trabalho jurídico de código aberto: documentos, casos, revisão e pesquisa. Auto-hospede ou use nossa nuvem. IA por uso, sem dependência de fornecedor.",
+    "homeTitle": "stella | espaço de trabalho jurídico de código aberto"
+  },
   "nav": {
     "aiFactSheet": "Ficha para IA",
     "aiFactSheetBlurb": "stella em formato legível por máquinas.",

@@ -1263,7 +1263,10 @@ const CLI_STYLES = `
     /* Attio-style staging: at page load the main window stands alone,
        larger and sitting higher; scrolling scrubs it down to its resting
        size and position while the companions arrive one after another.
-       Pure transform scale, so the recording keeps its aspect. */
+       Timeline is ABSOLUTE scroll distance (scroll(root)), not viewport
+       entry: entry progress varies with viewport height, so on tall
+       screens companions would already be past their range at load.
+       With scroll distance, zero scroll always means hidden companions. */
     @keyframes cli-main-scroll-settle {
       from { transform: translateY(-7%) scale(1.24); }
       to { transform: translateY(0) scale(1); }
@@ -1272,26 +1275,26 @@ const CLI_STYLES = `
       transform-origin: 50% 0%;
       animation: cli-main-scroll-settle linear both;
       animation-duration: auto;
-      animation-timeline: view(block);
-      animation-range: entry 25% entry 85%;
+      animation-timeline: scroll(root);
+      animation-range: 0px 420px;
     }
     .cli-story-with-scroll-reveal .cli-window {
       animation: cli-terminal-scroll-reveal linear both;
       animation-duration: auto;
-      animation-timeline: view(block);
-      animation-range: entry 45% entry 80%;
+      animation-timeline: scroll(root);
+      animation-range: 40px 260px;
     }
     .cli-story-with-scroll-reveal .cli-client {
       animation: cli-side-start-reveal linear both;
       animation-duration: auto;
-      animation-timeline: view(block);
-      animation-range: entry 55% entry 90%;
+      animation-timeline: scroll(root);
+      animation-range: 120px 380px;
     }
     .cli-story-with-scroll-reveal .cli-response {
       animation: cli-side-end-reveal linear both;
       animation-duration: auto;
-      animation-timeline: view(block);
-      animation-range: entry 65% entry 100%;
+      animation-timeline: scroll(root);
+      animation-range: 200px 480px;
     }
   }
   .nav-mega-pane .cli-window,
