@@ -13,7 +13,11 @@ import { promisify } from "node:util";
 
 // Explicit .ts extension: `capture:product-story` runs this file under
 // node's type stripping, whose ESM resolver requires real file paths.
-import { captureDefinitions, RECORDINGS_MANIFEST_PATH } from "./captures.ts";
+import {
+  CAPTURE_DPR,
+  captureDefinitions,
+  RECORDINGS_MANIFEST_PATH,
+} from "./captures.ts";
 import type {
   CaptureDefinition,
   CaptureTheme,
@@ -43,6 +47,9 @@ const MANIFEST_PATH = path.join(REPO_ROOT, RECORDINGS_MANIFEST_PATH);
 const execFileAsync = promisify(execFile);
 
 type StoryScene = {
+  // Pre-collapse the app sidebar (icon rail) before the page loads; used by
+  // the portrait document scene so the docx page fills the frame.
+  collapsedSidebar?: boolean;
   durationSeconds: number;
   id: StoryCaptureId;
   path: (views: MarketingViewRoutes) => string;
@@ -105,6 +112,25 @@ const scenes = [
     },
   },
   {
+    // Portrait-only document scene for the floating editor side window: the
+    // same seeded SAFE in the document full view (the route the inspector's
+    // "Full view" button opens), with the app sidebar collapsed so the Word
+    // page fills the narrow frame.
+    id: "editor-doc",
+    collapsedSidebar: true,
+    path: () =>
+      `/workspaces/${NORTHSTAR_WORKSPACE_ID}/all/document` +
+      "?editing=true" +
+      "&entity=c3596565-1663-57fe-81aa-e69a56675a27" +
+      "&field=6a22b489-4a08-5c91-8cda-ec83ff6ef8e7",
+    durationSeconds: 5.6,
+    prepare: async (page) => {
+      await page.getByText("Internal_SAFE_Agreement.docx").first().waitFor();
+      await page.locator(".layout-run-text").first().waitFor();
+      await closeInspectorIfOpen(page);
+    },
+  },
+  {
     id: "agent",
     path: ({ agent }) => agent,
     durationSeconds: 8,
@@ -123,6 +149,7 @@ const scenes = [
 
 // Join the shared capture matrix (viewports, watched paths) with this file's
 // per-scene routes and choreography.
+// eslint-disable-next-line no-map-spread -- merges each capture definition with its scene into a new record; neither source object may be mutated, and the array is tiny
 const captures: readonly StoryCapture[] = captureDefinitions.map(
   (definition) => {
     const scene = scenes.find(({ id }) => id === definition.sceneId);
@@ -131,7 +158,7 @@ const captures: readonly StoryCapture[] = captureDefinitions.map(
         `No scene choreography for capture ${definition.captureId}`,
       );
     }
-    return { ...scene, ...definition };
+    return { ...scene, ...definition};
   },
 );
 
@@ -147,7 +174,16 @@ const main = async () => {
   const recordedAtCommit = await resolveRecordedAtCommit();
   const recordedEntries: RecordingManifestEntry[] = [];
   let cookies = await authenticate();
-  const browser = await chromium.launch({ headless: true });
+  // Playwright's screencast delivers frames at the compositor's resolution,
+  // which emulated deviceScaleFactor alone does not raise: without the launch
+  // flag, a 2x recordVideo size just pads 1x frames with grey. Forcing the
+  // device scale at the browser level makes the compositor render at
+  // CAPTURE_DPR so the video really contains device pixels. The flag is
+  // browser-wide, hence one DPR for the whole capture matrix.
+  const browser = await chromium.launch({
+    args: [`--force-device-scale-factor=${CAPTURE_DPR}`],
+    headless: true,
+  });
   cookies = await selectMarketingOrganization(browser, cookies);
   const views = await resolveMarketingViewRoutes(browser, cookies);
 
@@ -165,6 +201,7 @@ const main = async () => {
         captureId: capture.captureId,
         theme,
         viewport: capture.viewport,
+        dpr: capture.dpr,
         recordedAtCommit,
         watchedPaths: capture.watchedPaths,
       });
@@ -224,7 +261,7 @@ const readRecordingsManifest = async (): Promise<RecordingsManifest> => {
   if (!existsSync(MANIFEST_PATH)) {
     return { entries: [] };
   }
-  const parsed: unknown = JSON.parse(await readFile(MANIFEST_PATH, "utf8"));
+  const parsed: unknown = JSON.parse(await readFile(MANIFEST_PATH, "utf-8"));
   if (
     typeof parsed !== "object" ||
     parsed === null ||
@@ -260,7 +297,9 @@ const recordCapture = async ({
 }: RecordCaptureOptions) => {
   const context = await createRecordingContext({
     browser,
+    collapsedSidebar: capture.collapsedSidebar ?? false,
     cookies,
+    dpr: capture.dpr,
     theme,
     viewport: capture.viewport,
   });
@@ -314,28 +353,44 @@ const recordCapture = async ({
 
 type RecordingContextOptions = {
   browser: Browser;
+  collapsedSidebar: boolean;
   cookies: AuthCookie[];
+  dpr: number;
   theme: CaptureTheme;
   viewport: CaptureViewport;
 };
 
 const createRecordingContext = async ({
   browser,
+  collapsedSidebar,
   cookies,
+  dpr,
   theme,
   viewport,
 }: RecordingContextOptions) => {
   const context = await browser.newContext({
     baseURL: WEB_URL,
     colorScheme: theme,
+    // Record at device pixels (logical viewport x dpr) so retina screens get
+    // sharp UI text instead of a 1x upscale.
+    deviceScaleFactor: dpr,
     locale: "en-GB",
-    recordVideo: { dir: RAW_VIDEO_DIR, size: viewport },
+    recordVideo: {
+      dir: RAW_VIDEO_DIR,
+      size: { height: viewport.height * dpr, width: viewport.width * dpr },
+    },
     viewport,
   });
   await context.addCookies(cookies);
-  await context.addInitScript((nextTheme) => {
-    localStorage.setItem("theme", nextTheme);
-  }, theme);
+  await context.addInitScript(
+    ({ nextCollapsedSidebar, nextTheme }) => {
+      localStorage.setItem("theme", nextTheme);
+      if (nextCollapsedSidebar) {
+        localStorage.setItem("sidebar_state", "collapsed");
+      }
+    },
+    { nextCollapsedSidebar: collapsedSidebar, nextTheme: theme },
+  );
   return context;
 };
 
@@ -586,12 +641,23 @@ const animateBetweenRows = async (
   await page.getByText(secondRowText).first().hover();
 };
 
+// The inspector opens store-driven (async, after the document mounts), so a
+// visibility snapshot races it: wait for its Close button to appear, close,
+// and wait for the pane to leave so the document reflows to full width.
 const closeInspectorIfOpen = async (page: Page) => {
-  const closeButton = page.getByRole("button", { name: /close/iu }).last();
-  if (await closeButton.isVisible().catch(() => false)) {
-    await closeButton.click();
-    await page.waitForTimeout(500);
+  const closeButton = page.getByRole("button", { name: /^close$/iu }).last();
+  const appeared = await closeButton
+    .waitFor({ state: "visible", timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!appeared) {
+    return;
   }
+  await closeButton.click();
+  await closeButton
+    .waitFor({ state: "hidden", timeout: 5000 })
+    .catch(() => undefined);
+  await page.waitForTimeout(500);
 };
 
 const animateDocumentScroll = async (page: Page) => {
@@ -619,7 +685,7 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
     await animateBetweenRows(page, /^In Review$/u, /^Closed$/u);
     return;
   }
-  if (captureId === "editor") {
+  if (captureId === "editor" || captureId === "editor-doc") {
     await animateDocumentScroll(page);
     return;
   }
@@ -668,8 +734,10 @@ const transcodeVideo = async ({
       "libx264",
       "-preset",
       "slow",
+      // CRF 23 keeps 2x UI text legible; the old 1x captures used 27, which
+      // reads soft on the fine strokes of retina-density text.
       "-crf",
-      "27",
+      "23",
       "-movflags",
       "+faststart",
       outputPath,

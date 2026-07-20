@@ -49,6 +49,7 @@ const isManifestEntry = (value: unknown): value is RecordingManifestEntry =>
   typeof value["captureId"] === "string" &&
   isTheme(value["theme"]) &&
   isViewport(value["viewport"]) &&
+  typeof value["dpr"] === "number" &&
   typeof value["recordedAtCommit"] === "string" &&
   Array.isArray(value["watchedPaths"]) &&
   value["watchedPaths"].every((path) => typeof path === "string");
@@ -58,7 +59,7 @@ const readManifestEntries = (): RecordingManifestEntry[] => {
   if (!existsSync(manifestPath)) {
     return [];
   }
-  const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf-8"));
   if (!isRecord(parsed) || !Array.isArray(parsed["entries"])) {
     throw new TypeError(
       `${RECORDINGS_MANIFEST_PATH} must contain an entries array`,
@@ -75,7 +76,7 @@ const readManifestEntries = (): RecordingManifestEntry[] => {
 };
 
 const git = (args: readonly string[]): string =>
-  execFileSync("git", [...args], { cwd: ROOT_DIR, encoding: "utf8" }).trim();
+  execFileSync("git", [...args], { cwd: ROOT_DIR, encoding: "utf-8" }).trim();
 
 const isKnownCommit = (commit: string): boolean => {
   try {
@@ -116,14 +117,21 @@ const judgeEntry = (entry: RecordingManifestEntry): Verdict => {
   );
   if (!definition) {
     reasons.push("capture id is no longer in the capture matrix (captures.ts)");
-  } else if (
-    definition.viewport.width !== entry.viewport.width ||
-    definition.viewport.height !== entry.viewport.height
-  ) {
-    reasons.push(
-      `viewport drifted: recorded ${entry.viewport.width}x${entry.viewport.height}, ` +
-        `expected ${definition.viewport.width}x${definition.viewport.height}`,
-    );
+  } else {
+    if (
+      definition.viewport.width !== entry.viewport.width ||
+      definition.viewport.height !== entry.viewport.height
+    ) {
+      reasons.push(
+        `viewport drifted: recorded ${entry.viewport.width}x${entry.viewport.height}, ` +
+          `expected ${definition.viewport.width}x${definition.viewport.height}`,
+      );
+    }
+    if (definition.dpr !== entry.dpr) {
+      reasons.push(
+        `device pixel ratio drifted: recorded ${entry.dpr}x, expected ${definition.dpr}x`,
+      );
+    }
   }
 
   if (!isKnownCommit(entry.recordedAtCommit)) {

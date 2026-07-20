@@ -8,11 +8,25 @@
 
 export type CaptureViewport = { height: number; width: number };
 
-export type StoryCaptureId = "agent" | "editor" | "review" | "workspace";
+// "editor-doc" is the portrait-only scene: the same seeded SAFE document
+// opened in the document full view with the app sidebar collapsed, so the
+// floating editor side window shows the docx page rather than the whole app
+// squeezed narrow.
+export type StoryCaptureId =
+  | "agent"
+  | "editor"
+  | "editor-doc"
+  | "review"
+  | "workspace";
 
 export const CAPTURE_THEMES = ["light", "dark"] as const;
 
 export type CaptureTheme = (typeof CAPTURE_THEMES)[number];
+
+// All captures record at 2x device pixels: the landing page renders them in
+// CSS-sized boxes on mostly-retina screens, and 1x captures upscale soft.
+// The staleness checker treats a DPR change like a viewport change.
+export const CAPTURE_DPR = 2;
 
 // 16:9 masters for the scene-only embeds (product pages, HomeProductStory
 // chapters), whose main-window content box sits near 16:9.
@@ -30,6 +44,7 @@ export const PORTRAIT_VIEWPORT = { height: 1036, width: 900 } as const;
 
 export type CaptureDefinition = {
   captureId: string;
+  dpr: number;
   sceneId: StoryCaptureId;
   viewport: CaptureViewport;
   watchedPaths: readonly string[];
@@ -59,6 +74,8 @@ const SCENE_WATCHED_PATHS: Record<StoryCaptureId, readonly string[]> = {
   // DOCX editor over the seeded Northstar SAFE ($viewId.document.tsx and
   // -components/docx live inside the workspace slice).
   editor: ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
+  // Document full view of the same SAFE, sidebar collapsed.
+  "editor-doc": ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
   // Seeded agent thread in the chat surface.
   agent: [
     "apps/web/src/routes/_protected.chat",
@@ -75,27 +92,22 @@ const toDefinition = (
   viewport: CaptureViewport,
 ): CaptureDefinition => ({
   captureId,
+  dpr: CAPTURE_DPR,
   sceneId,
   viewport,
   watchedPaths: [...COMMON_WATCHED_PATHS, ...SCENE_WATCHED_PATHS[sceneId]],
 });
 
 // Every scene is captured at the 16:9 wide viewport (scene-only embeds) and
-// at the hero viewport (companion composition's main window). The editor is
-// additionally captured portrait for the floating side window.
-export const captureDefinitions: readonly CaptureDefinition[] =
-  SCENE_IDS.flatMap((sceneId) => {
-    const definitions = [
-      toDefinition(sceneId, sceneId, WIDE_VIEWPORT),
-      toDefinition(sceneId, `${sceneId}-hero`, HERO_VIEWPORT),
-    ];
-    if (sceneId === "editor") {
-      definitions.push(
-        toDefinition(sceneId, "editor-portrait", PORTRAIT_VIEWPORT),
-      );
-    }
-    return definitions;
-  });
+// at the hero viewport (companion composition's main window). The floating
+// editor side window additionally gets the portrait-only document scene.
+export const captureDefinitions: readonly CaptureDefinition[] = [
+  ...SCENE_IDS.flatMap((sceneId) => [
+    toDefinition(sceneId, sceneId, WIDE_VIEWPORT),
+    toDefinition(sceneId, `${sceneId}-hero`, HERO_VIEWPORT),
+  ]),
+  toDefinition("editor-doc", "editor-portrait", PORTRAIT_VIEWPORT),
+];
 
 export const RECORDINGS_MANIFEST_PATH =
   "apps/landing/public/media/products/recordings-manifest.json";
@@ -104,6 +116,7 @@ export type RecordingManifestEntry = {
   captureId: string;
   theme: CaptureTheme;
   viewport: CaptureViewport;
+  dpr: number;
   recordedAtCommit: string;
   watchedPaths: readonly string[];
 };
