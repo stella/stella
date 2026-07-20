@@ -116,7 +116,7 @@ export const anonymization: Product = {
     },
     {
       type: "capability",
-      id: "workspaces.anonymization-terms.readWorkspaceAnonymizationTerms",
+      id: "workspaces.anonymization-terms.read",
     },
     {
       type: "source",
