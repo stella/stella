@@ -18,6 +18,7 @@ const CATALOG_URL = new URL(
 const jsonSchemaSchema = v.record(v.string(), v.unknown());
 const catalogEntrySchema = v.looseObject({
   id: v.string(),
+  description: v.optional(v.string()),
   handlerKind: v.picklist(["workspace", "root", "session"]),
   access: v.picklist(["read", "write"]),
   destructive: v.boolean(),
@@ -54,6 +55,9 @@ export const parseCapabilityCatalog = (
       destructive: entry.destructive,
       scope: entry.scope,
     };
+    if (entry.description !== undefined) {
+      projected.description = entry.description;
+    }
     if (entry.requiresFileInput !== undefined) {
       projected.requiresFileInput = entry.requiresFileInput;
     }

@@ -44,7 +44,19 @@ const variadicFlag = (brief: string) =>
 const booleanFlag = (brief: string, withNegated: boolean) =>
   ({ brief, kind: "boolean", optional: true, withNegated }) as const;
 
+/**
+ * A flag's `--help` line: the property's authored prose first (that is what a
+ * caller — usually an agent — actually needs), then the mechanical
+ * required/kind/enum/range facts the schema already encodes.
+ */
 const flagBrief = (spec: FlagSpec): string => {
+  const facts = mechanicalFlagFacts(spec);
+  return spec.description === undefined
+    ? facts
+    : `${spec.description} [${facts}]`;
+};
+
+const mechanicalFlagFacts = (spec: FlagSpec): string => {
   const parts = [spec.required ? "(required)" : "(optional)", spec.kind];
   if (spec.enum) {
     parts.push(`one of: ${spec.enum.join(", ")}`);
@@ -168,8 +180,19 @@ const capabilityInputHint = (spec: CapabilityLeafSpec): string => {
   return "";
 };
 
-const capabilityLeafBrief = (spec: CapabilityLeafSpec): string =>
-  `Invoke the ${spec.capabilityId} capability${capabilityInputHint(spec)}`;
+/**
+ * The command's `--help` brief. The catalog's authored description is the whole
+ * point of the single-registry design, so it wins outright; the id-derived line
+ * survives only as the fallback for a capability that has not been given a
+ * description yet (a shrinking set — see the description-coverage ratchet).
+ */
+const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
+  const hint = capabilityInputHint(spec);
+  if (spec.description === undefined) {
+    return `Invoke the ${spec.capabilityId} capability${hint}`;
+  }
+  return `${spec.description}${hint}`;
+};
 
 const buildCapabilityLeafFlags = (
   spec: CapabilityLeafSpec,

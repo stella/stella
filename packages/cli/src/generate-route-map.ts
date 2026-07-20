@@ -218,6 +218,7 @@ const classifyObject = (
         kind: "enum",
         enum: childEnum,
         repeatable: false,
+        ...descriptionField(child),
       });
       continue;
     }
@@ -231,12 +232,47 @@ const classifyObject = (
       kind: scalar,
       ...(scalar === "int" || scalar === "number" ? boundFields(child) : {}),
       repeatable: false,
+      ...descriptionField(child),
     });
   }
   return { kind: "dot-path", children };
 };
 
+/**
+ * The schema's own `description`, as a spreadable field. Present on a curated
+ * tool's hand-written property schema and on any handler-config property given
+ * an Elysia `t.X({ description })`; both reach the generator as plain JSON
+ * Schema, so one helper covers the tool tree and the capability tree alike.
+ */
+const descriptionField = (schema: PropSchema): { description?: string } => {
+  const description = schema["description"];
+  if (typeof description !== "string" || description.trim().length === 0) {
+    return {};
+  }
+  return { description };
+};
+
+/**
+ * Classify one property into a flag, a dot-path group, or `--input`-only, and
+ * carry the property's own prose onto the resulting flag. The shape derivation
+ * lives in `classifyPropShape`; attaching the description in one place here
+ * keeps every construction site in that function free of the concern.
+ */
 export const classifyProp = (
+  prop: string,
+  schema: PropSchema,
+): PropClassification => {
+  const classified = classifyPropShape(prop, schema);
+  if (classified.kind !== "flag") {
+    return classified;
+  }
+  return {
+    kind: "flag",
+    spec: { ...classified.spec, ...descriptionField(schema) },
+  };
+};
+
+const classifyPropShape = (
   prop: string,
   schema: PropSchema,
 ): PropClassification => {

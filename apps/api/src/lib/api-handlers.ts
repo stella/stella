@@ -229,22 +229,44 @@ export type UsageMeteringConfig = {
   modelRole?: ModelRole;
 };
 
-export type HandlerConfig = InputSchema & {
-  permissions: PermissionInput;
-  requiresUsage?: UsageMeteringConfig;
-  mcp: McpExposure;
+/**
+ * One prose description of what a capability does, written for the agent that
+ * will decide whether to call it. This is the SINGLE place the description
+ * lives: the capability-catalog exporter carries it into both committed catalog
+ * mirrors, from which the CLI derives `--help` for the generated command and MCP
+ * derives `list_capabilities` / `describe_capability` output. Do not duplicate
+ * it into a hand-written MCP tool definition.
+ *
+ * Write it the way a tool description is written, not the way a code comment is:
+ * lead with the operation, then the consequential detail a caller needs BEFORE
+ * invoking (irreversibility, what else it deletes, which fields are required for
+ * a create vs. an update, what `null` clears). Per-PROPERTY prose does not
+ * belong here; it goes on the property's own Elysia `t.*` schema
+ * (`t.String({ description: "..." })`), which the same exporter already carries
+ * into the catalog's `inputSchema`.
+ */
+type CapabilityDescription = {
+  description?: string;
 };
 
-export type SessionHandlerConfig = InputSchema & {
-  mcp: McpExposure;
-};
+export type HandlerConfig = InputSchema &
+  CapabilityDescription & {
+    permissions: PermissionInput;
+    requiresUsage?: UsageMeteringConfig;
+    mcp: McpExposure;
+  };
+
+export type SessionHandlerConfig = InputSchema &
+  CapabilityDescription & {
+    mcp: McpExposure;
+  };
 
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
-  Omit<TConfig, "permissions" | "mcp">
+  Omit<TConfig, "permissions" | "mcp" | "description">
 >;
 
 type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
-  UnwrapRoute<Omit<TConfig, "mcp">>;
+  UnwrapRoute<Omit<TConfig, "mcp" | "description">>;
 
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,

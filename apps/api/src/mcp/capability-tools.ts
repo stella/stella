@@ -68,6 +68,14 @@ type HandlerKind = (typeof HANDLER_KINDS)[number];
 
 type CatalogEntry = {
   id: string;
+  /**
+   * Authored prose describing what the capability does, sourced from the
+   * handler config and carried here by the export script. Surfaced in
+   * `list_capabilities` and `describe_capability` so an agent can choose a
+   * capability without a round trip through the REST docs. Absent only for a
+   * capability that has not been given one yet.
+   */
+  description?: string;
   handlerKind: HandlerKind;
   access: "read" | "write";
   destructive: boolean;
@@ -137,6 +145,8 @@ const isMcpDisposition = (
 const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   isRecord(value) &&
   typeof value["id"] === "string" &&
+  (value["description"] === undefined ||
+    typeof value["description"] === "string") &&
   isHandlerKind(value["handlerKind"]) &&
   (value["access"] === "read" || value["access"] === "write") &&
   typeof value["destructive"] === "boolean" &&
@@ -454,6 +464,7 @@ const listCapabilitiesHandler = async ({
       items: page.map((entry) => ({
         id: entry.id,
         summary: summarizeEntry(entry),
+        description: entry.description ?? null,
         scope: entry.scope,
       })),
       nextCursor,
@@ -581,6 +592,7 @@ const describeCapabilityHandler = async ({
     egress: "structured",
     payload: {
       id: entry.id,
+      description: entry.description ?? null,
       domain: capabilityDomain(entry.id),
       access: entry.access,
       destructive: entry.destructive,

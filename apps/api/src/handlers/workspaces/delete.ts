@@ -71,6 +71,9 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
 };
 
 const config = {
+  description:
+    "Permanently delete a matter and all its documents, tasks, fields, and " +
+    "chat history. This is irreversible.",
   permissions: { workspace: ["delete"] },
   mcp: { type: "tool", name: "delete_matter" },
 } satisfies HandlerConfig;
