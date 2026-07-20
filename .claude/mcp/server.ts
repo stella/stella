@@ -628,7 +628,7 @@ server.tool(
       );
       const failureNote =
         failedSourceNames.length > 0
-          ? `\n\nNote: could not fetch ${failedSourceNames.join(", ")}; results exclude ${failedSourceNames.length === 1 ? "it" : "them"}.`
+          ? `Note: could not fetch ${failedSourceNames.join(", ")}; results exclude ${failedSourceNames.length === 1 ? "it" : "them"}.`
           : "";
 
       for (const { value } of successfulSources) {
@@ -671,18 +671,24 @@ server.tool(
           content: [
             {
               type: "text" as const,
-              text: `No matching documentation pages found for "${query}".${failureNote}`,
+              text: `No matching documentation pages found for "${query}".${failureNote.length > 0 ? ` ${failureNote}` : ""}`,
             },
           ],
         };
       }
 
+      // The note rides as its own content block rather than being appended to
+      // the JSON text: a caller parsing the results block must still get valid
+      // JSON, so the warning cannot be concatenated onto it.
       return {
         content: [
           {
             type: "text" as const,
-            text: `${JSON.stringify(limitedResults, null, 2)}${failureNote}`,
+            text: JSON.stringify(limitedResults, null, 2),
           },
+          ...(failureNote.length > 0
+            ? [{ type: "text" as const, text: failureNote }]
+            : []),
         ],
       };
     } catch (error) {
