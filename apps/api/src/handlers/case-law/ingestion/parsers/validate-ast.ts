@@ -58,7 +58,12 @@ const SKIP_WORDS = new Set([
   "pokračování",
 ]);
 
-const LETTERS = new Set("abcdefghijklmnopqrstuvwxyzáčďéěíňóřšťúůýž");
+// Letters across the supported corpora: base Latin, Czech, Polish,
+// Slovak, German. A letter missing here gets trimmed from word edges,
+// silently shrinking the compared word sets for that language.
+const LETTERS = new Set(
+  "abcdefghijklmnopqrstuvwxyzáäąčćďéěęíĺľłňńóôöřŕšśťúůüýžźżß",
+);
 const trimNonLetters = (word: string): string => {
   let start = 0;
   let end = word.length;
@@ -93,21 +98,24 @@ const extractWords = (text: string): Set<string> => {
   return words;
 };
 
-/** Count characters across all inline nodes. */
-const inlineTextLength = (inlines: readonly Inline[]): number => {
-  let len = 0;
+/** Flatten inline nodes to text (line-break → space). */
+const inlineText = (inlines: readonly Inline[]): string => {
+  let text = "";
   for (const node of inlines) {
     if (node.type === "text") {
-      len += node.text.length;
+      text += node.text;
     } else if (node.type === "line-break") {
-      len += 1;
+      text += " ";
     } else {
       // bold | italic | link — all carry children
-      len += inlineTextLength(node.children);
+      text += inlineText(node.children);
     }
   }
-  return len;
+  return text;
 };
+
+const collapseWhitespace = (text: string): string =>
+  text.replace(/\s+/gu, " ").trim();
 
 // ── Validator ──────────────────────────────────────────────
 
@@ -127,6 +135,12 @@ export const validateAst = (
 
   const $ = cheerio.load(html);
   $("div[style*='-aw-headerfooter-type']").remove();
+
+  // <br> is a word boundary in the rendered document, but cheerio's
+  // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →
+  // "wrazz") and producing phantom MISSING_WORDS reports against a
+  // correct AST. Make it a space before extracting reference text.
+  $("br").replaceWith(" ");
 
   // Extract text from content elements, but skip nested
   // elements whose text is already included by a parent
@@ -272,8 +286,10 @@ export const validateAst = (
     // ── 4. Inline-plainText consistency ─────────────────
 
     if (block.type === "heading" || block.type === "paragraph") {
-      const inlineLen = inlineTextLength(block.inlines);
-      const plainLen = block.plainText.length;
+      // Parsers normalize plainText while inlines keep source spacing;
+      // compare whitespace-collapsed forms so padding never flags.
+      const inlineLen = collapseWhitespace(inlineText(block.inlines)).length;
+      const plainLen = collapseWhitespace(block.plainText).length;
       // Allow some tolerance for whitespace differences
       if (
         Math.abs(inlineLen - plainLen) > 5 &&
@@ -347,19 +363,28 @@ export const validateAndLog = (
 ): ValidationResult => {
   const result = validateAst(html, blocks);
 
+  // Court decisions are public documents; log full diagnostics so a
+  // failure is actionable straight from the log line, without
+  // re-fetching and re-parsing the source.
   if (!result.ok) {
     logger.error("case_law.ingestion.ast_validation_failed", {
       parser: parserName,
       caseNumber,
-      issues: result.issues.length,
-      missingWords: result.stats.missingWords.length,
+      issues: result.issues
+        .map((issue) => `${issue.code}: ${issue.message}`)
+        .join("; "),
+      missingWords: result.stats.missingWords.slice(0, 25).join(", "),
+      missingWordCount: result.stats.missingWords.length,
       retainedPct: result.stats.retainedPct,
+      blockCount: result.stats.blockCount,
     });
   } else if (result.issues.length > 0) {
     logger.warn("case_law.ingestion.ast_validation_warning", {
       parser: parserName,
       caseNumber,
-      issues: result.issues.length,
+      issues: result.issues
+        .map((issue) => `${issue.code}: ${issue.message}`)
+        .join("; "),
     });
   }
 
