@@ -35,7 +35,10 @@ const DB_TEST_MARKERS = [
   "pglite",
 ] as const;
 const DB_TEST_PATH_RE = /\.(?:integration|db)\.test\.tsx?$/u;
-const TYPE_ONLY_IMPORT_RE = /^\s*import\s+type\b.*$/gmu;
+// Spans multi-line type imports (formatters wrap long ones), up to and
+// including the module specifier so it cannot leak into marker matching.
+const TYPE_ONLY_IMPORT_RE =
+  /^\s*import\s+type\b[\s\S]*?from\s+["'][^"']+["']/gmu;
 // Hard per-batch peak-RSS budget. A batch that outgrows it fails the run
 // even when every test passes, so memory growth surfaces here as a readable
 // error instead of an opaque exit-137 kill when the hosted runner's memory
@@ -156,7 +159,13 @@ const runTests = async (testFiles: string[], isolate: boolean) => {
 
   const usage = child.resourceUsage();
   if (usage) {
-    const peakMb = Math.round(usage.maxRSS / BYTES_PER_MB);
+    // getrusage semantics pass straight through Bun: ru_maxrss is bytes on
+    // macOS but kibibytes on Linux. Normalize before comparing, or the
+    // budget can never trip on the hosted runners.
+    const peakMb =
+      process.platform === "darwin"
+        ? Math.round(usage.maxRSS / BYTES_PER_MB)
+        : Math.round(usage.maxRSS / 1024);
     console.log(
       `${executionMode} batch (${testFiles.length} files) peak RSS: ` +
         `${peakMb} MB (budget ${MAX_BATCH_PEAK_RSS_MB} MB)`,
