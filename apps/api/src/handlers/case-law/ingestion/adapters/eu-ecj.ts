@@ -49,8 +49,11 @@ const SPARQL_URL = "https://publications.europa.eu/webapi/rdf/sparql";
 const CELLAR_RESOURCE_PREFIX = "http://publications.europa.eu/resource/cellar/";
 const CELLAR_LANGUAGE_PREFIX =
   "http://publications.europa.eu/resource/authority/language/";
+// Digit runs are unbounded on purpose: Cellar's version/manifestation
+// padding is an upstream detail, and the charset alone already rules out
+// path traversal in the URL we build from this.
 const CELLAR_MANIFESTATION_ID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d{4}\.\d{2}$/u;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d+\.\d+$/u;
 
 /**
  * All 24 official EU languages. EUR-Lex publishes CJEU
@@ -90,6 +93,11 @@ const eurLexSourceUrl = (lang: EcjLanguage, celex: string) =>
   `https://eur-lex.europa.eu/legal-content/${lang}` +
   `/ALL/?uri=CELEX:${celex}`;
 
+// Intl.Locale construction is not free and SPARQL pages repeat the same
+// 24 language URIs thousands of times during backfills; memoize per
+// Cellar code (misses included).
+const ecjLanguageCache = new Map<string, EcjLanguage | undefined>();
+
 const toEcjLanguage = (languageUri: string): EcjLanguage | undefined => {
   if (!languageUri.startsWith(CELLAR_LANGUAGE_PREFIX)) {
     return undefined;
@@ -98,10 +106,15 @@ const toEcjLanguage = (languageUri: string): EcjLanguage | undefined => {
   if (!/^[A-Z]{3}$/u.test(cellarCode)) {
     return undefined;
   }
+  if (ecjLanguageCache.has(cellarCode)) {
+    return ecjLanguageCache.get(cellarCode);
+  }
   const language = new Intl.Locale(
     cellarCode.toLowerCase(),
   ).language.toUpperCase();
-  return ECJ_LANGUAGES.find((supported) => supported === language);
+  const resolved = ECJ_LANGUAGES.find((supported) => supported === language);
+  ecjLanguageCache.set(cellarCode, resolved);
+  return resolved;
 };
 
 const toCellarContentUrl = (manifestationUri: string): string | undefined => {
@@ -110,6 +123,11 @@ const toCellarContentUrl = (manifestationUri: string): string | undefined => {
   }
   const manifestationId = manifestationUri.slice(CELLAR_RESOURCE_PREFIX.length);
   if (!CELLAR_MANIFESTATION_ID.test(manifestationId)) {
+    // A Cellar-prefixed URI that fails validation means the upstream ID
+    // format changed; surface it instead of silently dropping the variant.
+    logger.warn("case_law.ingestion.unexpected_cellar_manifestation_id", {
+      manifestationUri,
+    });
     return undefined;
   }
   return `https://publications.europa.eu/resource/cellar/${manifestationId}/DOC_1`;
@@ -423,6 +441,9 @@ export const euEcjAdapter: SourceAdapter = {
 
         // 2. Process each SPARQL result
         for (const binding of bindings) {
+          if (abortSignal.aborted) {
+            break;
+          }
           const celex = binding.celex.value;
           const ecli = binding.ecli.value;
           const date = binding.date.value;
