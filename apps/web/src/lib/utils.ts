@@ -30,11 +30,11 @@ export const composeRefs =
         const cleanup = ref(node);
         if (typeof cleanup === "function") {
           cleanups.push(() => {
-            void cleanup();
+            cleanup();
           });
         } else if (node !== null) {
           cleanups.push(() => {
-            void ref(null);
+            ref(null);
           });
         }
       } else if (ref !== undefined && ref !== null) {
@@ -85,4 +85,14 @@ export const downloadFile = (blob: Blob, fileName: string) => {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+};
+
+/**
+ * Force a synchronous style and layout flush so pending DOM writes (a class
+ * change, an injected style) take effect before the next mutation. Reading a
+ * layout property is the side effect; the returned value is intentionally
+ * discarded.
+ */
+export const forceReflow = (element: HTMLElement): void => {
+  element.getBoundingClientRect();
 };

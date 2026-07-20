@@ -6,11 +6,11 @@ import { logDevError } from "@/lib/errors/utils";
 const noop = () => undefined;
 
 export const noopAnalytics: Analytics = {
-  captureError: (error) => {
+  captureError: (error, context) => {
     if (error instanceof CancelledError) {
       return;
     }
-    logDevError(error);
+    logDevError(error, context);
   },
   capturePageViewed: noop,
   identifyUser: noop,
