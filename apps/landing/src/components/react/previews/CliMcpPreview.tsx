@@ -1,6 +1,5 @@
 import {
   type CSSProperties,
-  type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
   useEffect,
@@ -262,26 +261,13 @@ export const CliMcpPreview = ({
 
       {showCompanions && (
         <div
-          aria-label="Bring Microsoft Teams conversation to front"
-          aria-pressed={focusedWindow === "client"}
           className={cn(
-            "cli-client mac-window group bg-card focus-visible:outline-ring absolute start-[2.5%] top-[8%] hidden h-[30%] w-[15.5%] min-w-0 cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none",
+            "cli-client mac-window group bg-card absolute start-[2.5%] top-[8%] hidden h-[30%] w-[15.5%] min-w-0 overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] sm:block",
             discoverLabel && selectedWindow === "client" && "cli-selected",
           )}
-          onBlur={() => scheduleSelectionClear("client")}
-          onFocus={() => {
-            activateWindow("client");
-            selectWindow("client");
-          }}
+          onPointerDown={() => activateWindow("client")}
           onPointerEnter={() => selectWindow("client")}
           onPointerLeave={() => scheduleSelectionClear("client")}
-          onKeyDown={(event) =>
-            activateWindowFromKeyboard(event, () => activateWindow("client"))
-          }
-          onPointerDown={(event) => handleDragPointerDown("client", event)}
-          onPointerMove={handleDragPointerMove}
-          onPointerUp={handleDragPointerUp}
-          role="button"
           style={{
             borderColor:
               "color-mix(in srgb, var(--foreground) 11%, transparent)",
@@ -292,18 +278,35 @@ export const CliMcpPreview = ({
               window: "client",
             }),
           }}
-          tabIndex={0}
         >
-          <div className="shrink-0">
+          <div
+            className="shrink-0 cursor-grab touch-none active:cursor-grabbing"
+            onPointerDown={(event) => handleDragPointerDown("client", event)}
+            onPointerMove={handleDragPointerMove}
+            onPointerUp={handleDragPointerUp}
+          >
             <WindowChrome
               icon={<TeamsMark />}
               label="Microsoft Teams"
               prominent
             />
           </div>
-          <TeamsWindow
-            showAnswer={!isAutoPlaying || teamsLoopFrame % 2 === 1}
-          />
+          <WindowBodyLink
+            discover={
+              discoverLabel
+                ? {
+                    href: DISCOVER_WINDOW_PRODUCTS.client.href,
+                    label: `${discoverLabel} ${DISCOVER_WINDOW_PRODUCTS.client.name}`,
+                  }
+                : undefined
+            }
+            onBlur={() => scheduleSelectionClear("client")}
+            onFocus={() => selectWindow("client")}
+          >
+            <TeamsWindow
+              showAnswer={!isAutoPlaying || teamsLoopFrame % 2 === 1}
+            />
+          </WindowBodyLink>
         </div>
       )}
 
@@ -311,21 +314,12 @@ export const CliMcpPreview = ({
         aria-label="Bring stella workspace to front"
         aria-pressed={focusedWindow === "workspace"}
         className={cn(
-          "cli-main-window mac-window group bg-card focus-visible:outline-ring absolute start-[18.5%] top-[8%] h-[81%] w-[63%] cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_42px_110px_-54px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2",
+          "cli-main-window mac-window group bg-card absolute start-[18.5%] top-[8%] h-[81%] w-[63%] overflow-hidden border p-0 text-start shadow-[0_42px_110px_-54px_rgba(15,23,42,.5)]",
           discoverLabel && selectedWindow === "workspace" && "cli-selected",
         )}
-        onBlur={() => scheduleSelectionClear("workspace")}
-        onFocus={() => {
-          activateWindow("workspace");
-          selectWindow("workspace");
-        }}
+        onPointerDown={() => activateWindow("workspace")}
         onPointerEnter={() => selectWindow("workspace")}
         onPointerLeave={() => scheduleSelectionClear("workspace")}
-        onKeyDown={(event) =>
-          activateWindowFromKeyboard(event, () => activateWindow("workspace"))
-        }
-        onPointerDown={() => activateWindow("workspace")}
-        role="button"
         style={{
           borderColor: "color-mix(in srgb, var(--foreground) 11%, transparent)",
           zIndex: getWindowZIndex({
@@ -334,16 +328,27 @@ export const CliMcpPreview = ({
             window: "workspace",
           }),
         }}
-        tabIndex={0}
       >
         <WindowChrome label={getSceneChromeLabel(activeSceneId)} prominent />
-        <div className="bg-background relative h-[calc(100%-var(--mac-titlebar-height))] overflow-hidden">
+        <WindowBodyLink
+          className="bg-background relative h-[calc(100%-var(--mac-titlebar-height))] overflow-hidden"
+          discover={
+            discoverLabel
+              ? {
+                  href: DISCOVER_PRODUCTS[activeSceneId].href,
+                  label: `${discoverLabel} ${DISCOVER_PRODUCTS[activeSceneId].name}`,
+                }
+              : undefined
+          }
+          onBlur={() => scheduleSelectionClear("workspace")}
+          onFocus={() => selectWindow("workspace")}
+        >
           <RecordedStellaScene
             isActive={isInViewport}
             sceneId={activeSceneId}
             variant={showCompanions ? "hero" : "wide"}
           />
-        </div>
+        </WindowBodyLink>
       </div>
 
       {showCompanions && (
@@ -351,24 +356,13 @@ export const CliMcpPreview = ({
           aria-label="Bring stella Editor to front"
           aria-pressed={focusedWindow === "source"}
           className={cn(
-            "cli-response mac-window group bg-card focus-visible:outline-ring absolute end-[2%] top-[15%] hidden h-[42%] w-[16%] cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none",
+            "cli-response mac-window group bg-card absolute end-[2%] top-[15%] hidden h-[42%] w-[16%] overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] sm:block",
             discoverLabel && selectedWindow === "source" && "cli-selected",
           )}
           key={activeScenario.id}
-          onBlur={() => scheduleSelectionClear("source")}
-          onFocus={() => {
-            activateWindow("source");
-            selectWindow("source");
-          }}
+          onPointerDown={() => activateWindow("source")}
           onPointerEnter={() => selectWindow("source")}
           onPointerLeave={() => scheduleSelectionClear("source")}
-          onKeyDown={(event) =>
-            activateWindowFromKeyboard(event, () => activateWindow("source"))
-          }
-          onPointerDown={(event) => handleDragPointerDown("source", event)}
-          onPointerMove={handleDragPointerMove}
-          onPointerUp={handleDragPointerUp}
-          role="button"
           style={{
             borderColor:
               "color-mix(in srgb, var(--foreground) 11%, transparent)",
@@ -379,19 +373,35 @@ export const CliMcpPreview = ({
               window: "source",
             }),
           }}
-          tabIndex={0}
         >
-          <div className="shrink-0">
+          <div
+            className="shrink-0 cursor-grab touch-none active:cursor-grabbing"
+            onPointerDown={(event) => handleDragPointerDown("source", event)}
+            onPointerMove={handleDragPointerMove}
+            onPointerUp={handleDragPointerUp}
+          >
             <WindowChrome label="stella Editor" />
           </div>
-          <div className="bg-background relative h-[calc(100%-var(--mac-titlebar-height))] overflow-hidden">
+          <WindowBodyLink
+            className="bg-background relative h-[calc(100%-var(--mac-titlebar-height))] overflow-hidden"
+            discover={
+              discoverLabel
+                ? {
+                    href: DISCOVER_WINDOW_PRODUCTS.source.href,
+                    label: `${discoverLabel} ${DISCOVER_WINDOW_PRODUCTS.source.name}`,
+                  }
+                : undefined
+            }
+            onBlur={() => scheduleSelectionClear("source")}
+            onFocus={() => selectWindow("source")}
+          >
             <RecordedStellaScene
               crop="document"
               isActive={isInViewport}
               sceneId="editor"
               variant="portrait"
             />
-          </div>
+          </WindowBodyLink>
         </div>
       )}
 
@@ -401,23 +411,12 @@ export const CliMcpPreview = ({
           aria-live="polite"
           aria-pressed={focusedWindow === "terminal"}
           className={cn(
-            "cli-window mac-window group focus-visible:outline-ring absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 cursor-grab appearance-none flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:start-[4.5%] sm:bottom-[14%] sm:h-[31%] sm:w-[14%] sm:touch-none",
+            "cli-window mac-window group absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] sm:start-[4.5%] sm:bottom-[14%] sm:h-[31%] sm:w-[14%]",
             discoverLabel && selectedWindow === "terminal" && "cli-selected",
           )}
-          onBlur={() => scheduleSelectionClear("terminal")}
-          onFocus={() => {
-            activateWindow("terminal");
-            selectWindow("terminal");
-          }}
+          onPointerDown={() => activateWindow("terminal")}
           onPointerEnter={() => selectWindow("terminal")}
           onPointerLeave={() => scheduleSelectionClear("terminal")}
-          onKeyDown={(event) =>
-            activateWindowFromKeyboard(event, () => activateWindow("terminal"))
-          }
-          onPointerDown={(event) => handleDragPointerDown("terminal", event)}
-          onPointerMove={handleDragPointerMove}
-          onPointerUp={handleDragPointerUp}
-          role="button"
           style={{
             background: "var(--terminal-chrome)",
             borderColor:
@@ -430,15 +429,29 @@ export const CliMcpPreview = ({
               window: "terminal",
             }),
           }}
-          tabIndex={0}
         >
-          <div className="shrink-0">
+          <div
+            className="shrink-0 cursor-grab touch-none active:cursor-grabbing"
+            onPointerDown={(event) => handleDragPointerDown("terminal", event)}
+            onPointerMove={handleDragPointerMove}
+            onPointerUp={handleDragPointerUp}
+          >
             <WindowChrome label="stella CLI agent" />
           </div>
 
-          <div
+          <WindowBodyLink
             className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            discover={
+              discoverLabel
+                ? {
+                    href: DISCOVER_WINDOW_PRODUCTS.terminal.href,
+                    label: `${discoverLabel} ${DISCOVER_WINDOW_PRODUCTS.terminal.name}`,
+                  }
+                : undefined
+            }
             key={`${activeScenario.id}-${terminalLoopFrame}`}
+            onBlur={() => scheduleSelectionClear("terminal")}
+            onFocus={() => selectWindow("terminal")}
             style={{
               background: "var(--terminal-background)",
               fontVariantLigatures: "none",
@@ -544,7 +557,7 @@ export const CliMcpPreview = ({
             >
               <SessionStatus scenario={activeScenario} />
             </div>
-          </div>
+          </WindowBodyLink>
         </div>
       )}
 
@@ -919,6 +932,50 @@ const DISCOVER_WINDOW_PRODUCTS: Record<
   terminal: { href: "/product/cli-mcp", name: "CLI & MCP" },
 };
 
+type WindowBodyLinkProps = {
+  children: ReactNode;
+  className?: string;
+  discover?: { href: string; label: string };
+  onBlur: () => void;
+  onFocus: () => void;
+  style?: CSSProperties;
+};
+
+// Window body: a real link to the product page in the interactive hero
+// (where `discover` is provided); a plain container in embeds. The window
+// chrome above it is the drag handle.
+const WindowBodyLink = ({
+  children,
+  className,
+  discover,
+  onBlur,
+  onFocus,
+  style,
+}: WindowBodyLinkProps) => {
+  if (!discover) {
+    return (
+      <div className={className} style={style}>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <a
+      aria-label={discover.label}
+      className={cn(
+        "block cursor-pointer text-inherit no-underline",
+        className,
+      )}
+      href={discover.href}
+      onBlur={onBlur}
+      onFocus={onFocus}
+      style={style}
+    >
+      {children}
+    </a>
+  );
+};
+
 type DiscoverTagProps = {
   dragOffset?: { x: number; y: number };
   href: string;
@@ -1045,17 +1102,6 @@ const getFocusedWindow = ({
     return toPreviewWindow(focus);
   }
   return activeWindow;
-};
-
-const activateWindowFromKeyboard = (
-  event: KeyboardEvent,
-  activateWindow: () => void,
-) => {
-  if (event.key !== "Enter" && event.key !== " ") {
-    return;
-  }
-  event.preventDefault();
-  activateWindow();
 };
 
 const SessionStatus = ({ scenario }: { scenario: CliScenario }) => {
