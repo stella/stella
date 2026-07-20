@@ -850,16 +850,17 @@ export const createSafeSessionHandler = <
 export type TokenHandlerConfig = Omit<
   InputSchema,
   "body" | "query" | "params"
-> & {
-  body?: AnyPermissiveRouteSchema;
-  query?: AnyPermissiveRouteSchema;
-  params?: AnyPermissiveRouteSchema;
-  mcp: McpExposure;
-};
+> &
+  CapabilityDescription & {
+    body?: AnyPermissiveRouteSchema;
+    query?: AnyPermissiveRouteSchema;
+    params?: AnyPermissiveRouteSchema;
+    mcp: McpExposure;
+  };
 
 type TokenHandlerContext<
   TConfig extends TokenHandlerConfig = TokenHandlerConfig,
-> = Context<UnwrapRoute<Omit<TConfig, "mcp">>>;
+> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description">>>;
 
 /**
  * Like `createSafeSessionHandler`, but the framework does not
@@ -878,13 +879,14 @@ export const createSafeTokenHandler = <
 ): SafeHandlerDefinition<TConfig, TokenHandlerContext<TConfig>, TResult> =>
   createSafeDirectHandler(config, handler);
 
-export type PublicHandlerConfig = InputSchema & {
-  mcp: McpExposure;
-};
+export type PublicHandlerConfig = InputSchema &
+  CapabilityDescription & {
+    mcp: McpExposure;
+  };
 
 type PublicHandlerContext<
   TConfig extends PublicHandlerConfig = PublicHandlerConfig,
-> = Context<UnwrapRoute<Omit<TConfig, "mcp">>>;
+> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description">>>;
 
 /**
  * For unauthenticated routes that intentionally expose public data.
