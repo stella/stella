@@ -1181,7 +1181,8 @@ const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
   { id: "gamma.update" },
   { id: "delta.delete", inputSchemaTruncated: true },
 ])}\n`;
-const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 2;
+// Two truncated entries in each of the two mirror fixtures.
+const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 4;
 
 const runSelfTest = (): number => {
   const failures: string[] = [];
@@ -1250,9 +1251,16 @@ const runSelfTest = (): number => {
       "apps/web/src/features/alpha/uses-beta.ts",
       SELF_TEST_CROSS_FEATURE,
     );
+    // Both mirrors, so each `include` glob is exercised rather than only the
+    // first: the metric's whole point is that the two artifacts stay in step.
     writeFixture(
       root,
       "packages/cli/src/generated/capability-catalog.json",
+      SELF_TEST_CAPABILITY_CATALOG,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/mcp/generated/capability-catalog.json",
       SELF_TEST_CAPABILITY_CATALOG,
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
