@@ -461,11 +461,7 @@ export const euEcjAdapter: SourceAdapter = {
             continue;
           }
 
-          if (
-            previousCelex &&
-            previousCelex !== celex &&
-            !abortSignal.aborted
-          ) {
+          if (previousCelex && previousCelex !== celex) {
             // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between decisions; language variants within one decision remain contiguous and unslept
             await Bun.sleep(500);
           }
