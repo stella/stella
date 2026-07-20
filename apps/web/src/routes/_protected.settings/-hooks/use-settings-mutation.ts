@@ -51,8 +51,9 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
   // re-enabling of the triggering control. The `.catch` on the same line
   // keeps this out of the detached-promise ratchet and routes a failed
   // refetch to telemetry instead of an unhandled rejection.
-  const invalidateInBackground = () =>
+  const invalidateInBackground = (): void => {
     invalidate().catch((error: unknown) => analytics.captureError(error));
+  };
 
   const invalidatesOnSettle = options.invalidateOn === "settled";
 
