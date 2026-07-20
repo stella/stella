@@ -4,7 +4,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 import { chromium, request as playwrightRequest } from "@playwright/test";
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, Locator, Page } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -46,10 +46,18 @@ const MANIFEST_PATH = path.join(REPO_ROOT, RECORDINGS_MANIFEST_PATH);
 // eslint-disable-next-line typescript/strict-void-return -- promisify resolves execFile via its custom `__promisify__` overload; the rule matches the generic void-callback overload instead
 const execFileAsync = promisify(execFile);
 
+// Whether the fake cursor overlay is injected for a scene. "visible" scenes
+// must end their prepare step at the scene's deliberate resting pointer
+// position: the ready reference screenshot (and therefore frame 0 and the
+// poster) includes the cursor, and the loop choreography must return to that
+// same rest point so the loop still closes.
+type CursorMode = "hidden" | "visible";
+
 type StoryScene = {
   // Pre-collapse the app sidebar (icon rail) before the page loads; used by
   // the portrait document scene so the docx page fills the frame.
   collapsedSidebar?: boolean;
+  cursor: CursorMode;
   durationSeconds: number;
   id: StoryCaptureId;
   path: (views: MarketingViewRoutes) => string;
@@ -70,6 +78,7 @@ type MarketingViewRoutes = {
 const scenes = [
   {
     id: "workspace",
+    cursor: "visible",
     path: ({ files }) => files,
     durationSeconds: 3.5,
     prepare: async (page) => {
@@ -81,11 +90,14 @@ const scenes = [
         .getByText(/atlas_001_Corporate/u)
         .first()
         .waitFor();
+      // Rest: the second (home) row, matching the frame-0 hover state the
+      // loop returns to.
       await animateBetweenRows(page, /^Active$/u, /^Closed$/u);
     },
   },
   {
     id: "review",
+    cursor: "visible",
     path: ({ table }) => table,
     durationSeconds: 3.5,
     prepare: async (page) => {
@@ -94,11 +106,17 @@ const scenes = [
         .first()
         .waitFor();
       await page.getByRole("grid").waitFor();
+      // Rest: the second (home) row, matching the frame-0 hover state the
+      // loop returns to.
       await animateBetweenRows(page, /^Active$/u, /^In Review$/u);
     },
   },
   {
+    // The editor loop is a smooth document scroll with no pointer
+    // interaction; a static injected cursor would read as a dead pointer (or
+    // imply drag-scrolling that is not happening), so the overlay stays off.
     id: "editor",
+    cursor: "hidden",
     path: () =>
       `/workspaces/${NORTHSTAR_WORKSPACE_ID}/all/document` +
       "?editing=true" +
@@ -115,9 +133,11 @@ const scenes = [
     // Portrait-only document scene for the floating editor side window: the
     // same seeded SAFE in the document full view (the route the inspector's
     // "Full view" button opens), with the app sidebar collapsed so the Word
-    // page fills the narrow frame.
+    // page fills the narrow frame. Cursor hidden for the same reason as the
+    // wide editor scene: the loop is scroll-only.
     id: "editor-doc",
     collapsedSidebar: true,
+    cursor: "hidden",
     path: () =>
       `/workspaces/${NORTHSTAR_WORKSPACE_ID}/all/document` +
       "?editing=true" +
@@ -132,6 +152,7 @@ const scenes = [
   },
   {
     id: "agent",
+    cursor: "visible",
     path: ({ agent }) => agent,
     durationSeconds: 5.5,
     prepare: async (page) => {
@@ -143,6 +164,16 @@ const scenes = [
         .getByText(/assignment or a material service change/u)
         .first()
         .waitFor();
+      // Rest just below-right of the first cited source: neutral (nothing
+      // hovered), and the loop's first eased move starts from a short,
+      // natural approach onto that source.
+      const firstSource = await locatorCenter(
+        page.getByText(/atlas_001_Corporate/u).first(),
+      );
+      await moveCursorTo(page, {
+        x: firstSource.x + 56,
+        y: firstSource.y + 44,
+      });
     },
   },
 ] as const satisfies readonly StoryScene[];
@@ -299,6 +330,7 @@ const recordCapture = async ({
     browser,
     collapsedSidebar: capture.collapsedSidebar ?? false,
     cookies,
+    cursor: capture.cursor,
     dpr: capture.dpr,
     theme,
     viewport: capture.viewport,
@@ -601,6 +633,7 @@ type RecordingContextOptions = {
   browser: Browser;
   collapsedSidebar: boolean;
   cookies: AuthCookie[];
+  cursor: CursorMode;
   dpr: number;
   theme: CaptureTheme;
   viewport: CaptureViewport;
@@ -610,6 +643,7 @@ const createRecordingContext = async ({
   browser,
   collapsedSidebar,
   cookies,
+  cursor,
   dpr,
   theme,
   viewport,
@@ -637,7 +671,85 @@ const createRecordingContext = async ({
     },
     { nextCollapsedSidebar: collapsedSidebar, nextTheme: theme },
   );
+  if (cursor === "visible") {
+    await context.addInitScript(installCursorOverlay, CURSOR_OVERLAY_ID);
+  }
   return context;
+};
+
+const CURSOR_OVERLAY_ID = "__stella_capture_cursor";
+
+// Browser-side cursor overlay: headless screencasts contain no OS cursor, so
+// pointer-choreographed scenes inject a macOS-style arrow (natural CSS-pixel
+// size; the DPR-2 compositor scales it) that follows the real mousemove
+// events Playwright's page.mouse dispatches, plus a small expanding ring on
+// mousedown. It stays hidden until the first mousemove, ignores pointer
+// events, and sits one z-index below the ready marker so the magenta flash
+// stays solid.
+const installCursorOverlay = (cursorId: string) => {
+  // The arrow tip inside the SVG below; subtracted so the tip, not the SVG
+  // origin, lands on the pointer coordinates.
+  const hotspotX = 1.5;
+  const hotspotY = 1;
+  let cursorElement: HTMLDivElement | undefined;
+
+  const ensureCursorElement = () => {
+    if (cursorElement?.isConnected) {
+      return cursorElement;
+    }
+    cursorElement = document.createElement("div");
+    cursorElement.id = cursorId;
+    cursorElement.style.cssText =
+      "position:fixed;left:0;top:0;width:16px;height:22px;" +
+      "z-index:2147483646;pointer-events:none;opacity:0;" +
+      "will-change:transform;" +
+      "filter:drop-shadow(0 1px 1.5px rgba(0,0,0,0.35));";
+    // Static template literal with no interpolations: provably safe HTML.
+    cursorElement.innerHTML = `<svg width="16" height="22"
+      viewBox="0 0 16 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M1.5 1L1.5 18.2L5.6 14.4L8.4 20.8L11.4 19.5L8.6 13.2L14 13.2Z"
+      fill="#111114" stroke="#ffffff" stroke-width="1.3"
+      stroke-linejoin="round"/></svg>`;
+    document.body.append(cursorElement);
+    return cursorElement;
+  };
+
+  document.addEventListener(
+    "mousemove",
+    (event) => {
+      const element = ensureCursorElement();
+      element.style.opacity = "1";
+      element.style.transform =
+        `translate3d(${event.clientX - hotspotX}px, ` +
+        `${event.clientY - hotspotY}px, 0)`;
+    },
+    { capture: true, passive: true },
+  );
+
+  document.addEventListener(
+    "mousedown",
+    (event) => {
+      const pulse = document.createElement("div");
+      pulse.style.cssText =
+        `position:fixed;left:${event.clientX}px;top:${event.clientY}px;` +
+        "width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:9999px;" +
+        "z-index:2147483645;pointer-events:none;" +
+        "border:1.5px solid rgba(255,255,255,0.95);" +
+        "box-shadow:0 0 0 1px rgba(0,0,0,0.35);";
+      document.body.append(pulse);
+      const pulseAnimation = pulse.animate(
+        [
+          { opacity: 0.9, transform: "scale(0.5)" },
+          { opacity: 0, transform: "scale(2.4)" },
+        ],
+        { duration: 300, easing: "ease-out" },
+      );
+      pulseAnimation.addEventListener("finish", () => {
+        pulse.remove();
+      });
+    },
+    { capture: true, passive: true },
+  );
 };
 
 const configurePage = (page: Page) => {
@@ -877,14 +989,86 @@ const hideCaptureNoise = async (page: Page) => {
   });
 };
 
+// Eased pointer choreography: with the cursor overlay in the frame, every
+// pointer movement must be human-plausible, so all hovers and clicks route
+// through moveCursorTo (ease-in-out interpolation around page.mouse.move)
+// instead of Playwright's teleporting hover()/click().
+
+type PointerPoint = { x: number; y: number };
+
+// Playwright's virtual mouse starts at (0,0); the last commanded position is
+// tracked per page so every eased move starts where the previous one ended.
+const pointerPositions = new WeakMap<Page, PointerPoint>();
+
+const CURSOR_STEP_MS = 1000 / 60;
+const CURSOR_MIN_TRAVEL_MS = 280;
+const CURSOR_MAX_TRAVEL_MS = 900;
+const CURSOR_MS_PER_PIXEL = 1.4;
+const CURSOR_PRESS_MS = 90;
+
+const easeInOutCubic = (t: number) =>
+  t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+
+// Human-plausible travel time: proportional to distance, clamped so short
+// hops stay visible and long glides stay brisk.
+const cursorTravelMs = (from: PointerPoint, to: PointerPoint) =>
+  Math.min(
+    CURSOR_MAX_TRAVEL_MS,
+    Math.max(
+      CURSOR_MIN_TRAVEL_MS,
+      Math.hypot(to.x - from.x, to.y - from.y) * CURSOR_MS_PER_PIXEL,
+    ),
+  );
+
+const moveCursorTo = async (page: Page, target: PointerPoint) => {
+  const from = pointerPositions.get(page) ?? { x: 0, y: 0 };
+  const durationMs = cursorTravelMs(from, target);
+  const startedAt = Date.now();
+  let elapsedMs = 0;
+  while (elapsedMs < durationMs) {
+    const eased = easeInOutCubic(elapsedMs / durationMs);
+    // eslint-disable-next-line no-await-in-loop -- the interpolated steps of one cursor glide are inherently sequential
+    await page.mouse.move(
+      from.x + (target.x - from.x) * eased,
+      from.y + (target.y - from.y) * eased,
+    );
+    // eslint-disable-next-line no-await-in-loop -- paces the glide at ~60 steps/s
+    await page.waitForTimeout(CURSOR_STEP_MS);
+    elapsedMs = Date.now() - startedAt;
+  }
+  await page.mouse.move(target.x, target.y);
+  pointerPositions.set(page, target);
+};
+
+const locatorCenter = async (locator: Locator): Promise<PointerPoint> => {
+  const box = await locator.boundingBox();
+  if (!box) {
+    throw new Error(
+      "Cannot move the cursor to an element without a bounding box",
+    );
+  }
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+};
+
+const hoverWithCursor = async (page: Page, locator: Locator) => {
+  await moveCursorTo(page, await locatorCenter(locator));
+};
+
+const clickWithCursor = async (page: Page, locator: Locator) => {
+  await hoverWithCursor(page, locator);
+  await page.mouse.down();
+  await page.waitForTimeout(CURSOR_PRESS_MS);
+  await page.mouse.up();
+};
+
 const animateBetweenRows = async (
   page: Page,
   firstRowText: RegExp,
   secondRowText: RegExp,
 ) => {
-  await page.getByText(firstRowText).first().hover();
+  await hoverWithCursor(page, page.getByText(firstRowText).first());
   await page.waitForTimeout(750);
-  await page.getByText(secondRowText).first().hover();
+  await hoverWithCursor(page, page.getByText(secondRowText).first());
 };
 
 // The inspector opens store-driven (async, after the document mounts), so a
@@ -943,29 +1127,26 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
     await scrollDocumentTo(page, 0);
     return;
   }
-  // Only "agent" remains.
-  await page
-    .getByText(/atlas_001_Corporate/u)
-    .first()
-    .click();
+  // Only "agent" remains. The cursor starts from its just-off-the-source
+  // rest position, glides onto each cited source, and clicks (with the
+  // overlay's ring pulse); the scene deliberately ends on the second source.
+  await clickWithCursor(page, page.getByText(/atlas_001_Corporate/u).first());
   await page.waitForTimeout(2600);
-  await page
-    .getByText(/atlas_005_Finance/u)
-    .first()
-    .click();
+  await clickWithCursor(page, page.getByText(/atlas_005_Finance/u).first());
 };
 
-// Hover away, then back home (the row the prepare step ended on, i.e. the
-// frame-0 hover state) so the loop closes cleanly.
+// Glide away, then back home (the row the prepare step ended on, i.e. the
+// frame-0 hover state and cursor rest position) so the loop closes cleanly
+// with the cursor back at its frame-0 spot.
 const animateRowHoverLoop = async (
   page: Page,
   awayRowText: RegExp,
   homeRowText: RegExp,
 ) => {
   await page.waitForTimeout(450);
-  await page.getByText(awayRowText).first().hover();
+  await hoverWithCursor(page, page.getByText(awayRowText).first());
   await page.waitForTimeout(1600);
-  await page.getByText(homeRowText).first().hover();
+  await hoverWithCursor(page, page.getByText(homeRowText).first());
 };
 
 type TranscodeVideoOptions = {

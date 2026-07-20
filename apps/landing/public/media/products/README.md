@@ -51,6 +51,20 @@ the recording run instead of shipping a partial or pre-ready clip. Loops are
 kept short (~3.5s, agent 5.5s) and the choreography returns each scene to its
 frame-0 state so the loop closes without a jump.
 
+Pointer-choreographed scenes (workspace, review, agent) show a fake cursor:
+headless screencasts contain no OS cursor, so the recorder injects a
+macOS-style arrow overlay (natural CSS-pixel size, scaled by the DPR-2
+compositor) that follows the real mouse events, with a small expanding ring
+on mousedown. All pointer movement runs through an eased interpolation helper
+(~60 steps/s around `page.mouse.move`) so the cursor never teleports on
+camera. Each cursor scene has a deliberate resting position; the prepare step
+parks the cursor there before the ready marker fires, so the ready reference,
+frame 0, and poster all include the cursor at rest, and the loop choreography
+returns to that same spot (agent excepted, per its documented non-closing
+loop). The editor scenes keep the overlay off: their loop is a document
+scroll with no pointer interaction, and a frozen cursor would suggest
+interactions that are not happening.
+
 ## Scene variants
 
 Each scene is recorded at the aspect of the box it plays in, so the landing
