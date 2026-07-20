@@ -383,6 +383,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-stable-snapshot.ts",
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
+    "./.oxlint-plugins/no-detached-void.ts",
   ],
 
   overrides: [
@@ -642,6 +643,37 @@ export default defineConfig({
       ],
       rules: {
         "no-document-cookie/no-document-cookie": "error",
+      },
+    },
+    {
+      // App source (the two surfaces the detached-promise ratchet counts):
+      // ban the value-level `void` operator so a floating promise is routed
+      // through the `detached(promise, context)` helper instead of throwing
+      // its rejection away. The `void` TYPE keyword is a different AST node
+      // and is untouched.
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-detached-void.fixture.ts",
+      ],
+      rules: {
+        "no-detached-void/no-detached-void": "error",
+      },
+    },
+    {
+      // Tests are outside the detached-promise ratchet's scope: a bare
+      // `void trigger()` to fire-and-forget without capture is fine in a
+      // test. Mirror that exclusion so the rule matches the ratchet.
+      files: [
+        "apps/api/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/api/src/**/tests/**",
+        "apps/api/src/**/__tests__/**",
+        "apps/web/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/web/src/**/tests/**",
+        "apps/web/src/**/__tests__/**",
+      ],
+      rules: {
+        "no-detached-void/no-detached-void": "off",
       },
     },
     {
