@@ -125,8 +125,8 @@ export const authClient = createAuthClient({
   baseURL: env.VITE_API_URL,
   plugins: authClientPlugins,
   fetchOptions: {
-    customFetchImpl: async (input, init) =>
-      await fetchWithTimeout(input, {
+    customFetchImpl: (input, init) =>
+      fetchWithTimeout(input, {
         ...init,
         signal: init?.signal ?? undefined,
         timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
