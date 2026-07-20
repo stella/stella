@@ -11,6 +11,7 @@ type State = {
   reactGrab: boolean;
   publicLawPreview: boolean;
   playbooksPreview: boolean;
+  workflowsPreview: boolean;
   timeBillingPreview: boolean;
   simulateSlowLoad: boolean;
 };
@@ -22,6 +23,7 @@ type Actions = {
   setReactGrab: (value: boolean) => void;
   setPublicLawPreview: (value: boolean) => void;
   setPlaybooksPreview: (value: boolean) => void;
+  setWorkflowsPreview: (value: boolean) => void;
   setTimeBillingPreview: (value: boolean) => void;
   setSimulateSlowLoad: (value: boolean) => void;
 };
@@ -41,6 +43,7 @@ export const useDevStore = create<State & Actions>()(
       reactGrab: false,
       publicLawPreview: false,
       playbooksPreview: false,
+      workflowsPreview: false,
       timeBillingPreview: false,
       simulateSlowLoad: false,
 
@@ -61,6 +64,9 @@ export const useDevStore = create<State & Actions>()(
       },
       setPlaybooksPreview: (playbooksPreview) => {
         void set({ playbooksPreview });
+      },
+      setWorkflowsPreview: (workflowsPreview) => {
+        void set({ workflowsPreview });
       },
       setTimeBillingPreview: (timeBillingPreview) => {
         void set({ timeBillingPreview });

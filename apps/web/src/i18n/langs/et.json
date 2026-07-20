@@ -1960,10 +1960,6 @@
       }
     },
     "sections": {
-      "agents": {
-        "description": "Seadistatavad assistendid korduvaks tööks",
-        "title": "Agendid"
-      },
       "caseLaw": {
         "description": "Kohtulahendid erinevatest jurisdiktsioonidest"
       },

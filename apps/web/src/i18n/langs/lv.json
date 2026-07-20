@@ -1960,10 +1960,6 @@
       }
     },
     "sections": {
-      "agents": {
-        "description": "Konfigurējami asistenti atkārtojamam darbam",
-        "title": "Aģenti"
-      },
       "caseLaw": {
         "description": "Tiesas lēmumi no dažādām jurisdikcijām"
       },

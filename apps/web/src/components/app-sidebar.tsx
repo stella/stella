@@ -87,6 +87,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
+import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
@@ -131,6 +132,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const isCollapsed = state === "collapsed" && !isMobile;
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
   const playbooksPreviewEnabled = usePlaybooksPreviewEnabled();
+  const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includePublicLaw: publicLawPreviewEnabled,
   });
@@ -355,24 +357,21 @@ export function AppSidebar(props: AppSidebarProps) {
     if (s.key === "styles" && !canUseStyleSets) {
       continue;
     }
-    if (s.key !== "playbooks" || playbooksPreviewEnabled) {
-      const Icon = s.icon;
-      knowledgeRecents.push({
-        id: s.key,
-        label: t(s.titleKey),
-        icon: <Icon />,
-        onClick: () => {
-          if (s.to) {
-            void navigate({ to: s.to });
-            return;
-          }
-          stellaToast.add({
-            title: t("common.comingSoon"),
-            type: "neutral",
-          });
-        },
-      });
+    if (s.key === "playbooks" && !playbooksPreviewEnabled) {
+      continue;
     }
+    if (s.key === "workflows" && !workflowsPreviewEnabled) {
+      continue;
+    }
+    const Icon = s.icon;
+    knowledgeRecents.push({
+      id: s.key,
+      label: t(s.titleKey),
+      icon: <Icon />,
+      onClick: () => {
+        void navigate({ to: s.to });
+      },
+    });
   }
 
   const fixedNavTargetsById = {

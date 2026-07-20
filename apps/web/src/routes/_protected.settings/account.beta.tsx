@@ -24,6 +24,8 @@ function BetaFeaturesPage() {
   const setPublicLawPreview = useDevStore((s) => s.setPublicLawPreview);
   const playbooksPreview = useDevStore((s) => s.playbooksPreview);
   const setPlaybooksPreview = useDevStore((s) => s.setPlaybooksPreview);
+  const workflowsPreview = useDevStore((s) => s.workflowsPreview);
+  const setWorkflowsPreview = useDevStore((s) => s.setWorkflowsPreview);
   const timeBillingPreview = useDevStore((s) => s.timeBillingPreview);
   const setTimeBillingPreview = useDevStore((s) => s.setTimeBillingPreview);
 
@@ -73,6 +75,27 @@ function BetaFeaturesPage() {
                 }}
               />
               <FieldLabel>{t("common.playbooks")}</FieldLabel>
+            </Field>
+          </div>
+        </FramePanel>
+        <FramePanel>
+          <div className="flex flex-col gap-3 p-1">
+            <h2 className="text-sm font-medium">{t("common.workflows")}</h2>
+            <p className="text-muted-foreground text-xs">
+              {t("knowledge.sections.workflows.description")}
+            </p>
+            <Field className="flex-row items-center gap-2">
+              <Checkbox
+                checked={workflowsPreview}
+                onCheckedChange={(next) => {
+                  if (next === workflowsPreview) {
+                    return;
+                  }
+
+                  setWorkflowsPreview(next);
+                }}
+              />
+              <FieldLabel>{t("common.workflows")}</FieldLabel>
             </Field>
           </div>
         </FramePanel>

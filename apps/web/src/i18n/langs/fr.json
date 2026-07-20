@@ -1960,10 +1960,6 @@
       }
     },
     "sections": {
-      "agents": {
-        "description": "Assistants configurables pour les travaux répétables",
-        "title": "Agents"
-      },
       "caseLaw": {
         "description": "Décisions de justice et base de jurisprudence"
       },

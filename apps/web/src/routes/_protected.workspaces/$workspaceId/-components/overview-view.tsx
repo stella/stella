@@ -61,6 +61,7 @@ import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useLocale } from "@/i18n/formatting-context";
 import {
   getFormatter,
@@ -160,6 +161,7 @@ const formatHours = (hours: number) =>
 
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const t = useTranslations();
+  const workflowsEnabled = useWorkflowsPreviewEnabled();
   const tWorkspaces = useTranslations("workspaces");
   const locale = useLocale();
   const firstWeekday = getFirstWeekday(locale);
@@ -514,20 +516,24 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           }}
           value={formatHours(totalHoursThisWeek)}
         />
-        <StatCard
-          icon={<WorkflowIcon className="size-4" />}
-          label={t("common.workflows")}
-          onClick={() => {
-            void navigate({
-              to: "/workspaces/$workspaceId/workflows",
-              params: { workspaceId },
-            });
-          }}
-          sublabel={
-            activeFlowRunCount > 0 ? t("flows.runs.activeSublabel") : undefined
-          }
-          value={getFormatter().number(activeFlowRunCount)}
-        />
+        {workflowsEnabled && (
+          <StatCard
+            icon={<WorkflowIcon className="size-4" />}
+            label={t("common.workflows")}
+            onClick={() => {
+              void navigate({
+                to: "/workspaces/$workspaceId/workflows",
+                params: { workspaceId },
+              });
+            }}
+            sublabel={
+              activeFlowRunCount > 0
+                ? t("flows.runs.activeSublabel")
+                : undefined
+            }
+            value={getFormatter().number(activeFlowRunCount)}
+          />
+        )}
       </div>
 
       {/* Two-column layout: tasks + team */}

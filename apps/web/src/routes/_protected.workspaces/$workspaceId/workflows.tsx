@@ -1,11 +1,12 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 
+import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { RunDetail } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-detail";
 import { RunLauncher } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/run-launcher";
 import { RunsList } from "@/routes/_protected.workspaces/$workspaceId/-components/flows/runs-list";
@@ -14,6 +15,14 @@ import { flowRunsOptions } from "@/routes/_protected.workspaces/$workspaceId/-qu
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/workflows",
 )({
+  beforeLoad: ({ params }) => {
+    if (!workflowsRouteAvailable()) {
+      throw redirect({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: params.workspaceId },
+      });
+    }
+  },
   component: WorkflowsPage,
 });
 

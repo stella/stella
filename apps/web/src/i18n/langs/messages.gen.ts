@@ -1963,10 +1963,6 @@ type Messages = {
       };
     };
     "sections": {
-      "agents": {
-        "description": "Configurable assistants for repeatable work";
-        "title": "Agents";
-      };
       "caseLaw": {
         "description": "Court decisions and case law database";
       };

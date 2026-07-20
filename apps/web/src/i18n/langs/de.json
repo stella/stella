@@ -1960,10 +1960,6 @@
       }
     },
     "sections": {
-      "agents": {
-        "description": "Konfigurierbare Assistenten für wiederkehrende Arbeit",
-        "title": "Agenten"
-      },
       "caseLaw": {
         "description": "Gerichtsentscheidungen und Rechtsprechungsdatenbank"
       },
