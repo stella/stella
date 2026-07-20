@@ -1,18 +1,30 @@
 import { Result } from "better-result";
-import * as v from "valibot";
+import { t } from "elysia";
 
+import { toMachineApiKeySummary } from "@/api/handlers/api-keys/mint";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { getAuth } from "@/api/lib/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  MACHINE_API_KEY_CONFIG_ID,
-  machineApiKeyMetadataSchema,
-  machineApiKeyPermissionsSchema,
-} from "@/api/lib/machine-api-key-config";
 import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
+import { listOrganizationMachineApiKeys } from "@/api/lib/machine-api-key-queries";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
+
+const MACHINE_API_KEY_PAGE_SIZE_DEFAULT = 50;
+const MACHINE_API_KEY_PAGE_SIZE_MAX = 200;
+
+const listMachineApiKeysQuerySchema = t.Object({
+  limit: t.Optional(
+    t.Integer({ minimum: 1, maximum: MACHINE_API_KEY_PAGE_SIZE_MAX }),
+  ),
+  cursor: t.Optional(t.String({ maxLength: 512 })),
+});
 
 const config = {
+  query: listMachineApiKeysQuerySchema,
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
@@ -33,89 +45,115 @@ type MachineApiKeySummary = {
   lastRequest: Date | null;
 };
 
-const listUserMachineApiKeys = async (headers: Headers) => {
-  const listed = await Result.tryPromise({
-    try: async () =>
-      await getAuth().api.listApiKeys({
-        query: { configId: MACHINE_API_KEY_CONFIG_ID },
-        headers,
-      }),
-    catch: (error: unknown) => error,
-  });
+type MachineApiKeyCursor = { createdAt: Date; id: string };
 
-  if (listed.isErr()) {
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Could not list API keys",
-        cause: listed.error,
-      }),
-    );
+/**
+ * Cursor over `(created_at, id)`, the same pair the query orders and indexes by.
+ * A malformed cursor is rejected rather than silently treated as "first page",
+ * so a client bug surfaces instead of quietly re-reading page one forever.
+ */
+const decodeMachineApiKeyCursor = (
+  cursor: string,
+): MachineApiKeyCursor | null => {
+  const parts = decodePaginationCursor(cursor);
+  if (parts === null || parts.length !== 2) {
+    return null;
   }
 
-  return Result.ok(listed.value);
+  const [createdAt, id] = parts;
+  if (typeof createdAt !== "string" || typeof id !== "string") {
+    return null;
+  }
+
+  const parsed = new Date(createdAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return { createdAt: parsed, id };
 };
 
 /**
- * List the caller's machine API keys in their active organization.
+ * List the machine API keys belonging to the caller's active organization.
  *
- * The plugin's list is scoped by the owning **user**, so it is filtered here by
- * the organization id in each key's server-written metadata: a member of two
- * organizations must not see the keys they minted in one while acting in the
- * other. A key whose metadata does not parse is dropped for the same reason
- * `mcp/api-key-auth.ts` refuses it — an unreadable scope record is not a key we
- * can describe accurately.
+ * Organization-scoped, not caller-scoped: an admin has to be able to see (and
+ * therefore revoke) a key a colleague minted, otherwise a departing employee's
+ * credential is unrevokable. The organization predicate is applied in SQL by
+ * `listOrganizationMachineApiKeys` — see `machine-api-key-queries.ts` for why
+ * that filter is the tenant boundary for this table and must not move into JS.
  *
- * No plaintext is returned and no endpoint returns it after creation.
+ * Rows written by anything other than these handlers (unparseable metadata or
+ * permissions, missing name) are dropped: a key we cannot describe accurately
+ * is not one to render. That is a rendering decision applied after the page is
+ * cut, not the tenant filter.
+ *
+ * No plaintext is returned, and no endpoint returns it after creation.
  */
 const listMachineApiKeys = createSafeRootHandler(
   config,
-  async function* ({ session, request }) {
-    const listed = yield* Result.await(listUserMachineApiKeys(request.headers));
+  async function* ({ session, query }) {
+    const limit = query.limit ?? MACHINE_API_KEY_PAGE_SIZE_DEFAULT;
+
+    const cursor = query.cursor
+      ? decodeMachineApiKeyCursor(query.cursor)
+      : null;
+    if (query.cursor !== undefined && cursor === null) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Invalid cursor" }),
+      );
+    }
+
+    const rows = yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await listOrganizationMachineApiKeys({
+            cursor,
+            limit,
+            organizationId: session.activeOrganizationId,
+          }),
+        catch: (error: unknown) =>
+          new HandlerError({
+            status: 500,
+            message: "Could not list API keys",
+            cause: error,
+          }),
+      }),
+    );
+
+    // Paginate first, then render. Cutting the page before dropping
+    // undescribable rows keeps `nextCursor` anchored to a real row's
+    // `(created_at, id)`, so pagination cannot skip rows or stall.
+    const page = createCursorPage({
+      rows,
+      limit,
+      cursorForItem: (row) =>
+        encodePaginationCursor([row.createdAt.toISOString(), row.id]),
+    });
 
     const items: MachineApiKeySummary[] = [];
-
-    for (const apiKey of listed.apiKeys) {
-      const metadata = v.safeParse(
-        machineApiKeyMetadataSchema,
-        apiKey.metadata,
-      );
-      if (
-        !metadata.success ||
-        metadata.output.organizationId !== session.activeOrganizationId
-      ) {
+    for (const row of page.items) {
+      const summary = toMachineApiKeySummary(row);
+      if (summary === null) {
         continue;
       }
-
-      const permissions = v.safeParse(
-        machineApiKeyPermissionsSchema,
-        apiKey.permissions,
-      );
-      if (!permissions.success) {
-        continue;
-      }
-
-      const { name } = apiKey;
-      if (name === null) {
-        continue;
-      }
-
       items.push({
-        id: apiKey.id,
-        name,
-        start: apiKey.start,
-        scopes: metadata.output.scopes,
-        permissions: permissions.output,
-        enabled: apiKey.enabled,
-        expiresAt: apiKey.expiresAt,
-        createdAt: apiKey.createdAt,
-        lastRequest: apiKey.lastRequest,
+        id: summary.id,
+        name: summary.name,
+        start: row.start,
+        scopes: summary.scopes,
+        permissions: summary.permissions,
+        enabled: summary.enabled,
+        expiresAt: row.expiresAt,
+        createdAt: row.createdAt,
+        lastRequest: row.lastRequest,
       });
     }
 
-    items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-    return Result.ok({ items });
+    return Result.ok({
+      items,
+      limit: page.limit,
+      nextCursor: page.nextCursor,
+    });
   },
 );
 

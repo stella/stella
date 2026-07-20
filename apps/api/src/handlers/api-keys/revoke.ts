@@ -29,12 +29,11 @@ const config = {
  */
 const revokeMachineApiKey = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, body, request, recordAuditEvent }) {
+  async function* ({ safeDb, session, body, recordAuditEvent }) {
     const existing = yield* Result.await(
       loadOrganizationMachineApiKey({
         keyId: body.keyId,
         organizationId: session.activeOrganizationId,
-        headers: request.headers,
       }),
     );
 
@@ -46,7 +45,10 @@ const revokeMachineApiKey = createSafeRootHandler(
     }
 
     yield* Result.await(
-      disableMachineApiKey({ keyId: existing.id, headers: request.headers }),
+      disableMachineApiKey({
+        keyId: existing.id,
+        ownerUserId: existing.ownerUserId,
+      }),
     );
 
     yield* Result.await(

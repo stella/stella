@@ -23,6 +23,7 @@ export const apiKeysRoute = new Elysia({ prefix: "/api-keys" })
     validateAuth: true,
   })
   .get("/", listMachineApiKeys.handler, {
+    query: listMachineApiKeys.config.query,
     permissions: listMachineApiKeys.config.permissions,
   })
   .post("/", createMachineApiKey.handler, {

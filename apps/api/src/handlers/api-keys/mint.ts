@@ -14,10 +14,28 @@ import {
   parseMachineApiKeyPermissions,
 } from "@/api/lib/machine-api-key-config";
 import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
+import { findOrganizationMachineApiKey } from "@/api/lib/machine-api-key-queries";
+import type { MachineApiKeyRow } from "@/api/lib/machine-api-key-queries";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 const SECONDS_PER_DAY = 24 * 60 * 60;
+
+/**
+ * Deserialize one of the plugin's JSON text columns. Returns `null` on
+ * malformed JSON so the valibot parse downstream reports it the same way it
+ * reports a wrong shape, rather than this throwing mid-request.
+ */
+const parseJsonColumn = (value: string | null): unknown => {
+  if (value === null) {
+    return null;
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Boundary schemas shared by `create` and `rotate`. They live here rather than
@@ -222,84 +240,130 @@ export type LoadedMachineApiKey = {
   scopes: MachineApiKeyScope[];
   permissions: Record<string, string[]>;
   enabled: boolean;
+  /**
+   * The member who minted the key. Lifecycle is organization-scoped, so this is
+   * frequently somebody other than the caller; the plugin's update endpoint
+   * still wants it (see `disableMachineApiKey`).
+   */
+  ownerUserId: string;
 };
 
 /**
- * Load one machine key and prove it belongs to the caller's organization.
+ * Load one machine key from the caller's organization.
  *
- * Two layers of scoping, both necessary:
- *  - the plugin's own `get` runs under the session and 404s a key whose
- *    `referenceId` is not the caller, and
- *  - the organization id in the key's server-written metadata must match the
- *    caller's active organization. The plugin has no notion of our orgs, so
- *    without this second check a user who belongs to two organizations could
- *    manage one organization's keys while acting in the other.
+ * Scoping is organization-wide, not caller-wide: an admin must be able to reach
+ * a key a colleague minted, otherwise a departing employee's credential can
+ * never be revoked. `findOrganizationMachineApiKey` applies the organization
+ * predicate in SQL — see the header comment in `machine-api-key-queries.ts`
+ * for why that is the tenant boundary here and why it cannot move into JS.
+ *
+ * Every failure returns the same 404 so probing ids cannot distinguish a key in
+ * another organization from one that does not exist.
  */
 export const loadOrganizationMachineApiKey = async ({
   keyId,
   organizationId,
-  headers,
 }: {
   keyId: string;
   organizationId: SafeId<"organization">;
-  headers: Headers;
 }): Promise<Result<LoadedMachineApiKey, HandlerError>> => {
   const found = await Result.tryPromise({
     try: async () =>
-      await getAuth().api.getApiKey({
-        query: { configId: MACHINE_API_KEY_CONFIG_ID, id: keyId },
-        headers,
-      }),
+      await findOrganizationMachineApiKey({ keyId, organizationId }),
     catch: (error: unknown) => error,
   });
 
   if (found.isErr()) {
-    return Result.err(machineApiKeyNotFound());
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Could not load the API key",
+        cause: found.error,
+      }),
+    );
   }
 
   const apiKey = found.value;
-
-  const metadata = v.safeParse(machineApiKeyMetadataSchema, apiKey.metadata);
-  if (!metadata.success || metadata.output.organizationId !== organizationId) {
+  if (apiKey === null) {
     return Result.err(machineApiKeyNotFound());
+  }
+
+  const summary = toMachineApiKeySummary(apiKey);
+  if (summary === null) {
+    return Result.err(machineApiKeyNotFound());
+  }
+
+  return Result.ok(summary);
+};
+
+/**
+ * Parse the stored JSON columns of one row into the shape handlers work with,
+ * or `null` when the row was not written by these handlers (unparseable
+ * metadata or permissions, or a missing name — `requireName` is on for this
+ * configuration). Shared by the single-key load and the list so both describe a
+ * key the same way, and so neither renders a key it cannot describe accurately.
+ */
+export const toMachineApiKeySummary = (
+  row: MachineApiKeyRow,
+): LoadedMachineApiKey | null => {
+  // `metadata` and `permissions` arrive as raw JSON **text**. The plugin's own
+  // read endpoints deserialize them on the way out; these rows come straight
+  // from the table (see `machine-api-key-queries.ts` for why the plugin's
+  // reads are bypassed), so the parse has to happen here. Reading them as
+  // objects would make every key look undescribable and silently empty the
+  // list.
+  const metadata = v.safeParse(
+    machineApiKeyMetadataSchema,
+    parseJsonColumn(row.metadata),
+  );
+  if (!metadata.success) {
+    return null;
   }
 
   const permissions = v.safeParse(
     machineApiKeyPermissionsSchema,
-    apiKey.permissions,
+    parseJsonColumn(row.permissions),
   );
   if (!permissions.success) {
-    return Result.err(machineApiKeyNotFound());
+    return null;
   }
 
-  // `requireName` is on for this configuration, so a null name means the row
-  // was written by something other than these handlers. Treat it as absent
-  // rather than inventing a placeholder a rotation would then propagate.
-  const { name } = apiKey;
+  const { name } = row;
   if (name === null) {
-    return Result.err(machineApiKeyNotFound());
+    return null;
   }
 
-  return Result.ok({
-    id: apiKey.id,
+  return {
+    enabled: row.enabled,
+    id: row.id,
     name,
-    scopes: metadata.output.scopes,
+    ownerUserId: row.referenceId,
     permissions: permissions.output,
-    enabled: apiKey.enabled,
-  });
+    scopes: metadata.output.scopes,
+  };
 };
 
 /**
  * Disable a key. Revocation is never a delete: the row carries the audit trail
  * and the `start` prefix operators use to recognize a leaked credential, and
  * `mcp/api-key-auth.ts` already refuses a disabled key.
+ *
+ * Called with **no headers** and an explicit `userId`. That is the plugin's
+ * documented server-side path: with no request or headers present it takes the
+ * principal from `body.userId` instead of a session, and then enforces
+ * `referenceId === userId`. Passing the key's real owner satisfies that check
+ * while leaving authorization to this codebase — the caller has already been
+ * gated on the `organizationSettings` permission and the key has already been
+ * proven to belong to their organization by a SQL predicate. Passing the
+ * caller's headers instead would re-impose the plugin's caller-scoping and make
+ * a colleague's key unrevokable.
  */
 export const disableMachineApiKey = async ({
   keyId,
-  headers,
+  ownerUserId,
 }: {
   keyId: string;
-  headers: Headers;
+  ownerUserId: string;
 }): Promise<Result<void, HandlerError>> => {
   const updated = await Result.tryPromise({
     try: async () =>
@@ -308,8 +372,8 @@ export const disableMachineApiKey = async ({
           configId: MACHINE_API_KEY_CONFIG_ID,
           keyId,
           enabled: false,
+          userId: ownerUserId,
         },
-        headers,
       }),
     catch: (error: unknown) => error,
   });

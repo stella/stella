@@ -43,7 +43,6 @@ const rotateMachineApiKey = createSafeRootHandler(
     session,
     user,
     body,
-    request,
     memberRole,
     recordAuditEvent,
   }) {
@@ -51,7 +50,6 @@ const rotateMachineApiKey = createSafeRootHandler(
       loadOrganizationMachineApiKey({
         keyId: body.keyId,
         organizationId: session.activeOrganizationId,
-        headers: request.headers,
       }),
     );
 
@@ -76,7 +74,10 @@ const rotateMachineApiKey = createSafeRootHandler(
     );
 
     yield* Result.await(
-      disableMachineApiKey({ keyId: existing.id, headers: request.headers }),
+      disableMachineApiKey({
+        keyId: existing.id,
+        ownerUserId: existing.ownerUserId,
+      }),
     );
 
     yield* Result.await(
