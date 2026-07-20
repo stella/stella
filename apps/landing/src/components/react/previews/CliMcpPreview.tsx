@@ -532,7 +532,7 @@ export const CliMcpPreview = ({
 
               <div
                 aria-hidden="true"
-                className="cli-idle-prompt mt-auto flex min-h-[clamp(1.6rem,2.4vw,2rem)] items-center rounded-md border px-2 text-[.46rem] sm:text-[clamp(.4rem,.56vw,.56rem)]"
+                className="cli-idle-prompt mt-auto hidden min-h-[clamp(1.6rem,2.4vw,2rem)] items-center rounded-md border px-2 text-[.46rem] sm:flex sm:text-[clamp(.4rem,.56vw,.56rem)]"
                 style={{
                   borderColor:
                     "color-mix(in srgb, var(--terminal-foreground) 14%, transparent)",
