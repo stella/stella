@@ -382,6 +382,14 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `time-entries.timer-stop`   | write              | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella time-entries timer-stop`                    |
 | `time-entries.update`       | write              | stella:billing_write | FEATURE_TIME_BILLING | covered by `save_time_entry`                                         |
 
+## uploads
+
+| Capability       | Access            | Scope                | Feature | Reachable via                            |
+| ---------------- | ----------------- | -------------------- | ------- | ---------------------------------------- |
+| `uploads.create` | read              | stella:matters_write | —       | generic invoke → `stella uploads create` |
+| `uploads.delete` | read, destructive | stella:matters_write | —       | generic invoke → `stella uploads delete` |
+| `uploads.update` | read              | stella:matters_write | —       | generic invoke → `stella uploads update` |
+
 ## usage
 
 | Capability              | Access | Scope       | Feature       | Reachable via            |
@@ -458,7 +466,7 @@ mechanics, and similar), not gaps in coverage.
 | realtime_stream        | 2     |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 5     |
-| upload_mechanics       | 7     |
+| upload_mechanics       | 4     |
 | url_preview            | 2     |
 
-Total: 86
+Total: 83

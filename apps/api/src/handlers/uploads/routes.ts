@@ -1,11 +1,11 @@
 import Elysia from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
-import abortUpload from "@/api/handlers/uploads/abort";
+import presignUpload from "@/api/handlers/uploads/create";
+import abortUpload from "@/api/handlers/uploads/delete";
 import entityCreateTree from "@/api/handlers/uploads/entity-create-tree";
-import finalizeUpload from "@/api/handlers/uploads/finalize";
 import preflightEntityCreate from "@/api/handlers/uploads/preflight-entity-create";
-import presignUpload from "@/api/handlers/uploads/presign";
+import finalizeUpload from "@/api/handlers/uploads/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS } from "@/api/lib/limits";

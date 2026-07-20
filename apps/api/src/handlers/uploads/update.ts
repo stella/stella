@@ -58,8 +58,18 @@ const finalizeParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Step 3 of 3 of the file-upload flow: finalize an upload whose bytes have " +
+    "already been PUT to the presigned URL from uploads.create. Verifies the " +
+    "stored object against the size and checksum the URL was signed for, " +
+    "then commits the durable record and returns finalizedResult, which is " +
+    "an entity_create (entityId, fileId, fileName, renamed), entity_version " +
+    "(entityId, entityVersionId, versionNumber, fileId, fileName), or " +
+    "agent_skill (skillId, name, version) shape depending on the purpose the " +
+    "upload was created with. Idempotent: replaying it on an already " +
+    "finalized upload returns the same result rather than duplicating.",
   permissions: uploadRoutePermission,
-  mcp: { type: "internal", reason: "upload_mechanics" },
+  mcp: { type: "capability", reason: "file_transport" },
   params: finalizeParamsSchema,
 } satisfies HandlerConfig;
 

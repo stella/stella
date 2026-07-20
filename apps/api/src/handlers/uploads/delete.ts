@@ -33,8 +33,15 @@ const abortParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Abandon an upload reserved by uploads.create, discarding the staged " +
+    "object. Call this when the presigned PUT fails or the upload is no " +
+    "longer wanted, so the staged bytes are not left to expire on their own. " +
+    "Idempotent: aborting an already aborted upload succeeds. Fails if the " +
+    "upload was already finalized -- delete the resulting entity or skill " +
+    "instead.",
   permissions: uploadRoutePermission,
-  mcp: { type: "internal", reason: "upload_mechanics" },
+  mcp: { type: "capability", reason: "file_transport" },
   params: abortParamsSchema,
 } satisfies HandlerConfig;
 

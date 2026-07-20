@@ -34,9 +34,9 @@ void mock.module("@/api/lib/s3", () => ({
   }),
 }));
 
-const { default: abortUpload } = await import("./abort");
-const { default: finalizeUpload } = await import("./finalize");
-const { default: presignUpload } = await import("./presign");
+const { default: abortUpload } = await import("./delete");
+const { default: finalizeUpload } = await import("./update");
+const { default: presignUpload } = await import("./create");
 
 setDefaultTimeout(120_000);
 

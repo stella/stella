@@ -199,6 +199,14 @@ const DOMAIN_SCOPE: Record<string, string> = {
   "template-recipes": "stella:templates",
   templates: "stella:templates",
   "time-entries": "stella:billing_write",
+  // Presigned-upload coordination (presign / finalize / abort). One domain,
+  // three upload purposes with different underlying permissions
+  // (entity:create, entity:update, agentSkill:create), so the domain takes the
+  // workspace write bucket — the broadest of the three surfaces it can touch —
+  // and `authorizeUploadPurpose` still re-checks the exact per-purpose
+  // permission inside the handler. Deliberately NOT `stella:skills`, which
+  // would let a skills-only consent presign an entity write.
+  uploads: "stella:matters_write",
   usage: "stella:read",
   "view-templates": "stella:matters_write",
   views: "stella:matters_write",
