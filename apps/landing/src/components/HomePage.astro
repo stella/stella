@@ -129,8 +129,8 @@ const selfHostingDocsUrl =
           </h1>
           <p
             data-reveal
-            style="--reveal-delay: 360ms; color: var(--muted-foreground)"
-            class="mt-6 max-w-2xl text-balance text-center text-lg leading-[1.55]"
+            style="--reveal-delay: 360ms; color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground))"
+            class="mt-6 max-w-2xl text-balance text-center text-lg leading-[1.55] sm:text-xl"
           >
             {
               isSourceLocale ? (
@@ -184,6 +184,7 @@ const selfHostingDocsUrl =
             client:load
             revealSideWindowsOnScroll
             backdrop="transparent"
+            discoverLabel={t("story.discover")}
           />
         </div>
       </section>

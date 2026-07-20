@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -21,6 +22,7 @@ import { RecordedStellaScene } from "../product-story/RecordedStellaScene";
 
 export const CliMcpPreview = ({
   backdrop = "wash",
+  discoverLabel,
   initialScenarioId = "search",
   includeStyles = true,
   revealSideWindowsOnScroll = false,
@@ -41,7 +43,11 @@ export const CliMcpPreview = ({
   const [storyFrame, setStoryFrame] = useState(0);
   const [teamsLoopFrame, setTeamsLoopFrame] = useState(0);
   const [terminalLoopFrame, setTerminalLoopFrame] = useState(0);
+  const [selectedWindow, setSelectedWindow] = useState<PreviewWindow | null>(
+    null,
+  );
   const drag = useRef<DragState | null>(null);
+  const selectionClearTimer = useRef<number | null>(null);
   const story = useRef<HTMLDivElement>(null);
   const initialScenarioIndex = Math.max(
     SCENARIOS.findIndex((scenario) => scenario.id === initialScenarioId),
@@ -130,6 +136,27 @@ export const CliMcpPreview = ({
   const activateWindow = (window: PreviewWindow) => {
     setActiveWindow(window);
     setHasManualWindowFocus(true);
+  };
+
+  // Selection frame + tag: hover or keyboard focus marks a window selected;
+  // clearing is delayed so the pointer can travel to the tag below the
+  // window without the selection collapsing on the way.
+  const selectWindow = (target: PreviewWindow) => {
+    if (selectionClearTimer.current !== null) {
+      clearTimeout(selectionClearTimer.current);
+      selectionClearTimer.current = null;
+    }
+    setSelectedWindow(target);
+  };
+
+  const scheduleSelectionClear = (target: PreviewWindow) => {
+    if (selectionClearTimer.current !== null) {
+      clearTimeout(selectionClearTimer.current);
+    }
+    selectionClearTimer.current = window.setTimeout(() => {
+      selectionClearTimer.current = null;
+      setSelectedWindow((current) => (current === target ? null : current));
+    }, 200);
   };
 
   // Drag offsets go on the CSS `translate` property, not `transform`: the
@@ -237,8 +264,17 @@ export const CliMcpPreview = ({
         <div
           aria-label="Bring Microsoft Teams conversation to front"
           aria-pressed={focusedWindow === "client"}
-          className="cli-client mac-window bg-card focus-visible:outline-ring absolute start-[3%] top-[7%] hidden h-[32%] w-[19.5%] min-w-0 cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none"
-          onFocus={() => activateWindow("client")}
+          className={cn(
+            "cli-client mac-window group bg-card focus-visible:outline-ring absolute start-[2.5%] top-[8%] hidden h-[30%] w-[15.5%] min-w-0 cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none",
+            discoverLabel && selectedWindow === "client" && "cli-selected",
+          )}
+          onBlur={() => scheduleSelectionClear("client")}
+          onFocus={() => {
+            activateWindow("client");
+            selectWindow("client");
+          }}
+          onPointerEnter={() => selectWindow("client")}
+          onPointerLeave={() => scheduleSelectionClear("client")}
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("client"))
           }
@@ -274,8 +310,17 @@ export const CliMcpPreview = ({
       <div
         aria-label="Bring stella workspace to front"
         aria-pressed={focusedWindow === "workspace"}
-        className="cli-main-window mac-window bg-card focus-visible:outline-ring absolute start-[18.5%] top-[8%] h-[81%] w-[63%] cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_42px_110px_-54px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2"
-        onFocus={() => activateWindow("workspace")}
+        className={cn(
+          "cli-main-window mac-window group bg-card focus-visible:outline-ring absolute start-[18.5%] top-[8%] h-[81%] w-[63%] cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_42px_110px_-54px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2",
+          discoverLabel && selectedWindow === "workspace" && "cli-selected",
+        )}
+        onBlur={() => scheduleSelectionClear("workspace")}
+        onFocus={() => {
+          activateWindow("workspace");
+          selectWindow("workspace");
+        }}
+        onPointerEnter={() => selectWindow("workspace")}
+        onPointerLeave={() => scheduleSelectionClear("workspace")}
         onKeyDown={(event) =>
           activateWindowFromKeyboard(event, () => activateWindow("workspace"))
         }
@@ -305,9 +350,18 @@ export const CliMcpPreview = ({
         <div
           aria-label="Bring stella Editor to front"
           aria-pressed={focusedWindow === "source"}
-          className="cli-response mac-window bg-card focus-visible:outline-ring absolute end-[1.6%] top-[19%] hidden h-[44.5%] w-[17%] cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none"
+          className={cn(
+            "cli-response mac-window group bg-card focus-visible:outline-ring absolute end-[2%] top-[15%] hidden h-[42%] w-[16%] cursor-grab appearance-none overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:block sm:touch-none",
+            discoverLabel && selectedWindow === "source" && "cli-selected",
+          )}
           key={activeScenario.id}
-          onFocus={() => activateWindow("source")}
+          onBlur={() => scheduleSelectionClear("source")}
+          onFocus={() => {
+            activateWindow("source");
+            selectWindow("source");
+          }}
+          onPointerEnter={() => selectWindow("source")}
+          onPointerLeave={() => scheduleSelectionClear("source")}
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("source"))
           }
@@ -346,8 +400,17 @@ export const CliMcpPreview = ({
           aria-label="Bring stella terminal to front"
           aria-live="polite"
           aria-pressed={focusedWindow === "terminal"}
-          className="cli-window mac-window group focus-visible:outline-ring absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 cursor-grab appearance-none flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:start-[6%] sm:bottom-[15%] sm:h-[38%] sm:w-[17.5%] sm:touch-none"
-          onFocus={() => activateWindow("terminal")}
+          className={cn(
+            "cli-window mac-window group focus-visible:outline-ring absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 cursor-grab appearance-none flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] focus-visible:outline-2 focus-visible:outline-offset-2 active:cursor-grabbing sm:start-[4.5%] sm:bottom-[14%] sm:h-[31%] sm:w-[14%] sm:touch-none",
+            discoverLabel && selectedWindow === "terminal" && "cli-selected",
+          )}
+          onBlur={() => scheduleSelectionClear("terminal")}
+          onFocus={() => {
+            activateWindow("terminal");
+            selectWindow("terminal");
+          }}
+          onPointerEnter={() => selectWindow("terminal")}
+          onPointerLeave={() => scheduleSelectionClear("terminal")}
           onKeyDown={(event) =>
             activateWindowFromKeyboard(event, () => activateWindow("terminal"))
           }
@@ -483,6 +546,30 @@ export const CliMcpPreview = ({
             </div>
           </div>
         </div>
+      )}
+
+      {discoverLabel && selectedWindow && (
+        <DiscoverTag
+          dragOffset={
+            selectedWindow === "workspace"
+              ? undefined
+              : positions[selectedWindow]
+          }
+          href={
+            selectedWindow === "workspace"
+              ? DISCOVER_PRODUCTS[activeSceneId].href
+              : DISCOVER_WINDOW_PRODUCTS[selectedWindow].href
+          }
+          label={discoverLabel}
+          onPointerEnter={() => selectWindow(selectedWindow)}
+          onPointerLeave={() => scheduleSelectionClear(selectedWindow)}
+          productName={
+            selectedWindow === "workspace"
+              ? DISCOVER_PRODUCTS[activeSceneId].name
+              : DISCOVER_WINDOW_PRODUCTS[selectedWindow].name
+          }
+          window={selectedWindow}
+        />
       )}
     </div>
   );
@@ -678,6 +765,12 @@ type CliMcpPreviewProps = {
    * (e.g. the homepage hero gradient) shows through.
    */
   backdrop?: "wash" | "transparent";
+  /**
+   * Translated "Discover" label; when set, each window shows a hover/focus
+   * chip linking to its product page (the main window follows the active
+   * scene). Omitted in embeds that have their own product links.
+   */
+  discoverLabel?: string;
   includeStyles?: boolean;
   initialScenarioId?: CliScenarioId;
   revealSideWindowsOnScroll?: boolean;
@@ -785,6 +878,90 @@ const COMMAND_CHARACTER_DELAY_MS = 24;
 const TERMINAL_LOOP_DURATION_MS = 9000;
 
 const getInitialActiveWindow = (): PreviewWindow => "terminal";
+
+// Product destination per scene for the main window's discover chip; the
+// companion windows have fixed products. Names match the product eyebrows
+// used across the nav (brand-constant, not translated).
+const DISCOVER_PRODUCTS: Record<
+  ProductStorySceneId,
+  { href: string; name: string }
+> = {
+  workspace: { href: "/product/workspace", name: "Workspace" },
+  review: { href: "/product/tabular-review", name: "Tabular Review" },
+  editor: { href: "/product/editor", name: "Editor" },
+  agent: { href: "/product/agent", name: "AI agent" },
+  cli: { href: "/product/cli-mcp", name: "CLI & MCP" },
+};
+
+// Geometry for the selection tag rendered UNDER each window. The windows
+// clip their children (overflow-hidden), so the tag is a scene-level
+// sibling; these values mirror the windows' inset/size classes below and
+// must move together with them.
+const DISCOVER_TAG_POSITIONS: Record<PreviewWindow, CSSProperties> = {
+  // Teams: centred on start 2.5% + half of 15.5%; below top 8% + 30% height.
+  client: { insetInlineStart: "10.25%", top: "calc(38% + 0.55rem)" },
+  // Main: centred on start 18.5% + half of 63%; below top 8% + 81% height.
+  workspace: { insetInlineStart: "50%", top: "calc(89% + 0.55rem)" },
+  // Editor: centred on end 2% + half of 16%; below top 15% + 42% height.
+  source: { insetInlineEnd: "10%", top: "calc(57% + 0.55rem)" },
+  // Terminal (sm layout): start 4.5% + half of 14%; bottom edge at 14%.
+  terminal: { insetInlineStart: "11.5%", bottom: "calc(14% - 2.7rem)" },
+};
+
+// Companion windows map to fixed products; the main window's product
+// follows the active scene via DISCOVER_PRODUCTS.
+const DISCOVER_WINDOW_PRODUCTS: Record<
+  DraggableWindow,
+  { href: string; name: string }
+> = {
+  client: { href: "/product/agent", name: "AI agent" },
+  source: { href: "/product/editor", name: "Editor" },
+  terminal: { href: "/product/cli-mcp", name: "CLI & MCP" },
+};
+
+type DiscoverTagProps = {
+  dragOffset?: { x: number; y: number };
+  href: string;
+  label: string;
+  onPointerEnter: () => void;
+  onPointerLeave: () => void;
+  productName: string;
+  window: PreviewWindow;
+};
+
+// Selection tag: rendered below the selected window in the style of a
+// design-tool selection frame. The tag is the only link surface; the frame
+// itself is the `cli-selected` outline on the window.
+const DiscoverTag = ({
+  dragOffset,
+  href,
+  label,
+  onPointerEnter,
+  onPointerLeave,
+  productName,
+  window,
+}: DiscoverTagProps) => (
+  <a
+    onPointerEnter={onPointerEnter}
+    onPointerLeave={onPointerLeave}
+    className="absolute z-[70] inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold whitespace-nowrap no-underline shadow-md"
+    dir="auto"
+    href={href}
+    style={{
+      ...DISCOVER_TAG_POSITIONS[window],
+      background: "var(--primary)",
+      color: "var(--primary-foreground)",
+      translate: dragOffset ? `${dragOffset.x}px ${dragOffset.y}px` : undefined,
+      transform:
+        DISCOVER_TAG_POSITIONS[window].insetInlineEnd === undefined
+          ? "translateX(-50%)"
+          : "translateX(50%)",
+    }}
+  >
+    {label} {productName}
+    <span aria-hidden="true">→</span>
+  </a>
+);
 
 type WindowZIndexOptions = {
   focusedWindow: PreviewWindow;
@@ -919,6 +1096,12 @@ const CLI_STYLES = `
     /* --card is translucent in the dark theme; windows overlap, so composite
        it over the page background for an opaque surface. */
     background: linear-gradient(var(--card), var(--card)) var(--background);
+  }
+  /* Design-tool style selection frame; paired with the DiscoverTag rendered
+     under the selected window. */
+  .cli-selected {
+    outline: 2px solid var(--primary);
+    outline-offset: 5px;
   }
   .mac-window::after {
     content: "";

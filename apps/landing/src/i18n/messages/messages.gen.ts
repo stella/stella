@@ -90,6 +90,7 @@ type Messages = {
     "dataTitle": "Bring the law and the data with you.";
     "deploySubtitle": "Start in the cloud or deploy the same open-source workspace on your infrastructure.";
     "deployTitle": "Run it with us. Or run it yourself.";
+    "discover": "Discover";
     "exploreAgent": "Explore AI agent";
     "exploreAnonymization": "Explore Anonymization";
     "explorePublicData": "Explore Public data";
