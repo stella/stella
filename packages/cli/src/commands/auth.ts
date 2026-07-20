@@ -14,6 +14,7 @@ import { logout, switchOrg, whoami } from "../auth/manage.js";
 import { parseScopesFlag } from "../auth/scopes.js";
 import { resolveServerUrl } from "../auth/server-resolution.js";
 import type { Context } from "../context.js";
+import { STELLA_API_KEY } from "../env.js";
 
 const parseString = (input: string): string => input;
 
@@ -118,6 +119,23 @@ const whoamiCommand = buildCommand<ServerOrgFlags, [], Context>({
     );
     if (Result.isError(serverUrlResult)) {
       return new Error(serverUrlResult.error.message);
+    }
+
+    // `STELLA_API_KEY` takes precedence over `credentials.json` for every other
+    // command, so reporting the stored credential here would describe an
+    // identity nothing is actually running as. The key is opaque to the CLI (it
+    // is a random secret, not a JWT), so the honest answer is which credential
+    // is in effect and where it came from, not decoded claims.
+    if (STELLA_API_KEY !== undefined && STELLA_API_KEY !== "") {
+      this.process.stdout.write(
+        [
+          `Server: ${serverUrlResult.value}`,
+          "Credential: machine API key (STELLA_API_KEY)",
+          "Stored credentials are ignored while this variable is set.",
+          "",
+        ].join("\n"),
+      );
+      return undefined;
     }
 
     const result = await whoami(

@@ -13,6 +13,7 @@
 
 import { Result } from "better-result";
 
+import { STELLA_API_KEY } from "../env.js";
 import {
   findDefaultCredential,
   readCredentialFile,
@@ -59,6 +60,23 @@ export const resolveAccessToken = async ({
   serverUrl,
   now = Date.now(),
 }: ResolveAccessTokenOptions): Promise<ResolveAccessTokenResult> => {
+  // Precedence: `STELLA_API_KEY` beats any stored credential, and when it is set
+  // there is no fallback to disk — not even if the key turns out to be invalid.
+  //
+  // The alternative (try the key, fall back to `credentials.json`) is the more
+  // forgiving design and the wrong one here. A CI job or agent that sets this
+  // variable is stating which identity the run belongs to; silently falling back
+  // would let it execute as whichever human happened to be logged in on that
+  // machine, which is both an audit-trail lie and a privilege escalation on a
+  // developer workstation. Failing closed makes a bad key look like a bad key.
+  //
+  // Machine keys carry their own expiry server-side and have no refresh token,
+  // so there is deliberately no freshness check or rotation here: an expired key
+  // is rejected by the server and must be rotated by an org admin.
+  if (STELLA_API_KEY !== undefined && STELLA_API_KEY !== "") {
+    return { status: "ok", token: STELLA_API_KEY };
+  }
+
   const credentialFile = await readCredentialFile(configDir);
   const credential = findDefaultCredential(credentialFile, serverUrl);
   if (credential === undefined) {
