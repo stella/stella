@@ -15,7 +15,7 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { upsertWorkspaceSearchDocuments } from "@/api/lib/search/index-global";
 
 const deleteContactParamsSchema = t.Object({
-  contactId: tSafeId("contact"),
+  contactId: tSafeId("contact", { description: "Contact ID to delete" }),
 });
 
 export type DeleteContactHandlerProps = {
@@ -145,6 +145,10 @@ export const deleteContactHandler = async function* ({
 
 const deleteContactById = createSafeRootHandler(
   {
+    description:
+      "Permanently delete a contact from the organization address book. " +
+      "Rejected while the contact is still the client of any matter. This is " +
+      "irreversible.",
     permissions: { contact: ["delete"] },
     mcp: { type: "tool", name: "delete_contact" },
     params: deleteContactParamsSchema,

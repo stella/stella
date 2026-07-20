@@ -14,7 +14,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { tSafeId, tUserId, withDescription } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -26,23 +26,59 @@ const auditLogCursor = createTimestampIdCursorCodec({
 });
 
 export const readAuditLogsQuerySchema = t.Object({
-  workspaceId: t.Optional(tSafeId("workspace")),
+  workspaceId: t.Optional(
+    tSafeId("workspace", {
+      description: "Only entries scoped to this matter/workspace",
+    }),
+  ),
   // The shared validator below checks these strings against the domain
   // constants so HTTP and MCP callers reject unknown values identically.
-  action: t.Optional(t.String({ minLength: 1 })),
-  resourceType: t.Optional(t.String({ minLength: 1 })),
-  resourceId: t.Optional(t.String({ minLength: 1 })),
-  userId: t.Optional(tUserId),
-  from: t.Optional(t.String({ format: "date-time" })),
-  to: t.Optional(t.String({ format: "date-time" })),
+  action: t.Optional(
+    t.String({
+      minLength: 1,
+      description: "Only entries with this audit action",
+    }),
+  ),
+  resourceType: t.Optional(
+    t.String({
+      minLength: 1,
+      description: "Only entries about this resource type",
+    }),
+  ),
+  resourceId: t.Optional(
+    t.String({
+      minLength: 1,
+      description: "Only entries about this resource id; requires resourceType",
+    }),
+  ),
+  userId: t.Optional(
+    withDescription(tUserId, "Only entries whose actor is this user"),
+  ),
+  from: t.Optional(
+    t.String({
+      format: "date-time",
+      description: "Only entries created on or after this ISO date-time",
+    }),
+  ),
+  to: t.Optional(
+    t.String({
+      format: "date-time",
+      description: "Only entries created on or before this ISO date-time",
+    }),
+  ),
   toExclusive: t.Optional(t.String({ format: "date-time" })),
   limit: t.Optional(
     t.Integer({
       minimum: 1,
       maximum: LIMITS.auditLogPageSizeMax,
+      description: "Max entries to return",
     }),
   ),
-  cursor: t.Optional(t.String()),
+  cursor: t.Optional(
+    t.String({
+      description: "Opaque cursor from a previous page to fetch the next page",
+    }),
+  ),
 });
 
 export type ReadAuditLogsQuery = Static<typeof readAuditLogsQuerySchema>;

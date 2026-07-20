@@ -20,50 +20,82 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const config = {
+  description:
+    "Set a document's value for a property (a cell in the matter's table). " +
+    "Pass the document entityId, the propertyId (from list_properties), and " +
+    "a content object whose 'type' matches the property's value type: text " +
+    "(value: string), single-select (value: string or null), multi-select " +
+    "(value: array of strings), date (value: ISO YYYY-MM-DD or null), or int " +
+    "(value: integer, optional currency: 3-letter ISO code). An empty value " +
+    "clears the cell.",
   permissions: {
     entity: ["create", "update"],
   },
   mcp: { type: "tool", name: "set_field_value" },
   body: t.Object({
-    propertyId: tSafeId("property"),
-    entityId: tSafeId("entity"),
-    content: t.Union([
-      t.Object({
-        version: t.Literal(1),
-        type: t.Literal("text"),
-        value: t.String(),
-      }),
-      t.Object({
-        version: t.Literal(1),
-        type: t.Literal("single-select"),
-        value: t.Nullable(t.String()),
-      }),
-      t.Object({
-        version: t.Literal(1),
-        type: t.Literal("multi-select"),
-        value: t.Array(t.String({ minLength: 1 })),
-      }),
-      t.Object({
-        version: t.Literal(1),
-        type: t.Literal("date"),
-        value: t.Nullable(t.String({ format: "date" })),
-      }),
-      t.Object({
-        version: t.Literal(1),
-        type: t.Literal("int"),
-        value: t.Integer(),
-        currency: t.Nullable(t.String({ minLength: 3, maxLength: 3 })),
-      }),
-      t.Object({
-        version: t.Literal(1),
-        type: t.Literal("clip"),
-        url: t.String({ maxLength: 2048 }),
-        snippet: t.Optional(t.String({ maxLength: 10_000 })),
-        citation: t.Optional(t.String({ maxLength: 1000 })),
-        jurisdiction: t.Optional(t.String({ maxLength: 128 })),
-        sourceType: t.Optional(t.String({ maxLength: 64 })),
-      }),
-    ]),
+    propertyId: tSafeId("property", {
+      description: "Property ID, as returned by list_properties",
+    }),
+    entityId: tSafeId("entity", {
+      description: "Document entity ID whose cell to set",
+    }),
+    content: t.Union(
+      [
+        t.Object({
+          version: t.Literal(1),
+          type: t.Literal("text", {
+            description: "Value type; must match the property's value type",
+          }),
+          value: t.String(),
+        }),
+        t.Object({
+          version: t.Literal(1),
+          type: t.Literal("single-select", {
+            description: "Value type; must match the property's value type",
+          }),
+          value: t.Nullable(t.String()),
+        }),
+        t.Object({
+          version: t.Literal(1),
+          type: t.Literal("multi-select", {
+            description: "Value type; must match the property's value type",
+          }),
+          value: t.Array(t.String({ minLength: 1 })),
+        }),
+        t.Object({
+          version: t.Literal(1),
+          type: t.Literal("date", {
+            description: "Value type; must match the property's value type",
+          }),
+          value: t.Nullable(t.String({ format: "date" })),
+        }),
+        t.Object({
+          version: t.Literal(1),
+          type: t.Literal("int", {
+            description: "Value type; must match the property's value type",
+          }),
+          value: t.Integer(),
+          currency: t.Nullable(
+            t.String({
+              minLength: 3,
+              maxLength: 3,
+              description:
+                "For int values only: 3-letter ISO currency code, or null",
+            }),
+          ),
+        }),
+        t.Object({
+          version: t.Literal(1),
+          type: t.Literal("clip"),
+          url: t.String({ maxLength: 2048 }),
+          snippet: t.Optional(t.String({ maxLength: 10_000 })),
+          citation: t.Optional(t.String({ maxLength: 1000 })),
+          jurisdiction: t.Optional(t.String({ maxLength: 128 })),
+          sourceType: t.Optional(t.String({ maxLength: 64 })),
+        }),
+      ],
+      { description: "The value to set; 'type' must match the property." },
+    ),
   }),
 } satisfies HandlerConfig;
 

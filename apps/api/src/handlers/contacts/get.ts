@@ -9,11 +9,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const readContactByIdParamsSchema = t.Object({
-  contactId: tSafeId("contact"),
+  contactId: tSafeId("contact", { description: "Contact ID" }),
 });
 
 const readContactById = createSafeRootHandler(
   {
+    description: "Read a contact by ID.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "read_contact" },
     params: readContactByIdParamsSchema,

@@ -89,6 +89,13 @@ export type FlagSpec = {
   max?: number;
   repeatable: boolean;
   default?: unknown;
+  /**
+   * Per-property prose from the source JSON Schema's `description` (an Elysia
+   * `t.String({ description })` on the handler config, or a curated tool's
+   * hand-written property description). Rendered ahead of the mechanical
+   * type/required suffix in the flag's `--help` brief.
+   */
+  description?: string;
 };
 
 /** The generator's per-leaf output before handing to stricli's `buildCommand`. */
@@ -136,6 +143,12 @@ export type CapabilityFlagSpec = FlagSpec & {
 export type CapabilityLeafSpec = {
   commandPath: readonly string[];
   capabilityId: string;
+  /**
+   * The catalog entry's `description`: the single authored sentence about what
+   * this capability does, sourced from the handler config. Used verbatim as the
+   * command's `--help` brief; absent entries fall back to an id-derived line.
+   */
+  description?: string;
   /**
    * Read vs. write, from the catalog entry. The executor surfaces the server's
    * request-id receipt on stderr only for a `write` (a mutation an operator may

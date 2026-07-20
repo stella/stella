@@ -605,6 +605,33 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
   ).length;
 };
 
+// A capability carrying no authored `description`. The description is the ONE
+// place a capability says what it does: the exporter carries it from the
+// handler config into both catalog mirrors, and from there it becomes the
+// generated CLI command's `--help` brief and the prose an MCP client sees in
+// list/describe. Without one the CLI falls back to "Invoke the <id>
+// capability", which tells a caller (usually an agent) nothing, and the real
+// prose ends up hand-written a second time in apps/api/src/mcp/*-tools.ts —
+// the duplication this metric exists to burn down. A blank/whitespace-only
+// string counts as missing so an empty description cannot be used to silence
+// the ratchet. Counting the committed artifacts keeps the scan cheap and
+// deterministic; both mirrors are included so drift between them also shows up.
+const countCapabilitiesWithoutDescription = (content: string): number => {
+  const parsed: unknown = JSON.parse(content);
+  if (!Array.isArray(parsed)) {
+    return 0;
+  }
+  return parsed.filter((entry) => {
+    if (typeof entry !== "object" || entry === null) {
+      return false;
+    }
+    const description: unknown = Object.hasOwn(entry, "description")
+      ? Object.getOwnPropertyDescriptor(entry, "description")?.value
+      : undefined;
+    return typeof description !== "string" || description.trim().length === 0;
+  }).length;
+};
+
 /**
  * Entries in the reviewed `DOMAIN_ACTION_VERBS` allowlist: capability action
  * verbs outside the canonical `list/get/create/update/delete` set. Each one is a
@@ -754,6 +781,19 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
     count: countTruncatedCapabilitySchemas,
+  },
+  {
+    id: "capabilities-without-description",
+    description:
+      'capabilities with no authored description, so the CLI briefs them as "Invoke the <id> capability" and the real prose stays duplicated in the hand-written MCP tool files (counted across both committed catalog mirrors)',
+    include: [
+      "packages/cli/src/generated/capability-catalog.json",
+      "apps/api/src/mcp/generated/capability-catalog.json",
+    ],
+    // Generated artifacts are the subject here, so the shared source
+    // exclusions (which skip `.gen.`/generated paths) must not apply.
+    exclude: () => false,
+    count: countCapabilitiesWithoutDescription,
   },
   {
     id: "capability-domain-action-verbs",
@@ -1224,9 +1264,16 @@ const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
   { id: "beta.read", inputSchemaTruncated: false },
   { id: "gamma.update" },
   { id: "delta.delete", inputSchemaTruncated: true },
+  // Description shapes: a real one (not counted as missing) and a
+  // whitespace-only one (counted, so a blank string cannot silence the guard).
+  { id: "epsilon.list", description: "Lists the epsilons." },
+  { id: "zeta.get", description: "   " },
 ])}\n`;
 // Two truncated entries in each of the two mirror fixtures.
 const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 4;
+// Five of the six fixture entries lack usable prose (only `epsilon.list` has
+// it), in each of the two mirror fixtures.
+const EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION = 10;
 
 const runSelfTest = (): number => {
   const failures: string[] = [];
@@ -1403,6 +1450,17 @@ const runSelfTest = (): number => {
     ) {
       failures.push(
         `capability-schemas-truncated counted ${truncatedCapabilityMetric.count}, expected ${EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS}`,
+      );
+    }
+
+    const missingDescriptionMetric =
+      snapshot["capabilities-without-description"];
+    if (
+      missingDescriptionMetric.count !==
+      EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION
+    ) {
+      failures.push(
+        `capabilities-without-description counted ${missingDescriptionMetric.count}, expected ${EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION}`,
       );
     }
 

@@ -20,7 +20,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  tDefaultVarchar,
+  tSafeId,
+  withDescription,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -38,17 +42,24 @@ import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 // client matter and `memberUserIds` may add additional members.
 const createWorkspaceBodySchema = t.Object({
   id: tSafeId("workspace"),
-  clientId: t.Optional(tSafeId("contact")),
+  clientId: t.Optional(
+    tSafeId("contact", {
+      description: "Contact ID to attach in the client role",
+    }),
+  ),
   memberUserIds: t.Optional(
     t.Array(t.String({ maxLength: 128 }), {
       maxItems: LIMITS.workspaceMembersCount - 1,
     }),
   ),
-  name: tDefaultVarchar,
+  name: withDescription(tDefaultVarchar, "Matter name"),
   filePropertyName: tDefaultVarchar,
 });
 
 const config = {
+  description:
+    "Create a new matter (name required; pass clientId to attach a client " +
+    "contact). Returns the matter ID.",
   permissions: { workspace: ["create"] },
   mcp: { type: "tool", name: "save_matter" },
   body: createWorkspaceBodySchema,

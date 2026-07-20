@@ -15,13 +15,18 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, withDescription } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const createEntityBodySchema = t.Object({
-  kind: t.Optional(entityKindSchema),
+  kind: t.Optional(
+    withDescription(
+      entityKindSchema,
+      "Entity kind to create; defaults to 'document'. Only valid when creating.",
+    ),
+  ),
   parentId: t.Optional(t.Nullable(tSafeId("entity"))),
   name: t.String({ minLength: 1, maxLength: 255 }),
 });

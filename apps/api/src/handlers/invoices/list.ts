@@ -12,9 +12,19 @@ import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
 const readInvoicesQuerySchema = t.Object({
   limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.invoicesPageSizeMax }),
+    t.Integer({
+      minimum: 1,
+      maximum: LIMITS.invoicesPageSizeMax,
+      description: "Max invoices to return",
+    }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(
+    t.String({
+      maxLength: 512,
+      description:
+        "Opaque cursor from a previous list_invoices call to fetch the next page",
+    }),
+  ),
 });
 
 const invoiceCursor = createTimestampIdCursorCodec({

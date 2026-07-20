@@ -492,6 +492,15 @@ type CapabilityMcp =
 
 type CapabilityEntry = {
   id: string;
+  /**
+   * Prose from the handler config's `description`, written for the agent
+   * deciding whether to call this capability. Carried verbatim into both
+   * committed catalog mirrors; the CLI renders it as the generated command's
+   * `--help` brief and MCP renders it in list/describe. Absent only for a
+   * capability that has not been given one yet (see the description-coverage
+   * ratchet in scripts/ratchet.ts).
+   */
+  description?: string;
   handlerKind: HandlerKind;
   access: "read" | "write";
   destructive: boolean;
@@ -588,6 +597,22 @@ const buildInputSchema = (
   return inputSchema;
 };
 
+/**
+ * The handler config's tool-level `description`. A non-string or empty value is
+ * reported as absent rather than emitted, so a malformed config shows up as a
+ * gap in the description-coverage ratchet instead of putting junk prose in front
+ * of an agent.
+ */
+const readDescription = (
+  config: Record<string, unknown>,
+): string | undefined => {
+  const description = config["description"];
+  if (typeof description !== "string" || description.trim().length === 0) {
+    return undefined;
+  }
+  return description;
+};
+
 type EntryScopeResult =
   | { status: "resolved"; scope: string }
   | { status: "error"; message: string };
@@ -665,6 +690,8 @@ const coveringToolOf = (exposure: ParsedExposure): string | undefined => {
 
 type BuildCatalogEntryOptions = {
   id: string;
+  /** Handler config's `description`, absent when the handler declares none. */
+  description: string | undefined;
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
   scope: string;
@@ -685,6 +712,7 @@ type BuildCatalogEntryOptions = {
  */
 const buildCatalogEntry = ({
   id,
+  description,
   kind,
   access,
   scope,
@@ -696,6 +724,7 @@ const buildCatalogEntry = ({
   feature,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
+  ...(description === undefined ? {} : { description }),
   handlerKind: kind,
   access: access.access,
   destructive: access.destructive,
@@ -1138,6 +1167,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
     entries.push(
       buildCatalogEntry({
         id,
+        description: readDescription(endpoint.config),
         kind: kindResolution.kind,
         access: accessResolution,
         scope,

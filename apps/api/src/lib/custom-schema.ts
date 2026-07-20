@@ -1,4 +1,4 @@
-import type { TProperties } from "@sinclair/typebox";
+import type { TProperties, TSchema } from "@sinclair/typebox";
 import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 
@@ -28,8 +28,27 @@ export const tUuid = t.String({
   pattern: UUID_REGEX.source,
 });
 
-export const tSafeId = <T extends SafeIdType>(_type: T) =>
-  Type.Unsafe<SafeId<T>>({ ...tUuid });
+/**
+ * A copy of a shared schema carrying per-property prose. The branded schemas
+ * below (`tUserId`, `tDefaultVarchar`, …) are single module-level instances
+ * reused by many handlers, so a description belongs to the USE SITE, not to the
+ * shared value; mutating the shared one would leak the prose everywhere. Object
+ * spread copies TypeBox's own enumerable symbol metadata (the `Kind` marker),
+ * so the copy validates exactly as the original does.
+ *
+ * The resulting `description` is carried by the capability-catalog exporter
+ * into the committed catalog's `inputSchema`, where it becomes the generated
+ * CLI flag's `--help` text and the property prose an MCP client sees.
+ */
+export const withDescription = <T extends TSchema>(
+  schema: T,
+  description: string,
+): T => ({ ...schema, description });
+
+export const tSafeId = <T extends SafeIdType>(
+  _type: T,
+  options?: { description: string },
+) => Type.Unsafe<SafeId<T>>({ ...tUuid, ...options });
 
 export const tUserId = t.String({
   minLength: 1,

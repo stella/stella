@@ -23,12 +23,30 @@ const clauseCursor = createTimestampIdCursorCodec({
 // ── List ────────────────────────────────────────────
 
 export const listClausesQuerySchema = t.Object({
-  categoryId: t.Optional(tSafeId("clauseCategory")),
-  q: t.Optional(t.String({ minLength: 1 })),
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.clausesPageSizeMax }),
+  categoryId: t.Optional(
+    tSafeId("clauseCategory", {
+      description: "List only clauses filed under this category (list mode)",
+    }),
   ),
-  cursor: t.Optional(t.String()),
+  q: t.Optional(
+    t.String({
+      minLength: 1,
+      description:
+        "Filter clauses by a text query over title and body (list mode)",
+    }),
+  ),
+  limit: t.Optional(
+    t.Integer({
+      minimum: 1,
+      maximum: LIMITS.clausesPageSizeMax,
+      description: "Max clauses to return",
+    }),
+  ),
+  cursor: t.Optional(
+    t.String({
+      description: "Opaque cursor from a previous page to fetch the next page",
+    }),
+  ),
 });
 
 type ListClausesProps = {

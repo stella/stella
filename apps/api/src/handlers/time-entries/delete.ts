@@ -13,7 +13,9 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const deleteTimeEntryBodySchema = t.Object({
-  id: tSafeId("timeEntry"),
+  id: tSafeId("timeEntry", {
+    description: "Time entry ID to delete or write off",
+  }),
 });
 
 export type DeleteTimeEntryHandlerProps = {
@@ -147,6 +149,11 @@ export const deleteTimeEntryHandler = async function* ({
 
 const deleteTimeEntryById = createSafeHandler(
   {
+    description:
+      "Delete a time entry. A draft entry is permanently deleted; an " +
+      "approved entry is written off instead (kept for the audit trail, " +
+      "excluded from billing). A billed entry cannot be deleted until its " +
+      "invoice is reverted. Returns whether the entry was hard-deleted.",
     permissions: { timeEntry: ["delete"] },
     mcp: { type: "tool", name: "delete_time_entry" },
     body: deleteTimeEntryBodySchema,

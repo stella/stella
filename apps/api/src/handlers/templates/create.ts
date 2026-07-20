@@ -15,7 +15,11 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  tDefaultVarchar,
+  tSafeId,
+  withDescription,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -24,7 +28,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createTemplateBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
-  name: tDefaultVarchar,
+  name: withDescription(tDefaultVarchar, "Template display name"),
   categoryId: t.Optional(tSafeId("templateCategory")),
   // Elysia auto-parses JSON strings from FormData, so the
   // manifest may arrive as a string or an already-parsed
@@ -115,6 +119,11 @@ const createTemplateHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Create a document template from a DOCX. Pass file and a name; the " +
+    "{{field}} markers in the file become the template's fillable fields. " +
+    "Read the marker grammar from the template-markers reference resource " +
+    "when unsure. Returns the template id and field count.",
   permissions: { template: ["create"] },
   mcp: { type: "tool", name: "save_template" },
   body: createTemplateBodySchema,

@@ -27,6 +27,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
+  description: "List the matters you can access.",
   permissions: {
     workspace: ["read"],
   },

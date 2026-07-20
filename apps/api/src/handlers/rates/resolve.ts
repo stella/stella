@@ -7,19 +7,28 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tUserId } from "@/api/lib/custom-schema";
+import { tUserId, withDescription } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const resolveRateQuerySchema = t.Object({
-  userId: tUserId,
-  date: t.String({ format: "date" }),
+  userId: withDescription(tUserId, "User ID to resolve the rate for"),
+  date: t.String({
+    format: "date",
+    description: "Date to resolve the rate on (ISO YYYY-MM-DD)",
+  }),
 });
 
 const resolveRateHandler = createSafeHandler(
   {
+    description:
+      "Resolve the effective hourly rate for a user on a given date in a " +
+      "matter, using the matter's default rate table (user-specific rate " +
+      "first, then the table default). Returns the hourly rate in integer " +
+      "minor currency units (e.g. cents) and the currency, or nulls when no " +
+      "rate applies.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "resolve_rate" },
     query: resolveRateQuerySchema,

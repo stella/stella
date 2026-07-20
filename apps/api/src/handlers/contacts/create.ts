@@ -29,7 +29,9 @@ import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createContactBodySchema = t.Object({
   id: tSafeId("contact"),
-  type: t.UnionEnum(["person", "organization"]),
+  type: t.UnionEnum(["person", "organization"], {
+    description: "Contact kind; required when creating",
+  }),
   prefix: t.Optional(t.String({ maxLength: 32 })),
   firstName: t.Optional(t.String({ maxLength: 256 })),
   middleName: t.Optional(t.String({ maxLength: 256 })),

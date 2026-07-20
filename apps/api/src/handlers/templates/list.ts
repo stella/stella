@@ -140,6 +140,11 @@ export const listTemplatesHandler = async function* ({
 };
 
 const config = {
+  description:
+    "List the document templates in this organization (NDAs, powers of " +
+    "attorney, leases): each template's id, name, field count, tags, and " +
+    "usage guidance (whenToUse / whenNotToUse); prefer a template whose " +
+    "whenToUse matches the request and skip any whose whenNotToUse applies.",
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "list_templates" },
   query: listTemplatesQuerySchema,

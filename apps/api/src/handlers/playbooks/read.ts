@@ -22,9 +22,16 @@ export const listPlaybookDefinitionsQuerySchema = t.Object({
     t.Integer({
       minimum: 1,
       maximum: LIMITS.playbookDefinitionsPageSizeMax,
+      description: "Max playbooks to return",
     }),
   ),
-  cursor: t.Optional(t.String({ maxLength: 512 })),
+  cursor: t.Optional(
+    t.String({
+      maxLength: 512,
+      description:
+        "Opaque cursor from a previous list_playbooks call to fetch the next page",
+    }),
+  ),
 });
 
 // The cursor is the boundary row id alone; the query resolves that row's exact

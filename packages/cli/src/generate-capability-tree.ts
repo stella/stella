@@ -34,6 +34,8 @@ import type {
 /** The catalog entry fields the CLI codegen consumes (a subset of the export). */
 export type CapabilityCatalogEntry = {
   id: string;
+  /** Authored prose from the handler config; the command's `--help` brief. */
+  description?: string;
   handlerKind: "workspace" | "root" | "session";
   access: "read" | "write";
   destructive: boolean;
@@ -351,6 +353,9 @@ export const deriveCapabilityLeaf = (
       spec: {
         commandPath,
         capabilityId: entry.id,
+        ...(entry.description === undefined
+          ? {}
+          : { description: entry.description }),
         access: entry.access,
         flags: [],
         inputOnly: [],
@@ -410,6 +415,9 @@ export const deriveCapabilityLeaf = (
     spec: {
       commandPath,
       capabilityId: entry.id,
+      ...(entry.description === undefined
+        ? {}
+        : { description: entry.description }),
       access: entry.access,
       flags,
       inputOnly,
