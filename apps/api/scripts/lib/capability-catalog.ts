@@ -76,6 +76,212 @@ export const deriveDomain = (id: string): string => {
   return domain;
 };
 
+/**
+ * The canonical action verbs. A capability id's FINAL segment names the action;
+ * `list` (a collection) and `get` (one entity by id) are deliberately split so
+ * the surface can never repeat the old ambiguous `read`, which meant "list many"
+ * in some domains and "fetch one" in others.
+ */
+export const CANONICAL_ACTION_VERBS = new Set([
+  "list",
+  "get",
+  "create",
+  "update",
+  "delete",
+]);
+
+/**
+ * Reviewed domain-specific action verbs: operations that are genuinely not CRUD
+ * (`search`, `run`, `export-csv`, …). This list is an explicit review gate, not
+ * a free-for-all: a capability whose action verb is in neither
+ * `CANONICAL_ACTION_VERBS` nor this set fails the export, so a new
+ * non-conforming verb cannot land silently. It is ratcheted (see
+ * `capability-domain-action-verbs` in `scripts/ratchet.ts`) and may only shrink
+ * as compound verbs are restructured into nested resources — e.g.
+ * `clauses.categories-create` should become `clauses.categories.create`, which
+ * needs no allowlist entry at all.
+ */
+export const DOMAIN_ACTION_VERBS = new Set([
+  "add-entries",
+  "approve",
+  "archive",
+  "assignees-add",
+  "assignees-remove",
+  "auto-run",
+  "batch-delete",
+  "batch-update",
+  "binding-catalog",
+  "boe-get-law",
+  "boe-law-structure",
+  "boe-related-laws",
+  "boe-search",
+  "boe-text-block",
+  "borme-summary",
+  "business-registries-lookup",
+  "calendar",
+  "categories-create",
+  "categories-delete",
+  "categories-list",
+  "categories-update",
+  "cell-retry",
+  "check",
+  "check-stamp",
+  "clause-slots",
+  "clauses-link",
+  "clauses-list",
+  "clauses-slot-update",
+  "clauses-sync",
+  "clauses-sync-all",
+  "clauses-unlink",
+  "clip",
+  "clone-builtin",
+  "compare-versions",
+  "convert",
+  "copy-to-workspace",
+  "create-batch",
+  "create-blank",
+  "create-blank-document",
+  "create-from-editor",
+  "create-from-legal-source",
+  "create-from-style-set",
+  "create-from-styles",
+  "delete-thread",
+  "delete-version",
+  "discover",
+  "download",
+  "download-zip",
+  "duplicate",
+  "entity-links-create",
+  "entity-links-delete",
+  "entity-links-read",
+  "entries-create",
+  "entries-delete",
+  "entries-read",
+  "entries-update",
+  "export",
+  "export-csv",
+  "export-ledes",
+  "export-pdf",
+  "export-view",
+  "fill",
+  "fill-by-id",
+  "fill-preview",
+  "fill-to-workspace",
+  "from-blueprint",
+  "from-starter",
+  "generate",
+  "generate-draft",
+  "get-entitlement",
+  "get-messages",
+  "get-older-messages",
+  "get-threads",
+  "import",
+  "import-url",
+  "install-skill",
+  "list-catalogue",
+  "list-commands",
+  "list-exports",
+  "list-files",
+  "list-folders",
+  "list-starters",
+  "list-templates",
+  "list-versions",
+  "lookup-preview",
+  "manifest",
+  "mark-column-flag",
+  "move",
+  "organize-suggestions",
+  "prefill",
+  "prepare",
+  "preview",
+  "read-ai-availability",
+  "read-anonymization-blacklist",
+  "read-deepl-availability",
+  "read-editor",
+  "read-export",
+  "read-filesystem-tree",
+  "read-justifications",
+  "read-stella-editor",
+  "read-summaries",
+  "read-summaries-count",
+  "read-version",
+  "read-version-by-id",
+  "read-versions",
+  "read-window",
+  "read-workflow-status",
+  "read-workflow-target-count",
+  "remove-entries",
+  "rename",
+  "rename-thread",
+  "reorder",
+  "replace",
+  "resolve",
+  "restore-version",
+  "review",
+  "rewrite",
+  "run",
+  "run-cancel",
+  "run-detail",
+  "run-list",
+  "run-review",
+  "run-start",
+  "save-document",
+  "search",
+  "seed",
+  "split",
+  "status",
+  "suggest-fields",
+  "suggest-prompt",
+  "table-export",
+  "template-slot-preview",
+  "timer-start",
+  "timer-stop",
+  "transition",
+  "translate",
+  "unarchive",
+  "update-anonymization-blacklist",
+  "update-cell-metadata",
+  "update-from-editor",
+  "update-practice-jurisdictions",
+  "update-thread",
+  "update-version-description",
+  "update-version-label",
+  "upload",
+  "upload-version",
+  "upsert-by-id",
+  "variants-create",
+  "variants-delete",
+  "variants-list",
+  "variants-update",
+  "version-diff",
+  "version-summarize",
+  "versions-diff",
+  "versions-get",
+  "versions-list",
+  "versions-restore",
+  "versions-summarize",
+  "workflow-start",
+  "workspace-contacts-create",
+  "workspace-contacts-delete",
+  "workspace-members-add",
+  "workspace-members-remove",
+]);
+
+/** The action a capability id names: its final `.`-separated segment. */
+export const deriveActionVerb = (id: string): string =>
+  id.split(".").at(-1) ?? id;
+
+/** Whether a capability id's action verb is canonical or a reviewed domain verb. */
+export const isAllowedActionVerb = (id: string): boolean => {
+  const verb = deriveActionVerb(id);
+  return CANONICAL_ACTION_VERBS.has(verb) || DOMAIN_ACTION_VERBS.has(verb);
+};
+
+/** Ids whose action verb is in neither allowed set, sorted (empty when all conform). */
+export const findNonConformingActionVerbs = (
+  ids: readonly string[],
+): string[] => ids.filter((id) => !isAllowedActionVerb(id)).sort();
+
 export type AccessClassification = {
   access: "read" | "write";
   destructive: boolean;

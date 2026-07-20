@@ -49,14 +49,17 @@ import {
   type AccessClassification,
   type CapabilityDispatchRecord,
   capInputSchema,
+  CANONICAL_ACTION_VERBS,
   CAPABILITY_ID_SEGMENT_PATTERN,
   type CapabilityInputSchema,
   compareScopeStrictness,
+  deriveActionVerb,
   deriveCapabilityId,
   deriveDomain,
   deriveHandlerImportPath,
   findInlineCapabilityMismatches,
   findStaleAccessOverrides,
+  isAllowedActionVerb,
   isDestructiveName,
   isWellFormedCapabilityId,
   resolveAccess,
@@ -955,6 +958,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
       // identifier gets suffixed onto the path-derived id.
       errors.push(
         `malformed capability id "${id}" from ${endpoint.file}: every \`.\`-separated segment must be lowercase kebab-case (${CAPABILITY_ID_SEGMENT_PATTERN.source}). Capability ids are public, so give this endpoint its own kebab-case-named file and export it as the file's DEFAULT export instead of a named one`,
+      );
+      continue;
+    }
+    if (!isAllowedActionVerb(id)) {
+      // The final id segment is the PUBLIC action verb (`stella contacts list`,
+      // `invoke_capability contacts.list`). Keeping it inside a small canonical
+      // set plus a reviewed domain list is what stops the surface drifting back
+      // into synonym soup (`read` vs `list` vs `get` for the same shape).
+      errors.push(
+        `non-conforming action verb "${deriveActionVerb(id)}" in capability id "${id}" from ${endpoint.file}: the final id segment must be one of ${[...CANONICAL_ACTION_VERBS].sort().join(", ")}, or an explicitly reviewed entry in DOMAIN_ACTION_VERBS. Prefer renaming the handler file to a canonical verb, or splitting a compound verb into a nested resource directory (\`clauses/categories/create.ts\` over \`clauses/categories-create.ts\`)`,
       );
       continue;
     }

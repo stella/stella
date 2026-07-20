@@ -605,6 +605,34 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
   ).length;
 };
 
+/**
+ * Entries in the reviewed `DOMAIN_ACTION_VERBS` allowlist: capability action
+ * verbs outside the canonical `list/get/create/update/delete` set. Each one is a
+ * public command verb a caller has to learn, so the list may only shrink —
+ * typically by splitting a compound verb into a nested resource directory
+ * (`clauses/categories/create.ts` over `clauses/categories-create.ts`).
+ */
+const countDomainActionVerbs = (content: string): number => {
+  const block =
+    /export const DOMAIN_ACTION_VERBS = new Set\(\[([\s\S]*?)\]\);/u.exec(
+      content,
+    )?.[1];
+  return block === undefined ? 0 : (block.match(/^\s*"/gmu) ?? []).length;
+};
+
+/**
+ * Namespaces where a curated, hand-written command still shares a top-level name
+ * with generated capability commands, so `stella <namespace> …` mixes the named
+ * MCP tool path and the generic `invoke_capability` path. Must reach zero.
+ */
+const countShadowedNamespaces = (content: string): number => {
+  const block =
+    /const SHADOWED_NAMESPACE_ALLOWLIST: readonly string\[\] = \[([\s\S]*?)\];/u.exec(
+      content,
+    )?.[1];
+  return block === undefined ? 0 : (block.match(/^\s*"/gmu) ?? []).length;
+};
+
 type FileCounter = (content: string, file: string) => number;
 
 type RatchetMetric = {
@@ -726,6 +754,22 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
     count: countTruncatedCapabilitySchemas,
+  },
+  {
+    id: "capability-domain-action-verbs",
+    description:
+      "reviewed non-canonical capability action verbs (DOMAIN_ACTION_VERBS); each is a public command verb outside list/get/create/update/delete",
+    include: ["apps/api/scripts/lib/capability-catalog.ts"],
+    exclude: () => false,
+    count: countDomainActionVerbs,
+  },
+  {
+    id: "cli-shadowed-namespaces",
+    description:
+      "namespaces where a curated command and a generated capability command share a top-level name, so callers cannot tell which mechanism they get",
+    include: ["packages/cli/src/generate-capability-tree.test.ts"],
+    exclude: () => false,
+    count: countShadowedNamespaces,
   },
   {
     id: "cross-feature-imports",

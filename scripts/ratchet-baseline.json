@@ -95,7 +95,7 @@
       "apps/api/src/handlers/clauses/import.ts": 4,
       "apps/api/src/handlers/clauses/search-vector.ts": 1,
       "apps/api/src/handlers/contacts/create.ts": 1,
-      "apps/api/src/handlers/contacts/update-by-id.ts": 1,
+      "apps/api/src/handlers/contacts/update.ts": 1,
       "apps/api/src/handlers/docx/adapt-ai-fields.ts": 1,
       "apps/api/src/handlers/docx/discover-clause-slots.ts": 1,
       "apps/api/src/handlers/docx/discover-placeholders.ts": 1,
@@ -137,10 +137,10 @@
       "apps/api/src/handlers/playbooks/route-playbooks.ts": 1,
       "apps/api/src/handlers/properties/create-batch.ts": 3,
       "apps/api/src/handlers/properties/create.ts": 1,
-      "apps/api/src/handlers/properties/delete-by-id.ts": 1,
+      "apps/api/src/handlers/properties/delete.ts": 1,
       "apps/api/src/handlers/properties/preview.ts": 1,
       "apps/api/src/handlers/properties/suggest-prompt.ts": 1,
-      "apps/api/src/handlers/properties/update-by-id.ts": 1,
+      "apps/api/src/handlers/properties/update.ts": 1,
       "apps/api/src/handlers/properties/utils.ts": 1,
       "apps/api/src/handlers/reports/build-report-data.ts": 2,
       "apps/api/src/handlers/search/ai.ts": 3,
@@ -157,12 +157,12 @@
       "apps/api/src/handlers/view-templates/create.ts": 1,
       "apps/api/src/handlers/view-templates/properties.ts": 3,
       "apps/api/src/handlers/views/table-export.ts": 2,
-      "apps/api/src/handlers/workspaces/anonymization-allowlist.ts": 1,
-      "apps/api/src/handlers/workspaces/anonymization-terms.ts": 1,
-      "apps/api/src/handlers/workspaces/delete-by-id.ts": 1,
+      "apps/api/src/handlers/workspaces/anonymization-allowlist/list.ts": 1,
+      "apps/api/src/handlers/workspaces/anonymization-terms/list.ts": 1,
+      "apps/api/src/handlers/workspaces/delete.ts": 1,
       "apps/api/src/handlers/workspaces/duplicate.ts": 7,
       "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts": 1,
-      "apps/api/src/handlers/workspaces/read.ts": 2,
+      "apps/api/src/handlers/workspaces/list.ts": 2,
       "apps/api/src/lib/account-deletion-steps.ts": 4,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
@@ -589,8 +589,8 @@
       "apps/api/src/handlers/folio-collab/checkpoint.ts": 1,
       "apps/api/src/handlers/folio-collab/finalize.ts": 7,
       "apps/api/src/handlers/legislation/corpus-index.ts": 1,
+      "apps/api/src/handlers/legislation/get.ts": 2,
       "apps/api/src/handlers/legislation/ingestion.ts": 4,
-      "apps/api/src/handlers/legislation/read-by-id.ts": 2,
       "apps/api/src/handlers/legislation/search-index.ts": 2,
       "apps/api/src/handlers/legislation/search.ts": 1,
       "apps/api/src/handlers/playbooks/materialize-run.ts": 2,
@@ -637,7 +637,7 @@
       "apps/api/src/handlers/views/create.ts": 1,
       "apps/api/src/handlers/views/table-export.ts": 2,
       "apps/api/src/handlers/views/update.ts": 1,
-      "apps/api/src/handlers/workspaces/delete-by-id.ts": 2,
+      "apps/api/src/handlers/workspaces/delete.ts": 2,
       "apps/api/src/handlers/workspaces/duplicate.ts": 2,
       "apps/api/src/handlers/workspaces/workspace-members-remove.ts": 1
     }
@@ -761,6 +761,18 @@
     "files": {
       "apps/api/src/mcp/generated/capability-catalog.json": 3,
       "packages/cli/src/generated/capability-catalog.json": 3
+    }
+  },
+  "capability-domain-action-verbs": {
+    "count": 163,
+    "files": {
+      "apps/api/scripts/lib/capability-catalog.ts": 163
+    }
+  },
+  "cli-shadowed-namespaces": {
+    "count": 4,
+    "files": {
+      "packages/cli/src/generate-capability-tree.test.ts": 4
     }
   },
   "cross-feature-imports": {
