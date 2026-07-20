@@ -1,7 +1,13 @@
+import { Result } from "better-result";
 import { t } from "elysia";
 
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  authorizeFolioCollabSession,
+  type AuthorizedFolioCollabSession,
+} from "@/api/lib/folio-collab-sessions";
+import { validatePostAuth } from "@/api/lib/permissive-route-schema";
 
 /**
  * Folio-collab room tokens are two concatenated 32-char parts (see
@@ -35,3 +41,52 @@ export const folioCollabSessionNotFoundError = () =>
     status: 404,
     message: "Collaborative edit session not found.",
   });
+
+/**
+ * Validates and authorizes the shared folio-collab credential pair. Keeping
+ * every auth-shaped response here prevents the token routes from drifting
+ * into observably different behavior for malformed, missing, or revoked
+ * credentials.
+ */
+export const authorizeFolioCollabCredentials = async (
+  rawCredentials: unknown,
+): Promise<
+  Result<
+    { session: AuthorizedFolioCollabSession; token: string },
+    HandlerError<401 | 403 | 404>
+  >
+> => {
+  const credentials = validatePostAuth(
+    folioCollabSessionCredentialsSchema,
+    rawCredentials,
+  );
+  if (!credentials.ok) {
+    return Result.err(folioCollabSessionNotFoundError());
+  }
+
+  const authorized = await authorizeFolioCollabSession(credentials.value);
+  if (authorized.status === "missing") {
+    return Result.err(folioCollabSessionNotFoundError());
+  }
+  if (authorized.status === "token-expired") {
+    return Result.err(
+      new HandlerError({
+        status: 401,
+        message: "Collaborative edit token expired.",
+      }),
+    );
+  }
+  if (authorized.status === "permission-revoked") {
+    return Result.err(
+      new HandlerError({
+        status: 403,
+        message: "Collaborative edit permission revoked.",
+      }),
+    );
+  }
+
+  return Result.ok({
+    session: authorized.value,
+    token: credentials.value.token,
+  });
+};

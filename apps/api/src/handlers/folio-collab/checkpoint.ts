@@ -14,7 +14,6 @@ import {
 } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
-import { authorizeFolioCollabSession } from "@/api/lib/folio-collab-sessions";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import {
   permissiveBodySchema,
@@ -25,10 +24,7 @@ import { getS3 } from "@/api/lib/s3";
 import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-import {
-  folioCollabSessionCredentialsSchema,
-  folioCollabSessionNotFoundError,
-} from "./session-credentials";
+import { authorizeFolioCollabCredentials } from "./session-credentials";
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
@@ -36,7 +32,10 @@ const config = {
   // The multipart file part is undeclared here on purpose: the permissive
   // schema passes it through untouched and the strict schema below checks
   // it after authorization.
-  body: permissiveBodySchema({ keys: ["token"] }),
+  body: permissiveBodySchema({
+    keys: ["token"],
+    passthroughKeys: ["file"],
+  }),
 } satisfies TokenHandlerConfig;
 
 /** Validated after authorization; see `permissive-route-schema.ts`. */
@@ -48,44 +47,22 @@ const strictBodySchema = t.Object({
 
 const checkpointFolioCollabSession = createSafeTokenHandler(
   config,
-  // eslint-disable-next-line require-yield -- token auth + scopedDb returns plain Promises; nothing to Result.await
   async function* ({ body, params, request, server }) {
-    const credentials = validatePostAuth(folioCollabSessionCredentialsSchema, {
-      sessionId: params.sessionId,
-      token: body?.token,
-    });
-    if (!credentials.ok) {
-      return Result.err(folioCollabSessionNotFoundError());
-    }
-    const { sessionId, token } = credentials.value;
-
-    const authorizedSession = await authorizeFolioCollabSession({
+    const { session: authorizedSession } = yield* Result.await(
+      authorizeFolioCollabCredentials({
+        sessionId: params.sessionId,
+        token: body?.token,
+      }),
+    );
+    const {
+      canEdit,
+      fileName,
+      organizationId,
+      scopedDb,
       sessionId,
-      token,
-    });
-
-    if (authorizedSession.status === "missing") {
-      return Result.err(folioCollabSessionNotFoundError());
-    }
-    if (authorizedSession.status === "token-expired") {
-      return Result.err(
-        new HandlerError({
-          status: 401,
-          message: "Collaborative edit token expired.",
-        }),
-      );
-    }
-    if (authorizedSession.status === "permission-revoked") {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Collaborative edit permission revoked.",
-        }),
-      );
-    }
-
-    const { canEdit, fileName, organizationId, scopedDb, userId, workspaceId } =
-      authorizedSession.value;
+      userId,
+      workspaceId,
+    } = authorizedSession;
 
     if (!canEdit) {
       return Result.err(

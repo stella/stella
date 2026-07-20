@@ -11,7 +11,6 @@ import {
 } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  authorizeFolioCollabSession,
   collectFolioCollabStoredSessionFiles,
   deleteFolioCollabStoredSessionFiles,
 } from "@/api/lib/folio-collab-sessions";
@@ -19,14 +18,10 @@ import type { FolioCollabStoredSessionFile } from "@/api/lib/folio-collab-sessio
 import {
   permissiveBodySchema,
   permissiveRouteSchema,
-  validatePostAuth,
 } from "@/api/lib/permissive-route-schema";
 import { broadcast } from "@/api/lib/sse";
 
-import {
-  folioCollabSessionCredentialsSchema,
-  folioCollabSessionNotFoundError,
-} from "./session-credentials";
+import { authorizeFolioCollabCredentials } from "./session-credentials";
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
@@ -36,44 +31,21 @@ const config = {
 
 const cancelFolioCollabSession = createSafeTokenHandler(
   config,
-  // eslint-disable-next-line require-yield -- token auth + scopedDb returns plain Promises; nothing to Result.await
   async function* ({ body, params, request, server }) {
-    const credentials = validatePostAuth(folioCollabSessionCredentialsSchema, {
-      sessionId: params.sessionId,
-      token: body?.token,
-    });
-    if (!credentials.ok) {
-      return Result.err(folioCollabSessionNotFoundError());
-    }
-    const { sessionId, token } = credentials.value;
-
-    const authorizedSession = await authorizeFolioCollabSession({
+    const { session: authorizedSession } = yield* Result.await(
+      authorizeFolioCollabCredentials({
+        sessionId: params.sessionId,
+        token: body?.token,
+      }),
+    );
+    const {
+      canEdit,
+      organizationId,
+      scopedDb,
       sessionId,
-      token,
-    });
-
-    if (authorizedSession.status === "missing") {
-      return Result.err(folioCollabSessionNotFoundError());
-    }
-    if (authorizedSession.status === "token-expired") {
-      return Result.err(
-        new HandlerError({
-          status: 401,
-          message: "Collaborative edit token expired.",
-        }),
-      );
-    }
-    if (authorizedSession.status === "permission-revoked") {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Collaborative edit permission revoked.",
-        }),
-      );
-    }
-
-    const { canEdit, organizationId, scopedDb, userId, workspaceId } =
-      authorizedSession.value;
+      userId,
+      workspaceId,
+    } = authorizedSession;
 
     if (!canEdit) {
       return Result.err(

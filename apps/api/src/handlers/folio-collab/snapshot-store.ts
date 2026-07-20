@@ -5,7 +5,6 @@ import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
-  authorizeFolioCollabSession,
   FOLIO_COLLAB_SNAPSHOT_MAX_BASE64_LENGTH,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
   storeFolioCollabSnapshot,
@@ -15,10 +14,7 @@ import {
   validatePostAuth,
 } from "@/api/lib/permissive-route-schema";
 
-import {
-  folioCollabSessionCredentialsSchema,
-  folioCollabSessionNotFoundError,
-} from "./session-credentials";
+import { authorizeFolioCollabCredentials } from "./session-credentials";
 
 const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
@@ -36,40 +32,10 @@ const strictBodySchema = t.Object({
 
 const storeFolioCollabSnapshotHandler = createSafeTokenHandler(
   config,
-  // eslint-disable-next-line require-yield -- token auth returns a plain Promise; nothing to Result.await
   async function* ({ body }) {
-    const credentials = validatePostAuth(
-      folioCollabSessionCredentialsSchema,
-      body,
+    const { session: value } = yield* Result.await(
+      authorizeFolioCollabCredentials(body),
     );
-    if (!credentials.ok) {
-      return Result.err(folioCollabSessionNotFoundError());
-    }
-    const { sessionId, token } = credentials.value;
-
-    const authorized = await authorizeFolioCollabSession({ sessionId, token });
-
-    if (authorized.status === "missing") {
-      return Result.err(folioCollabSessionNotFoundError());
-    }
-    if (authorized.status === "token-expired") {
-      return Result.err(
-        new HandlerError({
-          status: 401,
-          message: "Collaborative edit token expired.",
-        }),
-      );
-    }
-    if (authorized.status === "permission-revoked") {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "Collaborative edit permission revoked.",
-        }),
-      );
-    }
-
-    const { value } = authorized;
     if (!value.canEdit) {
       return Result.err(
         new HandlerError({

@@ -70,6 +70,14 @@ describe("folio-collab probes with malformed bodies never see validation errors"
       await expectAuthShapedNotFound(
         jsonRequest(path, { sessionId: "garbage", token: WELL_FORMED_TOKEN }),
       );
+      // Non-string JSON values must reach the handler too; otherwise the
+      // permissive route schema itself leaks a 422 before authorization.
+      await expectAuthShapedNotFound(
+        jsonRequest(path, { sessionId: [], token: 0 }),
+      );
+      await expectAuthShapedNotFound(
+        jsonRequest(path, { sessionId: true, token: {} }),
+      );
       // Unknown extra keys alongside malformed credentials.
       await expectAuthShapedNotFound(
         jsonRequest(path, { token: "x", probe: "1", admin: "true" }),
@@ -101,6 +109,8 @@ describe("folio-collab probes with malformed bodies never see validation errors"
       );
       await expectAuthShapedNotFound(jsonRequest(path, {}));
       await expectAuthShapedNotFound(jsonRequest(path, { token: "short" }));
+      await expectAuthShapedNotFound(jsonRequest(path, { token: 0 }));
+      await expectAuthShapedNotFound(jsonRequest(path, { token: [] }));
     },
   );
 

@@ -1,4 +1,5 @@
 import type { TOptional, TSchema, TUnsafe } from "@sinclair/typebox";
+import { Type } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import type { Static } from "elysia";
 import { t } from "elysia";
@@ -25,10 +26,6 @@ import { t } from "elysia";
  * token-route meta-test in `tests/security`.
  */
 
-declare const permissiveRouteSchemaBrand: unique symbol;
-
-type PermissiveBrand = { readonly [permissiveRouteSchemaBrand]: true };
-
 /**
  * Runtime counterpart of the compile-time brand. The factories stamp this
  * symbol on every schema they produce; the token-route meta-test asserts it
@@ -39,7 +36,15 @@ export const PERMISSIVE_ROUTE_SCHEMA_MARKER: unique symbol = Symbol.for(
   "stella.permissiveRouteSchema",
 );
 
+type PermissiveBrand = {
+  readonly [PERMISSIVE_ROUTE_SCHEMA_MARKER]: true;
+};
+
 type PermissiveStatic<TKeys extends string> = Partial<Record<TKeys, string>>;
+
+type PermissiveBodyStatic<TKeys extends string> = Partial<
+  Record<TKeys, unknown>
+>;
 
 /**
  * Permissive schema for the `query` and `params` slots of a token route.
@@ -56,9 +61,10 @@ export type PermissiveRouteSchema<TKeys extends string = never> = TUnsafe<
  * root so a probe with no body (or an unparseable one) reaches the handler
  * instead of failing framework validation.
  */
-export type PermissiveBodySchema<TKeys extends string = never> = TOptional<
-  TUnsafe<PermissiveStatic<TKeys>>
-> &
+export type PermissiveBodySchema<
+  TStringKeys extends string = never,
+  TPassthroughKeys extends string = never,
+> = TOptional<TUnsafe<PermissiveBodyStatic<TStringKeys | TPassthroughKeys>>> &
   PermissiveBrand;
 
 /**
@@ -67,13 +73,21 @@ export type PermissiveBodySchema<TKeys extends string = never> = TOptional<
  */
 export type AnyPermissiveRouteSchema = TSchema & PermissiveBrand;
 
-type PermissiveRouteSchemaOptions<TKeys extends readonly string[]> = {
+type PermissiveRouteSchemaOptions<
+  TStringKeys extends readonly string[],
+  TPassthroughKeys extends readonly string[] = [],
+> = {
   /**
    * Property names the handler reads (typed `string | undefined`).
    * Properties outside this list still pass validation; the handler's
    * post-auth strict schema is the only authority on shape.
    */
-  keys: TKeys;
+  keys: TStringKeys;
+  /**
+   * Non-string fields the generated client must accept without validating
+   * before authorization (for example, a multipart file part).
+   */
+  passthroughKeys?: TPassthroughKeys;
 };
 
 const buildPermissiveObject = (keys: readonly string[]) => {
@@ -87,10 +101,15 @@ const buildPermissiveObject = (keys: readonly string[]) => {
   return t.Object(properties, { additionalProperties: true });
 };
 
-const stampMarker = (schema: TSchema) => {
-  Object.defineProperty(schema, PERMISSIVE_ROUTE_SCHEMA_MARKER, {
-    value: true,
-  });
+const buildPermissiveBodyObject = (keys: readonly string[]) => {
+  const properties: Record<string, TSchema> = {};
+  for (const key of keys) {
+    // Body credential fields must accept every JSON value here. Their real
+    // types are checked by the handler after authorization; using t.String()
+    // would let arrays, numbers, or booleans trigger a pre-auth 422.
+    properties[key] = t.Optional(t.Any());
+  }
+  return t.Object(properties, { additionalProperties: true });
 };
 
 /**
@@ -99,17 +118,11 @@ const stampMarker = (schema: TSchema) => {
  */
 export const permissiveRouteSchema = <const TKeys extends readonly string[]>({
   keys,
-}: PermissiveRouteSchemaOptions<TKeys>): PermissiveRouteSchema<
-  TKeys[number]
-> => {
-  const schema = buildPermissiveObject(keys);
-  stampMarker(schema);
-  // SAFETY: the brand exists only at the type level; this is its single
-  // construction point and the runtime object is exactly the permissive
-  // t.Object the type describes (every property TOptional<TString>).
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY above
-  return schema as unknown as PermissiveRouteSchema<TKeys[number]>;
-};
+}: PermissiveRouteSchemaOptions<TKeys>): PermissiveRouteSchema<TKeys[number]> =>
+  Object.assign(
+    Type.Unsafe<PermissiveStatic<TKeys[number]>>(buildPermissiveObject(keys)),
+    { [PERMISSIVE_ROUTE_SCHEMA_MARKER]: true } satisfies PermissiveBrand,
+  );
 
 /**
  * Permissive schema for a token route's `body` slot. Root-optional so a
@@ -117,19 +130,20 @@ export const permissiveRouteSchema = <const TKeys extends readonly string[]>({
  * the handler sees `null`/`undefined` and fails its own credential check
  * instead.
  */
-export const permissiveBodySchema = <const TKeys extends readonly string[]>({
-  keys,
-}: PermissiveRouteSchemaOptions<TKeys>): PermissiveBodySchema<
-  TKeys[number]
-> => {
-  const schema = t.Optional(buildPermissiveObject(keys));
-  stampMarker(schema);
-  // SAFETY: same single-construction-point brand cast as
-  // permissiveRouteSchema; the runtime object is the optional-wrapped
-  // permissive t.Object the type describes.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY above
-  return schema as unknown as PermissiveBodySchema<TKeys[number]>;
-};
+export const permissiveBodySchema = <
+  const TStringKeys extends readonly string[],
+  const TPassthroughKeys extends readonly string[] = [],
+>(
+  options: PermissiveRouteSchemaOptions<TStringKeys, TPassthroughKeys>,
+): PermissiveBodySchema<TStringKeys[number], TPassthroughKeys[number]> =>
+  Object.assign(
+    t.Optional(
+      Type.Unsafe<
+        PermissiveBodyStatic<TStringKeys[number] | TPassthroughKeys[number]>
+      >(buildPermissiveBodyObject(options.keys)),
+    ),
+    { [PERMISSIVE_ROUTE_SCHEMA_MARKER]: true } satisfies PermissiveBrand,
+  );
 
 export type PostAuthValidation<TStrict extends TSchema> =
   | { ok: true; value: Static<TStrict> }
@@ -141,6 +155,10 @@ export type PostAuthValidation<TStrict extends TSchema> =
  * for credential fields themselves, a failure must map to the same
  * response as an unknown credential so malformed and unknown credentials
  * stay indistinguishable.
+ *
+ * `Value.Check` does not perform Elysia's route-level coercion. Callers whose
+ * strict schemas expect numbers or booleans from query, params, or headers
+ * must normalize those string inputs explicitly before validating them.
  */
 export const validatePostAuth = <TStrict extends TSchema>(
   strictSchema: TStrict,
