@@ -904,6 +904,7 @@ const DISCOVER_PRODUCTS: Record<
   editor: { href: "/product/editor", name: "Editor" },
   agent: { href: "/product/agent", name: "AI agent" },
   cli: { href: "/product/cli-mcp", name: "CLI & MCP" },
+  templates: { href: "/product/templates", name: "Templates" },
 };
 
 // Geometry for the selection tag rendered UNDER each window. The windows
@@ -1056,10 +1057,13 @@ const getSceneChromeLabel = (sceneId: ProductStorySceneId) => {
     return "stella · Project Atlas · Table";
   }
   if (sceneId === "editor") {
-    return "stella · Northstar SAFE · Editor";
+    return "stella · Meridian supply · Editor";
   }
   if (sceneId === "agent") {
     return "stella · Project Atlas · Agent";
+  }
+  if (sceneId === "templates") {
+    return "stella · Supply Agreement · Templates";
   }
   return "stella · Agent";
 };

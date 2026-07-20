@@ -14,10 +14,8 @@ export const templates: Product = {
   metaDescription:
     "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. Produce a document into the matter.",
   hero: {
-    type: "image",
-    src: "/media/products/templates.png",
-    darkSrc: "/media/products/templates-dark.png",
-    alt: "The seeded template library in stella",
+    type: "story",
+    sceneId: "templates",
     aspect: "16 / 10",
   },
   // Frame rhythm down the page: ripple, bloom, wash, bloom.

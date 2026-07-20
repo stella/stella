@@ -41,6 +41,7 @@ import {
   fields,
   invoices,
   justifications,
+  organizationSettings,
   playbookDefinitions,
   properties,
   propertyDependencies,
@@ -52,7 +53,10 @@ import {
   workspaces,
   workspaceViews,
 } from "@/api/db/schema";
-import type { JustificationContent } from "@/api/db/schema";
+import type {
+  JustificationContent,
+  PracticeJurisdiction,
+} from "@/api/db/schema";
 import type {
   EntityKind,
   FieldContent,
@@ -106,7 +110,11 @@ const EXPORT_TABLE_FOLDER_COUNT = 6;
 // "Document Type" classifier uses the org taxonomy labels so playbook gating
 // can match the SPA document.
 const AKVIZICE_MATTER_LABEL = "ws-akvizice-energo";
-const AKVIZICE_SPA_DOC_NAME = "Smlouva_o_akvizici_akcii.pdf";
+// English filename over a Czech-language body: the workspace stills film this
+// file list, and the marketing cast files documents in English; the body stays
+// Czech (like Due_Diligence_Report.pdf) so the Czech playbook demo keeps a
+// Czech-law SPA to review.
+const AKVIZICE_SPA_DOC_NAME = "Share_Acquisition_Agreement.pdf";
 // The taxonomy key the Czech playbook is scoped to; its label classifies the
 // akvizice SPA document so the gate matches. Derived from the single source of
 // truth so the field value never drifts from the taxonomy.
@@ -1143,10 +1151,10 @@ This seeded file exists so table export can be tested with many rows, attached d
 
 const workspaceDocNames: Record<string, string[]> = {
   "ws-akvizice-energo": [
-    "Smlouva_o_akvizici_akcii.pdf",
+    AKVIZICE_SPA_DOC_NAME,
     "Due_Diligence_Report.pdf",
     "Board_Consent_Northstar.docx",
-    "Znalecky_posudek_hodnota.pdf",
+    "Expert_Valuation_Report.pdf",
     "Internal_SAFE_Agreement.docx",
     "Redacted_Due_Diligence_Extract.docx",
     SUPPLIER_AGREEMENT_DOC_NAME,
@@ -1204,7 +1212,7 @@ const workspaceDocNames: Record<string, string[]> = {
  */
 const documentTexts: Record<string, string> = {
   // ws-akvizice-energo
-  "Smlouva_o_akvizici_akcii.pdf": `SMLOUVA O AKVIZICI AKCIÍ
+  [AKVIZICE_SPA_DOC_NAME]: `SMLOUVA O AKVIZICI AKCIÍ
 
 Smluvní strany:
 1. Kupující: InvestCo Capital, a.s., IČO: 28456789, se sídlem Praha 1, Národní 15
@@ -1354,7 +1362,7 @@ Obtain change-of-control consent, require a specific indemnity for the pending d
 
 Prepared for internal review. Personal names, counterparties, account numbers, and commercially sensitive amounts have been redacted.`,
 
-  "Znalecky_posudek_hodnota.pdf": `ZNALECKÝ POSUDEK č. 127-15/2025
+  "Expert_Valuation_Report.pdf": `ZNALECKÝ POSUDEK č. 127-15/2025
 O stanovení hodnoty 100 % akcií společnosti EnerGo Distribuce, a.s.
 
 Znalec: doc. Ing. Karel Fiala, Ph.D., znalec v oboru ekonomika
@@ -2753,10 +2761,13 @@ const personContacts = [
 const seedWorkspaces = [
   {
     id: seedId("ws-akvizice-energo"),
-    name: "Northstar SAFE financing",
-    reference: "2026/014",
+    // The matter the marketing editor scenes film: its breadcrumb frames the
+    // Supplier_Agreement.docx redline (Northstar Robotics buying drive
+    // components from Meridian Precision), so the name stays supplier-themed.
+    name: "Meridian supply agreement",
+    reference: "2026/031",
     clientId: at(orgContacts, 4).id, // Northstar Robotics
-    billingReference: "NS-SAFE-2026",
+    billingReference: "NS-SUPPLY-2026",
   },
   {
     id: seedId("ws-stavebni-spor"),
@@ -2834,7 +2845,7 @@ const seedWorkspaces = [
 // its insertion index. Keyed by the org-unique matter reference.
 const RECENT_MATTER_ACTIVITY: Record<string, string> = {
   "2024/059": "2026-07-17T09:00:00.000Z", // Export Review - Project Atlas Data Room (Greenleaf)
-  "2026/014": "2026-07-16T15:00:00.000Z", // Northstar SAFE financing (Northstar Robotics)
+  "2026/031": "2026-07-16T15:00:00.000Z", // Meridian supply agreement (Northstar Robotics)
   "2024/058": "2026-07-16T11:00:00.000Z", // Fund IV Structuring (Greenleaf)
   "2024/046": "2026-07-15T16:00:00.000Z", // Sanctions Screening Programme (Crown Shipping)
   "2024/018": "2026-07-15T10:30:00.000Z", // Post-Acquisition Integration (Thames Advisory)
@@ -2845,16 +2856,63 @@ const RECENT_MATTER_ACTIVITY: Record<string, string> = {
   "2024/016": "2026-07-12T14:00:00.000Z", // Shareholder Dispute Resolution (Thames Advisory)
 };
 
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
+
 // Non-cast matters: deterministic and strictly older than every pinned
 // date above (2026-02-02 base + one hour per insertion index).
 const FALLBACK_ACTIVITY_BASE_MS = Date.UTC(2026, 1, 2, 8, 0, 0);
-const FALLBACK_ACTIVITY_STEP_MS = 3_600_000;
+const FALLBACK_ACTIVITY_STEP_MS = HOUR_MS;
 
 const workspaceLastActivityAt = (reference: string, index: number): Date => {
   const pinned = RECENT_MATTER_ACTIVITY[reference];
   return pinned
     ? new Date(pinned)
     : new Date(FALLBACK_ACTIVITY_BASE_MS + index * FALLBACK_ACTIVITY_STEP_MS);
+};
+
+// ─── Entity timestamp pinning ───────────────────────────
+// The files views show per-document Created/Last-updated columns, the list
+// endpoints sort by asc(entities.createdAt) (see
+// apps/api/src/handlers/entities/list-files.ts), and the marketing stills
+// film that ordering. With the columns' defaultNow(), every fresh seed
+// produced "N min ago" values that varied with seed wall-clock time, so
+// re-seeded screenshots drifted. Entities therefore get deterministic
+// timestamps (same pattern as workspaces.lastActivityAt above): createdAt
+// steps forward 9 minutes per entity from 30 days before the workspace's
+// pinned lastActivityAt, so createdAt-sorted views render the seed's
+// insertion order (folders first, then documents in listing order) exactly
+// as the pre-pinning seed did; updatedAt lands a deterministic (hashed from
+// the entity id) few minutes under one hour before the workspace's activity
+// date, so created < updated <= workspace activity always holds. Exported
+// for scripts that re-pin the shared dev DB without a full reseed.
+const ENTITY_CREATED_STEP_MS = 9 * 60_000;
+const ENTITY_CREATED_BASE_OFFSET_MS = 30 * DAY_MS;
+
+type SeedEntityTimestampsOptions = {
+  entityId: string;
+  /** Insertion index of the entity within its workspace. */
+  indexInWorkspace: number;
+  workspaceActivityAt: Date;
+};
+
+export const seedEntityTimestamps = ({
+  entityId,
+  indexInWorkspace,
+  workspaceActivityAt,
+}: SeedEntityTimestampsOptions): { createdAt: Date; updatedAt: Date } => {
+  // First 12 hex chars of the deterministic entity UUID: a stable, well-mixed
+  // 48-bit value that is safely inside Number precision.
+  const hash = Number.parseInt(entityId.replaceAll("-", "").slice(0, 12), 16);
+  const createdAt = new Date(
+    workspaceActivityAt.getTime() -
+      ENTITY_CREATED_BASE_OFFSET_MS +
+      indexInWorkspace * ENTITY_CREATED_STEP_MS,
+  );
+  const updatedAt = new Date(
+    workspaceActivityAt.getTime() - HOUR_MS - (hash % (59 * 60_000)),
+  );
+  return { createdAt, updatedAt };
 };
 
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
@@ -4883,12 +4941,37 @@ export async function seed(organizationId?: string, userId?: string) {
     `  Contacts: ${totalContacts} (${orgContacts.length + moreOrgContacts.length} orgs, ${personContacts.length} people)`,
   );
 
+  // 1c. Organization settings: pin the practice jurisdiction (the seeded
+  // cast is a Czech firm) so jurisdiction-derived surfaces, notably the
+  // Knowledge tools catalogue's recommended section that the marketing cli
+  // scene films, render identically on every fresh seed instead of
+  // depending on whatever settings live dev usage left behind. Re-pinned on
+  // conflict; other settings columns stay untouched.
+  const practiceJurisdictions: PracticeJurisdiction[] = [
+    { countryCode: "CZ", isPrimary: true },
+  ];
+  await rootDb
+    .insert(organizationSettings)
+    .values({
+      id: seedId("org-settings"),
+      organizationId: ORG_ID,
+      practiceJurisdictions,
+    })
+    .onConflictDoUpdate({
+      target: organizationSettings.organizationId,
+      set: { practiceJurisdictions },
+    });
+  console.log("  Organization settings: practice jurisdiction CZ pinned");
+
   // 2. Workspaces. lastActivityAt is pinned (never defaultNow()) so the
   // sidebar "Recent matters" ordering the marketing recordings film stays
   // deterministic; the conflict path re-pins it so a reseed restores the
   // ordering even when live activity bumped it in the shared dev DB.
+  // Collected per workspace because entity timestamps below derive from it.
+  const workspaceActivityById = new Map<WorkspaceId, Date>();
   for (const [wsIndex, ws] of seedWorkspaces.entries()) {
     const lastActivityAt = workspaceLastActivityAt(ws.reference, wsIndex);
+    workspaceActivityById.set(ws.id, lastActivityAt);
     // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(workspaces)
@@ -4916,6 +4999,7 @@ export async function seed(organizationId?: string, userId?: string) {
       mw.reference,
       seedWorkspaces.length + moreWsCount,
     );
+    workspaceActivityById.set(wsId, lastActivityAt);
     // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(workspaces)
@@ -5125,7 +5209,21 @@ export async function seed(organizationId?: string, userId?: string) {
     const label = `extra-ws-${mw.reference}`;
     allEntities.push(...buildEntities(wsId, label));
   }
+  const entityIndexByWorkspace = new Map<WorkspaceId, number>();
   for (const [ei, e] of allEntities.entries()) {
+    const workspaceActivityAt = workspaceActivityById.get(e.workspaceId);
+    if (!workspaceActivityAt) {
+      panic(`No pinned activity date for workspace ${e.workspaceId}`);
+    }
+    const indexInWorkspace = entityIndexByWorkspace.get(e.workspaceId) ?? 0;
+    entityIndexByWorkspace.set(e.workspaceId, indexInWorkspace + 1);
+    // Pinned like workspaces.lastActivityAt, re-pinned on conflict, so the
+    // filmed Created/Modified columns match a fresh seed exactly.
+    const { createdAt, updatedAt } = seedEntityTimestamps({
+      entityId: e.entityId,
+      indexInWorkspace,
+      workspaceActivityAt,
+    });
     // oxlint-disable-next-line no-await-in-loop -- entity row must exist before its version + currentVersion link below
     await rootDb
       .insert(entities)
@@ -5137,12 +5235,16 @@ export async function seed(organizationId?: string, userId?: string) {
         name: e.name,
         createdBy: pickAuthor(seedUserIds, ei),
         lastEditedBy: pickAuthor(seedUserIds, ei + 1),
+        createdAt,
+        updatedAt,
       })
       .onConflictDoUpdate({
         target: entities.id,
         set: {
           name: e.name,
           parentId: e.parentId ?? null,
+          createdAt,
+          updatedAt,
         },
       });
 

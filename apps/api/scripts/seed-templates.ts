@@ -2,8 +2,8 @@
  * Seed templates & clauses (Knowledge section).
  *
  * Creates clause categories (5), clauses (25) with variants (6),
- * template categories (4), templates (8 DOCX files with manifests),
- * and template-clause links (9).
+ * template categories (4), templates (9 DOCX files with manifests),
+ * and template-clause links (12).
  *
  * Deterministic IDs via `seedId()` so re-running is idempotent
  * (uses `onConflictDoNothing()`).
@@ -1326,7 +1326,7 @@ const TEMPLATE_CATS = [
 ] as const;
 
 // ═══════════════════════════════════════════════════════════
-// TEMPLATES (8)
+// TEMPLATES (9)
 // ═══════════════════════════════════════════════════════════
 
 type TemplateSeed = {
@@ -2094,10 +2094,160 @@ const TEMPLATES: TemplateSeed[] = [
       },
     ],
   },
+
+  // 9. Supply Agreement — the template the marketing templates scene films
+  // (apps/web/e2e/marketing/record-product-story.ts): a supplier-side
+  // counterpart to the seeded Supplier_Agreement.docx redline in the
+  // "Meridian supply agreement" matter, with visible fields, two conditional
+  // sections, and clause slots on one scrollable page.
+  {
+    label: "tmpl-supply",
+    catLabel: "tmpl-cat-commercial",
+    name: "Supply Agreement",
+    fileName: "Supply_Agreement.docx",
+    bodyXml:
+      xmlHeading("Supply Agreement", 1) +
+      xmlP("Date: {{date}}") +
+      xmlHeading("Parties", 2) +
+      xmlBoldP("Supplier") +
+      xmlP(
+        "{{supplierName}}, a company incorporated in {{supplierJurisdiction}}, with registered office at {{supplierAddress}}.",
+      ) +
+      xmlBoldP("Customer") +
+      xmlP(
+        "{{customerName}}, a company incorporated in {{customerJurisdiction}}, with registered office at {{customerAddress}}.",
+      ) +
+      xmlHeading("Supply of Products", 2) +
+      xmlP(
+        "The Supplier shall manufacture and supply the products described in Annex 1 (the Products) in accordance with the agreed specifications and quality standards. The Supplier shall maintain sufficient production capacity to satisfy the Customer's rolling forecast, up to {{capacityHeadroomPercent}} per cent of the most recent quarterly forecast volume.",
+      ) +
+      xmlHeading("Orders and Delivery", 2) +
+      xmlP(
+        "The Customer shall order Products by written purchase order. Each accepted order shall be delivered {{deliveryTerms}} to {{deliveryLocation}} within the lead time stated in Annex 1.",
+      ) +
+      xmlP("{{#if includeLiquidatedDamages}}") +
+      xmlHeading("Liquidated Damages for Late Delivery", 2) +
+      xmlP(
+        "If the Supplier fails to deliver an accepted order by the agreed delivery date, the Supplier shall pay liquidated damages of 0.5 per cent of the order value for each commenced week of delay, up to an aggregate cap of 5 per cent of the order value. The Parties agree this is a genuine pre-estimate of loss and not a penalty.",
+      ) +
+      xmlP("{{/if}}") +
+      xmlHeading("Liability", 2) +
+      xmlP(
+        "Each Party's aggregate liability under this Agreement shall not exceed {{liabilityCapPercent}} per cent of the annual fees paid or payable under this Agreement in the twelve months preceding the event giving rise to the claim.",
+      ) +
+      xmlHeading("Term and Termination", 2) +
+      xmlP(
+        "This Agreement shall commence on {{startDate}} and continue for an initial term of {{termYears}} years. Either Party may terminate for convenience on not less than {{terminationNoticeDays}} days' written notice.",
+      ) +
+      xmlP("{{#if includeStepInRights}}") +
+      xmlHeading("Step-In Rights", 2) +
+      xmlP(
+        "If the Supplier suffers a persistent failure to meet the agreed service or quality levels, the Customer may, at its option and on written notice, assume or appoint a third party to assume performance of the affected obligations until the failure is remedied.",
+      ) +
+      xmlP("{{/if}}") +
+      xmlP("{{@clause:Confidentiality}}") +
+      xmlP("{{@clause:LimitationOfLiability}}") +
+      xmlP("{{@clause:GoverningLaw}}"),
+    fields: [
+      { path: "date", label: "Date", inputType: "date", required: true },
+      {
+        path: "supplierName",
+        label: "Supplier Name",
+        inputType: "text",
+        required: true,
+      },
+      {
+        path: "supplierJurisdiction",
+        label: "Supplier Jurisdiction",
+        inputType: "text",
+      },
+      {
+        path: "supplierAddress",
+        label: "Supplier Address",
+        inputType: "text",
+      },
+      {
+        path: "customerName",
+        label: "Customer Name",
+        inputType: "text",
+        required: true,
+      },
+      {
+        path: "customerJurisdiction",
+        label: "Customer Jurisdiction",
+        inputType: "text",
+      },
+      { path: "customerAddress", label: "Customer Address", inputType: "text" },
+      {
+        path: "capacityHeadroomPercent",
+        label: "Capacity Headroom (%)",
+        inputType: "number",
+        required: true,
+      },
+      {
+        path: "deliveryTerms",
+        label: "Delivery Terms (Incoterms)",
+        inputType: "text",
+        required: true,
+      },
+      {
+        path: "deliveryLocation",
+        label: "Delivery Location",
+        inputType: "text",
+        required: true,
+      },
+      {
+        path: "liabilityCapPercent",
+        label: "Liability Cap (% of annual fees)",
+        inputType: "number",
+        required: true,
+      },
+      {
+        path: "startDate",
+        label: "Start Date",
+        inputType: "date",
+        required: true,
+      },
+      {
+        path: "termYears",
+        label: "Initial Term (years)",
+        inputType: "number",
+        required: true,
+      },
+      {
+        path: "terminationNoticeDays",
+        label: "Termination Notice (days)",
+        inputType: "number",
+        required: true,
+      },
+      {
+        path: "includeLiquidatedDamages",
+        label: "Include Liquidated Damages",
+        inputType: "boolean",
+      },
+      {
+        path: "includeStepInRights",
+        label: "Include Step-In Rights",
+        inputType: "boolean",
+      },
+    ],
+    conditions: [
+      {
+        name: "includeLiquidatedDamages",
+        expression: "includeLiquidatedDamages",
+        label: "Include liquidated damages for late delivery",
+      },
+      {
+        name: "includeStepInRights",
+        expression: "includeStepInRights",
+        label: "Include step-in rights",
+      },
+    ],
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════
-// TEMPLATE-CLAUSE LINKS (9)
+// TEMPLATE-CLAUSE LINKS (12)
 // ═══════════════════════════════════════════════════════════
 
 type TemplateClauseLinkSeed = {
@@ -2163,6 +2313,25 @@ const TEMPLATE_CLAUSE_LINKS: TemplateClauseLinkSeed[] = [
     clauseLabel: "clause-governing-law",
     slotName: "GoverningLaw",
     variantLabel: "State of New York",
+    sortOrder: 2,
+  },
+  {
+    templateLabel: "tmpl-supply",
+    clauseLabel: "clause-confidentiality",
+    slotName: "Confidentiality",
+    sortOrder: 0,
+  },
+  {
+    templateLabel: "tmpl-supply",
+    clauseLabel: "clause-limitation-of-liability",
+    slotName: "LimitationOfLiability",
+    sortOrder: 1,
+  },
+  {
+    templateLabel: "tmpl-supply",
+    clauseLabel: "clause-governing-law",
+    slotName: "GoverningLaw",
+    variantLabel: "England & Wales",
     sortOrder: 2,
   },
 ];

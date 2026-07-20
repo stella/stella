@@ -32,8 +32,10 @@ The capture suite selects the deterministic `Test Firm`, resolves seeded
 workspace view IDs from the API, waits for real route content, and writes
 light and dark files for every product in this directory.
 
-`capture:product-story` records the four Stella-owned scenes used in the
-homepage story: Files, Table review, Editor, and Agent. It records both themes,
+`capture:product-story` records the six Stella-owned scenes used in the
+homepage story and product pages: Files, Table review, Editor, Agent, the
+template studio (Templates), and the Knowledge tools catalogue (the CLI & MCP
+chapter's own scene). It records both themes,
 then converts Playwright's raw video to compact, streaming-friendly H.264 MP4.
 The Microsoft Teams and terminal companion windows remain DOM components so
 their typewriter, focus, and drag interactions stay crisp and interactive.
@@ -51,7 +53,7 @@ the recording run instead of shipping a partial or pre-ready clip. Loops are
 kept short (~3.5s, agent 5.5s) and the choreography returns each scene to its
 frame-0 state so the loop closes without a jump.
 
-Pointer-choreographed scenes (workspace, review, agent) show a fake cursor:
+Pointer-choreographed scenes (workspace, review, agent, cli) show a fake cursor:
 headless screencasts contain no OS cursor, so the recorder injects a
 macOS-style arrow overlay (natural CSS-pixel size, scaled by the DPR-2
 compositor) that follows the real mouse events, with a small expanding ring
@@ -61,9 +63,9 @@ camera. Each cursor scene has a deliberate resting position; the prepare step
 parks the cursor there before the ready marker fires, so the ready reference,
 frame 0, and poster all include the cursor at rest, and the loop choreography
 returns to that same spot (agent excepted, per its documented non-closing
-loop). The editor scenes keep the overlay off: their loop is a document
-scroll with no pointer interaction, and a frozen cursor would suggest
-interactions that are not happening.
+loop). The editor and templates scenes keep the overlay off: their loop is a
+document scroll with no pointer interaction, and a frozen cursor would
+suggest interactions that are not happening.
 
 ## Scene variants
 
@@ -76,9 +78,9 @@ matrix lives in `apps/web/e2e/marketing/captures.ts`; capture ids are
 
 | Variant | Viewport (file = 2x) | Consumed by |
 | --- | --- | --- |
-| wide (`workspace`, `review`, `editor`, `agent`) | 1280x720 (16:9) | `productStoryMedia`: scene-only embeds (product pages via `ProductMediaFrame`, HomeProductStory chapters, nav thumbnails) |
-| hero (`workspace-hero`, `review-hero`, `editor-hero`, `agent-hero`) | 1280x764 (~1.674:1) | `productStoryHeroMedia`: the companion composition's main window (homepage hero, sections with `showCompanions`); the `cli` scene reuses `agent-hero` |
-| portrait (`editor-portrait`) | 900x1036 (~0.869:1) | `productStoryEditorPortraitMedia`: the floating "stella Editor" side window. Films the `editor-doc` scene: the seeded SAFE in the document full view with the app sidebar collapsed and the inspector closed, so the Word page fills the frame rather than the whole app squeezed narrow |
+| wide (`workspace`, `review`, `editor`, `agent`, `cli`, `templates`) | 1280x720 (16:9) | `productStoryMedia`: scene-only embeds (product pages via `ProductMediaFrame`, HomeProductStory chapters, nav thumbnails); `templates` is wide-only and plays on the templates product page |
+| hero (`workspace-hero`, `review-hero`, `editor-hero`, `agent-hero`, `cli-hero`) | 1280x764 (~1.674:1) | `productStoryHeroMedia`: the companion composition's main window (homepage hero, sections with `showCompanions`) |
+| portrait (`editor-portrait`) | 900x1036 (~0.869:1) | `productStoryEditorPortraitMedia`: the floating "stella Editor" side window. Films the `editor-doc` scene: the seeded Supplier Agreement in the document full view with the app sidebar collapsed and the inspector closed, so the Word page fills the frame rather than the whole app squeezed narrow |
 
 The registry is `apps/landing/src/data/product-story.ts`;
 `RecordedStellaScene` picks the variant, and reduced-motion posters come from

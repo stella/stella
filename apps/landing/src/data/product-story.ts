@@ -4,6 +4,7 @@ export const productStorySceneIds = [
   "editor",
   "agent",
   "cli",
+  "templates",
 ] as const;
 
 export type ProductStorySceneId = (typeof productStorySceneIds)[number];
@@ -106,9 +107,14 @@ export const productStoryThumbnails = {
     alt: "AI agent in stella",
   },
   cli: {
-    src: "/media/products/story-workspace.png",
-    darkSrc: "/media/products/story-workspace-dark.png",
-    alt: "stella workspace connected to the CLI and MCP",
+    src: "/media/products/story-cli-poster.jpg",
+    darkSrc: "/media/products/story-cli-dark-poster.jpg",
+    alt: "The tools and capability catalogue in stella",
+  },
+  templates: {
+    src: "/media/products/story-templates-poster.jpg",
+    darkSrc: "/media/products/story-templates-dark-poster.jpg",
+    alt: "A template with fields and conditional clauses in the stella template studio",
   },
 } as const satisfies Record<
   ProductStorySceneId,
@@ -148,11 +154,18 @@ export const productStoryMedia = {
     alt: "A grounded answer with cited matter sources in stella",
   },
   cli: {
-    videoSrc: "/media/products/story-agent.mp4",
-    darkVideoSrc: "/media/products/story-agent-dark.mp4",
-    posterSrc: "/media/products/story-agent-poster.jpg",
-    darkPosterSrc: "/media/products/story-agent-dark-poster.jpg",
-    alt: "A grounded answer produced through stella MCP",
+    videoSrc: "/media/products/story-cli.mp4",
+    darkVideoSrc: "/media/products/story-cli-dark.mp4",
+    posterSrc: "/media/products/story-cli-poster.jpg",
+    darkPosterSrc: "/media/products/story-cli-dark-poster.jpg",
+    alt: "The tools and capability catalogue in stella",
+  },
+  templates: {
+    videoSrc: "/media/products/story-templates.mp4",
+    darkVideoSrc: "/media/products/story-templates-dark.mp4",
+    posterSrc: "/media/products/story-templates-poster.jpg",
+    darkPosterSrc: "/media/products/story-templates-dark-poster.jpg",
+    alt: "A template with fields and conditional clauses in the stella template studio",
   },
 } as const satisfies Record<ProductStorySceneId, ProductStoryMedia>;
 
@@ -191,11 +204,20 @@ export const productStoryHeroMedia = {
     alt: "A grounded answer with cited matter sources in stella",
   },
   cli: {
-    videoSrc: "/media/products/story-agent-hero.mp4",
-    darkVideoSrc: "/media/products/story-agent-hero-dark.mp4",
-    posterSrc: "/media/products/story-agent-hero-poster.jpg",
-    darkPosterSrc: "/media/products/story-agent-hero-dark-poster.jpg",
-    alt: "A grounded answer produced through stella MCP",
+    videoSrc: "/media/products/story-cli-hero.mp4",
+    darkVideoSrc: "/media/products/story-cli-hero-dark.mp4",
+    posterSrc: "/media/products/story-cli-hero-poster.jpg",
+    darkPosterSrc: "/media/products/story-cli-hero-dark-poster.jpg",
+    alt: "The tools and capability catalogue in stella",
+  },
+  // Templates has a wide capture only; the hero record reuses it, which
+  // object-cover crops slightly in the companion composition.
+  templates: {
+    videoSrc: "/media/products/story-templates.mp4",
+    darkVideoSrc: "/media/products/story-templates-dark.mp4",
+    posterSrc: "/media/products/story-templates-poster.jpg",
+    darkPosterSrc: "/media/products/story-templates-dark-poster.jpg",
+    alt: "A template with fields and conditional clauses in the stella template studio",
   },
 } as const satisfies Record<ProductStorySceneId, ProductStoryMedia>;
 

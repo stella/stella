@@ -12,11 +12,18 @@ export type CaptureViewport = { height: number; width: number };
 // Agreement opened in the document full view with the app sidebar collapsed,
 // so the floating editor side window shows the docx page rather than the
 // whole app squeezed narrow.
+// "templates" films the seeded Supply Agreement template open in the
+// template studio (fields and conditional sections highlighted).
+// "cli" films the Knowledge tools catalogue: the real MCP/capability surface
+// the CLI and MCP expose, recorded as its own scene instead of reusing the
+// agent chat footage.
 export type StoryCaptureId =
   | "agent"
+  | "cli"
   | "editor"
   | "editor-doc"
   | "review"
+  | "templates"
   | "workspace";
 
 export const CAPTURE_THEMES = ["light", "dark"] as const;
@@ -83,9 +90,20 @@ const SCENE_WATCHED_PATHS: Record<StoryCaptureId, readonly string[]> = {
     "apps/web/src/components/chat",
     "apps/web/src/components/ai-elements",
   ],
+  // Seeded Supply Agreement template in the Knowledge template studio; the
+  // filmed content comes from seed-templates.ts, not seed-dev.ts.
+  templates: [
+    "apps/web/src/routes/_protected.knowledge",
+    "apps/api/scripts/seed-templates.ts",
+  ],
+  // Knowledge tools catalogue (the MCP/capability surface).
+  cli: ["apps/web/src/routes/_protected.knowledge"],
 };
 
-const SCENE_IDS = ["workspace", "review", "editor", "agent"] as const;
+// Scenes consumed at both the wide (scene-only embeds) and hero (companion
+// composition main window) viewports. "templates" is wide-only below: it
+// plays only in scene-only embeds (templates product page).
+const SCENE_IDS = ["workspace", "review", "editor", "agent", "cli"] as const;
 
 const toDefinition = (
   sceneId: StoryCaptureId,
@@ -107,6 +125,7 @@ export const captureDefinitions: readonly CaptureDefinition[] = [
     toDefinition(sceneId, sceneId, WIDE_VIEWPORT),
     toDefinition(sceneId, `${sceneId}-hero`, HERO_VIEWPORT),
   ]),
+  toDefinition("templates", "templates", WIDE_VIEWPORT),
   toDefinition("editor-doc", "editor-portrait", PORTRAIT_VIEWPORT),
 ];
 

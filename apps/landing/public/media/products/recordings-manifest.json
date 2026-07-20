@@ -8,7 +8,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -29,7 +29,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -50,7 +50,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -71,7 +71,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -85,6 +85,82 @@
       ]
     },
     {
+      "captureId": "cli",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.knowledge"
+      ]
+    },
+    {
+      "captureId": "cli",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.knowledge"
+      ]
+    },
+    {
+      "captureId": "cli-hero",
+      "theme": "dark",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.knowledge"
+      ]
+    },
+    {
+      "captureId": "cli-hero",
+      "theme": "light",
+      "viewport": {
+        "height": 764,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.knowledge"
+      ]
+    },
+    {
       "captureId": "editor",
       "theme": "dark",
       "viewport": {
@@ -92,7 +168,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -111,7 +187,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -130,7 +206,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -149,7 +225,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -168,7 +244,7 @@
         "width": 900
       },
       "dpr": 2,
-      "recordedAtCommit": "b77f5a9c12b14fd2d3ee6389500020455d06c2f2",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -187,7 +263,7 @@
         "width": 900
       },
       "dpr": 2,
-      "recordedAtCommit": "b77f5a9c12b14fd2d3ee6389500020455d06c2f2",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -206,7 +282,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -225,7 +301,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -244,7 +320,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -263,7 +339,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -275,6 +351,46 @@
       ]
     },
     {
+      "captureId": "templates",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.knowledge",
+        "apps/api/scripts/seed-templates.ts"
+      ]
+    },
+    {
+      "captureId": "templates",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.knowledge",
+        "apps/api/scripts/seed-templates.ts"
+      ]
+    },
+    {
       "captureId": "workspace",
       "theme": "dark",
       "viewport": {
@@ -282,7 +398,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -301,7 +417,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -320,7 +436,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -339,7 +455,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "e4b759138e1c961df89254db9701537ed2658223",
+      "recordedAtCommit": "f34d4196c08eaa60e28824fefeb1eba2a6a88591",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",

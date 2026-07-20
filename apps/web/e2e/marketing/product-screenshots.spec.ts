@@ -3,8 +3,9 @@ import type { APIRequestContext } from "@playwright/test";
 
 const AKVIZICE_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
-// Seeded Supplier Agreement redline in the Northstar matter; keep in sync
-// with record-product-story.ts (seed-dev.ts `ws-akvizice-energo-doc-7`).
+// Seeded Supplier Agreement redline in the "Meridian supply agreement"
+// matter; keep in sync with record-product-story.ts (seed-dev.ts
+// `ws-akvizice-energo-doc-7`).
 const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
 const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 const requestedCapture = process.env["MARKETING_CAPTURE"];
@@ -14,7 +15,7 @@ const captures = [
     name: "workspace",
     path: `/workspaces/${AKVIZICE_WORKSPACE_ID}/`,
     prepare: "open-files",
-    readyText: "Northstar SAFE financing",
+    readyText: "Meridian supply agreement",
   },
   {
     name: "tabular-review",

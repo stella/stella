@@ -37,12 +37,13 @@ const THEME_FILTER = process.env["MARKETING_THEME"];
 const EMAIL = "test@stella.dev";
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
-const NORTHSTAR_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
-// The negotiated Supplier Agreement in the Northstar matter (seed-dev.ts:
-// `ws-akvizice-energo-doc-7` / `ws-akvizice-energo-field-file-6`): the docx
-// with the clause-12 liability-cap redline and playbook margin comments
-// that the editor scenes film, matching the landing DOM mock
-// (storyEditorDocument in apps/landing/src/data/product-story.ts).
+const MERIDIAN_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
+// The negotiated Supplier Agreement in the "Meridian supply agreement"
+// matter (seed-dev.ts: `ws-akvizice-energo-doc-7` /
+// `ws-akvizice-energo-field-file-6`): the docx with the clause-12
+// liability-cap redline and playbook margin comments that the editor scenes
+// film, matching the landing DOM mock (storyEditorDocument in
+// apps/landing/src/data/product-story.ts).
 const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
 const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 const SUPPLIER_AGREEMENT_FILE_NAME = "Supplier_Agreement.docx";
@@ -88,6 +89,14 @@ type MarketingViewRoutes = {
 // mirrors the document into a hidden off-screen ProseMirror layer whose runs
 // carry `.docx-insertion` too, and scrolling that mirror moves nothing.
 const PAINTED_REDLINE_SELECTOR = ".layout-run-text.docx-insertion";
+
+// Folio's painted template-directive overlays in the template studio: the
+// {{...}} field placeholders, the {{#if}} conditional-section markers, and
+// the {{@clause:...}} slots. The templates scene requires the first two
+// before the ready marker and scrolls to the last clause slot mid-loop.
+const TEMPLATE_FIELD_SELECTOR = ".folio-template-directive--placeholder";
+const TEMPLATE_CONDITIONAL_SELECTOR = ".folio-template-directive--if";
+const TEMPLATE_CLAUSE_SELECTOR = ".folio-template-directive--clause";
 
 // Shared prepare for both editor scenes: wait for the Supplier Agreement to
 // lay out, require the clause-12 redline (folio's tracked-insertion run) so
@@ -221,7 +230,7 @@ const scenes = [
     id: "editor",
     cursor: "hidden",
     path: () =>
-      `/workspaces/${NORTHSTAR_WORKSPACE_ID}/all/document` +
+      `/workspaces/${MERIDIAN_WORKSPACE_ID}/all/document` +
       "?editing=true" +
       `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
       `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
@@ -238,12 +247,55 @@ const scenes = [
     collapsedSidebar: true,
     cursor: "hidden",
     path: () =>
-      `/workspaces/${NORTHSTAR_WORKSPACE_ID}/all/document` +
+      `/workspaces/${MERIDIAN_WORKSPACE_ID}/all/document` +
       "?editing=true" +
       `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
       `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
     durationSeconds: 3.5,
     prepare: prepareEditorScene,
+  },
+  {
+    // The seeded Supply Agreement template open in the template studio:
+    // highlighted {{...}} field placeholders, the {{#if}} conditional
+    // sections, and the fields inspector panel. The template row click and
+    // studio layout all settle in prepare, before the ready marker. Cursor
+    // hidden: the loop is a document scroll with no pointer interaction,
+    // same rationale as the editor scenes.
+    id: "templates",
+    cursor: "hidden",
+    path: () => "/knowledge/templates",
+    durationSeconds: 3.5,
+    prepare: async (page) => {
+      await page.getByText("Supply Agreement", { exact: true }).first().click();
+      await page.locator(".layout-run-text").first().waitFor();
+      // Require the painted template directives so a build that lost the
+      // field highlighting can never ship a plain-document recording.
+      await page.locator(TEMPLATE_FIELD_SELECTOR).first().waitFor();
+      await page.locator(TEMPLATE_CONDITIONAL_SELECTOR).first().waitFor();
+    },
+  },
+  {
+    // The Knowledge tools catalogue: the app surface listing the skills and
+    // capabilities the CLI and MCP server expose. Filmed as the CLI & MCP
+    // chapter's own scene instead of reusing the agent chat footage.
+    id: "cli",
+    cursor: "visible",
+    path: () => "/knowledge/tools",
+    durationSeconds: 3.5,
+    prepare: async (page) => {
+      await page.getByRole("heading", { name: "Tools" }).first().waitFor();
+      await page
+        .getByText(/^Anonymise$/u)
+        .first()
+        .waitFor();
+      await page
+        .getByText(/^ARES$/u)
+        .first()
+        .waitFor();
+      // Rest: the first (home) entry, matching the frame-0 hover state the
+      // loop returns to.
+      await animateBetweenRows(page, /^ARES$/u, /^Anonymise$/u);
+    },
   },
   {
     id: "agent",
@@ -1242,32 +1294,30 @@ const scrollDocumentTo = async (page: Page, top: number) => {
     }, top);
 };
 
-// Scroll the document so the clause-12 liability-cap redline (the first
-// painted tracked insertion) sits mid-frame. The editor loop pauses here, so
-// the tracked change is on screen around the loop's midpoint.
-const scrollDocumentToRedline = async (page: Page) => {
-  await page
-    .locator(PAINTED_REDLINE_SELECTOR)
-    .first()
-    .evaluate((redline) => {
-      let scrollParent = redline.parentElement;
-      while (scrollParent) {
-        if (scrollParent.scrollHeight > scrollParent.clientHeight + 40) {
-          const parentBox = scrollParent.getBoundingClientRect();
-          const redlineBox = redline.getBoundingClientRect();
-          const centered =
-            scrollParent.scrollTop +
-            (redlineBox.top - parentBox.top) -
-            scrollParent.clientHeight / 2;
-          scrollParent.scrollTo({
-            behavior: "smooth",
-            top: Math.max(0, centered),
-          });
-          return;
-        }
-        scrollParent = scrollParent.parentElement;
+// Smooth-scroll the nearest scrollable ancestor so the located element sits
+// mid-frame. The editor loop pauses on the clause-12 redline and the
+// templates loop on the last clause slot, so the payoff content is on
+// screen around the loop's midpoint.
+const scrollElementToCenter = async (locator: Locator) => {
+  await locator.evaluate((element) => {
+    let scrollParent = element.parentElement;
+    while (scrollParent) {
+      if (scrollParent.scrollHeight > scrollParent.clientHeight + 40) {
+        const parentBox = scrollParent.getBoundingClientRect();
+        const elementBox = element.getBoundingClientRect();
+        const centered =
+          scrollParent.scrollTop +
+          (elementBox.top - parentBox.top) -
+          scrollParent.clientHeight / 2;
+        scrollParent.scrollTo({
+          behavior: "smooth",
+          top: Math.max(0, centered),
+        });
+        return;
       }
-    });
+      scrollParent = scrollParent.parentElement;
+    }
+  });
 };
 
 // Loop-friendly motion: every scene returns to (or near) its frame-0 state by
@@ -1290,9 +1340,22 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
     // enough to read the tracked change (mid-loop), then return to the top
     // so the loop closes on frame 0. The glide spans ~3 pages (~1.1s each
     // way), so the hold is what keeps the return inside the 3.5s cut.
-    await scrollDocumentToRedline(page);
+    await scrollElementToCenter(page.locator(PAINTED_REDLINE_SELECTOR).first());
     await page.waitForTimeout(1300);
     await scrollDocumentTo(page, 0);
+    return;
+  }
+  if (captureId === "templates") {
+    // Same shape as the editor loop: glide down to the template's final
+    // clause slot (past the conditional sections), hold, and return to the
+    // top so the loop closes on frame 0.
+    await scrollElementToCenter(page.locator(TEMPLATE_CLAUSE_SELECTOR).last());
+    await page.waitForTimeout(1300);
+    await scrollDocumentTo(page, 0);
+    return;
+  }
+  if (captureId === "cli") {
+    await animateRowHoverLoop(page, /^ARES$/u, /^Anonymise$/u);
     return;
   }
   // Only "agent" remains. The cursor starts from its just-off-the-source
