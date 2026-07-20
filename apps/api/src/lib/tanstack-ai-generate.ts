@@ -9,6 +9,7 @@ import type {
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import * as v from "valibot";
 
+import { supportsTemperature } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 
 import type {
@@ -19,6 +20,7 @@ import type {
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { tanStackCacheControl } from "@/api/lib/tanstack-ai-caching";
 import {
@@ -628,12 +630,26 @@ export const mergeGenerationOptions = ({
   serviceTier: AIRequestServiceTier;
   temperature: number | undefined;
 }): TanStackModelOptions => {
+  // Caller temperature overrides only reach models with declared
+  // temperature support; sampling-rejecting and unknown models keep
+  // provider defaults (same capability gate as the role builders).
+  // The suppression is logged so a caller's explicit setting never
+  // disappears without a trace.
+  const temperatureSupported = supportsTemperature(model.modelId);
+  if (temperature !== undefined && !temperatureSupported) {
+    logger.debug("tanstack_ai.temperature_suppressed", {
+      "ai.model": model.modelId,
+      "ai.provider": model.provider,
+    });
+  }
+  const temperatureOverride =
+    temperature !== undefined && temperatureSupported ? { temperature } : {};
   switch (model.provider) {
     case "google":
       return {
         ...model.modelOptions,
         ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
-        ...(temperature === undefined ? {} : { temperature }),
+        ...temperatureOverride,
         ...googleServiceTierOptions(serviceTier),
       };
     case "anthropic": {
@@ -643,10 +659,7 @@ export const mergeGenerationOptions = ({
           ? {}
           : { max_tokens: maxOutputTokens }),
       };
-      if (temperature === undefined || !("temperature" in model.modelOptions)) {
-        return anthropicOptions;
-      }
-      return { ...anthropicOptions, temperature };
+      return { ...anthropicOptions, ...temperatureOverride };
     }
     case "bedrock":
       return {
@@ -654,7 +667,7 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : { max_completion_tokens: maxOutputTokens }),
-        ...(temperature === undefined ? {} : { temperature }),
+        ...temperatureOverride,
       };
     case "mistral":
       return {
@@ -662,7 +675,7 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : { max_tokens: maxOutputTokens }),
-        ...(temperature === undefined ? {} : { temperature }),
+        ...temperatureOverride,
       };
     case "openai":
       return {
@@ -670,7 +683,7 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : { max_output_tokens: maxOutputTokens }),
-        ...(temperature === undefined ? {} : { temperature }),
+        ...temperatureOverride,
         ...openAICacheOptions(caching),
         ...openAIServiceTierOptions(serviceTier),
       };
@@ -680,7 +693,7 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined
           ? {}
           : { maxCompletionTokens: maxOutputTokens }),
-        ...(temperature === undefined ? {} : { temperature }),
+        ...temperatureOverride,
         ...openRouterServiceTierOptions(serviceTier),
       };
     default: {

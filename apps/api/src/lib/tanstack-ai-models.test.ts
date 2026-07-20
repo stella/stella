@@ -4,6 +4,7 @@ import {
   BYOK_MODEL_OPTIONS,
   getModelReasoningEfforts,
   MODEL_ROLES,
+  supportsTemperature,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 
@@ -345,8 +346,9 @@ describe("TanStack text model resolution", () => {
       keySource: "byok",
       provider: "mistral",
       modelId: "model-chat",
-      modelOptions: { temperature: 0 },
     });
+    // "model-chat" is not a catalogued id: no sampling params are sent.
+    expect(model.modelOptions).toEqual({});
     expect(model.adapter.name).toBe("mistral");
   });
 
@@ -433,8 +435,9 @@ describe("TanStack text model resolution", () => {
       keySource: "byok",
       provider: "bedrock",
       modelId: "model-chat",
-      modelOptions: { temperature: 0 },
     });
+    // "model-chat" is not a catalogued id: no sampling params are sent.
+    expect(model.modelOptions).toEqual({});
     expect(model.adapter.name).toBe("bedrock-converse");
   });
 
@@ -544,19 +547,17 @@ describe("tanStackModelOptionsForRole", () => {
       temperature: 0,
     });
     // GPT slugs accept "none"; the request passes through unchanged.
-    expect(
-      looseOptions(
-        tanStackModelOptionsForRole({
-          role: "fast",
-          provider: "openrouter",
-          modelId: "openai/gpt-5.4-mini",
-          organizationId: null,
-        }),
-      ),
-    ).toMatchObject({
-      reasoning: { effort: "none" },
-      temperature: 0,
-    });
+    // No temperature: the GPT-5 family rejects sampling overrides.
+    const gptOptions = looseOptions(
+      tanStackModelOptionsForRole({
+        role: "fast",
+        provider: "openrouter",
+        modelId: "openai/gpt-5.4-mini",
+        organizationId: null,
+      }),
+    );
+    expect(gptOptions).toMatchObject({ reasoning: { effort: "none" } });
+    expect(gptOptions.temperature).toBeUndefined();
   });
 
   test("preserves OpenRouter reasoning-role effort on capable models", () => {
@@ -607,22 +608,42 @@ describe("tanStackModelOptionsForRole", () => {
               thinkingLevel.toLowerCase(),
             );
           }
+
+          if (options.temperature !== undefined) {
+            expect(supportsTemperature(modelId), context).toBe(true);
+          }
         }
       }
     }
   });
 
-  test("sends no reasoning field for models outside the catalog", () => {
-    // Unknown IDs (env overrides, retired models) have no declared
-    // capability; the provider default is the only safe request.
-    expect(
-      tanStackModelOptionsForRole({
-        role: "fast",
-        provider: "openrouter",
-        modelId: "some/unknown-model",
-        organizationId: null,
-      }),
-    ).toEqual({ temperature: 0 });
+  test("sends no reasoning or sampling controls for models outside the catalog", () => {
+    // Unknown IDs (env overrides, agent-chosen models — the explicit-id
+    // path deliberately does not allowlist) have no declared
+    // capability; the provider default is the only safe request. An
+    // o-series id via the arbitrary path must not receive temperature.
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      if (provider === "google") {
+        continue; // safetySettings are always sent; asserted below.
+      }
+      const options = looseOptions(
+        tanStackModelOptionsForRole({
+          role: "fast",
+          provider,
+          modelId: "totally-unknown-model",
+          organizationId: null,
+        }),
+      );
+      expect(options, provider).toEqual({});
+    }
+    const google = tanStackModelOptionsForRole({
+      role: "fast",
+      provider: "google",
+      modelId: "totally-unknown-model",
+      organizationId: null,
+    });
+    expect(looseOptions(google).temperature).toBeUndefined();
+    expect(looseOptions(google).thinkingConfig).toBeUndefined();
   });
 
   test("uses TanStack Anthropic snake_case thinking options", () => {
@@ -692,9 +713,10 @@ describe("tanStackModelOptionsForRole", () => {
     expect(options).not.toHaveProperty("temperature");
   });
 
-  test("keeps deterministic sampling for uncatalogued OpenAI models", () => {
-    // Custom deployments / env overrides have no declared reasoning
-    // control; the deterministic default stays the safe request.
+  test("sends no sampling params for uncatalogued OpenAI models", () => {
+    // Custom deployments / env overrides have no declared capability;
+    // parameters are only sent on positive evidence the model accepts
+    // them, so the provider default is the only safe request.
     const options = tanStackModelOptionsForRole({
       role: "chat",
       provider: "openai",
@@ -702,7 +724,7 @@ describe("tanStackModelOptionsForRole", () => {
       organizationId: null,
     });
 
-    expect(options).toEqual({ temperature: 0 });
+    expect(options).toEqual({});
   });
 });
 

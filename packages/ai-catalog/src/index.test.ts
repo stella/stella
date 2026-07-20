@@ -16,9 +16,11 @@ import {
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
   MODEL_ROLES,
+  MODEL_TEMPERATURE_SUPPORT,
   REASONING_EFFORTS,
   resolveReasoningEffort,
   resolveWorkingBYOKModelForRole,
+  supportsTemperature,
   TANSTACK_AI_PROVIDERS,
 } from "./index";
 
@@ -291,6 +293,30 @@ describe("MODEL_REASONING_EFFORTS", () => {
         expect(REASONING_EFFORTS, `${modelId}: ${effort}`).toContain(effort);
       }
     }
+  });
+});
+
+describe("MODEL_TEMPERATURE_SUPPORT", () => {
+  test("declares every offered BYOK model", () => {
+    for (const models of Object.values(BYOK_MODEL_OPTIONS)) {
+      for (const modelId of models) {
+        expect(
+          MODEL_TEMPERATURE_SUPPORT[modelId],
+          `missing temperature capability for ${modelId}`,
+        ).not.toBeUndefined();
+      }
+    }
+  });
+
+  test("supportsTemperature answers declared models and denies unknown ids", () => {
+    expect(supportsTemperature("gemini-3.5-flash")).toBe(true);
+    // GPT-5 family and the newest Claude models reject sampling overrides.
+    expect(supportsTemperature("gpt-5.4")).toBe(false);
+    expect(supportsTemperature("openai/gpt-5.4-mini")).toBe(false);
+    expect(supportsTemperature("claude-fable-5")).toBe(false);
+    // Unknown ids: no positive evidence, no parameter.
+    expect(supportsTemperature("o3-mini")).toBe(false);
+    expect(supportsTemperature("some-env-override-model")).toBe(false);
   });
 });
 

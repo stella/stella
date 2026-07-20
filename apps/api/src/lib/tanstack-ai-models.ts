@@ -22,12 +22,12 @@ import * as v from "valibot";
 import {
   AI_PROVIDERS,
   ANTHROPIC_ADAPTIVE_THINKING_MODELS,
-  ANTHROPIC_FIXED_SAMPLING_MODELS,
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   resolveReasoningEffort,
+  supportsTemperature,
 } from "@stll/ai-catalog";
 import type {
   AIProvider,
@@ -1015,10 +1015,18 @@ const GOOGLE_SAFETY_SETTINGS_BASELINE = [
   },
 ] as const satisfies NonNullable<GeminiTextProviderOptions["safetySettings"]>;
 
-const rejectsAnthropicSamplingParams = (modelId: string): boolean =>
-  ANTHROPIC_FIXED_SAMPLING_MODELS.some((fixedModelId) =>
-    modelId.includes(fixedModelId),
-  );
+/**
+ * `{ temperature: 0 }` only for models with positive evidence they
+ * accept a temperature override (`MODEL_TEMPERATURE_SUPPORT`); models
+ * declared `false` and unknown ids get nothing and run on provider
+ * defaults. This is the sole temperature emission point for role
+ * defaults, so a sampling-rejecting model (GPT-5 family, newest
+ * Claude) can never receive the 400-ing parameter.
+ */
+const deterministicSamplingForModel = (
+  modelId: string,
+): { temperature: 0 } | Record<never, never> =>
+  supportsTemperature(modelId) ? { temperature: 0 } : {};
 
 const usesAnthropicAdaptiveThinking = (modelId: string): boolean =>
   ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((adaptiveModelId) =>
@@ -1092,7 +1100,7 @@ const tanStackGoogleModelOptionsForRole = ({
     requested: GOOGLE_REASONING_EFFORT_BY_ROLE[role],
   });
   return {
-    temperature: 0,
+    ...deterministicSamplingForModel(modelId),
     ...(effort === null
       ? {}
       : {
@@ -1115,29 +1123,17 @@ const tanStackAnthropicModelOptionsForRole = ({
     };
   }
 
-  if (rejectsAnthropicSamplingParams(modelId)) {
-    return {};
-  }
-
-  return {
-    temperature: 0,
-  };
+  return deterministicSamplingForModel(modelId);
 };
 
 const tanStackOpenAIModelOptionsForRole = ({
   role,
   modelId,
 }: TanStackModelOptionsForRoleInput<"openai">): StellaOpenAITextProviderOptions => {
-  // OpenAI reasoning models reject any `temperature` other than the
-  // default (a 400, mirroring the Anthropic fixed-sampling class): a
-  // catalogued effort ladder marks such a model, so omit sampling for
-  // it and only send `temperature: 0` for models with no reasoning
-  // control (uncatalogued/custom deployments, where the deterministic
-  // default is still the safe request).
-  const effort = resolveReasoningEffort({ modelId, requested: "medium" });
   if (role !== "reasoning") {
-    return effort === null ? { temperature: 0 } : {};
+    return deterministicSamplingForModel(modelId);
   }
+  const effort = resolveReasoningEffort({ modelId, requested: "medium" });
   return effort === null ? {} : { reasoning: { effort } };
 };
 
@@ -1163,17 +1159,18 @@ const tanStackOpenRouterModelOptionsForRole = ({
   const effort =
     requested === null ? null : resolveReasoningEffort({ modelId, requested });
   return {
-    temperature: 0,
+    ...deterministicSamplingForModel(modelId),
     ...(effort === null ? {} : { reasoning: { effort } }),
   };
 };
 
-const tanStackMistralModelOptionsForRole = (): MistralTextProviderOptions => ({
-  temperature: 0,
-});
+const tanStackMistralModelOptionsForRole = (
+  modelId: string,
+): MistralTextProviderOptions => deterministicSamplingForModel(modelId);
 
-const tanStackBedrockModelOptionsForRole =
-  (): BedrockConverseProviderOptions => ({ temperature: 0 });
+const tanStackBedrockModelOptionsForRole = (
+  modelId: string,
+): BedrockConverseProviderOptions => deterministicSamplingForModel(modelId);
 
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"google">,
@@ -1219,9 +1216,9 @@ export function tanStackModelOptionsForRole(
         organizationId: input.organizationId,
       });
     case "bedrock":
-      return tanStackBedrockModelOptionsForRole();
+      return tanStackBedrockModelOptionsForRole(input.modelId);
     case "mistral":
-      return tanStackMistralModelOptionsForRole();
+      return tanStackMistralModelOptionsForRole(input.modelId);
     case "openai":
       return tanStackOpenAIModelOptionsForRole({
         role: input.role,
@@ -1342,7 +1339,7 @@ const buildResolvedTextModel = ({
         provider,
         modelId,
         organizationId,
-        modelOptions: tanStackBedrockModelOptionsForRole(),
+        modelOptions: tanStackBedrockModelOptionsForRole(modelId),
         ...(region === undefined ? {} : { region }),
         role,
       });
@@ -1353,7 +1350,7 @@ const buildResolvedTextModel = ({
         provider,
         modelId,
         organizationId,
-        modelOptions: tanStackMistralModelOptionsForRole(),
+        modelOptions: tanStackMistralModelOptionsForRole(modelId),
         ...(region === undefined ? {} : { region }),
         role,
       });

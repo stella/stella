@@ -19,12 +19,13 @@
  *  2. Existence — OpenRouter slugs are checked for presence against
  *     OpenRouter's routing API; future non-first-party providers can
  *     fall back to the full upstream model set.
- *  3. Reasoning capability — the per-model `MODEL_REASONING_EFFORTS`
- *     declarations are compared against models.dev
- *     `reasoning_options` (first-party and openrouter catalogs), so a
- *     model that starts requiring reasoning — or grows/loses effort
- *     tiers — fails CI before a stale declaration lets request
- *     construction send an effort the model rejects.
+ *  3. Request capabilities — the per-model `MODEL_REASONING_EFFORTS`
+ *     and `MODEL_TEMPERATURE_SUPPORT` declarations are compared
+ *     against models.dev `reasoning_options` and `temperature`
+ *     (first-party and openrouter catalogs), so a model that starts
+ *     requiring reasoning, changes effort tiers, or flips temperature
+ *     support fails CI before a stale declaration lets request
+ *     construction send a parameter the model rejects.
  *
  * Aggregators lag on brand-new models, and a model we offer may be
  * deprecated upstream while we still intend to serve it until shutdown.
@@ -38,22 +39,23 @@ import {
   DEFAULT_MODELS,
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
+  MODEL_TEMPERATURE_SUPPORT,
 } from "@stll/ai-catalog";
 
+import {
+  parseUpstreamCapabilities,
+  validateCapabilities,
+} from "./model-catalog-capabilities";
+import type {
+  CapabilityFailure,
+  UpstreamCapabilities,
+} from "./model-catalog-capabilities";
 import { parseUpstreamCost, validateRates } from "./model-catalog-rates";
 import type {
   CatalogEntry,
   RateFailure,
   UpstreamCost,
 } from "./model-catalog-rates";
-import {
-  parseUpstreamReasoning,
-  validateReasoning,
-} from "./model-catalog-reasoning";
-import type {
-  ReasoningFailure,
-  UpstreamReasoning,
-} from "./model-catalog-reasoning";
 
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -90,7 +92,7 @@ const FIRST_PARTY_KEYS = new Set(Object.values(MODELS_DEV_PROVIDER));
  * slug (the values OpenRouter actually accepts, which is what stella
  * sends).
  */
-const REASONING_CHECK_PROVIDERS: Record<string, string> = {
+const CAPABILITY_CHECK_PROVIDERS: Record<string, string> = {
   ...MODELS_DEV_PROVIDER,
   openrouter: "openrouter",
 };
@@ -215,7 +217,7 @@ type Upstream = {
    * `${provider}:${id}` → upstream reasoning metadata (first-party
    * catalogs plus the models.dev openrouter catalog).
    */
-  reasoningMeta: Map<string, UpstreamReasoning>;
+  capabilityMeta: Map<string, UpstreamCapabilities>;
   /** OpenRouter listing was fetched and parsed. */
   openrouterReachable: boolean;
   /** models.dev listing was fetched and parsed. */
@@ -229,7 +231,7 @@ const loadUpstream = async (): Promise<Upstream> => {
   const firstPartyPresent = new Set<string>();
   const firstPartyDeprecated = new Set<string>();
   const firstPartyCost = new Map<string, UpstreamCost>();
-  const reasoningMeta = new Map<string, UpstreamReasoning>();
+  const capabilityMeta = new Map<string, UpstreamCapabilities>();
   let openrouterReachable = false;
   let modelsDevReachable = false;
 
@@ -266,9 +268,9 @@ const loadUpstream = async (): Promise<Upstream> => {
         canonAll.add(canonical(modelId));
         count += 1;
         if (isFirstParty || providerKey === "openrouter") {
-          const reasoning = parseUpstreamReasoning(modelVal);
+          const reasoning = parseUpstreamCapabilities(modelVal);
           if (reasoning !== null) {
-            reasoningMeta.set(`${providerKey}:${modelId}`, reasoning);
+            capabilityMeta.set(`${providerKey}:${modelId}`, reasoning);
           }
         }
         if (!isFirstParty) {
@@ -297,7 +299,7 @@ const loadUpstream = async (): Promise<Upstream> => {
     firstPartyPresent,
     firstPartyDeprecated,
     firstPartyCost,
-    reasoningMeta,
+    capabilityMeta,
     openrouterReachable,
     modelsDevReachable,
   };
@@ -422,15 +424,16 @@ const main = async (): Promise<void> => {
     );
   }
 
-  const reasoningFailures: ReasoningFailure[] = [];
+  const capabilityFailures: CapabilityFailure[] = [];
   if (upstream.modelsDevReachable) {
-    const reasoningCheck = validateReasoning({
+    const capabilityCheck = validateCapabilities({
       entries,
-      checkableProviders: REASONING_CHECK_PROVIDERS,
-      upstream: upstream.reasoningMeta,
-      declared: MODEL_REASONING_EFFORTS,
+      checkableProviders: CAPABILITY_CHECK_PROVIDERS,
+      upstream: upstream.capabilityMeta,
+      declaredEfforts: MODEL_REASONING_EFFORTS,
+      declaredTemperature: MODEL_TEMPERATURE_SUPPORT,
     });
-    for (const failure of reasoningCheck.failures) {
+    for (const failure of capabilityCheck.failures) {
       // ACKNOWLEDGED is intentionally empty by default — see the note
       // on the existence loop above.
 
@@ -440,16 +443,16 @@ const main = async (): Promise<void> => {
         );
         continue;
       }
-      reasoningFailures.push(failure);
+      capabilityFailures.push(failure);
     }
-    for (const entry of reasoningCheck.skipped) {
+    for (const entry of capabilityCheck.skipped) {
       console.warn(
-        `  ⚠ reasoning capability unverifiable (no upstream reasoning metadata): ${entry.provider} / ${entry.modelId}`,
+        `  ⚠ capability unverifiable (no upstream capability metadata): ${entry.provider} / ${entry.modelId}`,
       );
     }
   } else {
     console.warn(
-      "  ⚠ reasoning-capability validation skipped: models.dev listing unreachable",
+      "  ⚠ capability validation skipped: models.dev listing unreachable",
     );
   }
 
@@ -475,7 +478,7 @@ const main = async (): Promise<void> => {
   }
 
   const failureCount =
-    failures.length + rateFailures.length + reasoningFailures.length;
+    failures.length + rateFailures.length + capabilityFailures.length;
   if (failureCount > 0) {
     console.error(`\n✗ ${failureCount} offered model ID(s) need attention:`);
     for (const { entry, verdict } of failures) {
@@ -487,7 +490,7 @@ const main = async (): Promise<void> => {
     }
     for (const { entry, label, detail } of [
       ...rateFailures,
-      ...reasoningFailures,
+      ...capabilityFailures,
     ]) {
       console.error(
         `  ✗ [${label}] ${entry.provider} / ${entry.modelId} — ${detail}`,

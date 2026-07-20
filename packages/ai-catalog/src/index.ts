@@ -25,6 +25,11 @@ import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrout
  */
 import * as v from "valibot";
 
+import {
+  MODEL_REASONING_EFFORTS,
+  MODEL_TEMPERATURE_SUPPORT,
+} from "./capabilities.gen";
+
 /**
  * Logical model roles. Call sites declare *what* they need, not
  * *which* model to use.
@@ -190,6 +195,11 @@ export const BYOK_MODEL_OPTIONS = {
 
 export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 
+// Input data for the capability generator
+// (packages/scripts/src/model-catalog-capabilities-gen.ts).
+export { CAPABILITY_OVERRIDES } from "./capabilities-overrides";
+export type { CapabilityOverride } from "./capabilities-overrides";
+
 type ModelInputModalitiesByName = Record<string, readonly string[]>;
 
 type ModelWithInputModality<
@@ -223,6 +233,8 @@ type TanStackDocumentInputModelByProvider = {
 type BYOKModelIdByProvider = {
   [TProvider in BYOKProvider]: (typeof BYOK_MODEL_OPTIONS)[TProvider][number];
 };
+
+export type OfferedBYOKModelId = BYOKModelIdByProvider[BYOKProvider];
 
 const TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS = {
   anthropic: ["claude-sonnet-4-6"],
@@ -377,23 +389,10 @@ export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
 ] as const;
 
 /**
- * Anthropic models that reject sampling overrides (`temperature`,
- * `topP`, `topK`) with a 400 on every request shape; they always run
- * with provider-side defaults. Enforced by TanStack model-option
- * construction in `apps/api/src/lib/tanstack-ai-models.ts` so neither
- * role defaults nor call-site overrides can reach the provider.
- */
-export const ANTHROPIC_FIXED_SAMPLING_MODELS = [
-  "claude-opus-4-7",
-  "claude-opus-4-8",
-  "claude-fable-5",
-] as const;
-
-/**
  * Canonical reasoning-effort ladder, ordered weakest to strongest.
  * Union of every effort keyword the offered providers accept; no
- * single model accepts all of them, which is exactly why per-model
- * `MODEL_REASONING_EFFORTS` exists.
+ * single model accepts all of them, which is exactly why the
+ * generated per-model `MODEL_REASONING_EFFORTS` exists.
  */
 export const REASONING_EFFORTS = [
   "none",
@@ -423,78 +422,25 @@ export type ResolvedReasoningEffort = v.InferOutput<
   typeof resolvedReasoningEffortSchema
 >;
 
-type OfferedBYOKModelId = BYOKModelIdByProvider[BYOKProvider];
+// Per-model capability maps are generated from models.dev; see
+// capabilities.gen.ts (regenerate with `bun --filter @stll/ai-catalog
+// gen:capabilities`).
+export {
+  MODEL_REASONING_EFFORTS,
+  MODEL_TEMPERATURE_SUPPORT,
+} from "./capabilities.gen";
+
+const MODEL_TEMPERATURE_SUPPORT_BY_ID: Readonly<Record<string, boolean>> =
+  MODEL_TEMPERATURE_SUPPORT;
 
 /**
- * Reasoning-effort values each offered model accepts, `null` when the
- * model exposes no effort-style reasoning control (reasoning absent,
- * always-on with no dial, or budget/thinking-shaped instead — the
- * Anthropic thinking shape is governed separately by
- * `ANTHROPIC_ADAPTIVE_THINKING_MODELS`).
- *
- * The `satisfies Record<OfferedBYOKModelId, …>` makes offering a model
- * without declaring its reasoning capability a compile error, and a
- * stale entry for a de-listed model an excess-property error.
- *
- * A missing `"none"` means the model's reasoning cannot be disabled;
- * sending `effort: "none"` anyway is a provider 4xx/5xx (the
- * gemini-3.5-flash "Reasoning is mandatory" class). Values sourced
- * from models.dev `reasoning_options` (first-party and openrouter
- * catalogs) on 2026-07-20; the nightly `model-catalog-upstream` check
- * fails CI when upstream drifts from these declarations. Bedrock IDs
- * have no keyless upstream source and stella's Bedrock path sends no
- * reasoning control, so they are declared `null` and skipped by the
- * nightly check.
+ * Whether a `temperature` override may be sent to this model.
+ * Unknown ids resolve to `false` (send nothing; provider default).
+ * Callers must never index `MODEL_TEMPERATURE_SUPPORT` directly with
+ * a runtime string.
  */
-export const MODEL_REASONING_EFFORTS = {
-  // Google (native API): Gemini 3.x cannot disable reasoning; Flash
-  // models bottom out at "minimal", Pro at "low".
-  "gemini-3.1-pro-preview": ["low", "medium", "high"],
-  "gemini-3.5-flash": ["minimal", "low", "medium", "high"],
-  "gemini-3.1-flash-lite": ["minimal", "low", "medium", "high"],
-  // Anthropic: effort-style control on the adaptive-thinking models;
-  // Haiku 4.5 is budget-token-only.
-  "claude-fable-5": ["low", "medium", "high", "xhigh", "max"],
-  "claude-opus-4-8": ["low", "medium", "high", "xhigh", "max"],
-  "claude-opus-4-7": ["low", "medium", "high", "xhigh", "max"],
-  "claude-sonnet-4-6": ["low", "medium", "high", "max"],
-  "claude-opus-4-6": ["low", "medium", "high", "max"],
-  "claude-haiku-4-5-20251001": null,
-  // OpenAI: GPT-5.x reasoning is optional ("none" is accepted).
-  "gpt-5.5": ["none", "low", "medium", "high", "xhigh"],
-  "gpt-5.4": ["none", "low", "medium", "high", "xhigh"],
-  "gpt-5.4-mini": ["none", "low", "medium", "high", "xhigh"],
-  "gpt-5.4-nano": ["none", "low", "medium", "high", "xhigh"],
-  "gpt-5.2": ["none", "low", "medium", "high", "xhigh"],
-  // OpenRouter slugs mirror their upstream models.
-  "google/gemini-3.1-pro-preview": ["low", "medium", "high"],
-  "google/gemini-3.5-flash": ["minimal", "low", "medium", "high"],
-  "google/gemini-3.1-flash-lite": ["minimal", "low", "medium", "high"],
-  "anthropic/claude-opus-4.8": ["low", "medium", "high", "xhigh", "max"],
-  "anthropic/claude-sonnet-4.6": ["low", "medium", "high", "max"],
-  "openai/gpt-5.5": ["none", "low", "medium", "high", "xhigh"],
-  "openai/gpt-5.4-mini": ["none", "low", "medium", "high", "xhigh"],
-  // Bedrock: no effort control sent, no keyless upstream verification.
-  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": null,
-  "us.anthropic.claude-haiku-4-5-20251001-v1:0": null,
-  "us.amazon.nova-pro-v1:0": null,
-  "us.amazon.nova-lite-v1:0": null,
-  "us.amazon.nova-micro-v1:0": null,
-  "openai.gpt-oss-120b-1:0": null,
-  "openai.gpt-oss-20b-1:0": null,
-  "us.deepseek.r1-v1:0": null,
-  // Mistral: large/pixtral do not reason; magistral reasons with no
-  // dial; small/medium expose a binary none/high switch.
-  "mistral-large-latest": null,
-  "mistral-medium-latest": ["none", "high"],
-  "mistral-small-latest": ["none", "high"],
-  "magistral-medium-latest": null,
-  "magistral-small": null,
-  "pixtral-large-latest": null,
-} as const satisfies Record<
-  OfferedBYOKModelId,
-  readonly ReasoningEffort[] | null
->;
+export const supportsTemperature = (modelId: string): boolean =>
+  MODEL_TEMPERATURE_SUPPORT_BY_ID[modelId] ?? false;
 
 const MODEL_REASONING_EFFORTS_BY_ID: Readonly<
   Record<string, readonly ReasoningEffort[] | null>

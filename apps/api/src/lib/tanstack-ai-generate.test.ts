@@ -245,8 +245,10 @@ describe("TanStack AI structured output generation", () => {
       prompt_cache_key:
         "106a444562569784437b331c30f0edcfa70367d5e744cdba050d7234d6ee197c",
       service_tier: "default",
-      temperature: 0,
     });
+    // gpt-5.4-mini rejects sampling overrides; the caller temperature
+    // is suppressed by the capability gate.
+    expect(options).not.toHaveProperty("temperature");
     expect(options).not.toHaveProperty("prompt_cache_retention");
   });
 
@@ -291,7 +293,9 @@ describe("TanStack AI structured output generation", () => {
     const model = {
       adapter: {},
       keySource: "instance",
-      modelId: "gemini-3-pro-preview",
+      // A catalogued id: caller temperature only survives the
+      // capability gate for models with declared support.
+      modelId: "gemini-3.1-pro-preview",
       modelOptions: {},
       provider: "google",
     } as ResolvedTanStackTextModel;
