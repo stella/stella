@@ -511,6 +511,11 @@ const createAuth = () => {
           type: "string",
           required: false,
         },
+        isSystemAdmin: {
+          type: "boolean",
+          required: false,
+          defaultValue: false,
+        },
       },
     },
     session: {

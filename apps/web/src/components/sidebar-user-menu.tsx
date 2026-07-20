@@ -6,6 +6,7 @@ import {
   MonitorIcon,
   MoonIcon,
   Settings2Icon,
+  ShieldIcon,
   SunIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -54,6 +55,7 @@ type SidebarUserMenuProps = {
     activeOrganizationId: string;
     email: string;
     image: string | null | undefined;
+    isSystemAdmin: boolean;
     name: string | undefined;
   };
 };
@@ -152,6 +154,16 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
             <Settings2Icon />
             {t("common.settings")}
           </MenuItem>
+          {user.isSystemAdmin && (
+            <MenuItem
+              onClick={() => {
+                void navigate({ to: "/admin/diagnostics" });
+              }}
+            >
+              <ShieldIcon />
+              Admin Diagnostics
+            </MenuItem>
+          )}
           <MenuSeparator />
           <MenuSub>
             <MenuSubTrigger>

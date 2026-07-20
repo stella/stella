@@ -32,6 +32,7 @@ export const statements = {
   chat: ["create", "update", "delete"],
   organizationSettings: ["update"],
   auditLog: ["read"],
+  admin: ["read"],
   agentSkill: ["create", "update", "delete"],
 } as const;
 
@@ -99,6 +100,7 @@ export const roles = {
     chat: ["create", "update", "delete"],
     organizationSettings: ["update"],
     auditLog: ["read"],
+    admin: ["read"],
     agentSkill: ["create", "update", "delete"],
   }),
   admin: ac.newRole({
@@ -125,6 +127,7 @@ export const roles = {
     chat: ["create", "update", "delete"],
     organizationSettings: ["update"],
     auditLog: ["read"],
+    admin: ["read"],
     agentSkill: ["create", "update", "delete"],
   }),
   member: memberAc,

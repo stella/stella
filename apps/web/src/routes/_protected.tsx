@@ -186,6 +186,7 @@ export const Route = createFileRoute("/_protected")({
       user: {
         id: authContext.session.userId,
         activeOrganizationId,
+        isSystemAdmin: authContext.user.isSystemAdmin ?? false,
         name: authContext.user.name || undefined,
         email: authContext.user.email,
         image: authContext.user.image,

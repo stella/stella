@@ -51,6 +51,7 @@ import { Route as ProtectedDevAutocompleteRouteImport } from './routes/_protecte
 import { Route as ProtectedContactsContactIdRouteImport } from './routes/_protected.contacts/$contactId'
 import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat_.new'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
+import { Route as ProtectedAdminDiagnosticsRouteImport } from './routes/_protected.admin/diagnostics'
 import { Route as ProtectedWorkspacesWorkspaceIdRouteRouteImport } from './routes/_protected.workspaces/$workspaceId/route'
 import { Route as ProtectedSettingsOrganizationRouteRouteImport } from './routes/_protected.settings/organization.route'
 import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
@@ -305,6 +306,12 @@ const ProtectedChatThreadIdRoute = ProtectedChatThreadIdRouteImport.update({
   path: '/$threadId',
   getParentRoute: () => ProtectedChatRouteRoute,
 } as any)
+const ProtectedAdminDiagnosticsRoute =
+  ProtectedAdminDiagnosticsRouteImport.update({
+    id: '/admin/diagnostics',
+    path: '/admin/diagnostics',
+    getParentRoute: () => ProtectedRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdRouteRoute =
   ProtectedWorkspacesWorkspaceIdRouteRouteImport.update({
     id: '/workspaces/$workspaceId',
@@ -527,6 +534,7 @@ export interface FileRoutesByFullPath {
   '/law/': typeof LawIndexRoute
   '/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  '/admin/diagnostics': typeof ProtectedAdminDiagnosticsRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
@@ -596,6 +604,7 @@ export interface FileRoutesByTo {
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/auth': typeof AuthIndexRoute
   '/law': typeof LawIndexRoute
+  '/admin/diagnostics': typeof ProtectedAdminDiagnosticsRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
@@ -673,6 +682,7 @@ export interface FileRoutesById {
   '/law/': typeof LawIndexRoute
   '/_protected/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   '/_protected/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  '/_protected/admin/diagnostics': typeof ProtectedAdminDiagnosticsRoute
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/_protected/chat_/new': typeof ProtectedChatNewRoute
   '/_protected/contacts/$contactId': typeof ProtectedContactsContactIdRoute
@@ -751,6 +761,7 @@ export interface FileRouteTypes {
     | '/law/'
     | '/settings/organization'
     | '/workspaces/$workspaceId'
+    | '/admin/diagnostics'
     | '/chat/$threadId'
     | '/chat/new'
     | '/contacts/$contactId'
@@ -820,6 +831,7 @@ export interface FileRouteTypes {
     | '/sitemaps/law.xml'
     | '/auth'
     | '/law'
+    | '/admin/diagnostics'
     | '/chat/$threadId'
     | '/chat/new'
     | '/contacts/$contactId'
@@ -896,6 +908,7 @@ export interface FileRouteTypes {
     | '/law/'
     | '/_protected/settings/organization'
     | '/_protected/workspaces/$workspaceId'
+    | '/_protected/admin/diagnostics'
     | '/_protected/chat/$threadId'
     | '/_protected/chat_/new'
     | '/_protected/contacts/$contactId'
@@ -1262,6 +1275,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/chat/$threadId'
       preLoaderRoute: typeof ProtectedChatThreadIdRouteImport
       parentRoute: typeof ProtectedChatRouteRoute
+    }
+    '/_protected/admin/diagnostics': {
+      id: '/_protected/admin/diagnostics'
+      path: '/admin/diagnostics'
+      fullPath: '/admin/diagnostics'
+      preLoaderRoute: typeof ProtectedAdminDiagnosticsRouteImport
+      parentRoute: typeof ProtectedRoute
     }
     '/_protected/workspaces/$workspaceId': {
       id: '/_protected/workspaces/$workspaceId'
@@ -1728,6 +1748,7 @@ interface ProtectedRouteChildren {
   ProtectedKnowledgeRouteRoute: typeof ProtectedKnowledgeRouteRouteWithChildren
   ProtectedSettingsRouteRoute: typeof ProtectedSettingsRouteRouteWithChildren
   ProtectedWorkspacesWorkspaceIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
+  ProtectedAdminDiagnosticsRoute: typeof ProtectedAdminDiagnosticsRoute
   ProtectedChatNewRoute: typeof ProtectedChatNewRoute
   ProtectedContactsContactIdRoute: typeof ProtectedContactsContactIdRoute
   ProtectedDevAutocompleteRoute: typeof ProtectedDevAutocompleteRoute
@@ -1742,6 +1763,7 @@ const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedSettingsRouteRoute: ProtectedSettingsRouteRouteWithChildren,
   ProtectedWorkspacesWorkspaceIdRouteRoute:
     ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren,
+  ProtectedAdminDiagnosticsRoute: ProtectedAdminDiagnosticsRoute,
   ProtectedChatNewRoute: ProtectedChatNewRoute,
   ProtectedContactsContactIdRoute: ProtectedContactsContactIdRoute,
   ProtectedDevAutocompleteRoute: ProtectedDevAutocompleteRoute,

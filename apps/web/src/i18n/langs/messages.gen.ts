@@ -2478,6 +2478,26 @@ type Messages = {
       "auditLogsTo": "To date";
       "auditLogsUserId": "User ID";
       "auditLogsUserIdPlaceholder": "Filter by user ID";
+      "diagnostics": {
+        "checkAiKeysDescActive": "Configured & Active";
+        "checkAiKeysDescMissing": "Instance/BYOK key missing";
+        "checkAiKeysLabel": "AI API Keys";
+        "checkDeepLDescActive": "Configured & Active";
+        "checkDeepLDescMissing": "Translation key missing";
+        "checkDeepLLabel": "DeepL Translation";
+        "checkJurisdictionDescActive": "Jurisdictions selected";
+        "checkJurisdictionDescMissing": "No jurisdictions set";
+        "checkJurisdictionLabel": "Jurisdiction Selected";
+        "checklistProgress": "<passedSpan>{passed}/{total}</passedSpan> critical configuration elements configured.";
+        "checklistTitle": "Configuration Diagnostics Checklist";
+        "checklistTitleVerified": "All Core Integrations Verified";
+        "configureAction": "Configure";
+        "hideDetails": "Hide Details";
+        "showDetails": "Show Details";
+        "statusActionRequired": "Action Required";
+        "statusOptional": "Optional";
+        "statusReady": "Ready";
+      };
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)";
         "deleteFailed": "Couldn't delete document type";

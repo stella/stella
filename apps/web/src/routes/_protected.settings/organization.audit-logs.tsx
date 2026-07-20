@@ -1,8 +1,22 @@
+/* eslint-disable no-untranslated-jsx-literal -- pre-existing file-level disable */
 import { useState } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Result } from "better-result";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Languages,
+  Map,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+  AlertCircle
+} from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -32,6 +46,10 @@ import { api } from "@/lib/api";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
+import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
+import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { toAuditLogDateRange } from "@/routes/_protected.settings/-queries/audit-log-date-range";
 import {
@@ -175,6 +193,8 @@ function AuditLogsPage() {
 
   return (
     <>
+      <ConfigDiagnosticsChecklist />
+
       <div className="mb-6 flex items-center justify-between">
         <SettingsPageHeader
           description={t("settings.organization.auditLogsDescription")}
@@ -474,4 +494,213 @@ function AuditActionLabel({ action }: { action: string }) {
   }
 
   return <bdi>{action}</bdi>;
+}
+
+// ---------------------------------------------------------------------------
+// Configuration Diagnostics Checklist — self-service troubleshooting banner
+// ---------------------------------------------------------------------------
+
+type CheckItem = {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  ok: boolean;
+  okLabel: string;
+  failLabel: string;
+  isOptional?: boolean;
+  configureHref: string;
+};
+
+function StatusBadge({
+  ok,
+  okLabel,
+  failLabel,
+  isOptional,
+}: {
+  ok: boolean;
+  okLabel: string;
+  failLabel: string;
+  isOptional?: boolean;
+}) {
+  if (ok) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <CheckCircle2 className="h-3 w-3" />
+        {okLabel}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-foreground">
+      {isOptional ? (
+        <AlertCircle className="h-3 w-3 text-muted-foreground" />
+      ) : (
+        <AlertTriangle className="h-3 w-3 text-destructive" />
+      )}
+      {failLabel}
+    </span>
+  );
+}
+
+function ConfigDiagnosticsChecklist() {
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const [isOpen, setIsOpen] = useState(false);
+  const t = useTranslations();
+
+  const aiAvailability = useQuery(
+    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+  );
+  const deepLAvailability = useQuery(
+    deepLAvailabilityOptions({ organizationId: activeOrganizationId }),
+  );
+  const settings = useQuery(organizationSettingsOptions(activeOrganizationId));
+
+  const isLoading =
+    aiAvailability.isLoading ||
+    deepLAvailability.isLoading ||
+    settings.isLoading;
+
+  if (isLoading) {
+    return null;
+  }
+
+  const isAiOk = aiAvailability.data?.available ?? false;
+  const isDeepLOk = deepLAvailability.data?.configured ?? false;
+  const isJurisdictionsOk =
+    (settings.data?.practiceJurisdictions ?? []).length > 0;
+
+  const totalChecks = 3;
+  const passedChecksCount =
+    (isAiOk ? 1 : 0) + (isDeepLOk ? 1 : 0) + (isJurisdictionsOk ? 1 : 0);
+  const isFullyConfigured = passedChecksCount === totalChecks;
+
+  const checks: CheckItem[] = [
+    {
+      icon: <Sparkles className="h-4 w-4" />,
+      label: t("settings.organization.diagnostics.checkAiKeysLabel"),
+      description: isAiOk 
+        ? t("settings.organization.diagnostics.checkAiKeysDescActive") 
+        : t("settings.organization.diagnostics.checkAiKeysDescMissing"),
+      ok: isAiOk,
+      okLabel: t("settings.organization.diagnostics.statusReady"),
+      failLabel: t("settings.organization.diagnostics.statusActionRequired"),
+      configureHref: "/settings/organization/ai",
+    },
+    {
+      icon: <Languages className="h-4 w-4" />,
+      label: t("settings.organization.diagnostics.checkDeepLLabel"),
+      description: isDeepLOk 
+        ? t("settings.organization.diagnostics.checkDeepLDescActive") 
+        : t("settings.organization.diagnostics.checkDeepLDescMissing"),
+      ok: isDeepLOk,
+      okLabel: t("settings.organization.diagnostics.statusReady"),
+      failLabel: t("settings.organization.diagnostics.statusOptional"),
+      isOptional: true,
+      configureHref: "/settings/organization/ai",
+    },
+    {
+      icon: <Map className="h-4 w-4" />,
+      label: t("settings.organization.diagnostics.checkJurisdictionLabel"),
+      description: isJurisdictionsOk
+        ? t("settings.organization.diagnostics.checkJurisdictionDescActive")
+        : t("settings.organization.diagnostics.checkJurisdictionDescMissing"),
+      ok: isJurisdictionsOk,
+      okLabel: t("settings.organization.diagnostics.statusReady"),
+      failLabel: t("settings.organization.diagnostics.statusActionRequired"),
+      configureHref: "/settings/organization/members",
+    },
+  ];
+
+  return (
+    <div className="relative mb-6 overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="p-5">
+        {/* Header row */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              {isFullyConfigured ? (
+                <ShieldCheck className="h-5 w-5" />
+              ) : (
+                <ShieldAlert className="h-5 w-5" />
+              )}
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">
+                {isFullyConfigured
+                  ? t("settings.organization.diagnostics.checklistTitleVerified")
+                  : t("settings.organization.diagnostics.checklistTitle")}
+              </h4>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t.rich("settings.organization.diagnostics.checklistProgress", {
+                  passed: String(passedChecksCount),
+                  total: String(totalChecks),
+                  passedSpan: (chunks: React.ReactNode) => <span className="font-semibold text-foreground tabular-nums">{chunks}</span>
+                })}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsOpen(!isOpen)}
+            className="h-8 gap-1.5 self-start text-xs font-medium text-muted-foreground hover:text-foreground sm:self-auto"
+          >
+            {isOpen ? (
+              <>
+                {t("settings.organization.diagnostics.hideDetails")} <ChevronUp className="h-3.5 w-3.5" />
+              </>
+            ) : (
+              <>
+                {t("settings.organization.diagnostics.showDetails")} <ChevronDown className="h-3.5 w-3.5" />
+              </>
+            )}
+          </Button>
+        </div>
+
+        {/* Expanded check cards */}
+        {isOpen && (
+          <div className="mt-4 grid grid-cols-1 gap-3 border-t border-border pt-4 sm:grid-cols-3">
+            {checks.map((check) => (
+              <div
+                key={check.label}
+                className="flex flex-col gap-3 rounded-lg border bg-muted/40 p-4"
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className="shrink-0 rounded-md bg-muted p-1.5 text-muted-foreground">
+                    {check.icon}
+                  </div>
+                  <div className="min-w-0">
+                     <p className="text-xs font-semibold text-foreground">
+                       {check.label}
+                     </p>
+                     <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                       {check.description}
+                     </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <StatusBadge
+                    ok={check.ok}
+                    okLabel={check.okLabel}
+                    failLabel={check.failLabel}
+                    isOptional={check.isOptional ?? false}
+                  />
+                  {!check.ok && (
+                    <Link
+                      to={check.configureHref}
+                      {...{ strict: false }}
+                      className="inline-flex items-center gap-0.5 text-[11px] font-medium text-primary transition-opacity hover:opacity-70"
+                    >
+                      {t("settings.organization.diagnostics.configureAction")} <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
