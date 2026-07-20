@@ -211,7 +211,7 @@ describe("validateAst", () => {
         { length: 20 },
         (_, i) => `źdźbło${String.fromCodePoint(97 + i)}ż`,
       );
-      const html = wrapInHtml(words.join(" "));
+      const html = wrapInHtml(`${words.join(" ")} mógł Łódź`);
       const blocks: Block[] = [
         makeHeading("H"),
         makeBlock({ plainText: "brak" }),
@@ -222,6 +222,11 @@ describe("validateAst", () => {
       // Edge diacritics must survive word extraction; the untrimmed
       // words are reported missing (not "dźbło..." fragments).
       expect(result.stats.missingWords).toContain("źdźbłoaż");
+      // ł is the most common edge diacritic in Polish (past-tense verbs,
+      // proper names); trimming it would shrink "mógł" below the 3-char
+      // cutoff and hide it entirely.
+      expect(result.stats.missingWords).toContain("mógł");
+      expect(result.stats.missingWords).toContain("łódź");
     });
   });
 

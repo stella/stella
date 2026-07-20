@@ -62,7 +62,7 @@ const SKIP_WORDS = new Set([
 // Slovak, German. A letter missing here gets trimmed from word edges,
 // silently shrinking the compared word sets for that language.
 const LETTERS = new Set(
-  "abcdefghijklmnopqrstuvwxyzáäąčćďéěęíĺľňńóôöřŕšśťúůüýžźżß",
+  "abcdefghijklmnopqrstuvwxyzáäąčćďéěęíĺľłňńóôöřŕšśťúůüýžźżß",
 );
 const trimNonLetters = (word: string): string => {
   let start = 0;
@@ -370,8 +370,10 @@ export const validateAndLog = (
     logger.error("case_law.ingestion.ast_validation_failed", {
       parser: parserName,
       caseNumber,
-      issues: result.issues.map((issue) => `${issue.code}: ${issue.message}`),
-      missingWords: result.stats.missingWords.slice(0, 25),
+      issues: result.issues
+        .map((issue) => `${issue.code}: ${issue.message}`)
+        .join("; "),
+      missingWords: result.stats.missingWords.slice(0, 25).join(", "),
       missingWordCount: result.stats.missingWords.length,
       retainedPct: result.stats.retainedPct,
       blockCount: result.stats.blockCount,
@@ -380,7 +382,9 @@ export const validateAndLog = (
     logger.warn("case_law.ingestion.ast_validation_warning", {
       parser: parserName,
       caseNumber,
-      issues: result.issues.map((issue) => `${issue.code}: ${issue.message}`),
+      issues: result.issues
+        .map((issue) => `${issue.code}: ${issue.message}`)
+        .join("; "),
     });
   }
 
