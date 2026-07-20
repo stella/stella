@@ -659,6 +659,7 @@
   },
   "clauses": {
     "addVariant": "Añadir variante",
+    "aiStructureChanged": "La reescritura con IA cambió la estructura de la cláusula y no se puede mostrar como cambios en línea. Ajusta tu instrucción e inténtalo de nuevo.",
     "allClauses": "Todas las cláusulas",
     "backToList": "Volver a cláusulas",
     "body": "Cuerpo",

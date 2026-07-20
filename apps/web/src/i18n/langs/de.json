@@ -659,6 +659,7 @@
   },
   "clauses": {
     "addVariant": "Variante hinzufügen",
+    "aiStructureChanged": "Die Überarbeitung mit KI hat die Struktur der Klausel verändert und kann nicht als Inline-Änderungen angezeigt werden. Passen Sie Ihre Anweisung an und versuchen Sie es erneut.",
     "allClauses": "Alle Klauseln",
     "backToList": "Zurück zu Klauseln",
     "body": "Inhalt",

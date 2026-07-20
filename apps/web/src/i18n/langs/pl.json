@@ -659,6 +659,7 @@
   },
   "clauses": {
     "addVariant": "Dodaj wariant",
+    "aiStructureChanged": "Edycja z AI zmieniła strukturę klauzuli i nie można jej wyświetlić jako zmian w tekście. Dostosuj instrukcję i spróbuj ponownie.",
     "allClauses": "Wszystkie klauzule",
     "backToList": "Wróć do listy klauzul",
     "body": "Treść",
