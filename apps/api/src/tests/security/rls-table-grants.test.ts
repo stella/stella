@@ -56,6 +56,11 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "agent_trusted_issuer",
   "agent_delegation",
   "agent_assertion_replay",
+  // Machine API keys: credential digests plus the permission set each key
+  // carries. A tenant-scoped connection must be able to neither read a digest
+  // nor widen a key's permissions, so every access goes through better-auth on
+  // the owner connection.
+  "apikey",
 ]);
 
 const SQL_IDENTIFIER_PATTERN =

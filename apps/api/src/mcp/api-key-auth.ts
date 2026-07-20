@@ -9,6 +9,7 @@ import {
 } from "@/api/lib/machine-api-key-config";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import type { McpSession } from "@/api/mcp/auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
@@ -93,10 +94,13 @@ export const resolveMachineApiKeySession = async (
   // the session it builds; doing it here as well is what lets the permission
   // re-check below happen before any session exists, and re-running an
   // authorization check is the safe direction to duplicate in.
-  const authorization = await resolveMemberAuthorization({
-    organizationId,
-    userId,
-  });
+  //
+  // Branding happens here, at the same boundary `resolveMcpSessionContext` uses:
+  // these two ids arrive as plain strings (one parsed out of a metadata column,
+  // one read off the key row) and only become ownership ids once they cross it.
+  const authorization = await resolveMemberAuthorization(
+    brandActorSessionIdentity({ organizationId, userId }),
+  );
 
   if (!authorization || !isMemberRole(authorization.role)) {
     throw rejectCredential();
