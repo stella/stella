@@ -120,9 +120,12 @@ const OXFMT_CONFIG = path.resolve(REPO_ROOT, ".oxfmtrc.json");
  * format gate can never disagree. The temp file lives outside the repo so no
  * ignore rules apply to it.
  */
-const formatGeneratedModule = async (raw: string): Promise<string> => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "capability-dispatch-"));
-  const tmpFile = path.join(dir, "capability-dispatch.ts");
+const formatGeneratedArtifact = async (
+  raw: string,
+  fileName: string,
+): Promise<string> => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "capability-artifact-"));
+  const tmpFile = path.join(dir, fileName);
   try {
     await Bun.write(tmpFile, raw);
     const proc = Bun.spawnSync([OXFMT_BIN, "-c", OXFMT_CONFIG, tmpFile], {
@@ -131,7 +134,7 @@ const formatGeneratedModule = async (raw: string): Promise<string> => {
     });
     if (proc.exitCode !== 0) {
       return panic(
-        `export-capability-catalog: oxfmt failed on the generated dispatch module: ${proc.stderr.toString()}`,
+        `export-capability-catalog: oxfmt failed on generated ${fileName}: ${proc.stderr.toString()}`,
       );
     }
     return await Bun.file(tmpFile).text();
@@ -1424,8 +1427,9 @@ const main = async (): Promise<number> => {
   }
 
   const serialized = serializeCatalog(entries);
-  const dispatchSerialized = await formatGeneratedModule(
+  const dispatchSerialized = await formatGeneratedArtifact(
     serializeDispatchModule(dispatchRecords),
+    "capability-dispatch.ts",
   );
 
   const { cliCommandPathById, errors: pathErrors } =
@@ -1450,11 +1454,18 @@ const main = async (): Promise<number> => {
     return 1;
   }
 
-  const doc = serializeCoverageDoc({
-    entries,
-    cliCommandPathById,
-    internalWaiverCounts,
-  });
+  // Formatted here for the same reason as the dispatch module: an unformatted
+  // artifact fails CI's Format gate, and hand-formatting it afterwards makes it
+  // differ from what this exporter regenerates, which then fails the drift
+  // guard instead. Only generator-formatted output satisfies both.
+  const doc = await formatGeneratedArtifact(
+    serializeCoverageDoc({
+      entries,
+      cliCommandPathById,
+      internalWaiverCounts,
+    }),
+    "capability-coverage.md",
+  );
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);
