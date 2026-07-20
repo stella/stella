@@ -20,9 +20,9 @@ type OpeningSceneHealth = {
   // The Teams window occupies its designed fraction of the scene, not an
   // unconstrained auto width.
   teamsProportional: boolean;
-  // The auto-playing Teams loop reaches the answer step: the playbook
-  // deviation card fades in (its reveal is opacity-driven, so visibility
-  // checks alone cannot see it).
+  // The auto-playing Teams loop reaches the answer step: the agent answer
+  // message fades in (its reveal is opacity-driven, so visibility checks
+  // alone cannot see it).
   deviationCardShown: boolean;
 };
 
@@ -34,9 +34,18 @@ const HEALTHY: OpeningSceneHealth = {
 };
 
 const readOpeningSceneHealth = (): OpeningSceneHealth => {
+  // The companions are staged in by root scroll distance (hidden at zero
+  // scroll by design), so the healthy state is only reachable past the
+  // reveal range (ends by 480px). Scrolling inside the polled read makes the
+  // check self-correcting against the router's scroll restoration; "instant"
+  // opts out of the page's smooth scrolling. A poll iteration that runs in
+  // the same frame as the scroll may still see the pre-scroll reveal state;
+  // the next iteration reads the settled one.
+  window.scrollTo({ top: 600, behavior: "instant" });
   const scene = document.querySelector("#opening-product-story .cli-story");
   const teams = document.querySelector("#opening-product-story .cli-client");
-  const card = teams?.querySelector(".story-step .story-step") ?? null;
+  // The answer is the second chat step in the Teams card (prompt, answer).
+  const card = teams?.querySelectorAll(".story-step").item(1) ?? null;
   if (!scene || !teams || !card) {
     return {
       present: false,
@@ -73,6 +82,157 @@ const expectHealthyOpeningScene = async (page: Page) => {
     .toEqual(HEALTHY);
 };
 
+// Class guard: companion card content must fit its card box. Card text uses
+// clamp() with absolute rem floors (a readability decision), while the card
+// boxes scale with the scene; CliMcpPreview reconciles the two with rem
+// floors/caps on the boxes (and a content-driven Teams height). Any future
+// resize or copy change that lets content outgrow its box again, or shrinks
+// body text below its readability floor, fails here at both a notebook-class
+// and a desktop-class viewport.
+
+const CARD_FIT_VIEWPORTS = [
+  { width: 1280, height: 800 },
+  { width: 1680, height: 1050 },
+] as const;
+
+type CardFitCheck = {
+  name: string;
+  selector: string;
+  // Body-text elements and their readability floor in px. The floors mirror
+  // the clamp() rem minimums in CliMcpPreview at the 16px root: Teams body
+  // text clamp(.45rem, …) → 7.2px, terminal result text clamp(.4rem, …) →
+  // 6.4px (minus a rounding epsilon). The editor card is a recording; it has
+  // no body text to measure.
+  text: { selector: string; minFontPx: number } | null;
+};
+
+const CARD_FIT_CHECKS: readonly CardFitCheck[] = [
+  {
+    name: "teams",
+    selector: ".cli-client",
+    text: { selector: ".story-step p", minFontPx: 7.15 },
+  },
+  { name: "editor", selector: ".cli-response", text: null },
+  {
+    name: "terminal",
+    selector: ".cli-window",
+    text: { selector: ".cli-result p", minFontPx: 6.35 },
+  },
+];
+
+// Runs in the page. Returns a list of human-readable violations; healthy is
+// the empty list.
+const readCompanionCardFit = (checks: readonly CardFitCheck[]): string[] => {
+  const TOLERANCE_PX = 2;
+  const issues: string[] = [];
+  const describeElement = (element: Element) => {
+    const classes = [...element.classList].slice(0, 3).join(".");
+    return classes
+      ? `${element.tagName.toLowerCase()}.${classes}`
+      : element.tagName.toLowerCase();
+  };
+  const scene = document.querySelector("#opening-product-story .cli-story");
+  if (!scene) {
+    return ["opening scene not found"];
+  }
+  for (const check of checks) {
+    const card = scene.querySelector(check.selector);
+    if (!(card instanceof HTMLElement)) {
+      issues.push(`${check.name}: card not found`);
+      continue;
+    }
+    const cardRect = card.getBoundingClientRect();
+    if (cardRect.width === 0 || cardRect.height === 0) {
+      issues.push(`${check.name}: card has no box`);
+      continue;
+    }
+    for (const element of [card, ...card.querySelectorAll("*")]) {
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+      const style = getComputedStyle(element);
+      if (style.display === "none") {
+        continue;
+      }
+      // No vertical overflow inside any clipping box. Line-clamped text
+      // hides trailing lines by design and is exempt; single-line truncate
+      // only clips horizontally, which this check does not look at.
+      const clipsVertically = ["auto", "clip", "hidden", "scroll"].includes(
+        style.overflowY,
+      );
+      const isLineClamped =
+        style.webkitLineClamp !== "" && style.webkitLineClamp !== "none";
+      if (
+        clipsVertically &&
+        !isLineClamped &&
+        element.scrollHeight > element.clientHeight + TOLERANCE_PX
+      ) {
+        issues.push(
+          `${check.name}: ${describeElement(element)} overflows vertically ` +
+            `(scrollHeight ${element.scrollHeight} > clientHeight ${element.clientHeight})`,
+        );
+      }
+      // Every rendered box stays inside the card box: content escaping the
+      // card is exactly what the card's overflow clip cuts mid-glyph.
+      const rect = element.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) {
+        continue;
+      }
+      if (
+        rect.top < cardRect.top - TOLERANCE_PX ||
+        rect.bottom > cardRect.bottom + TOLERANCE_PX ||
+        rect.left < cardRect.left - TOLERANCE_PX ||
+        rect.right > cardRect.right + TOLERANCE_PX
+      ) {
+        issues.push(
+          `${check.name}: ${describeElement(element)} escapes the card box ` +
+            `(element ${Math.round(rect.top)}..${Math.round(rect.bottom)} vs ` +
+            `card ${Math.round(cardRect.top)}..${Math.round(cardRect.bottom)})`,
+        );
+      }
+    }
+    if (check.text) {
+      for (const text of card.querySelectorAll(check.text.selector)) {
+        const fontSize = Number.parseFloat(getComputedStyle(text).fontSize);
+        if (fontSize < check.text.minFontPx) {
+          issues.push(
+            `${check.name}: ${describeElement(text)} font-size ${fontSize}px ` +
+              `is below the ${check.text.minFontPx}px readability floor`,
+          );
+        }
+      }
+    }
+  }
+  return issues;
+};
+
+for (const viewport of CARD_FIT_VIEWPORTS) {
+  test(`companion cards fit their boxes at ${viewport.width}x${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    // Layout is what is under test; reduced motion removes the entry/typing
+    // animations whose transient transforms would otherwise perturb the
+    // scrollHeight/rect reads mid-animation.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/", { waitUntil: "networkidle" });
+    const story = page.locator("#opening-product-story");
+    await expect(story.locator(".cli-client")).toBeVisible();
+    // Settle the scroll-staged reveal at its resting state (the reveal
+    // timelines end by 480px of root scroll). "instant" opts out of the
+    // page's smooth scrolling so the poll below never races the animation.
+    await page.evaluate(() =>
+      window.scrollTo({ top: 600, behavior: "instant" }),
+    );
+    await expect
+      .poll(() => page.evaluate(readCompanionCardFit, CARD_FIT_CHECKS), {
+        message: "companion card content fits its card box",
+        timeout: 20_000,
+      })
+      .toEqual([]);
+  });
+}
+
 test("opening scene stays healthy after a navigation round-trip", async ({
   page,
 }) => {
@@ -86,9 +246,17 @@ test("opening scene stays healthy after a navigation round-trip", async ({
     Reflect.set(window, marker, true);
   }, SOFT_NAV_MARKER);
 
-  // Navigate via the header product menu so the scroll position stays at the
-  // top and the scene is in the viewport again right after going back.
-  await page.locator("summary.nav-link").first().click();
+  // Navigate via the header product menu so the scene is near the viewport
+  // again right after going back. The menu interaction expects the header's
+  // top-of-page state, so undo the health check's reveal scroll first. The
+  // menu is hover-open on fine pointers (a click on the summary would toggle
+  // the hover-opened dropdown straight back shut), so hover it instead.
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.locator("summary.nav-link").first().hover();
+  await expect(page.locator("details.nav-dropdown").first()).toHaveAttribute(
+    "open",
+    "",
+  );
   await page.locator('.nav-mega a[href="/product/workspace"]').first().click();
   await page.waitForURL("**/product/workspace");
   await expect(page.locator("main").first()).toBeVisible();

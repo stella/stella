@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type FocusEvent,
   type PointerEvent,
   type ReactNode,
   useEffect,
@@ -42,9 +43,7 @@ export const CliMcpPreview = ({
   const [storyFrame, setStoryFrame] = useState(0);
   const [teamsLoopFrame, setTeamsLoopFrame] = useState(0);
   const [terminalLoopFrame, setTerminalLoopFrame] = useState(0);
-  const [selectedWindow, setSelectedWindow] = useState<PreviewWindow | null>(
-    null,
-  );
+  const [selection, setSelection] = useState<WindowSelection | null>(null);
   const drag = useRef<DragState | null>(null);
   const selectionClearTimer = useRef<number | null>(null);
   const story = useRef<HTMLDivElement>(null);
@@ -137,15 +136,47 @@ export const CliMcpPreview = ({
     setHasManualWindowFocus(true);
   };
 
-  // Selection frame + tag: hover or keyboard focus marks a window selected;
-  // clearing is delayed so the pointer can travel to the tag below the
-  // window without the selection collapsing on the way.
-  const selectWindow = (target: PreviewWindow) => {
+  const cancelSelectionClear = () => {
     if (selectionClearTimer.current !== null) {
       clearTimeout(selectionClearTimer.current);
       selectionClearTimer.current = null;
     }
-    setSelectedWindow(target);
+  };
+
+  // Selection frame + tag: hover or keyboard focus marks a window selected.
+  // The tag anchor is measured from the window's live box relative to the
+  // scene at selection time (the Teams card is content-sized and the other
+  // boxes carry rem floors, so no static geometry map can mirror them). Drag
+  // offsets are subtracted here and re-applied by the tag's `translate`, so
+  // the tag follows the window while it is dragged. Clearing is delayed so
+  // the pointer can travel to the tag below the window without the selection
+  // collapsing on the way.
+  const selectWindow = (target: PreviewWindow, element: HTMLElement) => {
+    cancelSelectionClear();
+    const scene = story.current;
+    const windowElement = element.closest(".mac-window");
+    if (!scene || !(windowElement instanceof HTMLElement)) {
+      return;
+    }
+    const sceneRect = scene.getBoundingClientRect();
+    const windowRect = windowElement.getBoundingClientRect();
+    const dragOffset =
+      target === "workspace" ? { x: 0, y: 0 } : positions[target];
+    setSelection({
+      window: target,
+      tag: {
+        left:
+          windowRect.left -
+          sceneRect.left +
+          windowRect.width / 2 -
+          dragOffset.x,
+        top:
+          windowRect.bottom -
+          sceneRect.top +
+          DISCOVER_TAG_GAP_PX -
+          dragOffset.y,
+      },
+    });
   };
 
   const scheduleSelectionClear = (target: PreviewWindow) => {
@@ -154,7 +185,7 @@ export const CliMcpPreview = ({
     }
     selectionClearTimer.current = window.setTimeout(() => {
       selectionClearTimer.current = null;
-      setSelectedWindow((current) => (current === target ? null : current));
+      setSelection((current) => (current?.window === target ? null : current));
     }, 200);
   };
 
@@ -259,14 +290,21 @@ export const CliMcpPreview = ({
         className="cli-story-reflection absolute inset-0"
       />
 
+      {/* Companion box model: text inside the windows uses clamp() with
+          absolute rem floors (readability), so the boxes must not shrink as
+          pure scene percentages. Widths are clamp(rem floor, scene %, rem
+          cap); the Teams card has no recording aspect to preserve, so its
+          height is content-driven and can never clip the exchange. */}
       {showCompanions && (
         <div
           className={cn(
-            "cli-client mac-window group bg-card absolute start-[2.5%] top-[8%] hidden h-[24%] w-[15.5%] min-w-0 overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] sm:block",
-            discoverLabel && selectedWindow === "client" && "cli-selected",
+            "cli-client mac-window group bg-card absolute start-[2.5%] top-[8%] hidden w-[clamp(11rem,15.5%,18.5rem)] min-w-0 overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] sm:block",
+            discoverLabel && selection?.window === "client" && "cli-selected",
           )}
           onPointerDown={() => activateWindow("client")}
-          onPointerEnter={() => selectWindow("client")}
+          onPointerEnter={(event) =>
+            selectWindow("client", event.currentTarget)
+          }
           onPointerLeave={() => scheduleSelectionClear("client")}
           style={{
             borderColor:
@@ -301,7 +339,7 @@ export const CliMcpPreview = ({
                 : undefined
             }
             onBlur={() => scheduleSelectionClear("client")}
-            onFocus={() => selectWindow("client")}
+            onFocus={(event) => selectWindow("client", event.currentTarget)}
           >
             <TeamsWindow
               showAnswer={!isAutoPlaying || teamsLoopFrame % 2 === 1}
@@ -315,10 +353,12 @@ export const CliMcpPreview = ({
         aria-pressed={focusedWindow === "workspace"}
         className={cn(
           "cli-main-window mac-window group bg-card absolute start-[18.5%] top-[8%] h-[81%] w-[63%] overflow-hidden border p-0 text-start shadow-[0_42px_110px_-54px_rgba(15,23,42,.5)]",
-          discoverLabel && selectedWindow === "workspace" && "cli-selected",
+          discoverLabel && selection?.window === "workspace" && "cli-selected",
         )}
         onPointerDown={() => activateWindow("workspace")}
-        onPointerEnter={() => selectWindow("workspace")}
+        onPointerEnter={(event) =>
+          selectWindow("workspace", event.currentTarget)
+        }
         onPointerLeave={() => scheduleSelectionClear("workspace")}
         style={{
           borderColor: "color-mix(in srgb, var(--foreground) 11%, transparent)",
@@ -341,7 +381,7 @@ export const CliMcpPreview = ({
               : undefined
           }
           onBlur={() => scheduleSelectionClear("workspace")}
-          onFocus={() => selectWindow("workspace")}
+          onFocus={(event) => selectWindow("workspace", event.currentTarget)}
         >
           <RecordedStellaScene
             isActive={isInViewport}
@@ -351,17 +391,25 @@ export const CliMcpPreview = ({
         </WindowBodyLink>
       </div>
 
+      {/* Editor box: width is clamp(rem floor, scene %, rem cap) held in a
+          CSS variable (cqw = scene width, the .cli-story container). The
+          recording is portrait ~0.869:1 (see RecordedStellaScene), so the
+          height is derived from that width: content height = width / 0.869,
+          plus the titlebar. This keeps the recording aspect exact at every
+          scene size instead of only at the % geometry's design width. */}
       {showCompanions && (
         <div
           aria-label="Bring stella Editor to front"
           aria-pressed={focusedWindow === "source"}
           className={cn(
-            "cli-response mac-window group bg-card absolute end-[2%] top-[15%] hidden h-[42%] w-[16%] overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] sm:block",
-            discoverLabel && selectedWindow === "source" && "cli-selected",
+            "cli-response mac-window group bg-card absolute end-[2%] top-[15%] hidden h-[calc(var(--cli-editor-width)/0.869_+_var(--mac-titlebar-height))] w-[var(--cli-editor-width)] overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] [--cli-editor-width:clamp(12rem,16cqw,19.5rem)] sm:block",
+            discoverLabel && selection?.window === "source" && "cli-selected",
           )}
           key={activeScenario.id}
           onPointerDown={() => activateWindow("source")}
-          onPointerEnter={() => selectWindow("source")}
+          onPointerEnter={(event) =>
+            selectWindow("source", event.currentTarget)
+          }
           onPointerLeave={() => scheduleSelectionClear("source")}
           style={{
             borderColor:
@@ -393,7 +441,7 @@ export const CliMcpPreview = ({
                 : undefined
             }
             onBlur={() => scheduleSelectionClear("source")}
-            onFocus={() => selectWindow("source")}
+            onFocus={(event) => selectWindow("source", event.currentTarget)}
           >
             <RecordedStellaScene
               crop="document"
@@ -405,17 +453,26 @@ export const CliMcpPreview = ({
         </div>
       )}
 
+      {/* Terminal box: keeps the flex layout with a width clamp and a rem
+          min-height floor sized so titlebar + command box + full results
+          (steps, summary, usage) + idle prompt + status bar fit at their
+          clamp() caps (~271px; the vw/font clamps all cap out by ~1700px
+          viewport, so the content needs at most that). Under real height
+          pressure the results block still clips first (min-h-0 +
+          overflow-hidden below) instead of overlapping the idle prompt. */}
       {showCompanions && (
         <div
           aria-label="Bring stella terminal to front"
           aria-live="polite"
           aria-pressed={focusedWindow === "terminal"}
           className={cn(
-            "cli-window mac-window group absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] sm:start-[4.5%] sm:bottom-[14%] sm:h-[31%] sm:w-[14%]",
-            discoverLabel && selectedWindow === "terminal" && "cli-selected",
+            "cli-window mac-window group absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] sm:start-[4.5%] sm:bottom-[14%] sm:h-[31%] sm:min-h-[17rem] sm:w-[clamp(12rem,14%,17.5rem)]",
+            discoverLabel && selection?.window === "terminal" && "cli-selected",
           )}
           onPointerDown={() => activateWindow("terminal")}
-          onPointerEnter={() => selectWindow("terminal")}
+          onPointerEnter={(event) =>
+            selectWindow("terminal", event.currentTarget)
+          }
           onPointerLeave={() => scheduleSelectionClear("terminal")}
           style={{
             background: "var(--terminal-chrome)",
@@ -451,7 +508,7 @@ export const CliMcpPreview = ({
             }
             key={`${activeScenario.id}-${terminalLoopFrame}`}
             onBlur={() => scheduleSelectionClear("terminal")}
-            onFocus={() => selectWindow("terminal")}
+            onFocus={(event) => selectWindow("terminal", event.currentTarget)}
             style={{
               background: "var(--terminal-background)",
               fontVariantLigatures: "none",
@@ -563,27 +620,27 @@ export const CliMcpPreview = ({
         </div>
       )}
 
-      {discoverLabel && selectedWindow && (
+      {discoverLabel && selection && (
         <DiscoverTag
           dragOffset={
-            selectedWindow === "workspace"
+            selection.window === "workspace"
               ? undefined
-              : positions[selectedWindow]
+              : positions[selection.window]
           }
           href={
-            selectedWindow === "workspace"
+            selection.window === "workspace"
               ? DISCOVER_PRODUCTS[activeSceneId].href
-              : DISCOVER_WINDOW_PRODUCTS[selectedWindow].href
+              : DISCOVER_WINDOW_PRODUCTS[selection.window].href
           }
           label={discoverLabel}
-          onPointerEnter={() => selectWindow(selectedWindow)}
-          onPointerLeave={() => scheduleSelectionClear(selectedWindow)}
+          onPointerEnter={cancelSelectionClear}
+          onPointerLeave={() => scheduleSelectionClear(selection.window)}
+          position={selection.tag}
           productName={
-            selectedWindow === "workspace"
+            selection.window === "workspace"
               ? DISCOVER_PRODUCTS[activeSceneId].name
-              : DISCOVER_WINDOW_PRODUCTS[selectedWindow].name
+              : DISCOVER_WINDOW_PRODUCTS[selection.window].name
           }
-          window={selectedWindow}
         />
       )}
     </div>
@@ -790,6 +847,13 @@ const STORY_PHASES = openingProductStory;
 // backdrop and stays fixed.
 type DraggableWindow = Exclude<PreviewWindow, "workspace">;
 
+type WindowSelection = {
+  window: PreviewWindow;
+  // Tag anchor measured relative to the scene at selection time; see
+  // selectWindow.
+  tag: { left: number; top: number };
+};
+
 type DragState = {
   window: DraggableWindow;
   pointerId: number;
@@ -892,20 +956,11 @@ const DISCOVER_PRODUCTS: Record<
   templates: { href: "/product/templates", name: "Templates" },
 };
 
-// Geometry for the selection tag rendered UNDER each window. The windows
-// clip their children (overflow-hidden), so the tag is a scene-level
-// sibling; these values mirror the windows' inset/size classes below and
-// must move together with them.
-const DISCOVER_TAG_POSITIONS: Record<PreviewWindow, CSSProperties> = {
-  // Teams: centred on start 2.5% + half of 15.5%; below top 8% + 24% height.
-  client: { insetInlineStart: "10.25%", top: "calc(32% + 0.55rem)" },
-  // Main: centred on start 18.5% + half of 63%; below top 8% + 81% height.
-  workspace: { insetInlineStart: "50%", top: "calc(89% + 0.55rem)" },
-  // Editor: centred on end 2% + half of 16%; below top 15% + 42% height.
-  source: { insetInlineEnd: "10%", top: "calc(57% + 0.55rem)" },
-  // Terminal (sm layout): start 4.5% + half of 14%; bottom edge at 14%.
-  terminal: { insetInlineStart: "11.5%", bottom: "calc(14% - 2.7rem)" },
-};
+// Gap between a selected window's bottom edge and its tag; the tag anchor
+// itself is measured from the window's live box in selectWindow, because the
+// windows clip their children (overflow-hidden) and the tag must render as a
+// scene-level sibling.
+const DISCOVER_TAG_GAP_PX = 9;
 
 // Companion windows map to fixed products; the main window's product
 // follows the active scene via DISCOVER_PRODUCTS.
@@ -923,7 +978,7 @@ type WindowBodyLinkProps = {
   className?: string;
   discover?: { href: string; label: string };
   onBlur: () => void;
-  onFocus: () => void;
+  onFocus: (event: FocusEvent<HTMLElement>) => void;
   style?: CSSProperties;
 };
 
@@ -968,8 +1023,11 @@ type DiscoverTagProps = {
   label: string;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
+  // Measured anchor: the horizontal centre of the window's bottom edge,
+  // relative to the scene, without the drag offset (re-applied via
+  // `translate`). Physical left/top is safe: the scene root is dir="ltr".
+  position: { left: number; top: number };
   productName: string;
-  window: PreviewWindow;
 };
 
 // Selection tag: rendered below the selected window in the style of a
@@ -981,8 +1039,8 @@ const DiscoverTag = ({
   label,
   onPointerEnter,
   onPointerLeave,
+  position,
   productName,
-  window,
 }: DiscoverTagProps) => (
   <a
     onPointerEnter={onPointerEnter}
@@ -991,14 +1049,12 @@ const DiscoverTag = ({
     dir="auto"
     href={href}
     style={{
-      ...DISCOVER_TAG_POSITIONS[window],
+      left: position.left,
+      top: position.top,
       background: "var(--primary)",
       color: "var(--primary-foreground)",
       translate: dragOffset ? `${dragOffset.x}px ${dragOffset.y}px` : undefined,
-      transform:
-        DISCOVER_TAG_POSITIONS[window].insetInlineEnd === undefined
-          ? "translateX(-50%)"
-          : "translateX(50%)",
+      transform: "translateX(-50%)",
     }}
   >
     {label} {productName}
@@ -1349,6 +1405,9 @@ const CLI_STYLES = `
     inset: auto auto 4% 4%;
     width: 48%;
     height: 72%;
+    /* The thumbnail pane is far smaller than any real scene; the sm rem
+       min-height floor must not apply here. */
+    min-height: 0;
   }
   .cli-story-scene-only .cli-client,
   .cli-story-scene-only .cli-response,
