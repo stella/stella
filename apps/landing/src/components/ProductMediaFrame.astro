@@ -1,7 +1,7 @@
 ---
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { ProductMedia } from "../data/products/types";
+import type { FrameAccent, FrameVariant, ProductMedia } from "../data/products/types";
 import { productStoryThumbnails } from "../data/product-story";
 import MediaSkeleton from "./MediaSkeleton.astro";
 import ThemeImage from "./ThemeImage.astro";
@@ -13,9 +13,24 @@ type Props = {
   compact?: boolean;
   deferThemeImage?: boolean;
   thumbnail?: boolean;
+  /**
+   * Frame background recipe; "wash" keeps the neutral glass gradient and is
+   * the default (menu thumbnails always stay on it for calm).
+   */
+  variant?: FrameVariant;
+  /** Accent hue for the "bloom" glow, from `frameAccents`. */
+  accent?: FrameAccent;
 };
-const { media, compact = false, deferThemeImage = false, thumbnail = false } = Astro.props;
+const {
+  media,
+  compact = false,
+  deferThemeImage = false,
+  thumbnail = false,
+  variant = "wash",
+  accent,
+} = Astro.props;
 const aspect = media.aspect ?? "16 / 9";
+const accentStyle = accent === undefined ? "" : `; --frame-accent: ${accent}`;
 
 // A video slot upgrades from skeleton to <video> the moment its file lands in
 // public/. The build's cwd is the Astro project dir (apps/landing), so resolve
@@ -29,12 +44,22 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
 <div
   class:list={[
     "product-media relative overflow-hidden",
+    variant === "bloom" && "frame-bloom",
     compact
       ? "rounded-xl p-1.5"
       : "rounded-[2rem] p-[clamp(1rem,3vw,2.5rem)]",
   ]}
-  style={`aspect-ratio: ${aspect}; background: linear-gradient(135deg, color-mix(in srgb, var(--card) 88%, var(--background)), color-mix(in srgb, var(--muted) 52%, var(--background))); box-shadow: inset 0 1px 0 color-mix(in srgb, white 22%, transparent)`}
+  style={`aspect-ratio: ${aspect}${accentStyle}`}
 >
+  {
+    variant === "ripple" && (
+      <div class="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div class="frame-ripple-layer frame-ripple-light" />
+        <div class="frame-ripple-layer frame-ripple-dark" />
+      </div>
+    )
+  }
+
   <div
     class="pointer-events-none absolute -top-1/2 start-[8%] z-10 h-full w-[42%] rotate-[18deg] rounded-full blur-3xl"
     style="background: color-mix(in srgb, white 20%, transparent)"
@@ -124,3 +149,65 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
 
   {media.type === "placeholder" && <MediaSkeleton note={media.note} />}
 </div>
+
+<style>
+  /* Neutral glass base shared by every recipe; "wash" is exactly this. The
+     variants layer on top of it so the frame never loses its glass footing. */
+  .product-media {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--card) 88%, var(--background)),
+      color-mix(in srgb, var(--muted) 52%, var(--background))
+    );
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 22%, transparent);
+  }
+
+  /* "bloom": a radial accent glow anchored to the frame's end corner via
+     logical insets, so it mirrors correctly under RTL like the sheen does.
+     The accent stays at a low mix percentage; it is a background, never a
+     competitor to the screenshot. ::before paints below every positioned
+     child (tree order), keeping the glow under the media. */
+  .frame-bloom::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset-block-start: -22%;
+    inset-inline-end: -14%;
+    inline-size: 62%;
+    block-size: 78%;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in srgb, var(--frame-accent, var(--auth-gradient-end)) 12%, transparent),
+      transparent
+    );
+  }
+
+  /* "ripple": a faint excerpt of the hero gradient artwork under the glass,
+     theme-switched with the same light/dark opacity toggle the hero and the
+     footer art use. Static background-image only; no animation in frames. */
+  .frame-ripple-layer {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center 30%;
+    transition: opacity 500ms ease;
+  }
+
+  .frame-ripple-light {
+    background-image: url("/images/gradients/hero-light.svg");
+    opacity: 0.4;
+  }
+
+  .frame-ripple-dark {
+    background-image: url("/images/gradients/hero-dark.svg");
+    opacity: 0;
+  }
+
+  :global(.dark) .frame-ripple-light {
+    opacity: 0;
+  }
+
+  :global(.dark) .frame-ripple-dark {
+    opacity: 0.35;
+  }
+</style>

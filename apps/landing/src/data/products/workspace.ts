@@ -1,4 +1,4 @@
-import type { Product } from "./types";
+import { frameAccents, type Product } from "./types";
 
 // The live preview is assembled from shared tokens and product UI components,
 // so it evolves with the application instead of depending on screenshots.
@@ -16,6 +16,9 @@ export const workspace: Product = {
     sceneId: "workspace",
     aspect: "16 / 10",
   },
+  // Frame rhythm down the page: bloom, wash, bloom, ripple.
+  heroFrameVariant: "bloom",
+  frameAccent: frameAccents.iris,
   quickAnswer: {
     question: "What is the stella workspace?",
     answer:
@@ -60,6 +63,7 @@ export const workspace: Product = {
         sceneId: "review",
         aspect: "16 / 10",
       },
+      frameVariant: "wash",
     },
     {
       heading: "A bridge to local Office editing",
@@ -73,6 +77,7 @@ export const workspace: Product = {
         sceneId: "editor",
         aspect: "16 / 10",
       },
+      frameVariant: "bloom",
     },
     {
       heading: "Connect stella to your tools",
@@ -87,6 +92,7 @@ export const workspace: Product = {
         showCompanions: true,
         aspect: "2.03",
       },
+      frameVariant: "ripple",
     },
   ],
   faqs: [

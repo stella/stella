@@ -1,4 +1,4 @@
-import type { Product } from "./types";
+import { frameAccents, type Product } from "./types";
 
 // The review hero reuses the same deterministic scene as the opening story.
 export const tabularReview: Product = {
@@ -15,6 +15,9 @@ export const tabularReview: Product = {
     sceneId: "review",
     aspect: "16 / 10",
   },
+  // Frame rhythm down the page: bloom, wash, ripple, bloom.
+  heroFrameVariant: "bloom",
+  frameAccent: frameAccents.ember,
   quickAnswer: {
     question: "How does Tabular Review work?",
     answer:
@@ -58,6 +61,7 @@ export const tabularReview: Product = {
         type: "preview",
         key: "review-grid",
       },
+      frameVariant: "wash",
     },
     {
       heading: "Every answer traces back to the text",
@@ -71,6 +75,7 @@ export const tabularReview: Product = {
         sceneId: "review",
         aspect: "16 / 10",
       },
+      frameVariant: "ripple",
     },
     {
       heading: "It lives where the work lives",
@@ -84,6 +89,7 @@ export const tabularReview: Product = {
         sceneId: "workspace",
         aspect: "16 / 10",
       },
+      frameVariant: "bloom",
     },
   ],
   faqs: [

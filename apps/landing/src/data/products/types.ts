@@ -33,12 +33,36 @@ export type ProductMedia =
       aspect?: string;
     };
 
+// Frame recipes for ProductMediaFrame. "wash" is the neutral diagonal glass
+// gradient (the default everywhere, including menu thumbnails); "bloom" adds a
+// low-percentage radial accent glow in the frame's end corner; "ripple" lays a
+// faint excerpt of the hero gradient artwork under the glass. Pages assign
+// variants so no two adjacent frames on one page share a recipe.
+export type FrameVariant = "wash" | "bloom" | "ripple";
+
+// Accent hues reused from scenes and tokens that already exist in the landing;
+// no invented colors. Keyed by pillar mood, applied per product.
+export const frameAccents = {
+  // Agent scene chip color (AGENT_ACCENT in CliMcpPreview).
+  ember: "#d97757",
+  // Teams companion window accent (--teams-accent in CliMcpPreview).
+  iris: "#6264a7",
+  // Terminal accent token (global.css).
+  sky: "var(--terminal-accent)",
+  // Theme-switched hero/auth gradient endpoint token (global.css).
+  tide: "var(--auth-gradient-end)",
+} as const;
+
+export type FrameAccent = (typeof frameAccents)[keyof typeof frameAccents];
+
 export type ProductCapability = { title: string; body: string };
 
 export type ProductSection = {
   heading: string;
   bullets: readonly string[];
   media: ProductMedia;
+  /** Frame recipe for this section's media frame; defaults to "wash". */
+  frameVariant?: FrameVariant;
 };
 
 export type ProductFaq = { question: string; answer: string };
@@ -65,6 +89,13 @@ export type Product = {
    */
   metaDescription?: string;
   hero: ProductMedia;
+  /** Frame recipe for the hero media frame; defaults to "wash". */
+  heroFrameVariant?: FrameVariant;
+  /**
+   * Accent hue for this product's "bloom" frames, from `frameAccents`.
+   * Bloom frames without an accent fall back to the tide token.
+   */
+  frameAccent?: FrameAccent;
   quickAnswer: ProductFaq;
   capabilities: readonly ProductCapability[];
   sections: readonly ProductSection[];

@@ -1,4 +1,4 @@
-import type { Product } from "./types";
+import { frameAccents, type Product } from "./types";
 
 export const editor: Product = {
   slug: "editor",
@@ -14,6 +14,9 @@ export const editor: Product = {
     sceneId: "editor",
     aspect: "16 / 10",
   },
+  // Frame rhythm down the page: bloom, ripple, bloom.
+  heroFrameVariant: "bloom",
+  frameAccent: frameAccents.iris,
   quickAnswer: {
     question: "Can I edit Word documents in stella?",
     answer:
@@ -51,6 +54,7 @@ export const editor: Product = {
         sceneId: "editor",
         aspect: "16 / 10",
       },
+      frameVariant: "ripple",
     },
     {
       heading: "Connected to the rest of the matter",
@@ -65,6 +69,7 @@ export const editor: Product = {
         sceneId: "workspace",
         aspect: "16 / 10",
       },
+      frameVariant: "bloom",
     },
   ],
   faqs: [

@@ -1,4 +1,5 @@
 ---
+import { type FrameVariant, frameAccents } from "../data/products/types";
 import type { TranslationKey } from "../data/site-nav";
 import { defaultLocale, isLocale } from "../i18n/config";
 import { getTranslations } from "../i18n/utils";
@@ -51,6 +52,16 @@ const chapters = [
     ],
   },
 ] as const satisfies readonly StoryChapter[];
+
+// Deliberate frame-recipe assignment: three chapters, three recipes, so no
+// two adjacent homepage visuals repeat a background. The agent chapter blooms
+// with the agent scene's own ember accent; the data chapter carries a faint
+// ripple of the hero artwork; the workspace chapter keeps the neutral wash.
+const chapterFrameVariants = {
+  workspace: "wash",
+  agent: "bloom",
+  data: "ripple",
+} as const satisfies Record<StoryChapter["id"], FrameVariant>;
 
 const proofItems = [
   { titleKey: "story.proofOpenSourceTitle", bodyKey: "story.proofOpenSourceBody" },
@@ -136,12 +147,24 @@ const proofItems = [
 
             <div
               data-reveal
-              style={`--reveal-delay: ${120 + index * 30}ms`}
+              style={`--reveal-delay: ${120 + index * 30}ms${
+                chapterFrameVariants[chapter.id] === "bloom"
+                  ? `; --frame-accent: ${frameAccents.ember}`
+                  : ""
+              }`}
               class:list={[
                 "product-chapter-visual lg:col-span-8",
+                chapterFrameVariants[chapter.id] === "bloom" && "chapter-frame-bloom",
+                chapterFrameVariants[chapter.id] === "ripple" && "chapter-frame-ripple",
                 index % 2 === 1 ? "lg:col-start-1 lg:row-start-1" : "lg:col-start-5",
               ]}
             >
+              {chapterFrameVariants[chapter.id] === "ripple" && (
+                <div class="pointer-events-none absolute inset-0" aria-hidden="true">
+                  <div class="chapter-ripple-layer chapter-ripple-light" />
+                  <div class="chapter-ripple-layer chapter-ripple-dark" />
+                </div>
+              )}
               {chapter.id === "workspace" && (
                 <div class="story-media story-media-workspace">
                   <CliMcpPreview
@@ -339,6 +362,70 @@ const proofItems = [
       transparent 72%,
       color-mix(in srgb, var(--auth-gradient-end) 10%, transparent)
     );
+  }
+
+  /* "bloom" chapter recipe: a radial accent glow in the frame's end corner,
+     via logical insets so it mirrors under RTL. ::after paints above the
+     sheen (tree order) but below .story-media (z-index: 1). The same glow
+     repeats inside the media surface, behind the floating scene windows, so
+     the accent reads through the scene, always at a low mix percentage. */
+  .chapter-frame-bloom::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset-block-start: -20%;
+    inset-inline-end: -12%;
+    inline-size: 58%;
+    block-size: 76%;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in srgb, var(--frame-accent, var(--auth-gradient-end)) 12%, transparent),
+      transparent
+    );
+  }
+
+  .chapter-frame-bloom .story-media::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset-block-start: -18%;
+    inset-inline-end: -10%;
+    inline-size: 58%;
+    block-size: 80%;
+    background: radial-gradient(
+      closest-side,
+      color-mix(in srgb, var(--frame-accent, var(--auth-gradient-end)) 8%, transparent),
+      transparent
+    );
+  }
+
+  /* "ripple" chapter recipe: a faint excerpt of the hero gradient artwork in
+     the frame ring, theme-switched with the same light/dark opacity toggle
+     the hero and footer art use. Static image, no animation. */
+  .chapter-ripple-layer {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center 30%;
+    transition: opacity 500ms ease;
+  }
+
+  .chapter-ripple-light {
+    background-image: url("/images/gradients/hero-light.svg");
+    opacity: 0.4;
+  }
+
+  .chapter-ripple-dark {
+    background-image: url("/images/gradients/hero-dark.svg");
+    opacity: 0;
+  }
+
+  :global(.dark) .chapter-ripple-light {
+    opacity: 0;
+  }
+
+  :global(.dark) .chapter-ripple-dark {
+    opacity: 0.35;
   }
 
   .story-link {

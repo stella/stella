@@ -1,4 +1,4 @@
-import type { Product } from "./types";
+import { frameAccents, type Product } from "./types";
 
 // Claims stay anchored to the shared WASM-backed anonymization pipeline and
 // the product surfaces that expose it.
@@ -18,6 +18,9 @@ export const anonymization: Product = {
     alt: "A redacted legal due diligence extract open in stella",
     aspect: "16 / 10",
   },
+  // Frame rhythm down the page: ripple, bloom, wash.
+  heroFrameVariant: "ripple",
+  frameAccent: frameAccents.tide,
   quickAnswer: {
     question: "What is anonymization in stella?",
     answer:
@@ -53,6 +56,7 @@ export const anonymization: Product = {
         type: "preview",
         key: "anonymization",
       },
+      frameVariant: "bloom",
     },
     {
       heading: "Part of the workspace, not a separate tool",
@@ -68,6 +72,7 @@ export const anonymization: Product = {
         alt: "A redacted due diligence extract open in the stella editor",
         aspect: "16 / 10",
       },
+      frameVariant: "wash",
     },
   ],
   faqs: [

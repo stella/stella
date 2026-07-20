@@ -1,4 +1,4 @@
-import type { Product } from "./types";
+import { frameAccents, type Product } from "./types";
 
 // The hero reuses the same agent scene as the opening product story.
 export const agent: Product = {
@@ -15,6 +15,9 @@ export const agent: Product = {
     sceneId: "agent",
     aspect: "16 / 10",
   },
+  // Frame rhythm down the page: bloom, ripple, bloom, wash.
+  heroFrameVariant: "bloom",
+  frameAccent: frameAccents.ember,
   quickAnswer: {
     question: "What can the AI agent do?",
     answer:
@@ -59,6 +62,7 @@ export const agent: Product = {
         sceneId: "agent",
         aspect: "16 / 10",
       },
+      frameVariant: "ripple",
     },
     {
       heading: "You stay in control",
@@ -72,6 +76,7 @@ export const agent: Product = {
         sceneId: "agent",
         aspect: "16 / 10",
       },
+      frameVariant: "bloom",
     },
     {
       heading: "Extend it with skills and connectors",
@@ -86,6 +91,7 @@ export const agent: Product = {
         showCompanions: true,
         aspect: "2.03",
       },
+      frameVariant: "wash",
     },
   ],
   faqs: [

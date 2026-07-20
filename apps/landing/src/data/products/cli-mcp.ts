@@ -1,4 +1,4 @@
-import type { Product } from "./types";
+import { frameAccents, type Product } from "./types";
 
 export const cliMcp: Product = {
   slug: "cli-mcp",
@@ -15,6 +15,9 @@ export const cliMcp: Product = {
     showCompanions: true,
     aspect: "2.03",
   },
+  // Frame rhythm down the page: bloom, wash, bloom.
+  heroFrameVariant: "bloom",
+  frameAccent: frameAccents.sky,
   quickAnswer: {
     question: "What are the stella CLI and MCP server?",
     answer:
@@ -60,6 +63,7 @@ export const cliMcp: Product = {
         showCompanions: true,
         aspect: "2.03",
       },
+      frameVariant: "wash",
     },
     {
       heading: "The same capabilities through MCP",
@@ -74,6 +78,7 @@ export const cliMcp: Product = {
         showCompanions: true,
         aspect: "2.03",
       },
+      frameVariant: "bloom",
     },
   ],
   faqs: [

@@ -76,7 +76,11 @@ const faqJsonLd = {
             style="--reveal-delay: 240ms"
             class="mx-auto mt-10 max-w-4xl"
           >
-            <ProductMediaFrame media={product.hero} />
+            <ProductMediaFrame
+              media={product.hero}
+              variant={product.heroFrameVariant}
+              accent={product.frameAccent}
+            />
           </div>
         </div>
       </section>
@@ -255,7 +259,12 @@ const faqJsonLd = {
                 </ul>
               </div>
               <div data-reveal style={`--reveal-delay: ${80 + index * 30}ms`}>
-                <ProductMediaFrame media={section.media} compact />
+                <ProductMediaFrame
+                  media={section.media}
+                  compact
+                  variant={section.frameVariant}
+                  accent={product.frameAccent}
+                />
               </div>
             </div>
           </section>

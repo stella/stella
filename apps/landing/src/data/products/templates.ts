@@ -1,4 +1,4 @@
-import type { Product } from "./types";
+import { frameAccents, type Product } from "./types";
 
 // Templates shipped in 0.5.0. Part of the Legal-intelligence pillar: build
 // reusable templates with fields and conditional clauses, and let AI fill them
@@ -20,6 +20,9 @@ export const templates: Product = {
     alt: "The seeded template library in stella",
     aspect: "16 / 10",
   },
+  // Frame rhythm down the page: ripple, bloom, wash, bloom.
+  heroFrameVariant: "ripple",
+  frameAccent: frameAccents.ember,
   quickAnswer: {
     question: "How do templates work in stella?",
     answer:
@@ -63,6 +66,7 @@ export const templates: Product = {
         type: "preview",
         key: "template-editor",
       },
+      frameVariant: "bloom",
     },
     {
       heading: "Fields and conditional logic",
@@ -75,6 +79,7 @@ export const templates: Product = {
         type: "preview",
         key: "template-editor",
       },
+      frameVariant: "wash",
     },
     {
       heading: "Edit and produce in place",
@@ -87,6 +92,7 @@ export const templates: Product = {
         type: "preview",
         key: "template-editor",
       },
+      frameVariant: "bloom",
     },
   ],
   faqs: [

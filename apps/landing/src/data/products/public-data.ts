@@ -1,4 +1,4 @@
-import type { Product } from "./types";
+import { frameAccents, type Product } from "./types";
 
 // "Public data" merges the case-law reader and the company-registry clients
 // into one data-infrastructure story, matching the README's "Data
@@ -19,6 +19,9 @@ export const publicData: Product = {
     alt: "A court decision open in the stella case-law reader",
     aspect: "16 / 10",
   },
+  // Frame rhythm down the page: bloom, ripple, wash, bloom.
+  heroFrameVariant: "bloom",
+  frameAccent: frameAccents.tide,
   quickAnswer: {
     question: "What public data does stella bring in?",
     answer:
@@ -62,6 +65,7 @@ export const publicData: Product = {
         type: "preview",
         key: "case-law-reader",
       },
+      frameVariant: "ripple",
     },
     {
       heading: "Company and commercial registries, queried from a matter",
@@ -74,6 +78,7 @@ export const publicData: Product = {
         type: "preview",
         key: "registry-lookup",
       },
+      frameVariant: "wash",
     },
     {
       heading: "One grounded source for the agent",
@@ -86,6 +91,7 @@ export const publicData: Product = {
         type: "preview",
         key: "agent-answer",
       },
+      frameVariant: "bloom",
     },
   ],
   faqs: [
