@@ -2,7 +2,6 @@ import type { ComponentType, ReactNode, SVGProps } from "react";
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  BotIcon,
   ClipboardCheckIcon,
   LayoutTemplateIcon,
   PackageIcon,
@@ -12,11 +11,11 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
+import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import type { TranslationKey } from "@/i18n/types";
 
 export const Route = createFileRoute("/_protected/knowledge/")({
@@ -28,16 +27,9 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 // on the Tools page. The sidebar entry was removed so the landing
 // doesn't advertise a deleted destination.
 type KnowledgeSection = {
-  key:
-    | "templates"
-    | "styles"
-    | "clauses"
-    | "playbooks"
-    | "workflows"
-    | "tools"
-    | "agents";
+  key: "templates" | "styles" | "clauses" | "playbooks" | "workflows" | "tools";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  to?:
+  to:
     | "/knowledge/templates"
     | "/knowledge/styles"
     | "/knowledge/clauses"
@@ -51,7 +43,6 @@ type KnowledgeSection = {
     | "knowledge.sections.templates.title"
     | "styleSets.title"
     | "knowledge.sections.tools.title"
-    | "knowledge.sections.agents.title"
     | "common.clauses"
     | "common.playbooks"
     | "common.workflows"
@@ -95,17 +86,20 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
     to: "/knowledge/workflows",
     titleKey: "common.workflows",
   },
-  { key: "agents", icon: BotIcon, titleKey: "knowledge.sections.agents.title" },
 ];
 
 function KnowledgeLanding() {
   const t = useTranslations();
   const playbooksEnabled = usePlaybooksPreviewEnabled();
+  const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canUseStyleSets = usePermissions({ styleSet: ["use"] });
 
   const sectionCards: ReactNode[] = [];
   for (const section of knowledgeSections) {
     if (section.key === "playbooks" && !playbooksEnabled) {
+      continue;
+    }
+    if (section.key === "workflows" && !workflowsEnabled) {
       continue;
     }
     if (section.key === "styles" && !canUseStyleSets) {
@@ -134,43 +128,18 @@ function KnowledgeLanding() {
       </>
     );
 
-    if (section.to) {
-      sectionCards.push(
-        <Link
-          className={cn(
-            "bg-card rounded-xl border p-5",
-            "transition-colors",
-            "hover:border-foreground/15 hover:shadow-sm",
-          )}
-          key={section.key}
-          to={section.to}
-        >
-          {cardBody}
-        </Link>,
-      );
-      continue;
-    }
-
     sectionCards.push(
-      <button
-        type="button"
+      <Link
         className={cn(
-          "bg-card rounded-xl border p-5 text-start",
-          "hover:border-foreground/15 opacity-50 transition-colors",
+          "bg-card rounded-xl border p-5",
+          "transition-colors",
+          "hover:border-foreground/15 hover:shadow-sm",
         )}
         key={section.key}
-        onClick={() => {
-          stellaToast.add({
-            title: t("common.comingSoon"),
-            type: "neutral",
-          });
-        }}
+        to={section.to}
       >
         {cardBody}
-        <p className="text-muted-foreground mt-3 text-xs">
-          {t("common.comingSoon")}
-        </p>
-      </button>,
+      </Link>,
     );
   }
 

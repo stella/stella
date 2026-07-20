@@ -1960,10 +1960,6 @@
       }
     },
     "sections": {
-      "agents": {
-        "description": "Konfigurowalni asystenci do powtarzalnej pracy",
-        "title": "Agenci"
-      },
       "caseLaw": {
         "description": "Orzeczenia sądowe i baza orzecznictwa"
       },

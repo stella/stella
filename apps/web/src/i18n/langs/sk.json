@@ -1960,10 +1960,6 @@
       }
     },
     "sections": {
-      "agents": {
-        "description": "Konfigurovateľní asistenti pre opakovanú prácu",
-        "title": "Agenti"
-      },
       "caseLaw": {
         "description": "Rozhodnutia súdov a databáza judikatúry"
       },

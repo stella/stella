@@ -1960,10 +1960,6 @@
       }
     },
     "sections": {
-      "agents": {
-        "description": "Konfigūruojami asistentai pasikartojančiam darbui",
-        "title": "Agentai"
-      },
       "caseLaw": {
         "description": "Teismų sprendimai iš įvairių jurisdikcijų"
       },

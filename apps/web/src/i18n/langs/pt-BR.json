@@ -1960,10 +1960,6 @@
       }
     },
     "sections": {
-      "agents": {
-        "description": "Assistentes configuráveis para trabalhos repetitivos",
-        "title": "Agentes"
-      },
       "caseLaw": {
         "description": "Banco de decisões judiciais e jurisprudência"
       },

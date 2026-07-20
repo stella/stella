@@ -1960,10 +1960,6 @@
       }
     },
     "sections": {
-      "agents": {
-        "description": "Konfigurálható asszisztensek ismételhető munkákhoz",
-        "title": "Ügynökök"
-      },
       "caseLaw": {
         "description": "Bírósági határozatok és joggyakorlati adatbázis"
       },

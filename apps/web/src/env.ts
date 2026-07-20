@@ -60,6 +60,7 @@ export const env = createEnv({
     // serve sitemaps for verification while staying non-indexable.
     VITE_SEO_INDEXABLE: featureFlagSchema,
     VITE_PLAYBOOKS_ENABLED: featureFlagSchema,
+    VITE_WORKFLOWS_ENABLED: featureFlagSchema,
     VITE_FEATURE_CONTACTS: featureFlagSchema,
     VITE_FEATURE_CALENDAR: featureFlagSchema,
     VITE_FEATURE_TODOS: featureFlagSchema,
