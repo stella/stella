@@ -23,7 +23,7 @@ const SOURCES: Record<string, string> = {
   Zod: "https://zod.dev/llms.txt",
   TipTap: "https://tiptap.dev/llms.txt",
   Bun: "https://bun.sh/llms.txt",
-  BetterAuth: "https://www.better-auth.com/llms.txt",
+  BetterAuth: "https://better-auth.com/llms.txt",
   Turborepo: "https://turborepo.dev/llms.txt",
   Rivet: "https://rivet.dev/llms.txt",
   PostHog: "https://posthog.com/llms.txt",
@@ -33,6 +33,10 @@ const SOURCES: Record<string, string> = {
 
 const HOST_ALIASES: Record<string, string[]> = {
   "bun.sh": ["bun.com", "www.bun.com"],
+  // Docs link to the `www.` host, which 307s back to the apex. Both must be
+  // allowlisted or the redirect hop fails `validateAllowedUrl` and the source
+  // silently indexes nothing.
+  "better-auth.com": ["www.better-auth.com"],
 };
 
 const DEFAULT_MAX_RESULTS = 3;
@@ -612,6 +616,21 @@ server.tool(
         throw new Error("Could not fetch any selected documentation indexes");
       }
 
+      // A source that fails to fetch is dropped from the search silently, which
+      // makes a broken entry indistinguishable from one that simply has no
+      // match: the index looks configured while contributing nothing. Name the
+      // casualties in the response so a misconfigured source is visible rather
+      // than inferred from suspiciously empty results.
+      const failedSourceNames = settledSources.flatMap((source, index) =>
+        source.status === "rejected"
+          ? [selectedSources[index]?.name ?? "unknown"]
+          : [],
+      );
+      const failureNote =
+        failedSourceNames.length > 0
+          ? `Note: could not fetch ${failedSourceNames.join(", ")}; results exclude ${failedSourceNames.length === 1 ? "it" : "them"}.`
+          : "";
+
       for (const { value } of successfulSources) {
         const { name, indexText, indexUrl } = value;
         for (const entry of parseIndexEntries({
@@ -652,18 +671,24 @@ server.tool(
           content: [
             {
               type: "text" as const,
-              text: `No matching documentation pages found for "${query}".`,
+              text: `No matching documentation pages found for "${query}".${failureNote.length > 0 ? ` ${failureNote}` : ""}`,
             },
           ],
         };
       }
 
+      // The note rides as its own content block rather than being appended to
+      // the JSON text: a caller parsing the results block must still get valid
+      // JSON, so the warning cannot be concatenated onto it.
       return {
         content: [
           {
             type: "text" as const,
             text: JSON.stringify(limitedResults, null, 2),
           },
+          ...(failureNote.length > 0
+            ? [{ type: "text" as const, text: failureNote }]
+            : []),
         ],
       };
     } catch (error) {
