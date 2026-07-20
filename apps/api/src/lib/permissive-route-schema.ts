@@ -13,10 +13,10 @@ import { t } from "elysia";
  * leaking the endpoint's existence (breaking 404-when-unconfigured
  * semantics) and its parameter shape. The contract enforced here:
  *
- * 1. The route schema is *permissive*: every declared property is an
- *    optional plain string and unknown properties pass through untouched,
- *    so framework validation cannot reject a request before the handler's
- *    own credential check runs.
+ * 1. The route schema is *permissive*: query/param properties are optional
+ *    plain strings, while bodies accept any root value, so framework
+ *    validation cannot reject a request before the handler's own credential
+ *    check runs.
  * 2. The handler declares its strict schema separately and applies it via
  *    {@link validatePostAuth} only after authorization has succeeded.
  *
@@ -101,17 +101,6 @@ const buildPermissiveObject = (keys: readonly string[]) => {
   return t.Object(properties, { additionalProperties: true });
 };
 
-const buildPermissiveBodyObject = (keys: readonly string[]) => {
-  const properties: Record<string, TSchema> = {};
-  for (const key of keys) {
-    // Body credential fields must accept every JSON value here. Their real
-    // types are checked by the handler after authorization; using t.String()
-    // would let arrays, numbers, or booleans trigger a pre-auth 422.
-    properties[key] = t.Optional(t.Any());
-  }
-  return t.Object(properties, { additionalProperties: true });
-};
-
 /**
  * Permissive schema for a token route's `query` or `params` slot: every
  * listed key is an optional plain string, everything else passes through.
@@ -125,22 +114,22 @@ export const permissiveRouteSchema = <const TKeys extends readonly string[]>({
   );
 
 /**
- * Permissive schema for a token route's `body` slot. Root-optional so a
- * missing or unparseable body cannot produce a framework validation error;
- * the handler sees `null`/`undefined` and fails its own credential check
- * instead.
+ * Permissive schema for a token route's `body` slot. The runtime schema
+ * accepts every root value so missing, malformed, or non-object probes cannot
+ * produce a framework validation error. The unsafe static type still exposes
+ * only the fields each handler reads; strict shape checks happen post-auth.
  */
 export const permissiveBodySchema = <
   const TStringKeys extends readonly string[],
   const TPassthroughKeys extends readonly string[] = [],
 >(
-  options: PermissiveRouteSchemaOptions<TStringKeys, TPassthroughKeys>,
+  _options: PermissiveRouteSchemaOptions<TStringKeys, TPassthroughKeys>,
 ): PermissiveBodySchema<TStringKeys[number], TPassthroughKeys[number]> =>
   Object.assign(
     t.Optional(
       Type.Unsafe<
         PermissiveBodyStatic<TStringKeys[number] | TPassthroughKeys[number]>
-      >(buildPermissiveBodyObject(options.keys)),
+      >(t.Any()),
     ),
     { [PERMISSIVE_ROUTE_SCHEMA_MARKER]: true } satisfies PermissiveBrand,
   );

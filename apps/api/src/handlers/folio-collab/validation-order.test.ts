@@ -78,6 +78,12 @@ describe("folio-collab probes with malformed bodies never see validation errors"
       await expectAuthShapedNotFound(
         jsonRequest(path, { sessionId: true, token: {} }),
       );
+      // Non-object JSON roots must also reach the handler. An object-only
+      // route schema would reject these before credential authorization.
+      await expectAuthShapedNotFound(jsonRequest(path, null));
+      await expectAuthShapedNotFound(jsonRequest(path, []));
+      await expectAuthShapedNotFound(jsonRequest(path, 0));
+      await expectAuthShapedNotFound(jsonRequest(path, "probe"));
       // Unknown extra keys alongside malformed credentials.
       await expectAuthShapedNotFound(
         jsonRequest(path, { token: "x", probe: "1", admin: "true" }),
@@ -111,6 +117,10 @@ describe("folio-collab probes with malformed bodies never see validation errors"
       await expectAuthShapedNotFound(jsonRequest(path, { token: "short" }));
       await expectAuthShapedNotFound(jsonRequest(path, { token: 0 }));
       await expectAuthShapedNotFound(jsonRequest(path, { token: [] }));
+      await expectAuthShapedNotFound(jsonRequest(path, null));
+      await expectAuthShapedNotFound(jsonRequest(path, []));
+      await expectAuthShapedNotFound(jsonRequest(path, 0));
+      await expectAuthShapedNotFound(jsonRequest(path, "probe"));
     },
   );
 
