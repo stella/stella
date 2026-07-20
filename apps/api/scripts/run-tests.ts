@@ -80,7 +80,15 @@ const runTests = async (testFiles: string[], isolate: boolean) => {
   const executionMode = isolate ? "isolated" : "shared-process";
   console.log(`Running ${testFiles.length} ${executionMode} API test files`);
 
-  const command = [process.execPath, "test", "--preload", preloadPath];
+  // The shared batch loads hundreds of API test modules. Prefer more frequent
+  // garbage collection so it stays within the hosted runner's memory budget.
+  const command = [
+    process.execPath,
+    "--smol",
+    "test",
+    "--preload",
+    preloadPath,
+  ];
   if (isolate) {
     command.push("--isolate");
   }
