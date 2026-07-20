@@ -47,7 +47,11 @@ const TYPE_ONLY_IMPORT_RE =
 // error instead of an opaque exit-137 kill when the hosted runner's memory
 // runs out. Raising it is a reviewed product decision (like the typecheck
 // and network baselines), not a mechanical way to make CI green.
-const MAX_BATCH_PEAK_RSS_MB = 3584;
+// Calibrated from the Linux runners' first measured full run (worst batch
+// 3670 MB; Linux RSS accounting runs hotter than macOS): high enough to
+// absorb near-threshold variance, low enough to leave ~3 GB for a
+// concurrent turbo task on the 7 GB runner.
+const MAX_BATCH_PEAK_RSS_MB = 4096;
 const BYTES_PER_MB = 1024 * 1024;
 
 const apiRoot = path.resolve(import.meta.dir, "..");
