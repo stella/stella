@@ -18,7 +18,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/components/dialog";
-import { Frame } from "@stll/ui/components/frame";
+import {
+  Frame,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from "@stll/ui/components/frame";
 import {
   Table,
   TableBody,
@@ -54,13 +59,16 @@ export const SessionsCard = () => {
   const hasOtherSessions = sessions.some((s) => s.id !== currentSessionId);
 
   return (
-    <div className="flex flex-col gap-4">
-      {hasOtherSessions && (
-        <div className="flex justify-end">
-          <RevokeAllDialog />
-        </div>
-      )}
-      <Frame>
+    <Frame>
+      <FrameHeader>
+        <FrameTitle>{t("common.sessions")}</FrameTitle>
+      </FrameHeader>
+      <FramePanel>
+        {hasOtherSessions && (
+          <div className="flex justify-end p-4 pb-0">
+            <RevokeAllDialog />
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow>
@@ -115,8 +123,8 @@ export const SessionsCard = () => {
             )}
           </TableBody>
         </Table>
-      </Frame>
-    </div>
+      </FramePanel>
+    </Frame>
   );
 };
 
