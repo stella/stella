@@ -8,14 +8,14 @@ import { roles } from "@stll/permissions";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
 import type { ContactEmail, ContactPhone } from "@/api/db/schema-validators";
-import { readDecisionHandler } from "@/api/handlers/case-law/decisions/read-by-id";
+import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import {
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
 } from "@/api/handlers/organization-settings/practice-jurisdictions";
-import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
+import { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";

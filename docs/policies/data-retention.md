@@ -52,7 +52,7 @@ Handler: `apps/api/src/handlers/entities/delete.ts`
 
 ### Property deletion
 
-Handler: `apps/api/src/handlers/properties/delete-by-id.ts`
+Handler: `apps/api/src/handlers/properties/delete.ts`
 
 1. Delete the property row. Cascade FKs remove dependent
    `fields` and `propertyDependencies`.
@@ -70,7 +70,7 @@ Handler: `apps/api/src/handlers/views/delete-by-id.ts`
 
 ### Workspace deletion
 
-Handler: `apps/api/src/handlers/workspaces/delete-by-id.ts`
+Handler: `apps/api/src/handlers/workspaces/delete.ts`
 
 1. Set workspace status to `"deleting"`, which gates all
    new uploads and actor connections.

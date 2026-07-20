@@ -4,13 +4,13 @@ import Elysia, { t } from "elysia";
 import { env } from "@/api/env";
 import { listDecisionFacetsHandler } from "@/api/handlers/case-law/decisions/facets";
 import {
+  readDecisionBySlugHandler,
+  readDecisionHandler,
+} from "@/api/handlers/case-law/decisions/get";
+import {
   listDecisionsHandler,
   listDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/list";
-import {
-  readDecisionBySlugHandler,
-  readDecisionHandler,
-} from "@/api/handlers/case-law/decisions/read-by-id";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {

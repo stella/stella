@@ -2,7 +2,7 @@ import Elysia from "elysia";
 
 import createExpense from "@/api/handlers/expenses/create";
 import deleteExpense from "@/api/handlers/expenses/delete";
-import readExpenses from "@/api/handlers/expenses/read";
+import readExpenses from "@/api/handlers/expenses/list";
 import updateExpense from "@/api/handlers/expenses/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";

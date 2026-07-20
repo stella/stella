@@ -2,7 +2,7 @@ import Elysia from "elysia";
 
 import createBillingCode from "@/api/handlers/billing-codes/create";
 import deleteBillingCode from "@/api/handlers/billing-codes/delete";
-import readBillingCodes from "@/api/handlers/billing-codes/read";
+import readBillingCodes from "@/api/handlers/billing-codes/list";
 import updateBillingCode from "@/api/handlers/billing-codes/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";

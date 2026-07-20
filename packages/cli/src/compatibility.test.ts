@@ -114,9 +114,14 @@ describe("deployed API compatibility", () => {
   });
 
   test("rejects a CLI version outside the server's inclusive range", async () => {
+    // Derived from the CLI's own version rather than hardcoded: a literal
+    // range stops excluding the CLI the moment its version is bumped into it,
+    // which silently turns this into a test that the CLI is ACCEPTED.
+    const [major] = packageJson.version.split(".");
+    const aboveCurrent = `${Number(major) + 1}.0.0`;
     const server = startCompatibilityServer({
-      maximum: "0.3.0",
-      minimum: "0.2.1",
+      maximum: `${Number(major) + 2}.0.0`,
+      minimum: aboveCurrent,
     });
     try {
       const result = await checkServerCompatibility(server.url.origin);

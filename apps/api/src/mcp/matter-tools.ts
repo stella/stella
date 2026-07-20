@@ -7,8 +7,8 @@ import { roles } from "@stll/permissions";
 import { entities } from "@/api/db/schema";
 import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries-lookup";
 import { createContactHandler } from "@/api/handlers/contacts/create";
-import { deleteContactHandler } from "@/api/handlers/contacts/delete-by-id";
-import { updateContactHandler } from "@/api/handlers/contacts/update-by-id";
+import { deleteContactHandler } from "@/api/handlers/contacts/delete";
+import { updateContactHandler } from "@/api/handlers/contacts/update";
 import {
   entityListCursorCondition,
   entityListTimestampCursorExpr,
@@ -21,9 +21,9 @@ import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links-delet
 import { updateTaskHandler } from "@/api/handlers/tasks/update";
 import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
 import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
-import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete-by-id";
+import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete";
 import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
-import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update-by-id";
+import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
 import { createWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-create";
 import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-delete";
 import type { SafeId } from "@/api/lib/branded-types";

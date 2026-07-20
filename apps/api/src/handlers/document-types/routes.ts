@@ -1,10 +1,10 @@
 import Elysia from "elysia";
 
 import createDocumentType from "@/api/handlers/document-types/create";
-import deleteDocumentType from "@/api/handlers/document-types/delete-by-id";
-import listDocumentTypes from "@/api/handlers/document-types/read-list";
+import deleteDocumentType from "@/api/handlers/document-types/delete";
+import listDocumentTypes from "@/api/handlers/document-types/list";
 import reorderDocumentTypes from "@/api/handlers/document-types/reorder";
-import updateDocumentType from "@/api/handlers/document-types/update-by-id";
+import updateDocumentType from "@/api/handlers/document-types/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 export const documentTypesRoute = new Elysia({

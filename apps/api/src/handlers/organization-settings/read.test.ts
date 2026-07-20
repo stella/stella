@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { projectOrganizationSettingsRow } from "@/api/handlers/organization-settings/read";
+import { projectOrganizationSettingsRow } from "@/api/handlers/organization-settings/get";
 
 describe("projectOrganizationSettingsRow", () => {
   test("returns the active org's practiceJurisdictions verbatim", () => {

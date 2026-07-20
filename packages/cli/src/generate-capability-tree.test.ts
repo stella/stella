@@ -362,3 +362,70 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
     expect(stats.generated).toBe(catalog.length - suppressed);
   });
 });
+
+/**
+ * Namespaces where a curated, hand-written command still shares a top-level name
+ * with generated capability commands. Each entry means a caller typing
+ * `stella <namespace> …` cannot tell whether they get a named MCP tool or the
+ * generic `invoke_capability` path — the exact drift this guard exists to stop.
+ *
+ * The list may only SHRINK: it is seeded with the four namespaces that were
+ * already split when the guard landed, and is ratcheted by
+ * `cli-shadowed-namespaces` in `scripts/ratchet.ts`. Adding a curated command in
+ * a namespace a capability occupies fails this test rather than silently landing.
+ */
+const SHADOWED_NAMESPACE_ALLOWLIST: readonly string[] = [
+  "capability",
+  "case-law",
+  "legislation",
+  "usage",
+];
+
+/**
+ * Capabilities whose natural command path is taken by a curated command, so they
+ * are relocated under `stella capability <domain> <action>`. A relocation is a
+ * symptom of the same shadowing problem, so it is pinned rather than merely counted.
+ */
+const COLLISION_FALLBACK_ALLOWLIST: readonly string[] = ["legislation.search"];
+
+describe("curated commands must not shadow capability commands", () => {
+  const namespacesByKind = (node: RouteNode) => {
+    const curated = new Set<string>();
+    const capability = new Set<string>();
+    const walk = (current: RouteNode, path: readonly string[]): void => {
+      if (current.kind === "route") {
+        for (const [segment, child] of Object.entries(current.children)) {
+          walk(child, [...path, segment]);
+        }
+        return;
+      }
+      const top = path.at(0);
+      if (top === undefined) {
+        return;
+      }
+      (current.kind === "leaf" ? curated : capability).add(top);
+    };
+    walk(node, []);
+    return { capability, curated };
+  };
+
+  test("no curated command occupies a namespace a capability occupies", async () => {
+    const catalog: CapabilityCatalogEntry[] = await Bun.file(
+      new URL("generated/capability-catalog.json", import.meta.url),
+    ).json();
+    const listings = await Bun.file(
+      new URL("generated/registry-snapshot.json", import.meta.url),
+    ).json();
+    const { tree, stats } = insertCapabilities({
+      entries: catalog,
+      tree: generateRouteMap(listings, TOOL_ANNOTATIONS),
+    });
+    const { capability, curated } = namespacesByKind(tree);
+    const shadowed = [...curated].filter((ns) => capability.has(ns)).sort();
+
+    expect(shadowed).toEqual([...SHADOWED_NAMESPACE_ALLOWLIST].sort());
+    expect([...stats.collisionFallbacks].sort()).toEqual(
+      [...COLLISION_FALLBACK_ALLOWLIST].sort(),
+    );
+  });
+});

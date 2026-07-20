@@ -20,13 +20,13 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { deleteEntityVersionHandler } from "@/api/handlers/entities/delete-version";
+import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import {
   ENTITY_LIST_TIMESTAMP_CURSOR_FORMAT,
   entityListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/handlers/entities/list-cursor";
 import { moveEntityHandler } from "@/api/handlers/entities/move";
-import { readEntityByIdHandler } from "@/api/handlers/entities/read-by-id";
 import { renameEntityHandler } from "@/api/handlers/entities/rename";
 import { updateVersionDescriptionHandler } from "@/api/handlers/entities/update-version-description";
 import { updateVersionLabelHandler } from "@/api/handlers/entities/update-version-label";

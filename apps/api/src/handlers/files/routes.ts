@@ -6,7 +6,7 @@ import {
   readEmailHtmlPreviewHandler,
   readFileHandler,
   stampedDownloadHandler,
-} from "@/api/handlers/files/read-by-id";
+} from "@/api/handlers/files/get";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";

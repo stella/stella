@@ -2,14 +2,14 @@ import Elysia from "elysia";
 
 import approvePlaybookDefinition from "@/api/handlers/playbooks/approve";
 import createPlaybookDefinition from "@/api/handlers/playbooks/create";
-import deletePlaybookDefinition from "@/api/handlers/playbooks/delete-by-id";
+import deletePlaybookDefinition from "@/api/handlers/playbooks/delete";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter";
+import getPlaybookDefinition from "@/api/handlers/playbooks/get";
+import listPlaybookDefinitions from "@/api/handlers/playbooks/list";
 import listStarterPlaybooks from "@/api/handlers/playbooks/list-starters";
 import listPlaybookVersions from "@/api/handlers/playbooks/list-versions";
-import getPlaybookDefinition from "@/api/handlers/playbooks/read-by-id";
-import listPlaybookDefinitions from "@/api/handlers/playbooks/read-list";
 import restorePlaybookVersion from "@/api/handlers/playbooks/restore-version";
-import updatePlaybookDefinition from "@/api/handlers/playbooks/update-by-id";
+import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 export const playbooksRoute = new Elysia({

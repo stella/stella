@@ -14,8 +14,8 @@ import {
 
 describe("toEndpointIdentifier", () => {
   test("is the repo-relative path, stable regardless of root trailing slash", () => {
-    const abs = "/repo/apps/api/src/handlers/contacts/read-by-id.ts";
-    const expected = "apps/api/src/handlers/contacts/read-by-id.ts";
+    const abs = "/repo/apps/api/src/handlers/contacts/get.ts";
+    const expected = "apps/api/src/handlers/contacts/get.ts";
     expect(toEndpointIdentifier(abs, "/repo")).toBe(expected);
     expect(toEndpointIdentifier(abs, "/repo/")).toBe(expected);
   });

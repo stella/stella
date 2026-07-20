@@ -3,7 +3,7 @@ import Elysia from "elysia";
 import convertView from "@/api/handlers/views/convert";
 import createView from "@/api/handlers/views/create";
 import deleteView from "@/api/handlers/views/delete";
-import readViews from "@/api/handlers/views/read";
+import readViews from "@/api/handlers/views/list";
 import reorderViews from "@/api/handlers/views/reorder";
 import exportTableView from "@/api/handlers/views/table-export";
 import updateView from "@/api/handlers/views/update";

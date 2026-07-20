@@ -9,18 +9,18 @@ import {
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
-import readBillingCodes from "@/api/handlers/billing-codes/read";
-import readContactById from "@/api/handlers/contacts/read-by-id";
+import readBillingCodes from "@/api/handlers/billing-codes/list";
+import readContactById from "@/api/handlers/contacts/get";
 import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
-import readEntityById from "@/api/handlers/entities/read-by-id";
+import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
-import readExpenses from "@/api/handlers/expenses/read";
-import { readFileHandler } from "@/api/handlers/files/read-by-id";
-import readInvoiceById from "@/api/handlers/invoices/read-by-id";
+import readExpenses from "@/api/handlers/expenses/list";
+import { readFileHandler } from "@/api/handlers/files/get";
+import readInvoiceById from "@/api/handlers/invoices/get";
 import readRateEntries from "@/api/handlers/rates/entries-read";
 import getTemplate from "@/api/handlers/templates/get";
-import readTimeEntryById from "@/api/handlers/time-entries/read-by-id";
+import readTimeEntryById from "@/api/handlers/time-entries/get";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

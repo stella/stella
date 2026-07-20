@@ -4,7 +4,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import deleteContactById from "./delete-by-id";
+import deleteContactById from "./delete";
 
 type DeleteContactCtx = Parameters<typeof deleteContactById.handler>[0];
 

@@ -163,7 +163,7 @@ describe("custom oxlint guardrails", () => {
       "public-case-law-db-boundary/public-case-law-db-boundary",
     );
     expect(configSource).toContain(
-      "apps/api/src/handlers/case-law/decisions/read-by-id.ts",
+      "apps/api/src/handlers/case-law/decisions/get.ts",
     );
     expect(configSource).toContain(
       "apps/api/src/lib/case-law-public-read-db.ts",

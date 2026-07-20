@@ -15,8 +15,8 @@ export type CapabilityDispatchEntry = {
 };
 
 export const CAPABILITY_DISPATCH = {
-  "audit-logs.read": {
-    load: async () => await import("@/api/handlers/audit-logs/read"),
+  "audit-logs.list": {
+    load: async () => await import("@/api/handlers/audit-logs/list"),
   },
   "billing-codes.create": {
     load: async () => await import("@/api/handlers/billing-codes/create"),
@@ -24,8 +24,8 @@ export const CAPABILITY_DISPATCH = {
   "billing-codes.delete": {
     load: async () => await import("@/api/handlers/billing-codes/delete"),
   },
-  "billing-codes.read": {
-    load: async () => await import("@/api/handlers/billing-codes/read"),
+  "billing-codes.list": {
+    load: async () => await import("@/api/handlers/billing-codes/list"),
   },
   "billing-codes.update": {
     load: async () => await import("@/api/handlers/billing-codes/update"),
@@ -92,14 +92,14 @@ export const CAPABILITY_DISPATCH = {
   "clauses.export": {
     load: async () => await import("@/api/handlers/clauses/export"),
   },
+  "clauses.get": {
+    load: async () => await import("@/api/handlers/clauses/get"),
+  },
   "clauses.import": {
     load: async () => await import("@/api/handlers/clauses/import"),
   },
-  "clauses.read-by-id": {
-    load: async () => await import("@/api/handlers/clauses/read-by-id"),
-  },
-  "clauses.read-list": {
-    load: async () => await import("@/api/handlers/clauses/read-list"),
+  "clauses.list": {
+    load: async () => await import("@/api/handlers/clauses/list"),
   },
   "clauses.read-version": {
     load: async () => await import("@/api/handlers/clauses/read-version"),
@@ -142,37 +142,35 @@ export const CAPABILITY_DISPATCH = {
   "contacts.create": {
     load: async () => await import("@/api/handlers/contacts/create"),
   },
-  "contacts.delete-by-id": {
-    load: async () => await import("@/api/handlers/contacts/delete-by-id"),
+  "contacts.delete": {
+    load: async () => await import("@/api/handlers/contacts/delete"),
   },
-  "contacts.read": {
-    load: async () => await import("@/api/handlers/contacts/read"),
+  "contacts.get": {
+    load: async () => await import("@/api/handlers/contacts/get"),
   },
-  "contacts.read-by-id": {
-    load: async () => await import("@/api/handlers/contacts/read-by-id"),
+  "contacts.list": {
+    load: async () => await import("@/api/handlers/contacts/list"),
   },
   "contacts.search": {
     load: async () => await import("@/api/handlers/contacts/search"),
   },
-  "contacts.update-by-id": {
-    load: async () => await import("@/api/handlers/contacts/update-by-id"),
+  "contacts.update": {
+    load: async () => await import("@/api/handlers/contacts/update"),
   },
   "document-types.create": {
     load: async () => await import("@/api/handlers/document-types/create"),
   },
-  "document-types.delete-by-id": {
-    load: async () =>
-      await import("@/api/handlers/document-types/delete-by-id"),
+  "document-types.delete": {
+    load: async () => await import("@/api/handlers/document-types/delete"),
   },
-  "document-types.read-list": {
-    load: async () => await import("@/api/handlers/document-types/read-list"),
+  "document-types.list": {
+    load: async () => await import("@/api/handlers/document-types/list"),
   },
   "document-types.reorder": {
     load: async () => await import("@/api/handlers/document-types/reorder"),
   },
-  "document-types.update-by-id": {
-    load: async () =>
-      await import("@/api/handlers/document-types/update-by-id"),
+  "document-types.update": {
+    load: async () => await import("@/api/handlers/document-types/update"),
   },
   "entities.check-stamp": {
     load: async () => await import("@/api/handlers/entities/check-stamp"),
@@ -209,6 +207,12 @@ export const CAPABILITY_DISPATCH = {
   "entities.duplicate": {
     load: async () => await import("@/api/handlers/entities/duplicate"),
   },
+  "entities.get": {
+    load: async () => await import("@/api/handlers/entities/get"),
+  },
+  "entities.list": {
+    load: async () => await import("@/api/handlers/entities/list"),
+  },
   "entities.list-files": {
     load: async () => await import("@/api/handlers/entities/list-files"),
   },
@@ -221,12 +225,6 @@ export const CAPABILITY_DISPATCH = {
   "entities.organize-suggestions": {
     load: async () =>
       await import("@/api/handlers/entities/organize-suggestions"),
-  },
-  "entities.read": {
-    load: async () => await import("@/api/handlers/entities/read"),
-  },
-  "entities.read-by-id": {
-    load: async () => await import("@/api/handlers/entities/read-by-id"),
   },
   "entities.read-filesystem-tree": {
     load: async () =>
@@ -284,8 +282,8 @@ export const CAPABILITY_DISPATCH = {
   "expenses.delete": {
     load: async () => await import("@/api/handlers/expenses/delete"),
   },
-  "expenses.read": {
-    load: async () => await import("@/api/handlers/expenses/read"),
+  "expenses.list": {
+    load: async () => await import("@/api/handlers/expenses/list"),
   },
   "expenses.update": {
     load: async () => await import("@/api/handlers/expenses/update"),
@@ -303,15 +301,11 @@ export const CAPABILITY_DISPATCH = {
   "flows.create": {
     load: async () => await import("@/api/handlers/flows/create"),
   },
-  "flows.delete-by-id": {
-    load: async () => await import("@/api/handlers/flows/delete-by-id"),
+  "flows.delete": {
+    load: async () => await import("@/api/handlers/flows/delete"),
   },
-  "flows.read-by-id": {
-    load: async () => await import("@/api/handlers/flows/read-by-id"),
-  },
-  "flows.read-list": {
-    load: async () => await import("@/api/handlers/flows/read-list"),
-  },
+  "flows.get": { load: async () => await import("@/api/handlers/flows/get") },
+  "flows.list": { load: async () => await import("@/api/handlers/flows/list") },
   "flows.run-cancel": {
     load: async () => await import("@/api/handlers/flows/run-cancel"),
   },
@@ -327,8 +321,8 @@ export const CAPABILITY_DISPATCH = {
   "flows.run-start": {
     load: async () => await import("@/api/handlers/flows/run-start"),
   },
-  "flows.update-by-id": {
-    load: async () => await import("@/api/handlers/flows/update-by-id"),
+  "flows.update": {
+    load: async () => await import("@/api/handlers/flows/update"),
   },
   "invoices.add-entries": {
     load: async () => await import("@/api/handlers/invoices/add-entries"),
@@ -339,11 +333,11 @@ export const CAPABILITY_DISPATCH = {
   "invoices.delete": {
     load: async () => await import("@/api/handlers/invoices/delete"),
   },
-  "invoices.read": {
-    load: async () => await import("@/api/handlers/invoices/read"),
+  "invoices.get": {
+    load: async () => await import("@/api/handlers/invoices/get"),
   },
-  "invoices.read-by-id": {
-    load: async () => await import("@/api/handlers/invoices/read-by-id"),
+  "invoices.list": {
+    load: async () => await import("@/api/handlers/invoices/list"),
   },
   "invoices.remove-entries": {
     load: async () => await import("@/api/handlers/invoices/remove-entries"),
@@ -374,18 +368,18 @@ export const CAPABILITY_DISPATCH = {
   "legislation.borme-summary": {
     load: async () => await import("@/api/handlers/legislation/borme-summary"),
   },
-  "legislation.read-by-id": {
-    load: async () => await import("@/api/handlers/legislation/read-by-id"),
+  "legislation.get": {
+    load: async () => await import("@/api/handlers/legislation/get"),
   },
   "legislation.search": {
     load: async () => await import("@/api/handlers/legislation/search"),
   },
+  "organization-settings.get": {
+    load: async () => await import("@/api/handlers/organization-settings/get"),
+  },
   "organization-settings.preview": {
     load: async () =>
       await import("@/api/handlers/organization-settings/preview"),
-  },
-  "organization-settings.read": {
-    load: async () => await import("@/api/handlers/organization-settings/read"),
   },
   "organization-settings.read-ai-availability": {
     load: async () =>
@@ -420,23 +414,23 @@ export const CAPABILITY_DISPATCH = {
   "playbooks.create": {
     load: async () => await import("@/api/handlers/playbooks/create"),
   },
-  "playbooks.delete-by-id": {
-    load: async () => await import("@/api/handlers/playbooks/delete-by-id"),
+  "playbooks.delete": {
+    load: async () => await import("@/api/handlers/playbooks/delete"),
   },
   "playbooks.from-starter": {
     load: async () => await import("@/api/handlers/playbooks/from-starter"),
+  },
+  "playbooks.get": {
+    load: async () => await import("@/api/handlers/playbooks/get"),
+  },
+  "playbooks.list": {
+    load: async () => await import("@/api/handlers/playbooks/list"),
   },
   "playbooks.list-starters": {
     load: async () => await import("@/api/handlers/playbooks/list-starters"),
   },
   "playbooks.list-versions": {
     load: async () => await import("@/api/handlers/playbooks/list-versions"),
-  },
-  "playbooks.read-by-id": {
-    load: async () => await import("@/api/handlers/playbooks/read-by-id"),
-  },
-  "playbooks.read-list": {
-    load: async () => await import("@/api/handlers/playbooks/read-list"),
   },
   "playbooks.restore-version": {
     load: async () => await import("@/api/handlers/playbooks/restore-version"),
@@ -447,8 +441,8 @@ export const CAPABILITY_DISPATCH = {
   "playbooks.run": {
     load: async () => await import("@/api/handlers/playbooks/run"),
   },
-  "playbooks.update-by-id": {
-    load: async () => await import("@/api/handlers/playbooks/update-by-id"),
+  "playbooks.update": {
+    load: async () => await import("@/api/handlers/playbooks/update"),
   },
   "properties.create": {
     load: async () => await import("@/api/handlers/properties/create"),
@@ -456,20 +450,20 @@ export const CAPABILITY_DISPATCH = {
   "properties.create-batch": {
     load: async () => await import("@/api/handlers/properties/create-batch"),
   },
-  "properties.delete-by-id": {
-    load: async () => await import("@/api/handlers/properties/delete-by-id"),
+  "properties.delete": {
+    load: async () => await import("@/api/handlers/properties/delete"),
+  },
+  "properties.list": {
+    load: async () => await import("@/api/handlers/properties/list"),
   },
   "properties.preview": {
     load: async () => await import("@/api/handlers/properties/preview"),
   },
-  "properties.read": {
-    load: async () => await import("@/api/handlers/properties/read"),
-  },
   "properties.suggest-prompt": {
     load: async () => await import("@/api/handlers/properties/suggest-prompt"),
   },
-  "properties.update-by-id": {
-    load: async () => await import("@/api/handlers/properties/update-by-id"),
+  "properties.update": {
+    load: async () => await import("@/api/handlers/properties/update"),
   },
   "rates.create": {
     load: async () => await import("@/api/handlers/rates/create"),
@@ -489,7 +483,7 @@ export const CAPABILITY_DISPATCH = {
   "rates.entries-update": {
     load: async () => await import("@/api/handlers/rates/entries-update"),
   },
-  "rates.read": { load: async () => await import("@/api/handlers/rates/read") },
+  "rates.list": { load: async () => await import("@/api/handlers/rates/list") },
   "rates.resolve": {
     load: async () => await import("@/api/handlers/rates/resolve"),
   },
@@ -614,9 +608,7 @@ export const CAPABILITY_DISPATCH = {
   "tasks.entity-links-read": {
     load: async () => await import("@/api/handlers/tasks/entity-links-read"),
   },
-  "tasks.read-by-id": {
-    load: async () => await import("@/api/handlers/tasks/read-by-id"),
-  },
+  "tasks.get": { load: async () => await import("@/api/handlers/tasks/get") },
   "tasks.update": {
     load: async () => await import("@/api/handlers/tasks/update"),
   },
@@ -757,8 +749,8 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.create": {
     load: async () => await import("@/api/handlers/time-entries/create"),
   },
-  "time-entries.delete-by-id": {
-    load: async () => await import("@/api/handlers/time-entries/delete-by-id"),
+  "time-entries.delete": {
+    load: async () => await import("@/api/handlers/time-entries/delete"),
   },
   "time-entries.export-csv": {
     load: async () => await import("@/api/handlers/time-entries/export-csv"),
@@ -769,11 +761,11 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.export-pdf": {
     load: async () => await import("@/api/handlers/time-entries/export-pdf"),
   },
-  "time-entries.read": {
-    load: async () => await import("@/api/handlers/time-entries/read"),
+  "time-entries.get": {
+    load: async () => await import("@/api/handlers/time-entries/get"),
   },
-  "time-entries.read-by-id": {
-    load: async () => await import("@/api/handlers/time-entries/read-by-id"),
+  "time-entries.list": {
+    load: async () => await import("@/api/handlers/time-entries/list"),
   },
   "time-entries.split": {
     load: async () => await import("@/api/handlers/time-entries/split"),
@@ -784,8 +776,8 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.timer-stop": {
     load: async () => await import("@/api/handlers/time-entries/timer-stop"),
   },
-  "time-entries.update-by-id": {
-    load: async () => await import("@/api/handlers/time-entries/update-by-id"),
+  "time-entries.update": {
+    load: async () => await import("@/api/handlers/time-entries/update"),
   },
   "usage.get-entitlement": {
     load: async () => await import("@/api/handlers/usage/get-entitlement"),
@@ -808,7 +800,7 @@ export const CAPABILITY_DISPATCH = {
   "views.delete": {
     load: async () => await import("@/api/handlers/views/delete"),
   },
-  "views.read": { load: async () => await import("@/api/handlers/views/read") },
+  "views.list": { load: async () => await import("@/api/handlers/views/list") },
   "views.reorder": {
     load: async () => await import("@/api/handlers/views/reorder"),
   },
@@ -826,9 +818,9 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/workspaces/anonymization-allowlist/delete"),
   },
-  "workspaces.anonymization-allowlist.read": {
+  "workspaces.anonymization-allowlist.list": {
     load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-allowlist/read"),
+      await import("@/api/handlers/workspaces/anonymization-allowlist/list"),
   },
   "workspaces.anonymization-terms.create": {
     load: async () =>
@@ -838,9 +830,9 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/workspaces/anonymization-terms/delete"),
   },
-  "workspaces.anonymization-terms.read": {
+  "workspaces.anonymization-terms.list": {
     load: async () =>
-      await import("@/api/handlers/workspaces/anonymization-terms/read"),
+      await import("@/api/handlers/workspaces/anonymization-terms/list"),
   },
   "workspaces.archive": {
     load: async () => await import("@/api/handlers/workspaces/archive"),
@@ -851,14 +843,14 @@ export const CAPABILITY_DISPATCH = {
   "workspaces.create": {
     load: async () => await import("@/api/handlers/workspaces/create"),
   },
-  "workspaces.delete-by-id": {
-    load: async () => await import("@/api/handlers/workspaces/delete-by-id"),
+  "workspaces.delete": {
+    load: async () => await import("@/api/handlers/workspaces/delete"),
   },
   "workspaces.duplicate": {
     load: async () => await import("@/api/handlers/workspaces/duplicate"),
   },
-  "workspaces.read": {
-    load: async () => await import("@/api/handlers/workspaces/read"),
+  "workspaces.list": {
+    load: async () => await import("@/api/handlers/workspaces/list"),
   },
   "workspaces.read-justifications": {
     load: async () =>
@@ -875,8 +867,8 @@ export const CAPABILITY_DISPATCH = {
   "workspaces.unarchive": {
     load: async () => await import("@/api/handlers/workspaces/unarchive"),
   },
-  "workspaces.update-by-id": {
-    load: async () => await import("@/api/handlers/workspaces/update-by-id"),
+  "workspaces.update": {
+    load: async () => await import("@/api/handlers/workspaces/update"),
   },
   "workspaces.workflow-start": {
     load: async () => await import("@/api/handlers/workspaces/workflow-start"),

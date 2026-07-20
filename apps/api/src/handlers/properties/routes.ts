@@ -2,11 +2,11 @@ import Elysia from "elysia";
 
 import createProperty from "@/api/handlers/properties/create";
 import createPropertiesBatch from "@/api/handlers/properties/create-batch";
-import deleteProperty from "@/api/handlers/properties/delete-by-id";
+import deleteProperty from "@/api/handlers/properties/delete";
+import readProperties from "@/api/handlers/properties/list";
 import previewProperty from "@/api/handlers/properties/preview";
-import readProperties from "@/api/handlers/properties/read";
 import suggestPromptProperty from "@/api/handlers/properties/suggest-prompt";
-import updateProperty from "@/api/handlers/properties/update-by-id";
+import updateProperty from "@/api/handlers/properties/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 
