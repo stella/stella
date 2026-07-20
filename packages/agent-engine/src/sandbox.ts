@@ -76,6 +76,14 @@ export type StellaSandboxInput = {
    * stella-operated host pool's socket.
    */
   cloudSocketPath?: string;
+  /**
+   * Docker network for the `cloud` engine's container
+   * (`HostConfig.NetworkMode`). Omit to use the daemon default bridge; set a
+   * locked-down network to deny the run arbitrary egress so injected secrets
+   * (the MCP token, the harness key) cannot leave over unrestricted outbound
+   * connections.
+   */
+  cloudNetworkMode?: string;
   /** AGENTS.md guidance written into the sandbox for the harness. */
   instructions: string;
   /** Keep a cloud sandbox warm between turns of one thread. Defaults to 10m. */
@@ -132,13 +140,17 @@ export const defineStellaSandbox = (
     provider: bunDockerSandbox({
       image: input.cloudImage,
       ...(input.cloudSocketPath ? { socketPath: input.cloudSocketPath } : {}),
+      ...(input.cloudNetworkMode
+        ? { networkMode: input.cloudNetworkMode }
+        : {}),
     }),
     workspace,
     policy: stellaSandboxPolicy(),
     lifecycle: {
-      // No `snapshot` in v1: the bun-native provider does not implement image
-      // commit yet, so warm reuse is by keeping the container alive per thread,
-      // not by snapshotting. Snapshot support is a follow-up (plan 050).
+      // The provider implements image-commit snapshots, but v1 deliberately
+      // does not drive them here: warm reuse is by keeping the container alive
+      // per thread (`reuse: "thread"`), not by snapshotting. Wiring snapshot
+      // lifecycle is a follow-up (plan 050).
       reuse: "thread",
       keepAlive: input.keepAlive ?? "10m",
       destroyOnComplete: false,

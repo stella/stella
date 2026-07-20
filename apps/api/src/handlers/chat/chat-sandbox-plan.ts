@@ -1,6 +1,10 @@
-import type { HarnessProvider, StellaSandboxRunInput } from "@stll/agent-engine";
+import type {
+  HarnessProvider,
+  StellaSandboxRunInput,
+} from "@stll/agent-engine";
 
 import { env } from "@/api/env";
+import { logger } from "@/api/lib/observability/logger";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
 
 const MCP_SERVER_NAME = "stella";
@@ -36,6 +40,15 @@ export const resolveChatSandboxPlan = async (
   const harnessApiKey = env.AGENT_SANDBOX_HARNESS_API_KEY;
   const mcpUrl = env.AGENT_SANDBOX_MCP_URL;
   if (!image || !harnessModel || !harnessApiKey || !mcpUrl) {
+    // Enabled but under-configured: warn (without leaking values) so the
+    // fallback to the model path is diagnosable rather than silent. Names
+    // only — the sanitizing logger drops secret-shaped keys regardless.
+    logger.warn("agent-sandbox: enabled but engine config incomplete", {
+      missingImage: !image,
+      missingHarnessModel: !harnessModel,
+      missingHarnessApiKey: !harnessApiKey,
+      missingMcpUrl: !mcpUrl,
+    });
     return undefined;
   }
 
@@ -62,6 +75,9 @@ export const resolveChatSandboxPlan = async (
     cloudImage: image,
     ...(env.AGENT_SANDBOX_DOCKER_SOCKET
       ? { cloudSocketPath: env.AGENT_SANDBOX_DOCKER_SOCKET }
+      : {}),
+    ...(env.AGENT_SANDBOX_DOCKER_NETWORK
+      ? { cloudNetworkMode: env.AGENT_SANDBOX_DOCKER_NETWORK }
       : {}),
     instructions: SANDBOX_INSTRUCTIONS,
     mcp: { serverName: MCP_SERVER_NAME, url: mcpUrl, token },

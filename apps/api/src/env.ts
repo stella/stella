@@ -363,6 +363,12 @@ const envApi = createEnv({
     AGENT_SANDBOX_MCP_URL: v.optional(v.pipe(v.string(), v.url())),
     /** Docker daemon socket; Linux default is /var/run/docker.sock. */
     AGENT_SANDBOX_DOCKER_SOCKET: v.optional(v.string()),
+    /**
+     * Docker network for the sandbox container (`HostConfig.NetworkMode`).
+     * Omit to use the daemon default bridge; set a locked-down network to deny
+     * the run arbitrary egress so injected secrets cannot be exfiltrated.
+     */
+    AGENT_SANDBOX_DOCKER_NETWORK: v.optional(v.string()),
 
     /**
      * Break-glass diagnostics. When true, 5xx responses additionally

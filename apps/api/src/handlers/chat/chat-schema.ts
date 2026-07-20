@@ -185,6 +185,16 @@ export const sendMessageBodySchema = t.Object({
    * but never widen the turn's tool surface.
    */
   toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
+  /**
+   * Execution mode for this turn. Absent (the default) runs the normal
+   * server-side chat model with the user's selected model, tools, and MCP.
+   * `"agent"` explicitly requests an agent-sandbox run (plan 050); it only
+   * takes effect when the deployment also enables the sandbox engine. Making
+   * this an explicit opt-in means a normal, BYOK, or model-selected chat is
+   * never silently rerouted into a sandbox just because the engine is enabled.
+   * A single-value literal today; it grows to a union as engines/harnesses land.
+   */
+  runMode: t.Optional(t.Literal("agent")),
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),
   activeTemplate: t.Optional(activeTemplateSchema),

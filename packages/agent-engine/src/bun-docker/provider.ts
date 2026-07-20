@@ -42,8 +42,10 @@ let snapshotSeq = 0;
  * design: exec output streams over a plain (non-hijacked) response body, which
  * has no host→process stdin, so harness adapters deliver the prompt via a file
  * (they already branch on this flag). Snapshots use image commit; ports/fork
- * are out of scope for v1. Network egress is governed by the infra egress
- * proxy, not a provider network policy.
+ * are out of scope for v1. `networkPolicy` is false because Docker's
+ * `HostConfig` cannot express per-connection egress allowlisting; egress is
+ * constrained at the network layer instead (see `config.networkMode`), so the
+ * policy's `network: "deny"` is defense-in-depth, not the sole control.
  */
 const BUN_DOCKER_CAPS: SandboxCapabilities = {
   fs: true,
@@ -65,6 +67,14 @@ export type BunDockerSandboxConfig = {
   socketPath?: string;
   /** Add `host.docker.internal:host-gateway` for host-side MCP bridging. */
   hostGateway?: boolean;
+  /**
+   * Pin the container onto a specific Docker network (`HostConfig.NetworkMode`).
+   * Omit to use the daemon default bridge. Set this to a locked-down network to
+   * deny the run arbitrary egress (the harness reaches stella only via the
+   * bridged MCP server), so an injected MCP token or harness key cannot be
+   * exfiltrated over unrestricted outbound connections.
+   */
+  networkMode?: string;
   /** Remove the container on destroy (vs. just stop). Defaults to true. */
   removeOnDestroy?: boolean;
 };
@@ -178,9 +188,15 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
       env: envArray(opts?.env),
     });
     const controller = new AbortController();
-    opts?.signal?.addEventListener("abort", () => controller.abort(), {
-      once: true,
-    });
+    if (opts?.signal?.aborted) {
+      // Already aborted: the `abort` event has fired, so a listener added now
+      // would never run. Propagate immediately.
+      controller.abort();
+    } else {
+      opts?.signal?.addEventListener("abort", () => controller.abort(), {
+        once: true,
+      });
+    }
 
     const body = await startExecStream(conn, execId, controller.signal);
     const stdout = new StreamQueue();
@@ -277,6 +293,10 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
           typeof data === "string"
             ? Buffer.from(data, "utf-8")
             : Buffer.from(data);
+        // The base64 payload rides as a single argv entry, so a write is
+        // bounded by the container's ARG_MAX (~128KB–2MB). That covers the
+        // harness's config/prompt files; streaming large binaries via the
+        // archive API (PUT /containers/{id}/archive) is a follow-up.
         const b64 = bytes.toString("base64");
         const dir = absPath.replace(/\/[^/]*$/u, "") || "/";
         const r = await exec(
@@ -372,6 +392,7 @@ export const bunDockerSandbox = (
       workdir,
       cmd: KEEP_ALIVE_CMD,
       hostGateway,
+      ...(config.networkMode ? { networkMode: config.networkMode } : {}),
       ...(opts?.env
         ? { env: Object.entries(opts.env).map(([k, v]) => `${k}=${v}`) }
         : {}),

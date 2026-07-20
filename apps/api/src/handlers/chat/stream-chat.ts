@@ -140,6 +140,14 @@ type StreamChatProps = {
   orgAIConfig: OrgAIConfig | null;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
+  /**
+   * Explicit per-turn execution mode from the request (`body.runMode`).
+   * `"agent"` opts this turn into an agent-sandbox run; undefined (the default
+   * for every normal chat) keeps the server-side model path. Gating the
+   * sandbox plan on this makes it structurally impossible for a normal/BYOK
+   * chat to be rerouted just because the sandbox engine is enabled.
+   */
+  runMode: "agent" | undefined;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   safeDb: SafeDb;
@@ -184,6 +192,7 @@ export const streamChat = async ({
   orgAIConfig,
   promptCacheKey,
   promptCachingEnabled,
+  runMode,
   resolveAssistantTextRefs,
   resolveAssistantValueRefs,
   safeDb,
@@ -302,6 +311,7 @@ export const streamChat = async ({
     primaryModel,
     promptCacheKey,
     promptCachingEnabled,
+    runMode,
     safeDb,
     thirdPartyBoundary,
     threadId,
@@ -583,6 +593,7 @@ type RunChatAttemptsProps = {
   primaryModel: ResolvedTanStackTextModel;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
+  runMode: "agent" | undefined;
   safeDb: SafeDb;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
@@ -604,6 +615,7 @@ const runChatAttempts = async function* ({
   primaryModel,
   promptCacheKey,
   promptCachingEnabled,
+  runMode,
   safeDb,
   thirdPartyBoundary,
   threadId,
@@ -611,11 +623,17 @@ const runChatAttempts = async function* ({
   workspaceId,
 }: RunChatAttemptsProps): AsyncIterable<StreamChunk> {
   const primaryState = createChatAttemptState();
-  const sandboxRun = await resolveChatSandboxPlan({
-    userId,
-    organizationId,
-    runId: threadId,
-  });
+  // Only an explicit agent-run request resolves a sandbox plan. A normal chat
+  // (runMode undefined) is never rerouted, even when the sandbox engine is
+  // enabled — so BYOK/model-selected turns keep the user's chosen adapter.
+  const sandboxRun =
+    runMode === "agent"
+      ? await resolveChatSandboxPlan({
+          userId,
+          organizationId,
+          runId: threadId,
+        })
+      : undefined;
   yield* runChatAttempt({
     abortController,
     abortSignal,
@@ -773,6 +791,14 @@ const runChatAttempt = async function* ({
     // bridge is the sole tool surface. The analytics + runtime middleware are
     // shared with the normal path; the sandbox middleware provides the
     // capability the harness adapter requires.
+    //
+    // `systemPromptsPatch(... baseSystem)` is likewise intentionally omitted:
+    // the harness's instruction surface is the workspace AGENTS.md
+    // (`sandbox.instructions`), not the chat `system` message. The base chat
+    // persona is written for the server-side chat model and its tool surface,
+    // so injecting it verbatim into a coding-agent harness would be wrong.
+    // `baseSystem` stays wired below for loop-recovery parity; enriching the
+    // harness instructions with curated workspace context is a follow-up.
     const { adapter, middleware: sandboxMiddleware } =
       resolveStellaSandboxRun(sandboxRun);
     yield* chat({
