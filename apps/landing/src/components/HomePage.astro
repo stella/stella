@@ -230,26 +230,36 @@ const selfHostingDocsUrl =
               <li
                 data-reveal
                 style={`--reveal-delay: ${120 + index * 60}ms; border-block-start: 1px solid var(--border)`}
-                class="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-4"
               >
-                <span
-                  class="shrink-0 text-sm font-medium tabular-nums"
-                  style="color: var(--muted-foreground)"
+                <a
+                  href={`/changelog#${release.slug}`}
+                  class="group flex flex-wrap items-baseline gap-x-4 gap-y-1 py-4"
                 >
-                  {release.tagName}
-                </span>
-                <span class="min-w-0 flex-1 font-display text-lg font-medium">
-                  {release.heading ?? release.displayName}
-                </span>
-                {release.publishedAt && (
-                  <time
-                    datetime={release.publishedAt}
-                    class="shrink-0 text-sm tabular-nums"
+                  <span
+                    class="shrink-0 text-sm font-medium tabular-nums"
                     style="color: var(--muted-foreground)"
                   >
-                    {releaseDateFormatter.format(new Date(release.publishedAt))}
-                  </time>
-                )}
+                    {release.tagName}
+                  </span>
+                  <span class="min-w-0 flex-1 font-display text-lg font-medium transition-opacity group-hover:opacity-70">
+                    {release.heading ?? release.displayName}
+                  </span>
+                  {release.publishedAt && (
+                    <time
+                      datetime={release.publishedAt}
+                      class="shrink-0 text-sm tabular-nums"
+                      style="color: var(--muted-foreground)"
+                    >
+                      {releaseDateFormatter.format(new Date(release.publishedAt))}
+                    </time>
+                  )}
+                  <span
+                    aria-hidden="true"
+                    class="shrink-0 text-sm opacity-0 transition-all rtl:-scale-x-100 group-hover:opacity-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+                  >
+                    →
+                  </span>
+                </a>
               </li>
             ))
           }

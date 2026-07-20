@@ -446,6 +446,10 @@ const proofItems = [
     position: relative;
   }
 
+  .proof-list {
+    grid-auto-rows: 1fr;
+  }
+
   .proof-list li {
     display: flex;
     min-height: 6.5rem;
@@ -454,6 +458,10 @@ const proofItems = [
     gap: 0.3rem;
     border-block-start: 1px solid var(--border);
     padding-block: 1.25rem;
+  }
+
+  .proof-list li:first-child {
+    border-block-start: 0;
   }
 
   .proof-list li:nth-child(odd) {
@@ -485,6 +493,12 @@ const proofItems = [
   @media (min-width: 640px) {
     .proof-list li:nth-child(even) {
       border-inline-start: 1px solid var(--border);
+    }
+
+    /* In the two-column grid the second cell sits in the first row, so its
+       top border would draw the same stray line above the list. */
+    .proof-list li:nth-child(2) {
+      border-block-start: 0;
     }
   }
 
