@@ -177,6 +177,15 @@ describe("machine key tenant filter", () => {
       "utf-8",
     );
 
+  // The predicate itself lives in its own leaf module so the membership
+  // revocation path can apply the identical scope without pulling in the
+  // owner-level connection. One definition, two callers.
+  const readScopeHelper = () =>
+    readFileSync(
+      path.resolve(import.meta.dir, "../../lib/machine-api-key-scope.ts"),
+      "utf-8",
+    );
+
   test("every exported query applies the organization predicate in SQL", () => {
     const source = readQueryHelper();
 
@@ -189,7 +198,31 @@ describe("machine key tenant filter", () => {
       expect(source).toContain(name);
     }
     expect(source).toContain("organizationScope(organizationId)");
+  });
+
+  test("the shared scope predicate filters on config id and metadata organization", () => {
+    const source = readScopeHelper();
+
+    expect(source).toContain("MACHINE_API_KEY_CONFIG_ID");
     expect(source).toContain("'organizationId'");
+  });
+
+  test("member removal revokes machine keys through that same predicate", () => {
+    // The gap this closes: without it a removed member's keys survive as live
+    // rows and start working again the moment they are re-invited. Scoping by
+    // the owner alone would reach into organizations they have not left, so
+    // both halves have to be here.
+    const source = readFileSync(
+      path.resolve(import.meta.dir, "../../lib/auth-artifacts.ts"),
+      "utf-8",
+    );
+
+    expect(source).toContain("machineApiKeyOrganizationScope(organizationId)");
+    expect(source).toContain("eq(apikey.referenceId, userId)");
+    // Disabled, not deleted: the audit trail and `start` prefix have to survive.
+    expect(source).toContain("update(apikey)");
+    expect(source).toContain("enabled: false");
+    expect(source).not.toContain("delete(apikey)");
   });
 
   test("no handler filters by organization id in JS after the query", () => {

@@ -72,6 +72,10 @@ import {
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+import {
   assertSelfhostEmailOtpAllowed,
   assertSelfhostBootstrapSignUp,
   isSelfhostLocalPasswordAuthEnabled,
@@ -725,11 +729,15 @@ const createAuth = () => {
             member: removedMember,
             organization: org,
           }) {
+            // Branded here, at the boundary: both ids are read off persisted
+            // rows by the plugin itself (the membership it just removed), not
+            // supplied by the caller, so this is where they become ownership
+            // ids for the tenant predicates the helper applies.
             await rootDb.transaction(
               async (tx) =>
                 await revokeOrganizationMemberAuthArtifacts(tx, {
-                  organizationId: org.id,
-                  userId: removedMember.userId,
+                  organizationId: brandPersistedOrganizationId(org.id),
+                  userId: brandPersistedUserId(removedMember.userId),
                 }),
             );
           },

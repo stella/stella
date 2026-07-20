@@ -1,9 +1,9 @@
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, lt, or } from "drizzle-orm";
 
 import { apikey } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
-import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
+import { machineApiKeyOrganizationScope as organizationScope } from "@/api/lib/machine-api-key-scope";
 
 /**
  * Organization-scoped reads of the machine-key table.
@@ -28,6 +28,8 @@ import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
  *
  * The predicate is indexed (`apikey_metadata_organization_id_idx`,
  * `apikey_org_keyset_idx`); see `20260720140000_machine_api_keys_org_index`.
+ * It is defined once, in `lib/machine-api-key-scope.ts`, because membership
+ * revocation applies the same scope and the two must not drift apart.
  *
  * **Why this sits in `lib` rather than beside the handlers.** Handlers are
  * barred from importing owner-level DB values; owner-level access belongs in a
@@ -37,20 +39,6 @@ import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
  * to have validated it at the authorization boundary, so an unvalidated id
  * cannot reach the tenant predicate.
  */
-
-/** The owning organization id, read out of the plugin's JSON metadata column. */
-const metadataOrganizationId = sql`(${apikey.metadata}::jsonb ->> 'organizationId')`;
-
-/**
- * Rows belonging to one organization's machine-key configuration. Both halves
- * matter: `configId` keeps keys minted under some other configuration out, and
- * the metadata predicate is the tenant scope.
- */
-const organizationScope = (organizationId: SafeId<"organization">) =>
-  and(
-    eq(apikey.configId, MACHINE_API_KEY_CONFIG_ID),
-    sql`${metadataOrganizationId} = ${organizationId}`,
-  );
 
 const machineApiKeyColumns = {
   createdAt: apikey.createdAt,
