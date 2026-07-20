@@ -216,6 +216,14 @@ export type CreateContainerInput = {
   cmd: string[];
   env?: string[];
   hostGateway: boolean;
+  /**
+   * Pin the container onto a specific Docker network (maps to
+   * `HostConfig.NetworkMode`). Omit to use the daemon default bridge.
+   * Deployments that must constrain egress point this at a locked-down network
+   * (e.g. an internal network fronted by an egress allowlist) so a run cannot
+   * open arbitrary outbound connections and exfiltrate injected secrets.
+   */
+  networkMode?: string;
 };
 
 export const createContainer = async (
@@ -229,9 +237,12 @@ export const createContainer = async (
       Tty: false,
       WorkingDir: input.workdir,
       ...(input.env ? { Env: input.env } : {}),
-      HostConfig: input.hostGateway
-        ? { ExtraHosts: ["host.docker.internal:host-gateway"] }
-        : {},
+      HostConfig: {
+        ...(input.hostGateway
+          ? { ExtraHosts: ["host.docker.internal:host-gateway"] }
+          : {}),
+        ...(input.networkMode ? { NetworkMode: input.networkMode } : {}),
+      },
     }),
   );
 
@@ -306,7 +317,16 @@ export const imageExists = async (
   return res.ok;
 };
 
-/** Pull an image, draining the progress stream to completion. */
+const parseProgressLine = (line: string): unknown => {
+  try {
+    return JSON.parse(line);
+  } catch {
+    // Non-JSON progress noise: ignore and keep scanning for an error object.
+    return undefined;
+  }
+};
+
+/** Pull an image, draining the progress stream and surfacing pull errors. */
 export const pullImage = async (
   conn: DockerConn,
   image: string,
@@ -319,6 +339,20 @@ export const pullImage = async (
     ),
     `pull ${image}`,
   );
-  // Drain the newline-delimited progress body so the pull finishes.
-  await res.text();
+  // `/images/create` answers 200 immediately, then streams newline-delimited
+  // JSON progress. A pull failure (auth, rate limit, missing tag) arrives as
+  // an `{ "error": … }` object IN that body, not as a non-2xx status — so
+  // draining without inspecting would silently succeed. Scan for the error.
+  const body = await res.text();
+  for (const line of body.split("\n")) {
+    if (line.trim() === "") {
+      continue;
+    }
+    const parsed = parseProgressLine(line);
+    if (isRecord(parsed) && typeof parsed["error"] === "string") {
+      throw new DockerApiError({
+        message: `Docker pull failed for ${image}: ${parsed["error"]}`,
+      });
+    }
+  }
 };

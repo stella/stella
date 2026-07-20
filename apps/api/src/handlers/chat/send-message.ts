@@ -1603,6 +1603,7 @@ const sendMessage = createSafeRootHandler(
                 reasoningEffort: chatReasoningEffort,
                 promptCacheKey: chatContext.promptCacheKey,
                 promptCachingEnabled,
+                runMode: body.runMode,
                 resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
                 resolveAssistantValueRefs:
                   refRegistry.resolveAssistantValueRefs,
