@@ -26,6 +26,7 @@ import {
   DEFAULT_MODELS,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
+  isChatPdfAttachmentModelSupported,
   resolveReasoningEffort,
   supportsTemperature,
 } from "@stll/ai-catalog";
@@ -193,6 +194,38 @@ export type ResolvedTanStackTextModelInfo = Pick<
 export const isBYOKProvider = (
   provider: AIProvider,
 ): provider is BYOKProvider => provider in BYOK_MODEL_OPTIONS;
+
+/**
+ * Whether a resolved model can accept a PDF `document` content part in chat.
+ * The Mistral text adapter accepts PDF via `document_url` but throws on textual
+ * documents; other document-capable providers accept both. See
+ * `CHAT_PDF_ATTACHMENT_MODEL_OPTIONS`. Fail closed: an unrecognized provider is
+ * treated as not PDF-capable.
+ */
+export const modelAcceptsPdfDocumentInput = (
+  model: Pick<ResolvedTanStackTextModel, "modelId" | "provider">,
+): boolean =>
+  isBYOKProvider(model.provider) &&
+  isChatPdfAttachmentModelSupported({
+    provider: model.provider,
+    modelId: model.modelId,
+  });
+
+/**
+ * Whether a resolved model can accept a textual `document` content part
+ * (extracted docx / txt / csv / md) in chat. This is the pdf-role document set
+ * (`BYOK_DOCUMENT_INPUT_MODEL_OPTIONS`), which excludes Mistral because its
+ * `document_url` path handles PDF only. Fail closed on unrecognized providers.
+ */
+export const modelAcceptsTextualDocumentInput = (
+  model: Pick<ResolvedTanStackTextModel, "modelId" | "provider">,
+): boolean =>
+  isBYOKProvider(model.provider) &&
+  isBYOKModelRoleSupported({
+    provider: model.provider,
+    modelId: model.modelId,
+    role: "pdf",
+  });
 
 export const isAllowedBYOKModel = (
   provider: AIProvider,

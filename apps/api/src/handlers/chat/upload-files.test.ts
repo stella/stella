@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
@@ -10,13 +11,10 @@ import {
   TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
 } from "@/api/handlers/chat/attachment-validation";
-import {
-  createChatAttachmentPart,
-  getChatAttachmentUrl,
-} from "@/api/handlers/chat/chat-message-parts";
+import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import type { PersistableChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
-import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
+import { toDataUrl } from "@/api/lib/data-url";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -28,6 +26,30 @@ const arrayBufferMock = mock(async () =>
     fileBytes.byteOffset + fileBytes.byteLength,
   ),
 );
+
+/** Minimal DOCX with a heading and a body paragraph, for extraction tests. */
+const makeDocxBytes = async (): Promise<Uint8Array> => {
+  const zip = new JSZip();
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>
+  <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Agreement</w:t></w:r></w:p>
+  <w:p><w:r><w:t>Jan Novak signs here.</w:t></w:r></w:p>
+</w:body></w:document>`,
+  );
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="xml" ContentType="application/xml"/>
+</Types>`,
+  );
+  // Copy into a fresh ArrayBuffer-backed view so `.buffer` is an ArrayBuffer
+  // (not ArrayBufferLike) for the S3 arrayBuffer mock's return type.
+  return new Uint8Array(await zip.generateAsync({ type: "uint8array" }));
+};
 const fileMock = mock(() => ({ arrayBuffer: arrayBufferMock }));
 const writeMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
@@ -60,7 +82,7 @@ describe("chat attachment hydration", () => {
     expect(canHydrateFilePartAsPlainText(PDF_MIME_TYPE)).toBe(false);
   });
 
-  test("coerces text-like attachments to plain text for anonymized sends", async () => {
+  test("coerces text-like attachments to a text content part (universal, never modality-gated)", async () => {
     const result = await hydrateFilePart({
       fileName: "contacts.csv",
       mimeType: TEXT_CSV_MIME_TYPE,
@@ -73,28 +95,15 @@ describe("chat attachment hydration", () => {
       throw result.error;
     }
 
+    // A `text` part, not a `document` part: text needs no adapter modality
+    // support, so it can never trip the document gate or crash a stream.
     expect(result.value).toMatchObject({
       type: "anonymizable",
       part: {
-        metadata: { filename: "contacts.csv" },
-        source: { mimeType: TEXT_PLAIN_MIME_TYPE },
-        type: "document",
+        type: "text",
+        content: 'Attached file "contacts.csv":\n\nJan Novak,Acme',
       },
     });
-    if (result.value.type !== "anonymizable") {
-      throw new Error("Expected anonymizable attachment hydration");
-    }
-    const parsed = parseDataUrl({
-      expectedMimeType: TEXT_PLAIN_MIME_TYPE,
-      maxBytes: 1024,
-      url: getChatAttachmentUrl(result.value.part),
-    });
-
-    expect(Result.isOk(parsed)).toBe(true);
-    if (Result.isError(parsed)) {
-      throw parsed.error;
-    }
-    expect(new TextDecoder().decode(parsed.value.bytes)).toBe("Jan Novak,Acme");
   });
 
   test("blocks non-extractable attachments before reading bytes in anonymized mode", async () => {
@@ -135,27 +144,47 @@ describe("chat attachment hydration", () => {
     });
   });
 
-  test("raw override bypasses DOCX text extraction and sends the original file", async () => {
-    const result = await hydrateFilePart({
-      fileName: "draft.docx",
-      mimeType: DOCX_MIME_TYPE,
-      sendMode: CHAT_SEND_MODE.rawOverride,
-      s3Key: "user/file",
-    });
+  // Regression: a raw docx byte stream is not a valid content part for any
+  // provider adapter — the previous rawOverride short-circuit shipped it
+  // anyway, crashing the stream. A docx must ALWAYS be reduced to extracted
+  // text, in both send modes, never sent as raw bytes.
+  test.each([CHAT_SEND_MODE.rawOverride, CHAT_SEND_MODE.anonymized])(
+    "extracts DOCX to text and never ships raw bytes (%s mode)",
+    async (sendMode) => {
+      const docxBytes = await makeDocxBytes();
+      arrayBufferMock.mockImplementationOnce(async () => {
+        const arrayBuffer = new ArrayBuffer(docxBytes.byteLength);
+        new Uint8Array(arrayBuffer).set(docxBytes);
+        return arrayBuffer;
+      });
 
-    expect(Result.isOk(result)).toBe(true);
-    if (Result.isError(result)) {
-      throw result.error;
-    }
-    expect(result.value).toMatchObject({
-      type: "rawOverride",
-      part: {
-        metadata: { filename: "draft.docx" },
-        source: { mimeType: DOCX_MIME_TYPE },
-        type: "document",
-      },
-    });
-  });
+      const result = await hydrateFilePart({
+        fileName: "draft.docx",
+        mimeType: DOCX_MIME_TYPE,
+        sendMode,
+        s3Key: "user/file",
+      });
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isError(result)) {
+        throw result.error;
+      }
+      // A `text` part carrying the extracted text — never a raw docx part and
+      // never a `document` part, so it is universal across provider adapters.
+      expect(result.value.type).toBe("anonymizable");
+      if (
+        result.value.type !== "anonymizable" ||
+        result.value.part.type !== "text"
+      ) {
+        throw new Error("Expected extracted DOCX text as a text content part");
+      }
+      const extracted = result.value.part.content;
+      // Folio markdown extraction preserves structure (heading -> `#`).
+      expect(extracted).toContain('Attached file "draft.docx":');
+      expect(extracted).toContain("# Agreement");
+      expect(extracted).toContain("Jan Novak signs here.");
+    },
+  );
 
   test("cleans up already uploaded files when a later attachment fails", async () => {
     const valuesMock = mock(async () => undefined);

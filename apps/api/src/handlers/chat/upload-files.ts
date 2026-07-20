@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/chat/attachment-validation";
 import {
   createChatAttachmentPart,
+  createChatTextPart,
   getChatAttachmentFilename,
   getChatAttachmentMimeType,
   getChatAttachmentUrl,
@@ -45,13 +46,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
-import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-import { extractText } from "../docx/extract-text";
+import { extractMarkdown } from "../docx/extract-text";
 import type {
   ChatAttachmentPart,
   ChatMessage,
+  ChatPart,
   PersistableChatMessage,
 } from "./types";
 
@@ -245,7 +247,10 @@ type HydrateFilePartProps = {
 
 export type HydratedFilePart =
   | {
-      part: ChatAttachmentPart;
+      // A text-extractable attachment (docx/txt/csv/md) hydrated to a `text`
+      // content part, or any part that carries anonymizable text. Text is
+      // universal across provider adapters, so this is never modality-gated.
+      part: ChatPart;
       type: "anonymizable";
     }
   | {
@@ -292,6 +297,20 @@ export const createRawChatFilePart = ({
     url: toDataUrl(bytes, mimeType),
   });
 
+/**
+ * Wraps extracted attachment text with a filename header so the model has the
+ * same context a `document` part's filename metadata used to carry. The header
+ * is provider-bound context, not user-facing UI; the user still sees the
+ * attachment chip from the persisted reference part.
+ */
+const attachmentText = ({
+  fileName,
+  content,
+}: {
+  fileName: string;
+  content: string;
+}): string => `Attached file "${fileName}":\n\n${content}`;
+
 export const hydrateFilePart = async ({
   fileName,
   mimeType,
@@ -316,6 +335,75 @@ export const hydrateFilePart = async ({
     );
     const bytes = new Uint8Array(buffer);
 
+    // Text-extractable formats are ALWAYS reduced to a `text` content part
+    // before dispatch. Text is universal across provider adapters, so it is
+    // never modality-gated and never crashes a stream (unlike a `document`
+    // part, which the Mistral adapter rejects unless it is a PDF). rawOverride
+    // ("anonymization off") means "skip anonymization", NOT "ship raw bytes":
+    // no adapter ingests raw docx/csv/md. Only genuine binary formats (image,
+    // PDF) are sent raw, in the fallthrough below. Ordering is load-bearing —
+    // a rawOverride short-circuit placed before these branches (the previous
+    // shape) made the extraction dead code whenever anonymization was off (the
+    // default), shipping raw docx that every adapter rejects. The persisted
+    // `userfile://` reference part (see `uploadMessageFiles`) still renders the
+    // attachment chip; only the provider-bound copy becomes text.
+    if (DIRECT_TEXT_MIME_TYPES.has(mimeType)) {
+      return Result.ok<HydratedFilePart>({
+        part: createChatTextPart(
+          attachmentText({
+            fileName,
+            // Cap like the DOCX branch: a text/csv/md attachment can be up to
+            // the full upload size, and the model context budget is bounded.
+            content: new TextDecoder()
+              .decode(bytes)
+              .slice(0, LIMITS.chatContextFileMaxChars),
+          }),
+        ),
+        type: "anonymizable",
+      });
+    }
+
+    if (mimeType === DOCX_MIME_TYPE) {
+      // Use folio's structure-preserving Markdown extraction (headings,
+      // tables, lists) rather than a flat paragraph join: document structure
+      // is high-signal context for the model reading a legal document.
+      const markdown = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            (await extractMarkdown(bytes)).slice(
+              0,
+              LIMITS.chatContextFileMaxChars,
+            ),
+          catch: (cause) =>
+            new ChatError({
+              message: "Failed to extract text from chat DOCX attachment",
+              cause,
+            }),
+        }),
+      );
+
+      const text = markdown.trim();
+      if (!text) {
+        if (requiresPlainText) {
+          return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
+        }
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "Chat DOCX attachment did not contain extractable text",
+          }),
+        );
+      }
+
+      return Result.ok<HydratedFilePart>({
+        part: createChatTextPart(attachmentText({ fileName, content: text })),
+        type: "anonymizable",
+      });
+    }
+
+    // Remaining formats are genuine binary (image, PDF). Anonymized mode
+    // blocked them above (they cannot be reduced to plain text), so only
+    // rawOverride reaches here; send them raw for the model to ingest natively.
     if (sendMode === CHAT_SEND_MODE.rawOverride) {
       return Result.ok<HydratedFilePart>({
         part: createRawChatFilePart({ bytes, fileName, mimeType }),
@@ -323,64 +411,7 @@ export const hydrateFilePart = async ({
       });
     }
 
-    if (DIRECT_TEXT_MIME_TYPES.has(mimeType)) {
-      return Result.ok<HydratedFilePart>({
-        part: createChatAttachmentPart({
-          filename: fileName,
-          mimeType: TEXT_PLAIN_MIME_TYPE,
-          url: toDataUrl(bytes, TEXT_PLAIN_MIME_TYPE),
-        }),
-        type: "anonymizable",
-      });
-    }
-
-    if (mimeType !== DOCX_MIME_TYPE) {
-      return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
-    }
-
-    const extractedText = yield* Result.await(
-      Result.tryPromise({
-        try: async () => {
-          const extracted = await extractText(bytes);
-
-          return extracted.paragraphs
-            .flatMap((paragraph) => {
-              const trimmed = paragraph.text.trim();
-              return trimmed ? [trimmed] : [];
-            })
-            .join("\n")
-            .slice(0, LIMITS.chatContextFileMaxChars);
-        },
-        catch: (cause) =>
-          new ChatError({
-            message: "Failed to extract text from chat DOCX attachment",
-            cause,
-          }),
-      }),
-    );
-
-    const text = extractedText.trim();
-
-    if (!text) {
-      if (requiresPlainText) {
-        return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
-      }
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "Chat DOCX attachment did not contain extractable text",
-        }),
-      );
-    }
-
-    return Result.ok<HydratedFilePart>({
-      part: createChatAttachmentPart({
-        filename: toDocxTextFilename({ filename: fileName }),
-        mimeType: TEXT_PLAIN_MIME_TYPE,
-        url: toDataUrl(Buffer.from(text, "utf-8"), TEXT_PLAIN_MIME_TYPE),
-      }),
-      type: "anonymizable",
-    });
+    return Result.ok<HydratedFilePart>(createBlockedHydratedFilePart());
   });
 
 type UploadUserFileInput = {
@@ -628,12 +659,3 @@ const parseMessageFileDataUrl = ({ part }: ParseMessageFileDataUrlProps) => {
     mimeType: parseResult.value.mimeType,
   });
 };
-
-type ToDocxTextFilenameProps = {
-  filename: string;
-};
-
-const toDocxTextFilename = ({ filename }: ToDocxTextFilenameProps) =>
-  DOCX_EXT_RE.test(filename)
-    ? filename.replace(DOCX_EXT_RE, ".txt")
-    : `${filename}.txt`;

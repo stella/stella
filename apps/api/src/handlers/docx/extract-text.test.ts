@@ -332,4 +332,23 @@ describe("extractMarkdown", () => {
 
     expect(result).toBe("- Bullet item\n1. First ordered\n2. Second ordered");
   });
+
+  test("extracts paragraphs wrapped in block-level content controls", async () => {
+    // Legal templates bind fields with `w:sdt` content controls; the body
+    // content lives inside `w:sdtContent`. Dropping it would extract an empty
+    // or partial document.
+    const xml = WRAP(
+      `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Agreement</w:t></w:r></w:p>
+       <w:sdt>
+         <w:sdtPr><w:alias w:val="Party"/></w:sdtPr>
+         <w:sdtContent>
+           <w:p><w:r><w:t>Controlled clause text.</w:t></w:r></w:p>
+         </w:sdtContent>
+       </w:sdt>`,
+    );
+    const buf = await makeDocx(xml);
+    const result = await extractMarkdown(buf);
+
+    expect(result).toBe("# Agreement\nControlled clause text.");
+  });
 });

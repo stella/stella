@@ -80,6 +80,9 @@ export const isChatAttachmentPart = (
   "value" in part["source"] &&
   typeof part["source"]["value"] === "string";
 
+export const isChatDocumentPart = (part: unknown): part is ChatAttachmentPart =>
+  isChatAttachmentPart(part) && part.type === "document";
+
 export const getChatAttachmentUrl = (part: ChatAttachmentPart): string =>
   part.source.value;
 

@@ -1,5 +1,5 @@
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index f9627b9..cbe700a 100644
+index f9627b9147623292d8f17153be3138e539957d20..438a1b3ab2bcc8808543bef8835b177ca32ab039 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
 @@ -1,15 +1,16 @@
@@ -90,8 +90,23 @@ index f9627b9..cbe700a 100644
            } catch {
              partialInput = {};
            }
+@@ -665,8 +673,13 @@ class MistralTextAdapter extends BaseTextAdapter {
+         imageUrl: imageMetadata?.detail ? { url: imageUrl, detail: imageMetadata.detail } : imageUrl
+       };
+     }
++    if (part.type === "document") {
++      const documentValue = part.source.value;
++      const documentUrl = part.source.type === "data" && !documentValue.startsWith("data:") ? `data:${part.source.mimeType};base64,${documentValue}` : documentValue;
++      return { type: "document_url", documentUrl };
++    }
+     throw new Error(
+-      `Mistral text adapter does not support content part of type '${part.type}'. Supported types: text, image. Use a vision-capable model (pixtral-large-latest, pixtral-12b-2409, mistral-medium-latest, or mistral-small-latest) for images.`
++      `Mistral text adapter does not support content part of type '${part.type}'. Supported types: text, image, document. Use a vision-capable model (mistral-medium-latest or mistral-small-latest) for images and documents.`
+     );
+   }
+   /**
 diff --git a/dist/esm/tools/function-tool.js b/dist/esm/tools/function-tool.js
-index bc00221..27fa02f 100644
+index bc0022117d0291720e7ef32054b00a372b9562ab..27fa02fecb2ab7fee2335cfdaff65132884946d1 100644
 --- a/dist/esm/tools/function-tool.js
 +++ b/dist/esm/tools/function-tool.js
 @@ -1,4 +1,4 @@
@@ -119,7 +134,7 @@ index bc00221..27fa02f 100644
    };
  }
 diff --git a/dist/esm/utils/schema-converter.js b/dist/esm/utils/schema-converter.js
-index 2d0f3c4..a944a72 100644
+index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..a944a72894ec47e6cec63cb8d5f69163456895f2 100644
 --- a/dist/esm/utils/schema-converter.js
 +++ b/dist/esm/utils/schema-converter.js
 @@ -1,73 +1,120 @@
@@ -371,7 +386,7 @@ index 2d0f3c4..a944a72 100644
  };
  //# sourceMappingURL=schema-converter.js.map
 diff --git a/package.json b/package.json
-index cf9eb73..e19941a 100644
+index cf9eb735c761dbef8386acd4bf3b3aa26e194f37..e19941abb0e89d4bc6ad40f40f7c3e6355ad6261 100644
 --- a/package.json
 +++ b/package.json
 @@ -42,7 +42,8 @@

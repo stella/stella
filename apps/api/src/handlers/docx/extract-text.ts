@@ -509,6 +509,23 @@ const containerToMarkdown = (
       }
       continue;
     }
+
+    // Block-level content controls (`w:sdt > w:sdtContent`) wrap real body
+    // content — legal templates use them heavily for bound fields. Recurse
+    // into the content so controlled paragraphs/tables are not dropped;
+    // nested content controls are handled by the recursive call.
+    if (child.localName === "sdt" && child.namespaceURI === W_NS) {
+      for (const sdtChild of child.childNodes) {
+        if (
+          isElement(sdtChild) &&
+          sdtChild.localName === "sdtContent" &&
+          sdtChild.namespaceURI === W_NS
+        ) {
+          lines.push(...containerToMarkdown(sdtChild, numbering));
+        }
+      }
+      continue;
+    }
   }
 
   return lines;
