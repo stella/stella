@@ -58,6 +58,7 @@ import {
   MACHINE_API_KEY_CONFIG_ID,
   MACHINE_API_KEY_EXPIRY,
   MACHINE_API_KEY_LENGTH,
+  MACHINE_API_KEY_NAME_MAX_LENGTH,
   MACHINE_API_KEY_PREFIX,
   MACHINE_API_KEY_RATE_LIMIT,
   MACHINE_API_KEY_START_LENGTH,
@@ -668,6 +669,9 @@ const createAuth = () => {
         },
         // A key nobody can identify is a key nobody revokes.
         requireName: true,
+        // Match the HTTP boundary schema (defaults to 32 otherwise), so a name
+        // our schema accepts is never rejected by the plugin with its own 400.
+        maximumNameLength: MACHINE_API_KEY_NAME_MAX_LENGTH,
         enableMetadata: true,
         // Deliberately off. Enabling it would let any `x-api-key` header mint a
         // mock user session on *every* better-auth endpoint, turning a scoped

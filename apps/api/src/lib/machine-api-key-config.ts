@@ -42,6 +42,14 @@ export const MACHINE_API_KEY_PREFIX = "stella_mk_";
 export const MACHINE_API_KEY_LENGTH = 64;
 
 /**
+ * Max length of the human-facing key name. One constant drives both the HTTP
+ * boundary schema (`machineApiKeyNameSchema`) and the plugin's own
+ * `maximumNameLength`, so the boundary cannot accept a name the plugin then
+ * rejects with its own 400. The plugin defaults this to 32; we set both.
+ */
+export const MACHINE_API_KEY_NAME_MAX_LENGTH = 64;
+
+/**
  * Characters of the key stored in plaintext so the UI/CLI can identify a key it
  * can never show again. Covers the prefix plus a short discriminating tail.
  */
@@ -162,7 +170,16 @@ export const parseMachineApiKeyPermissions = (
   }
 
   for (const [resource, actions] of entries) {
-    const known = STATEMENT_ACTIONS[resource];
+    // Guard with `Object.hasOwn` before the index read, not a truthy check on
+    // its result: a resource named after an inherited key (`constructor`,
+    // `__proto__`) would otherwise resolve to a prototype value and make
+    // `known.includes(...)` throw a 500 instead of returning the intended
+    // unknown-resource result. The `?? undefined` collapses the same
+    // inherited-key case the index signature cannot see, so `known` narrows to
+    // a real array.
+    const known = Object.hasOwn(STATEMENT_ACTIONS, resource)
+      ? STATEMENT_ACTIONS[resource]
+      : undefined;
     if (!known) {
       return { type: "unknown-resource", resource };
     }

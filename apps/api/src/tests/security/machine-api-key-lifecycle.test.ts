@@ -238,4 +238,32 @@ describe("machine key tenant filter", () => {
       );
     }
   });
+
+  test("rotate refuses an already-revoked key before minting a replacement", () => {
+    // A rotate racing (or retried after) a revoke would otherwise mint a fresh
+    // active key carrying the revoked key's scopes, undoing the revocation. The
+    // enabled guard must sit before the mint call, not after it.
+    const source = readHandler("rotate.ts");
+    const guardAt = source.indexOf("!existing.enabled");
+    // The invocation, matched with its leading newline+indent, so the
+    // top-of-file import of the same name does not count as "before".
+    const mintCallAt = source.indexOf("\n      mintMachineApiKey({");
+    expect(guardAt).toBeGreaterThan(-1);
+    expect(mintCallAt).toBeGreaterThan(-1);
+    expect(guardAt).toBeLessThan(mintCallAt);
+  });
+});
+
+describe("machine key permission parsing", () => {
+  test("a resource named after a prototype key is unknown, not a 500", async () => {
+    // `STATEMENT_ACTIONS["constructor"]` resolves to a prototype value under a
+    // plain index read; calling `.includes` on it throws. The parser must
+    // return the unknown-resource result instead.
+    const { parseMachineApiKeyPermissions } =
+      await import("@/api/lib/machine-api-key-config");
+    for (const key of ["constructor", "__proto__", "toString"]) {
+      const parsed = parseMachineApiKeyPermissions({ [key]: ["read"] });
+      expect(parsed.type).toBe("unknown-resource");
+    }
+  });
 });

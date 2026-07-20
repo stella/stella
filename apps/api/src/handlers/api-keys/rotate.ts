@@ -4,6 +4,7 @@ import { t } from "elysia";
 import {
   disableMachineApiKey,
   loadOrganizationMachineApiKey,
+  machineApiKeyAlreadyRevoked,
   machineApiKeyExpiresInDaysSchema,
   mintMachineApiKey,
   validateGrantablePermissions,
@@ -52,6 +53,14 @@ const rotateMachineApiKey = createSafeRootHandler(
         organizationId: session.activeOrganizationId,
       }),
     );
+
+    // Refuse to rotate an already-revoked key. Minting off a disabled row
+    // (a retried rotation, or a rotate racing a revoke) would resurrect the
+    // revoked key's scopes and permissions on a fresh active credential —
+    // undoing the revocation the operator just performed.
+    if (!existing.enabled) {
+      return Result.err(machineApiKeyAlreadyRevoked());
+    }
 
     const validation = validateGrantablePermissions({
       memberRole,

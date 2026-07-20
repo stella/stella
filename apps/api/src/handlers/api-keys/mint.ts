@@ -9,6 +9,7 @@ import {
   MACHINE_API_KEY_CONFIG_ID,
   MACHINE_API_KEY_EXPIRY,
   MACHINE_API_KEY_GRANTABLE_SCOPES,
+  MACHINE_API_KEY_NAME_MAX_LENGTH,
   machineApiKeyMetadataSchema,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
@@ -44,7 +45,7 @@ const parseJsonColumn = (value: string | null): unknown => {
  */
 export const machineApiKeyNameSchema = t.String({
   minLength: 1,
-  maxLength: 64,
+  maxLength: MACHINE_API_KEY_NAME_MAX_LENGTH,
 });
 
 /**
@@ -82,6 +83,12 @@ export const machineApiKeyExpiresInDaysSchema = t.Optional(
  */
 const machineApiKeyNotFound = (): HandlerError =>
   new HandlerError({ status: 404, message: "API key not found" });
+
+export const machineApiKeyAlreadyRevoked = (): HandlerError =>
+  new HandlerError({
+    status: 409,
+    message: "API key is already revoked",
+  });
 
 type ValidatedPermissions =
   | { type: "ok" }
