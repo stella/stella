@@ -99,6 +99,7 @@ type Messages = {
     "exploreAgent": "Explore AI agent";
     "exploreAnonymization": "Explore Anonymization";
     "explorePublicData": "Explore Public data";
+    "exploreTabularReview": "Explore Tabular Review";
     "exploreTemplates": "Explore Templates";
     "exploreWorkspace": "Explore Workspace";
     "eyebrow": "One connected workspace";
