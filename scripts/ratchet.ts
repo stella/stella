@@ -581,6 +581,30 @@ const countCrossSliceImports =
 
 // --- Metric table -----------------------------------------------------------
 
+// A capability whose input schema exceeded the exporter's byte cap
+// (`MAX_CAPABILITY_SCHEMA_BYTES` in apps/api/scripts/lib/capability-catalog.ts).
+// The exporter drops the schema and marks the entry, which silently costs that
+// capability its typed CLI flags and its MCP input schema — the command
+// degrades to an opaque `--input` JSON blob with no discoverable shape. Nothing
+// fails when this happens, so without a ratchet the untyped surface grows
+// unnoticed. Counting the committed artifacts (rather than re-running the
+// exporter) keeps the scan cheap and deterministic; both mirrors are included
+// so drift between them also shows up.
+const countTruncatedCapabilitySchemas = (content: string): number => {
+  const parsed: unknown = JSON.parse(content);
+  if (!Array.isArray(parsed)) {
+    return 0;
+  }
+  return parsed.filter(
+    (entry) =>
+      typeof entry === "object" &&
+      entry !== null &&
+      "inputSchemaTruncated" in entry &&
+      (entry as { inputSchemaTruncated?: unknown }).inputSchemaTruncated ===
+        true,
+  ).length;
+};
+
 type FileCounter = (content: string, file: string) => number;
 
 type RatchetMetric = {
@@ -689,6 +713,19 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/web/src/**/*.{ts,tsx}"],
     exclude: isExcludedSource,
     count: countCrossSliceImports(crossesRoutePrivate),
+  },
+  {
+    id: "capability-schemas-truncated",
+    description:
+      "capabilities whose input schema exceeded the exporter byte cap, losing typed CLI flags and MCP input schemas (counted across both committed catalog mirrors)",
+    include: [
+      "packages/cli/src/generated/capability-catalog.json",
+      "apps/api/src/mcp/generated/capability-catalog.json",
+    ],
+    // Generated artifacts are the subject here, so the shared source
+    // exclusions (which skip `.gen.`/generated paths) must not apply.
+    exclude: () => false,
+    count: countTruncatedCapabilitySchemas,
   },
   {
     id: "cross-feature-imports",
@@ -1136,6 +1173,17 @@ const writeFixture = (root: string, rel: string, content: string): void => {
   writeFileSync(full, content);
 };
 
+// Two truncated entries among four, plus shapes the counter must NOT count:
+// `inputSchemaTruncated: false`, and an entry that simply omits the field.
+const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
+  { id: "alpha.create", inputSchemaTruncated: true },
+  { id: "beta.read", inputSchemaTruncated: false },
+  { id: "gamma.update" },
+  { id: "delta.delete", inputSchemaTruncated: true },
+])}\n`;
+// Two truncated entries in each of the two mirror fixtures.
+const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 4;
+
 const runSelfTest = (): number => {
   const failures: string[] = [];
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
@@ -1202,6 +1250,18 @@ const runSelfTest = (): number => {
       root,
       "apps/web/src/features/alpha/uses-beta.ts",
       SELF_TEST_CROSS_FEATURE,
+    );
+    // Both mirrors, so each `include` glob is exercised rather than only the
+    // first: the metric's whole point is that the two artifacts stay in step.
+    writeFixture(
+      root,
+      "packages/cli/src/generated/capability-catalog.json",
+      SELF_TEST_CAPABILITY_CATALOG,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/mcp/generated/capability-catalog.json",
+      SELF_TEST_CAPABILITY_CATALOG,
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
@@ -1290,6 +1350,15 @@ const runSelfTest = (): number => {
     if (detachedPromiseMetric.count !== EXPECTED_DETACHED_PROMISES) {
       failures.push(
         `detached-promise-review-sites counted ${detachedPromiseMetric.count}, expected ${EXPECTED_DETACHED_PROMISES}`,
+      );
+    }
+
+    const truncatedCapabilityMetric = snapshot["capability-schemas-truncated"];
+    if (
+      truncatedCapabilityMetric.count !== EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS
+    ) {
+      failures.push(
+        `capability-schemas-truncated counted ${truncatedCapabilityMetric.count}, expected ${EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS}`,
       );
     }
 

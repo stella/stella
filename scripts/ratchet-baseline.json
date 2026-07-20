@@ -756,6 +756,13 @@
       "apps/web/src/stores/config-store.ts": 2
     }
   },
+  "capability-schemas-truncated": {
+    "count": 6,
+    "files": {
+      "apps/api/src/mcp/generated/capability-catalog.json": 3,
+      "packages/cli/src/generated/capability-catalog.json": 3
+    }
+  },
   "cross-feature-imports": {
     "count": 0,
     "files": {}
