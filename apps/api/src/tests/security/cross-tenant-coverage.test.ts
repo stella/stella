@@ -34,6 +34,13 @@ const WAIVER_REASON = {
    * intentionally public reads. No cross-tenant matrix case is meaningful.
    */
   noTenantReadSurface: "no cross-tenant read surface",
+  /**
+   * The domain has an organization-scoped read surface, but it does not read
+   * through the tenant-scoped RLS database the matrix harness exercises, so a
+   * matrix case would prove nothing about how the domain actually isolates.
+   * Isolation must instead be covered by a dedicated test, named here.
+   */
+  isolatedOutsideRlsHarness: "isolated outside the RLS harness, covered",
 } as const;
 
 type WaiverReason = (typeof WAIVER_REASON)[keyof typeof WAIVER_REASON];
@@ -47,6 +54,15 @@ type WaiverReason = (typeof WAIVER_REASON)[keyof typeof WAIVER_REASON];
  * read-content/read-thumbnail); adding those is incremental follow-up work.
  */
 const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
+  // Machine API keys live in better-auth's `apikey` table, which the scoped
+  // `stella` role is denied outright (`denyStellaAccessPolicies`) — every read
+  // goes through the plugin on the owner connection, so there is no RLS
+  // boundary for this harness to probe. The plugin lists by owning *user*, and
+  // the organization filter is applied in `handlers/api-keys/list.ts` against
+  // each key's server-written metadata. That filter, and the equivalent check
+  // on the credential path, are covered by
+  // `tests/security/machine-api-keys.test.ts`.
+  "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
