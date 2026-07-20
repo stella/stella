@@ -1,5 +1,6 @@
 import { env } from "@/api/env";
 import { REQUEST_ID_HEADER } from "@/api/lib/observability/request-context";
+import { declareCliSupportBand } from "@/api/mcp/cli-support-band";
 
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:search",
@@ -72,8 +73,17 @@ export const MCP_ALLOWED_HEADERS = [
 // Deploy support for a CLI version before publishing it: the production
 // canary checks these inclusive bounds against the exact packed CLI version.
 export const STELLA_MCP_API_CONTRACT_VERSION = 1;
-export const STELLA_CLI_MINIMUM_VERSION = "0.3.0";
-export const STELLA_CLI_MAXIMUM_VERSION = "0.3.0";
+// Declared as one validated band: `declareCliSupportBand` panics at import
+// time on an incoherent ordering, so bumping a subset of these can no longer
+// ship an inverted contract (see cli-support-band.ts).
+const CLI_SUPPORT_BAND = declareCliSupportBand({
+  minimum: "0.3.0",
+  latest: "0.3.0",
+  maximum: "0.3.0",
+});
+
+export const STELLA_CLI_MINIMUM_VERSION = CLI_SUPPORT_BAND.minimum;
+export const STELLA_CLI_MAXIMUM_VERSION = CLI_SUPPORT_BAND.maximum;
 export const STELLA_MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version";
 export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 
@@ -83,7 +93,7 @@ export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 // the maximum may move ahead in the API release that deliberately precedes a
 // CLI publication. The header name is mirrored (by design, no shared module)
 // in `packages/cli/src/cli-version-nudge.ts`.
-export const STELLA_CLI_LATEST_VERSION = "0.3.0";
+export const STELLA_CLI_LATEST_VERSION = CLI_SUPPORT_BAND.latest;
 export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
 
 export const MCP_EXPOSE_HEADERS = [
