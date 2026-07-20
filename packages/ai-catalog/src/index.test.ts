@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ReasoningEffort } from "./index";
 import {
   AI_PROVIDERS,
   ANTHROPIC_ADAPTIVE_THINKING_MODELS,
@@ -13,8 +14,13 @@ import {
   isBYOKProviderRoleSupported,
   DEFAULT_MODELS,
   MODEL_RATES,
+  MODEL_REASONING_EFFORTS,
   MODEL_ROLES,
+  MODEL_TEMPERATURE_SUPPORT,
+  REASONING_EFFORTS,
+  resolveReasoningEffort,
   resolveWorkingBYOKModelForRole,
+  supportsTemperature,
   TANSTACK_AI_PROVIDERS,
 } from "./index";
 
@@ -261,5 +267,91 @@ describe("CONTEXT_WINDOW_TOKENS", () => {
   test("returns the documented window for a listed model ID", () => {
     expect(getContextWindowTokens("claude-sonnet-4-6")).toBe(200_000);
     expect(getContextWindowTokens("gpt-5.4")).toBe(400_000);
+  });
+});
+
+describe("MODEL_REASONING_EFFORTS", () => {
+  test("declares every offered BYOK model", () => {
+    for (const models of Object.values(BYOK_MODEL_OPTIONS)) {
+      for (const modelId of models) {
+        expect(
+          MODEL_REASONING_EFFORTS[modelId],
+          `missing reasoning capability for ${modelId}`,
+        ).not.toBeUndefined();
+      }
+    }
+  });
+
+  test("declared effort lists are non-empty, deduplicated ladder values", () => {
+    for (const [modelId, efforts] of Object.entries(MODEL_REASONING_EFFORTS)) {
+      if (efforts === null) {
+        continue;
+      }
+      expect(efforts.length, modelId).toBeGreaterThan(0);
+      expect(new Set(efforts).size, modelId).toBe(efforts.length);
+      for (const effort of efforts) {
+        expect(REASONING_EFFORTS, `${modelId}: ${effort}`).toContain(effort);
+      }
+    }
+  });
+});
+
+describe("MODEL_TEMPERATURE_SUPPORT", () => {
+  test("declares every offered BYOK model", () => {
+    for (const models of Object.values(BYOK_MODEL_OPTIONS)) {
+      for (const modelId of models) {
+        expect(
+          MODEL_TEMPERATURE_SUPPORT[modelId],
+          `missing temperature capability for ${modelId}`,
+        ).not.toBeUndefined();
+      }
+    }
+  });
+
+  test("supportsTemperature answers declared models and denies unknown ids", () => {
+    expect(supportsTemperature("gemini-3.5-flash")).toBe(true);
+    // GPT-5 family and the newest Claude models reject sampling overrides.
+    expect(supportsTemperature("gpt-5.4")).toBe(false);
+    expect(supportsTemperature("openai/gpt-5.4-mini")).toBe(false);
+    expect(supportsTemperature("claude-fable-5")).toBe(false);
+    // Unknown ids: no positive evidence, no parameter.
+    expect(supportsTemperature("o3-mini")).toBe(false);
+    expect(supportsTemperature("some-env-override-model")).toBe(false);
+  });
+});
+
+describe("resolveReasoningEffort", () => {
+  // Widen the branded return type so literal expectations typecheck.
+  const resolve = (
+    modelId: string,
+    requested: ReasoningEffort,
+  ): ReasoningEffort | null => resolveReasoningEffort({ modelId, requested });
+
+  test("passes a supported effort through unchanged", () => {
+    expect(resolve("openai/gpt-5.5", "none")).toBe("none");
+    expect(resolve("google/gemini-3.5-flash", "high")).toBe("high");
+  });
+
+  test("clamps a disabled-reasoning request on a reasoning-mandatory model to its weakest tier", () => {
+    // The provider-502 class this table exists for: gemini-3.5-flash
+    // rejects effort "none" outright.
+    expect(resolve("google/gemini-3.5-flash", "none")).toBe("minimal");
+    expect(resolve("gemini-3.1-pro-preview", "minimal")).toBe("low");
+  });
+
+  test("clamps a request above the model's ceiling down to it", () => {
+    expect(resolve("google/gemini-3.1-pro-preview", "max")).toBe("high");
+  });
+
+  test("prefers the weaker side on equidistant ties", () => {
+    // mistral-small-latest declares ["none", "high"]; "low" sits two
+    // ladder steps from "none" and two from "high" — weaker side wins.
+    expect(resolve("mistral-small-latest", "low")).toBe("none");
+  });
+
+  test("returns null for unknown models and models without an effort dial", () => {
+    expect(resolve("some-env-override-model", "none")).toBeNull();
+    expect(resolve("magistral-medium-latest", "high")).toBeNull();
+    expect(resolve("claude-haiku-4-5-20251001", "low")).toBeNull();
   });
 });

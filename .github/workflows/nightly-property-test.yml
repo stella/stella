@@ -43,9 +43,9 @@ jobs:
       - name: Prepare environment
         run: |
           cd ./apps/api
-          mv .env.example .env
+          cp .env.example .env
           cd ../web
-          mv .env.example .env
+          cp .env.example .env
 
       # Run only the property tests, in isolation, with a larger per-test
       # budget than PR CI affords. Each package's test:property selects every

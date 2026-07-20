@@ -1,3 +1,7 @@
+import type { AnthropicModelInputModalitiesByName } from "@tanstack/ai-anthropic";
+import type { BedrockModelInputModalitiesByName } from "@tanstack/ai-bedrock";
+import type { GeminiModelInputModalitiesByName } from "@tanstack/ai-gemini";
+import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
 /**
  * Canonical AI provider and model catalog.
  *
@@ -9,7 +13,9 @@
  *
  * Pure data: no provider SDKs, no env access, no side effects. This is
  * deliberate so scripts (the nightly upstream-validation check) and
- * both apps can import it cheaply. Keep it that way.
+ * both apps can import it cheaply. Keep it that way. The only runtime
+ * dependency is valibot, used solely to construct branded types the
+ * same way the rest of the repo does.
  *
  * Model IDs go stale when providers rename or retire models. The
  * nightly `model-catalog-upstream` check
@@ -17,10 +23,12 @@
  * ID here against live provider/aggregator listings so a retired model
  * fails CI instead of 400-ing a user at runtime.
  */
-import type { AnthropicModelInputModalitiesByName } from "@tanstack/ai-anthropic";
-import type { BedrockModelInputModalitiesByName } from "@tanstack/ai-bedrock";
-import type { GeminiModelInputModalitiesByName } from "@tanstack/ai-gemini";
-import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
+import * as v from "valibot";
+
+import {
+  MODEL_REASONING_EFFORTS,
+  MODEL_TEMPERATURE_SUPPORT,
+} from "./capabilities.gen";
 
 /**
  * Logical model roles. Call sites declare *what* they need, not
@@ -187,6 +195,11 @@ export const BYOK_MODEL_OPTIONS = {
 
 export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 
+// Input data for the capability generator
+// (packages/scripts/src/model-catalog-capabilities-gen.ts).
+export { CAPABILITY_OVERRIDES } from "./capabilities-overrides";
+export type { CapabilityOverride } from "./capabilities-overrides";
+
 type ModelInputModalitiesByName = Record<string, readonly string[]>;
 
 type ModelWithInputModality<
@@ -220,6 +233,8 @@ type TanStackDocumentInputModelByProvider = {
 type BYOKModelIdByProvider = {
   [TProvider in BYOKProvider]: (typeof BYOK_MODEL_OPTIONS)[TProvider][number];
 };
+
+export type OfferedBYOKModelId = BYOKModelIdByProvider[BYOKProvider];
 
 const TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS = {
   anthropic: ["claude-sonnet-4-6"],
@@ -374,17 +389,128 @@ export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
 ] as const;
 
 /**
- * Anthropic models that reject sampling overrides (`temperature`,
- * `topP`, `topK`) with a 400 on every request shape; they always run
- * with provider-side defaults. Enforced by TanStack model-option
- * construction in `apps/api/src/lib/tanstack-ai-models.ts` so neither
- * role defaults nor call-site overrides can reach the provider.
+ * Canonical reasoning-effort ladder, ordered weakest to strongest.
+ * Union of every effort keyword the offered providers accept; no
+ * single model accepts all of them, which is exactly why the
+ * generated per-model `MODEL_REASONING_EFFORTS` exists.
  */
-export const ANTHROPIC_FIXED_SAMPLING_MODELS = [
-  "claude-opus-4-7",
-  "claude-opus-4-8",
-  "claude-fable-5",
+export const REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
 ] as const;
+
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
+const resolvedReasoningEffortSchema = v.pipe(
+  v.picklist(REASONING_EFFORTS),
+  v.brand("ResolvedReasoningEffort"),
+);
+
+/**
+ * A reasoning effort proven to be accepted by the model it targets.
+ * Only `resolveReasoningEffort` can produce this type, so option
+ * builders cannot hand a provider a literal effort the model rejects
+ * (e.g. `"none"` to a model whose reasoning cannot be disabled) —
+ * that mistake now fails typecheck instead of 502-ing at runtime.
+ */
+export type ResolvedReasoningEffort = v.InferOutput<
+  typeof resolvedReasoningEffortSchema
+>;
+
+// Per-model capability maps are generated from models.dev; see
+// capabilities.gen.ts (regenerate with `bun --filter @stll/ai-catalog
+// gen:capabilities`).
+export {
+  MODEL_REASONING_EFFORTS,
+  MODEL_TEMPERATURE_SUPPORT,
+} from "./capabilities.gen";
+
+const MODEL_TEMPERATURE_SUPPORT_BY_ID: Readonly<Record<string, boolean>> =
+  MODEL_TEMPERATURE_SUPPORT;
+
+/**
+ * Whether a `temperature` override may be sent to this model.
+ * Unknown ids resolve to `false` (send nothing; provider default).
+ * Callers must never index `MODEL_TEMPERATURE_SUPPORT` directly with
+ * a runtime string.
+ */
+export const supportsTemperature = (modelId: string): boolean =>
+  MODEL_TEMPERATURE_SUPPORT_BY_ID[modelId] ?? false;
+
+const MODEL_REASONING_EFFORTS_BY_ID: Readonly<
+  Record<string, readonly ReasoningEffort[] | null>
+> = MODEL_REASONING_EFFORTS;
+
+/**
+ * Declared reasoning-effort values for a model ID, or `null` when the
+ * model has no effort control or is not catalogued (custom deployments,
+ * env overrides). Callers must never index `MODEL_REASONING_EFFORTS`
+ * directly with a runtime string.
+ */
+export const getModelReasoningEfforts = (
+  modelId: string,
+): readonly ReasoningEffort[] | null =>
+  MODEL_REASONING_EFFORTS_BY_ID[modelId] ?? null;
+
+// Sole constructor of the ResolvedReasoningEffort brand; every call
+// site below has already established membership in the model's
+// declared effort set, and the parse revalidates it at runtime.
+const asResolvedReasoningEffort = (
+  effort: ReasoningEffort,
+): ResolvedReasoningEffort => v.parse(resolvedReasoningEffortSchema, effort);
+
+export type ResolveReasoningEffortOptions = {
+  modelId: string;
+  requested: ReasoningEffort;
+};
+
+/**
+ * Clamp a requested reasoning effort into the target model's declared
+ * capability.
+ *
+ * - Unknown model or no effort control → `null` (send no effort at
+ *   all; the provider default is the only universally safe choice).
+ * - Requested value supported → returned unchanged.
+ * - Otherwise → the supported value nearest on `REASONING_EFFORTS`,
+ *   preferring the weaker side on ties, so a "none" request against a
+ *   reasoning-mandatory model degrades to its weakest tier instead of
+ *   erroring, and requests above the model's ceiling clamp down to it.
+ */
+export const resolveReasoningEffort = ({
+  modelId,
+  requested,
+}: ResolveReasoningEffortOptions): ResolvedReasoningEffort | null => {
+  const efforts = getModelReasoningEfforts(modelId);
+  const weakest = efforts?.at(0);
+  if (efforts === null || weakest === undefined) {
+    return null;
+  }
+  if (efforts.includes(requested)) {
+    return asResolvedReasoningEffort(requested);
+  }
+  const requestedRank = REASONING_EFFORTS.indexOf(requested);
+  let nearest: ReasoningEffort = weakest;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const effort of efforts) {
+    const distance = Math.abs(
+      REASONING_EFFORTS.indexOf(effort) - requestedRank,
+    );
+    if (
+      distance < nearestDistance ||
+      (distance === nearestDistance &&
+        REASONING_EFFORTS.indexOf(effort) < REASONING_EFFORTS.indexOf(nearest))
+    ) {
+      nearest = effort;
+      nearestDistance = distance;
+    }
+  }
+  return asResolvedReasoningEffort(nearest);
+};
 
 /**
  * Per-model ledger rates, normalized micro-units per 1M tokens.

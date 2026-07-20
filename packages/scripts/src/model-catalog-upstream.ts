@@ -19,6 +19,13 @@
  *  2. Existence — OpenRouter slugs are checked for presence against
  *     OpenRouter's routing API; future non-first-party providers can
  *     fall back to the full upstream model set.
+ *  3. Request capabilities — the per-model `MODEL_REASONING_EFFORTS`
+ *     and `MODEL_TEMPERATURE_SUPPORT` declarations are compared
+ *     against models.dev `reasoning_options` and `temperature`
+ *     (first-party and openrouter catalogs), so a model that starts
+ *     requiring reasoning, changes effort tiers, or flips temperature
+ *     support fails CI before a stale declaration lets request
+ *     construction send a parameter the model rejects.
  *
  * Aggregators lag on brand-new models, and a model we offer may be
  * deprecated upstream while we still intend to serve it until shutdown.
@@ -29,10 +36,21 @@
  */
 import {
   BYOK_MODEL_OPTIONS,
+  CAPABILITY_OVERRIDES,
   DEFAULT_MODELS,
   MODEL_RATES,
+  MODEL_REASONING_EFFORTS,
+  MODEL_TEMPERATURE_SUPPORT,
 } from "@stll/ai-catalog";
 
+import {
+  parseUpstreamCapabilities,
+  validateCapabilities,
+} from "./model-catalog-capabilities";
+import type {
+  CapabilityFailure,
+  UpstreamCapabilities,
+} from "./model-catalog-capabilities";
 import { parseUpstreamCost, validateRates } from "./model-catalog-rates";
 import type {
   CatalogEntry,
@@ -67,6 +85,19 @@ const MODELS_DEV_PROVIDER: Record<string, string> = {
   mistral: "mistral",
 };
 const FIRST_PARTY_KEYS = new Set(Object.values(MODELS_DEV_PROVIDER));
+
+/**
+ * Providers whose reasoning capability is checkable against models.dev.
+ * Extends the first-party set with `openrouter`, whose models.dev
+ * catalog publishes the OpenRouter-normalized `reasoning_options` per
+ * slug (the values OpenRouter actually accepts, which is what stella
+ * sends).
+ */
+const CAPABILITY_CHECK_PROVIDERS: Record<string, string> = {
+  ...MODELS_DEV_PROVIDER,
+  openrouter: "openrouter",
+  bedrock: "amazon-bedrock",
+};
 
 /**
  * Providers whose offered IDs are not checkable against the public
@@ -184,6 +215,11 @@ type Upstream = {
   firstPartyDeprecated: Set<string>;
   /** `${provider}:${nativeId}` → upstream cost metadata, when published. */
   firstPartyCost: Map<string, UpstreamCost>;
+  /**
+   * `${provider}:${id}` → upstream reasoning metadata (first-party
+   * catalogs plus the models.dev openrouter catalog).
+   */
+  capabilityMeta: Map<string, UpstreamCapabilities>;
   /** OpenRouter listing was fetched and parsed. */
   openrouterReachable: boolean;
   /** models.dev listing was fetched and parsed. */
@@ -197,6 +233,7 @@ const loadUpstream = async (): Promise<Upstream> => {
   const firstPartyPresent = new Set<string>();
   const firstPartyDeprecated = new Set<string>();
   const firstPartyCost = new Map<string, UpstreamCost>();
+  const capabilityMeta = new Map<string, UpstreamCapabilities>();
   let openrouterReachable = false;
   let modelsDevReachable = false;
 
@@ -232,6 +269,16 @@ const loadUpstream = async (): Promise<Upstream> => {
       for (const [modelId, modelVal] of Object.entries(providerVal["models"])) {
         canonAll.add(canonical(modelId));
         count += 1;
+        if (
+          isFirstParty ||
+          providerKey === "openrouter" ||
+          providerKey === "amazon-bedrock"
+        ) {
+          const reasoning = parseUpstreamCapabilities(modelVal);
+          if (reasoning !== null) {
+            capabilityMeta.set(`${providerKey}:${modelId}`, reasoning);
+          }
+        }
         if (!isFirstParty) {
           continue;
         }
@@ -258,6 +305,7 @@ const loadUpstream = async (): Promise<Upstream> => {
     firstPartyPresent,
     firstPartyDeprecated,
     firstPartyCost,
+    capabilityMeta,
     openrouterReachable,
     modelsDevReachable,
   };
@@ -382,6 +430,51 @@ const main = async (): Promise<void> => {
     );
   }
 
+  const capabilityFailures: CapabilityFailure[] = [];
+  if (upstream.modelsDevReachable) {
+    // Bedrock ids are excluded from the existence/rate entries
+    // (CUSTOM_ID_PROVIDERS) but their generated capability rows come
+    // from the models.dev amazon-bedrock catalog, so include them in
+    // the capability drift check; override-declared ids (absent
+    // upstream by definition) are skipped inside the validator.
+    const capabilityEntries = [
+      ...entries,
+      ...BYOK_MODEL_OPTIONS.bedrock.map((modelId) => ({
+        provider: "bedrock",
+        modelId,
+      })),
+    ];
+    const capabilityCheck = validateCapabilities({
+      entries: capabilityEntries,
+      checkableProviders: CAPABILITY_CHECK_PROVIDERS,
+      upstream: upstream.capabilityMeta,
+      declaredEfforts: MODEL_REASONING_EFFORTS,
+      declaredTemperature: MODEL_TEMPERATURE_SUPPORT,
+      overriddenIds: new Set(Object.keys(CAPABILITY_OVERRIDES)),
+    });
+    for (const failure of capabilityCheck.failures) {
+      // ACKNOWLEDGED is intentionally empty by default — see the note
+      // on the existence loop above.
+
+      if (ACKNOWLEDGED.has(acknowledgementKey(failure.entry))) {
+        console.log(
+          `  · acknowledged ${failure.label.toLowerCase()} ${failure.entry.provider} / ${failure.entry.modelId}`,
+        );
+        continue;
+      }
+      capabilityFailures.push(failure);
+    }
+    for (const entry of capabilityCheck.skipped) {
+      console.warn(
+        `  ⚠ capability unverifiable (no upstream capability metadata): ${entry.provider} / ${entry.modelId}`,
+      );
+    }
+  } else {
+    console.warn(
+      "  ⚠ capability validation skipped: models.dev listing unreachable",
+    );
+  }
+
   console.log(`\nChecked ${entries.length} offered model IDs.`);
 
   if (unverified.length > 0) {
@@ -403,10 +496,10 @@ const main = async (): Promise<void> => {
     process.exit(1);
   }
 
-  if (failures.length > 0 || rateFailures.length > 0) {
-    console.error(
-      `\n✗ ${failures.length + rateFailures.length} offered model ID(s) need attention:`,
-    );
+  const failureCount =
+    failures.length + rateFailures.length + capabilityFailures.length;
+  if (failureCount > 0) {
+    console.error(`\n✗ ${failureCount} offered model ID(s) need attention:`);
     for (const { entry, verdict } of failures) {
       const label = verdict.kind === "deprecated" ? "DEPRECATED" : "MISSING";
       const detail = "detail" in verdict ? ` — ${verdict.detail}` : "";
@@ -414,16 +507,19 @@ const main = async (): Promise<void> => {
         `  ✗ [${label}] ${entry.provider} / ${entry.modelId}${detail}`,
       );
     }
-    for (const { entry, label, detail } of rateFailures) {
+    for (const { entry, label, detail } of [
+      ...rateFailures,
+      ...capabilityFailures,
+    ]) {
       console.error(
         `  ✗ [${label}] ${entry.provider} / ${entry.modelId} — ${detail}`,
       );
     }
     console.error(
       "\nResolve by updating @stll/ai-catalog (migrate off the model, or\n" +
-        "refresh its MODEL_RATES entry), or, if the divergence is real and\n" +
-        "deliberate, add the provider-scoped acknowledgementKey() form to\n" +
-        "ACKNOWLEDGED with a dated note.",
+        "refresh its MODEL_RATES / MODEL_REASONING_EFFORTS entry), or, if\n" +
+        "the divergence is real and deliberate, add the provider-scoped\n" +
+        "acknowledgementKey() form to ACKNOWLEDGED with a dated note.",
     );
     process.exit(1);
   }

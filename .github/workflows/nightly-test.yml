@@ -38,9 +38,9 @@ jobs:
       - name: Prepare environment
         run: |
           cd ./apps/api
-          mv .env.example .env
+          cp .env.example .env
           cd ../web
-          mv .env.example .env
+          cp .env.example .env
 
       - name: Full test suite
         run: bun run test -- --concurrency=2
