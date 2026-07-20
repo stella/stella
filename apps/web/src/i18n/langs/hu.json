@@ -2673,6 +2673,13 @@
     "aiAdaptHint": "Az MI a megfogalmazást a dokumentum minden előfordulási helyéhez igazítja.",
     "allTemplates": "Összes sablon",
     "backToList": "Vissza a sablonokhoz",
+    "binding": {
+      "attorneyLead": "Vezető ügyvéd",
+      "fieldBillingReference": "Számlázási hivatkozás",
+      "sourceAttorney": "Ügyvéd",
+      "sourceFirm": "Ügyvédi iroda",
+      "sourceParty": "Egyéb fél"
+    },
     "browseFiles": "Fájlok tallózása",
     "categoryDeleteConfirm": "Ezzel a kategória törlődik. Az ide tartozó sablonok kategória nélkülivé válnak.",
     "categoryDeleteFailed": "A kategória törlése nem sikerült",
@@ -2952,6 +2959,9 @@
       "slashGroupInsert": "Beszúrás",
       "slashGroupReuse": "Újrahasználat",
       "slashHint": "Gépeljen a mezők szűréséhez vagy új elnevezéséhez",
+      "sourceEnable": "Kitöltés az ügyből",
+      "sourceHint": "Az érték a dokumentum létrehozásakor az ügyből (annak ügyfeléből, egy félből, magából az ügyből, egy ügyvédből vagy egy ügyvédi irodából) kerül kitöltésre.",
+      "sourcePickSource": "Adatforrás",
       "textPlusAi": "Személy + MI",
       "useExisting": "A meglévő {name} mező használata",
       "whoFills": "Ki tölti ki később ezt a mezőt?"

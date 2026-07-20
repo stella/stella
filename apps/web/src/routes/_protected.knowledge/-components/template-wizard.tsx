@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
@@ -43,6 +44,7 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
+import { bindingCatalogOptions } from "@/routes/_protected.knowledge/-queries/binding-catalog";
 
 import {
   LOOKUP_REGISTRY_OPTIONS,
@@ -98,6 +100,20 @@ const fieldTypeChoice = (field: TemplateEditableField): InputType | "company" =>
 const PART_INPUT_TYPES = ["text", "select"] as const;
 
 type PartInputType = (typeof PART_INPUT_TYPES)[number];
+
+/** A field's value source: resolved server-side from a matter record at fill
+ *  time (the matter's client, a party in a given role, the matter itself, an
+ *  attorney by ref, or the firm). A derived value source, mutually exclusive
+ *  with the input sources (lookup/formula/parts/aiPrompt/condition). Mirrors
+ *  the backend `FieldSource` (apps/api/src/lib/template-binding/binding-sources.ts);
+ *  the `role`/`ref`/`field` keys are validated against the binding catalog
+ *  server-side, so they are plain strings here. */
+export type FieldSource =
+  | { kind: "contact"; field: string }
+  | { kind: "party"; role: string; field: string }
+  | { kind: "matter"; field: string }
+  | { kind: "attorney"; ref: string; field: string }
+  | { kind: "firm"; field: string };
 
 /** One output format for a lookup field: the author enters the registry
  *  number once and addresses this rendering of the resolved hit by a marker.
@@ -167,6 +183,12 @@ export type TemplateEditableField = {
    *  expression at fill time; the fill form renders no input for it.
    *  Mutually exclusive with parts and lookup. */
   formula?: string | undefined;
+  /** Binding source: the value is resolved server-side from a matter record
+   *  (its client, a party, the matter itself, an attorney, or the firm) at
+   *  fill time, so the fill form renders no input for it. A derived value
+   *  source, mutually exclusive with lookup/formula/parts/aiPrompt/condition
+   *  (backend-validated). */
+  source?: FieldSource | undefined;
   /** Condition rule (a `@stll/template-conditions` expression): a boolean
    *  field whose yes/no value is DERIVED by this rule rather than asked. Only
    *  meaningful on `inputType === "boolean"`; mutually exclusive with
@@ -185,6 +207,20 @@ export type TemplateEditableField = {
    *  are the repeat bounds and live on the FieldMeta whose path equals the
    *  loop's array (container) path. */
   validation?: FieldValidation | undefined;
+};
+
+/**
+ * The field shape the value-source controls (binding, formula) edit. A superset
+ * of {@link TemplateEditableField} that also carries the AI-draft fields the
+ * Studio field adds, so enabling one value mode can clear every rival — the
+ * AI-draft modes included — without the wizard depending on the Studio's field
+ * type. Both the wizard's plain field and the Studio's `StudioField` assign to
+ * it (the AI fields are optional here, required on the Studio field).
+ */
+export type EditableField = TemplateEditableField & {
+  aiPrompt?: string | undefined;
+  aiAdapt?: boolean | undefined;
+  aiSeesDocument?: boolean | undefined;
 };
 
 /** Field-level validation. The studio's UI surfaces only the `{{#each}}`
@@ -257,6 +293,7 @@ const buildEditableFields = (
     optionsFrom: f.optionsFrom,
     lookup: f.lookup,
     formula: f.formula,
+    source: f.source,
     dateFormat: f.dateFormat,
   }));
 
@@ -388,6 +425,19 @@ const formulaManifestProps = (
   return formula === "" ? undefined : formula;
 };
 
+/**
+ * The manifest shape of a field's binding source: emitted as-is when set. A
+ * derived value resolved server-side at fill time, mutually exclusive with the
+ * input sources — the config controls clear those when the source is enabled
+ * (and clear the source when an input source is enabled), so a field never
+ * carries both. Returns a spreadable object so the field map omits `source`
+ * entirely when absent.
+ */
+export const sourceManifestProps = (
+  field: EditableField,
+): { source: FieldSource } | Record<string, never> =>
+  field.source !== undefined ? { source: field.source } : {};
+
 type ConfigureStepProps = {
   file: File;
   fields: ResolvedField[];
@@ -476,6 +526,7 @@ export const ConfigureStep = ({
               : undefined,
           lookup: lookupManifestProps(f),
           dateFormat: dateFormatManifestProps(f),
+          ...sourceManifestProps(f),
         };
       }),
       // Legacy named conditions from discovery are preserved read-only; new
@@ -1523,7 +1574,11 @@ const FormulaConfigControl = ({
             onCheckedChange={(checked) =>
               onUpdate(
                 checked
-                  ? { formula: field.formula ?? "", lookup: undefined }
+                  ? {
+                      formula: field.formula ?? "",
+                      lookup: undefined,
+                      source: undefined,
+                    }
                   : { formula: undefined },
               )
             }
@@ -1557,6 +1612,268 @@ const FormulaConfigControl = ({
   );
 };
 
+type BindingCatalogResponse = Awaited<
+  ReturnType<(typeof api.templates)["binding-catalog"]["get"]>
+>;
+
+type BindingCatalogData = Exclude<
+  NonNullable<Extract<BindingCatalogResponse, { data: unknown }>["data"]>,
+  Response
+>;
+
+/** One pickable source in the binding catalog (the matter's client, a party, the
+ *  matter, an attorney, or the firm), with its bindable fields and any extra
+ *  selector (party `roles`, attorney `refs`). Derived from the Eden response so
+ *  it tracks the backend catalog. */
+type CatalogSource = BindingCatalogData["sources"][number];
+
+/** Compose a {@link FieldSource} from a catalog source plus the role/ref the
+ *  author picked. Explicit per-branch construction so each variant carries
+ *  exactly the keys it needs: party adds `role`, attorney adds `ref`, the rest
+ *  carry only `field`. */
+const composeSource = (
+  source: CatalogSource,
+  fieldKey: string,
+  role: string,
+  ref: string,
+): FieldSource => {
+  switch (source.kind) {
+    case "contact":
+      return { kind: "contact", field: fieldKey };
+    case "party":
+      return { kind: "party", role, field: fieldKey };
+    case "matter":
+      return { kind: "matter", field: fieldKey };
+    case "attorney":
+      return { kind: "attorney", ref, field: fieldKey };
+    case "firm":
+      return { kind: "firm", field: fieldKey };
+    default: {
+      // A new source kind must be handled explicitly rather than silently
+      // persisting as a contact binding.
+      const exhaustive: never = source;
+      return exhaustive;
+    }
+  }
+};
+
+/** The source selected by default when a source is first enabled or switched:
+ *  its first field, and (where applicable) its first role/ref. */
+const defaultSourceFor = (source: CatalogSource): FieldSource =>
+  composeSource(
+    source,
+    source.fields.at(0)?.key ?? "",
+    source.kind === "party" ? (source.roles.at(0)?.value ?? "") : "",
+    source.kind === "attorney" ? (source.refs.at(0)?.value ?? "") : "",
+  );
+
+/** Binding-source affordance: the field's value is resolved server-side from a
+ *  matter record at fill time, so the fill form asks for nothing. The pickable
+ *  sources and fields come from the binding catalog. Mutually exclusive with the
+ *  other value sources; enabling it clears the registry lookup, formula, and
+ *  composite configuration. */
+const BindingSourceConfigControl = ({
+  field,
+  onUpdate,
+}: {
+  field: EditableField;
+  onUpdate: (patch: Partial<EditableField>) => void;
+}) => {
+  const t = useTranslations();
+  const { data } = useQuery(bindingCatalogOptions());
+  const sources = optionalArray(data?.sources);
+  const firstSource = sources.at(0);
+
+  // A binding is a derived value source, mutually exclusive with every other
+  // input mode; enabling it clears them all (matching the Studio's value-source
+  // switcher, which clears aiPrompt/aiAdapt/aiSeesDocument together) so a field
+  // never carries a binding beside a rival the backend validator rejects.
+  const emitSource = (source: FieldSource) =>
+    onUpdate({
+      source,
+      lookup: undefined,
+      formula: undefined,
+      parts: undefined,
+      format: undefined,
+      optionsFrom: undefined,
+      dateFormat: undefined,
+      condition: undefined,
+      conditionAst: undefined,
+      aiPrompt: undefined,
+      aiAdapt: false,
+      aiSeesDocument: false,
+    });
+
+  // Fail safe: while the catalog is loading or errored there is nothing to
+  // bind to, so the toggle is disabled rather than crashing on empty data.
+  if (firstSource === undefined) {
+    return (
+      <Field>
+        <div className="flex items-center gap-2">
+          <Checkbox checked={field.source !== undefined} disabled />
+          <FieldLabel>{t("templates.studio.sourceEnable")}</FieldLabel>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          {t("templates.studio.sourceHint")}
+        </p>
+      </Field>
+    );
+  }
+
+  return (
+    <>
+      <Field>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={field.source !== undefined}
+            onCheckedChange={(checked) =>
+              checked
+                ? emitSource(defaultSourceFor(firstSource))
+                : onUpdate({ source: undefined })
+            }
+          />
+          <FieldLabel>{t("templates.studio.sourceEnable")}</FieldLabel>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          {t("templates.studio.sourceHint")}
+        </p>
+      </Field>
+
+      {field.source !== undefined && (
+        <BindingSourcePicker
+          onChange={emitSource}
+          source={field.source}
+          sources={sources}
+        />
+      )}
+    </>
+  );
+};
+
+/** Cascading selects that compose a {@link FieldSource}: pick the source, then
+ *  its role (party) or attorney ref (attorney) where the source has them, then
+ *  the bindable field. Switching the source reseeds the field (and role/ref) to
+ *  the new source's defaults since the field set differs per source. */
+const BindingSourcePicker = ({
+  source,
+  sources,
+  onChange,
+}: {
+  source: FieldSource;
+  sources: readonly CatalogSource[];
+  onChange: (next: FieldSource) => void;
+}) => {
+  const t = useTranslations();
+  const selected = sources.find((s) => s.kind === source.kind) ?? sources.at(0);
+  if (selected === undefined) {
+    return null;
+  }
+
+  const role = source.kind === "party" ? source.role : "";
+  const ref = source.kind === "attorney" ? source.ref : "";
+
+  return (
+    <>
+      <Field>
+        <FieldLabel>{t("templates.studio.sourcePickSource")}</FieldLabel>
+        <Select
+          onValueChange={(val) => {
+            const next = sources.find((s) => s.kind === val);
+            if (next !== undefined) {
+              onChange(defaultSourceFor(next));
+            }
+          }}
+          value={selected.kind}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            {sources.map((s) => (
+              <SelectItem key={s.kind} value={s.kind}>
+                {t(s.labelKey)}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      </Field>
+
+      {selected.kind === "party" && source.kind === "party" && (
+        <Field>
+          <FieldLabel>{t("common.role")}</FieldLabel>
+          <Select
+            onValueChange={(val) => {
+              if (typeof val === "string") {
+                onChange({ kind: "party", role: val, field: source.field });
+              }
+            }}
+            value={source.role}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              {selected.roles.map((r) => (
+                <SelectItem key={r.value} value={r.value}>
+                  {t(r.labelKey)}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </Field>
+      )}
+
+      {selected.kind === "attorney" && source.kind === "attorney" && (
+        <Field>
+          <FieldLabel>{t("templates.binding.sourceAttorney")}</FieldLabel>
+          <Select
+            onValueChange={(val) => {
+              if (typeof val === "string") {
+                onChange({ kind: "attorney", ref: val, field: source.field });
+              }
+            }}
+            value={source.ref}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              {selected.refs.map((r) => (
+                <SelectItem key={r.value} value={r.value}>
+                  {t(r.labelKey)}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </Field>
+      )}
+
+      <Field>
+        <FieldLabel>{t("templates.conditionField")}</FieldLabel>
+        <Select
+          onValueChange={(val) => {
+            if (typeof val === "string") {
+              onChange(composeSource(selected, val, role, ref));
+            }
+          }}
+          value={source.field}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectPopup>
+            {selected.fields.map((f) => (
+              <SelectItem key={f.key} value={f.key}>
+                {t(f.labelKey)}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      </Field>
+    </>
+  );
+};
+
 /** Hint length cap mirrored by the manifest's expectation of short hints. */
 const HINT_MAX_LENGTH = 200;
 
@@ -1568,6 +1885,7 @@ export const FieldConfigEditor = ({
   hideRequired = false,
   siblingPaths,
   hideFormulaControl = false,
+  hideSourceControl = false,
   defaultDateLocale,
 }: {
   field: TemplateEditableField;
@@ -1586,6 +1904,10 @@ export const FieldConfigEditor = ({
   /** The host renders its own formula affordance (the Studio's source
    *  picker); drop the built-in control to avoid duplicating it. */
   hideFormulaControl?: boolean;
+  /** Hide the data-binding affordance. Set for a field inside an `{{#each}}`
+   *  repeat block: the backend resolver leaves loop-item paths unresolved, so
+   *  a binding there would silently produce nothing. */
+  hideSourceControl?: boolean;
   /** Preselected locale for a date field's format picker — the template's
    *  primary language when the host knows it; app locale otherwise. */
   defaultDateLocale?: string | undefined;
@@ -1662,6 +1984,7 @@ export const FieldConfigEditor = ({
                 const seedRegistry = preferredRegistry(appLocale);
                 onUpdate({
                   inputType: "text",
+                  source: undefined,
                   lookup: field.lookup ?? {
                     registry: seedRegistry,
                     formats: [
@@ -1706,6 +2029,7 @@ export const FieldConfigEditor = ({
                   onUpdate({
                     parts: field.parts ?? [emptyEditablePart()],
                     format: field.format ?? "",
+                    source: undefined,
                   });
                   return;
                 }
@@ -1723,6 +2047,10 @@ export const FieldConfigEditor = ({
 
       {!isComposite && !hideFormulaControl && typeChoice !== "company" && (
         <FormulaConfigControl field={field} onUpdate={onUpdate} />
+      )}
+
+      {!isComposite && !hideSourceControl && typeChoice !== "company" && (
+        <BindingSourceConfigControl field={field} onUpdate={onUpdate} />
       )}
 
       {!isComposite && !isFormula && typeChoice === "company" && (

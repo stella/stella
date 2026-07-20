@@ -2673,6 +2673,13 @@
     "aiAdaptHint": "A IA adapta este texto a cada lugar do documento em que ele aparece.",
     "allTemplates": "Todos os modelos",
     "backToList": "Voltar aos modelos",
+    "binding": {
+      "attorneyLead": "Advogado principal",
+      "fieldBillingReference": "Referência de faturamento",
+      "sourceAttorney": "Advogado",
+      "sourceFirm": "Escritório",
+      "sourceParty": "Outra parte"
+    },
     "browseFiles": "Navegar pelos arquivos",
     "categoryDeleteConfirm": "Isso removerá a categoria. Os modelos nesta categoria não serão categorizados.",
     "categoryDeleteFailed": "Falha ao excluir categoria",
@@ -2952,6 +2959,9 @@
       "slashGroupInsert": "Inserir",
       "slashGroupReuse": "Reutilizar",
       "slashHint": "Digite para filtrar campos ou nomear um novo",
+      "sourceEnable": "Preencher a partir do caso",
+      "sourceHint": "O valor é preenchido a partir do caso (seu cliente, uma parte, o próprio caso, um advogado ou o escritório) ao gerar o documento.",
+      "sourcePickSource": "Fonte de dados",
       "textPlusAi": "Pessoa + IA",
       "useExisting": "Usar o campo existente {name}",
       "whoFills": "Quem preencherá este campo depois?"

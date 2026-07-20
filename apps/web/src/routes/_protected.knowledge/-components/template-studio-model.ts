@@ -20,6 +20,7 @@ import {
 import type {
   EditableLookupFormat,
   EditablePart,
+  FieldSource,
   FieldValidation,
   TemplateEditableField,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
@@ -123,6 +124,36 @@ const parseValidation = (raw: unknown): FieldValidation | undefined => {
   return Object.keys(validation).length > 0 ? validation : undefined;
 };
 
+/** Restore a persisted data binding ({@link FieldSource}) from a raw manifest
+ *  field. Validates only the structural shape (a known `kind`, a string
+ *  `field`, and the `role`/`ref` a party/attorney binding needs); the backend
+ *  re-validates the keys against the binding catalog on save, so a stale or
+ *  hand-edited key is caught there, not here. */
+const parseSource = (raw: unknown): FieldSource | undefined => {
+  if (!isRecord(raw) || typeof raw["field"] !== "string") {
+    return undefined;
+  }
+  const field = raw["field"];
+  switch (raw["kind"]) {
+    case "contact":
+      return { kind: "contact", field };
+    case "matter":
+      return { kind: "matter", field };
+    case "firm":
+      return { kind: "firm", field };
+    case "party":
+      return typeof raw["role"] === "string"
+        ? { kind: "party", role: raw["role"], field }
+        : undefined;
+    case "attorney":
+      return typeof raw["ref"] === "string"
+        ? { kind: "attorney", ref: raw["ref"], field }
+        : undefined;
+    default:
+      return undefined;
+  }
+};
+
 const parseField = (raw: Record<string, unknown>): StudioField => {
   const rawType = raw["inputType"];
   const inputType =
@@ -170,6 +201,10 @@ const parseField = (raw: Record<string, unknown>): StudioField => {
     if (parsed.success) {
       field.conditionAst = parsed.output;
     }
+  }
+  const source = parseSource(raw["source"]);
+  if (source !== undefined) {
+    field.source = source;
   }
   if (typeof raw["hint"] === "string") {
     field.hint = raw["hint"];
@@ -272,6 +307,7 @@ type ManifestField = {
   formula?: string;
   condition?: string;
   conditionAst?: ConditionNode;
+  source?: TemplateEditableField["source"];
   hint?: string;
   dateFormat?: TemplateEditableField["dateFormat"];
   validation?: FieldValidation;
@@ -326,6 +362,13 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
     f.inputType === "boolean" ? (f.condition?.trim() ?? "") : "";
   if (condition !== "") {
     field.condition = condition;
+    return field;
+  }
+  // A data-bound field's value is resolved from a matter record at fill time,
+  // never user-entered; like formula/condition it is a derived value source the
+  // backend rejects next to aiPrompt/lookup/parts, so emit it alone.
+  if (f.source !== undefined) {
+    field.source = f.source;
     return field;
   }
   if (f.aiPrompt) {
@@ -456,14 +499,16 @@ export const buildRecipeDefinition = (
     const field =
       fields.find((f) => f.path === path) ?? defaultStudioField(path);
     // The recipe schema is a strict FieldMeta subset without formula,
-    // validation, or condition; strip them so saving a recipe passes boundary
-    // validation (the snapshot keeps the field's label and type; the formula,
-    // condition rule, and loop repeat bounds stay template-local).
+    // validation, condition, or data binding; strip them so saving a recipe
+    // passes boundary validation (the snapshot keeps the field's label and
+    // type; the formula, condition rule, data binding, and loop repeat bounds
+    // stay template-local).
     const {
       formula: _formula,
       validation: _validation,
       condition: _condition,
       conditionAst: _conditionAst,
+      source: _source,
       ...recipeField
     } = studioFieldToManifestField(field);
     return recipeField;

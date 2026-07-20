@@ -2673,6 +2673,13 @@
     "aiAdaptHint": "La IA adapta esta redacción a cada lugar del documento donde aparece.",
     "allTemplates": "Todas las plantillas",
     "backToList": "Volver a plantillas",
+    "binding": {
+      "attorneyLead": "Abogado principal",
+      "fieldBillingReference": "Referencia de facturación",
+      "sourceAttorney": "Abogado",
+      "sourceFirm": "Despacho",
+      "sourceParty": "Otra parte"
+    },
     "browseFiles": "Explorar archivos",
     "categoryDeleteConfirm": "Esta acción eliminará la categoría. Las plantillas de esta categoría pasarán a estar sin categorizar.",
     "categoryDeleteFailed": "Error al eliminar la categoría",
@@ -2952,6 +2959,9 @@
       "slashGroupInsert": "Insertar",
       "slashGroupReuse": "Reutilizar",
       "slashHint": "Escribe para filtrar campos o nombrar uno nuevo",
+      "sourceEnable": "Rellenar desde el asunto",
+      "sourceHint": "El valor se rellena a partir del asunto (su cliente, una parte, el propio asunto, un abogado o el despacho) al generar el documento.",
+      "sourcePickSource": "Fuente de datos",
       "textPlusAi": "Persona + IA",
       "useExisting": "Usar el campo existente {name}",
       "whoFills": "¿Quién rellenará este campo más tarde?"

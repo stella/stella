@@ -2673,6 +2673,13 @@
     "aiAdaptHint": "L'IA adapte cette formulation à chaque endroit du document où elle apparaît.",
     "allTemplates": "Tous les modèles",
     "backToList": "Retour aux modèles",
+    "binding": {
+      "attorneyLead": "Avocat principal",
+      "fieldBillingReference": "Référence de facturation",
+      "sourceAttorney": "Avocat",
+      "sourceFirm": "Cabinet",
+      "sourceParty": "Autre partie"
+    },
     "browseFiles": "Parcourir les fichiers",
     "categoryDeleteConfirm": "La catégorie sera supprimée. Les modèles qui lui appartiennent seront déplacés vers « Non catégorisé ».",
     "categoryDeleteFailed": "Impossible de supprimer la catégorie",
@@ -2952,6 +2959,9 @@
       "slashGroupInsert": "Insérer",
       "slashGroupReuse": "Réutiliser",
       "slashHint": "Saisissez pour filtrer les champs ou en nommer un nouveau",
+      "sourceEnable": "Remplir depuis le dossier",
+      "sourceHint": "La valeur est remplie à partir du dossier (son client, une partie, le dossier lui-même, un avocat ou le cabinet) lors de la génération du document.",
+      "sourcePickSource": "Source de données",
       "textPlusAi": "Personne + IA",
       "useExisting": "Utiliser le champ existant {name}",
       "whoFills": "Qui remplira ce champ par la suite ?"

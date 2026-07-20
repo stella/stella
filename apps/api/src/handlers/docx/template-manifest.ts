@@ -31,6 +31,7 @@ import type {
   FieldLookupFormat,
   FieldMeta,
   FieldPart,
+  FieldSource,
   FieldValidation,
   InputType,
   LookupRegistry,
@@ -40,6 +41,7 @@ import type {
 } from "./types";
 import {
   isFieldDateFormat,
+  isFieldSource,
   isLookupFormatKey,
   LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH,
   LOOKUP_FORMATS_MAX,
@@ -177,6 +179,18 @@ const buildDateFormatXml = (dateFormat: FieldDateFormat): string =>
   `<st:dateFormat locale="${escapeXml(dateFormat.locale)}"` +
   ` style="${escapeXml(dateFormat.style)}"/>`;
 
+const buildSourceXml = (source: FieldSource): string => {
+  const attrs: string[] = [`kind="${escapeXml(source.kind)}"`];
+  if (source.kind === "party") {
+    attrs.push(`role="${escapeXml(source.role)}"`);
+  }
+  if (source.kind === "attorney") {
+    attrs.push(`ref="${escapeXml(source.ref)}"`);
+  }
+  attrs.push(`field="${escapeXml(source.field)}"`);
+  return `<st:source ${attrs.join(" ")}/>`;
+};
+
 const buildFieldXml = (field: FieldMeta): string => {
   const attrs: string[] = [`path="${escapeXml(field.path)}"`];
   if (field.label !== undefined) {
@@ -234,6 +248,10 @@ const buildFieldXml = (field: FieldMeta): string => {
 
   if (field.dateFormat) {
     children.push(buildDateFormatXml(field.dateFormat));
+  }
+
+  if (field.source) {
+    children.push(buildSourceXml(field.source));
   }
 
   if (field.validation) {
@@ -387,6 +405,38 @@ const parseFieldPart = (el: slimdom.Element): FieldPart | null => {
   }
 
   return part;
+};
+
+const parseFieldSource = (el: slimdom.Element): FieldSource | null => {
+  const candidate = {
+    kind: el.getAttribute("kind"),
+    role: el.getAttribute("role"),
+    ref: el.getAttribute("ref"),
+    field: el.getAttribute("field"),
+  };
+  if (!isFieldSource(candidate)) {
+    return null;
+  }
+  // Reconstruct the exact per-kind shape: isFieldSource ignores irrelevant
+  // attributes, but the stored binding must match its union member so a
+  // contact/matter/firm source never carries a stray role/ref from hand-edited
+  // XML, and a round-tripped source compares equal to its input.
+  switch (candidate.kind) {
+    case "party":
+      return { kind: "party", role: candidate.role, field: candidate.field };
+    case "attorney":
+      return { kind: "attorney", ref: candidate.ref, field: candidate.field };
+    case "contact":
+      return { kind: "contact", field: candidate.field };
+    case "matter":
+      return { kind: "matter", field: candidate.field };
+    case "firm":
+      return { kind: "firm", field: candidate.field };
+    default: {
+      const exhaustive: never = candidate;
+      return exhaustive;
+    }
+  }
 };
 
 const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
@@ -595,6 +645,26 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
     field.parts === undefined
   ) {
     field.condition = condition;
+  }
+
+  // A data binding is a derived value; a hand-edited source on a field that
+  // already carries another value source is dropped so the isFieldMeta
+  // invariant holds downstream.
+  const sourceEl = getFirstElementChild(el, "source");
+  if (
+    sourceEl &&
+    field.formula === undefined &&
+    field.condition === undefined &&
+    field.conditionAst === undefined &&
+    field.aiPrompt === undefined &&
+    field.aiAdapt === undefined &&
+    field.lookup === undefined &&
+    field.parts === undefined
+  ) {
+    const source = parseFieldSource(sourceEl);
+    if (source !== null) {
+      field.source = source;
+    }
   }
 
   return field;
@@ -983,6 +1053,7 @@ export const mergeManifestWithDiscovery = (
         format: f.format,
         optionsFrom: f.optionsFrom,
         lookup: f.lookup,
+        source: f.source,
         formula: f.formula,
         condition: f.condition,
         conditionAst: f.conditionAst,
@@ -1061,6 +1132,13 @@ const mergeField = (
     }
     if (meta.lookup !== undefined) {
       resolved.lookup = meta.lookup;
+    }
+    // A discovered placeholder that also carries a data binding in the manifest
+    // keeps that binding on save (the common case); without this, `source` is
+    // preserved only for manifest-only fields and a bound in-document field
+    // loses its binding on every round-trip. Mirrors lookup/formula above.
+    if (meta.source !== undefined) {
+      resolved.source = meta.source;
     }
     if (meta.formula !== undefined) {
       resolved.formula = meta.formula;

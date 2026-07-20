@@ -2673,6 +2673,13 @@
     "aiAdaptHint": "AI přizpůsobí tuto formulaci každému místu v dokumentu, kde se objeví.",
     "allTemplates": "Všechny vzory",
     "backToList": "Zpět na vzory",
+    "binding": {
+      "attorneyLead": "Vedoucí advokát",
+      "fieldBillingReference": "Fakturační reference",
+      "sourceAttorney": "Advokát",
+      "sourceFirm": "Kancelář",
+      "sourceParty": "Jiná strana"
+    },
     "browseFiles": "Procházet soubory",
     "categoryDeleteConfirm": "Tímto se kategorie odstraní. Vzory v této kategorii budou označeny jako nekategorizované.",
     "categoryDeleteFailed": "Smazání kategorie se nezdařilo",
@@ -2952,6 +2959,9 @@
       "slashGroupInsert": "Vložit",
       "slashGroupReuse": "Znovu použít",
       "slashHint": "Pište pro filtrování polí nebo pojmenování nového",
+      "sourceEnable": "Vyplnit ze spisu",
+      "sourceHint": "Hodnota se při generování dokumentu vyplní ze spisu (jeho klienta, strany, samotného spisu, advokáta nebo kanceláře).",
+      "sourcePickSource": "Zdroj dat",
       "textPlusAi": "Osoba + AI",
       "useExisting": "Použít existující pole {name}",
       "whoFills": "Kdo bude následně vyplňovat dané pole?"

@@ -45,6 +45,7 @@ import { isTemplateData } from "@/api/handlers/docx/types";
 import { recordTemplateUse } from "@/api/handlers/templates/record-use";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getS3 } from "@/api/lib/s3";
+import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 
 // Data a template is filled with: open-ended field-path → value map (paths come
 // from the template's manifest/markers, not a fixed entity), patched in place
@@ -226,6 +227,12 @@ type FillServiceOptions<TRejection = never> = {
    *  before any model call. A non-null return aborts the fill with a
    *  `{ usageRejection }` result the caller surfaces as its own response. */
   assertUsageAvailable?: FillUsagePreflight<TRejection> | undefined;
+  /** The matter being filled into. When set and the manifest declares any
+   *  data-bound field ({@link FieldMeta.source}), the matter's client, parties,
+   *  attorneys, matter fields, and firm are resolved into a binding context and
+   *  supply those fields' values. Absent on transient fills (no matter), which
+   *  leaves bound fields unfilled. */
+  workspaceId?: SafeId<"workspace"> | undefined;
 };
 
 type FilledDocx = {
@@ -275,6 +282,7 @@ export const fillTemplateDocx = async <TRejection = never>({
   decideAiCondition,
   adaptAiValue,
   assertUsageAvailable,
+  workspaceId,
 }: FillDocxOptions<TRejection>): Promise<
   FilledDocx | { error: string } | { usageRejection: TRejection }
 > => {
@@ -313,6 +321,20 @@ export const fillTemplateDocx = async <TRejection = never>({
   let adaptedPaths: readonly string[] = [];
   const manifest = await readManifest(loaded.buffer);
   if (manifest) {
+    // Resolve the data-binding context only when this fill targets a matter and
+    // the manifest actually declares a bound field, so a transient fill or a
+    // template with no bindings fires no extra queries.
+    const bindingContext =
+      workspaceId !== undefined &&
+      manifest.fields.some((field) => field.source !== undefined)
+        ? await buildBindingContext({
+            scopedDb,
+            organizationId,
+            workspaceId,
+            manifest,
+          })
+        : null;
+
     // Resolve registry lookups, assemble composite (multipart) values,
     // evaluate formula (derived) fields, and check dependent (optionsFrom)
     // selects before any AI step or substitution sees them; a failing step
@@ -326,6 +348,7 @@ export const fillTemplateDocx = async <TRejection = never>({
           scopedDb,
         }),
       }),
+      bindingContext,
     });
     if (stepError !== null) {
       return { error: stepError };
@@ -420,6 +443,7 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
   decideAiCondition,
   adaptAiValue,
   assertUsageAvailable,
+  workspaceId,
 }: FillServiceOptions<TRejection>): Promise<
   FilledDocx | { error: string } | { usageRejection: TRejection }
 > => {
@@ -438,6 +462,7 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
     decideAiCondition,
     adaptAiValue,
     assertUsageAvailable,
+    workspaceId,
   });
 };
 

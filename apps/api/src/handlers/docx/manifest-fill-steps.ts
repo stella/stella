@@ -19,6 +19,12 @@
 
 import { resolvePath } from "@stll/template-conditions";
 
+import type { BindingContext } from "@/api/lib/template-binding/apply-source-fields";
+import {
+  applySourceFields,
+  EMPTY_BINDING_CONTEXT,
+} from "@/api/lib/template-binding/apply-source-fields";
+
 import { checkArrayBounds } from "./array-bounds";
 import { CONDITION_RAW_VALUES } from "./block-directives";
 import { applyCompositeFields } from "./composite-fields";
@@ -84,11 +90,17 @@ export const applyManifestFillSteps = async ({
   values,
   manifest,
   resolveLookup,
+  bindingContext,
 }: {
   values: Record<string, unknown>;
   manifest: { fields: FieldMeta[] } | null;
   resolveLookup: LookupResolver;
+  bindingContext?: BindingContext | null | undefined;
 }): Promise<string | null> => {
+  // Data-bound fields resolve first so the composite, formula, dependent
+  // select, condition, and date-format steps below all see the filled values.
+  applySourceFields(values, manifest, bindingContext ?? EMPTY_BINDING_CONTEXT);
+
   const lookupError = await applyLookupFields(values, manifest, {
     resolve: resolveLookup,
   });

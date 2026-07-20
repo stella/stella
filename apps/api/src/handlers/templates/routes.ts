@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import getBindingCatalog from "@/api/handlers/templates/binding-catalog";
 import createTemplateCategory from "@/api/handlers/templates/categories-create";
 import deleteTemplateCategory from "@/api/handlers/templates/categories-delete";
 import listTemplateCategories from "@/api/handlers/templates/categories-list";
@@ -76,6 +77,11 @@ export const templatesRoute = new Elysia({
   .post("/suggest-fields", suggestFields.handler, {
     body: suggestFields.config.body,
     permissions: suggestFields.config.permissions,
+  })
+  // Static catalog of data-binding (source, field) options; placed among the
+  // transient GET endpoints, before `/:templateId` so the literal path wins.
+  .get("/binding-catalog", getBindingCatalog.handler, {
+    permissions: getBindingCatalog.config.permissions,
   })
   // ── CRUD endpoints ─────────────────────────────────
   .get("/", listTemplates.handler, {

@@ -54960,6 +54960,25 @@ export const generatedRouteMap: RouteNode = {
     templates: {
       kind: "route",
       children: {
+        "binding-catalog": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["templates", "binding-catalog"],
+            capabilityId: "templates.binding-catalog",
+            access: "read",
+            flags: [],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "templates",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {},
+            },
+            schemaTruncated: false,
+          },
+        },
         "categories-create": {
           kind: "capability-leaf",
           spec: {

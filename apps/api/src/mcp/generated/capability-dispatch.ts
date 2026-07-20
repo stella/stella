@@ -629,6 +629,9 @@ export const CAPABILITY_DISPATCH = {
   "template-recipes.list": {
     load: async () => await import("@/api/handlers/template-recipes/list"),
   },
+  "templates.binding-catalog": {
+    load: async () => await import("@/api/handlers/templates/binding-catalog"),
+  },
   "templates.categories-create": {
     load: async () =>
       await import("@/api/handlers/templates/categories-create"),
