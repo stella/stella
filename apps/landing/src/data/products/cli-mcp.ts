@@ -58,10 +58,8 @@ export const cliMcp: Product = {
         "Use paginated, structured results in scripts and automated workflows",
       ],
       media: {
-        type: "story",
-        sceneId: "cli",
-        showCompanions: true,
-        aspect: "2.03",
+        type: "preview",
+        key: "cli-mcp",
       },
       frameVariant: "wash",
     },
@@ -73,10 +71,8 @@ export const cliMcp: Product = {
         "Connect compatible agents without copying legal data into another workspace",
       ],
       media: {
-        type: "story",
-        sceneId: "cli",
-        showCompanions: true,
-        aspect: "2.03",
+        type: "preview",
+        key: "cli-mcp-template",
       },
       frameVariant: "bloom",
     },
@@ -113,6 +109,11 @@ export const cliMcp: Product = {
       title: "Templates",
       href: "/product/templates",
       body: "Fill reusable legal documents through the app, CLI, or connected tools.",
+    },
+    {
+      title: "AI fact sheet",
+      href: "/ai-info",
+      body: "stella in machine-readable form for AI search engines.",
     },
   ],
   evidence: [

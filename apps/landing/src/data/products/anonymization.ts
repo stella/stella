@@ -66,10 +66,8 @@ export const anonymization: Product = {
         "Built on stella's own Rust anonymization engine, compiled to WebAssembly",
       ],
       media: {
-        type: "image",
-        src: "/media/products/anonymization.png",
-        darkSrc: "/media/products/anonymization-dark.png",
-        alt: "A redacted due diligence extract open in the stella editor",
+        type: "story",
+        sceneId: "workspace",
         aspect: "16 / 10",
       },
       frameVariant: "wash",
