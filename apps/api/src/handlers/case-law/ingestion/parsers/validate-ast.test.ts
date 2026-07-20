@@ -183,6 +183,46 @@ describe("validateAst", () => {
         false,
       );
     });
+
+    test("treats <br> as a word boundary, not glue", () => {
+      // Real SAOS pattern: single-letter Polish prepositions wrapped
+      // to the next line via <br/>. The reference extraction must not
+      // fuse them into phantom words ("wrazz") absent from the AST.
+      const html =
+        "<html><body><p>kosztów zastępstwa wraz<br/>z " +
+        "ustawowymi odsetkami należnymi powodowi</p></body></html>";
+      const blocks: Block[] = [
+        makeHeading("Uzasadnienie"),
+        makeBlock({
+          plainText:
+            "kosztów zastępstwa wraz\nz ustawowymi odsetkami " +
+            "należnymi powodowi",
+        }),
+      ];
+
+      const result = validateAst(html, blocks);
+
+      expect(result.stats.missingWords).toEqual([]);
+      expect(result.ok).toBe(true);
+    });
+
+    test("keeps Polish diacritics at word edges", () => {
+      const words = Array.from(
+        { length: 20 },
+        (_, i) => `źdźbło${String.fromCodePoint(97 + i)}ż`,
+      );
+      const html = wrapInHtml(words.join(" "));
+      const blocks: Block[] = [
+        makeHeading("H"),
+        makeBlock({ plainText: "brak" }),
+      ];
+
+      const result = validateAst(html, blocks);
+
+      // Edge diacritics must survive word extraction; the untrimmed
+      // words are reported missing (not "dźbło..." fragments).
+      expect(result.stats.missingWords).toContain("źdźbłoaż");
+    });
   });
 
   // ── Structural checks ─────────────────────────────────────
@@ -338,6 +378,33 @@ describe("validateAst", () => {
               type: "bold",
               children: [{ type: "text", text: "bold text here" }],
             },
+          ],
+          plainText: text,
+        },
+      ];
+
+      const result = validateAst(html, blocks);
+
+      expect(
+        result.issues.some((i) => i.code === "INLINE_PLAINTEXT_MISMATCH"),
+      ).toBe(false);
+    });
+
+    test("ignores whitespace-only differences from normalization", () => {
+      // Parsers collapse whitespace in plainText but keep the source
+      // spacing inside inlines; that alone is not a mismatch.
+      const text = "Sąd Okręgowy zważył, co następuje:";
+      const html = wrapInHtml(text);
+      const blocks: Block[] = [
+        makeHeading("H"),
+        {
+          id: "b2",
+          anchorId: "p-2",
+          type: "paragraph",
+          inlines: [
+            { type: "text", text: "   Sąd  Okręgowy   zważył, " },
+            { type: "line-break" },
+            { type: "text", text: " co następuje:   " },
           ],
           plainText: text,
         },
