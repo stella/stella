@@ -48,31 +48,31 @@ export const useDevStore = create<State & Actions>()(
       simulateSlowLoad: false,
 
       setTanstackDevtools: (tanstackDevtools) => {
-        void set({ tanstackDevtools });
+        set({ tanstackDevtools });
       },
       setSourceInspector: (sourceInspector) => {
-        void set({ sourceInspector });
+        set({ sourceInspector });
       },
       setChatModelId: (chatModelId) => {
-        void set({ chatModelId });
+        set({ chatModelId });
       },
       setReactGrab: (reactGrab) => {
-        void set({ reactGrab });
+        set({ reactGrab });
       },
       setPublicLawPreview: (publicLawPreview) => {
-        void set({ publicLawPreview });
+        set({ publicLawPreview });
       },
       setPlaybooksPreview: (playbooksPreview) => {
-        void set({ playbooksPreview });
+        set({ playbooksPreview });
       },
       setWorkflowsPreview: (workflowsPreview) => {
-        void set({ workflowsPreview });
+        set({ workflowsPreview });
       },
       setTimeBillingPreview: (timeBillingPreview) => {
-        void set({ timeBillingPreview });
+        set({ timeBillingPreview });
       },
       setSimulateSlowLoad: (simulateSlowLoad) => {
-        void set({ simulateSlowLoad });
+        set({ simulateSlowLoad });
       },
     }),
     {
