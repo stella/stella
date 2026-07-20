@@ -42,6 +42,13 @@ const captures = [
     clip: { x: 0, y: 0, width: 1440, height: 760 },
   },
   {
+    name: "story-public-data",
+    path: "/law/cases",
+    prepare: "open-decision",
+    readyText: "Case Law",
+    clip: { x: 0, y: 0, width: 1440, height: 760 },
+  },
+  {
     name: "editor",
     path:
       `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
