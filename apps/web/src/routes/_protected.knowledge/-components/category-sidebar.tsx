@@ -39,6 +39,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { ContextMenu } from "@/components/context-menu";
 import type { ContextMenuAction } from "@/components/context-menu";
+import { detached } from "@/lib/detached";
 
 // ── Types ────────────────────────────────────────────
 
@@ -377,7 +378,7 @@ const useCategoryDropTarget = (
     setIsDragOver(false);
     const itemId = e.dataTransfer.getData(dragAndDrop.mime);
     if (itemId) {
-      void dragAndDrop.onAssign(itemId, targetCategoryId);
+      detached(dragAndDrop.onAssign(itemId, targetCategoryId), "onDrop");
     }
   };
 
@@ -534,7 +535,7 @@ const CategoryRow = ({
             <Button
               disabled={deleting}
               onClick={() => {
-                void handleDelete();
+                detached(handleDelete(), "CategoryRow");
               }}
               variant="destructive"
             >
@@ -674,7 +675,7 @@ const CategoryFormDialogBody = ({
         <Button
           disabled={saving || !name.trim()}
           onClick={() => {
-            void handleSave();
+            detached(handleSave(), "CategoryFormDialogBody");
           }}
         >
           {t("common.save")}

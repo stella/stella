@@ -13,6 +13,7 @@ import {
   getMentionViewScope,
 } from "@/components/chat-mention-helpers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import type { WorkspaceEntity } from "@/lib/types";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -130,7 +131,10 @@ export const useWorkspaceChatMentionRegistration = (
 
       return await new Promise<ChatMentionOption[]>((resolve) => {
         pendingSearchRef.current = { queryKey: null, resolve };
-        void debouncedSearchEntities({ query, resolve });
+        detached(
+          debouncedSearchEntities({ query, resolve }),
+          "useWorkspaceChatMentionRegistration",
+        );
       });
     },
     [createSearchOptions, debouncedSearchEntities, queryClient, workspaceId],

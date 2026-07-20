@@ -1,3 +1,4 @@
+import { detached } from "@/api/lib/detached";
 import { logger } from "@/api/lib/observability/logger";
 import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
@@ -13,13 +14,16 @@ logger.info("scheduler.started", {
 await new Promise<void>((resolve) => {
   const shutdown = () => {
     loop.stop();
-    void loop.drained.then(() => {
-      logger.info("scheduler.stopped", {
-        "scheduler.runner_id": loop.runnerId,
-      });
-      resolve();
-      return;
-    });
+    detached(
+      loop.drained.then(() => {
+        logger.info("scheduler.stopped", {
+          "scheduler.runner_id": loop.runnerId,
+        });
+        resolve();
+        return;
+      }),
+      "shutdown",
+    );
   };
 
   process.once("SIGINT", shutdown);

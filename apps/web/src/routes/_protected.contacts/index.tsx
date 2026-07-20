@@ -72,6 +72,7 @@ import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { pageTitle } from "@/lib/page-title";
@@ -343,10 +344,13 @@ const ContactTableRow = ({
   const navigate = useNavigate();
 
   const openContact = () => {
-    void navigate({
-      to: "/contacts/$contactId",
-      params: { contactId: row.original.id },
-    });
+    detached(
+      navigate({
+        to: "/contacts/$contactId",
+        params: { contactId: row.original.id },
+      }),
+      "openContact",
+    );
   };
 
   return (
@@ -395,9 +399,12 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
       { contactId: contact.id },
       {
         onSuccess: () => {
-          void queryClient.invalidateQueries({
-            queryKey: contactsKeys.all,
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: contactsKeys.all,
+            }),
+            "onSuccess",
+          );
           stellaToast.add({
             title: t("success.contactDeleted"),
             type: "success",
@@ -797,7 +804,7 @@ const CreateContactDialog = ({
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
-            void form.handleSubmit();
+            detached(form.handleSubmit(), "CreateContactDialog");
           }}
         >
           <DialogHeader>
@@ -945,7 +952,10 @@ const CreateContactDialog = ({
                             <Button
                               loading={isAresLoading}
                               onClick={() => {
-                                void handleAresLookup();
+                                detached(
+                                  handleAresLookup(),
+                                  "CreateContactDialog",
+                                );
                               }}
                               type="button"
                               variant="outline"

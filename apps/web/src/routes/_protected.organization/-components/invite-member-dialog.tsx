@@ -33,6 +33,7 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { emailSchema, toFormErrors } from "@/lib/schema";
 import { roleOptions } from "@/routes/-queries";
@@ -157,7 +158,7 @@ export const InviteMemberDialog = ({
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
-            void form.handleSubmit();
+            detached(form.handleSubmit(), "InviteMemberDialog");
           }}
         >
           <DialogHeader>

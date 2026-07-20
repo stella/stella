@@ -36,6 +36,7 @@ import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -303,7 +304,7 @@ export const PeekPrintButton = () => {
         <Button
           disabled={!pdfDocument || isPrinting}
           onClick={() => {
-            void handlePrint();
+            detached(handlePrint(), "PeekPrintButton");
           }}
           size="icon-xs"
           variant="ghost"
@@ -368,7 +369,7 @@ export const PreparedPdfPrintButton = ({
         <Button
           disabled={disabled || isPrinting || fieldId.length === 0}
           onClick={() => {
-            void handlePrint();
+            detached(handlePrint(), "PreparedPdfPrintButton");
           }}
           size="icon-xs"
           variant="ghost"
@@ -424,11 +425,14 @@ const PeekDocxViewer = ({
 
     const printActions = printActionsRef.current;
     const print = () => {
-      void fetchPrintPdf({ workspaceId, fieldId })
-        .then(printPdfBuffer)
-        .catch((error: unknown) => {
-          analytics.captureError(error);
-        });
+      detached(
+        fetchPrintPdf({ workspaceId, fieldId })
+          .then(printPdfBuffer)
+          .catch((error: unknown) => {
+            analytics.captureError(error);
+          }),
+        "print",
+      );
     };
     printActions.set(fieldId, print);
 

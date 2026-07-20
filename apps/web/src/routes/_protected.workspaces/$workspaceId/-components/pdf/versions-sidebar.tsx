@@ -38,6 +38,7 @@ import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -164,7 +165,7 @@ export function VersionsSidebar({
     if (container) {
       anchorScrollHeightRef.current = container.scrollHeight;
     }
-    void onLoadOlder?.();
+    detached(onLoadOlder?.(), "triggerLoadOlder");
   };
 
   // Drive the trigger from a top sentinel: when it scrolls into view
@@ -439,7 +440,7 @@ export function VersionsSidebar({
         onChange={(e) => {
           const file = e.target.files?.item(0);
           if (file) {
-            void handleUploadVersion(file);
+            detached(handleUploadVersion(file), "VersionsSidebar");
           }
           e.target.value = "";
         }}
@@ -476,10 +477,10 @@ export function VersionsSidebar({
                 version={version}
                 onDelete={handleDeleteVersion}
                 onDownload={(fid) => {
-                  void handleDownload(fid);
+                  detached(handleDownload(fid), "VersionsSidebar");
                 }}
                 onRestore={(vid) => {
-                  void handleRestore(vid);
+                  detached(handleRestore(vid), "VersionsSidebar");
                 }}
                 onSetLabel={handleSetLabel}
                 onSwitchVersion={onSwitchVersion}
@@ -656,7 +657,10 @@ function VersionItem({
         title={`v${version.versionNumber}`}
         onActivate={() => {
           if (version.file) {
-            void onSwitchVersion(version.file.fieldId, version.id);
+            detached(
+              onSwitchVersion(version.file.fieldId, version.id),
+              "VersionItem",
+            );
           }
         }}
         onContextMenu={handleContextMenu}
@@ -679,7 +683,10 @@ function VersionItem({
               <MenuItem
                 key={preset.key}
                 onClick={() => {
-                  void onSetLabel(version.id, isActive ? null : label);
+                  detached(
+                    onSetLabel(version.id, isActive ? null : label),
+                    "VersionItem",
+                  );
                 }}
               >
                 <span
@@ -766,7 +773,7 @@ function VersionItem({
                       render={
                         <Button
                           onClick={() => {
-                            void onDelete(version.id);
+                            detached(onDelete(version.id), "VersionItem");
                           }}
                           variant="destructive"
                         />

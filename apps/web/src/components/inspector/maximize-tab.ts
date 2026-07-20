@@ -3,6 +3,7 @@ import type { useNavigate } from "@tanstack/react-router";
 
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { detached } from "@/lib/detached";
 import type { ChatThreadFetched } from "@/routes/_protected.chat/-queries";
 import {
   chatKeys,
@@ -63,21 +64,30 @@ export const buildMaximizeTabAction = (
         ? { ...existing, contextMatterIds: tab.contextMatterIds }
         : existing,
     );
-    void invalidateChatThreadAcrossScopes({
-      queryClient,
-      threadId: tab.id,
-    });
+    detached(
+      invalidateChatThreadAcrossScopes({
+        queryClient,
+        threadId: tab.id,
+      }),
+      "buildMaximizeTabAction",
+    );
     useInspectorStore.getState().closeTab(tab.id);
     if (tabWorkspaceId === undefined) {
-      void navigate({
-        to: "/chat/$threadId",
-        params: { threadId: tab.id },
-      });
+      detached(
+        navigate({
+          to: "/chat/$threadId",
+          params: { threadId: tab.id },
+        }),
+        "buildMaximizeTabAction",
+      );
       return;
     }
-    void navigate({
-      to: "/chat/workspaces/$workspaceId/$threadId",
-      params: { workspaceId: tabWorkspaceId, threadId: tab.id },
-    });
+    detached(
+      navigate({
+        to: "/chat/workspaces/$workspaceId/$threadId",
+        params: { workspaceId: tabWorkspaceId, threadId: tab.id },
+      }),
+      "buildMaximizeTabAction",
+    );
   };
 };

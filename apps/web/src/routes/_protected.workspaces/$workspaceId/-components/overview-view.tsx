@@ -71,6 +71,7 @@ import {
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { routeQueryOptions } from "@/lib/react-query";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
@@ -214,9 +215,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       title: t("success.taskCreated"),
       type: "success",
     });
-    void queryClient.invalidateQueries({
-      queryKey: workspacesKeys.overview(workspaceId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: workspacesKeys.overview(workspaceId),
+      }),
+      "OverviewView",
+    );
     useInspectorStore
       .getState()
       .openTask({ taskId: entityId, workspaceId, isNew: true });
@@ -458,10 +462,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           onClick={() => {
             const view = findViewByType("filesystem");
             if (view) {
-              void navigate({
-                to: "/workspaces/$workspaceId/$viewId",
-                params: { workspaceId, viewId: view.id },
-              });
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/$viewId",
+                  params: { workspaceId, viewId: view.id },
+                }),
+                "OverviewView",
+              );
             }
           }}
           value={getFormatter().number(data.documentCount)}
@@ -472,10 +479,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           onClick={() => {
             const view = findViewByType("kanban");
             if (view) {
-              void navigate({
-                to: "/workspaces/$workspaceId/$viewId",
-                params: { workspaceId, viewId: view.id },
-              });
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/$viewId",
+                  params: { workspaceId, viewId: view.id },
+                }),
+                "OverviewView",
+              );
             }
           }}
           value={getFormatter().number(data.taskCount)}
@@ -509,10 +519,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           icon={<ClockIcon className="size-4" />}
           label={t("workspaces.overview.timeThisWeek")}
           onClick={() => {
-            void navigate({
-              to: "/workspaces/$workspaceId/timesheets",
-              params: { workspaceId },
-            });
+            detached(
+              navigate({
+                to: "/workspaces/$workspaceId/timesheets",
+                params: { workspaceId },
+              }),
+              "OverviewView",
+            );
           }}
           value={formatHours(totalHoursThisWeek)}
         />
@@ -521,10 +534,13 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             icon={<WorkflowIcon className="size-4" />}
             label={t("common.workflows")}
             onClick={() => {
-              void navigate({
-                to: "/workspaces/$workspaceId/workflows",
-                params: { workspaceId },
-              });
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/workflows",
+                  params: { workspaceId },
+                }),
+                "OverviewView",
+              );
             }}
             sublabel={
               activeFlowRunCount > 0
@@ -561,7 +577,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             <Button
               className="h-7 text-xs"
               onClick={() => {
-                void handleCreateTask();
+                detached(handleCreateTask(), "OverviewView");
               }}
               size="sm"
               variant="ghost"
@@ -664,7 +680,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               {upcomingMenu.task === null ? (
                 <MenuItem
                   onClick={() => {
-                    void handleCreateTask();
+                    detached(handleCreateTask(), "OverviewView");
                   }}
                 >
                   <EntityKindIcon kind="task" />

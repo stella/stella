@@ -15,6 +15,7 @@ import { Button } from "@stll/ui/components/button";
 
 import Tooltip from "@/components/tooltip";
 import type { TranslationKey } from "@/i18n/types";
+import { detached } from "@/lib/detached";
 import type {
   WorkspaceEntity,
   WorkspaceField,
@@ -508,10 +509,13 @@ const WithOpenEntityButton = ({
     setIsRetrying(true);
     // .finally over try/finally: the React Compiler bails out ("Todo") on
     // try syntax inside compiled components; rejection behavior is unchanged.
-    void retryCell({
-      entityId: extraction.entityId,
-      propertyId: extraction.property.id,
-    }).finally(() => setIsRetrying(false));
+    detached(
+      retryCell({
+        entityId: extraction.entityId,
+        propertyId: extraction.property.id,
+      }).finally(() => setIsRetrying(false)),
+      "handleRetry",
+    );
   };
 
   const inlineActionClass =

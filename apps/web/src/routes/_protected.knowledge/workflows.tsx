@@ -9,6 +9,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { FlowEditor } from "@/routes/_protected.knowledge/-components/flow-editor";
@@ -166,9 +167,12 @@ function RouteComponent() {
       return;
     }
 
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.flows.all(organizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.flows.all(organizationId),
+      }),
+      "handleToggleEnabled",
+    );
   };
 
   if (view.kind === "editor") {
@@ -200,16 +204,19 @@ function RouteComponent() {
       flows={flows}
       onNewFlow={() => setView({ kind: "editor", flowId: null })}
       onRefresh={() => {
-        void queryClient.invalidateQueries({
-          queryKey: knowledgeKeys.flows.all(organizationId),
-        });
+        detached(
+          queryClient.invalidateQueries({
+            queryKey: knowledgeKeys.flows.all(organizationId),
+          }),
+          "RouteComponent",
+        );
       }}
       onSelect={(flow) => setView({ kind: "editor", flowId: flow.id })}
       onStartExample={(example) =>
         setView({ kind: "editor", flowId: null, example })
       }
       onToggleEnabled={(flow, enabled) => {
-        void handleToggleEnabled(flow, enabled);
+        detached(handleToggleEnabled(flow, enabled), "RouteComponent");
       }}
       togglingId={togglingId}
     />

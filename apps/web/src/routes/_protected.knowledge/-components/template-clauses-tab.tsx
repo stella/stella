@@ -39,6 +39,7 @@ import type {
 } from "@/components/versions/version-list";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -177,7 +178,7 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
             <Button
               disabled={syncingAll}
               onClick={() => {
-                void handleSyncAll();
+                detached(handleSyncAll(), "TemplateClausesTab");
               }}
               size="sm"
               variant="outline"
@@ -338,7 +339,7 @@ const LinkedClauseRow = ({
             <Button
               disabled={syncing}
               onClick={() => {
-                void handleSync();
+                detached(handleSync(), "LinkedClauseRow");
               }}
               size="sm"
               variant="ghost"
@@ -434,7 +435,7 @@ export const OutdatedChanges = ({
           aria-expanded={isDiffOpen}
           className="text-muted-foreground hover:text-foreground gap-1 px-1.5 text-xs font-normal"
           onClick={() => {
-            void toggleDiff();
+            detached(toggleDiff(), "OutdatedChanges");
           }}
           size="xs"
           variant="ghost"
@@ -451,7 +452,7 @@ export const OutdatedChanges = ({
           className="text-muted-foreground hover:text-foreground"
           disabled={summary.status === "loading"}
           onClick={() => {
-            void handleSummarize();
+            detached(handleSummarize(), "OutdatedChanges");
           }}
           size="icon-xs"
           title={t("common.summarizeChanges")}
@@ -562,7 +563,7 @@ export const UnlinkButton = ({
           <Button
             disabled={unlinking}
             onClick={() => {
-              void handleUnlink();
+              detached(handleUnlink(), "UnlinkButton");
             }}
             variant="destructive"
           >

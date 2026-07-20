@@ -16,6 +16,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 
 type ImportResult = {
@@ -186,7 +187,7 @@ export const ClauseImportDialog = ({
             <Button
               disabled={!file || importing}
               onClick={() => {
-                void handleImport();
+                detached(handleImport(), "ClauseImportDialog");
               }}
             >
               {importing ? t("clauses.importing") : t("common.import")}

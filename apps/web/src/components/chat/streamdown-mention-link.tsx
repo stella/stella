@@ -25,6 +25,7 @@ import { InlinePill } from "@/components/inline-pill";
 import { MatterIcon } from "@/components/matter-icon";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
@@ -237,7 +238,11 @@ const DecisionChip = ({
       leadingIcon={<LandmarkIcon className="size-3 shrink-0" />}
       onActivate={
         interactive
-          ? () => void openCaseLawDecision(decisionRef, navigate)
+          ? () =>
+              detached(
+                openCaseLawDecision(decisionRef, navigate),
+                "DecisionChip",
+              )
           : undefined
       }
       truncate
@@ -322,7 +327,10 @@ const SkillRefChip = ({
     <InlinePill
       leadingIcon={SKILL_CHIP_ICON}
       onActivate={() =>
-        void navigate({ to: "/knowledge/tools", search: { kind: "skill" } })
+        detached(
+          navigate({ to: "/knowledge/tools", search: { kind: "skill" } }),
+          "SkillRefChip",
+        )
       }
       truncate
     >
@@ -358,10 +366,13 @@ const WorkspaceRefChip = ({
     <InlinePill
       leadingIcon={icon}
       onActivate={() =>
-        void navigate({
-          to: "/workspaces/$workspaceId",
-          params: { workspaceId },
-        })
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId",
+            params: { workspaceId },
+          }),
+          "WorkspaceRefChip",
+        )
       }
       truncate
     >
@@ -385,17 +396,20 @@ const buildParsedEntityActivate =
     workspaceId: string;
   }) =>
   () => {
-    void (async () => {
-      const result = await openEntityInInspector(id, textLabel, workspaceId);
-      if (result.type === "folder") {
-        await navigateToWorkspaceFolder({
-          folderId: result.entityId,
-          navigate,
-          pathname,
-          targetWorkspaceId: result.workspaceId,
-        });
-      }
-    })();
+    detached(
+      (async () => {
+        const result = await openEntityInInspector(id, textLabel, workspaceId);
+        if (result.type === "folder") {
+          await navigateToWorkspaceFolder({
+            folderId: result.entityId,
+            navigate,
+            pathname,
+            targetWorkspaceId: result.workspaceId,
+          });
+        }
+      })(),
+      "buildParsedEntityActivate",
+    );
   };
 
 const ParsedMentionChip = ({
@@ -468,10 +482,13 @@ const ParsedMentionChip = ({
     <InlinePill
       leadingIcon={icon}
       onActivate={() =>
-        void navigate({
-          to: "/workspaces/$workspaceId",
-          params: { workspaceId: id },
-        })
+        detached(
+          navigate({
+            to: "/workspaces/$workspaceId",
+            params: { workspaceId: id },
+          }),
+          "ParsedMentionChip",
+        )
       }
       truncate
     >

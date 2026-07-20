@@ -5,6 +5,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { useMountEffect } from "@/hooks/use-effect";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 
 // Deliberately NOT nested under the /chat layout (`chat_` segment):
@@ -34,11 +35,14 @@ function NewChatRedirect() {
     }
 
     didRedirectRef.current = true;
-    void navigate({
-      params: { threadId: createChatThreadId() },
-      replace: true,
-      to: "/chat/$threadId",
-    });
+    detached(
+      navigate({
+        params: { threadId: createChatThreadId() },
+        replace: true,
+        to: "/chat/$threadId",
+      }),
+      "NewChatRedirect",
+    );
   });
 
   return <DefaultPendingComponent />;

@@ -7,6 +7,7 @@ import { useRouter } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
@@ -227,7 +228,10 @@ export const useDuplicateWorkspace = () => {
       return unwrapEden(response);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: workspacesKeys.all });
+      detached(
+        queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
+        "onSuccess",
+      );
     },
     onError: (error) => {
       analytics.captureError(error);

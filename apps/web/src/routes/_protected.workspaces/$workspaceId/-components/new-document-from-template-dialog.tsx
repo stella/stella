@@ -18,6 +18,7 @@ import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { useTemplateFillSchema } from "@/routes/_protected.knowledge/-components/use-template-fill-schema";
 import { templatesOptions } from "@/routes/_protected.knowledge/-queries";
@@ -132,7 +133,7 @@ const TemplatePickList = ({
     if (!hasNextPage || isFetchingNextPage) {
       return;
     }
-    void fetchNextPage();
+    detached(fetchNextPage(), "TemplatePickList");
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const templates = data ? data.pages.flatMap((page) => page.items) : [];

@@ -5,6 +5,7 @@ import { produce } from "immer";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { StellaMark } from "@/components/stella-mark";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -13,8 +14,8 @@ import { CreatingBBoxes } from "@/routes/_protected.workspaces/$workspaceId/-com
 import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
+import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const routeApi = getRouteApi(
   "/_protected/workspaces/$workspaceId/$viewId/document",
@@ -64,13 +65,16 @@ const FullscreenPdfViewer = () => {
   });
 
   const handlePageChanged = (page: number) => {
-    void navigate({
-      replace: true,
-      search: (prev) =>
-        produce(prev, (s) => {
-          s.pdfPage = page;
-        }),
-    });
+    detached(
+      navigate({
+        replace: true,
+        search: (prev) =>
+          produce(prev, (s) => {
+            s.pdfPage = page;
+          }),
+      }),
+      "handlePageChanged",
+    );
   };
 
   return (

@@ -76,6 +76,7 @@ import {
 } from "@/lib/chat-anonymized-store";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind } from "@/lib/value-types";
@@ -233,10 +234,10 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       key={chatThreadId}
       chatThreadId={chatThreadId}
       onNewThread={() => {
-        void rotateThread();
+        detached(rotateThread(), "ResolvedTemplateStudioChat");
       }}
       onScopedPresetSend={(request) => {
-        void handleScopedPresetSend(request);
+        detached(handleScopedPresetSend(request), "ResolvedTemplateStudioChat");
       }}
       pendingPresetSend={pendingPresetSend}
       onPendingPresetSendHandled={() => {
@@ -1156,7 +1157,7 @@ const TemplateStudioChatInner = ({
     );
     for (const part of partsToRun) {
       executedIds.add(part.id);
-      void runActiveDocxEditToolCall(part);
+      detached(runActiveDocxEditToolCall(part), "TemplateStudioChatInner");
     }
   }, [messages, runActiveDocxEditToolCall]);
 

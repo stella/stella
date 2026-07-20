@@ -31,6 +31,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@/lib/case-law-route";
+import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import {
   createCaseLawCollectionJsonLd,
@@ -211,10 +212,13 @@ function PublicCaseLawIndex() {
       title: t("caseLaw.decisionNotFound"),
       type: "error",
     });
-    void navigate({
-      replace: true,
-      search: (prev) => ({ ...prev, notFound: undefined }),
-    });
+    detached(
+      navigate({
+        replace: true,
+        search: (prev) => ({ ...prev, notFound: undefined }),
+      }),
+      "PublicCaseLawIndex",
+    );
   }, [notFound, navigate, t]);
   const routeFilters = createDecisionFiltersFromSearch(search);
   const [filters, setFilters] = useState<DecisionListFilters>(routeFilters);
@@ -269,7 +273,10 @@ function PublicCaseLawIndex() {
           <Button
             disabled={isFetchingNextPage}
             onClick={() => {
-              void (async () => await fetchNextPage())();
+              detached(
+                (async () => await fetchNextPage())(),
+                "PublicCaseLawIndex",
+              );
             }}
             variant="outline"
           >

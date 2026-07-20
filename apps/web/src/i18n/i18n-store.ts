@@ -10,6 +10,7 @@ import { getStorageKey } from "@/consts";
 import en from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
 import { resolveAppTimeZone, SERVER_I18N_TIME_ZONE } from "@/i18n/time-zone";
+import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 type LocalizedMessages<T> = {
@@ -517,7 +518,7 @@ export const useI18nStore = create<State & Actions>()(
         ) {
           return;
         }
-        void state.loadMessages(state.lang);
+        detached(state.loadMessages(state.lang), "onRehydrateStorage");
       },
     },
   ),

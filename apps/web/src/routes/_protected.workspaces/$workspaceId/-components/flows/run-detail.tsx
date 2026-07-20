@@ -31,6 +31,7 @@ import {
 } from "@/components/flows/flow-meta";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -143,9 +144,12 @@ const RunDetailContent = ({
 
     stellaToast.add({ type: "success", title: t("flows.runs.cancelled") });
     setCancelOpen(false);
-    void queryClient.invalidateQueries({
-      queryKey: flowRunsKeys.all(workspaceId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: flowRunsKeys.all(workspaceId),
+      }),
+      "handleCancel",
+    );
   };
 
   return (
@@ -176,7 +180,7 @@ const RunDetailContent = ({
                 <Button
                   disabled={cancelling}
                   onClick={() => {
-                    void handleCancel();
+                    detached(handleCancel(), "RunDetailContent");
                   }}
                   variant="destructive"
                 >
@@ -204,9 +208,12 @@ const RunDetailContent = ({
       {run.status === "awaiting_review" && (
         <ReviewGateCard
           onResolved={() => {
-            void queryClient.invalidateQueries({
-              queryKey: flowRunsKeys.all(workspaceId),
-            });
+            detached(
+              queryClient.invalidateQueries({
+                queryKey: flowRunsKeys.all(workspaceId),
+              }),
+              "RunDetailContent",
+            );
           }}
           run={run}
           workspaceId={workspaceId}
@@ -299,10 +306,13 @@ const StepRunOutput = ({
     return (
       <Button
         onClick={() => {
-          void openEntityInInspector(
-            output.entityId,
-            t("flows.runs.createdDocument"),
-            workspaceId,
+          detached(
+            openEntityInInspector(
+              output.entityId,
+              t("flows.runs.createdDocument"),
+              workspaceId,
+            ),
+            "StepRunOutput",
           );
         }}
         size="sm"
@@ -427,7 +437,7 @@ const ReviewGateCard = ({
         <Button
           disabled={!canReview || submitting}
           onClick={() => {
-            void submit("rejected");
+            detached(submit("rejected"), "ReviewGateCard");
           }}
           type="button"
           variant="outline"
@@ -438,7 +448,7 @@ const ReviewGateCard = ({
           disabled={!canReview || submitting}
           loading={submitting}
           onClick={() => {
-            void submit("approved");
+            detached(submit("approved"), "ReviewGateCard");
           }}
           type="button"
         >

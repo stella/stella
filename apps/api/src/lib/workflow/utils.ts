@@ -66,8 +66,7 @@ export const fieldContentToValue = (content: FieldContent): ConditionValue => {
     case "unsupported":
       return undefined;
     default: {
-      const exhaustive: never = content;
-      void exhaustive;
+      content satisfies never;
       return undefined;
     }
   }

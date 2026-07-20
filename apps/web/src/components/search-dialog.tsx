@@ -71,6 +71,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -538,10 +539,13 @@ export const SearchDialog = ({
       {
         onSuccess: (thread) => {
           onOpenChange(false);
-          void navigate({
-            to: "/chat/$threadId",
-            params: { threadId: thread.threadId },
-          });
+          detached(
+            navigate({
+              to: "/chat/$threadId",
+              params: { threadId: thread.threadId },
+            }),
+            "onSuccess",
+          );
         },
         onError: () => {
           stellaToast.add({
@@ -775,7 +779,7 @@ export const SearchDialog = ({
           if (!entry?.isIntersecting || isFetchingNextPage) {
             return;
           }
-          void fetchNextPage();
+          detached(fetchNextPage(), "SearchDialog");
         },
         { root, rootMargin: "160px 0px" },
       );
@@ -1291,7 +1295,7 @@ const SearchRecents = ({
                 className="h-auto! w-full justify-start gap-2 py-1 text-start text-sm"
                 key={file.entityId}
                 onClick={() => {
-                  void onFileClick(file);
+                  detached(onFileClick(file), "SearchRecents");
                 }}
                 variant="ghost"
               >

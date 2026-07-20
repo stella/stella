@@ -5,6 +5,7 @@ import { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { detached } from "@/api/lib/detached";
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import {
   executeFlowStep,
@@ -97,13 +98,14 @@ export const initFlowRunWorker = (): Worker<FlowStepJobData> => {
       return;
     }
 
-    void failFlowRunFromWorker(job.data, error).catch(
-      (finalizeError: unknown) => {
+    detached(
+      failFlowRunFromWorker(job.data, error).catch((finalizeError: unknown) => {
         captureError(finalizeError, {
           runId: job.data.runId,
           stepIndex: String(job.data.stepIndex),
         });
-      },
+      }),
+      "initFlowRunWorker",
     );
   });
 
@@ -121,10 +123,13 @@ export const initFlowRunWorker = (): Worker<FlowStepJobData> => {
   // idempotent: the deterministic job id no-ops a still-live job, and the
   // executor guards against re-running an already-completed step.
   // `awaiting_review` runs are intentionally parked on a human, not orphans.
-  void reconcileOrphanedFlowRuns().catch((error: unknown) => {
-    captureError(error);
-    logger.error("flow.reconcile_failed", errorSystemFields(error));
-  });
+  detached(
+    reconcileOrphanedFlowRuns().catch((error: unknown) => {
+      captureError(error);
+      logger.error("flow.reconcile_failed", errorSystemFields(error));
+    }),
+    "initFlowRunWorker",
+  );
 
   return worker;
 };

@@ -17,6 +17,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toFormErrors } from "@/lib/schema";
@@ -92,7 +93,7 @@ export const OrganizationProfileCard = () => {
             errors={formErrors}
             onSubmit={(e) => {
               e.preventDefault();
-              void form.handleSubmit();
+              detached(form.handleSubmit(), "OrganizationProfileCard");
             }}
           >
             <form.Field name="name">

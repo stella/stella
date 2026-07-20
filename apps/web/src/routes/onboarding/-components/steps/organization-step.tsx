@@ -12,6 +12,7 @@ import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
 
 import { usePulse } from "@/hooks/use-pulse";
+import { detached } from "@/lib/detached";
 import { toFormErrors } from "@/lib/schema";
 import { createSlug } from "@/routes/_protected.organization/-utils";
 
@@ -75,7 +76,7 @@ export const OrganizationStep = ({
             flashInput();
             return;
           }
-          void form.handleSubmit();
+          detached(form.handleSubmit(), "OrganizationStep");
         }}
       >
         <form.Field name="name">

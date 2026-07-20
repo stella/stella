@@ -26,6 +26,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspacePropertyOption } from "@/lib/types";
 import {
@@ -374,7 +375,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
       // extraction to actually populate cells; manual columns don't.
       // Same convention the single-column dialog uses.
       if (items.some((item) => item.toolType === "ai-model")) {
-        void startWorkflow();
+        detached(startWorkflow(), "handleSubmit");
       }
       stellaToast.add({
         title:
@@ -470,7 +471,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
             disabled={!canSubmit}
             loading={batch.isPending}
             onClick={() => {
-              void handleSubmit();
+              detached(handleSubmit(), "BulkBody");
             }}
             size="sm"
           >

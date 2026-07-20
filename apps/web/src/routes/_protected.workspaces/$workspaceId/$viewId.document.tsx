@@ -52,6 +52,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
@@ -80,8 +81,8 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
-import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
+import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
 const ReadOnlyDocxViewer = lazy(async () => {
   const m = await import("@/components/docx/app-docx-editor");
@@ -140,15 +141,18 @@ export const Route = createFileRoute(
     // component renders; warm the same query so it's a cache hit. The hook
     // normalizes entityIds (dedupe + sort) before building the key, but for a
     // single-element array that's a no-op, so the key matches exactly.
-    void prefetchRouteQuery(
-      context.queryClient,
-      justificationsOptions({
-        workspaceId: params.workspaceId,
-        entityIds: [deps.entity],
-      }),
-      (error: unknown) => {
-        getAnalytics().captureError(error);
-      },
+    detached(
+      prefetchRouteQuery(
+        context.queryClient,
+        justificationsOptions({
+          workspaceId: params.workspaceId,
+          entityIds: [deps.entity],
+        }),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      ),
+      "loader",
     );
 
     // `field` is the fieldId FullscreenPdfViewer eventually reads via
@@ -170,15 +174,18 @@ export const Route = createFileRoute(
     const isDocxField =
       field?.content.type === "file" && field.content.mimeType === DOCX_MIME;
     if (isDocxField) {
-      void prefetchRouteQuery(
-        context.queryClient,
-        docxSuggestionsOptions({
-          workspaceId: params.workspaceId,
-          entityId: deps.entity,
-        }),
-        (error: unknown) => {
-          getAnalytics().captureError(error);
-        },
+      detached(
+        prefetchRouteQuery(
+          context.queryClient,
+          docxSuggestionsOptions({
+            workspaceId: params.workspaceId,
+            entityId: deps.entity,
+          }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "loader",
       );
     }
 
@@ -188,12 +195,15 @@ export const Route = createFileRoute(
       // Warm the file query without blocking route commit: a large PDF
       // download shouldn't hold the user on the pendingComponent. The
       // component's useSuspenseQuery scopes the wait to the PDF area.
-      void prefetchRouteQuery(
-        context.queryClient,
-        fileOptions({ workspaceId: params.workspaceId, fieldId: deps.field }),
-        (error: unknown) => {
-          getAnalytics().captureError(error);
-        },
+      detached(
+        prefetchRouteQuery(
+          context.queryClient,
+          fileOptions({ workspaceId: params.workspaceId, fieldId: deps.field }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "loader",
       );
     }
   },
@@ -569,14 +579,17 @@ function RouteComponentInner({
     useInspectorStore
       .getState()
       .replaceFileFieldId(fieldId, latestFileFieldForProperty.id);
-    void navigate({
-      replace: true,
-      search: (prev) => ({
-        ...prev,
-        field: latestFileFieldForProperty.id,
-        pdfPage: undefined,
+    detached(
+      navigate({
+        replace: true,
+        search: (prev) => ({
+          ...prev,
+          field: latestFileFieldForProperty.id,
+          pdfPage: undefined,
+        }),
       }),
-    });
+      "RouteComponentInner",
+    );
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
   return (
@@ -685,25 +698,31 @@ function RouteComponentInner({
                         }}
                         onClose={() => {
                           setDocxUnlocked(false);
-                          void navigate({
-                            search: (prev) => ({
-                              ...prev,
-                              editing: undefined,
+                          detached(
+                            navigate({
+                              search: (prev) => ({
+                                ...prev,
+                                editing: undefined,
+                              }),
                             }),
-                          });
+                            "RouteComponentInner",
+                          );
                         }}
                         onSaved={(savedFieldId) => {
                           setDocxUnlocked(false);
                           setActiveFieldId(savedFieldId);
-                          void navigate({
-                            replace: true,
-                            search: (prev) => ({
-                              ...prev,
-                              editing: undefined,
-                              field: savedFieldId,
-                              pdfPage: undefined,
+                          detached(
+                            navigate({
+                              replace: true,
+                              search: (prev) => ({
+                                ...prev,
+                                editing: undefined,
+                                field: savedFieldId,
+                                pdfPage: undefined,
+                              }),
                             }),
-                          });
+                            "RouteComponentInner",
+                          );
                         }}
                         onUnlockedChange={setDocxUnlocked}
                         propertyId={filePropertyId}
@@ -1017,26 +1036,29 @@ const VersionDropZone = ({
         if (!file) {
           return;
         }
-        void (async () => {
-          setIsUploading(true);
-          try {
-            const response = await api
-              .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-              ["upload-version"].post({
-                entityId: toSafeId<"entity">(entityId),
-                file,
+        detached(
+          (async () => {
+            setIsUploading(true);
+            try {
+              const response = await api
+                .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+                ["upload-version"].post({
+                  entityId: toSafeId<"entity">(entityId),
+                  file,
+                  queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+                });
+              if (response.error) {
+                throw toAPIError(response.error);
+              }
+              await queryClient.invalidateQueries({
                 queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
               });
-            if (response.error) {
-              throw toAPIError(response.error);
+            } finally {
+              setIsUploading(false);
             }
-            await queryClient.invalidateQueries({
-              queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-            });
-          } finally {
-            setIsUploading(false);
-          }
-        })();
+          })(),
+          "onDrop",
+        );
       },
     });
   }, [disabled, entityId, queryClient, workspaceId, canStartUpload]);

@@ -23,6 +23,7 @@ import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { workspaceFilesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -249,7 +250,7 @@ export const TemplatePrefillPanel = ({
           <Button
             className="self-end"
             disabled={!hasSource || loading}
-            onClick={() => void runPrefill()}
+            onClick={() => detached(runPrefill(), "TemplatePrefillPanel")}
             size="sm"
             type="button"
           >

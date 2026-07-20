@@ -22,6 +22,7 @@ import type {
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
 import { MatterIcon } from "@/components/matter-icon";
+import { detached } from "@/lib/detached";
 
 type CreateDocumentPart = Extract<
   ChatToolCallPart,
@@ -91,6 +92,17 @@ export const NeedsMatterCard = ({
     return <CreatedFailureCard message={failedOutput.message} />;
   }
 
+  const handleMatterContinue = async (matterId: string) => {
+    if (!partialInput?.source) {
+      return;
+    }
+    const fullInput: CreateDocumentInput = {
+      name: partialInput.name ?? "Untitled",
+      source: partialInput.source,
+    };
+    await onResolve(part.id, matterId, fullInput);
+  };
+
   return (
     <div className="border-border bg-muted/30 my-1 rounded-lg border text-sm">
       <div className="flex items-center gap-2 px-3 py-2">
@@ -111,16 +123,7 @@ export const NeedsMatterCard = ({
         <MatterPickerSection
           isLoadingMatters={isLoadingMatters}
           matters={matters}
-          onContinue={async (matterId) => {
-            if (!partialInput?.source) {
-              return;
-            }
-            const fullInput: CreateDocumentInput = {
-              name: partialInput.name ?? "Untitled",
-              source: partialInput.source,
-            };
-            await onResolve(part.id, matterId, fullInput);
-          }}
+          onContinue={handleMatterContinue}
         />
       )}
     </div>
@@ -366,7 +369,7 @@ const MatterPickerSection = ({
         <Button
           disabled={selectedMatterId === null || isSubmitting}
           onClick={() => {
-            void handleContinue();
+            detached(handleContinue(), "MatterPickerSection");
           }}
           size="sm"
           type="button"
@@ -425,7 +428,7 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
             "border-border/50 hover:bg-muted/60 flex w-full items-center gap-3 border-t px-3 py-3 text-start transition-colors",
           )}
           onClick={() => {
-            void onOpen(output);
+            detached(onOpen(output), "CreatedSuccessCard");
           }}
           type="button"
         >

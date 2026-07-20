@@ -25,6 +25,7 @@ import {
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorRedirect,
 } from "@/lib/auth";
+import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -293,7 +294,7 @@ export function SignInPanel({
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
-            void form.handleSubmit();
+            detached(form.handleSubmit(), "SignInPanel");
           }}
         >
           <form.Field name="email">
@@ -407,7 +408,7 @@ function PasswordSignInForm({
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
-        void form.handleSubmit();
+        detached(form.handleSubmit(), "PasswordSignInForm");
       }}
     >
       <form.Field name="email">
@@ -530,7 +531,7 @@ function BootstrapSignUpForm({
         errors={formErrors}
         onSubmit={(e) => {
           e.preventDefault();
-          void form.handleSubmit();
+          detached(form.handleSubmit(), "BootstrapSignUpForm");
         }}
       >
         <form.Field name="email">

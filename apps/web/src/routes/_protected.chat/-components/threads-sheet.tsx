@@ -33,6 +33,7 @@ import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -154,7 +155,7 @@ export const ThreadsSheet = ({
                 className="self-center"
                 disabled={isFetchingNextPage}
                 onClick={() => {
-                  void fetchNextPage();
+                  detached(fetchNextPage(), "ThreadsSheet");
                 }}
                 size="sm"
                 variant="ghost"

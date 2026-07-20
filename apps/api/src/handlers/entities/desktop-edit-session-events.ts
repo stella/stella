@@ -15,6 +15,7 @@ import {
   readDesktopEditSessionEventState,
   refreshDesktopEditSessionLiveness,
 } from "@/api/lib/desktop-edit-sessions";
+import { detached } from "@/api/lib/detached";
 import { broadcastSessionEvent, registerSessionDelivery } from "@/api/lib/sse";
 import type { SSEEvent } from "@/api/lib/sse";
 
@@ -209,9 +210,12 @@ export const desktopEditSessionEventsHandler = async ({
   }
 
   const refreshLivenessInBackground = () => {
-    void refreshLiveness().catch((error: unknown) => {
-      captureError(error, { sessionId });
-    });
+    detached(
+      refreshLiveness().catch((error: unknown) => {
+        captureError(error, { sessionId });
+      }),
+      "refreshLivenessInBackground",
+    );
   };
 
   const stream = new ReadableStream({

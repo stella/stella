@@ -1019,8 +1019,7 @@ export const createChatMessageIdMapper = (
   createId: () => SafeId<"chatMessage"> = () => createSafeId<"chatMessage">(),
 ): MessageIdMapper => {
   let responseId: SafeId<"chatMessage"> | null = null;
-  return (messageId) => {
-    void messageId;
+  return (_messageId) => {
     if (!responseId) {
       responseId = createId();
     }

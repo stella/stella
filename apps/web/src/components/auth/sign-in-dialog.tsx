@@ -13,6 +13,7 @@ import {
 
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { SignInPanel } from "@/components/auth/sign-in-panel";
+import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
 
 type SignInDialogProps = {
@@ -54,6 +55,14 @@ export function SignInDialog({
     );
   };
 
+  const handleVerified = async () => {
+    await navigate({
+      to: "/auth/organization",
+      search: { redirectTo },
+      replace: true,
+    });
+  };
+
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup className="max-w-md">
@@ -66,7 +75,7 @@ export function SignInDialog({
               redirectTo={redirectTo}
               showHeading={false}
               onOtpSent={({ email }) => {
-                void showOtpStep(email);
+                detached(showOtpStep(email), "SignInDialog");
               }}
             />
           ) : (
@@ -79,13 +88,7 @@ export function SignInDialog({
               onUseDifferentEmail={() => {
                 setStep({ status: "sign-in" });
               }}
-              onVerified={async () => {
-                await navigate({
-                  to: "/auth/organization",
-                  search: { redirectTo },
-                  replace: true,
-                });
-              }}
+              onVerified={handleVerified}
             />
           )}
         </DialogPanel>

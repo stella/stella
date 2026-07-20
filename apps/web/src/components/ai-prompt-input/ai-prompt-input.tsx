@@ -35,6 +35,7 @@ import {
   handlePromptEditorSelectAll,
 } from "@/components/prompt-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -123,7 +124,7 @@ export const AIPromptInput = ({
     if (!hasNextSkillPage || isFetchingNextSkillPage) {
       return;
     }
-    void fetchNextSkillPage();
+    detached(fetchNextSkillPage(), "AIPromptInput");
   }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
   const slashItemsRef = useRef<SlashItem[]>([]);
   // eslint-disable-next-line react/react-compiler -- latest-value ref mirror: the memoized slash items are read later by the TipTap suggestion factory (outside render), never during render

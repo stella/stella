@@ -24,6 +24,7 @@ import { MatterIcon } from "@/components/matter-icon";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import Tooltip from "@/components/tooltip";
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { getMatterPickerColor, toStoredMatterColor } from "@/lib/matter-colors";
@@ -189,12 +190,12 @@ export const WorkspaceBreadcrumb = ({
         <Input
           className={`${breadcrumbInputClassName} w-28 text-sm`}
           onBlur={() => {
-            void refRename.commit();
+            detached(refRename.commit(), "WorkspaceBreadcrumb");
           }}
           onChange={(e) => refRename.setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
-              void refRename.commit();
+              detached(refRename.commit(), "WorkspaceBreadcrumb");
             }
             if (e.key === "Escape") {
               refRename.cancel();
@@ -262,7 +263,7 @@ export const WorkspaceBreadcrumb = ({
                     className={`${matterNameInputClassName} w-fit`}
                     disabled={updateWorkspace.isPending}
                     onBlur={() => {
-                      void nameRename.commit();
+                      detached(nameRename.commit(), "WorkspaceBreadcrumb");
                     }}
                     onChange={(e) => nameRename.setDraft(e.target.value)}
                     onKeyDown={(e) => {
@@ -367,7 +368,7 @@ export const WorkspaceBreadcrumb = ({
             className={`${matterNameInputClassName} w-fit`}
             disabled={updateWorkspace.isPending}
             onBlur={() => {
-              void nameRename.commit();
+              detached(nameRename.commit(), "WorkspaceBreadcrumb");
             }}
             onChange={(e) => nameRename.setDraft(e.target.value)}
             onKeyDown={(e) => {

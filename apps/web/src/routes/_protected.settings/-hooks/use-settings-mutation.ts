@@ -4,6 +4,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type SuccessToast = { title: string; description?: string };
@@ -52,7 +53,10 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
   // keeps this out of the detached-promise ratchet and routes a failed
   // refetch to telemetry instead of an unhandled rejection.
   const invalidateInBackground = () =>
-    void invalidate().catch((error: unknown) => analytics.captureError(error));
+    detached(
+      invalidate().catch((error: unknown) => analytics.captureError(error)),
+      "invalidateInBackground",
+    );
 
   const invalidatesOnSettle = options.invalidateOn === "settled";
 

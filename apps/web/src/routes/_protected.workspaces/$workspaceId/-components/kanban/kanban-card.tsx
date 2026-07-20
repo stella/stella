@@ -18,6 +18,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useFormatter } from "@/i18n/formatting-context";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -156,7 +157,7 @@ export const KanbanCard = ({
         onCancel={rename.cancel}
         onChange={rename.setDraft}
         onCommit={() => {
-          void rename.commit();
+          detached(rename.commit(), "KanbanCard");
         }}
         value={rename.state.draft}
       />

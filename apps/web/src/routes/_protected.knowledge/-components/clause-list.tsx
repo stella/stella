@@ -25,6 +25,7 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { downloadFile } from "@/lib/utils";
 import {
@@ -188,7 +189,7 @@ export const ClauseList = ({
                 <Button
                   aria-label={t("clauses.export")}
                   onClick={() => {
-                    void handleExport();
+                    detached(handleExport(), "ClauseList");
                   }}
                   size="sm"
                   title={t("clauses.export")}

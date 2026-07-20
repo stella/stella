@@ -17,6 +17,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
@@ -49,12 +50,18 @@ export const AddMcpServerSheet = ({
   const [wizard, setWizard] = useState<WizardState>(initialWizard);
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({
-      queryKey: catalogueKeys.list(organizationId),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.mcp.all(organizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: catalogueKeys.list(organizationId),
+      }),
+      "invalidate",
+    );
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.mcp.all(organizationId),
+      }),
+      "invalidate",
+    );
   };
 
   const close = () => {

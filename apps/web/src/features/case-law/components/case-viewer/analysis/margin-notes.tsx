@@ -9,6 +9,7 @@ import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { forceReflow } from "@/lib/utils";
 
 import { getCategoryVar } from "./types";
 
@@ -116,7 +117,7 @@ export const MarginNotes = ({
       sc.scrollTop;
     sc.scrollTo({ top: offset, behavior: "instant" });
     delete el.dataset["highlight"];
-    void el.offsetWidth;
+    forceReflow(el);
     el.dataset["highlight"] = "";
   };
 

@@ -21,6 +21,7 @@ import {
   collectSourceDocuments,
 } from "@/components/chat/source-chips.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
@@ -349,22 +350,25 @@ const SourceChip = ({
       return;
     }
 
-    void (async () => {
-      const result = await openEntityInInspector(
-        sourceDocument.entityId,
-        sourceDocument.title,
-        resolvedWorkspaceId,
-      );
+    detached(
+      (async () => {
+        const result = await openEntityInInspector(
+          sourceDocument.entityId,
+          sourceDocument.title,
+          resolvedWorkspaceId,
+        );
 
-      if (result.type === "folder") {
-        await navigateToWorkspaceFolder({
-          folderId: result.entityId,
-          navigate,
-          pathname,
-          targetWorkspaceId: result.workspaceId,
-        });
-      }
-    })();
+        if (result.type === "folder") {
+          await navigateToWorkspaceFolder({
+            folderId: result.entityId,
+            navigate,
+            pathname,
+            targetWorkspaceId: result.workspaceId,
+          });
+        }
+      })(),
+      "handleClick",
+    );
   };
 
   return (

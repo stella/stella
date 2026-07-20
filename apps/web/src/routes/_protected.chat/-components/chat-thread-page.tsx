@@ -21,6 +21,7 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { useChatEditor } from "@/components/chat-editor-provider";
+import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
@@ -52,6 +53,7 @@ import {
 } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -374,27 +376,33 @@ export const ChatThreadPage = ({
   // caches are invalidated so the inspector doesn't read whichever
   // entry happens to predate the move.
   const moveToSide = () => {
-    void invalidateChatThreadAcrossScopes({
-      queryClient,
-      threadId: threadRef.threadId,
-    });
+    detached(
+      invalidateChatThreadAcrossScopes({
+        queryClient,
+        threadId: threadRef.threadId,
+      }),
+      "moveToSide",
+    );
     if (threadRef.scope === "workspace") {
       openInspectorChat({
         id: threadRef.threadId,
         workspaceId: threadRef.workspaceId,
         contextMatterIds: selectedContextMatterIds,
       });
-      void navigate({
-        to: "/workspaces/$workspaceId",
-        params: { workspaceId: threadRef.workspaceId },
-      });
+      detached(
+        navigate({
+          to: "/workspaces/$workspaceId",
+          params: { workspaceId: threadRef.workspaceId },
+        }),
+        "moveToSide",
+      );
       return;
     }
     openInspectorChat({
       id: threadRef.threadId,
       contextMatterIds: selectedContextMatterIds,
     });
-    void navigate({ to: "/chat" });
+    detached(navigate({ to: "/chat" }), "moveToSide");
   };
 
   const selectPrompt = (prompt: ChatPrompt) => {
@@ -413,13 +421,16 @@ export const ChatThreadPage = ({
   const startNewThread = () => {
     stop();
     if (threadRef.scope === "workspace") {
-      void navigate({
-        to: "/chat/workspaces/$workspaceId/new",
-        params: { workspaceId: threadRef.workspaceId },
-      });
+      detached(
+        navigate({
+          to: "/chat/workspaces/$workspaceId/new",
+          params: { workspaceId: threadRef.workspaceId },
+        }),
+        "startNewThread",
+      );
       return;
     }
-    void navigate({ to: "/chat/new" });
+    detached(navigate({ to: "/chat/new" }), "startNewThread");
   };
 
   // The floating composer block grows with the draft (multi-line text,
@@ -447,6 +458,55 @@ export const ChatThreadPage = ({
       observer.disconnect();
     };
   }, []);
+
+  const handleSubmit = async (draft: ChatInputDraft) => {
+    const reservedCommand = matchReservedChatCommand(draft.html);
+    if (reservedCommand?.id === "new") {
+      // Abort any live stream first: `chatThreadOptions` keeps the
+      // in-flight Chat alive in the query cache, so navigating away
+      // would leave it streaming against the abandoned thread.
+      stop();
+      controller.setContent("");
+      if (threadRef.scope === "workspace") {
+        detached(
+          navigate({
+            to: "/chat/workspaces/$workspaceId/new",
+            params: { workspaceId: threadRef.workspaceId },
+            replace: true,
+          }),
+          "ChatThreadPage",
+        );
+      } else {
+        detached(
+          navigate({
+            to: "/chat/new",
+            replace: true,
+          }),
+          "ChatThreadPage",
+        );
+      }
+      return;
+    }
+    if (reservedCommand?.id === "model") {
+      controller.setContent("");
+      useModelSelectorStore.getState().open();
+      return;
+    }
+
+    if (!(await ensureAIAvailable())) {
+      return;
+    }
+    // A model just picked in the (+) menu may still be
+    // mid-PATCH: wait for it to settle so the send can
+    // never race onto the thread's previous model. On
+    // failure the hook has already toasted; abort instead
+    // of sending with a model that may not match what the
+    // server has persisted.
+    if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      return;
+    }
+    await sendMessage(await buildChatRequestMessage(draft));
+  };
 
   return (
     <ChatMattersContext
@@ -598,12 +658,15 @@ export const ChatThreadPage = ({
                 prompts={suggestedFollowupPrompts}
                 onSelect={(prompt) => {
                   controller.setContent(prompt);
-                  void controller.submit(async (draft) => {
-                    if (!(await ensureAIAvailable())) {
-                      return;
-                    }
-                    await sendMessage(await buildChatRequestMessage(draft));
-                  });
+                  detached(
+                    controller.submit(async (draft) => {
+                      if (!(await ensureAIAvailable())) {
+                        return;
+                      }
+                      await sendMessage(await buildChatRequestMessage(draft));
+                    }),
+                    "ChatThreadPage",
+                  );
                 }}
               />
               {/* Glass tray behind the composer + status row: the shared
@@ -647,54 +710,7 @@ export const ChatThreadPage = ({
                   onStop={() => {
                     stop();
                   }}
-                  onSubmit={async (draft) => {
-                    const reservedCommand = matchReservedChatCommand(
-                      draft.html,
-                    );
-                    if (reservedCommand?.id === "new") {
-                      // Abort any live stream first: `chatThreadOptions` keeps the
-                      // in-flight Chat alive in the query cache, so navigating away
-                      // would leave it streaming against the abandoned thread.
-                      stop();
-                      controller.setContent("");
-                      if (threadRef.scope === "workspace") {
-                        void navigate({
-                          to: "/chat/workspaces/$workspaceId/new",
-                          params: { workspaceId: threadRef.workspaceId },
-                          replace: true,
-                        });
-                      } else {
-                        void navigate({
-                          to: "/chat/new",
-                          replace: true,
-                        });
-                      }
-                      return;
-                    }
-                    if (reservedCommand?.id === "model") {
-                      controller.setContent("");
-                      useModelSelectorStore.getState().open();
-                      return;
-                    }
-
-                    if (!(await ensureAIAvailable())) {
-                      return;
-                    }
-                    // A model just picked in the (+) menu may still be
-                    // mid-PATCH: wait for it to settle so the send can
-                    // never race onto the thread's previous model. On
-                    // failure the hook has already toasted; abort instead
-                    // of sending with a model that may not match what the
-                    // server has persisted.
-                    if (
-                      Result.isError(
-                        await modelSelection.awaitPendingSelection(),
-                      )
-                    ) {
-                      return;
-                    }
-                    await sendMessage(await buildChatRequestMessage(draft));
-                  }}
+                  onSubmit={handleSubmit}
                 />
               </div>
             </div>
@@ -746,10 +762,13 @@ const useChatWebSearchSeed = ({
       return unwrapEden(response);
     },
     onSuccess: () => {
-      void invalidateChatThreadAcrossScopes({
-        queryClient,
-        threadId: toSafeId<"chatThread">(threadRef.threadId),
-      });
+      detached(
+        invalidateChatThreadAcrossScopes({
+          queryClient,
+          threadId: toSafeId<"chatThread">(threadRef.threadId),
+        }),
+        "onSuccess",
+      );
       onSettled(threadRef.threadId, true);
     },
     onError: (error) => {

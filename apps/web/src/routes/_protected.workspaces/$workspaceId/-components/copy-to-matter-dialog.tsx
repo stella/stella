@@ -23,6 +23,7 @@ import {
 } from "@/components/matter-target-picker";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import {
   getCopyToMatterRootEntities,
@@ -216,7 +217,7 @@ export const CopyToMatterDialog = ({
           <Button
             disabled={!target || isSubmitting}
             onClick={() => {
-              void handleSubmit();
+              detached(handleSubmit(), "CopyToMatterDialog");
             }}
           >
             {(() => {

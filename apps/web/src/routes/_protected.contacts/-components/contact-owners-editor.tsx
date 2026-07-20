@@ -12,6 +12,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { UserIdentity } from "@/components/user-avatar";
+import { detached } from "@/lib/detached";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 import { useUpdateContact } from "@/routes/_protected.contacts/-mutations";
@@ -56,11 +57,14 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
       },
       {
         onSuccess: () => {
-          void invalidateContactCaches(queryClient, {
-            activeOrganizationId,
-            contactId: contact.id,
-            invalidateWorkspaces: field === "responsibleAttorneyId",
-          });
+          detached(
+            invalidateContactCaches(queryClient, {
+              activeOrganizationId,
+              contactId: contact.id,
+              invalidateWorkspaces: field === "responsibleAttorneyId",
+            }),
+            "onSuccess",
+          );
         },
         onError: () => {
           stellaToast.add({

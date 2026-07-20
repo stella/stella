@@ -44,6 +44,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { MatterMetadataPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet";
@@ -114,10 +115,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             name: workspace.name,
             color: workspace.color ?? null,
             onClick: () => {
-              void navigate({
-                to: "/workspaces/$workspaceId",
-                params: { workspaceId },
-              });
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId",
+                  params: { workspaceId },
+                }),
+                "onClick",
+              );
             },
           }
         : null,
@@ -356,10 +360,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         window.history.back();
         return;
       }
-      void navigate({
-        to: "/workspaces/$workspaceId/$viewId",
-        params: { workspaceId: tab.workspaceId, viewId: "all" },
-      });
+      detached(
+        navigate({
+          to: "/workspaces/$workspaceId/$viewId",
+          params: { workspaceId: tab.workspaceId, viewId: "all" },
+        }),
+        "InspectorPanel",
+      );
     },
     [navigate],
   );
@@ -512,10 +519,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                 id={activeTab.workspaceId}
                 name={activeTab.label}
                 onClick={() => {
-                  void navigate({
-                    to: "/workspaces/$workspaceId",
-                    params: { workspaceId: activeTab.workspaceId },
-                  });
+                  detached(
+                    navigate({
+                      to: "/workspaces/$workspaceId",
+                      params: { workspaceId: activeTab.workspaceId },
+                    }),
+                    "InspectorPanel",
+                  );
                 }}
               />
             }

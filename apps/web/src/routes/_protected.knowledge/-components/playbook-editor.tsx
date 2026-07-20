@@ -46,6 +46,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -506,9 +507,12 @@ const PlaybookEditorForm = ({
         ? t("knowledge.playbooks.updated")
         : t("knowledge.playbooks.created"),
     });
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.playbooks.all(organizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.playbooks.all(organizationId),
+      }),
+      "handleSave",
+    );
     onSaved();
   };
 
@@ -539,9 +543,12 @@ const PlaybookEditorForm = ({
       title: t("knowledge.playbooks.deleted"),
     });
     setDeleteOpen(false);
-    void queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.playbooks.all(organizationId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.playbooks.all(organizationId),
+      }),
+      "handleDelete",
+    );
     onSaved();
   };
 
@@ -555,9 +562,12 @@ const PlaybookEditorForm = ({
     onSuccess: (data) => {
       setStatus("approved");
       setApprovedAt(data.approvedAt);
-      void queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.playbooks.all(organizationId),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.playbooks.all(organizationId),
+        }),
+        "onSuccess",
+      );
       stellaToast.add({
         type: "success",
         title: t("knowledge.playbooks.approval.approvedToast"),
@@ -646,7 +656,7 @@ const PlaybookEditorForm = ({
                       <Button
                         disabled={saving}
                         onClick={() => {
-                          void handleDelete();
+                          detached(handleDelete(), "PlaybookEditorForm");
                         }}
                         variant="destructive"
                       >
@@ -660,7 +670,7 @@ const PlaybookEditorForm = ({
                 disabled={!canSave || saving}
                 loading={saving}
                 onClick={() => {
-                  void handleSave();
+                  detached(handleSave(), "PlaybookEditorForm");
                 }}
                 type="button"
               >

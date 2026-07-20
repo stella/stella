@@ -19,6 +19,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import { detached } from "@/lib/detached";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 import { invoicesInfiniteOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/invoices";
@@ -237,13 +238,16 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
             className="hover:bg-muted/30 cursor-pointer border-b last:border-0"
             key={invoice.id}
             onClick={() => {
-              void navigate({
-                to: "/workspaces/$workspaceId/invoices/$invoiceId",
-                params: {
-                  workspaceId,
-                  invoiceId: invoice.id,
-                },
-              });
+              detached(
+                navigate({
+                  to: "/workspaces/$workspaceId/invoices/$invoiceId",
+                  params: {
+                    workspaceId,
+                    invoiceId: invoice.id,
+                  },
+                }),
+                "InvoicesList",
+              );
             }}
           >
             {columns.map((column) => (
@@ -262,7 +266,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
           <Button
             disabled={isFetchingNextPage}
             onClick={() => {
-              void fetchNextPage();
+              detached(fetchNextPage(), "InvoicesList");
             }}
             size="sm"
             variant="ghost"

@@ -6,6 +6,7 @@ import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
+import { detached } from "@/lib/detached";
 import type { WorkspaceGroup } from "@/routes/_protected.workspaces/-types";
 
 type ClientGroupHeaderProps = {
@@ -53,18 +54,24 @@ export const ClientGroupHeader = ({
             className="hover:underline"
             onClick={(e) => {
               e.stopPropagation();
-              void navigate({
-                to: "/contacts/$contactId",
-                params: { contactId: group.clientId },
-              });
+              detached(
+                navigate({
+                  to: "/contacts/$contactId",
+                  params: { contactId: group.clientId },
+                }),
+                "ClientGroupHeader",
+              );
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.stopPropagation();
-                void navigate({
-                  to: "/contacts/$contactId",
-                  params: { contactId: group.clientId },
-                });
+                detached(
+                  navigate({
+                    to: "/contacts/$contactId",
+                    params: { contactId: group.clientId },
+                  }),
+                  "ClientGroupHeader",
+                );
               }
             }}
             role="link"

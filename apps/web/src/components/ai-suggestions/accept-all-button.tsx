@@ -31,6 +31,7 @@ import type {
   ReviewSuggestion,
 } from "@/components/ai-suggestions/review-store";
 import type { TranslationKey } from "@/i18n/types";
+import { detached } from "@/lib/detached";
 
 /** Above this many pending suggestions, "accept all" asks to confirm first. */
 export const ACCEPT_ALL_CONFIRM_THRESHOLD = 10;
@@ -89,9 +90,12 @@ export const AcceptAllButton = ({
       return;
     }
     setIsAccepting(true);
-    void Promise.resolve(onAcceptAll(pendingItems)).finally(() => {
-      setIsAccepting(false);
-    });
+    detached(
+      Promise.resolve(onAcceptAll(pendingItems)).finally(() => {
+        setIsAccepting(false);
+      }),
+      "runAccept",
+    );
   };
 
   const handleClick = () => {

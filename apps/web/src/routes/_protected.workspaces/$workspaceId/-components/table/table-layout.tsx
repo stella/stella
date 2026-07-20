@@ -10,6 +10,7 @@ import { useTranslations } from "use-intl";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useMountEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import type { WorkspaceView } from "@/lib/types";
 import {
   EmptyState,
@@ -182,7 +183,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         onLoadMore={() => {
-          void fetchNextPage();
+          detached(fetchNextPage(), "FlatTableLayout");
         }}
         table={table}
         contentMode={tableState.contentMode}

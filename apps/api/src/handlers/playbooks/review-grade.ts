@@ -113,8 +113,7 @@ const extractedFromContent = (
     case "unsupported":
       return null;
     default: {
-      const exhaustive: never = content;
-      void exhaustive;
+      content satisfies never;
       return null;
     }
   }

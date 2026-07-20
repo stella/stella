@@ -11,6 +11,7 @@ import {
   FrameTitle,
 } from "@stll/ui/components/frame";
 
+import { detached } from "@/lib/detached";
 import { redirectToSchema } from "@/lib/redirect";
 
 const searchSchema = v.object({
@@ -48,7 +49,10 @@ function AuthError() {
         <Button
           className="w-full"
           onClick={() => {
-            void navigate({ to: "/auth", search: { redirectTo } });
+            detached(
+              navigate({ to: "/auth", search: { redirectTo } }),
+              "AuthError",
+            );
           }}
         >
           {t("common.tryAgain")}

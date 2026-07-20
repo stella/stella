@@ -6,6 +6,7 @@ import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { detached } from "@/api/lib/detached";
 import {
   ConfigurationError,
   SchedulerJobTimeoutError,
@@ -185,7 +186,7 @@ export const startSchedulerLoop = ({
         return;
       }
 
-      void runTick();
+      detached(runTick(), "scheduleNext");
     }, pollIntervalMs);
   };
 
@@ -216,7 +217,7 @@ export const startSchedulerLoop = ({
       return;
     }
 
-    void runTick();
+    detached(runTick(), "startSchedulerLoop");
   }, 0);
 
   return {
@@ -374,12 +375,15 @@ const startUnstartedJobsHeartbeat = ({
   };
 
   const timer = setInterval(() => {
-    void renew().catch((error: unknown) => {
-      logger.warn("scheduler.unstarted_lease_heartbeat_failed", {
-        "scheduler.runner_id": runnerId,
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      renew().catch((error: unknown) => {
+        logger.warn("scheduler.unstarted_lease_heartbeat_failed", {
+          "scheduler.runner_id": runnerId,
+          "error.type": errorTag(error),
+        });
+      }),
+      "startUnstartedJobsHeartbeat",
+    );
   }, intervalMs);
 
   return {
@@ -441,13 +445,16 @@ const startLeaseHeartbeat = ({
   };
 
   const timer = setInterval(() => {
-    void renew().catch((error: unknown) => {
-      logger.warn("scheduler.lease_heartbeat_failed", {
-        "scheduler.job_id": jobId,
-        "scheduler.runner_id": runnerId,
-        "error.type": errorTag(error),
-      });
-    });
+    detached(
+      renew().catch((error: unknown) => {
+        logger.warn("scheduler.lease_heartbeat_failed", {
+          "scheduler.job_id": jobId,
+          "scheduler.runner_id": runnerId,
+          "error.type": errorTag(error),
+        });
+      }),
+      "startLeaseHeartbeat",
+    );
   }, intervalMs);
 
   return {

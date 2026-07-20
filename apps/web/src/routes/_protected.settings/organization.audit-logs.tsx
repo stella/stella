@@ -29,6 +29,7 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
@@ -164,13 +165,16 @@ function AuditLogsPage() {
   };
 
   const handleExportClick = () => {
-    void handleExport().catch((error: unknown) => {
-      getAnalytics().captureError(error);
-      stellaToast.add({
-        title: t("settings.organization.auditLogsExportFailed"),
-        type: "error",
-      });
-    });
+    detached(
+      handleExport().catch((error: unknown) => {
+        getAnalytics().captureError(error);
+        stellaToast.add({
+          title: t("settings.organization.auditLogsExportFailed"),
+          type: "error",
+        });
+      }),
+      "handleExportClick",
+    );
   };
 
   return (

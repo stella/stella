@@ -127,6 +127,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
@@ -1130,21 +1131,24 @@ const sendMessage = createSafeRootHandler(
                       thread.type === "created" &&
                       body.sendMode !== CHAT_SEND_MODE.anonymized
                     ) {
-                      void generateThreadTitle({
-                        initialTitle: initialThreadTitle,
-                        messages: [
-                          parsedMessage.message,
-                          resolvedResponseMessage,
-                        ],
-                        organizationId: session.activeOrganizationId,
-                        orgAIConfig,
-                        promptCachingEnabled,
-                        recordAuditEvent,
-                        safeDb,
-                        threadId: body.threadId,
-                        threadWorkspaceId: workspaceId,
-                        userId: user.id,
-                      });
+                      detached(
+                        generateThreadTitle({
+                          initialTitle: initialThreadTitle,
+                          messages: [
+                            parsedMessage.message,
+                            resolvedResponseMessage,
+                          ],
+                          organizationId: session.activeOrganizationId,
+                          orgAIConfig,
+                          promptCachingEnabled,
+                          recordAuditEvent,
+                          safeDb,
+                          threadId: body.threadId,
+                          threadWorkspaceId: workspaceId,
+                          userId: user.id,
+                        }),
+                        "onFinish",
+                      );
                     }
                   }
                 },
@@ -1385,22 +1389,25 @@ const scheduleChatCompactionCheckpoint = ({
     return;
   }
 
-  void runChatCompactionCheckpoint({
-    abortSignal,
-    boundary,
-    chatModelOverride,
-    organizationId,
-    orgAIConfig,
-    preserveTokens,
-    safeDb,
-    threadId,
-    triggerTokens,
-  }).catch((error: unknown) => {
-    captureError(error, {
+  detached(
+    runChatCompactionCheckpoint({
+      abortSignal,
+      boundary,
+      chatModelOverride,
+      organizationId,
+      orgAIConfig,
+      preserveTokens,
+      safeDb,
       threadId,
-      feature: "chat.compaction_checkpoint_persist",
-    });
-  });
+      triggerTokens,
+    }).catch((error: unknown) => {
+      captureError(error, {
+        threadId,
+        feature: "chat.compaction_checkpoint_persist",
+      });
+    }),
+    "scheduleChatCompactionCheckpoint",
+  );
 };
 
 type RunChatCompactionCheckpointProps = ChatCompactionModelProps & {

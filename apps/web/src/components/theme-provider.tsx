@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { forceReflow } from "@/lib/utils";
 
 const THEMES = ["light", "dark", "system"] as const;
 type Theme = (typeof THEMES)[number];
@@ -20,13 +21,9 @@ type ThemeProviderState = {
 
 const initialState: ThemeProviderState = {
   theme: "system",
-  setTheme: () => {
-    void "system";
-  },
+  setTheme: () => undefined,
   palette: "neutral",
-  setPalette: () => {
-    void "neutral";
-  },
+  setPalette: () => undefined,
   resolvedTheme: "light",
 };
 
@@ -78,7 +75,7 @@ const suppressTransitions = () => {
   style.textContent = "*, *::before, *::after { transition: none !important; }";
   document.head.append(style);
   // Force reflow so suppression takes effect before class changes
-  void getComputedStyle(document.documentElement).opacity;
+  forceReflow(document.documentElement);
   return () => requestAnimationFrame(() => style.remove());
 };
 

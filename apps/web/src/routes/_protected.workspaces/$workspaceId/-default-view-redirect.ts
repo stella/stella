@@ -4,6 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 
 import { useMountEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
@@ -60,36 +61,45 @@ export const useDefaultWorkspaceViewRedirect = ({
   useMountEffect(() => {
     const run = { cancelled: false };
 
-    void (async () => {
-      try {
-        const target = await resolveDefaultWorkspaceViewTarget({
-          queryClient,
-          workspaceId,
-        });
-        if (run.cancelled) {
-          return;
-        }
+    detached(
+      (async () => {
+        try {
+          const target = await resolveDefaultWorkspaceViewTarget({
+            queryClient,
+            workspaceId,
+          });
+          if (run.cancelled) {
+            return;
+          }
 
-        if (target.to === "/workspaces") {
-          void navigate({ to: "/workspaces", replace: true });
-          return;
-        }
+          if (target.to === "/workspaces") {
+            detached(
+              navigate({ to: "/workspaces", replace: true }),
+              "DefaultViewRedirect",
+            );
+            return;
+          }
 
-        void navigate({
-          to: "/workspaces/$workspaceId/$viewId",
-          params: target.params,
-          replace: true,
-        });
-      } catch (error) {
-        if (!run.cancelled) {
-          setViewError(
-            error instanceof Error
-              ? error
-              : new Error("Failed to resolve the default workspace view"),
+          detached(
+            navigate({
+              to: "/workspaces/$workspaceId/$viewId",
+              params: target.params,
+              replace: true,
+            }),
+            "DefaultViewRedirect",
           );
+        } catch (error) {
+          if (!run.cancelled) {
+            setViewError(
+              error instanceof Error
+                ? error
+                : new Error("Failed to resolve the default workspace view"),
+            );
+          }
         }
-      }
-    })();
+      })(),
+      "DefaultViewRedirect",
+    );
 
     return () => {
       run.cancelled = true;

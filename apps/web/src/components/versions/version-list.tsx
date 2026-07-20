@@ -26,6 +26,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
+import { detached } from "@/lib/detached";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 
 export const VersionList = ({ children }: React.PropsWithChildren) => (
@@ -236,7 +237,7 @@ export const VersionRow = ({
               aria-expanded={isDiffOpen}
               className="text-muted-foreground hover:text-foreground gap-1 px-1.5 text-xs font-normal"
               onClick={() => {
-                void toggleDiff();
+                detached(toggleDiff(), "VersionRow");
               }}
               size="xs"
               variant="ghost"
@@ -255,7 +256,7 @@ export const VersionRow = ({
               className="text-muted-foreground hover:text-foreground"
               disabled={summary.status === "loading"}
               onClick={() => {
-                void handleSummarize();
+                detached(handleSummarize(), "VersionRow");
               }}
               size="icon-xs"
               title={t("common.summarizeChanges")}

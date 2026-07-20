@@ -66,6 +66,7 @@ import {
   SIDE_RAIL_WIDTH,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -169,10 +170,13 @@ export const Route = createFileRoute("/_protected")({
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error);
     };
-    void prefetchRouteQuery(
-      context.queryClient,
-      aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-      onPrefetchError,
+    detached(
+      prefetchRouteQuery(
+        context.queryClient,
+        aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+        onPrefetchError,
+      ),
+      "beforeLoad",
     );
     await prefetchRouteQuery(context.queryClient, roleOptions, onPrefetchError);
 

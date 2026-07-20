@@ -12,6 +12,7 @@ import {
   InputGroupInput,
 } from "@stll/ui/components/input-group";
 
+import { detached } from "@/lib/detached";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { InviteMemberDialog } from "@/routes/_protected.organization/-components/invite-member-dialog";
 
@@ -54,10 +55,13 @@ export const OrganizationListToolbar = () => {
     // Marker must match what the route exposes after re-validating `q`
     // through its search schema: trimmed, empty becomes undefined.
     setLastWrittenQuery({ value: normalizeQuery(value) });
-    void navigate({
-      to: "/settings/organization/members",
-      search: (prev) => ({ ...prev, q: value || undefined }),
-    });
+    detached(
+      navigate({
+        to: "/settings/organization/members",
+        search: (prev) => ({ ...prev, q: value || undefined }),
+      }),
+      "OrganizationListToolbar",
+    );
   }, 300);
 
   // Adjusting state during render: when the URL `q` changes to a value our

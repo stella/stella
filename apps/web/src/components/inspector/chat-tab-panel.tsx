@@ -73,6 +73,7 @@ import {
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import { type ChatThreadRef, createChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
+import { detached } from "@/lib/detached";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
@@ -395,7 +396,7 @@ export const ChatTabPanel = ({
               labelRename.state.mode === "edit" ? labelRename.state.draft : "",
             onChange: labelRename.setDraft,
             onCommit: () => {
-              void labelRename.commit();
+              detached(labelRename.commit(), "onCommit");
             },
             onCancel: labelRename.cancel,
           }}
@@ -469,12 +470,15 @@ export const ChatTabPanel = ({
                 prompts={suggestedPrompts}
                 onSelect={(prompt) => {
                   editorController.setContent(prompt);
-                  void editorController.submit(async (draft) => {
-                    if (!(await ensureAIAvailable())) {
-                      return;
-                    }
-                    await sendMessage(await buildChatRequestMessage(draft));
-                  });
+                  detached(
+                    editorController.submit(async (draft) => {
+                      if (!(await ensureAIAvailable())) {
+                        return;
+                      }
+                      await sendMessage(await buildChatRequestMessage(draft));
+                    }),
+                    "ChatTabPanel",
+                  );
                 }}
               />
             }
@@ -499,7 +503,7 @@ export const ChatTabPanel = ({
                 return;
               }
 
-              void handlePromptSubmit({ prompt, files });
+              detached(handlePromptSubmit({ prompt, files }), "ChatTabPanel");
             }}
             pendingCount={0}
             queueWhileGenerating

@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { detached } from "@/lib/detached";
 import type {
   ContactData,
   ContactPatch,
@@ -58,10 +59,13 @@ export const useContactPatch = (contact: ContactData) => {
   });
 
   const handleSuccess = () => {
-    void invalidateContactCaches(queryClient, {
-      activeOrganizationId,
-      contactId: contact.id,
-    });
+    detached(
+      invalidateContactCaches(queryClient, {
+        activeOrganizationId,
+        contactId: contact.id,
+      }),
+      "handleSuccess",
+    );
   };
 
   const handleError = (onError?: () => void) => {

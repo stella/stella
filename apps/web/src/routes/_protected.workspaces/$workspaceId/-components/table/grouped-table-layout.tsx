@@ -14,6 +14,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
+import { detached } from "@/lib/detached";
 import type {
   EntityKind,
   PropertyId,
@@ -676,7 +677,7 @@ const GroupSection = ({
               isFetchingNextPage={query.isFetchingNextPage}
               onLoadMore={() => {
                 if (query.hasNextPage && !query.isFetchingNextPage) {
-                  void query.fetchNextPage();
+                  detached(query.fetchNextPage(), "GroupSection");
                 }
               }}
               outerScrollRef={outerScrollRef}

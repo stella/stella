@@ -22,6 +22,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -246,7 +247,7 @@ function ConsentPage() {
               disabled={isPending}
               loading={isPending}
               onClick={() => {
-                void handleConsent(true);
+                detached(handleConsent(true), "ConsentPage");
               }}
               type="button"
             >
@@ -256,7 +257,7 @@ function ConsentPage() {
               className="w-full"
               disabled={isPending}
               onClick={() => {
-                void handleConsent(false);
+                detached(handleConsent(false), "ConsentPage");
               }}
               type="button"
               variant="outline"

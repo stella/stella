@@ -43,6 +43,7 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { detached } from "@/lib/detached";
 import { getInitials } from "@/lib/get-initials";
 import { organizationSummaryOptions } from "@/routes/_protected.organization/-queries";
 
@@ -144,9 +145,12 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
           )}
           <MenuItem
             onClick={() => {
-              void navigate({
-                to: "/settings",
-              });
+              detached(
+                navigate({
+                  to: "/settings",
+                }),
+                "SidebarUserMenu",
+              );
             }}
           >
             <Settings2Icon />
@@ -209,7 +213,9 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
                 {supportedLanguages.map((langCode) => (
                   <MenuRadioItem
                     key={langCode}
-                    onClick={() => void setLang(langCode)}
+                    onClick={() =>
+                      detached(setLang(langCode), "SidebarUserMenu")
+                    }
                     value={langCode}
                   >
                     {LANG_ENDONYMS[langCode]}

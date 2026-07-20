@@ -27,6 +27,7 @@ import { apiUrl } from "@/lib/api-url";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -623,9 +624,7 @@ type CreateChatRuntimeProps = {
 const toError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-const ignoreAbandonedStreamError = (error: unknown): void => {
-  void error;
-};
+const ignoreAbandonedStreamError = (_error: unknown): void => undefined;
 
 class ChatMessageStartError extends Error {
   readonly messageId: SafeId<"chatMessage">;
@@ -688,7 +687,7 @@ export const createChatRuntime = ({
   };
 
   const reportRuntimeError = (error: unknown): void => {
-    void captureRuntimeError(error);
+    captureRuntimeError(error);
   };
 
   const client = new ChatClient<ChatClientTools>({
@@ -751,7 +750,7 @@ export const createChatRuntime = ({
     const stream = client.sendMessage(message, options?.body);
 
     if (!hasUserMessage(snapshot.messages, message.id)) {
-      void stream.catch(ignoreAbandonedStreamError);
+      detached(stream.catch(ignoreAbandonedStreamError), "sendThreadMessage");
       const error = new ChatMessageStartError(message.id);
       captureRuntimeError(error);
       throw error;
@@ -798,11 +797,14 @@ export const createChatRuntime = ({
       const stream = client.sendMessage(message, options?.body);
 
       if (!hasUserMessage(snapshot.messages, message.id)) {
-        void stream.catch(ignoreAbandonedStreamError);
+        detached(
+          stream.catch(ignoreAbandonedStreamError),
+          "startRouteHandoffMessage",
+        );
         throw captureRuntimeError(new ChatMessageStartError(message.id));
       }
 
-      void stream.catch(reportRuntimeError);
+      detached(stream.catch(reportRuntimeError), "startRouteHandoffMessage");
       return { messageId: message.id, status: "started", stream };
     },
     stop: () => {
@@ -1702,13 +1704,17 @@ export const acquireChatRuntime = ({
       // wiping the finished turn until the refetch wins (or forever if
       // it fails). Kept in place, the entry reattaches seed-equal until
       // the refetch lands, then the idle reconcile replaces it.
-      void Promise.all([
-        invalidateChatThread({ queryClient, threadRef: key }),
-        invalidateChatThreadLists({
-          queryClient,
-          workspaceId: key.scope === "workspace" ? key.workspaceId : undefined,
-        }),
-      ]);
+      detached(
+        Promise.all([
+          invalidateChatThread({ queryClient, threadRef: key }),
+          invalidateChatThreadLists({
+            queryClient,
+            workspaceId:
+              key.scope === "workspace" ? key.workspaceId : undefined,
+          }),
+        ]),
+        "onFinish",
+      );
     },
   });
   chatRuntimeRegistry.set(registryKey, {
@@ -2012,5 +2018,8 @@ export const applyChatModelChange = ({
   queryClient.setQueryData(queryKey, (prev) =>
     prev ? { ...prev, model } : prev,
   );
-  void invalidateChatThreadAcrossScopes({ queryClient, threadId });
+  detached(
+    invalidateChatThreadAcrossScopes({ queryClient, threadId }),
+    "applyChatModelChange",
+  );
 };

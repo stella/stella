@@ -7,6 +7,7 @@ import * as anonymizeRuntime from "@stll/anonymize-wasm";
 import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
 
 import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
+import { detached } from "@/lib/detached";
 
 /**
  * Off-main-thread runner for the chat-input anonymization
@@ -102,11 +103,14 @@ if (!isDedicatedWorkerScope(globalThis)) {
 const scope = globalThis;
 
 scope.addEventListener("message", (event: MessageEvent<AnonRequest>) => {
-  void handle(event.data).then((response) => {
-    // Worker postMessage doesn't take a targetOrigin (unlike
-    // window.postMessage); the lint rule is window-specific.
-    // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
-    scope.postMessage(response);
-    return;
-  });
+  detached(
+    handle(event.data).then((response) => {
+      // Worker postMessage doesn't take a targetOrigin (unlike
+      // window.postMessage); the lint rule is window-specific.
+      // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
+      scope.postMessage(response);
+      return;
+    }),
+    "then",
+  );
 });

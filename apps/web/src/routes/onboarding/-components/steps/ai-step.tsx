@@ -23,6 +23,7 @@ import type {
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import {
   createProviderPreview,
   type RowStateMap,
@@ -285,7 +286,7 @@ export const AIStep = ({
               compact
               onProvidersChange={updateProviders}
               onSaveRow={(index) => {
-                void saveRow(index);
+                detached(saveRow(index), "AIStep");
               }}
               providers={providers}
               rowStatuses={rowStatusList}

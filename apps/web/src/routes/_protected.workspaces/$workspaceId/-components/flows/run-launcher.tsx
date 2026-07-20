@@ -19,6 +19,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -107,9 +108,12 @@ export const RunLauncher = ({
     stellaToast.add({ type: "success", title: t("flows.runs.started") });
     setDefinitionId(null);
     setSelectedEntityIds([]);
-    void queryClient.invalidateQueries({
-      queryKey: flowRunsKeys.all(workspaceId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: flowRunsKeys.all(workspaceId),
+      }),
+      "handleStart",
+    );
     onStarted(response.data.runId);
   };
 
@@ -193,7 +197,7 @@ export const RunLauncher = ({
           }
           loading={starting}
           onClick={() => {
-            void handleStart();
+            detached(handleStart(), "RunLauncher");
           }}
           type="button"
         >

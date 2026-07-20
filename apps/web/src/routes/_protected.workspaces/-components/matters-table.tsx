@@ -22,6 +22,7 @@ import { cn } from "@stll/ui/lib/utils";
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
+import { detached } from "@/lib/detached";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
@@ -323,10 +324,13 @@ const MattersTableRow = ({
     if (isEditing) {
       return;
     }
-    void navigate({
-      to: "/workspaces/$workspaceId",
-      params: { workspaceId: workspace.id },
-    });
+    detached(
+      navigate({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: workspace.id },
+      }),
+      "openMatter",
+    );
   };
 
   return (

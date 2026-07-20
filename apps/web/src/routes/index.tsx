@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { DefaultPendingComponent } from "@/components/route-components";
 import { useMountEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 export const Route = createFileRoute("/")({
@@ -27,27 +28,33 @@ function RootRedirect() {
     // stale completion cannot hijack the user's new location.
     const run = { cancelled: false };
 
-    void (async () => {
-      // loadAuthContext swallows its own errors (returns a null session), so
-      // this never rejects; a failed session simply routes to /auth below.
+    detached(
+      (async () => {
+        // loadAuthContext swallows its own errors (returns a null session), so
+        // this never rejects; a failed session simply routes to /auth below.
 
-      const authContext = await loadAuthContext(queryClient);
-      if (run.cancelled) {
-        return;
-      }
+        const authContext = await loadAuthContext(queryClient);
+        if (run.cancelled) {
+          return;
+        }
 
-      if (!authContext.session) {
-        void navigate({ to: "/auth", replace: true });
-        return;
-      }
+        if (!authContext.session) {
+          detached(navigate({ to: "/auth", replace: true }), "RootRedirect");
+          return;
+        }
 
-      if (!authContext.session.activeOrganizationId) {
-        void navigate({ to: "/auth/organization", replace: true });
-        return;
-      }
+        if (!authContext.session.activeOrganizationId) {
+          detached(
+            navigate({ to: "/auth/organization", replace: true }),
+            "RootRedirect",
+          );
+          return;
+        }
 
-      void navigate({ to: "/chat", replace: true });
-    })();
+        detached(navigate({ to: "/chat", replace: true }), "RootRedirect");
+      })(),
+      "RootRedirect",
+    );
 
     return () => {
       run.cancelled = true;

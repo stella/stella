@@ -3,6 +3,7 @@ import { useRouteContext } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
@@ -30,9 +31,12 @@ export const useCreateViewTemplate = () => {
       return { data: unwrapEden(response), workspaceId };
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: viewTemplateKeys.all({ organizationId }),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: viewTemplateKeys.all({ organizationId }),
+        }),
+        "onSuccess",
+      );
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -63,9 +67,12 @@ export const useDeleteViewTemplate = () => {
       return { data: unwrapEden(response), workspaceId };
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: viewTemplateKeys.all({ organizationId }),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: viewTemplateKeys.all({ organizationId }),
+        }),
+        "onSuccess",
+      );
     },
     onError: (error) => {
       analytics.captureError(error);

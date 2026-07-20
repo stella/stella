@@ -29,6 +29,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
+import { detached } from "@/api/lib/detached";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   connectionErrorFields,
@@ -1227,11 +1228,14 @@ export const initWorkflowWorkers = () => {
   // runtime — e.g. a job exhausts its retries while the lock is held —
   // without waiting for a restart.
   const runReconcile = (scanPendingCells: boolean): void => {
-    void reconcileOrphanedWorkflows({ scanPendingCells }).catch(
-      (error: unknown) => {
-        captureError(error);
-        logger.error("workflow.reconcile_failed", errorSystemFields(error));
-      },
+    detached(
+      reconcileOrphanedWorkflows({ scanPendingCells }).catch(
+        (error: unknown) => {
+          captureError(error);
+          logger.error("workflow.reconcile_failed", errorSystemFields(error));
+        },
+      ),
+      "runReconcile",
     );
   };
   runReconcile(true);
@@ -2120,13 +2124,16 @@ const finishWorkflow = async (
   // failure must never fail (or block) the classification workflow. The
   // recursion guard inside — a playbook run's materialized columns are never the
   // classifier, so they cannot re-trigger routing — keeps this from looping.
-  void maybeRouteClassifiedDocuments({
-    workspaceId,
-    organizationId,
-    userId,
-    scopedDb,
-    planPropertyIds,
-  }).catch((error: unknown) => captureError(error, { workspaceId }));
+  detached(
+    maybeRouteClassifiedDocuments({
+      workspaceId,
+      organizationId,
+      userId,
+      scopedDb,
+      planPropertyIds,
+    }).catch((error: unknown) => captureError(error, { workspaceId })),
+    "finishWorkflow",
+  );
 
   if (wasScopedRun) {
     return;
@@ -2154,13 +2161,16 @@ const finishWorkflow = async (
         .limit(1),
     );
     if (stragglers.length > 0) {
-      void startWorkflow({
-        workspaceId,
-        organizationId,
-        userId,
-        scopedDb,
-        serviceTier,
-      }).catch((error: unknown) => captureError(error, { workspaceId }));
+      detached(
+        startWorkflow({
+          workspaceId,
+          organizationId,
+          userId,
+          scopedDb,
+          serviceTier,
+        }).catch((error: unknown) => captureError(error, { workspaceId })),
+        "finishWorkflow",
+      );
     }
   } catch (error: unknown) {
     captureError(error, { workspaceId });

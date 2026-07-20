@@ -39,6 +39,7 @@ import { ContactPicker } from "@/components/contact-picker";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
@@ -84,9 +85,12 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
       { id, type, displayName: name },
       {
         onSuccess: () => {
-          void queryClient.invalidateQueries({
-            queryKey: contactsKeys.all,
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: contactsKeys.all,
+            }),
+            "onSuccess",
+          );
           handleSetClient({ id, displayName: name });
         },
         onError: () => {
@@ -108,9 +112,12 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             title: t("success.clientUpdated"),
             type: "success",
           });
-          void queryClient.invalidateQueries({
-            queryKey: workspacesKeys.byId(workspaceId),
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspacesKeys.byId(workspaceId),
+            }),
+            "onSuccess",
+          );
         },
         onError: () => {
           stellaToast.add({
@@ -301,9 +308,12 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
       { id, type, displayName: name },
       {
         onSuccess: () => {
-          void queryClient.invalidateQueries({
-            queryKey: contactsKeys.all,
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: contactsKeys.all,
+            }),
+            "onSuccess",
+          );
           setSelectedContact({ id, displayName: name });
         },
         onError: () => {
@@ -332,12 +342,18 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
             title: t("workspaces.parties.promotedSuccess"),
             type: "success",
           });
-          void queryClient.invalidateQueries({
-            queryKey: workspacesKeys.byId(workspaceId),
-          });
-          void queryClient.invalidateQueries({
-            queryKey: workspacesKeys.all,
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspacesKeys.byId(workspaceId),
+            }),
+            "onSuccess",
+          );
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspacesKeys.all,
+            }),
+            "onSuccess",
+          );
           handleClose();
         },
         onError: () => {
@@ -480,9 +496,12 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
             title: t("success.partyRemoved"),
             type: "success",
           });
-          void queryClient.invalidateQueries({
-            queryKey: workspaceContactsOptions(workspaceId).queryKey,
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspaceContactsOptions(workspaceId).queryKey,
+            }),
+            "onSuccess",
+          );
         },
         onError: () => {
           stellaToast.add({
@@ -600,9 +619,12 @@ const AddPartyDialog = ({
             title: t("success.partyAdded"),
             type: "success",
           });
-          void queryClient.invalidateQueries({
-            queryKey: workspaceContactsOptions(workspaceId).queryKey,
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspaceContactsOptions(workspaceId).queryKey,
+            }),
+            "onSuccess",
+          );
           setIsOpen(false);
           setSelectedContact(null);
           setSelectedRole(null);

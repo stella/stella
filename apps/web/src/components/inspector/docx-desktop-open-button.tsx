@@ -16,6 +16,7 @@ import {
   openDocxInDesktop,
 } from "@/lib/desktop-bridge";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
+import { detached } from "@/lib/detached";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 
 export const DocxDesktopOpenButton = ({
@@ -93,7 +94,7 @@ export const DocxDesktopOpenButton = ({
           aria-label={label}
           disabled={isOpening}
           onClick={() => {
-            void handleOpen();
+            detached(handleOpen(), "DocxDesktopOpenButton");
           }}
           size="icon-xs"
           variant="ghost"

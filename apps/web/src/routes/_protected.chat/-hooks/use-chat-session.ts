@@ -46,6 +46,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { internalToolErrorMessage, toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
@@ -125,9 +126,7 @@ const resetAskUserToolCall = (
   return { ...partWithoutOutput, state: "input-complete" };
 };
 
-const ignoreQueuedDispatchError = (error: unknown): void => {
-  void error;
-};
+const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 
 export const useChatSession = ({
   chat,
@@ -646,12 +645,15 @@ export const useChatSession = ({
       // off as a fire-and-forget; failures are silent because the
       // editor will retry the same query on mount.
       if (typeof response.data.fieldId === "string") {
-        void queryClient.prefetchQuery(
-          fileOptions({
-            workspaceId: matterId,
-            fieldId: response.data.fieldId,
-            purpose: "native-display",
-          }),
+        detached(
+          queryClient.prefetchQuery(
+            fileOptions({
+              workspaceId: matterId,
+              fieldId: response.data.fieldId,
+              purpose: "native-display",
+            }),
+          ),
+          "useChatSession",
         );
       }
 
@@ -787,7 +789,10 @@ export const useChatSession = ({
     // already passes them; the automatic drain must too, otherwise
     // toggling the mode between queueing and draining sends the
     // queued turn with the wrong mode.
-    void dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError);
+    detached(
+      dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
+      "useChatSession",
+    );
   }, [
     applySendQueueEvent,
     dispatchQueuedMessage,

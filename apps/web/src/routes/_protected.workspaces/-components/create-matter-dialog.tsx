@@ -41,6 +41,7 @@ import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useLocale } from "@/i18n/formatting-context";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
@@ -415,7 +416,10 @@ const CreateMatterDialogBody = ({
                     inputRef={clientInputRef}
                     invalid={clientInvalid}
                     onCreate={(...args) => {
-                      void handleCreateClient(...args);
+                      detached(
+                        handleCreateClient(...args),
+                        "CreateMatterDialogBody",
+                      );
                     }}
                     onSelect={(contact) => {
                       setSelectedClient({
@@ -463,7 +467,7 @@ const CreateMatterDialogBody = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  void handleSubmit();
+                  detached(handleSubmit(), "CreateMatterDialogBody");
                 }
               }}
               value={name}
@@ -632,7 +636,7 @@ const CreateMatterDialogBody = ({
           disabled={!canSubmit}
           loading={createWorkspace.isPending}
           onClick={() => {
-            void handleSubmit();
+            detached(handleSubmit(), "CreateMatterDialogBody");
           }}
         >
           {t("workspaces.createNewWorkspace")}

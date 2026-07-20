@@ -29,6 +29,7 @@ import { ThemePicker } from "@/components/theme-picker";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
@@ -727,7 +728,7 @@ export const OnboardingWizard = () => {
             onNext={({ emails }) => {
               const finalData = { ...data, emails };
               setData(finalData);
-              void executeSetup(finalData);
+              detached(executeSetup(finalData), "renderStep");
             }}
           />
         </OnboardingLayout>
@@ -788,10 +789,10 @@ export const OnboardingWizard = () => {
           onSelect={setDownloadTarget}
           selected={downloadTarget}
           onNext={() => {
-            void navigate({ to: "/chat", replace: true });
+            detached(navigate({ to: "/chat", replace: true }), "renderStep");
           }}
           onSkip={() => {
-            void navigate({ to: "/chat", replace: true });
+            detached(navigate({ to: "/chat", replace: true }), "renderStep");
           }}
         />
       </OnboardingLayout>

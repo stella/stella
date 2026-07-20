@@ -16,6 +16,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
@@ -68,9 +69,12 @@ const PlaybookStarterGallerySheetBody = ({
       return { id: unwrapEden(response).id };
     },
     onSuccess: ({ id }) => {
-      void queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.playbooks.all(organizationId),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.playbooks.all(organizationId),
+        }),
+        "onSuccess",
+      );
       stellaToast.add({
         title: t("knowledge.playbooks.starters.addedToast"),
         type: "success",

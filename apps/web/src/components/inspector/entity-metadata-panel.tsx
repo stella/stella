@@ -22,6 +22,7 @@ import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
   EntityField,
@@ -217,7 +218,7 @@ const EntityMetadataContent = ({
     }
 
     sawWorkflowRunning.current = false;
-    void refreshEntityFields();
+    detached(refreshEntityFields(), "EntityMetadataContent");
   }, [isWorkflowRunning, refreshEntityFields]);
 
   const entityFieldPropertyIds = new Set(

@@ -16,6 +16,7 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -136,8 +137,14 @@ export const ChatBreadcrumb = ({
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     },
     onSettled: () => {
-      void invalidateChatThreadLists({ queryClient, workspaceId });
-      void queryClient.invalidateQueries({ queryKey: titleKey });
+      detached(
+        invalidateChatThreadLists({ queryClient, workspaceId }),
+        "onSettled",
+      );
+      detached(
+        queryClient.invalidateQueries({ queryKey: titleKey }),
+        "onSettled",
+      );
     },
   });
 
@@ -156,7 +163,7 @@ export const ChatBreadcrumb = ({
           onCancel={inlineRename.cancel}
           onChange={inlineRename.setDraft}
           onCommit={() => {
-            void inlineRename.commit();
+            detached(inlineRename.commit(), "ChatBreadcrumb");
           }}
           value={inlineRename.state.draft}
         />

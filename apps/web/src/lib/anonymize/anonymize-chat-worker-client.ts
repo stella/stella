@@ -1,5 +1,7 @@
 import type { ChatAnonResult } from "@stll/anonymize-chat";
 
+import { detached } from "@/lib/detached";
+
 /**
  * Main-thread client for the chat-input anonymization Web Worker.
  *
@@ -146,13 +148,16 @@ export const warmupChatAnonymizeWorker = (): void => {
   // `loadNameDictionaries()` + the wasm pipeline once. The `"x"`
   // here has no semantic meaning; we just need *some* token so
   // the heavy initialisation happens before the user types.
-  void anonymizeChatTextInWorker({ text: "x", workspaceId: "warmup" }).catch(
-    () => {
-      // Swallow — a cold-start failure shouldn't bubble; the
-      // next real call will surface the error properly. We also
-      // reset the flag so a transient worker crash can be
-      // retried on the next mount.
-      warmedUp = false;
-    },
+  detached(
+    anonymizeChatTextInWorker({ text: "x", workspaceId: "warmup" }).catch(
+      () => {
+        // Swallow — a cold-start failure shouldn't bubble; the
+        // next real call will surface the error properly. We also
+        // reset the flag so a transient worker crash can be
+        // retried on the next mount.
+        warmedUp = false;
+      },
+    ),
+    "warmupChatAnonymizeWorker",
   );
 };

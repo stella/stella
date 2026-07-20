@@ -60,6 +60,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -1032,7 +1033,7 @@ export const AnonymizationFacet = ({
       )}
       <AnonymizationContextMenu
         onAnonymize={(selection) => {
-          void addTerm(selection, pendingLabel);
+          detached(addTerm(selection, pendingLabel), "AnonymizationFacet");
         }}
       />
     </div>

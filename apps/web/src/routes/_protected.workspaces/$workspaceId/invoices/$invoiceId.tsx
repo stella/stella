@@ -48,6 +48,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -219,12 +220,18 @@ const InvoiceDetail = ({
   );
 
   const invalidateAll = () => {
-    void queryClient.invalidateQueries({
-      queryKey: invoicesKeys.all(workspaceId),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: timeEntriesKeys.all(workspaceId),
-    });
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: invoicesKeys.all(workspaceId),
+      }),
+      "invalidateAll",
+    );
+    detached(
+      queryClient.invalidateQueries({
+        queryKey: timeEntriesKeys.all(workspaceId),
+      }),
+      "invalidateAll",
+    );
   };
 
   type TransitionAction =
@@ -797,9 +804,12 @@ const EditInvoiceForm = ({
         showErrorToast(t("billing.failedToSave"));
         return;
       }
-      void queryClient.invalidateQueries({
-        queryKey: invoicesKeys.all(workspaceId),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: invoicesKeys.all(workspaceId),
+        }),
+        "onSubmit",
+      );
       onClose();
     },
   });
@@ -812,7 +822,7 @@ const EditInvoiceForm = ({
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
-        void form.handleSubmit();
+        detached(form.handleSubmit(), "EditInvoiceForm");
       }}
     >
       <h2 className="text-sm font-semibold">

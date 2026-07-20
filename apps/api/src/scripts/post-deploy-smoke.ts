@@ -25,6 +25,7 @@
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { detached } from "@/api/lib/detached";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const SMOKE_SESSION_TIMEOUT_MS = 15_000;
@@ -485,7 +486,10 @@ const readWithDeadline = async (
             "Chat stream did not produce a readable prefix before timeout",
         }),
       );
-      void reader.cancel().catch(() => undefined);
+      detached(
+        reader.cancel().catch(() => undefined),
+        "readWithDeadline",
+      );
     }, remainingMs);
   });
 

@@ -14,6 +14,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
@@ -282,7 +283,7 @@ export const useEditSession = ({
   };
 
   const debouncedCheckpoint = useDebouncedCallback((buffer: ArrayBuffer) => {
-    void saveCheckpoint(buffer);
+    detached(saveCheckpoint(buffer), "useEditSession");
   }, CHECKPOINT_DEBOUNCE_MS);
   const cancelDebouncedCheckpoint = useLatestCallback(() => {
     debouncedCheckpoint.cancel();
@@ -300,7 +301,7 @@ export const useEditSession = ({
 
       sessionRef.current = null;
       const context = releaseContextRef.current;
-      void releaseEditSession(context);
+      detached(releaseEditSession(context), "useEditSession");
     };
   });
 

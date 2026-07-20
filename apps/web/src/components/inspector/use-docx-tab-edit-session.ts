@@ -12,6 +12,7 @@ import type {
 } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { DOCX_MIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 
@@ -119,7 +120,7 @@ export const useDocxTabEditSession = ({
     if (!compatibility) {
       return;
     }
-    void handleStartDocxEdit(target.id);
+    detached(handleStartDocxEdit(target.id), "useDocxTabEditSession");
     clearDocxEditRequest();
   }, [
     pendingDocxEditTabId,

@@ -16,6 +16,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
@@ -96,28 +97,43 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
       getAnalytics().captureError(error);
     };
     if (cause === "enter") {
-      void (async () => {
-        try {
-          const response = await api
-            .workspaces({ workspaceId: wsId })
-            .active.post();
-          if (response.error) {
-            throw toAPIError(response.error);
+      detached(
+        (async () => {
+          try {
+            const response = await api
+              .workspaces({ workspaceId: wsId })
+              .active.post();
+            if (response.error) {
+              throw toAPIError(response.error);
+            }
+          } catch (error: unknown) {
+            onPrefetchError(error);
           }
-        } catch (error: unknown) {
-          onPrefetchError(error);
-        }
-      })();
+        })(),
+        "loader",
+      );
     }
 
-    void prefetchRouteQuery(
-      qc,
-      workflowOptions({ key: { workspaceId: wsId } }),
-      onPrefetchError,
+    detached(
+      prefetchRouteQuery(
+        qc,
+        workflowOptions({ key: { workspaceId: wsId } }),
+        onPrefetchError,
+      ),
+      "loader",
     );
-    void prefetchRouteQuery(qc, viewsOptions(wsId), onPrefetchError);
-    void prefetchRouteQuery(qc, overviewOptions(wsId), onPrefetchError);
-    void prefetchRouteQuery(qc, propertiesOptions(wsId), onPrefetchError);
+    detached(
+      prefetchRouteQuery(qc, viewsOptions(wsId), onPrefetchError),
+      "loader",
+    );
+    detached(
+      prefetchRouteQuery(qc, overviewOptions(wsId), onPrefetchError),
+      "loader",
+    );
+    detached(
+      prefetchRouteQuery(qc, propertiesOptions(wsId), onPrefetchError),
+      "loader",
+    );
 
     return workspace;
   },

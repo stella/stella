@@ -42,6 +42,7 @@ import {
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorEnabledUser,
 } from "@/lib/auth";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { sessionOptions } from "@/routes/-queries";
@@ -250,7 +251,7 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
       <div className="flex gap-2">
         <Button
           onClick={() => {
-            void handleCopyAll();
+            detached(handleCopyAll(), "BackupCodesList");
           }}
           size="sm"
           variant="outline"
@@ -392,7 +393,7 @@ const EnableTwoFactorDialog = ({
       return;
     }
     // A later submit (e.g. after a wrong password) re-runs with the new value.
-    void enableQuery.refetch();
+    detached(enableQuery.refetch(), "submitPassword");
   };
 
   return (
@@ -470,7 +471,7 @@ const EnableTwoFactorDialog = ({
                 <Button
                   loading={enableQuery.isFetching}
                   onClick={() => {
-                    void enableQuery.refetch();
+                    detached(enableQuery.refetch(), "EnableTwoFactorDialog");
                   }}
                   variant="outline"
                 >

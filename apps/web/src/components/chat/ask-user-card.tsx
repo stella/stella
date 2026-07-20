@@ -24,6 +24,7 @@ import type {
 import { EntityLink } from "@/components/chat/entity-link";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 
 type AskUserPart = Extract<ChatToolCallPart, { name: "ask-user" }>;
 
@@ -307,7 +308,7 @@ export const AskUserCard = ({
       return;
     }
     setIsEditing(false);
-    void onEditAndRerun(part.id, output);
+    detached(onEditAndRerun(part.id, output), "AskUserCard");
   }, [input, onEditAndRerun, buildOutput, part.id]);
 
   const handleFormSubmit = useCallback<

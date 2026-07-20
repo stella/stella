@@ -29,6 +29,7 @@ import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useChatEditor } from "@/components/chat-editor-provider";
+import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
@@ -51,6 +52,7 @@ import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -231,16 +233,19 @@ function ChatIndex() {
             seedingDraftRef.current = null;
           }
           seededDraftRef.current = threadId;
-          void queryClient.invalidateQueries({
-            queryKey: [
-              "chat",
-              activeOrganizationId,
-              "thread",
-              "global",
-              threadId,
-              "draftMeta",
-            ] as const,
-          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: [
+                "chat",
+                activeOrganizationId,
+                "thread",
+                "global",
+                threadId,
+                "draftMeta",
+              ] as const,
+            }),
+            "onSuccess",
+          );
         },
         onError: () => {
           if (seedingDraftRef.current === threadId) {
@@ -349,7 +354,93 @@ function ChatIndex() {
       id: threadIdRef.current ?? createChatThreadId(),
       contextMatterIds,
     });
-    void navigate({ to: "/chat" });
+    detached(navigate({ to: "/chat" }), "moveToSide");
+  };
+
+  const handleSubmit = async (draft: ChatInputDraft) => {
+    const reservedCommand = matchReservedChatCommand(draft.html);
+    if (reservedCommand?.id === "new") {
+      controller.setContent("");
+      threadIdRef.current = createChatThreadId();
+      rotateDraftThread((value) => value + 1);
+      return;
+    }
+    if (reservedCommand?.id === "model") {
+      controller.setContent("");
+      useModelSelectorStore.getState().open();
+      return;
+    }
+
+    if (!(await ensureAIAvailable())) {
+      return;
+    }
+    // A model just picked in the (+) menu may still be
+    // mid-PATCH: wait for it to settle so the route-handoff
+    // send below can never race onto the thread's previous
+    // model, which is worst here since a brand-new draft
+    // thread has no persisted model until this PATCH lands. On
+    // failure the hook has already toasted; abort instead of
+    // sending with a model that may not match what the server
+    // has persisted.
+    if (Result.isError(await modelSelection.awaitPendingSelection())) {
+      return;
+    }
+    // Build the request payload and fetch the pure thread data
+    // in parallel, then resolve (and register) the Chat<>
+    // runtime from this component's own live getters; the
+    // thread route resolves the *same* registered runtime (see
+    // `acquireChatRuntime` — this context carries the exact
+    // capability set ChatThreadPage passes, so both map to
+    // the same registry fingerprint), and kicking off the
+    // send here lets the thread page observe the in-flight
+    // stream as soon as it mounts. The stream started below
+    // also makes the runtime BUSY before the destination
+    // page's acquire runs, so its idle-reconcile can never
+    // rebuild the handoff runtime out from under the live
+    // stream — it always takes the mid-stream reattach
+    // branch. The runtime keeps THIS page's getters until the
+    // turn's onFinish invalidation refetches the thread
+    // query; the destination page's post-refetch acquire then
+    // sees the diverged seed signal and rebuilds with its own
+    // getters.
+    const chatThreadContext = {
+      allowMissingThread: true,
+      getUserContext,
+      getContextMatterIds,
+      getSendMode,
+    };
+    const [message, threadData] = await Promise.all([
+      buildChatRequestMessage(draft),
+      queryClient.ensureQueryData(
+        chatThreadOptions({
+          activeOrganizationId,
+          key: threadRef,
+          context: chatThreadContext,
+        }),
+      ),
+    ]);
+    const chat = acquireChatRuntime({
+      activeOrganizationId,
+      context: chatThreadContext,
+      data: threadData,
+      key: threadRef,
+      queryClient,
+    });
+
+    // Start the stream before navigation and require
+    // the user message to be locally visible. If the
+    // TanStack boundary fails before appending, this
+    // throws here so the composer restores the draft
+    // instead of navigating to an empty thread.
+    chat.startRouteHandoffMessage(message);
+
+    await navigate({
+      to: "/chat/$threadId",
+      params: {
+        threadId: threadIdRef.current ?? createChatThreadId(),
+      },
+    });
+    detached(invalidateGroupedChatThreads(queryClient), "ChatIndex");
   };
 
   return (
@@ -418,93 +509,7 @@ function ChatIndex() {
                   threadRef={threadRef}
                 />
               }
-              onSubmit={async (draft) => {
-                const reservedCommand = matchReservedChatCommand(draft.html);
-                if (reservedCommand?.id === "new") {
-                  controller.setContent("");
-                  threadIdRef.current = createChatThreadId();
-                  rotateDraftThread((value) => value + 1);
-                  return;
-                }
-                if (reservedCommand?.id === "model") {
-                  controller.setContent("");
-                  useModelSelectorStore.getState().open();
-                  return;
-                }
-
-                if (!(await ensureAIAvailable())) {
-                  return;
-                }
-                // A model just picked in the (+) menu may still be
-                // mid-PATCH: wait for it to settle so the route-handoff
-                // send below can never race onto the thread's previous
-                // model, which is worst here since a brand-new draft
-                // thread has no persisted model until this PATCH lands. On
-                // failure the hook has already toasted; abort instead of
-                // sending with a model that may not match what the server
-                // has persisted.
-                if (
-                  Result.isError(await modelSelection.awaitPendingSelection())
-                ) {
-                  return;
-                }
-                // Build the request payload and fetch the pure thread data
-                // in parallel, then resolve (and register) the Chat<>
-                // runtime from this component's own live getters; the
-                // thread route resolves the *same* registered runtime (see
-                // `acquireChatRuntime` — this context carries the exact
-                // capability set ChatThreadPage passes, so both map to
-                // the same registry fingerprint), and kicking off the
-                // send here lets the thread page observe the in-flight
-                // stream as soon as it mounts. The stream started below
-                // also makes the runtime BUSY before the destination
-                // page's acquire runs, so its idle-reconcile can never
-                // rebuild the handoff runtime out from under the live
-                // stream — it always takes the mid-stream reattach
-                // branch. The runtime keeps THIS page's getters until the
-                // turn's onFinish invalidation refetches the thread
-                // query; the destination page's post-refetch acquire then
-                // sees the diverged seed signal and rebuilds with its own
-                // getters.
-                const chatThreadContext = {
-                  allowMissingThread: true,
-                  getUserContext,
-                  getContextMatterIds,
-                  getSendMode,
-                };
-                const [message, threadData] = await Promise.all([
-                  buildChatRequestMessage(draft),
-                  queryClient.ensureQueryData(
-                    chatThreadOptions({
-                      activeOrganizationId,
-                      key: threadRef,
-                      context: chatThreadContext,
-                    }),
-                  ),
-                ]);
-                const chat = acquireChatRuntime({
-                  activeOrganizationId,
-                  context: chatThreadContext,
-                  data: threadData,
-                  key: threadRef,
-                  queryClient,
-                });
-
-                // Start the stream before navigation and require
-                // the user message to be locally visible. If the
-                // TanStack boundary fails before appending, this
-                // throws here so the composer restores the draft
-                // instead of navigating to an empty thread.
-                chat.startRouteHandoffMessage(message);
-
-                await navigate({
-                  to: "/chat/$threadId",
-                  params: {
-                    threadId: threadIdRef.current ?? createChatThreadId(),
-                  },
-                });
-                void invalidateGroupedChatThreads(queryClient);
-              }}
+              onSubmit={handleSubmit}
             />
           </div>
         </div>

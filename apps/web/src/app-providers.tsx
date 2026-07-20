@@ -25,6 +25,7 @@ import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { AnalyticsProvider } from "@/lib/analytics/analytics-provider";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 const noopSubscribe = () => () => undefined;
@@ -71,7 +72,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
       return;
     }
     previousLocaleRef.current = locale;
-    void router.invalidate();
+    detached(router.invalidate(), "app-providers.locale-change");
   }, [router, locale, onPublicSsrPath]);
 
   // Gate the boot spinner on the first load, not on isLoaded: a language

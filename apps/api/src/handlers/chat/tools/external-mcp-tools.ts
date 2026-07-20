@@ -13,6 +13,7 @@ import {
 import { normalizeExternalMcpToolsForChat } from "@/api/handlers/chat/tools/external-mcp-tools-normalization";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { detached } from "@/api/lib/detached";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   createMcpClientForConnection,
@@ -307,12 +308,15 @@ const loadConnectorTools = async ({
       // settlement: it covers the case above where no client existed yet
       // at timeout, and is a no-op otherwise since `MCPClient.close()` is
       // idempotent (safe even if it ends up closing the same client twice).
-      void discovery
-        .catch(() => undefined)
-        .then(
-          async () =>
-            await closeAbandonedClient({ client, connectorSlug: row.slug }),
-        );
+      detached(
+        discovery
+          .catch(() => undefined)
+          .then(
+            async () =>
+              await closeAbandonedClient({ client, connectorSlug: row.slug }),
+          ),
+        "loadConnectorTools",
+      );
     } else {
       // `discovery` has already settled (that rejection is `error`), so
       // any client it created is safe to close immediately.

@@ -86,6 +86,7 @@ import {
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
@@ -1184,13 +1185,16 @@ const FileChatOverlayInner = ({
         workspaceId !== undefined &&
         items.length > 0
       ) {
-        void persistQueuedSuggestions({
-          workspaceId,
-          entityId: activeFile.entityId,
-          chatThreadId,
-          items,
-          docxEditorRef,
-        });
+        detached(
+          persistQueuedSuggestions({
+            workspaceId,
+            entityId: activeFile.entityId,
+            chatThreadId,
+            items,
+            docxEditorRef,
+          }),
+          "FileChatOverlayInner",
+        );
       }
       return {
         version: 1,
@@ -1668,7 +1672,7 @@ const FileChatOverlayInner = ({
     );
     for (const part of partsToRun) {
       executedIds.add(part.id);
-      void runFolioAgentDocToolCall(part);
+      detached(runFolioAgentDocToolCall(part), "FileChatOverlayInner");
     }
   }, [messages, runFolioAgentDocToolCall]);
 
@@ -1752,7 +1756,7 @@ const FileChatOverlayInner = ({
     );
     for (const part of partsToRun) {
       executedIds.add(part.id);
-      void runActiveDocxEditToolCall(part);
+      detached(runActiveDocxEditToolCall(part), "FileChatOverlayInner");
     }
   }, [messages, runActiveDocxEditToolCall]);
 
@@ -1890,16 +1894,19 @@ const FileChatOverlayInner = ({
                   return;
                 }
                 editorController.setContent(prompt);
-                void editorController.submit(async (draft) => {
-                  if (!(await ensureAIAvailable())) {
-                    return;
-                  }
-                  // Pop the thread open on send (mirrors the PromptBar submit
-                  // path) so a chip sent while the thread is collapsed still
-                  // streams the reply into view.
-                  setPanelOpen(true);
-                  await sendMessage(await buildChatRequestMessage(draft));
-                });
+                detached(
+                  editorController.submit(async (draft) => {
+                    if (!(await ensureAIAvailable())) {
+                      return;
+                    }
+                    // Pop the thread open on send (mirrors the PromptBar submit
+                    // path) so a chip sent while the thread is collapsed still
+                    // streams the reply into view.
+                    setPanelOpen(true);
+                    await sendMessage(await buildChatRequestMessage(draft));
+                  }),
+                  "FileChatOverlayInner",
+                );
               }}
             />
           }
@@ -1933,7 +1940,10 @@ const FileChatOverlayInner = ({
               return;
             }
 
-            void handlePromptSubmit({ prompt, files });
+            detached(
+              handlePromptSubmit({ prompt, files }),
+              "FileChatOverlayInner",
+            );
           }}
           pendingCount={0}
           queueWhileGenerating

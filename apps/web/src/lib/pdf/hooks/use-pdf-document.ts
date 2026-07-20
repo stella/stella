@@ -3,6 +3,7 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import type { Result } from "better-result";
 
 import { STALE_TIME } from "@/lib/consts";
+import { detached } from "@/lib/detached";
 import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
 import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
@@ -54,7 +55,7 @@ export const installPDFDocumentCleanup = (queryClient: QueryClient) => {
       return;
     }
 
-    void destroyPDFDocument(rawData.value);
+    detached(destroyPDFDocument(rawData.value), "installPDFDocumentCleanup");
   });
 };
 

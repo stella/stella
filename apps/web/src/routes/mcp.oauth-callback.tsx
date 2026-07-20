@@ -12,6 +12,7 @@ import {
 } from "@stll/ui/components/frame";
 
 import { useMountEffect } from "@/hooks/use-effect";
+import { detached } from "@/lib/detached";
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
@@ -51,7 +52,7 @@ function McpOAuthCallbackPage() {
     // `window.location.assign`). If we're still here after a tick,
     // route back to the MCP settings page so the user is not stranded.
     const fallback = window.setTimeout(() => {
-      void navigate({ to: KNOWLEDGE_MCP_PATH });
+      detached(navigate({ to: KNOWLEDGE_MCP_PATH }), "McpOAuthCallbackPage");
     }, FALLBACK_NAVIGATE_DELAY_MS);
     return () => window.clearTimeout(fallback);
   });
@@ -78,7 +79,10 @@ function McpOAuthCallbackPage() {
             className="w-full"
             onClick={() => {
               window.close();
-              void navigate({ to: KNOWLEDGE_MCP_PATH });
+              detached(
+                navigate({ to: KNOWLEDGE_MCP_PATH }),
+                "McpOAuthCallbackPage",
+              );
             }}
             type="button"
           >

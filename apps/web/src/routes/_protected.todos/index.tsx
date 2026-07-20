@@ -29,6 +29,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { pageTitle } from "@/lib/page-title";
 import type { TaskItem } from "@/routes/_protected.todos/-queries";
@@ -173,9 +174,12 @@ function MyTodosPage() {
                 <MenuItem
                   key={ws.id}
                   onClick={() => {
-                    void (async () => {
-                      await handleCreateTask(ws.id);
-                    })();
+                    detached(
+                      (async () => {
+                        await handleCreateTask(ws.id);
+                      })(),
+                      "MyTodosPage",
+                    );
                   }}
                 >
                   {ws.name}
@@ -229,9 +233,12 @@ function MyTodosPage() {
                   <MenuItem
                     key={ws.id}
                     onClick={() => {
-                      void (async () => {
-                        await handleCreateTask(ws.id);
-                      })();
+                      detached(
+                        (async () => {
+                          await handleCreateTask(ws.id);
+                        })(),
+                        "MyTodosPage",
+                      );
                     }}
                   >
                     {ws.name}

@@ -56,6 +56,7 @@ import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
+import { detached } from "@/lib/detached";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
@@ -780,7 +781,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         aria-label={t("workspaces.copyToMatter.rootFolder")}
                         className="text-muted-foreground hover:text-foreground text-xs"
                         onClick={() => {
-                          void navigateToFolder();
+                          detached(navigateToFolder(), "FilesystemView");
                         }}
                         type="button"
                       />
@@ -823,7 +824,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                               <button
                                 className="text-xs font-medium"
                                 onClick={() => {
-                                  void navigateToFolder();
+                                  detached(
+                                    navigateToFolder(),
+                                    "FilesystemView",
+                                  );
                                 }}
                                 onDoubleClick={(e) => {
                                   e.stopPropagation();
@@ -840,7 +844,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                             <button
                               className="text-muted-foreground hover:text-foreground text-xs"
                               onClick={() => {
-                                void navigateToFolder(crumb.id);
+                                detached(
+                                  navigateToFolder(crumb.id),
+                                  "FilesystemView",
+                                );
                               }}
                               type="button"
                             >
@@ -932,7 +939,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     gridTemplate={gridTemplate}
                     node={row.node}
                     onNavigateToFolder={(folderId) => {
-                      void navigateToFolder(folderId);
+                      detached(navigateToFolder(folderId), "FilesystemView");
                     }}
                     onRename={(entityId, newName) => {
                       renameEntity.mutate({

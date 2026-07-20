@@ -11,6 +11,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -64,13 +65,16 @@ function ReportExportRecoveryPage() {
   };
 
   const handleDownloadClick = () => {
-    void handleDownload().catch((error: unknown) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        type: "error",
-        title: t("common.unexpectedError"),
-      });
-    });
+    detached(
+      handleDownload().catch((error: unknown) => {
+        analytics.captureError(error);
+        stellaToast.add({
+          type: "error",
+          title: t("common.unexpectedError"),
+        });
+      }),
+      "handleDownloadClick",
+    );
   };
 
   return (

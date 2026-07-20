@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -58,14 +59,26 @@ export const useUninstallEntry = (
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: catalogueKeys.list(organizationId),
-      });
-      void queryClient.invalidateQueries({ queryKey: ["mcp"] });
-      void queryClient.invalidateQueries({ queryKey: ["skills"] });
-      void queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.mcp.all(organizationId),
-      });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: catalogueKeys.list(organizationId),
+        }),
+        "onSuccess",
+      );
+      detached(
+        queryClient.invalidateQueries({ queryKey: ["mcp"] }),
+        "onSuccess",
+      );
+      detached(
+        queryClient.invalidateQueries({ queryKey: ["skills"] }),
+        "onSuccess",
+      );
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.mcp.all(organizationId),
+        }),
+        "onSuccess",
+      );
       stellaToast.add({
         title: t("common.remove"),
         type: "success",

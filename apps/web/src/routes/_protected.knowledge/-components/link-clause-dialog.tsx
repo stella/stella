@@ -31,6 +31,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { SafeId } from "@/lib/safe-id";
@@ -467,7 +468,7 @@ export const LinkClauseDialog = ({
           <Button
             disabled={linking || !selectedClauseId || slotUnavailable}
             onClick={() => {
-              void handleLink();
+              detached(handleLink(), "LinkClauseDialog");
             }}
           >
             {t("clauses.linkClause")}
