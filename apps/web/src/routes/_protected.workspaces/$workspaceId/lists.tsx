@@ -745,9 +745,14 @@ const ItemSourcesPanel = ({
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       return;
     }
-    await queryClient.invalidateQueries({
-      queryKey: legalListKeys.sources(workspaceId, listId, itemEntityId),
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: legalListKeys.sources(workspaceId, listId, itemEntityId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: legalListKeys.activity(workspaceId, listId, itemEntityId),
+      }),
+    ]);
   };
 
   return (
