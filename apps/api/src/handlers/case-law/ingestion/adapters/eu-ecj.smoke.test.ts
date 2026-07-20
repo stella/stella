@@ -14,13 +14,16 @@ import { describe, expect, test } from "bun:test";
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 
 const SKIP = process.env["SMOKE_TEST"] !== "1";
+const ECJ_SMOKE_TIMEOUT_MS = 6 * 60 * 1000;
 
 describe.skipIf(SKIP)("euEcjAdapter smoke (live)", () => {
   test(
     "fetches at least one decision from a known date",
     async () => {
-      // 2024-01-18 is known to have ECJ decisions
-      const result = await euEcjAdapter.fetchPage("2024-01-18", {});
+      // 2024-01-31 has one known ECJ decision. Keeping the live fixture day
+      // small exercises every language manifestation without downloading a
+      // full high-volume judgment day.
+      const result = await euEcjAdapter.fetchPage("2024-01-31", {});
 
       if (!Result.isOk(result)) {
         throw new Error(`Expected Ok, got: ${result.error.message}`);
@@ -28,7 +31,7 @@ describe.skipIf(SKIP)("euEcjAdapter smoke (live)", () => {
       const page = result.value;
 
       expect(page.decisions.length).toBeGreaterThan(0);
-      expect(page.nextCursor).toBe("2024-01-19");
+      expect(page.nextCursor).toBe("2024-02-01");
 
       // Structural checks on each decision
       for (const d of page.decisions) {
@@ -53,6 +56,6 @@ describe.skipIf(SKIP)("euEcjAdapter smoke (live)", () => {
           `${withText.length} with fulltext`,
       );
     },
-    { timeout: 60_000 },
+    { timeout: ECJ_SMOKE_TIMEOUT_MS },
   );
 });

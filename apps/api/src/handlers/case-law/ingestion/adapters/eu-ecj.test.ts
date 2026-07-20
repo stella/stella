@@ -2,10 +2,7 @@ import { Result } from "better-result";
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import {
-  ECJ_LANGUAGES,
-  celexToCaseNumber,
-} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { celexToCaseNumber } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
@@ -13,6 +10,52 @@ import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
 const fulltextHtml = await Bun.file(
   new URL("__fixtures__/eu-ecj-fulltext-en.html", import.meta.url),
 ).text();
+
+const CELLAR_RESOURCE_PREFIX = "http://publications.europa.eu/resource/cellar/";
+const EN_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0011.05";
+const FR_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0012.05";
+const DE_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0013.05";
+
+type SparqlFixtureBinding = (typeof sparqlFixture.results.bindings)[number];
+
+type WithManifestationOptions = {
+  cellarLanguage: string;
+  manifestationId: string;
+};
+
+const withManifestation = (
+  binding: SparqlFixtureBinding,
+  { cellarLanguage, manifestationId }: WithManifestationOptions,
+) => ({
+  ...binding,
+  language: {
+    type: "uri",
+    value: `http://publications.europa.eu/resource/authority/language/${cellarLanguage}`,
+  },
+  manifestation: {
+    type: "uri",
+    value: `${CELLAR_RESOURCE_PREFIX}${manifestationId}`,
+  },
+});
+
+const firstFixtureBinding = sparqlFixture.results.bindings.at(0);
+const secondFixtureBinding = sparqlFixture.results.bindings.at(1);
+if (!firstFixtureBinding || !secondFixtureBinding) {
+  throw new TypeError("Expected at least two CJEU SPARQL fixture bindings");
+}
+
+const enBinding = withManifestation(firstFixtureBinding, {
+  cellarLanguage: "ENG",
+  manifestationId: EN_MANIFESTATION_ID,
+});
+const frBinding = withManifestation(firstFixtureBinding, {
+  cellarLanguage: "FRA",
+  manifestationId: FR_MANIFESTATION_ID,
+});
+const deBinding = withManifestation(firstFixtureBinding, {
+  cellarLanguage: "DEU",
+  manifestationId: DE_MANIFESTATION_ID,
+});
 
 // -- celexToCaseNumber --
 
@@ -55,7 +98,6 @@ describe("celexToCaseNumber", () => {
 
 describe("euEcjAdapter.fetchPage", () => {
   const originalFetch = globalThis.fetch;
-  const LANG_COUNT = ECJ_LANGUAGES.length;
 
   const originalSleep = Bun.sleep;
 
@@ -71,7 +113,29 @@ describe("euEcjAdapter.fetchPage", () => {
   test(
     "parses SPARQL + HTML into multi-lang decisions",
     async () => {
-      const bindings = sparqlFixture.results.bindings.slice(0, 2);
+      const secondDecision = withManifestation(
+        {
+          ...secondFixtureBinding,
+          type: {
+            type: "uri",
+            value: "http://publications.europa.eu/ontology/cdm#order_cjeu",
+          },
+        },
+        {
+          cellarLanguage: "ENG",
+          manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0001.05",
+        },
+      );
+      const duplicateEnBinding = withManifestation(firstFixtureBinding, {
+        cellarLanguage: "ENG",
+        manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0002.05",
+      });
+      const bindings = [
+        enBinding,
+        duplicateEnBinding,
+        frBinding,
+        secondDecision,
+      ];
       globalThis.fetch = asFetchMock(
         mock((url: string) => {
           const urlStr = url;
@@ -92,7 +156,7 @@ describe("euEcjAdapter.fetchPage", () => {
             );
           }
 
-          if (urlStr.includes("eur-lex.europa.eu")) {
+          if (urlStr.includes("publications.europa.eu/resource/cellar/")) {
             return Promise.resolve(
               new Response(fulltextHtml, {
                 status: 200,
@@ -117,16 +181,15 @@ describe("euEcjAdapter.fetchPage", () => {
       }
       const page = result.value;
 
-      const bindingCount = bindings.length;
-      expect(page.decisions).toHaveLength(bindingCount * LANG_COUNT);
+      expect(page.decisions).toHaveLength(3);
       expect(page.nextCursor).toBe("2024-01-19");
 
-      // Verify first binding (C-128/21) produced all languages
+      // Verify the two discovered manifestations for C-128/21.
       const langs = page.decisions
         .filter((d) => d.caseNumber === "C-128/21")
         .map((d) => d.language)
         .sort();
-      expect(langs).toEqual(ECJ_LANGUAGES.map((l) => l.toLowerCase()).sort());
+      expect(langs).toEqual(["en", "fr"]);
 
       const first = page.decisions[0];
       if (!first) {
@@ -135,20 +198,21 @@ describe("euEcjAdapter.fetchPage", () => {
       expect(first.caseNumber).toBe("C-128/21");
       expect(first.ecli).toBe("ECLI:EU:C:2024:49");
       expect(first.court).toBe("Court of Justice");
-      expect(first.language).toBe("bg");
+      expect(first.language).toBe("en");
       expect(first.decisionDate).toBe("2024-01-18");
       expect(first.decisionType).toBe("judgment");
       expect(first.documentUrl).toBe(
-        "https://eur-lex.europa.eu/legal-content/BG/TXT/HTML/?uri=CELEX:62021CJ0128",
+        `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_1`,
       );
       expect(first.sourceUrl).toBe(
-        "https://eur-lex.europa.eu/legal-content/BG/ALL/?uri=CELEX:62021CJ0128",
+        "https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:62021CJ0128",
       );
       expect(first.metadata).toEqual({ celex: "62021CJ0128" });
       expect(first.fulltext?.length).toBeGreaterThan(100);
       expect(first.rawHash).toHaveLength(64);
       expect(first.documentAst).toEqual({});
       expect(first.sourceRaw).toBeUndefined();
+      expect(page.decisions[2]?.decisionType).toBe("order");
     },
     { timeout: 30_000 },
   );
@@ -206,7 +270,7 @@ describe("euEcjAdapter.fetchPage", () => {
         if (urlStr.includes("sparql")) {
           const fixture = {
             results: {
-              bindings: [sparqlFixture.results.bindings[0]],
+              bindings: [enBinding, frBinding, deBinding],
             },
           };
           return Promise.resolve(
@@ -216,8 +280,11 @@ describe("euEcjAdapter.fetchPage", () => {
           );
         }
 
-        // Only EN and FR return fulltext
-        if (urlStr.includes("/EN/") || urlStr.includes("/FR/")) {
+        // Only the EN and FR Cellar manifestations return fulltext.
+        if (
+          urlStr.includes(EN_MANIFESTATION_ID) ||
+          urlStr.includes(FR_MANIFESTATION_ID)
+        ) {
           return Promise.resolve(
             new Response(fulltextHtml, {
               status: 200,
@@ -254,7 +321,7 @@ describe("euEcjAdapter.fetchPage", () => {
         if (urlStr.includes("sparql")) {
           const fixture = {
             results: {
-              bindings: [sparqlFixture.results.bindings[0]],
+              bindings: [enBinding],
             },
           };
           return Promise.resolve(
@@ -288,7 +355,7 @@ describe("euEcjAdapter.fetchPage", () => {
         if (urlStr.includes("sparql")) {
           const fixture = {
             results: {
-              bindings: [sparqlFixture.results.bindings[0]],
+              bindings: [enBinding],
             },
           };
           return Promise.resolve(
@@ -298,8 +365,7 @@ describe("euEcjAdapter.fetchPage", () => {
           );
         }
 
-        // Only EN
-        if (urlStr.includes("/EN/")) {
+        if (urlStr.includes(EN_MANIFESTATION_ID)) {
           return Promise.resolve(
             new Response(fulltextHtml, {
               status: 200,
@@ -326,6 +392,48 @@ describe("euEcjAdapter.fetchPage", () => {
     }
     expect(d.language).toBe("en");
     expect(d.sourceUrl).toContain("/EN/");
-    expect(d.documentUrl).toContain("/EN/");
+    expect(d.documentUrl).toBe(
+      `https://publications.europa.eu/resource/cellar/${EN_MANIFESTATION_ID}/DOC_1`,
+    );
+  });
+
+  test("rejects a manifestation URL outside the Cellar origin", async () => {
+    let externalFetches = 0;
+    globalThis.fetch = asFetchMock(
+      mock((url: string) => {
+        if (url.includes("sparql")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                results: {
+                  bindings: [
+                    {
+                      ...enBinding,
+                      manifestation: {
+                        type: "uri",
+                        value: "https://attacker.example/document",
+                      },
+                    },
+                  ],
+                },
+              }),
+              { status: 200 },
+            ),
+          );
+        }
+        externalFetches += 1;
+        return Promise.resolve(new Response(fulltextHtml, { status: 200 }));
+      }),
+    );
+
+    const { euEcjAdapter } =
+      await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
+    const result = await euEcjAdapter.fetchPage("2024-01-18", {});
+
+    if (!Result.isOk(result)) {
+      throw new TypeError("Expected Ok result");
+    }
+    expect(result.value.decisions).toHaveLength(0);
+    expect(externalFetches).toBe(0);
   });
 });

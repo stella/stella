@@ -7,6 +7,8 @@ const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
 const TEST_HELPER_GLOB = "src/tests/**/*.ts";
 const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
 const PROPERTY_TEST_MARKER = "fc.assert";
+const REGULAR_TEST_BATCH_SIZE = 100;
+const MODULE_MOCK_TEST_BATCH_SIZE = 20;
 
 const apiRoot = path.resolve(import.meta.dir, "..");
 
@@ -80,7 +82,15 @@ const runTests = async (testFiles: string[], isolate: boolean) => {
   const executionMode = isolate ? "isolated" : "shared-process";
   console.log(`Running ${testFiles.length} ${executionMode} API test files`);
 
-  const command = [process.execPath, "test", "--preload", preloadPath];
+  // Each batch loads many graph-heavy API modules. Prefer more frequent garbage
+  // collection so it stays within the hosted runner's memory budget.
+  const command = [
+    process.execPath,
+    "--smol",
+    "test",
+    "--preload",
+    preloadPath,
+  ];
   if (isolate) {
     command.push("--isolate");
   }
@@ -97,9 +107,54 @@ const runTests = async (testFiles: string[], isolate: boolean) => {
   return await child.exited;
 };
 
-const regularExitCode = await runTests(regularTests, false);
+type RunTestBatchesOptions = {
+  batchSize: number;
+  batchStart: number;
+  isolate: boolean;
+  testFiles: string[];
+};
+
+const runTestBatches = async ({
+  batchSize,
+  batchStart,
+  isolate,
+  testFiles,
+}: RunTestBatchesOptions): Promise<number> => {
+  if (batchStart >= testFiles.length) {
+    return 0;
+  }
+
+  const batch = testFiles.slice(batchStart, batchStart + batchSize);
+  const exitCode = await runTests(batch, isolate);
+  if (exitCode !== 0) {
+    return exitCode;
+  }
+
+  return runTestBatches({
+    batchSize,
+    batchStart: batchStart + batchSize,
+    isolate,
+    testFiles,
+  });
+};
+
+// A fresh process per test batch makes module memory reclaimable. One
+// process for the full suite grows until the hosted runner terminates it.
+const regularExitCode = await runTestBatches({
+  batchSize: REGULAR_TEST_BATCH_SIZE,
+  batchStart: 0,
+  isolate: false,
+  testFiles: regularTests,
+});
 if (regularExitCode !== 0) {
   process.exit(regularExitCode);
 }
 
-process.exit(await runTests(moduleMockTests, true));
+process.exit(
+  await runTestBatches({
+    batchSize: MODULE_MOCK_TEST_BATCH_SIZE,
+    batchStart: 0,
+    isolate: true,
+    testFiles: moduleMockTests,
+  }),
+);
