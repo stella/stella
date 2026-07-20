@@ -100,6 +100,84 @@ const prepareEditorScene = async (page: Page) => {
   await closeInspectorIfOpen(page);
 };
 
+// ─── Agent-scene inspector preview guards ───────────────
+// The agent loop clicks cited-source chips mid-cut, which opens the
+// right-hand inspector with the document's folio preview. That preview
+// loads asynchronously (file download + docx layout), so on a cold cache
+// the pane can sit as a large blank white column for a chunk of the cut;
+// the first-frame PSNR check is structurally blind to it because frame 0
+// has the pane closed and the reference screenshot is taken at the same
+// moment as the frame it validates. The guards are therefore DOM-level
+// and post-marker: prepare pre-warms both cited documents (which also
+// fails the run early if a preview cannot render at all), and the replay
+// enforces a per-click paint budget so slow-loading footage is a
+// recording failure, never a shipped clip.
+const MIN_INSPECTOR_PREVIEW_TEXT_LENGTH = 200;
+const INSPECTOR_PREVIEW_PAINT_BUDGET_MS = 1500;
+const INSPECTOR_PREWARM_TIMEOUT_MS = 60_000;
+
+type InspectorPreviewMarker = {
+  // Substring of the document body text that must appear inside the
+  // painted folio runs, so tab switches cannot pass with the previous
+  // document's paint.
+  bodyMarker: string;
+  label: string;
+};
+
+// Painted-text predicate evaluated in the page: real rendered document
+// text, not a skeleton. `.layout-run-text` is folio's painted layout
+// layer (docx previews) and `[data-text-layer]` is the pdf.js text layer
+// (pdf previews, appended only after the page has rendered); the chat
+// column paints neither, so on this route the selectors can only match
+// the inspector preview. The doc-specific bodyMarker keeps a tab switch
+// from passing on the previous document's still-mounted paint.
+const inspectorPreviewIsPainted = ({
+  bodyMarker,
+  minLength,
+}: {
+  bodyMarker: string;
+  minLength: number;
+}) => {
+  const painted = [
+    ...document.querySelectorAll(".layout-run-text, [data-text-layer]"),
+  ]
+    .map((run) => run.textContent ?? "")
+    .join("");
+  return painted.trim().length >= minLength && painted.includes(bodyMarker);
+};
+
+const waitForInspectorPreview = async (
+  page: Page,
+  marker: InspectorPreviewMarker,
+  timeoutMs: number,
+) => {
+  try {
+    await page.waitForFunction(
+      inspectorPreviewIsPainted,
+      {
+        bodyMarker: marker.bodyMarker,
+        minLength: MIN_INSPECTOR_PREVIEW_TEXT_LENGTH,
+      },
+      { timeout: timeoutMs },
+    );
+  } catch {
+    throw new Error(
+      `agent: the inspector preview for ${marker.label} did not paint ` +
+        `within ${timeoutMs}ms; refusing to ship footage with a blank ` +
+        "inspector pane",
+    );
+  }
+};
+
+const FIRST_SOURCE_PREVIEW = {
+  bodyMarker: "atlas_001_Corporate_Shareholder_Register",
+  label: "atlas_001_Corporate",
+} as const satisfies InspectorPreviewMarker;
+const SECOND_SOURCE_PREVIEW = {
+  bodyMarker: "atlas_005_Finance_Permit",
+  label: "atlas_005_Finance",
+} as const satisfies InspectorPreviewMarker;
+
 const scenes = [
   {
     id: "workspace",
@@ -181,6 +259,26 @@ const scenes = [
         .getByText(/assignment or a material service change/u)
         .first()
         .waitFor();
+      // Pre-warm both cited documents the loop will click: open each in
+      // the inspector, require its folio preview to really paint (this
+      // fails the run early when a preview cannot render), then close the
+      // pane again so frame 0 keeps the full-width chat. The warmed
+      // download/layout caches are what let the in-cut opens meet the
+      // paint budget enforced in the replay.
+      for (const marker of [FIRST_SOURCE_PREVIEW, SECOND_SOURCE_PREVIEW]) {
+        // eslint-disable-next-line no-await-in-loop -- the two pre-warm opens share one inspector pane, so they are inherently sequential
+        await page.getByText(new RegExp(marker.label, "u")).first().click();
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await waitForInspectorPreview(
+          page,
+          marker,
+          INSPECTOR_PREWARM_TIMEOUT_MS,
+        );
+      }
+      // Pre-warming opened one inspector tab per document; close them all
+      // so frame 0 keeps the full-width chat and the loop's first click
+      // performs the open on camera.
+      await closeAllInspectorTabs(page);
       // Rest just below-right of the first cited source: neutral (nothing
       // hovered), and the loop's first eased move starts from a short,
       // natural approach onto that source.
@@ -1091,20 +1189,41 @@ const animateBetweenRows = async (
 // The inspector opens store-driven (async, after the document mounts), so a
 // visibility snapshot races it: wait for its Close button to appear, close,
 // and wait for the pane to leave so the document reflows to full width.
-const closeInspectorIfOpen = async (page: Page) => {
+// Returns whether a tab was closed: the X closes one inspector tab at a
+// time, so callers that pre-warmed several tabs loop until nothing is left.
+const closeInspectorIfOpen = async (page: Page): Promise<boolean> => {
   const closeButton = page.getByRole("button", { name: /^close$/iu }).last();
   const appeared = await closeButton
     .waitFor({ state: "visible", timeout: 5000 })
     .then(() => true)
     .catch(() => false);
   if (!appeared) {
-    return;
+    return false;
   }
   await closeButton.click();
   await closeButton
     .waitFor({ state: "hidden", timeout: 5000 })
     .catch(() => undefined);
   await page.waitForTimeout(500);
+  return true;
+};
+
+// Close every open inspector tab (bounded so a Close button that never
+// leaves cannot loop forever) and require the pane to actually be gone.
+const MAX_INSPECTOR_TABS_TO_CLOSE = 4;
+
+const closeAllInspectorTabs = async (page: Page) => {
+  for (let closed = 0; closed < MAX_INSPECTOR_TABS_TO_CLOSE; closed++) {
+    // eslint-disable-next-line no-await-in-loop -- tabs share one pane and must be closed one at a time
+    const closedOne = await closeInspectorIfOpen(page);
+    if (!closedOne) {
+      return;
+    }
+  }
+  throw new Error(
+    `inspector still open after closing ${MAX_INSPECTOR_TABS_TO_CLOSE} tabs; ` +
+      "refusing to record with an unexpected pane in frame 0",
+  );
 };
 
 const scrollDocumentTo = async (page: Page, top: number) => {
@@ -1178,10 +1297,27 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
   }
   // Only "agent" remains. The cursor starts from its just-off-the-source
   // rest position, glides onto each cited source, and clicks (with the
-  // overlay's ring pulse); the scene deliberately ends on the second source.
+  // overlay's ring pulse); the scene deliberately ends on the second
+  // source. Each click must repaint the inspector preview inside the
+  // paint budget (pre-warmed in prepare); a blank pane on camera fails
+  // the run, and the budget wait is deducted from the hold so the loop's
+  // cadence stays fixed.
   await clickWithCursor(page, page.getByText(/atlas_001_Corporate/u).first());
-  await page.waitForTimeout(2600);
+  const firstPaintStartedAt = Date.now();
+  await waitForInspectorPreview(
+    page,
+    FIRST_SOURCE_PREVIEW,
+    INSPECTOR_PREVIEW_PAINT_BUDGET_MS,
+  );
+  await page.waitForTimeout(
+    Math.max(0, 2600 - (Date.now() - firstPaintStartedAt)),
+  );
   await clickWithCursor(page, page.getByText(/atlas_005_Finance/u).first());
+  await waitForInspectorPreview(
+    page,
+    SECOND_SOURCE_PREVIEW,
+    INSPECTOR_PREVIEW_PAINT_BUDGET_MS,
+  );
 };
 
 // Glide away, then back home (the row the prepare step ended on, i.e. the

@@ -859,8 +859,8 @@ const createSupplierAgreementDocx = async (): Promise<Buffer> => {
       return `<w:p>${paragraphProps}${runsXml}</w:p>`;
     }
     return (
-      `<w:p>${paragraphProps}<w:commentRangeStart w:id="${paragraph.commentId}"/>${ 
-      runsXml 
+      `<w:p>${paragraphProps}<w:commentRangeStart w:id="${paragraph.commentId}"/>${
+        runsXml
       }<w:commentRangeEnd w:id="${paragraph.commentId}"/>` +
       `<w:r><w:commentReference w:id="${paragraph.commentId}"/></w:r>` +
       `</w:p>`
@@ -2820,6 +2820,42 @@ const seedWorkspaces = [
     billingReference: "PERF-VIRT-1000",
   },
 ];
+
+// ─── Sidebar recents ordering ───────────────────────────
+// The app sidebar's "Recent matters" list is ordered by
+// workspaces.lastActivityAt (apps/web/src/components/app-sidebar.logic.ts),
+// and the marketing recordings film that sidebar. Relying on the column's
+// defaultNow() orders matters by seed insertion time, which surfaced the
+// last few MORE_WORKSPACES entries (Czech-named) in every recording. Every
+// workspace therefore gets a deterministic lastActivityAt: the matters
+// below (English names, English client names) are pinned to the newest
+// dates so they fill all visible recents slots (sidebar limit is 5) with
+// margin, and every other matter falls back to an older date derived from
+// its insertion index. Keyed by the org-unique matter reference.
+const RECENT_MATTER_ACTIVITY: Record<string, string> = {
+  "2024/059": "2026-07-17T09:00:00.000Z", // Export Review - Project Atlas Data Room (Greenleaf)
+  "2026/014": "2026-07-16T15:00:00.000Z", // Northstar SAFE financing (Northstar Robotics)
+  "2024/058": "2026-07-16T11:00:00.000Z", // Fund IV Structuring (Greenleaf)
+  "2024/046": "2026-07-15T16:00:00.000Z", // Sanctions Screening Programme (Crown Shipping)
+  "2024/018": "2026-07-15T10:30:00.000Z", // Post-Acquisition Integration (Thames Advisory)
+  "2024/003": "2026-07-14T14:00:00.000Z", // Due Diligence - Greenleaf Fund III (Greenleaf)
+  "2024/043": "2026-07-14T09:00:00.000Z", // Charter Party Dispute (Crown Shipping)
+  "2024/020": "2026-07-13T15:00:00.000Z", // Anti-Bribery Compliance Review (Thames Advisory)
+  "2024/007": "2026-07-13T10:00:00.000Z", // Cross-border M&A Advisory (Greenleaf)
+  "2024/016": "2026-07-12T14:00:00.000Z", // Shareholder Dispute Resolution (Thames Advisory)
+};
+
+// Non-cast matters: deterministic and strictly older than every pinned
+// date above (2026-02-02 base + one hour per insertion index).
+const FALLBACK_ACTIVITY_BASE_MS = Date.UTC(2026, 1, 2, 8, 0, 0);
+const FALLBACK_ACTIVITY_STEP_MS = 3_600_000;
+
+const workspaceLastActivityAt = (reference: string, index: number): Date => {
+  const pinned = RECENT_MATTER_ACTIVITY[reference];
+  return pinned
+    ? new Date(pinned)
+    : new Date(FALLBACK_ACTIVITY_BASE_MS + index * FALLBACK_ACTIVITY_STEP_MS);
+};
 
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 
@@ -4847,8 +4883,12 @@ export async function seed(organizationId?: string, userId?: string) {
     `  Contacts: ${totalContacts} (${orgContacts.length + moreOrgContacts.length} orgs, ${personContacts.length} people)`,
   );
 
-  // 2. Workspaces
-  for (const ws of seedWorkspaces) {
+  // 2. Workspaces. lastActivityAt is pinned (never defaultNow()) so the
+  // sidebar "Recent matters" ordering the marketing recordings film stays
+  // deterministic; the conflict path re-pins it so a reseed restores the
+  // ordering even when live activity bumped it in the shared dev DB.
+  for (const [wsIndex, ws] of seedWorkspaces.entries()) {
+    const lastActivityAt = workspaceLastActivityAt(ws.reference, wsIndex);
     // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(workspaces)
@@ -4860,14 +4900,22 @@ export async function seed(organizationId?: string, userId?: string) {
         clientId: ws.clientId,
         billingReference:
           "billingReference" in ws ? ws.billingReference : undefined,
+        lastActivityAt,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: workspaces.id,
+        set: { lastActivityAt },
+      });
   }
   // 2b. Additional workspaces (overview stress-testing)
   let moreWsCount = 0;
   for (const mw of MORE_WORKSPACES) {
     const clientId = seedId(mw.clientLabel);
     const wsId = seedId(`extra-ws-${mw.reference}`);
+    const lastActivityAt = workspaceLastActivityAt(
+      mw.reference,
+      seedWorkspaces.length + moreWsCount,
+    );
     // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves insert order / FK dependencies
     await rootDb
       .insert(workspaces)
@@ -4877,8 +4925,12 @@ export async function seed(organizationId?: string, userId?: string) {
         name: mw.name,
         reference: mw.reference,
         clientId,
+        lastActivityAt,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: workspaces.id,
+        set: { lastActivityAt },
+      });
 
     moreWsCount++;
   }
