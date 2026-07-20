@@ -33,6 +33,11 @@ export const aiFaqs = [
       "The agent chats over your matters, files, connected registries, and tools, with approvals and source previews so you can see where every answer comes from. It also powers Tabular Review, which extracts structured answers from large document sets into matter-scoped review tables for due diligence, discovery, and research.",
   },
   {
+    question: "Does stella have document templates?",
+    answer:
+      "Yes. stella includes reusable document templates with fields and conditional clauses. You fill a template in by hand or let stella draft it from a matter's data; the conditional clauses resolve, and the assembled document lands in the matter as a draft you keep editing. Clauses are reusable across templates, so repeat documents start from a known-good base.",
+  },
+  {
     question: "Is there a free tier?",
     answer:
       "Yes. The core workspace is free to use, and self-hosting is free under the Apache-2.0 license. You only pay for AI usage, and with BYOK that cost goes directly to your own AI provider.",
@@ -60,7 +65,7 @@ export const aiFaqs = [
   {
     question: "Does stella work with AI agents?",
     answer:
-      "Yes. stella supports the Model Context Protocol (MCP) and anonymization so agents can work with material without exposing names or identifying details. AI outputs are grounded by citations traceable back to the source text.",
+      "Yes. stella supports the Model Context Protocol (MCP) and a CLI, plus anonymization so agents can work with material without exposing names or identifying details. AI outputs are grounded by citations traceable back to the source text.",
   },
 ] as const;
 

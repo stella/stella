@@ -98,6 +98,7 @@ type Messages = {
     "exploreAgent": "Explore AI agent";
     "exploreAnonymization": "Explore Anonymization";
     "explorePublicData": "Explore Public data";
+    "exploreTemplates": "Explore Templates";
     "exploreWorkspace": "Explore Workspace";
     "eyebrow": "One connected workspace";
     "intro": "A matter moves through the same connected system: from source material, through review and drafting, to a grounded answer or action.";

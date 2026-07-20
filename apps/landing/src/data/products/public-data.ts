@@ -94,7 +94,7 @@ export const publicData: Product = {
     {
       question: "Which jurisdictions and registries are covered?",
       answer:
-        "Coverage is expanding. Registry clients already include ARES, Companies House, SEC EDGAR, KRS, PRH, and VIES, and the case-law reader is built to browse and filter by jurisdiction as more official sources are added.",
+        "Two lists, both expanding. Typed registry clients already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources surface per jurisdiction from stella's connector catalogue; Czechia, Spain, and Taiwan, for example, already have connected sources, and the case-law reader is built to browse and filter by jurisdiction as more official sources are added.",
     },
     {
       question: "Can the AI use this data?",
@@ -134,6 +134,18 @@ export const publicData: Product = {
       contains: [
         "export const RUNNER_NAMES",
         "export const getRunnerDefinitions",
+      ],
+    },
+    {
+      type: "source",
+      path: "packages/business-registries/src/index.ts",
+      contains: [
+        "./ares/index.js",
+        "./companies-house/index.js",
+        "./edgar/index.js",
+        "./krs/index.js",
+        "./prh/index.js",
+        "./vies/index.js",
       ],
     },
   ],

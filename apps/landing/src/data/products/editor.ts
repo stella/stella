@@ -92,6 +92,16 @@ export const editor: Product = {
       href: "/product/templates",
       body: "Create reusable Word documents with fields and conditional clauses.",
     },
+    {
+      title: "Tabular Review",
+      href: "/product/tabular-review",
+      body: "Turn a document set into a matter-scoped review table.",
+    },
+    {
+      title: "AI fact sheet",
+      href: "/ai-info",
+      body: "stella in machine-readable form for AI search engines.",
+    },
   ],
   evidence: [
     {
