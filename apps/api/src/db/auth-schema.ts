@@ -263,6 +263,58 @@ export const jwks = pgTable(
   () => [...denyStellaAccessPolicies()],
 );
 
+/**
+ * Storage for `@better-auth/api-key`. Every column name here mirrors a field the
+ * plugin declares (see `apiKeySchema` in the package): the drizzle adapter maps
+ * the plugin's camelCase field names onto these object keys, so renaming a key
+ * silently breaks the plugin at runtime rather than at build time.
+ *
+ * `referenceId` carries a **user** id, not an organization id: the plugin is
+ * configured with `references: "user"` (see `MACHINE_API_KEY_CONFIG` in
+ * `lib/auth.ts`), which is what lets a key resolve to a real principal that
+ * holds a `member` row and therefore an RLS identity. The owning organization
+ * travels in `metadata`. The cascade below makes "a key outliving its user" a
+ * structurally impossible state instead of a revocation step someone can forget.
+ */
+export const apikey = pgTable(
+  "apikey",
+  {
+    id: text("id").primaryKey(),
+    configId: text("config_id").default("default").notNull(),
+    name: text("name"),
+    start: text("start"),
+    prefix: text("prefix"),
+    key: text("key").notNull(),
+    referenceId: text("reference_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    refillInterval: integer("refill_interval"),
+    refillAmount: integer("refill_amount"),
+    lastRefillAt: timestamp("last_refill_at"),
+    enabled: boolean("enabled").default(true).notNull(),
+    rateLimitEnabled: boolean("rate_limit_enabled").default(true).notNull(),
+    rateLimitTimeWindow: integer("rate_limit_time_window"),
+    rateLimitMax: integer("rate_limit_max"),
+    requestCount: integer("request_count").default(0).notNull(),
+    remaining: integer("remaining"),
+    lastRequest: timestamp("last_request"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+    permissions: text("permissions"),
+    metadata: text("metadata"),
+  },
+  (table) => [
+    // Unique rather than the plugin's plain index: `key` holds a SHA-256 digest
+    // and the verification path resolves a credential by it, so two rows sharing
+    // one digest is a corruption we want the database to refuse outright.
+    uniqueIndex("apikey_key_uidx").on(table.key),
+    index("apikey_reference_id_idx").on(table.referenceId),
+    index("apikey_config_id_idx").on(table.configId),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
 export const oauthClient = pgTable(
   "oauth_client",
   {
@@ -416,6 +468,7 @@ export const authSchema = {
   member,
   invitation,
   jwks,
+  apikey,
   oauthClient,
   oauthAccessToken,
   oauthRefreshToken,
