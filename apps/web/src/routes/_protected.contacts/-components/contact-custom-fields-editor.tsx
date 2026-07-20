@@ -114,7 +114,7 @@ export const ContactCustomFieldsEditor = ({
             field={field}
             key={field.id}
             onRemove={() => removeCustomField(field.id)}
-            onSave={(patch) => updateCustomField(field.id, patch)}
+            onSave={async (patch) => await updateCustomField(field.id, patch)}
           />
         ))}
         {customFields.length === 0 && (
