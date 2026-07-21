@@ -105,8 +105,8 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
         lightSrc={storyThumbnail.src}
         darkSrc={storyThumbnail.darkSrc}
         alt={storyThumbnail.alt}
-        class="relative z-1 h-full w-full rounded-lg border object-cover object-top"
-        style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5)"
+        class="relative z-1 h-full w-full rounded-lg border object-cover"
+        style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"
         loading="lazy"
         decoding="async"
         defer={deferThemeImage ? "manual" : undefined}

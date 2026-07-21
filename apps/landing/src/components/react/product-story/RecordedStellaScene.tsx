@@ -31,18 +31,24 @@ export const RecordedStellaScene = ({
   const videoSrc = isDark ? media.darkVideoSrc : media.videoSrc;
   const shouldPlay = isActive && !prefersReducedMotion;
 
+  // Residual horizontal crop anchors to the recording's start edge (0%): the
+  // app's sidebar and logo stay whole and only the content area's far edge is
+  // trimmed. The recordings are LTR app UI, so the percentage anchor is
+  // correct on RTL pages too.
+  const cropStyle =
+    crop === "top" ? undefined : { objectPosition: "0% 50%" as const };
+
   if (!shouldPlay) {
     return (
       <img
         alt={media.alt}
         className={cn(
-          "bg-background h-full w-full",
-          crop === "top"
-            ? "object-cover object-top"
-            : "object-cover object-center",
+          "bg-background h-full w-full object-cover",
+          crop === "top" && "object-top",
         )}
         decoding="async"
         src={posterSrc}
+        style={cropStyle}
       />
     );
   }
@@ -52,11 +58,10 @@ export const RecordedStellaScene = ({
       aria-label={media.alt}
       autoPlay
       className={cn(
-        "bg-background h-full w-full",
-        crop === "top"
-          ? "object-cover object-top"
-          : "object-cover object-center",
+        "bg-background h-full w-full object-cover",
+        crop === "top" && "object-top",
       )}
+      style={cropStyle}
       key={videoSrc}
       loop
       muted
