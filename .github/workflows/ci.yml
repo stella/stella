@@ -184,6 +184,16 @@ jobs:
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         run: bun run lint:ws
 
+      - name: Lockfile workspace-version guard
+        # `bun.lock` caches each workspace's `name`/`version`; `bun install`
+        # (frozen or not) never rewrites that cache when only a workspace's
+        # own package.json version changes, and `bun pm pack`/`bun publish`
+        # read the stale cached version when resolving a dependent's
+        # `workspace:^`/`workspace:~` range at publish time. Catches drift
+        # before a published @stll/* package ships a wrong dependency range.
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        run: bun scripts/check-lockfile-workspace-versions.ts
+
       - name: Policy evidence
         run: bun run policies:check
 
