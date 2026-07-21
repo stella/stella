@@ -14,6 +14,7 @@ const bormeSummary = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "capability", reason: "legal_corpus_admin" },
+    access: "read",
     params: paramsSchema,
   },
   async function* ({ params: { date } }) {

@@ -12,6 +12,7 @@ const config = {
   // is just two booleans, so it does not require admin scope.
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const readAIAvailability = createSafeRootHandler(

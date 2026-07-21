@@ -32,6 +32,7 @@ const config = {
     workspace: ["read"],
   },
   mcp: { type: "tool", name: "list_matters" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const readWorkspaces = createSafeRootHandler(

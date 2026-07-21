@@ -42,6 +42,7 @@ export const listMatterLinksHandler = async ({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const listMatterLinks = createSafeHandler(

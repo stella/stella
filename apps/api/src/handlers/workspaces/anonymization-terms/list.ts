@@ -8,6 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
+  access: "read",
 } satisfies HandlerConfig;
 
 /**

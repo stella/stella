@@ -27,6 +27,7 @@ const boeRelatedLaws = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "search_legislation" },
+    access: "read",
     params: paramsSchema,
     query: querySchema,
   },
