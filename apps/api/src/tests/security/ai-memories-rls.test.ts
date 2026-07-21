@@ -193,7 +193,7 @@ describe("ai_memories source-data gating", () => {
 });
 
 describe("ai_memories archive-only", () => {
-  test("DELETE affects zero rows and leaves the memory intact", async () => {
+  test("direct DELETE affects zero rows and leaves the memory intact", async () => {
     const deleted = await scopedQuery(
       [ids.wsA1],
       ids.orgA,
