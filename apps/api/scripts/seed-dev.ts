@@ -4332,14 +4332,28 @@ export async function seed(organizationId?: string, userId?: string) {
   const fileProperties = allProperties.filter(
     (prop) => prop.system === true && prop.content.type === "file",
   );
-  const viewRows = fileProperties.flatMap((prop) =>
-    buildDefaultViewRows({
-      workspaceId: toWs(prop.workspaceId),
-      filePropertyId: prop.id,
-    }),
+  // Skip workspaces that already have views: `workspace_views` has only a
+  // primary key, so `onConflictDoNothing` catches nothing on the fresh ids a
+  // reseed generates and would accumulate duplicate default tabs each run.
+  // Seed only workspaces with none, matching the production create path and the
+  // backfill migration's NOT EXISTS guard.
+  const seededViewWorkspaceIds = new Set(
+    (
+      await rootDb
+        .select({ workspaceId: workspaceViews.workspaceId })
+        .from(workspaceViews)
+    ).map((row) => row.workspaceId),
   );
+  const viewRows = fileProperties
+    .filter((prop) => !seededViewWorkspaceIds.has(prop.workspaceId))
+    .flatMap((prop) =>
+      buildDefaultViewRows({
+        workspaceId: toWs(prop.workspaceId),
+        filePropertyId: prop.id,
+      }),
+    );
   if (viewRows.length > 0) {
-    await rootDb.insert(workspaceViews).values(viewRows).onConflictDoNothing();
+    await rootDb.insert(workspaceViews).values(viewRows);
   }
   console.log(
     `  Views: ${viewRows.length} (${fileProperties.length} workspaces × default set)`,
