@@ -2,7 +2,7 @@ import { panic } from "better-result";
 
 import { ENTITY_KINDS } from "@/api/db/schema";
 import type { ContactType } from "@/api/db/schema";
-import type { EntityKind } from "@/api/db/schema-validators";
+import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /** Narrow an unknown value to a valid EntityKind. */
@@ -13,6 +13,26 @@ export const parseEntityKind = (value: unknown): EntityKind => {
     panic(`Invalid entity kind: ${s}`);
   }
   return match;
+};
+
+/**
+ * The file the extraction pipeline reads text from for an entity's current
+ * version: the first field (in field order) whose content is a file. Shared
+ * by `processExtraction` (which writes `extractedContent`) and any reader
+ * that must resolve to the SAME source file `extractedContent` was produced
+ * from -- e.g. a live-conversion path must never pick a different field's
+ * file than the one the cached plaintext (and search hits referencing it)
+ * came from.
+ */
+export const findExtractionFileField = (
+  fields: readonly { content: FieldContent }[],
+): Extract<FieldContent, { type: "file" }> | null => {
+  for (const field of fields) {
+    if (field.content.type === "file") {
+      return field.content;
+    }
+  }
+  return null;
 };
 
 type SearchQueryBase = {

@@ -47,6 +47,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { findExtractionFileField } from "@/api/lib/search/types";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   defineTextFieldSpec,
@@ -1196,17 +1197,16 @@ const toIsoDateString = (value: unknown): string | null => {
 
 type DocxFieldContent = Extract<FieldContent, { type: "file" }>;
 
+// SAFETY: `content` is a NOT NULL jsonb column, but that only forbids a SQL
+// NULL -- a stored JSON `null` literal still reads back as JS `null` here,
+// so the predicate must not dereference `.type` before checking for it.
 const isDocxFileContent = (
-  content: FieldContent,
+  content: FieldContent | null | undefined,
 ): content is DocxFieldContent =>
-  content.type === "file" && content.mimeType === DOCX_MIME_TYPE;
-
-const findCurrentVersionDocxFile = (
-  fieldList: readonly { content: FieldContent }[],
-): DocxFieldContent | undefined =>
-  fieldList.find((field): field is { content: DocxFieldContent } =>
-    isDocxFileContent(field.content),
-  )?.content;
+  content !== null &&
+  content !== undefined &&
+  content.type === "file" &&
+  content.mimeType === DOCX_MIME_TYPE;
 
 type LoadCurrentVersionDocxMarkdownProps = {
   context: McpRequestContext;
@@ -1215,13 +1215,20 @@ type LoadCurrentVersionDocxMarkdownProps = {
 };
 
 /**
- * Convert the entity's CURRENT version DOCX file (if any) to folio's
- * structure-preserving Markdown. Reuses `readEntityByIdHandler` — the same
- * TOCTOU-safe entity+currentVersion+fields lookup `read_document` uses — so
- * this shares its auth boundary and never re-derives entity access. Returns
- * `null` (never throws) when the current version holds no DOCX file or the
- * conversion fails, so the caller can fall back to the cached plaintext
- * extraction instead of failing the whole read.
+ * Convert the entity's CURRENT version file to folio's structure-preserving
+ * Markdown, but only when it is a DOCX. Reuses `readEntityByIdHandler` — the
+ * same TOCTOU-safe entity+currentVersion+fields lookup `read_document` uses
+ * — so this shares its auth boundary and never re-derives entity access.
+ *
+ * File selection uses `findExtractionFileField`, the SAME first-file-field
+ * selection `processExtraction` uses to produce the cached `extractedContent`
+ * plaintext (and what search hits reference). Scanning fields for the first
+ * DOCX instead would let an auxiliary DOCX field outrank the entity's actual
+ * indexed file (e.g. a PDF system file with an unrelated DOCX attachment),
+ * returning markdown for a different document than the plaintext fallback
+ * and search results describe. Returns `null` (never throws) when that file
+ * is not a DOCX or the conversion fails, so the caller falls back to the
+ * cached plaintext extraction of the SAME file instead of failing the read.
  */
 const loadCurrentVersionDocxMarkdown = async ({
   context,
@@ -1235,8 +1242,8 @@ const loadCurrentVersionDocxMarkdown = async ({
     return null;
   }
 
-  const file = findCurrentVersionDocxFile(entityResult.value.fields);
-  if (!file) {
+  const file = findExtractionFileField(entityResult.value.fields);
+  if (!isDocxFileContent(file)) {
     return null;
   }
 

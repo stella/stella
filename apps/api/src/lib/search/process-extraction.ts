@@ -22,18 +22,8 @@ import {
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { findExtractionFileField } from "@/api/lib/search/types";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-
-const findFileField = (
-  fields: { content: FieldContent }[],
-): Extract<FieldContent, { type: "file" }> | null => {
-  for (const field of fields) {
-    if (field.content.type === "file") {
-      return field.content;
-    }
-  }
-  return null;
-};
 
 /**
  * Choose which S3 object to extract text from.
@@ -97,7 +87,7 @@ export const processExtraction = async (
   const version =
     entity.currentVersion ?? panic("Entity has no currentVersion");
 
-  const fileField = findFileField(version.fields);
+  const fileField = findExtractionFileField(version.fields);
   const canExtract = fileField && !fileField.encrypted;
 
   if (canExtract) {
