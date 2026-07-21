@@ -471,9 +471,21 @@ const BlockRenderer = ({
           block.role === "closing" && "mt-8 text-center",
           block.role === "signature" &&
             "reader-signature text-muted-foreground mt-1 text-end",
+          // Courts that number their paragraphs are cited by that
+          // number, so it hangs in the margin rather than running into
+          // the sentence, the way the published decision prints it.
+          block.number !== undefined && "relative ps-8",
         )}
         id={block.anchorId}
       >
+        {block.number !== undefined && (
+          <span
+            aria-hidden
+            className="text-muted-foreground absolute start-0 font-sans text-[0.8em] select-none"
+          >
+            {block.number}
+          </span>
+        )}
         <InlineContent
           activeMatchIndex={activeMatchIndex}
           inlines={block.inlines}

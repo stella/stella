@@ -350,7 +350,12 @@ export const processDecision = async (
     }
   }
 
-  const sections = result.fulltext ? segmentDecision(result.fulltext) : [];
+  // Structure-derived sections win: an adapter only supplies them when
+  // its parser recovered the document's own headings, which is strictly
+  // better than re-deriving boundaries from the flattened text.
+  const sections =
+    result.sections ??
+    (result.fulltext ? segmentDecision(result.fulltext) : []);
 
   const citations = extractCitations(
     sections.map((s) => ({ index: s.index, text: s.text })),

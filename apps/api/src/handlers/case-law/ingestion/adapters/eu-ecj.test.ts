@@ -2,6 +2,7 @@ import { Result } from "better-result";
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { celexToCaseNumber } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -207,12 +208,22 @@ describe("euEcjAdapter.fetchPage", () => {
       expect(first.sourceUrl).toBe(
         "https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:62021CJ0128",
       );
-      expect(first.metadata).toEqual({ celex: "62021CJ0128" });
+      expect(first.metadata).toMatchObject({
+        celex: "62021CJ0128",
+        ecli: "ECLI:EU:C:2024:49",
+        decisionDate: "2024-01-18",
+        decisionType: "judgment",
+      });
       expect(first.fulltext?.length).toBeGreaterThan(100);
       expect(first.rawHash).toHaveLength(64);
-      expect(first.documentAst).toEqual({});
-      expect(first.sourceRaw).toBeUndefined();
       expect(page.decisions[2]?.decisionType).toBe("order");
+
+      // The XHTML is kept verbatim so a parser change can be replayed
+      // without re-crawling, and the parse feeds the reader directly.
+      expect(first.sourceRaw).toBe(fulltextHtml);
+      expect(first.sourceRawContentType).toBe("application/xhtml+xml");
+      expect(hasUsableAst(first.documentAst)).toBe(true);
+      expect(first.sections?.length).toBeGreaterThan(1);
     },
     { timeout: 30_000 },
   );

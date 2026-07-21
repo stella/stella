@@ -65,6 +65,13 @@ export type WalkInlinesOptions = {
   parseSpanStyle?: boolean;
   /** Seed the anonymization flag for the whole subtree (pl-courts). */
   anonymized?: boolean;
+  /**
+   * Read emphasis from class names rather than tags or inline styles.
+   * Cellar's `coj-*` XHTML marks every emphasis with a class on a
+   * presentational `<span>` (`coj-bold`, `coj-italic`) and carries no
+   * style attributes at all.
+   */
+  emphasisClasses?: { bold: string; italic: string };
 };
 
 export const walkInlines = (
@@ -177,6 +184,28 @@ export const walkInlines = (
           inlines.push(...children);
         }
         return;
+      }
+
+      if (options.emphasisClasses) {
+        const isBold = $child.hasClass(options.emphasisClasses.bold);
+        const isItalic = $child.hasClass(options.emphasisClasses.italic);
+        if (isBold || isItalic) {
+          const children = walk($child, childAnon);
+          if (children.length === 0) {
+            return;
+          }
+          if (isBold && isItalic) {
+            inlines.push({
+              type: "bold",
+              children: [{ type: "italic", children }],
+            });
+          } else if (isBold) {
+            inlines.push({ type: "bold", children });
+          } else {
+            inlines.push({ type: "italic", children });
+          }
+          return;
+        }
       }
 
       // Unwrap presentational wrappers.

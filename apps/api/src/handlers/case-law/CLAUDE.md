@@ -187,7 +187,35 @@ Examples per country:
 - PL: `wyrok`, `postanowienie`
 - AT/DE: `Urteil`, `Beschluss`
 
-### 9. Cursors must never cause full re-scans
+### 9. Prefer the publisher's structure over its wording
+
+A parser that keys off headings ("Odůvodnění", "Uzasadnienie") is
+bound to one language. Where the source annotates structure —
+classes, element names, `id` attributes — key off that instead, and
+derive roles from position rather than from what a paragraph says.
+The CJEU parser (`parsers/eu-ecj.ts`) handles all 24 official
+languages, plus judgments, orders and Advocate General opinions,
+with no language table: headings come from `coj-*` classes and from
+the numbering scheme, paragraph numbers from the publisher's own
+`id="pointN"` anchors.
+
+The same applies downstream: an adapter whose parser recovered the
+document's headings should return `sections` on its
+`IngestionResult`, so the pipeline uses those instead of falling back
+to `segmentDecision`, which matches heading wording per language.
+
+### 10. Check a parser against the publisher, not against yourself
+
+Where a source publishes the same document in two encodings, use the
+more semantic one as a test oracle. Cellar serves CJEU decisions both
+as the `coj-*` XHTML we parse and as Formex XML, which states heading
+depth (`GR.SEQ LEVEL`), paragraph numbers (`NP.ECR/NO.P`) and the
+keyword chain (`INDEX/KEYWORD`) outright. `parsers/eu-ecj.test.ts`
+asserts the parse against the Formex tree, so a reviewer who does not
+read Greek or Finnish can still see the parser is right in those
+languages. Snapshot tests only prove the output has not changed.
+
+### 11. Cursors must never cause full re-scans
 
 After an adapter exhausts its range (reaches the oldest year
 in a backward crawl, or the current date in a forward crawl),
@@ -265,7 +293,34 @@ case-law/
 │       ├── cz-nss.ts      # NSS Aspose HTML parser
 │       ├── cz-us.ts       # ÚS RTF/HTML parser
 │       ├── cz-regional.ts # Regional structured JSON parser
+│       ├── eu-ecj.ts      # CJEU Cellar XHTML parser (all languages)
+│       ├── eu-ecj-formex.ts  # Formex reader; test oracle only
 │       └── validate-ast.ts # AST content-loss validator
 ├── polarity/              # Citation polarity classification
 └── matter-links/          # Link decisions to matters
 ```
+
+## Backfilling the CJEU corpus
+
+Decisions ingested before the parser landed hold `document_ast: {}`,
+and their XHTML was not kept (`sourceRaw` was `undefined`), so there
+is nothing to re-parse locally: the corpus has to be re-fetched.
+Deploying the parser alone changes nothing for them, because the
+adapter's cursor parks at the current date and never revisits a past
+publication day on its own.
+
+A re-fetch does update them. The parser's output feeds `fulltext`,
+`fulltext` feeds `rawHash`, so a re-fetched decision hashes
+differently from the stripped-text row already stored and the
+pipeline writes the new AST, sections and metadata over it.
+
+To backfill, set the source's `sync_cursor` back to `1952-01-01` and
+let the scheduler walk forward. Every day re-fetched this way also
+stores `sourceRaw`, so later parser changes can be replayed without
+touching Cellar again. The crawl is rate-limited per decision, not
+per language variant, so a full sweep is long-running; run it as a
+deliberate operation rather than as part of a deploy.
+
+`scripts/record-eu-ecj-fixtures.ts` reaches individual decisions by
+CELEX number through the same adapter path, which is the quicker way
+to re-ingest a specific case.

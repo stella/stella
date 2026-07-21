@@ -162,18 +162,22 @@ export const validateAst = (
         return;
       }
 
-      // Skip if a parent element in our selector already
-      // captured this text (prevents double-counting).
-      if ($el.parents(contentSelector).length > 0) {
-        const parentText = $el
-          .parent()
-          .closest(contentSelector)
-          .text()
-          .replace(/\s+/gu, " ")
-          .trim();
-        if (seen.has(parentText)) {
-          return;
-        }
+      // Skip if any ancestor in our selector already captured this
+      // text. Checking every ancestor rather than just the nearest one
+      // matters for sources that nest content two or more levels deep
+      // (Cellar quotes legislation as a table inside the cell of the
+      // numbered paragraph that introduces it): with only the nearest
+      // ancestor checked, the inner text is counted once inside the
+      // outer cell and again on its own, and the inflated original
+      // length reads as content loss in an otherwise complete AST.
+      const capturedByAncestor = $el
+        .parents(contentSelector)
+        .toArray()
+        .some((ancestor) =>
+          seen.has($(ancestor).text().replace(/\s+/gu, " ").trim()),
+        );
+      if (capturedByAncestor) {
+        return;
       }
       const text = $el.text().replace(/\s+/gu, " ").trim();
       if (text && !seen.has(text)) {
