@@ -23,6 +23,14 @@ export const parseEntityKind = (value: unknown): EntityKind => {
  * from -- e.g. a live-conversion path must never pick a different field's
  * file than the one the cached plaintext (and search hits referencing it)
  * came from.
+ *
+ * CONTRACT: `fields` must arrive pre-sorted into a stable, deterministic
+ * order -- this function does not sort. The `fields` table has no
+ * `createdAt`/position column, so every caller loading this relation MUST
+ * apply `orderBy: { id: "asc" }` (field ids are `Bun.randomUUIDv7()`, so
+ * ascending id order is ascending creation order). Without an explicit
+ * `orderBy`, Postgres/Drizzle give no ordering guarantee, and two callers
+ * could observe different "first" fields for the same version.
  */
 export const findExtractionFileField = (
   fields: readonly { content: FieldContent }[],

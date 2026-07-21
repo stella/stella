@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import {
   extractFileText,
@@ -73,7 +74,21 @@ export const processExtraction = async (
       currentVersion: {
         columns: { id: true },
         with: {
-          fields: { columns: { content: true } },
+          // Fields of one entity version: at most one row per property
+          // (fields_property_id_entity_version_id_key), so this is
+          // structurally bounded by properties-per-workspace; `limit` pins
+          // that same bound explicitly for the lint rule below.
+          // `id` is a Bun.randomUUIDv7() primary key (time-ordered), so
+          // ordering by it gives a stable field-creation order. This MUST
+          // match the ordering `readEntityByIdHandler` applies to the same
+          // relation -- both feed `findExtractionFileField`'s "first file
+          // field" selection, which must resolve to the SAME field
+          // wherever it runs (see findExtractionFileField).
+          fields: {
+            columns: { content: true },
+            orderBy: { id: "asc" },
+            limit: LIMITS.propertiesCount,
+          },
         },
       },
     },

@@ -48,6 +48,7 @@ import {
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { findExtractionFileField } from "@/api/lib/search/types";
+import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   defineTextFieldSpec,
@@ -1215,6 +1216,25 @@ type LoadCurrentVersionDocxMarkdownProps = {
 };
 
 /**
+ * `not-docx`: the current version's extraction file (see below) is
+ * confirmed NOT a DOCX (or the version has no file at all) -- stable across
+ * every read of this entity, so the caller can always use plaintext with no
+ * cursor-consistency risk.
+ *
+ * `unavailable`: the file IS a DOCX (or its identity could not even be
+ * confirmed -- e.g. a transient entity/fields lookup failure) but Markdown
+ * could not be produced for THIS call (S3 read failed, conversion errored,
+ * or the attempt timed out). Unlike `not-docx`, this is not a stable fact
+ * about the document -- a retry could succeed -- so the caller must not
+ * treat it as equivalent to `not-docx` once a cursor is already in flight
+ * (see `handleReadContentAcrossMattersTool`).
+ */
+type DocxMarkdownOutcome =
+  | { kind: "not-docx" }
+  | { kind: "markdown"; text: string }
+  | { kind: "unavailable" };
+
+/**
  * Convert the entity's CURRENT version file to folio's structure-preserving
  * Markdown, but only when it is a DOCX. Reuses `readEntityByIdHandler` — the
  * same TOCTOU-safe entity+currentVersion+fields lookup `read_document` uses
@@ -1226,45 +1246,57 @@ type LoadCurrentVersionDocxMarkdownProps = {
  * DOCX instead would let an auxiliary DOCX field outrank the entity's actual
  * indexed file (e.g. a PDF system file with an unrelated DOCX attachment),
  * returning markdown for a different document than the plaintext fallback
- * and search results describe. Returns `null` (never throws) when that file
- * is not a DOCX or the conversion fails, so the caller falls back to the
- * cached plaintext extraction of the SAME file instead of failing the read.
+ * and search results describe.
+ *
+ * The S3 read and conversion are bounded by `docxMarkdownConversionTimeoutMs`
+ * (`withTimeout`) so a stalled fetch or hung conversion cannot hang the
+ * request; a timeout is reported as `unavailable`, same as any other
+ * conversion failure.
  */
 const loadCurrentVersionDocxMarkdown = async ({
   context,
   entityId,
   workspaceId,
-}: LoadCurrentVersionDocxMarkdownProps): Promise<string | null> => {
+}: LoadCurrentVersionDocxMarkdownProps): Promise<DocxMarkdownOutcome> => {
   const entityResult = await Result.gen(() =>
     readEntityByIdHandler({ safeDb: context.safeDb, workspaceId, entityId }),
   );
   if (Result.isError(entityResult)) {
-    return null;
+    return { kind: "unavailable" };
   }
 
   const file = findExtractionFileField(entityResult.value.fields);
   if (!isDocxFileContent(file)) {
-    return null;
+    return { kind: "not-docx" };
   }
 
   const markdownResult = await Result.tryPromise({
-    try: async () => {
-      const buffer = await getS3()
-        .file(
-          createFileKey({
-            organizationId: context.organizationId,
-            workspaceId,
-            fileId: file.id,
-            mimeType: DOCX_MIME_TYPE,
-          }),
-        )
-        .arrayBuffer();
-      return await docxToMarkdown(buffer);
-    },
+    try: async () =>
+      await withTimeout(
+        async () => {
+          const buffer = await getS3()
+            .file(
+              createFileKey({
+                organizationId: context.organizationId,
+                workspaceId,
+                fileId: file.id,
+                mimeType: DOCX_MIME_TYPE,
+              }),
+            )
+            .arrayBuffer();
+          return await docxToMarkdown(buffer);
+        },
+        {
+          label: "read_content_across_matters:docx-to-markdown",
+          timeoutMs: LIMITS.docxMarkdownConversionTimeoutMs,
+        },
+      ),
     catch: (cause) => cause,
   });
 
-  return Result.isError(markdownResult) ? null : markdownResult.value;
+  return Result.isError(markdownResult)
+    ? { kind: "unavailable" }
+    : { kind: "markdown", text: markdownResult.value };
 };
 
 const handleReadContentAcrossMattersTool: McpToolHandler = async ({
@@ -1317,16 +1349,42 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   );
 
   const workspaceId = row.entity.workspaceId;
-  const markdown = await loadCurrentVersionDocxMarkdown({
+  const docxOutcome = await loadCurrentVersionDocxMarkdown({
     context,
     entityId,
     workspaceId,
   });
+
   // Prefer the live DOCX-to-Markdown conversion (headings, tables, lists
   // preserved) whenever the current version holds a DOCX file; every other
-  // format (PDF, images, non-document entities, or a conversion failure)
-  // falls back to the plain text already extracted at ingestion.
-  const text = markdown ?? plaintext;
+  // format (PDF, images, non-document entities) uses the plain text already
+  // extracted at ingestion.
+  //
+  // `cursor` (the char offset windowed below) is only ever valid against the
+  // ONE text representation it was issued against. On a first read
+  // (`cursor === undefined`) nothing has been issued yet, so a conversion
+  // failure can safely fall back to plaintext. On a paginated read, the
+  // caller's cursor already encodes an offset into whatever the first read
+  // served; if the live conversion becomes `unavailable` mid-stream, silently
+  // switching to plaintext (or vice versa) would slice a different text than
+  // the cursor was computed against, producing skipped or duplicated
+  // content. Surface a retryable error instead of guessing.
+  let text: string;
+  if (docxOutcome.kind === "markdown") {
+    text = docxOutcome.text;
+  } else if (docxOutcome.kind === "not-docx") {
+    text = plaintext;
+  } else if (cursor === undefined) {
+    text = plaintext;
+  } else {
+    return structuredErrorResult({
+      code: "internal_error",
+      message:
+        "Could not continue reading this document's Markdown conversion.",
+      hint: "Retry the request with the same cursor.",
+      retryable: true,
+    });
+  }
 
   // Carry the FULL text and window it in the egress pipeline, so an
   // anonymized read redacts the whole document before slicing (slicing raw text

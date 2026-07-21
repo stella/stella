@@ -5,6 +5,8 @@ import JSZip from "jszip";
 import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -55,6 +57,17 @@ const s3FileMock = mock(() => ({ arrayBuffer: s3ArrayBufferMock }));
 
 void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({ file: s3FileMock }),
+}));
+
+// Default passthrough: just await the wrapped operation, so every existing
+// test exercises the real S3-read-and-convert logic unchanged. Individual
+// tests override this with `mockImplementationOnce` to simulate the
+// operation timing out, without an actual wall-clock wait.
+const withTimeoutMock = mock(
+  async (operation: () => Promise<unknown>) => await operation(),
+);
+void mock.module("@/api/lib/with-timeout", () => ({
+  withTimeout: withTimeoutMock,
 }));
 
 const anonymizeTextFieldsMock = mock();
@@ -572,6 +585,7 @@ describe("OpenAI-compatible MCP tools", () => {
     readDecisionHandlerMock.mockReset();
     s3FileMock.mockClear();
     s3ArrayBufferMock.mockClear();
+    withTimeoutMock.mockClear();
   });
 
   afterAll(() => {
@@ -1550,6 +1564,82 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toMatchObject({
       text: "Full document text",
     });
+  });
+
+  test("read_content_across_matters returns a retryable error instead of switching representation when a paginated DOCX conversion fails", async () => {
+    s3ArrayBufferMock.mockImplementationOnce(async () => {
+      throw new Error("S3 read failed");
+    });
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow(), [
+        {
+          type: "file",
+          id: "file_1",
+          fileName: "agreement.docx",
+          mimeType: DOCX_MIME_TYPE,
+        },
+      ]),
+    });
+
+    // Simulates a client mid-pagination: a cursor already encodes an offset
+    // into whatever representation the (unseen) first read served. This
+    // call's conversion attempt fails; the tool must not guess by silently
+    // falling back to plaintext, which could be a different length/content
+    // than the Markdown the cursor was computed against (skipped/duplicated
+    // content).
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1", cursor: encodePaginationCursor([5]) },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "internal_error",
+      message:
+        "Could not continue reading this document's Markdown conversion.",
+      hint: "Retry the request with the same cursor.",
+      retryable: true,
+    });
+  });
+
+  test("read_content_across_matters treats a DOCX conversion timeout the same as any other conversion failure", async () => {
+    withTimeoutMock.mockImplementationOnce(async () => {
+      throw new TimeoutError({
+        message: "docx-to-markdown timed out",
+        label: "read_content_across_matters:docx-to-markdown",
+        timeoutMs: 30_000,
+      });
+    });
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow(), [
+        {
+          type: "file",
+          id: "file_1",
+          fileName: "agreement.docx",
+          mimeType: DOCX_MIME_TYPE,
+        },
+      ]),
+    });
+
+    // First read: a timeout is funneled through the exact same
+    // `Result.tryPromise` catch as any other conversion failure, so it
+    // still falls back to the cached plaintext rather than hanging or
+    // erroring the whole request.
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      text: "Full document text",
+    });
+    expect(withTimeoutMock).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+    );
   });
 
   test("search anonymizes titles in anonymized mode", async () => {

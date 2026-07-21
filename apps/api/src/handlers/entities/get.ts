@@ -6,6 +6,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 const readEntityByIdParamsSchema = workspaceParams({
   entityId: tSafeId("entity", { description: "Document entity ID" }),
@@ -48,10 +49,20 @@ export const readEntityByIdHandler = async function* ({
           currentVersion: {
             columns: { id: true },
             with: {
-              // SAFETY: fields of one entity version, bounded by
-              // properties-per-workspace (LIMITS.propertiesCount).
+              // Fields of one entity version: at most one row per property
+              // (fields_property_id_entity_version_id_key), so this is
+              // structurally bounded by properties-per-workspace; `limit`
+              // pins that same bound explicitly for the lint rule below.
+              // `id` is a Bun.randomUUIDv7() primary key (time-ordered), so
+              // ordering by it gives a stable field-creation order. This
+              // MUST match the ordering `processExtraction` applies to the
+              // same relation -- both feed `findExtractionFileField`'s
+              // "first file field" selection, which must resolve to the
+              // SAME field wherever it runs (see findExtractionFileField).
               fields: {
                 columns: { id: true, propertyId: true, content: true },
+                orderBy: { id: "asc" },
+                limit: LIMITS.propertiesCount,
               },
             },
           },
