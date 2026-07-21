@@ -4354,6 +4354,64 @@
       "version": "1.6.0"
     },
     {
+      "bom-ref": "pkg:npm/@better-auth/api-key@1.6.23",
+      "description": "API Key plugin for Better Auth.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@better-auth/api-key/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@better-auth/api-key/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/auth.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://www.better-auth.com/docs/plugins/api-key"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/better-auth/better-auth.git"
+        }
+      ],
+      "group": "@better-auth",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "api-key",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@better-auth/api-key/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40better-auth/api-key@1.6.23",
+      "scope": "required",
+      "tags": [
+        "auth"
+      ],
+      "type": "library",
+      "version": "1.6.23"
+    },
+    {
       "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.6.23",
       "description": "An oauth provider plugin for Better Auth",
       "evidence": {
@@ -4376,7 +4434,7 @@
             "location": "apps/api/src/handlers/auth/metadata.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#1"
+            "location": "apps/api/src/lib/auth.ts#2"
           },
           {
             "location": "apps/api/src/mcp/auth.ts#1"
@@ -7183,6 +7241,12 @@
             "location": "apps/api/src/lib/custom-schema.ts#2"
           },
           {
+            "location": "apps/api/src/lib/permissive-route-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/permissive-route-schema.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/views-schema.ts#1"
           },
           {
@@ -7193,6 +7257,9 @@
           },
           {
             "location": "apps/api/src/handlers/properties/preview.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/permissive-route-schema.ts#3"
           },
           {
             "location": "apps/api/src/mcp/capability-tools.ts#3"
@@ -7919,7 +7986,7 @@
             "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#5"
           },
           {
-            "location": "packages/ai-catalog/src/index.ts#20"
+            "location": "packages/ai-catalog/src/index.ts#1"
           }
         ]
       },
@@ -7983,7 +8050,7 @@
             "location": "apps/api/src/lib/tanstack-ai-models.ts#8"
           },
           {
-            "location": "packages/ai-catalog/src/index.ts#21"
+            "location": "packages/ai-catalog/src/index.ts#2"
           }
         ]
       },
@@ -8196,7 +8263,7 @@
             "location": "apps/api/src/lib/tanstack-ai-models.ts#10"
           },
           {
-            "location": "packages/ai-catalog/src/index.ts#22"
+            "location": "packages/ai-catalog/src/index.ts#3"
           }
         ]
       },
@@ -8454,7 +8521,7 @@
             "location": "apps/api/src/lib/tanstack-ai-models.ts#18"
           },
           {
-            "location": "packages/ai-catalog/src/index.ts#23"
+            "location": "packages/ai-catalog/src/index.ts#4"
           }
         ]
       },
@@ -9159,6 +9226,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/use-template-fill-schema.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-queries/binding-catalog.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-queries/catalogue.ts#1"
           },
           {
@@ -9610,6 +9680,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-versions-tab.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#3"
@@ -13760,19 +13833,19 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/auth.ts#2"
-          },
-          {
             "location": "apps/api/src/lib/auth.ts#3"
           },
           {
             "location": "apps/api/src/lib/auth.ts#4"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#9"
+            "location": "apps/api/src/lib/auth.ts#5"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#17"
+            "location": "apps/api/src/lib/auth.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/auth.ts#18"
           },
           {
             "location": "apps/api/src/lib/selfhost-auth.ts#1"
@@ -13790,16 +13863,16 @@
             "location": "packages/permissions/src/index.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#4"
+            "location": "apps/api/src/lib/auth.ts#5"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#9"
+            "location": "apps/api/src/lib/auth.ts#10"
           },
           {
             "location": "apps/api/src/lib/selfhost-auth.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#17"
+            "location": "apps/api/src/lib/auth.ts#18"
           },
           {
             "location": "apps/web/src/lib/auth.ts#2"
@@ -13958,13 +14031,28 @@
             "location": "apps/api/src/handlers/ai-config/validate-provider.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/api-keys/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/api-keys/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/api-keys/mint.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/api-keys/revoke.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/api-keys/rotate.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/audit-logs/export.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/audit-logs/query.ts#1"
+            "location": "apps/api/src/handlers/audit-logs/list.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/audit-logs/read.ts#1"
+            "location": "apps/api/src/handlers/audit-logs/query.ts#1"
           },
           {
             "location": "apps/api/src/handlers/auth/metadata.ts#2"
@@ -13976,7 +14064,7 @@
             "location": "apps/api/src/handlers/billing-codes/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/billing-codes/read.ts#1"
+            "location": "apps/api/src/handlers/billing-codes/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/billing-codes/update.ts#1"
@@ -13985,7 +14073,7 @@
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#1"
+            "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/slug.ts#1"
@@ -14255,37 +14343,37 @@
             "location": "apps/api/src/handlers/contacts/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/contacts/delete-by-id.ts#1"
+            "location": "apps/api/src/handlers/contacts/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/contacts/read-by-id.ts#1"
+            "location": "apps/api/src/handlers/contacts/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/contacts/read.ts#1"
+            "location": "apps/api/src/handlers/contacts/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/contacts/search.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/contacts/update-by-id.ts#1"
+            "location": "apps/api/src/handlers/contacts/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/document-types/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/document-types/delete-by-id.ts#1"
+            "location": "apps/api/src/handlers/document-types/delete.ts#1"
           },
           {
             "location": "apps/api/src/handlers/document-types/keys.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/document-types/read-list.ts#1"
+            "location": "apps/api/src/handlers/document-types/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/document-types/reorder.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/document-types/update-by-id.ts#1"
+            "location": "apps/api/src/handlers/document-types/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/docx/patch-template.ts#11"
@@ -14360,6 +14448,9 @@
             "location": "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entities/get.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/kanban-group-condition.ts#1"
           },
           {
@@ -14367,6 +14458,9 @@
           },
           {
             "location": "apps/api/src/handlers/entities/list-folders.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/move.ts#1"
@@ -14384,9 +14478,6 @@
             "location": "apps/api/src/handlers/entities/query-entities.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-by-id.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/entities/read-field-file.ts#1"
           },
           {
@@ -14402,6 +14493,9 @@
             "location": "apps/api/src/handlers/entities/read-property-facets.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entities/read-summaries-count.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/read-summaries.ts#1"
           },
           {
@@ -14412,9 +14506,6 @@
           },
           {
             "location": "apps/api/src/handlers/entities/read-window.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/read.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/release-desktop-edit-lock.ts#1"
@@ -14462,7 +14553,7 @@
             "location": "apps/api/src/handlers/expenses/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/expenses/read.ts#1"
+            "location": "apps/api/src/handlers/expenses/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/expenses/update.ts#1"
@@ -14489,6 +14580,9 @@
             "location": "apps/api/src/handlers/files/email-to-html.ts#14"
           },
           {
+            "location": "apps/api/src/handlers/files/get.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/files/gotenberg.ts#1"
           },
           {
@@ -14501,9 +14595,6 @@
             "location": "apps/api/src/handlers/files/pdf-utils.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/files/read-by-id.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/files/routes.ts#1"
           },
           {
@@ -14513,7 +14604,7 @@
             "location": "apps/api/src/handlers/flows/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/flows/delete-by-id.ts#1"
+            "location": "apps/api/src/handlers/flows/delete.ts#1"
           },
           {
             "location": "apps/api/src/handlers/flows/read.ts#1"
@@ -14531,7 +14622,7 @@
             "location": "apps/api/src/handlers/flows/run-start.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/flows/update-by-id.ts#1"
+            "location": "apps/api/src/handlers/flows/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/flows/validate-definition.ts#1"
@@ -14550,6 +14641,9 @@
           },
           {
             "location": "apps/api/src/handlers/folio-collab/refresh-token.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/session-credentials.ts#1"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/snapshot-load.ts#1"
@@ -14576,10 +14670,10 @@
             "location": "apps/api/src/handlers/invoices/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/invoices/read-by-id.ts#1"
+            "location": "apps/api/src/handlers/invoices/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/invoices/read.ts#1"
+            "location": "apps/api/src/handlers/invoices/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/invoices/remove-entries.ts#1"
@@ -14609,10 +14703,10 @@
             "location": "apps/api/src/handlers/legislation/borme-summary.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/ingestion.ts#1"
+            "location": "apps/api/src/handlers/legislation/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/read-by-id.ts#1"
+            "location": "apps/api/src/handlers/legislation/ingestion.ts#1"
           },
           {
             "location": "apps/api/src/handlers/legislation/search.ts#1"
@@ -14693,6 +14787,9 @@
             "location": "apps/api/src/handlers/organization-settings/delete-web-search-key.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/get.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/preview.ts#1"
           },
           {
@@ -14703,9 +14800,6 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/read-deepl-availability.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/organization-settings/read.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#1"
@@ -14732,7 +14826,7 @@
             "location": "apps/api/src/handlers/playbooks/create-shared.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/delete-by-id.ts#1"
+            "location": "apps/api/src/handlers/playbooks/delete.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/derive-ask.ts#1"
@@ -14771,7 +14865,7 @@
             "location": "apps/api/src/handlers/playbooks/run.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/update-by-id.ts#1"
+            "location": "apps/api/src/handlers/playbooks/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/properties/create-batch.ts#1"
@@ -14780,19 +14874,19 @@
             "location": "apps/api/src/handlers/properties/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/delete-by-id.ts#1"
+            "location": "apps/api/src/handlers/properties/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/properties/preview.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/properties/read.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/update-by-id.ts#1"
+            "location": "apps/api/src/handlers/properties/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/properties/utils.ts#1"
@@ -14819,7 +14913,7 @@
             "location": "apps/api/src/handlers/rates/entries-update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/rates/read.ts#1"
+            "location": "apps/api/src/handlers/rates/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/rates/resolve.ts#1"
@@ -14975,10 +15069,10 @@
             "location": "apps/api/src/handlers/tasks/entity-links-read.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/my-tasks-route.ts#1"
+            "location": "apps/api/src/handlers/tasks/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/tasks/read-by-id.ts#1"
+            "location": "apps/api/src/handlers/tasks/my-tasks-route.ts#1"
           },
           {
             "location": "apps/api/src/handlers/tasks/update.ts#1"
@@ -14994,6 +15088,9 @@
           },
           {
             "location": "apps/api/src/handlers/template-recipes/recipes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/binding-catalog.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/categories-create.ts#1"
@@ -15131,7 +15228,7 @@
             "location": "apps/api/src/handlers/time-entries/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/delete-by-id.ts#1"
+            "location": "apps/api/src/handlers/time-entries/delete.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/export-csv.ts#1"
@@ -15143,10 +15240,10 @@
             "location": "apps/api/src/handlers/time-entries/export-pdf.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/read-by-id.ts#1"
+            "location": "apps/api/src/handlers/time-entries/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/read.ts#1"
+            "location": "apps/api/src/handlers/time-entries/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/split.ts#1"
@@ -15158,13 +15255,16 @@
             "location": "apps/api/src/handlers/time-entries/timer-stop.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/update-by-id.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/uploads/abort.ts#13"
+            "location": "apps/api/src/handlers/time-entries/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/uploads/agent-skill.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/create.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/delete.ts#13"
           },
           {
             "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#1"
@@ -15176,12 +15276,6 @@
             "location": "apps/api/src/handlers/uploads/entity-version.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/uploads/finalize.ts#20"
-          },
-          {
-            "location": "apps/api/src/handlers/uploads/finalize.ts#21"
-          },
-          {
             "location": "apps/api/src/handlers/uploads/lib.ts#10"
           },
           {
@@ -15191,7 +15285,10 @@
             "location": "apps/api/src/handlers/uploads/preflight-entity-create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/uploads/presign.ts#10"
+            "location": "apps/api/src/handlers/uploads/update.ts#20"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/update.ts#21"
           },
           {
             "location": "apps/api/src/handlers/usage/create-hosted-management.ts#1"
@@ -15227,7 +15324,7 @@
             "location": "apps/api/src/handlers/views/delete.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/views/read.ts#1"
+            "location": "apps/api/src/handlers/views/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/views/reorder.ts#1"
@@ -15239,10 +15336,22 @@
             "location": "apps/api/src/handlers/views/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist.ts#1"
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/anonymization-terms.ts#1"
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/archive.ts#1"
@@ -15254,7 +15363,7 @@
             "location": "apps/api/src/handlers/workspaces/create.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/delete-by-id.ts#1"
+            "location": "apps/api/src/handlers/workspaces/delete.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/duplicate.ts#1"
@@ -15270,6 +15379,9 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/infosoud-lookup.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-active.ts#1"
@@ -15293,9 +15405,6 @@
             "location": "apps/api/src/handlers/workspaces/read-workflow-target-count.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/workspaces/routes.ts#1"
           },
           {
@@ -15305,7 +15414,7 @@
             "location": "apps/api/src/handlers/workspaces/update-active.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/update-by-id.ts#1"
+            "location": "apps/api/src/handlers/workspaces/update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/workflow-start.ts#1"
@@ -15347,7 +15456,7 @@
             "location": "apps/api/src/lib/api-handlers.ts#2"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#18"
+            "location": "apps/api/src/lib/auth.ts#19"
           },
           {
             "location": "apps/api/src/lib/azure-foundry.ts#1"
@@ -15555,6 +15664,9 @@
           },
           {
             "location": "apps/api/src/mcp/capability-tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/mcp/cli-support-band.ts#1"
           },
           {
             "location": "apps/api/src/mcp/compat-tools.ts#1"
@@ -15807,6 +15919,9 @@
           },
           {
             "location": "packages/scripts/src/i18n-lint.ts#27"
+          },
+          {
+            "location": "packages/scripts/src/model-catalog-capabilities-gen.ts#1"
           },
           {
             "location": "packages/skills/scripts/generate-blueprints-manifest.ts#1"
@@ -16944,7 +17059,7 @@
             "location": "apps/api/src/handlers/billing-codes/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/billing-codes/read.ts#2"
+            "location": "apps/api/src/handlers/billing-codes/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/billing-codes/update.ts#2"
@@ -16965,6 +17080,9 @@
             "location": "apps/api/src/handlers/case-law/decisions/facets.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/get.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/language.ts#1"
           },
           {
@@ -16972,9 +17090,6 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-sql.ts#1"
@@ -17139,19 +17254,19 @@
             "location": "apps/api/src/handlers/contacts/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/contacts/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/contacts/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/contacts/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/contacts/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/contacts/read.ts#2"
+            "location": "apps/api/src/handlers/contacts/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/contacts/search.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/contacts/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/contacts/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/dev/routes.ts#1"
@@ -17160,16 +17275,16 @@
             "location": "apps/api/src/handlers/document-types/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/document-types/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/document-types/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/document-types/read-list.ts#2"
+            "location": "apps/api/src/handlers/document-types/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/document-types/reorder.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/document-types/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/document-types/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/docx-suggestions/create.ts#2"
@@ -17280,6 +17395,9 @@
             "location": "apps/api/src/handlers/entities/read-property-facets.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/entities/read-summaries-count.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/entities/read-summaries.ts#2"
           },
           {
@@ -17331,7 +17449,7 @@
             "location": "apps/api/src/handlers/expenses/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/expenses/read.ts#2"
+            "location": "apps/api/src/handlers/expenses/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/expenses/update.ts#2"
@@ -17352,13 +17470,13 @@
             "location": "apps/api/src/handlers/files/field-file-refs.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/files/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/files/get.ts#2"
           },
           {
             "location": "apps/api/src/handlers/flows/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/flows/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/flows/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/flows/read.ts#2"
@@ -17370,7 +17488,7 @@
             "location": "apps/api/src/handlers/flows/run-start.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/flows/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/flows/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/flows/validate-definition.ts#2"
@@ -17397,10 +17515,10 @@
             "location": "apps/api/src/handlers/invoices/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/invoices/lock-invoice.ts#1"
+            "location": "apps/api/src/handlers/invoices/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/invoices/read.ts#2"
+            "location": "apps/api/src/handlers/invoices/lock-invoice.ts#1"
           },
           {
             "location": "apps/api/src/handlers/invoices/remove-entries.ts#2"
@@ -17415,10 +17533,10 @@
             "location": "apps/api/src/handlers/legislation/corpus-index.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/ingestion.ts#2"
+            "location": "apps/api/src/handlers/legislation/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/legislation/ingestion.ts#2"
           },
           {
             "location": "apps/api/src/handlers/legislation/redistribution.ts#1"
@@ -17487,7 +17605,7 @@
             "location": "apps/api/src/handlers/playbooks/create-shared.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/playbooks/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/list-versions.ts#2"
@@ -17511,7 +17629,7 @@
             "location": "apps/api/src/handlers/playbooks/route-playbooks.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/playbooks/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/properties/create-batch.ts#2"
@@ -17520,13 +17638,13 @@
             "location": "apps/api/src/handlers/properties/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/properties/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/properties/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/properties/property-lock.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/properties/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/rates/create.ts#2"
@@ -17547,7 +17665,7 @@
             "location": "apps/api/src/handlers/rates/entries-update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/rates/read.ts#2"
+            "location": "apps/api/src/handlers/rates/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/rates/resolve.ts#3"
@@ -17694,7 +17812,7 @@
             "location": "apps/api/src/handlers/time-entries/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/time-entries/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/time-entries/export-csv.ts#2"
@@ -17706,10 +17824,10 @@
             "location": "apps/api/src/handlers/time-entries/export-pdf.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/time-entries/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/read.ts#12"
+            "location": "apps/api/src/handlers/time-entries/list.ts#12"
           },
           {
             "location": "apps/api/src/handlers/time-entries/split.ts#2"
@@ -17721,13 +17839,13 @@
             "location": "apps/api/src/handlers/time-entries/timer-stop.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/update-by-id.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/uploads/abort.ts#14"
+            "location": "apps/api/src/handlers/time-entries/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/uploads/agent-skill.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/delete.ts#14"
           },
           {
             "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#2"
@@ -17739,7 +17857,7 @@
             "location": "apps/api/src/handlers/uploads/entity-version.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/uploads/finalize.ts#22"
+            "location": "apps/api/src/handlers/uploads/update.ts#22"
           },
           {
             "location": "apps/api/src/handlers/usage/create-hosted-management.ts#2"
@@ -17772,7 +17890,7 @@
             "location": "apps/api/src/handlers/views/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/views/read.ts#2"
+            "location": "apps/api/src/handlers/views/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/views/reorder.ts#2"
@@ -17781,10 +17899,22 @@
             "location": "apps/api/src/handlers/views/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist.ts#2"
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/anonymization-terms.ts#2"
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/archive.ts#2"
@@ -17796,13 +17926,16 @@
             "location": "apps/api/src/handlers/workspaces/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/workspaces/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/duplicate.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/list.ts#13"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-activity.ts#2"
@@ -17817,16 +17950,13 @@
             "location": "apps/api/src/handlers/workspaces/read-overview.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read.ts#13"
-          },
-          {
             "location": "apps/api/src/handlers/workspaces/unarchive.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/update-active.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/workspaces/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/workspace-contacts-create.ts#2"
@@ -17868,10 +17998,16 @@
             "location": "apps/api/src/lib/auth-artifacts.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#19"
+            "location": "apps/api/src/lib/auth-artifacts.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/auth-artifacts.ts#3"
           },
           {
             "location": "apps/api/src/lib/auth.ts#20"
+          },
+          {
+            "location": "apps/api/src/lib/auth.ts#21"
           },
           {
             "location": "apps/api/src/lib/case-law/case-law-config-store.ts#1"
@@ -17977,6 +18113,12 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/pg-fts-query.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/machine-api-key-queries.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/machine-api-key-scope.ts#1"
           },
           {
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#9"
@@ -18151,6 +18293,9 @@
           },
           {
             "location": "apps/api/src/lib/account-deletion-steps.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/auth-artifacts.ts#3"
           },
           {
             "location": "apps/api/src/lib/scheduler/runner.ts#3"
@@ -18332,7 +18477,7 @@
             "location": "apps/api/src/handlers/billing-codes/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/billing-codes/read.ts#2"
+            "location": "apps/api/src/handlers/billing-codes/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/billing-codes/update.ts#2"
@@ -18353,6 +18498,9 @@
             "location": "apps/api/src/handlers/case-law/decisions/facets.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/get.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/language.ts#1"
           },
           {
@@ -18360,9 +18508,6 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-sql.ts#1"
@@ -18527,19 +18672,19 @@
             "location": "apps/api/src/handlers/contacts/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/contacts/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/contacts/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/contacts/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/contacts/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/contacts/read.ts#2"
+            "location": "apps/api/src/handlers/contacts/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/contacts/search.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/contacts/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/contacts/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/dev/routes.ts#1"
@@ -18548,16 +18693,16 @@
             "location": "apps/api/src/handlers/document-types/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/document-types/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/document-types/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/document-types/read-list.ts#2"
+            "location": "apps/api/src/handlers/document-types/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/document-types/reorder.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/document-types/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/document-types/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/docx-suggestions/create.ts#2"
@@ -18668,6 +18813,9 @@
             "location": "apps/api/src/handlers/entities/read-property-facets.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/entities/read-summaries-count.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/entities/read-summaries.ts#2"
           },
           {
@@ -18719,7 +18867,7 @@
             "location": "apps/api/src/handlers/expenses/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/expenses/read.ts#2"
+            "location": "apps/api/src/handlers/expenses/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/expenses/update.ts#2"
@@ -18740,13 +18888,13 @@
             "location": "apps/api/src/handlers/files/field-file-refs.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/files/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/files/get.ts#2"
           },
           {
             "location": "apps/api/src/handlers/flows/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/flows/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/flows/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/flows/read.ts#2"
@@ -18758,7 +18906,7 @@
             "location": "apps/api/src/handlers/flows/run-start.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/flows/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/flows/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/flows/validate-definition.ts#2"
@@ -18785,10 +18933,10 @@
             "location": "apps/api/src/handlers/invoices/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/invoices/lock-invoice.ts#1"
+            "location": "apps/api/src/handlers/invoices/list.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/invoices/read.ts#2"
+            "location": "apps/api/src/handlers/invoices/lock-invoice.ts#1"
           },
           {
             "location": "apps/api/src/handlers/invoices/remove-entries.ts#2"
@@ -18803,10 +18951,10 @@
             "location": "apps/api/src/handlers/legislation/corpus-index.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/ingestion.ts#2"
+            "location": "apps/api/src/handlers/legislation/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/legislation/ingestion.ts#2"
           },
           {
             "location": "apps/api/src/handlers/legislation/redistribution.ts#1"
@@ -18875,7 +19023,7 @@
             "location": "apps/api/src/handlers/playbooks/create-shared.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/playbooks/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/list-versions.ts#2"
@@ -18899,7 +19047,7 @@
             "location": "apps/api/src/handlers/playbooks/route-playbooks.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/playbooks/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/properties/create-batch.ts#2"
@@ -18908,13 +19056,13 @@
             "location": "apps/api/src/handlers/properties/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/properties/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/properties/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/properties/property-lock.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/properties/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/rates/create.ts#2"
@@ -18935,7 +19083,7 @@
             "location": "apps/api/src/handlers/rates/entries-update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/rates/read.ts#2"
+            "location": "apps/api/src/handlers/rates/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/rates/resolve.ts#3"
@@ -19082,7 +19230,7 @@
             "location": "apps/api/src/handlers/time-entries/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/time-entries/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/time-entries/export-csv.ts#2"
@@ -19094,10 +19242,10 @@
             "location": "apps/api/src/handlers/time-entries/export-pdf.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/time-entries/get.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/read.ts#12"
+            "location": "apps/api/src/handlers/time-entries/list.ts#12"
           },
           {
             "location": "apps/api/src/handlers/time-entries/split.ts#2"
@@ -19109,13 +19257,13 @@
             "location": "apps/api/src/handlers/time-entries/timer-stop.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/update-by-id.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/uploads/abort.ts#14"
+            "location": "apps/api/src/handlers/time-entries/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/uploads/agent-skill.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/delete.ts#14"
           },
           {
             "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#2"
@@ -19127,7 +19275,7 @@
             "location": "apps/api/src/handlers/uploads/entity-version.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/uploads/finalize.ts#22"
+            "location": "apps/api/src/handlers/uploads/update.ts#22"
           },
           {
             "location": "apps/api/src/handlers/usage/create-hosted-management.ts#2"
@@ -19160,7 +19308,7 @@
             "location": "apps/api/src/handlers/views/delete.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/views/read.ts#2"
+            "location": "apps/api/src/handlers/views/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/views/reorder.ts#2"
@@ -19169,10 +19317,22 @@
             "location": "apps/api/src/handlers/views/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist.ts#2"
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/anonymization-terms.ts#2"
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/archive.ts#2"
@@ -19184,13 +19344,16 @@
             "location": "apps/api/src/handlers/workspaces/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/delete-by-id.ts#2"
+            "location": "apps/api/src/handlers/workspaces/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/duplicate.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/list.ts#13"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-activity.ts#2"
@@ -19205,16 +19368,13 @@
             "location": "apps/api/src/handlers/workspaces/read-overview.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read.ts#13"
-          },
-          {
             "location": "apps/api/src/handlers/workspaces/unarchive.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/update-active.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/update-by-id.ts#2"
+            "location": "apps/api/src/handlers/workspaces/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/workspace-contacts-create.ts#2"
@@ -19256,10 +19416,16 @@
             "location": "apps/api/src/lib/auth-artifacts.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#19"
+            "location": "apps/api/src/lib/auth-artifacts.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/auth-artifacts.ts#3"
           },
           {
             "location": "apps/api/src/lib/auth.ts#20"
+          },
+          {
+            "location": "apps/api/src/lib/auth.ts#21"
           },
           {
             "location": "apps/api/src/lib/case-law/case-law-config-store.ts#1"
@@ -19365,6 +19531,12 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/pg-fts-query.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/machine-api-key-queries.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/machine-api-key-scope.ts#1"
           },
           {
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#9"
@@ -19539,6 +19711,9 @@
           },
           {
             "location": "apps/api/src/lib/account-deletion-steps.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/auth-artifacts.ts#3"
           },
           {
             "location": "apps/api/src/lib/scheduler/runner.ts#3"
@@ -19736,6 +19911,24 @@
             "location": "apps/api/src/handlers/ai-config/validate-provider.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/api-keys/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/api-keys/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/api-keys/mint.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/api-keys/revoke.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/api-keys/rotate.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/api-keys/routes.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/audit-logs/query.ts#4"
           },
           {
@@ -19757,7 +19950,7 @@
             "location": "apps/api/src/handlers/billing-codes/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/billing-codes/read.ts#3"
+            "location": "apps/api/src/handlers/billing-codes/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/billing-codes/routes.ts#1"
@@ -19769,13 +19962,13 @@
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#11"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/get.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/search-schema.ts#1"
@@ -19886,10 +20079,10 @@
             "location": "apps/api/src/handlers/clauses/export.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/clauses/import.ts#3"
+            "location": "apps/api/src/handlers/clauses/get.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/read-by-id.ts#1"
+            "location": "apps/api/src/handlers/clauses/import.ts#3"
           },
           {
             "location": "apps/api/src/handlers/clauses/read-version.ts#1"
@@ -19952,13 +20145,13 @@
             "location": "apps/api/src/handlers/contacts/create.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/contacts/delete-by-id.ts#3"
+            "location": "apps/api/src/handlers/contacts/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/contacts/read-by-id.ts#3"
+            "location": "apps/api/src/handlers/contacts/get.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/contacts/read.ts#3"
+            "location": "apps/api/src/handlers/contacts/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/contacts/routes.ts#1"
@@ -19967,10 +20160,10 @@
             "location": "apps/api/src/handlers/contacts/search.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/contacts/update-by-id.ts#3"
+            "location": "apps/api/src/handlers/contacts/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/contacts/update-by-id.ts#4"
+            "location": "apps/api/src/handlers/contacts/update.ts#4"
           },
           {
             "location": "apps/api/src/handlers/dev/routes.ts#2"
@@ -20069,6 +20262,9 @@
             "location": "apps/api/src/handlers/entities/list-folders.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/entities/list.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/entities/move.ts#3"
           },
           {
@@ -20105,6 +20301,9 @@
             "location": "apps/api/src/handlers/entities/read-property-facets.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/entities/read-summaries-count.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/entities/read-summaries.ts#3"
           },
           {
@@ -20112,9 +20311,6 @@
           },
           {
             "location": "apps/api/src/handlers/entities/read-window.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/read.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/release-desktop-edit-lock.ts#3"
@@ -20162,7 +20358,7 @@
             "location": "apps/api/src/handlers/expenses/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/expenses/read.ts#3"
+            "location": "apps/api/src/handlers/expenses/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/expenses/routes.ts#1"
@@ -20195,7 +20391,7 @@
             "location": "apps/api/src/handlers/fields/upsert-by-id.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/files/read-by-id.ts#3"
+            "location": "apps/api/src/handlers/files/get.ts#3"
           },
           {
             "location": "apps/api/src/handlers/files/routes.ts#2"
@@ -20210,25 +20406,13 @@
             "location": "apps/api/src/handlers/flows/schema.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/authorize.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/folio-collab/cancel.ts#3"
-          },
-          {
             "location": "apps/api/src/handlers/folio-collab/checkpoint.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/folio-collab/finalize.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/folio-collab/refresh-token.ts#2"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/folio-collab/snapshot-load.ts#2"
+            "location": "apps/api/src/handlers/folio-collab/session-credentials.ts#2"
           },
           {
             "location": "apps/api/src/handlers/folio-collab/snapshot-store.ts#2"
@@ -20246,7 +20430,7 @@
             "location": "apps/api/src/handlers/invoices/create.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/invoices/read.ts#3"
+            "location": "apps/api/src/handlers/invoices/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/invoices/remove-entries.ts#3"
@@ -20282,7 +20466,7 @@
             "location": "apps/api/src/handlers/legislation/corpus-routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/read-by-id.ts#3"
+            "location": "apps/api/src/handlers/legislation/get.ts#3"
           },
           {
             "location": "apps/api/src/handlers/legislation/routes.ts#1"
@@ -20340,9 +20524,6 @@
           },
           {
             "location": "apps/api/src/handlers/operator/query.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/operator/query.ts#5"
           },
           {
             "location": "apps/api/src/handlers/operator/routes.ts#1"
@@ -20429,7 +20610,7 @@
             "location": "apps/api/src/handlers/properties/suggest-prompt.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/properties/update-by-id.ts#3"
+            "location": "apps/api/src/handlers/properties/update.ts#3"
           },
           {
             "location": "apps/api/src/handlers/rates/create.ts#3"
@@ -20450,7 +20631,7 @@
             "location": "apps/api/src/handlers/rates/entries-update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/rates/read.ts#3"
+            "location": "apps/api/src/handlers/rates/list.ts#3"
           },
           {
             "location": "apps/api/src/handlers/rates/resolve.ts#4"
@@ -20759,10 +20940,10 @@
             "location": "apps/api/src/handlers/time-entries/create.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/delete-by-id.ts#3"
+            "location": "apps/api/src/handlers/time-entries/delete.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/delete-by-id.ts#4"
+            "location": "apps/api/src/handlers/time-entries/delete.ts#4"
           },
           {
             "location": "apps/api/src/handlers/time-entries/export-csv.ts#3"
@@ -20783,7 +20964,7 @@
             "location": "apps/api/src/handlers/time-entries/export-pdf.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/read.ts#13"
+            "location": "apps/api/src/handlers/time-entries/list.ts#13"
           },
           {
             "location": "apps/api/src/handlers/time-entries/routes.ts#1"
@@ -20795,13 +20976,19 @@
             "location": "apps/api/src/handlers/time-entries/timer-start.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/update-by-id.ts#3"
+            "location": "apps/api/src/handlers/time-entries/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/update-by-id.ts#4"
+            "location": "apps/api/src/handlers/time-entries/update.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/uploads/abort.ts#15"
+            "location": "apps/api/src/handlers/uploads/create.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/create.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/delete.ts#15"
           },
           {
             "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#3"
@@ -20810,19 +20997,13 @@
             "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/uploads/finalize.ts#23"
-          },
-          {
             "location": "apps/api/src/handlers/uploads/preflight-entity-create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/uploads/presign.ts#11"
-          },
-          {
-            "location": "apps/api/src/handlers/uploads/presign.ts#12"
-          },
-          {
             "location": "apps/api/src/handlers/uploads/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/update.ts#23"
           },
           {
             "location": "apps/api/src/handlers/usage/create-hosted-setup.ts#3"
@@ -20867,10 +21048,19 @@
             "location": "apps/api/src/handlers/views/table-export.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist.ts#3"
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/create.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/anonymization-terms.ts#3"
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/create.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms/delete.ts#3"
           },
           {
             "location": "apps/api/src/handlers/workspaces/cell-retry.ts#3"
@@ -20891,13 +21081,13 @@
             "location": "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/get.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/infosoud-common.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-activity.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/workspaces/read-by-id.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-justifications.ts#3"
@@ -20909,10 +21099,10 @@
             "location": "apps/api/src/handlers/workspaces/routes.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/update-by-id.ts#3"
+            "location": "apps/api/src/handlers/workspaces/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/update-by-id.ts#4"
+            "location": "apps/api/src/handlers/workspaces/update.ts#4"
           },
           {
             "location": "apps/api/src/handlers/workspaces/workflow-start.ts#2"
@@ -20936,7 +21126,7 @@
             "location": "apps/api/src/lib/api-handlers.ts#9"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#21"
+            "location": "apps/api/src/lib/auth.ts#22"
           },
           {
             "location": "apps/api/src/lib/conditions/contract.ts#11"
@@ -20949,6 +21139,12 @@
           },
           {
             "location": "apps/api/src/lib/invalidate-query-macro.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/permissive-route-schema.ts#4"
+          },
+          {
+            "location": "apps/api/src/lib/permissive-route-schema.ts#5"
           },
           {
             "location": "apps/api/src/lib/security-headers.ts#1"
@@ -21866,10 +22062,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-versions-tab.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx#10"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#12"
+            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#15"
@@ -25773,7 +25969,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-versions-tab.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx#11"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/use-template-dialog.tsx#1"
@@ -25782,7 +25978,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#13"
+            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#6"
@@ -26502,6 +26698,9 @@
             "location": "apps/api/src/env.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/api-keys/mint.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#12"
           },
           {
@@ -26658,6 +26857,9 @@
             "location": "apps/api/src/lib/tanstack-ai-generate.ts#10"
           },
           {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#20"
+          },
+          {
             "location": "apps/api/src/lib/tanstack-ai-schema.ts#7"
           },
           {
@@ -26677,6 +26879,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/verdict-engine.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/api-key-auth.ts#1"
           },
           {
             "location": "apps/api/src/mcp/billing-tools.ts#3"
@@ -26764,6 +26969,9 @@
           },
           {
             "location": "apps/web/src/routes/law/-case-detail.logic.ts#3"
+          },
+          {
+            "location": "packages/ai-catalog/src/index.ts#26"
           },
           {
             "location": "packages/anonymize-chat/src/index.ts#1"
