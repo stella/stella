@@ -2301,7 +2301,8 @@
       "owner": "Właściciel"
     },
     "settings": "Ustawienia organizacji",
-    "settingsDescription": "Edytuj nazwę i slug organizacji"
+    "settingsDescription": "Edytuj nazwę i slug organizacji",
+    "switchOrganization": "Przełącz organizację"
   },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",

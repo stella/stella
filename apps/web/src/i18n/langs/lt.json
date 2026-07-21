@@ -2301,7 +2301,8 @@
       "owner": "Savininkas"
     },
     "settings": "Organizacijos nustatymai",
-    "settingsDescription": "Redaguokite organizacijos pavadinimą ir slug"
+    "settingsDescription": "Redaguokite organizacijos pavadinimą ir slug",
+    "switchOrganization": "Pakeisti organizaciją"
   },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",

@@ -2301,7 +2301,8 @@
       "owner": "Eigentümer"
     },
     "settings": "Organisationseinstellungen",
-    "settingsDescription": "Name und Slug der Organisation bearbeiten"
+    "settingsDescription": "Name und Slug der Organisation bearbeiten",
+    "switchOrganization": "Organisation wechseln"
   },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",

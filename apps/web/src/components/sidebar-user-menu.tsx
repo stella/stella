@@ -1,5 +1,7 @@
+import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
+  BuildingIcon,
   ChevronsUpDownIcon,
   GlobeIcon,
   LogOutIcon,
@@ -30,6 +32,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { DevSidebarGroup } from "@/components/dev-sidebar-group";
@@ -37,13 +40,18 @@ import { SidebarMenuItem, useSidebar } from "@/components/sidebar";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useSignOut } from "@/hooks/use-sign-out";
 import {
   LANG_ENDONYMS,
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { useAnalytics } from "@/lib/analytics/provider";
+import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
+import { toAuthClientError } from "@/lib/errors/auth";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { getInitials } from "@/lib/get-initials";
 import { roleOptions } from "@/routes/-queries";
 import { organizationSummaryOptions } from "@/routes/_protected.organization/-queries";
@@ -76,6 +84,34 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
     organizationSummaryOptions(user.activeOrganizationId),
   );
   const { data: role } = useChromeQuery(roleOptions);
+  const { data: organizations } = authClient.useListOrganizations();
+  const invalidateSession = useInvalidateSession();
+  const analytics = useAnalytics();
+
+  const { isPending: isSwitchPending, mutate: switchOrg } = useMutation({
+    mutationFn: async (organizationId: string) => {
+      const { error } = await authClient.organization.setActive({
+        organizationId,
+      });
+
+      if (error) {
+        stellaToast.add({
+          title: userErrorFromThrown(
+            toAuthClientError(error),
+            t("errors.actionFailed"),
+          ),
+          type: "error",
+        });
+        throw toAuthClientError(error);
+      }
+
+      await invalidateSession.mutateAsync();
+      await navigate({ to: "/", replace: true });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
 
   const displayName = user.name ?? user.email;
   const orgName = organization?.name;
@@ -153,18 +189,53 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
         <MenuPopup align="end" className="w-56" side="top" sideOffset={8}>
           {orgName && (
             <>
-              <MenuGroup>
-                <MenuGroupLabel className="pb-1 text-sm">
-                  {orgName}
-                </MenuGroupLabel>
-                {role && (
-                  <div className="px-2 pb-1.5">
-                    <span className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium select-none">
-                      {t(`organization.roles.${role}`)}
-                    </span>
-                  </div>
-                )}
-              </MenuGroup>
+              {organizations && organizations.length > 1 ? (
+                <MenuSub>
+                  <MenuSubTrigger>
+                    <BuildingIcon />
+                    {orgName}
+                  </MenuSubTrigger>
+                  <MenuSubPopup>
+                    <MenuGroup>
+                      <MenuGroupLabel>
+                        {t("organization.switchOrganization")}
+                      </MenuGroupLabel>
+                      <MenuRadioGroup value={user.activeOrganizationId}>
+                        {organizations.map((org) => (
+                          <MenuRadioItem
+                            key={org.id}
+                            disabled={
+                              isSwitchPending ||
+                              org.id === user.activeOrganizationId
+                            }
+                            onClick={() => {
+                              if (org.id !== user.activeOrganizationId) {
+                                switchOrg(org.id);
+                              }
+                            }}
+                            value={org.id}
+                          >
+                            {org.name}
+                          </MenuRadioItem>
+                        ))}
+                      </MenuRadioGroup>
+                    </MenuGroup>
+                  </MenuSubPopup>
+                </MenuSub>
+              ) : (
+                <MenuGroup>
+                  <MenuGroupLabel className="pb-1 text-sm">
+                    {orgName}
+                  </MenuGroupLabel>
+                </MenuGroup>
+              )}
+              {role && (
+                <div className="px-2 pb-1.5">
+                  <span className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium select-none">
+                    {t(`organization.roles.${role}`)}
+                  </span>
+                </div>
+              )}
               <MenuSeparator />
             </>
           )}

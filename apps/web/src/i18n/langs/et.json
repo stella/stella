@@ -2301,7 +2301,8 @@
       "owner": "Omanik"
     },
     "settings": "Organisatsiooni seaded",
-    "settingsDescription": "Muutke oma organisatsiooni nime ja slugi"
+    "settingsDescription": "Muutke oma organisatsiooni nime ja slugi",
+    "switchOrganization": "Vaheta organisatsiooni"
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
