@@ -36,7 +36,15 @@ const compactMenus = [
       class={`nav-link flex cursor-pointer list-none items-center gap-1 ${current === "product" ? "is-current" : ""}`}
     >
       {t("nav.product")}
-      <span class="nav-caret text-[0.6rem] transition-transform" aria-hidden="true">▾</span>
+      <svg aria-hidden="true" class="nav-caret h-3 w-3 shrink-0" fill="none" viewBox="0 0 12 12">
+        <path
+          d="M3 4.5L6 7.5L9 4.5"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="1.5"
+        />
+      </svg>
     </summary>
     <div
       class="nav-menu nav-mega absolute start-0 top-full z-50 mt-2 w-[min(48rem,calc(100vw-16rem))] overflow-hidden rounded-xl border"
@@ -83,8 +91,14 @@ const compactMenus = [
                 data-pane={p.slug}
               >
                 <ProductMediaFrame media={p.hero} compact deferThemeImage thumbnail />
-                <span class="mt-2 block text-xs font-medium leading-[1.4]" style="color: var(--foreground)">
+                <span class="mt-3 block text-base font-medium leading-snug" style="color: var(--foreground)">
                   {p.title}
+                </span>
+                <span
+                  class="mt-1 block text-sm leading-[1.5] line-clamp-3"
+                  style="color: var(--muted-foreground)"
+                >
+                  {p.summary}
                 </span>
               </a>
             ))
@@ -98,7 +112,15 @@ const compactMenus = [
     <details class="nav-dropdown group relative" data-nav-dropdown name="primary-navigation">
       <summary class={`nav-link flex cursor-pointer list-none items-center gap-1 ${menu.isCurrent ? "is-current" : ""}`}>
         {menu.label}
-        <span class="nav-caret text-[0.6rem] transition-transform" aria-hidden="true">▾</span>
+        <svg aria-hidden="true" class="nav-caret h-3 w-3 shrink-0" fill="none" viewBox="0 0 12 12">
+          <path
+            d="M3 4.5L6 7.5L9 4.5"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+          />
+        </svg>
       </summary>
       <div
         class="nav-menu absolute start-0 top-full z-50 mt-2 w-48 rounded-xl border p-2"
@@ -145,8 +167,19 @@ const compactMenus = [
   .nav-dropdown summary::-webkit-details-marker {
     display: none;
   }
+
+  /* Stroke chevron (replaces the old glyph triangle): symmetric, so it needs
+     no RTL mirroring, just a plain 180deg rotate on open. */
+  .nav-caret {
+    transition: transform 150ms ease;
+  }
   .nav-dropdown[open] .nav-caret {
     transform: rotate(180deg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nav-caret {
+      transition: none;
+    }
   }
 
   .nav-menu {
@@ -219,6 +252,23 @@ const compactMenus = [
   .nav-mega-pane.is-active {
     opacity: 1;
     pointer-events: auto;
+  }
+
+  /* Frameless previews: the pane's own media (ThemeImage's border + shadow,
+     or the recorded scene's own window chrome) is the only frame, matching
+     the homepage's frameless story windows (HomeProductStory .story-window /
+     .story-shot-main). ProductMediaFrame's outer glass frame is shared with
+     product-page heroes, so it is stripped here rather than in that
+     component; !important overrides its own scoped background/shadow rule
+     and the compact variant's padding/radius utility classes. */
+  .nav-mega-pane :global(.product-media) {
+    background: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+  .nav-mega-pane :global(.product-media-sheen) {
+    display: none !important;
   }
 </style>
 
