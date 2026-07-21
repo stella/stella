@@ -293,11 +293,41 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     expect(server.calls).toHaveLength(0);
   });
 
-  test("--input is exclusive with value flags", async () => {
+  test("value flags COMPOSE with --input; the explicit flag wins over its path", async () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
-      capabilityId: "a.b",
-      flags: [stringFlag("--name", "body", "name")],
+      capabilityId: "uploads.create",
+      flags: [stringFlag("--workspace", "params", "workspaceId", true)],
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    // The body rides --input; the required --workspace flag overlays
+    // params.workspaceId (and overrides the stale id present in the JSON).
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: {
+        input:
+          '{"body":{"purpose":"agent_skill"},"params":{"workspaceId":"stale"}}',
+        workspace: "ws-1",
+      },
+      spec,
+    });
+    server.stop();
+    expect(tty.exitCode()).toBeUndefined();
+    expect(lastInvoke(server.calls)["input"]).toEqual({
+      body: { purpose: "agent_skill" },
+      params: { workspaceId: "ws-1" },
+    });
+  });
+
+  test("a required flag supplied only via --input's path is accepted", async () => {
+    const server = startServer({ kind: "echo" });
+    const spec = capSpec({
+      capabilityId: "uploads.create",
+      flags: [stringFlag("--workspace", "params", "workspaceId", true)],
     });
     const tty = makeTtyContext({
       serverUrl: server.url,
@@ -306,12 +336,36 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     });
     await runCapabilityCommand({
       context: tty.context,
-      flags: { input: "{}", name: "x" },
+      flags: { input: '{"params":{"workspaceId":"ws-9"}}' },
+      spec,
+    });
+    server.stop();
+    expect(tty.exitCode()).toBeUndefined();
+    expect(lastInvoke(server.calls)["input"]).toEqual({
+      params: { workspaceId: "ws-9" },
+    });
+  });
+
+  test("a required flag absent from both flags and --input still errors (exit 2, no call)", async () => {
+    const server = startServer({ kind: "echo" });
+    const spec = capSpec({
+      capabilityId: "uploads.create",
+      flags: [stringFlag("--workspace", "params", "workspaceId", true)],
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { input: '{"body":{"purpose":"agent_skill"}}' },
       spec,
     });
     server.stop();
     expect(tty.exitCode()).toBe(EXIT_CODES.validation);
-    expect(tty.stderrText()).toContain("exclusive");
+    expect(server.calls).toHaveLength(0);
+    expect(tty.stderrText()).toContain("--workspace");
   });
 });
 

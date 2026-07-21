@@ -145,6 +145,27 @@ export const setPath = (
   node[segments.at(-1) ?? path] = value;
 };
 
+/**
+ * True when `path` (dot form, e.g. `body.workspaceId`) already resolves to a
+ * defined value inside `target`. Used to decide whether a required flag is
+ * satisfied by the `--input` JSON when the flag itself is unset (the flag and
+ * the JSON compose; see `runLeafCommand`/`runCapabilityCommand`).
+ */
+export const hasInputPath = (
+  target: Record<string, unknown>,
+  path: string,
+): boolean => {
+  const segments = path.split(".");
+  let node: unknown = target;
+  for (const segment of segments) {
+    if (!isRecord(node)) {
+      return false;
+    }
+    node = node[segment];
+  }
+  return node !== undefined;
+};
+
 type ArgsResult =
   | { ok: true; args: Record<string, unknown> }
   | { ok: false; message: string };
@@ -271,12 +292,19 @@ export const coerceFlagValue = async (
   return Result.ok(raw);
 };
 
-/** Build the tool-args object from parsed value flags (spec S3). Exported for tests. */
+/**
+ * Overlay parsed value flags onto `base` (spec S3). `base` is the args object
+ * built from `--input` (or `{}` when no `--input` was given): each SET flag is
+ * coerced and written at its `prop` path, so an explicit flag WINS over the same
+ * path in the JSON. A required flag is satisfied either by being set or by
+ * already being present in `base`, so `--input` can carry it. Exported for tests.
+ */
 export const buildArgsFromFlags = async (
   spec: LeafCommandSpec,
   flags: LeafFlags,
+  base: Record<string, unknown> = {},
 ): Promise<ArgsResult> => {
-  const args: Record<string, unknown> = {};
+  const args = base;
 
   for (const flagSpec of spec.flags) {
     const value = flags[flagKey(flagSpec)];
@@ -291,9 +319,10 @@ export const buildArgsFromFlags = async (
     setPath(args, flagSpec.prop, coerced.value);
   }
 
-  // Enforce required flags (spec S3): missing -> usage error (exit 2 upstream).
+  // Enforce required flags (spec S3): unset AND absent from `--input` -> usage
+  // error (exit 2 upstream), naming the missing flag.
   for (const flagSpec of spec.flags) {
-    if (flagSpec.required && flags[flagKey(flagSpec)] === undefined) {
+    if (flagSpec.required && !hasInputPath(args, flagSpec.prop)) {
       return { ok: false, message: `missing required flag ${flagSpec.flag}` };
     }
   }
@@ -952,32 +981,27 @@ export const runLeafCommand = async ({
     return;
   }
 
+  // `--input` and value flags COMPOSE: the JSON is the base, then each explicit
+  // flag overlays its own path on top (flag wins). This lets a required value
+  // flag (e.g. --workspace, advertised on the usage line) coexist with a body
+  // passed through --input, instead of forcing the caller to hand-relocate it
+  // into the JSON under a different key.
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  let args: Record<string, unknown>;
-  if (typeof inputRaw === "string") {
-    const conflicting = spec.flags.some(
-      (flagSpec) => flags[flagKey(flagSpec)] !== undefined,
-    );
-    if (conflicting) {
-      writers.stderr("--input is exclusive with per-tool value flags.\n");
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    const parsed = await buildArgsFromInput({ inputRaw, spec, writers });
-    if (parsed === undefined) {
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    args = parsed;
-  } else {
-    const built = await buildArgsFromFlags(spec, flags);
-    if (!built.ok) {
-      writers.stderr(`${built.message}\n`);
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    args = built.args;
+  const argsBase =
+    typeof inputRaw === "string"
+      ? await buildArgsFromInput({ inputRaw, spec, writers })
+      : {};
+  if (argsBase === undefined) {
+    setExit(context, EXIT_CODES.validation);
+    return;
   }
+  const built = await buildArgsFromFlags(spec, flags, argsBase);
+  if (!built.ok) {
+    writers.stderr(`${built.message}\n`);
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+  let args = built.args;
 
   if (spec.discriminatorInject !== undefined) {
     args = { ...args, ...spec.discriminatorInject };

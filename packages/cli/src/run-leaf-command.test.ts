@@ -136,6 +136,29 @@ describe("buildArgsFromFlags (S3)", () => {
     const result = await buildArgsFromFlags(spec, { name: "@@handle" });
     expect(result).toEqual({ ok: true, args: { name: "@handle" } });
   });
+
+  test("flags overlay onto a --input base; an explicit flag wins over the same path", async () => {
+    const spec = specWith([stringFlag("name")]);
+    const base = { name: "fromJson", keep: 1 };
+    const result = await buildArgsFromFlags(spec, { name: "fromFlag" }, base);
+    // The flag overrides the JSON's `name`; the JSON's other keys survive.
+    expect(result).toEqual({ ok: true, args: { name: "fromFlag", keep: 1 } });
+  });
+
+  test("a required flag is satisfied by the --input base when the flag is unset", async () => {
+    const spec = specWith([stringFlag("matter_id", true)]);
+    const result = await buildArgsFromFlags(spec, {}, { matter_id: "m1" });
+    expect(result).toEqual({ ok: true, args: { matter_id: "m1" } });
+  });
+
+  test("a required flag absent from both flags and the --input base still errors", async () => {
+    const spec = specWith([stringFlag("matter_id", true)]);
+    const result = await buildArgsFromFlags(spec, {}, { other: "x" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("--matter-id");
+    }
+  });
 });
 
 describe("classifyToolError: structured envelope -> exit map (S4)", () => {

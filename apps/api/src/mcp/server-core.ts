@@ -14,7 +14,11 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import type { McpSession } from "@/api/mcp/auth";
-import type { McpMode } from "@/api/mcp/constants";
+import {
+  type McpMode,
+  STELLA_MCP_ORGANIZATION_HEADER,
+  STELLA_MCP_SCOPES_HEADER,
+} from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   McpAuthenticationError,
@@ -98,12 +102,19 @@ const extractBearerToken = (request: Request): string | undefined => {
   return token.length > 0 ? token : undefined;
 };
 
-const withMcpCors = (response: Response) => {
+const withMcpCors = (response: Response, session?: McpSession) => {
   const headers = new Headers(response.headers);
   for (const [key, value] of createMcpCorsHeaders()) {
     if (!headers.has(key)) {
       headers.set(key, value);
     }
+  }
+  // Echo the authenticated session's identity so a caller holding an opaque
+  // machine API key (not a decodable JWT) can confirm which org and scopes it
+  // resolves to. Scopes are space-delimited, matching the OAuth scope grammar.
+  if (session) {
+    headers.set(STELLA_MCP_ORGANIZATION_HEADER, session.organizationId);
+    headers.set(STELLA_MCP_SCOPES_HEADER, session.scopes.join(" "));
   }
   return new Response(response.body, {
     headers,
@@ -315,7 +326,7 @@ export const createMcpHttpRequestHandler = ({
         },
       });
 
-      return withMcpCors(response);
+      return withMcpCors(response, session);
     } catch (error) {
       if (error instanceof McpOrganizationAccessError) {
         return accessDeniedResponse({

@@ -97,7 +97,7 @@ const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
 
   // Reserved global flags every command carries (spec S1/S3).
   flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
-    "Full tool-args JSON: '<json>' | - (stdin) | @file",
+    "Full tool-args JSON ('<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
   );
   flags[RESERVED_FLAG_KEYS.output] = parsedStringFlag(
     "Output format: json | table | jsonl",
@@ -214,7 +214,7 @@ const buildCapabilityLeafFlags = (
   }
 
   flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
-    "Full capability input JSON ({ body?, params?, query? }): '<json>' | - (stdin) | @file",
+    "Full capability input JSON ({ body?, params?, query? }: '<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
   );
   flags[RESERVED_FLAG_KEYS.output] = parsedStringFlag(
     "Output format: json | table | jsonl",

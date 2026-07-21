@@ -15,6 +15,7 @@ import { parseScopesFlag } from "../auth/scopes.js";
 import { resolveServerUrl } from "../auth/server-resolution.js";
 import type { Context } from "../context.js";
 import { STELLA_API_KEY } from "../env.js";
+import { fetchMachineIdentity } from "../mcp-client.js";
 
 const parseString = (input: string): string => input;
 
@@ -110,56 +111,88 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
   },
 });
 
+/**
+ * `stella auth whoami`, factored out of the command so the machine-key path is
+ * unit-testable with an injected `apiKey` (env reads stay in the thin command
+ * wrapper). Returns an `Error` for stricli to surface, or `undefined` on
+ * success.
+ */
+export const runWhoami = async ({
+  process: proc,
+  configDir,
+  orgFlag,
+  serverFlag,
+  apiKey,
+}: {
+  process: Context["process"];
+  configDir: string;
+  orgFlag: string | undefined;
+  serverFlag: string | undefined;
+  apiKey: string | undefined;
+}): Promise<Error | undefined> => {
+  const serverUrlResult = await resolveServerUrl(configDir, serverFlag);
+  if (Result.isError(serverUrlResult)) {
+    return new Error(serverUrlResult.error.message);
+  }
+  const serverUrl = serverUrlResult.value;
+
+  // `STELLA_API_KEY` takes precedence over `credentials.json` for every other
+  // command, so reporting the stored credential here would describe an identity
+  // nothing is actually running as. The key is opaque to the CLI (a random
+  // secret, not a JWT), so we make a real authenticated round-trip and report
+  // the org + scopes the SERVER resolves it to — which also proves the key is
+  // valid, instead of echoing static text that prints identically for a dead key.
+  if (apiKey !== undefined && apiKey !== "") {
+    const identity = await fetchMachineIdentity({ serverUrl, token: apiKey });
+    if (Result.isError(identity)) {
+      return new Error(
+        `Machine API key (STELLA_API_KEY) was rejected by ${serverUrl}: ${identity.error.message}. Confirm STELLA_API_KEY is a current, enabled key for this server.`,
+      );
+    }
+    const { organizationId, scopes } = identity.value;
+    proc.stdout.write(
+      [
+        `Server: ${serverUrl}`,
+        "Credential: machine API key (STELLA_API_KEY)",
+        `Organization: ${organizationId.length > 0 ? organizationId : "(unknown; server did not report one)"}`,
+        `Scopes: ${scopes.length > 0 ? scopes.join(" ") : "(none reported)"}`,
+        "Stored credentials are ignored while this variable is set.",
+        "",
+      ].join("\n"),
+    );
+    return undefined;
+  }
+
+  const result = await whoami(configDir, serverUrl, orgFlag);
+  if (Result.isError(result)) {
+    return new Error(result.error.message);
+  }
+
+  const info = result.value;
+  const lines = [
+    `Server: ${info.serverUrl}`,
+    `Organization: ${info.orgLabel ? `${info.orgLabel} (${info.orgId})` : info.orgId}`,
+    `Scopes: ${info.scope}`,
+    `Expires: ${formatDate(info.expiresAt)}${info.isExpired ? " (expired)" : ""}`,
+    `Refresh token: ${info.hasRefreshToken ? "yes" : "no"}`,
+  ];
+  if (info.claims?.sub) {
+    lines.push(`Subject: ${info.claims.sub}`);
+  }
+  proc.stdout.write(`${lines.join("\n")}\n`);
+  return undefined;
+};
+
 const whoamiCommand = buildCommand<ServerOrgFlags, [], Context>({
   docs: { brief: "Show the signed-in organization, scopes, and token expiry" },
   func: async function func(this: Context, flags) {
-    const serverUrlResult = await resolveServerUrl(
-      this.configDir,
-      flags.server,
-    );
-    if (Result.isError(serverUrlResult)) {
-      return new Error(serverUrlResult.error.message);
-    }
-
-    // `STELLA_API_KEY` takes precedence over `credentials.json` for every other
-    // command, so reporting the stored credential here would describe an
-    // identity nothing is actually running as. The key is opaque to the CLI (it
-    // is a random secret, not a JWT), so the honest answer is which credential
-    // is in effect and where it came from, not decoded claims.
-    if (STELLA_API_KEY !== undefined && STELLA_API_KEY !== "") {
-      this.process.stdout.write(
-        [
-          `Server: ${serverUrlResult.value}`,
-          "Credential: machine API key (STELLA_API_KEY)",
-          "Stored credentials are ignored while this variable is set.",
-          "",
-        ].join("\n"),
-      );
-      return undefined;
-    }
-
-    const result = await whoami(
-      this.configDir,
-      serverUrlResult.value,
-      flags.org,
-    );
-    if (Result.isError(result)) {
-      return new Error(result.error.message);
-    }
-
-    const info = result.value;
-    const lines = [
-      `Server: ${info.serverUrl}`,
-      `Organization: ${info.orgLabel ? `${info.orgLabel} (${info.orgId})` : info.orgId}`,
-      `Scopes: ${info.scope}`,
-      `Expires: ${formatDate(info.expiresAt)}${info.isExpired ? " (expired)" : ""}`,
-      `Refresh token: ${info.hasRefreshToken ? "yes" : "no"}`,
-    ];
-    if (info.claims?.sub) {
-      lines.push(`Subject: ${info.claims.sub}`);
-    }
-    this.process.stdout.write(`${lines.join("\n")}\n`);
-    return undefined;
+    return await runWhoami({
+      process: this.process,
+      configDir: this.configDir,
+      orgFlag: flags.org,
+      serverFlag: flags.server,
+      apiKey: STELLA_API_KEY,
+    });
   },
   parameters: {
     flags: {

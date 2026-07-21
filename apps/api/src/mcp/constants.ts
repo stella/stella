@@ -96,11 +96,21 @@ export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
 export const STELLA_CLI_LATEST_VERSION = CLI_SUPPORT_BAND.latest;
 export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
 
+// Identity of the authenticated session, echoed back to the caller on every
+// authenticated MCP response so `stella auth whoami` can confirm which org and
+// scopes an opaque machine API key actually resolves to (the key is not a JWT
+// the CLI can decode). Returned only to the already-authenticated caller: it is
+// that caller's own org and grants, not a disclosure to anyone else.
+export const STELLA_MCP_ORGANIZATION_HEADER = "x-stella-organization";
+export const STELLA_MCP_SCOPES_HEADER = "x-stella-scopes";
+
 export const MCP_EXPOSE_HEADERS = [
   "WWW-Authenticate",
   STELLA_MCP_API_CONTRACT_HEADER,
   STELLA_CLI_MINIMUM_HEADER,
   STELLA_CLI_LATEST_HEADER,
+  STELLA_MCP_ORGANIZATION_HEADER,
+  STELLA_MCP_SCOPES_HEADER,
   // The per-request receipt (also on the global CORS exposeHeaders list):
   // browser-based MCP clients correlate a failed/successful call with server
   // logs the same way REST callers do.

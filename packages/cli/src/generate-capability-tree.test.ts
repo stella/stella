@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   type CapabilityCatalogEntry,
   capabilityCommandPath,
@@ -427,5 +428,64 @@ describe("curated commands must not shadow capability commands", () => {
     expect([...stats.collisionFallbacks].sort()).toEqual(
       [...COLLISION_FALLBACK_ALLOWLIST].sort(),
     );
+  });
+});
+
+// Guard for the flag <-> --input drift class: a value flag routes its value into
+// `input[part]` at `partPath` (setPath in the executors), and `--input` is
+// validated against the synthesized wrapper schema. If a flag's target path is
+// not a real path in that schema, the flag and the JSON key silently diverge --
+// exactly the trap the compose fix removes. Assert every generated flag's
+// `${part}.${partPath}` resolves to a declared property in the leaf's wrapper
+// schema, so drift fails CI instead of shipping.
+describe("every capability flag maps to a real path in its wrapper schema", () => {
+  const isObjectSchema = (
+    value: unknown,
+  ): value is { properties?: Record<string, unknown> } =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+
+  const pathResolves = (
+    wrapper: Record<string, unknown>,
+    part: string,
+    partPath: string,
+  ): boolean => {
+    const properties = isObjectSchema(wrapper) ? wrapper.properties : undefined;
+    let node = isObjectSchema(properties) ? properties[part] : undefined;
+    for (const segment of partPath.split(".")) {
+      if (!isObjectSchema(node) || !isObjectSchema(node.properties)) {
+        return false;
+      }
+      node = node.properties[segment];
+      if (node === undefined) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  test("no flag targets a path absent from the wrapper schema", async () => {
+    const raw: unknown = await Bun.file(
+      new URL("generated/capability-catalog.json", import.meta.url),
+    ).json();
+    const entries = parseCapabilityCatalog(raw);
+    expect(entries).not.toBeNull();
+
+    const drift: string[] = [];
+    for (const catalogEntry of entries ?? []) {
+      const { spec } = deriveCapabilityLeaf(catalogEntry);
+      if (spec.inputSchema === undefined) {
+        // Truncated entry: no flags, `--input` only.
+        expect(spec.flags).toHaveLength(0);
+        continue;
+      }
+      for (const flag of spec.flags) {
+        if (!pathResolves(spec.inputSchema, flag.part, flag.partPath)) {
+          drift.push(
+            `${spec.capabilityId}: ${flag.flag} -> ${flag.part}.${flag.partPath}`,
+          );
+        }
+      }
+    }
+    expect(drift).toEqual([]);
   });
 });

@@ -25,6 +25,7 @@ import {
   confirmDestructive,
   errorEnvelope,
   flagKey,
+  hasInputPath,
   mapClientErrorExit,
   parsePayload,
   readAllStdin,
@@ -53,12 +54,20 @@ type InputResult =
   | { ok: true; input: Record<string, unknown> }
   | { ok: false; message: string };
 
-/** Build the `{ body?, params?, query? }` input object from parsed value flags. */
+/**
+ * Overlay parsed value flags onto `base` (the `{ body?, params?, query? }`
+ * object built from `--input`, or `{}` when no `--input` was given). Each SET
+ * flag is coerced and written at its known input path (`${part}.${partPath}` —
+ * the same mapping the flag would use on its own), so an explicit flag WINS over
+ * the same path in the JSON. A required flag is satisfied either by being set or
+ * by already being present in `base`, so `--input` can carry it.
+ */
 const buildInputFromFlags = async (
   spec: CapabilityLeafSpec,
   flags: LeafFlags,
+  base: Record<string, unknown> = {},
 ): Promise<InputResult> => {
-  const input: Record<string, unknown> = {};
+  const input = base;
   for (const flagSpec of spec.flags) {
     const value = flags[flagKey(flagSpec)];
     if (value === undefined) {
@@ -72,7 +81,10 @@ const buildInputFromFlags = async (
     setPath(input, `${flagSpec.part}.${flagSpec.partPath}`, coerced.value);
   }
   for (const flagSpec of spec.flags) {
-    if (flagSpec.required && flags[flagKey(flagSpec)] === undefined) {
+    if (
+      flagSpec.required &&
+      !hasInputPath(input, `${flagSpec.part}.${flagSpec.partPath}`)
+    ) {
       return { ok: false, message: `missing required flag ${flagSpec.flag}` };
     }
   }
@@ -298,32 +310,27 @@ export const runCapabilityCommand = async ({
     return;
   }
 
+  // `--input` and value flags COMPOSE: the JSON is the base, then each explicit
+  // flag overlays its own input path on top (flag wins). A required value flag
+  // (e.g. --workspace) advertised on the usage line therefore stays usable
+  // alongside a body passed through --input, instead of forcing the caller to
+  // hand-relocate it into `params.workspaceId` in the JSON.
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  let input: Record<string, unknown>;
-  if (typeof inputRaw === "string") {
-    const conflicting = spec.flags.some(
-      (flagSpec) => flags[flagKey(flagSpec)] !== undefined,
-    );
-    if (conflicting) {
-      writers.stderr("--input is exclusive with per-capability value flags.\n");
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    const parsed = await buildInputFromRaw({ inputRaw, spec, writers });
-    if (parsed === undefined) {
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    input = parsed;
-  } else {
-    const built = await buildInputFromFlags(spec, flags);
-    if (!built.ok) {
-      writers.stderr(`${built.message}\n`);
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    input = built.input;
+  const inputBase =
+    typeof inputRaw === "string"
+      ? await buildInputFromRaw({ inputRaw, spec, writers })
+      : {};
+  if (inputBase === undefined) {
+    setExit(context, EXIT_CODES.validation);
+    return;
   }
+  const built = await buildInputFromFlags(spec, flags, inputBase);
+  if (!built.ok) {
+    writers.stderr(`${built.message}\n`);
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+  const input = built.input;
 
   // Client-side scope precheck (spec S3): fail before any server call.
   if (spec.scope !== undefined && !scopeGranted({ token, scope: spec.scope })) {
