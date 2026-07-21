@@ -327,21 +327,28 @@ const expandUnionError = (
     return [{ path: prefixPartPath(part, unionDot), message: error.message }];
   }
   const variant = matchingVariant(variants, discriminator, error.value);
-  if (variant !== undefined) {
-    const nested = [...Value.Errors(variant, error.value)].map((sub) => ({
-      path: prefixPartPath(part, joinDot(unionDot, typeboxPathToDot(sub.path))),
-      message: sub.message,
-    }));
-    if (nested.length > 0) {
-      return nested;
-    }
+  // No variant matched: the discriminator is missing or not one of the literals.
+  // Name it and its allowed values -- the single most useful thing to report.
+  if (variant === undefined) {
+    return [
+      {
+        path: prefixPartPath(part, joinDot(unionDot, discriminator.key)),
+        message: `expected one of ${discriminator.literals.join(" | ")}`,
+      },
+    ];
   }
-  return [
-    {
-      path: prefixPartPath(part, joinDot(unionDot, discriminator.key)),
-      message: `expected one of ${discriminator.literals.join(" | ")}`,
-    },
-  ];
+  // A variant matched: report that variant's own field-level errors.
+  const nested = [...Value.Errors(variant, error.value)].map((sub) => ({
+    path: prefixPartPath(part, joinDot(unionDot, typeboxPathToDot(sub.path))),
+    message: sub.message,
+  }));
+  if (nested.length > 0) {
+    return nested;
+  }
+  // Matched with no field errors -- unreachable in practice (a clean match means
+  // the union would have passed). Fall back to the opaque node message rather
+  // than blaming the discriminator, which was correct.
+  return [{ path: prefixPartPath(part, unionDot), message: error.message }];
 };
 
 /** Map one TypeBox validation error to one or more part-prefixed issues. */

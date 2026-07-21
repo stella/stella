@@ -332,11 +332,9 @@ export const buildArgsFromFlags = async (
 
 const buildArgsFromInput = async ({
   inputRaw,
-  spec,
   writers,
 }: {
   inputRaw: string;
-  spec: LeafCommandSpec;
   writers: Writers;
 }): Promise<Record<string, unknown> | undefined> => {
   let jsonText: string;
@@ -365,14 +363,10 @@ const buildArgsFromInput = async ({
     writers.stderr("--input must be a JSON object.\n");
     return undefined;
   }
-
-  const validation = validateAgainstSchema(spec.inputSchema, parsed.value);
-  if (!validation.valid) {
-    writers.stderr(
-      `--input invalid at ${validation.path}: ${validation.message}\n`,
-    );
-    return undefined;
-  }
+  // Parse only: schema validation runs on the COMPOSED args (after value flags
+  // overlay their paths), never on the raw `--input` alone. Validating here would
+  // reject a `--input` that legitimately omits a required flag-backed path (e.g.
+  // a `matter_id` supplied by `--matter-id`), defeating the compose semantics.
   return parsed.value;
 };
 
@@ -989,7 +983,7 @@ export const runLeafCommand = async ({
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
   const argsBase =
     typeof inputRaw === "string"
-      ? await buildArgsFromInput({ inputRaw, spec, writers })
+      ? await buildArgsFromInput({ inputRaw, writers })
       : {};
   if (argsBase === undefined) {
     setExit(context, EXIT_CODES.validation);
@@ -1005,6 +999,21 @@ export const runLeafCommand = async ({
 
   if (spec.discriminatorInject !== undefined) {
     args = { ...args, ...spec.discriminatorInject };
+  }
+
+  // Validate the COMPOSED args (JSON base + overlaid flags + injected
+  // discriminator) against the schema, only when `--input` supplied JSON.
+  // Flags-only requests keep relying on the required-flag check plus server
+  // validation (unchanged surface).
+  if (typeof inputRaw === "string") {
+    const validation = validateAgainstSchema(spec.inputSchema, args);
+    if (!validation.valid) {
+      writers.stderr(
+        `--input invalid at ${validation.path}: ${validation.message}\n`,
+      );
+      setExit(context, EXIT_CODES.validation);
+      return;
+    }
   }
 
   // Client-side scope precheck (spec S3): fail before any server call.

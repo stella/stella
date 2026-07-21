@@ -388,6 +388,56 @@ const makeTtyContext = ({
   };
 };
 
+describe("--input composes with flags before schema validation (S5.5)", () => {
+  // Same class as the capability executor: the schema marks `matter_id`
+  // required; --input omits it and the --matter-id flag supplies it. Validating
+  // the RAW --input would reject it at `matter_id` before the flag overlays the
+  // value, defeating compose for required flag-backed fields.
+  const REQUIRED_FLAG_SPEC: LeafCommandSpec = {
+    commandPath: ["matter", "delete"],
+    toolName: "matter_delete",
+    flags: [
+      {
+        flag: "--matter-id",
+        prop: "matter_id",
+        kind: "string",
+        required: true,
+        repeatable: false,
+      },
+    ],
+    inputOnly: [],
+    paginated: false,
+    windowedText: false,
+    destructive: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        matter_id: { type: "string" },
+        confirm: { type: "boolean" },
+      },
+      required: ["matter_id"],
+    },
+  };
+
+  test("a required flag-backed path absent from --input but supplied by its flag is accepted", async () => {
+    const server = startConfirmGateServer();
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runLeafCommand({
+      context: tty.context,
+      flags: { input: '{"confirm":true}', matterId: "m1" },
+      spec: REQUIRED_FLAG_SPEC,
+    });
+    server.stop();
+    expect(tty.exitCode()).toBeUndefined();
+    expect(server.calls).toHaveLength(1);
+    expect(server.calls[0]?.args).toEqual({ confirm: true, matter_id: "m1" });
+  });
+});
+
 describe("confirm passthrough (capability invoke)", () => {
   test("--yes injects confirm: true upfront (single call)", async () => {
     const server = startConfirmGateServer();

@@ -346,6 +346,47 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     });
   });
 
+  test("a required schema path absent from --input but supplied by its flag is accepted (validation runs after overlay)", async () => {
+    const server = startServer({ kind: "echo" });
+    // A synthetic-required workspaceId plus a body-borne required field: the
+    // exact shape (e.g. view-templates.delete) where validating the RAW --input
+    // would reject params.workspaceId before --workspace overlays it.
+    const spec = capSpec({
+      capabilityId: "view-templates.delete",
+      flags: [stringFlag("--workspace", "params", "workspaceId", true)],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          params: {
+            type: "object",
+            additionalProperties: false,
+            required: ["workspaceId", "templateId"],
+            properties: {
+              workspaceId: { type: "string" },
+              templateId: { type: "string" },
+            },
+          },
+        },
+      },
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { input: '{"params":{"templateId":"t1"}}', workspace: "ws-1" },
+      spec,
+    });
+    server.stop();
+    expect(tty.exitCode()).toBeUndefined();
+    expect(lastInvoke(server.calls)["input"]).toEqual({
+      params: { workspaceId: "ws-1", templateId: "t1" },
+    });
+  });
+
   test("a required flag absent from both flags and --input still errors (exit 2, no call)", async () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
