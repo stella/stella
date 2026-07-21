@@ -66,7 +66,7 @@ export type CapabilityTreeStats = {
 const PARTS: readonly CapabilityPart[] = ["params", "body", "query"];
 
 /** The single root beneath which all generated capability commands live. */
-const CAPABILITY_NAMESPACE = "capability";
+export const CAPABILITY_NAMESPACE = "capability";
 
 /** Valid `ToolScope` strings, for mapping a catalog `stella:*` scope to a precheck. */
 const TOOL_SCOPES: ReadonlySet<string> = new Set<ToolScope>([
