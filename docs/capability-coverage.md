@@ -384,11 +384,11 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 ## uploads
 
-| Capability       | Access            | Scope       | Feature | Reachable via                            |
-| ---------------- | ----------------- | ----------- | ------- | ---------------------------------------- |
-| `uploads.create` | read              | stella:read | —       | generic invoke → `stella uploads create` |
-| `uploads.delete` | read, destructive | stella:read | —       | generic invoke → `stella uploads delete` |
-| `uploads.update` | read              | stella:read | —       | generic invoke → `stella uploads update` |
+| Capability       | Access             | Scope                | Feature | Reachable via                            |
+| ---------------- | ------------------ | -------------------- | ------- | ---------------------------------------- |
+| `uploads.create` | write              | stella:matters_write | —       | generic invoke → `stella uploads create` |
+| `uploads.delete` | write, destructive | stella:matters_write | —       | generic invoke → `stella uploads delete` |
+| `uploads.update` | write              | stella:matters_write | —       | generic invoke → `stella uploads update` |
 
 ## usage
 

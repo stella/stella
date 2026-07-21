@@ -58596,7 +58596,7 @@ export const generatedRouteMap: RouteNode = {
             capabilityId: "uploads.create",
             description:
               "Step 1 of 3 of the file-upload flow: reserve an upload and mint a short-lived presigned S3 PUT URL. This is the ONLY way to get a file into stella from an agent surface; the multipart endpoints cannot be called with JSON. Pass purpose plus the file metadata: name, mimeType, size in bytes, and sha256Hex (lowercase hex SHA-256 of the exact bytes). purpose is entity_create (with propertyId, optional parentId) to add a new document, entity_version (with entityId) to add a version to an existing one, or agent_skill (with scope team or private) for a skill pack. Returns uploadId, url, expiresAt, and headers. Step 2: PUT the bytes to url with those headers verbatim -- the URL is signed against the exact size and checksum, so any deviation is rejected. Step 3: call uploads.update with the uploadId to commit the record. Call uploads.delete instead if the PUT fails.",
-            access: "read",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -58611,7 +58611,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "read",
+            scope: "matters_write",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -58819,7 +58819,7 @@ export const generatedRouteMap: RouteNode = {
             capabilityId: "uploads.delete",
             description:
               "Abandon an upload reserved by uploads.create, discarding the staged object. Call this when the presigned PUT fails or the upload is no longer wanted, so the staged bytes are not left to expire on their own. Idempotent: aborting an already aborted upload succeeds. Fails if the upload was already finalized -- delete the resulting entity or skill instead.",
-            access: "read",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -58843,7 +58843,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: true,
-            scope: "read",
+            scope: "matters_write",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -58880,7 +58880,7 @@ export const generatedRouteMap: RouteNode = {
             capabilityId: "uploads.update",
             description:
               "Step 3 of 3 of the file-upload flow: finalize an upload whose bytes have already been PUT to the presigned URL from uploads.create. Verifies the stored object against the size and checksum the URL was signed for, then commits the durable record and returns finalizedResult, which is an entity_create (entityId, fileId, fileName, renamed), entity_version (entityId, entityVersionId, versionNumber, fileId, fileName), or agent_skill (skillId, name, version) shape depending on the purpose the upload was created with. Idempotent: replaying it on an already finalized upload returns the same result rather than duplicating.",
-            access: "read",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -58904,7 +58904,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "read",
+            scope: "matters_write",
             inputSchema: {
               type: "object",
               additionalProperties: false,

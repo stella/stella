@@ -338,6 +338,15 @@ const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
  *   pure count read used before running a workflow.
  */
 const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
+  // The upload lifecycle mints presigned PUT URLs and finalizes/aborts entity,
+  // entity-version, and skill uploads — writes. Their ROUTE permission is only
+  // `workspace:["read"]` because the real write authorization runs inside the
+  // handler (`authorizeUploadPurpose`), invisible to verb classification, so
+  // without this override they classify as read and — since read now resolves
+  // to `stella:read` — a read-only consent could perform file writes.
+  "uploads.create": { access: "write", destructive: false },
+  "uploads.update": { access: "write", destructive: false },
+  "uploads.delete": { access: "write", destructive: false },
   // `flow:["run"]` / `flow:["review"]` gate run lifecycle mutations (start a
   // run, cancel an in-progress run, submit a review-gate decision). All are
   // non-destructive writes: they change run state, they do not delete data.

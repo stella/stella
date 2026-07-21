@@ -40,8 +40,6 @@ export type CapabilityCatalogEntry = {
   access: "read" | "write";
   destructive: boolean;
   scope: string;
-  /** Write scope that also satisfies a read capability's gate (write implies read, same domain). */
-  elevatedByScope?: string;
   requiresFileInput?: boolean;
   returnsFileResponse?: boolean;
   inputSchemaTruncated?: boolean;
