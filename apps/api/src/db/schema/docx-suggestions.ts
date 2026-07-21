@@ -44,6 +44,7 @@ export type DocxSuggestionSeverity =
 export const DOCX_SUGGESTION_APPLY_MODES = [
   "tracked-changes",
   "direct",
+  "suggested",
 ] as const;
 export type DocxSuggestionApplyMode =
   (typeof DOCX_SUGGESTION_APPLY_MODES)[number];

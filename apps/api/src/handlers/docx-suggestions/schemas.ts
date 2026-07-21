@@ -18,6 +18,7 @@ export const tDocxSuggestionSeverity = t.Union([
 export const tDocxSuggestionApplyMode = t.Union([
   t.Literal("tracked-changes"),
   t.Literal("direct"),
+  t.Literal("suggested"),
 ]);
 
 /**
