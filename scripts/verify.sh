@@ -202,6 +202,11 @@ run_step "Lint" run_lint
 run_step "Format" run_format
 run_step "Rust format" run_rust_format
 run_step "Typecheck" run_typecheck
+if [[ -n "$affected_flag" ]]; then
+  run_step "Result consumption" bun run check:result-consumption -- --base "$base_ref"
+else
+  run_step "Result consumption" bun run check:result-consumption -- --all
+fi
 run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_step "Ratchet guard" run_ratchet_guard
 run_step "Crawl posture guard" run_crawl_posture_guard
