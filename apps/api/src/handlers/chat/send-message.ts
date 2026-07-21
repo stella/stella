@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import type { Static } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -24,6 +23,7 @@ import type {
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
+  ChatSendRequest,
   IncomingActiveDecision,
   IncomingActiveExternal,
   IncomingActiveFile,
@@ -1496,7 +1496,7 @@ const isChatStreamResponse = (response: Response): boolean => {
 };
 
 const messageNeedsExternalMcpValidation = (
-  message: Static<typeof sendMessageBodySchema>["message"],
+  message: ChatSendRequest["message"],
 ): boolean => {
   if (message.role !== "assistant") {
     return false;
@@ -1513,7 +1513,7 @@ const messageNeedsExternalMcpValidation = (
  * branch doesn't add to the handler generator's own cognitive complexity.
  */
 const resolveExternalToolsForValidation = async (
-  message: Static<typeof sendMessageBodySchema>["message"],
+  message: ChatSendRequest["message"],
   loader: LazyExternalMcpToolsLoader,
 ): Promise<LoadedExternalMcpTools["tools"] | undefined> => {
   if (!messageNeedsExternalMcpValidation(message)) {

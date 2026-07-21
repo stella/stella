@@ -42,8 +42,8 @@ const rawMessageSchema = t.Object(
       t.Literal("user"),
       t.Literal("assistant"),
     ]),
-    metadata: t.Optional(t.Any()),
-    parts: t.Array(t.Any()),
+    metadata: t.Optional(t.Unknown()),
+    parts: t.Array(t.Unknown()),
   },
   { additionalProperties: true },
 );
@@ -152,6 +152,8 @@ export const sendMessageBodySchema = t.Object({
     }),
   ),
 });
+
+export type ChatSendRequest = Static<typeof sendMessageBodySchema>;
 
 type RawIncomingMessage = Static<typeof rawMessageSchema>;
 export type IncomingUserContext = Static<typeof userContextSchema>;

@@ -3,6 +3,8 @@ import { Elysia } from "elysia";
 import type { Context } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
+import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
+
 import { env } from "@/api/env";
 import {
   agentAuthConfirmRoute,
@@ -433,7 +435,7 @@ const api = new Elysia()
   .use(smokeRoute)
   .use(operatorRoute)
   .mount(getAuth().handler)
-  .group("/v1", (app) =>
+  .group(STELLA_API_VERSION_PREFIX, (app) =>
     app
 
       .use(

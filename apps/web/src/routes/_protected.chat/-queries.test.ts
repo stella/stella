@@ -374,6 +374,75 @@ describe("buildSendRequestBody", () => {
     });
   });
 
+  test("normalizes context values at the transport boundary", () => {
+    const threadId = toChatThreadId("thread-A");
+    const body = buildSendRequestBody({
+      context: {
+        getActiveDecision: () => ({ decisionId: "decision-A" }),
+        getActiveExternal: () => ({
+          connectorSlug: undefined,
+          title: "Source",
+          url: "https://example.com",
+        }),
+        getActiveFile: () => ({
+          docxEditSnapshot: {
+            blocks: [
+              {
+                displayLabel: undefined,
+                id: "block-A",
+                kind: "paragraph",
+                styleId: undefined,
+                text: "Text",
+              },
+            ],
+            canApplyEdits: undefined,
+          },
+          entityId: "entity-A",
+          fileFieldId: undefined,
+          fileName: "document.docx",
+          supportsDocxEdits: undefined,
+        }),
+        getActiveSkill: () => ({
+          skillId: undefined,
+          skillName: "Review",
+        }),
+        getSendMode: () => CHAT_SEND_MODE.anonymized,
+      },
+      key: { scope: "global", threadId },
+      messages: [createMessage("message-A")],
+    });
+
+    expect(body).toMatchObject({
+      activeDecision: { decisionId: "decision-A" },
+      activeExternal: {
+        title: "Source",
+        url: "https://example.com",
+      },
+      activeFile: {
+        docxEditSnapshot: {
+          blocks: [{ id: "block-A", kind: "paragraph", text: "Text" }],
+        },
+        entityId: "entity-A",
+        fileName: "document.docx",
+      },
+      activeSkill: { skillName: "Review" },
+      message: { id: "message-A" },
+    });
+    expect(body.activeFile).not.toHaveProperty("fileFieldId");
+    expect(body.activeFile).not.toHaveProperty("supportsDocxEdits");
+    expect(body.activeExternal).not.toHaveProperty("connectorSlug");
+    expect(body.activeSkill).not.toHaveProperty("skillId");
+    expect(body.activeFile?.docxEditSnapshot).not.toHaveProperty(
+      "canApplyEdits",
+    );
+    expect(body.activeFile?.docxEditSnapshot?.blocks[0]).not.toHaveProperty(
+      "displayLabel",
+    );
+    expect(body.activeFile?.docxEditSnapshot?.blocks[0]).not.toHaveProperty(
+      "styleId",
+    );
+  });
+
   test("preserves a raw override across continuation requests in the same turn", () => {
     const threadId = toChatThreadId("thread-A");
     const key = { scope: "global", threadId } as const;
