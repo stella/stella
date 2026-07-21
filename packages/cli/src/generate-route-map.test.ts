@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
 import {
+  classifyProp,
   generateRouteMap,
   RouteGenerationError,
 } from "./generate-route-map.js";
@@ -185,6 +186,26 @@ describe("generateRouteMap: discriminator split (S2)", () => {
 });
 
 describe("generateRouteMap: flag mapping (S3)", () => {
+  test("one-character query properties get a parser-safe long flag", () => {
+    expect(classifyProp("q", { type: "string" })).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--query",
+        prop: "q",
+        kind: "string",
+        repeatable: false,
+      },
+    });
+  });
+
+  test("unknown one-character properties fail codegen", () => {
+    for (const prop of "abcdefghijklmnoprstuvwxyz") {
+      expect(() => classifyProp(prop, { type: "string" })).toThrow(
+        RouteGenerationError,
+      );
+    }
+  });
+
   test("nullable-string props map to nullable-string flags", () => {
     const save = findLeaf(tree, ["contact", "save"]);
     expect(flagFor(save ?? errorSpec(), "--first-name")?.kind).toBe(
@@ -270,13 +291,13 @@ describe("generateRouteMap: collisions (S1)", () => {
     ).toThrow(RouteGenerationError);
   });
 
-  test("two props kebabbing to the same flag fail hard", () => {
+  test("two flags normalizing to the same parser key fail hard", () => {
     const bad: RegistryToolListing = {
       name: "save_matter",
       description: "d",
       inputSchema: {
         type: "object",
-        properties: { a_b: { type: "string" }, aB: { type: "string" } },
+        properties: { a_b: { type: "string" }, "a.b": { type: "string" } },
       },
     };
     expect(() =>

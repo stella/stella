@@ -64,7 +64,7 @@ describe("buildArgsFromFlags variadic/--input overlay", () => {
     const spec = specWith([arrayFlag("assignee_ids")]);
     const result = await buildArgsFromFlags(
       spec,
-      { [flagKey({ prop: "assignee_ids" })]: [] },
+      { [flagKey({ flag: "--assignee-ids" })]: [] },
       { assignee_ids: ["from-input"] },
     );
     expect(result).toEqual({
@@ -77,7 +77,7 @@ describe("buildArgsFromFlags variadic/--input overlay", () => {
     const spec = specWith([arrayFlag("assignee_ids")]);
     const result = await buildArgsFromFlags(
       spec,
-      { [flagKey({ prop: "assignee_ids" })]: ["from-flag"] },
+      { [flagKey({ flag: "--assignee-ids" })]: ["from-flag"] },
       { assignee_ids: ["from-input"] },
     );
     expect(result).toEqual({ ok: true, args: { assignee_ids: ["from-flag"] } });
@@ -96,7 +96,7 @@ describe("buildArgsFromFlags (S3)", () => {
       },
     ]);
     const result = await buildArgsFromFlags(spec, {
-      [flagKey({ prop: "first_name" })]: "null",
+      [flagKey({ flag: "--first-name" })]: "null",
     });
     expect(result).toEqual({ ok: true, args: { first_name: null } });
   });
@@ -167,7 +167,7 @@ describe("buildArgsFromFlags (S3)", () => {
         repeatable: true,
       },
     ]);
-    const result = await buildArgsFromFlags(spec, { tags: ["a", "b"] });
+    const result = await buildArgsFromFlags(spec, { tag: ["a", "b"] });
     expect(result).toEqual({ ok: true, args: { tags: ["a", "b"] } });
   });
 

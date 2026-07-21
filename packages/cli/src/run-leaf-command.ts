@@ -12,6 +12,7 @@ import { text as readStreamText } from "node:stream/consumers";
 
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import type { Context } from "./context.js";
+import { flagKey } from "./flag-name.js";
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import {
   callTool,
@@ -38,11 +39,7 @@ import {
 } from "./output.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
 
-/** stricli flag record key for a FlagSpec: snake/dot path -> camelCase identifier. */
-export const flagKey = (spec: Pick<FlagSpec, "prop">): string =>
-  spec.prop.replace(/[._](?<char>[a-z0-9])/gu, (_match, char: string) =>
-    char.toUpperCase(),
-  );
+export { flagKey } from "./flag-name.js";
 
 /**
  * Whether a parsed flag value counts as caller-provided when overlaying flags

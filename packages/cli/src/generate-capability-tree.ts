@@ -12,6 +12,7 @@
 // <domain> <action>` instead.
 
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
+import { flagKey } from "./flag-name.js";
 import {
   classifyProp,
   generateRouteMap,
@@ -270,20 +271,21 @@ const resolveFlags = ({
     }
   }
 
-  const seen = new Map<string, string>();
+  const seenParserKeys = new Map<string, string>();
   const flags: CapabilityFlagSpec[] = [];
   const flagCollisions: string[] = [];
   for (const entry of resolved) {
     const { candidate } = entry;
     const flag = finalName(entry);
     const source = `${candidate.part}.${candidate.partPath}`;
-    const existing = seen.get(flag);
+    const parserKey = flagKey({ flag });
+    const existing = seenParserKeys.get(parserKey);
     if (existing !== undefined || takenNames.has(flag)) {
       throw new RouteGenerationError(
-        `capability "${capabilityId}": flag ${flag} (from ${source}) collides with ${existing ?? "a reserved leaf flag"} even after part-prefixing`,
+        `capability "${capabilityId}": flag ${flag} (from ${source}) collides at parser key ${parserKey} with ${existing ?? "a reserved leaf flag"} even after part-prefixing`,
       );
     }
-    seen.set(flag, source);
+    seenParserKeys.set(parserKey, source);
     if (entry.prefixed) {
       flagCollisions.push(flag);
     }

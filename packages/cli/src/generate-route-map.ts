@@ -7,6 +7,7 @@
 
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
 import { CliBaseError } from "./auth/errors.js";
+import { flagKey } from "./flag-name.js";
 import type {
   FlagSpec,
   JsonSchema,
@@ -77,6 +78,30 @@ export const kebabCase = (segment: string): string =>
     .replace(/_/gu, "-")
     .replace(/(?<lower>[a-z0-9])(?<upper>[A-Z])/gu, "$<lower>-$<upper>")
     .toLowerCase();
+
+const SINGLE_CHARACTER_FLAG_NAMES: Readonly<Record<string, string>> = {
+  q: "query",
+};
+
+/**
+ * Stricli reserves one-character names for aliases and only parses long flag
+ * names with at least two characters. Expand known terse schema properties to
+ * an authored long name; fail codegen for every unknown one-character property
+ * so help can never advertise a flag the parser will reject.
+ */
+const directFlagName = (prop: string): string => {
+  const name = kebabCase(prop);
+  if (name.length > 1) {
+    return `--${name}`;
+  }
+  const expanded = SINGLE_CHARACTER_FLAG_NAMES[name];
+  if (expanded === undefined) {
+    throw new RouteGenerationError(
+      `Schema property "${prop}" needs an explicit long CLI flag name`,
+    );
+  }
+  return `--${expanded}`;
+};
 
 export type PropSchema = Record<string, unknown>;
 
@@ -154,7 +179,7 @@ const classifyArrayItems = (
     return {
       kind: "flag",
       spec: {
-        flag: `--${kebabCase(prop)}`,
+        flag: directFlagName(prop),
         prop,
         kind: "enum-array",
         enum: itemEnum,
@@ -166,7 +191,7 @@ const classifyArrayItems = (
     return {
       kind: "flag",
       spec: {
-        flag: `--${kebabCase(prop)}`,
+        flag: directFlagName(prop),
         prop,
         kind: "string-array",
         repeatable: true,
@@ -177,7 +202,7 @@ const classifyArrayItems = (
     return {
       kind: "flag",
       spec: {
-        flag: `--${kebabCase(prop)}`,
+        flag: directFlagName(prop),
         prop,
         kind: "int-array",
         repeatable: true,
@@ -283,7 +308,7 @@ const classifyPropShape = (
     return {
       kind: "flag",
       spec: {
-        flag: `--${kebabCase(prop)}`,
+        flag: directFlagName(prop),
         prop,
         kind: "enum",
         enum: values,
@@ -296,7 +321,7 @@ const classifyPropShape = (
     return {
       kind: "flag",
       spec: {
-        flag: `--${kebabCase(prop)}`,
+        flag: directFlagName(prop),
         prop,
         kind: nullable ? "nullable-string" : "string",
         repeatable: false,
@@ -308,7 +333,7 @@ const classifyPropShape = (
     return {
       kind: "flag",
       spec: {
-        flag: `--${kebabCase(prop)}`,
+        flag: directFlagName(prop),
         prop,
         kind: "int",
         ...boundFields(schema),
@@ -321,7 +346,7 @@ const classifyPropShape = (
     return {
       kind: "flag",
       spec: {
-        flag: `--${kebabCase(prop)}`,
+        flag: directFlagName(prop),
         prop,
         kind: "number",
         ...boundFields(schema),
@@ -334,7 +359,7 @@ const classifyPropShape = (
     return {
       kind: "flag",
       spec: {
-        flag: `--${kebabCase(prop)}`,
+        flag: directFlagName(prop),
         prop,
         kind: "boolean",
         repeatable: false,
@@ -395,7 +420,7 @@ const buildFlags = ({
 }): BuiltFlags => {
   const flags: FlagSpec[] = [];
   const inputOnly: string[] = [];
-  const seenFlags = new Set<string>();
+  const seenFlagKeys = new Set<string>();
 
   const propNames =
     includeProps ?? Object.keys(properties).filter((p) => !skipProps.has(p));
@@ -424,12 +449,13 @@ const buildFlags = ({
           `Generated flag ${candidate.flag} (from prop ${candidate.prop}) collides with a reserved global flag`,
         );
       }
-      if (seenFlags.has(candidate.flag)) {
+      const parserKey = flagKey(candidate);
+      if (seenFlagKeys.has(parserKey)) {
         throw new RouteGenerationError(
-          `Flag ${candidate.flag} is generated twice within one command; add a flagRename annotation`,
+          `Flag ${candidate.flag} normalizes to duplicate parser key ${parserKey}; add a flagRename annotation`,
         );
       }
-      seenFlags.add(candidate.flag);
+      seenFlagKeys.add(parserKey);
       // A dot-path leaf is required only if the whole object prop is required
       // AND the child schema itself is required; the CLI keeps this simple by
       // treating dot-path leaves as optional (the server enforces sub-requiredness).
