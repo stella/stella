@@ -47,7 +47,7 @@ describe("buildFlag optionality invariant", () => {
       string,
       unknown
     >;
-    expect(scalar.variadic).toBeUndefined();
+    expect(scalar["variadic"]).toBeUndefined();
   });
 
   test("boolean fields build a boolean flag", () => {
