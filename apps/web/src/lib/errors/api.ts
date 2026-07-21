@@ -1,5 +1,8 @@
 import { TaggedError } from "better-result";
 
+import { normalizeApiError } from "@stll/api-contract";
+import type { ApiErrorInput } from "@stll/api-contract";
+
 import type { TranslationKey } from "@/i18n/types";
 import {
   STATUS_ERROR_KEYS,
@@ -15,23 +18,7 @@ export class APIError extends TaggedError("ApiError")<{
   details?: Record<string, unknown> | undefined;
 }>() {}
 
-export type ToAPIErrorProps = {
-  status: number;
-  value:
-    | string
-    | {
-        type: "validation";
-        on: string;
-        summary?: string;
-        message?: string;
-        found?: unknown;
-        property?: string;
-        expected?: string;
-      }
-    | { code?: string | undefined; type?: never; message: string }
-    | null
-    | undefined;
-};
+export type ToAPIErrorProps = ApiErrorInput;
 
 type EdenResponse<T> =
   | { data: T; error: null }
@@ -52,37 +39,17 @@ export function unwrapEden<T>(response: EdenResponse<T>): T {
   return response.data;
 }
 
-export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
-  if (value === null || value === undefined) {
-    return new APIError({ message: localizeAPIError({ status }), status });
-  }
-  if (typeof value === "string") {
-    return new APIError({
-      message: localizeAPIError({ status }),
-      rawMessage: value,
-      status,
-    });
-  }
-  if (value.type === "validation") {
-    return new APIError({
-      code: API_ERROR_CODE.validation,
-      message: localizeAPIError({ code: API_ERROR_CODE.validation, status }),
-      rawMessage: JSON.stringify(value),
-      status,
-    });
-  }
-
-  const details = pickDetails(value);
+export const toAPIError = (input: ToAPIErrorProps) => {
+  const { code, details, rawMessage, status } = normalizeApiError(input);
   return new APIError({
-    ...(value.code ? { code: value.code } : {}),
+    ...(code === undefined ? {} : { code }),
+    ...(details === undefined ? {} : { details }),
+    ...(rawMessage === undefined ? {} : { rawMessage }),
     status,
-    message: localizeAPIError({ code: value.code, details, status }),
-    rawMessage: value.message,
-    ...(details ? { details } : {}),
+    message: localizeAPIError({ code, details, status }),
   });
 };
 
-const API_ERROR_CODE = { validation: "validation" } as const;
 const RAW_INTERNAL_TOOL_ERROR_CODE = {
   legalSourceStructuralRepairRequired:
     "legal_source_structural_repair_required",
@@ -164,14 +131,4 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
     return translateError(USAGE_REJECTION_REASON_KEYS[details["reason"]]);
   }
   return translateError(STATUS_TO_KEY[status] ?? STATUS_ERROR_KEYS.unknown);
-};
-
-const KNOWN_TEXT_KEYS: readonly string[] = Object.freeze(["message", "code"]);
-const pickDetails = (
-  value: { message: string } & Record<string, unknown>,
-): Record<string, unknown> | undefined => {
-  const entries = Object.entries(value).filter(
-    ([key]) => !KNOWN_TEXT_KEYS.includes(key),
-  );
-  return entries.length === 0 ? undefined : Object.fromEntries(entries);
 };
