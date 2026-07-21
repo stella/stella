@@ -316,6 +316,19 @@ describe("generateRouteMap: collisions (S1)", () => {
     expect(() => generateRouteMap([bad], {})).toThrow(RouteGenerationError);
   });
 
+  test("a generated tool can never shadow the hand-wired upload command", () => {
+    const bad: RegistryToolListing = {
+      name: "create_upload",
+      description: "d",
+      inputSchema: { type: "object", properties: {} },
+    };
+    expect(() =>
+      generateRouteMap([bad], {
+        create_upload: { command: ["upload", "create"], scope: "read" },
+      }),
+    ).toThrow(RouteGenerationError);
+  });
+
   test("a duplicate command path fails hard", () => {
     const one: RegistryToolListing = {
       name: "save_matter",

@@ -435,6 +435,19 @@ describe("insertCapabilities: merge + collisions", () => {
     ).toBe("legislation.search");
   });
 
+  test("a reserved hand-wired namespace forces the capability fallback", () => {
+    const { tree, stats } = insertCapabilities({
+      tree: { kind: "route", children: {} },
+      entries: [entry({ id: "upload.create" })],
+    });
+
+    expect(leafAt(tree, ["upload", "create"])).toBeUndefined();
+    expect(leafAt(tree, ["capability", "upload", "create"])?.capabilityId).toBe(
+      "upload.create",
+    );
+    expect(stats.collisionFallbacks).toEqual(["upload.create"]);
+  });
+
   test("a capability that is a prefix of another falls back rather than clobbering", () => {
     const { tree, stats } = insertCapabilities({
       tree: { kind: "route", children: {} },

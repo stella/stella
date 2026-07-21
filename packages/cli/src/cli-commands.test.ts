@@ -4,6 +4,7 @@
 // `Bun.serve` can answer requests concurrently. No real network origin is hit.
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -37,11 +38,18 @@ type MockResponse =
 
 type MockHandler = (request: JsonRpcRequest, callIndex: number) => MockResponse;
 
-const startMockServer = (handler: MockHandler) => {
+type PutHandler = (request: Request) => Response | Promise<Response>;
+
+const startMockServer = (handler: MockHandler, putHandler?: PutHandler) => {
   const requests: JsonRpcRequest[] = [];
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
+      if (req.method === "PUT") {
+        return putHandler === undefined
+          ? new Response("unexpected PUT", { status: 405 })
+          : await putHandler(req);
+      }
       const body: JsonRpcRequest = JSON.parse(await req.text());
       const index = requests.length;
       requests.push(body);
@@ -180,6 +188,117 @@ afterEach(async () => {
 
 const READ = makeToken(["read"]);
 const WRITE = makeToken(["read", "matters_write"]);
+
+describe("one-command document upload", () => {
+  test("discovers, reserves, PUTs and finalizes without external curl", async () => {
+    const uploadDir = await mkdtemp(path.join(tmpdir(), "stella-upload-"));
+    tempDirs.push(uploadDir);
+    const filePath = path.join(uploadDir, "agreement.txt");
+    await writeFile(filePath, "agreement body");
+    const putBodies: string[] = [];
+    const putChecksums: string[] = [];
+    let putUrl = "";
+    const server = startMockServer(
+      (request, index) => {
+        const capability = request.params.arguments?.["capability"];
+        if (index === 0 && capability === "properties.list") {
+          return {
+            toolPayload: [
+              { id: "property-text", content: { type: "text" } },
+              { id: "property-file", content: { type: "file" } },
+            ],
+          };
+        }
+        if (index === 1 && capability === "uploads.create") {
+          return {
+            toolPayload: {
+              uploadId: "upload-1",
+              url: putUrl,
+              headers: {
+                "content-type": "text/plain",
+                "x-amz-checksum-sha256": "signed-checksum",
+              },
+            },
+          };
+        }
+        return {
+          toolPayload: {
+            finalizedResult: {
+              type: "entity_create",
+              entityId: "entity-1",
+              fileName: "agreement.txt",
+            },
+          },
+        };
+      },
+      async (request) => {
+        putBodies.push(await request.text());
+        putChecksums.push(request.headers.get("x-amz-checksum-sha256") ?? "");
+        return new Response(null, { status: 200 });
+      },
+    );
+    putUrl = `${server.url}/presigned/upload-1`;
+
+    const result = await runCli({
+      args: [
+        "upload",
+        "--workspace",
+        "workspace-1",
+        "--file",
+        filePath,
+        "--mime-type",
+        "text/plain",
+      ],
+      url: server.url,
+      token: WRITE,
+    });
+    server.stop();
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual({
+      finalizedResult: {
+        type: "entity_create",
+        entityId: "entity-1",
+        fileName: "agreement.txt",
+      },
+    });
+    expect(result.stderr).toBe("");
+    expect(putBodies).toEqual(["agreement body"]);
+    expect(putChecksums).toEqual(["signed-checksum"]);
+    expect(
+      server.requests.map(
+        (request) => request.params.arguments?.["capability"],
+      ),
+    ).toEqual(["properties.list", "uploads.create", "uploads.update"]);
+    expect(server.requests.at(1)?.params.arguments?.["input"]).toEqual({
+      body: {
+        purpose: "entity_create",
+        propertyId: "property-file",
+        name: "agreement.txt",
+        mimeType: "text/plain",
+        size: Buffer.byteLength("agreement body"),
+        sha256Hex: createHash("sha256").update("agreement body").digest("hex"),
+      },
+      params: { workspaceId: "workspace-1" },
+    });
+  });
+
+  test("help explains the entire local-file workflow", async () => {
+    const server = startMockServer(() => ({ toolPayload: {} }));
+    const result = await runCli({
+      args: ["upload", "--help"],
+      url: server.url,
+      token: WRITE,
+    });
+    server.stop();
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("--file");
+    expect(result.stdout).toContain("--workspace");
+    expect(result.stdout).toContain("computes its SHA-256 checksum");
+    expect(server.requests).toHaveLength(0);
+  });
+});
 
 describe("auth and scope gating (S4)", () => {
   test("no stored credential exits 3", async () => {
