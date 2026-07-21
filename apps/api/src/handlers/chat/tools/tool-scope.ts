@@ -1,3 +1,5 @@
+import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+
 import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/template-tools";
@@ -10,9 +12,7 @@ import { SUGGEST_TEMPLATE_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/tem
  * arbitrary tool list, so a request can never widen its own tool
  * authorization, only narrow it.
  */
-export const CHAT_TOOL_SCOPE = {
-  suggestTemplateFields: "suggest-template-fields",
-} as const;
+export { CHAT_TOOL_SCOPE };
 
 export type ChatToolScope =
   (typeof CHAT_TOOL_SCOPE)[keyof typeof CHAT_TOOL_SCOPE];

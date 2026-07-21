@@ -2,6 +2,10 @@ import type { Brand } from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+export const CHAT_TOOL_SCOPE = {
+  suggestTemplateFields: "suggest-template-fields",
+} as const;
+
 export type SafeId<TType extends string> = string &
   Brand<"SafeId"> & {
     readonly __safeIdType?: TType;
@@ -58,7 +62,7 @@ export type ChatSendRequest = {
   };
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
-  toolScope?: "suggest-template-fields";
+  toolScope?: (typeof CHAT_TOOL_SCOPE)["suggestTemplateFields"];
   truncateAfterMessageId?: SafeId<"chatMessage">;
   userContext?: {
     locale: string;

@@ -10,6 +10,7 @@ import { panic } from "better-result";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
 import type { ChatSendRequest } from "@stll/api-contract";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
@@ -110,7 +111,7 @@ export type GroupedChatThreads = Pick<
 
 const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
-  "suggest-template-fields" as const;
+  CHAT_TOOL_SCOPE.suggestTemplateFields;
 const CHAT_THREADS_PAGE_SIZE = 50;
 const CHAT_TRANSPORT_VERSION = 2;
 

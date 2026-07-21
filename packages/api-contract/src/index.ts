@@ -1,6 +1,7 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 1 as const;
 
+export { CHAT_TOOL_SCOPE } from "./chat";
 export type { ChatSendRequest, SafeId } from "./chat";
 
 /** Path prefix shared by the REST router and direct-fetch clients. */
