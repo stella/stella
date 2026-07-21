@@ -1,4 +1,5 @@
 ---
+import { frameAccents } from "../data/products/types";
 import type { TranslationKey } from "../data/site-nav";
 import { defaultLocale, isLocale } from "../i18n/config";
 import { getTranslations } from "../i18n/utils";
@@ -191,7 +192,13 @@ const proofItems = [
   </div>
 </section>
 
-<section class="px-4 pb-20 sm:px-6 lg:pb-28" aria-labelledby="control-title">
+<section class="relative px-4 pb-20 sm:px-6 lg:pb-28" aria-labelledby="control-title">
+  <div
+    class="control-glow pointer-events-none absolute"
+    style={`--control-glow-accent: ${frameAccents.ember}`}
+    aria-hidden="true"
+  >
+  </div>
   <div class="control-rail mx-auto max-w-300 overflow-hidden rounded-[1.65rem]">
     <div class="grid gap-8 p-7 sm:p-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,2.65fr)] lg:items-center lg:p-12">
       <div data-reveal>
@@ -299,11 +306,50 @@ const proofItems = [
     }
   }
 
+  /* Liquid-glass control rail: soft colour blobs behind the box give the
+     backdrop-filter something real to refract (blur over a flat background
+     reads as nothing). The rail itself is a thin translucent layer with a
+     strong blur + saturation boost, a bright specular top edge, and a
+     diagonal sheen. Solid fallbacks below for browsers without
+     backdrop-filter and for reduced-transparency users. */
+  .control-glow {
+    inset: -12% 0 -4%;
+    background:
+      radial-gradient(
+        36% 55% at 24% 24%,
+        color-mix(in srgb, var(--auth-gradient-end) 55%, transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        30% 48% at 82% 78%,
+        color-mix(in srgb, var(--control-glow-accent) 34%, transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        24% 40% at 58% 8%,
+        color-mix(in srgb, var(--auth-gradient-end) 35%, transparent),
+        transparent 70%
+      );
+    filter: blur(34px);
+  }
+
   .control-rail {
-    background: color-mix(in srgb, var(--card) 82%, transparent);
+    background: color-mix(in srgb, var(--card) 52%, transparent);
+    -webkit-backdrop-filter: blur(26px) saturate(1.7);
+    backdrop-filter: blur(26px) saturate(1.7);
+    border: 1px solid color-mix(in srgb, white 34%, transparent);
     box-shadow:
-      inset 0 1px 0 color-mix(in srgb, white 28%, transparent),
-      0 36px 90px -58px color-mix(in srgb, var(--foreground) 38%, transparent);
+      inset 0 1px 0 color-mix(in srgb, white 55%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, white 12%, transparent),
+      0 36px 90px -58px color-mix(in srgb, var(--foreground) 45%, transparent);
+  }
+
+  :global(.dark) .control-rail {
+    border-color: color-mix(in srgb, white 14%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 20%, transparent),
+      inset 0 -1px 0 color-mix(in srgb, white 6%, transparent),
+      0 36px 90px -58px rgba(0, 0, 0, 0.8);
   }
 
   .control-rail::before {
@@ -312,12 +358,46 @@ const proofItems = [
     pointer-events: none;
     inset: 0;
     background: linear-gradient(
-      118deg,
-      color-mix(in srgb, white 20%, transparent),
-      transparent 28%,
-      transparent 72%,
-      color-mix(in srgb, var(--auth-gradient-end) 10%, transparent)
+      115deg,
+      color-mix(in srgb, white 30%, transparent),
+      transparent 24%,
+      transparent 70%,
+      color-mix(in srgb, var(--auth-gradient-end) 14%, transparent)
     );
+  }
+
+  :global(.dark) .control-rail::before {
+    background: linear-gradient(
+      115deg,
+      color-mix(in srgb, white 10%, transparent),
+      transparent 24%,
+      transparent 70%,
+      color-mix(in srgb, var(--auth-gradient-end) 18%, transparent)
+    );
+  }
+
+  /* Glass needs backdrop-filter; without it (or when the user asks for
+     reduced transparency) the rail falls back to a solid card. */
+  @supports not (backdrop-filter: blur(1px)) {
+    .control-rail {
+      background: color-mix(in srgb, var(--card) 92%, var(--background));
+    }
+
+    .control-glow {
+      display: none;
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .control-rail {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background: color-mix(in srgb, var(--card) 92%, var(--background));
+    }
+
+    .control-glow {
+      display: none;
+    }
   }
 
   .story-link {
