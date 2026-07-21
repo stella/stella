@@ -166,6 +166,13 @@ const candidatesForPart = ({
   inputOnly: string[];
 }): Candidate[] => {
   const properties = propertyMap(schema);
+  if (
+    schema !== undefined &&
+    Object.keys(properties).length === 0 &&
+    (Array.isArray(schema["anyOf"]) || schema["additionalProperties"] === true)
+  ) {
+    inputOnly.push(part);
+  }
   const required = requiredSet(schema);
   const candidates: Candidate[] = [];
   for (const [prop, propSchema] of Object.entries(properties)) {

@@ -645,6 +645,37 @@ describe("error tiers -> exit codes (S4)", () => {
 });
 
 describe("help surfaces --input for inputOnly tools", () => {
+  test("template fill --help renders its free-map shape and a complete example", async () => {
+    const server = startMockServer(() => ({ toolPayload: {} }));
+    const result = await runCli({
+      args: ["template", "fill", "--help"],
+      url: server.url,
+      token: makeToken(["templates"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("values.<key>  any JSON value  required");
+    expect(result.stdout).toContain(
+      `--input '{"template_id":"xxxxx","values":{"key":"value"}}'`,
+    );
+  });
+
+  test("uploads create --help renders every union branch from the schema", async () => {
+    const server = startMockServer(() => ({ toolPayload: {} }));
+    const result = await runCli({
+      args: ["uploads", "create", "--help"],
+      url: server.url,
+      token: WRITE,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('purpose = "entity_create"');
+    expect(result.stdout).toContain('purpose = "entity_version"');
+    expect(result.stdout).toContain('purpose = "agent_skill"');
+    expect(result.stdout).toContain("body.sha256Hex  string  required");
+    expect(result.stdout).toContain('"params":{"workspaceId":"xxxxx"}');
+  });
+
   test("template save --help documents the --input-only fields", async () => {
     const server = startMockServer(() => ({ toolPayload: {} }));
     const result = await runCli({

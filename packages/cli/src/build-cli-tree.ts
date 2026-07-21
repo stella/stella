@@ -15,6 +15,10 @@ import type {
 } from "@stricli/core";
 
 import type { Context } from "./context.js";
+import {
+  buildInputContractHelp,
+  formatInputExample,
+} from "./input-contract-help.js";
 import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
 import type {
   CapabilityLeafSpec,
@@ -174,10 +178,55 @@ const leafBrief = (spec: LeafCommandSpec): string => {
   return `Run the ${spec.toolName} tool${inputHint}`;
 };
 
+const fullDescription = ({
+  brief,
+  inputSchema,
+  inputOnly,
+  requiredPaths,
+}: {
+  brief: string;
+  inputSchema: Record<string, unknown> | undefined;
+  inputOnly: readonly string[];
+  requiredPaths: readonly string[];
+}): string | undefined => {
+  if (inputSchema === undefined) {
+    return undefined;
+  }
+  const contract = buildInputContractHelp({
+    schema: inputSchema,
+    inputOnly,
+    requiredPaths,
+  });
+  if (contract === undefined || contract.fields.length === 0) {
+    return undefined;
+  }
+  return [
+    brief,
+    "",
+    "--input JSON fields (explicit value flags override matching JSON paths):",
+    ...contract.fields.map((line) => `  ${line}`),
+    "",
+    "Complete JSON example:",
+    `  ${formatInputExample(contract.example)}`,
+  ].join("\n");
+};
+
 const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
   const flags = buildLeafFlags(spec);
+  const brief = leafBrief(spec);
+  const description = fullDescription({
+    brief,
+    inputSchema: spec.inputSchema,
+    inputOnly: spec.inputOnly,
+    requiredPaths: spec.flags
+      .filter((flag) => flag.required)
+      .map((flag) => flag.prop),
+  });
   const builderArgs = {
-    docs: { brief: leafBrief(spec) },
+    docs: {
+      brief,
+      ...(description === undefined ? {} : { fullDescription: description }),
+    },
     parameters: { flags },
     func: async function func(
       this: Context,
@@ -276,8 +325,20 @@ const buildCapabilityLeafCommand = (
   spec: CapabilityLeafSpec,
 ): RoutingTarget => {
   const flags = buildCapabilityLeafFlags(spec);
+  const brief = capabilityLeafBrief(spec);
+  const description = fullDescription({
+    brief,
+    inputSchema: spec.inputSchema,
+    inputOnly: spec.inputOnly,
+    requiredPaths: spec.flags
+      .filter((flag) => flag.required)
+      .map((flag) => `${flag.part}.${flag.partPath}`),
+  });
   const builderArgs = {
-    docs: { brief: capabilityLeafBrief(spec) },
+    docs: {
+      brief,
+      ...(description === undefined ? {} : { fullDescription: description }),
+    },
     parameters: { flags },
     func: async function func(
       this: Context,
