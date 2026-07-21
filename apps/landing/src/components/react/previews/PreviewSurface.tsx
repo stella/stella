@@ -1,9 +1,13 @@
 import type { PropsWithChildren } from "react";
 
 // Faux app-window chrome shared by every product preview, so each one reads as a
-// real product surface. Non-interactive (the outer ProductMediaFrame supplies the
-// glass frame, border, and aspect ratio); colors come from the same semantic
-// tokens the rest of the landing uses, so previews adapt to the theme.
+// real product surface. This is the preview's own window (border, radius,
+// shadow), matching the frameless language every other media type on product
+// pages uses (MacWindow, CliMcpPreview's mac-window scenes, a plain image's
+// own border+shadow): ProductMediaFrame no longer wraps media in a glass
+// frame, so the window has to carry its own edges. Colors come from the same
+// semantic tokens the rest of the landing uses, so previews adapt to the
+// theme.
 type PreviewSurfaceProps = PropsWithChildren<{ title: string }>;
 
 const DOT = (opacity: number) => ({
@@ -12,9 +16,13 @@ const DOT = (opacity: number) => ({
 
 export const PreviewSurface = ({ title, children }: PreviewSurfaceProps) => (
   <div
-    className="pointer-events-none flex h-full w-full flex-col select-none"
+    className="pointer-events-none flex h-full w-full flex-col overflow-hidden rounded-[1.1rem] border select-none"
     style={{
-      background: "color-mix(in srgb, var(--card) 60%, var(--background))",
+      borderColor: "color-mix(in srgb, var(--foreground) 11%, transparent)",
+      // --card is translucent in the dark theme; composite it over the page
+      // background for an opaque window instead of a translucency artifact.
+      background: "linear-gradient(var(--card), var(--card)) var(--background)",
+      boxShadow: "0 42px 110px -54px rgba(15, 23, 42, 0.5)",
     }}
     aria-hidden="true"
   >

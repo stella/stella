@@ -36,11 +36,16 @@ export type ProductMedia =
       aspect?: string;
     };
 
-// Frame recipes for ProductMediaFrame. "wash" is the neutral diagonal glass
-// gradient (the default everywhere, including menu thumbnails); "bloom" adds a
-// low-percentage radial accent glow in the frame's end corner; "ripple" lays a
-// faint excerpt of the hero gradient artwork under the glass. Pages assign
-// variants so no two adjacent frames on one page share a recipe.
+// Frame recipes for ProductMediaFrame. DORMANT: product pages now use the
+// homepage's frameless language (each media type paints its own window; see
+// HomeProductStory's .story-window), so ProductMediaFrame no longer renders
+// a glass ring and these recipes are visually inert. Kept on the data model,
+// unchanged from when "wash" was the neutral diagonal glass gradient
+// (default everywhere, including menu thumbnails), "bloom" added a
+// low-percentage radial accent glow in the frame's end corner, and "ripple"
+// laid a faint excerpt of the hero gradient artwork under the glass; a
+// planned faint background-accent pass will decide what (if anything) these
+// drive next, so don't delete them as dead data in the meantime.
 export type FrameVariant = "wash" | "bloom" | "ripple";
 
 // Accent hues reused from scenes and tokens that already exist in the landing;
@@ -64,7 +69,7 @@ export type ProductSection = {
   heading: string;
   bullets: readonly string[];
   media: ProductMedia;
-  /** Frame recipe for this section's media frame; defaults to "wash". */
+  /** Frame recipe for this section's media frame; dormant, see `FrameVariant`. */
   frameVariant?: FrameVariant;
 };
 
@@ -92,11 +97,11 @@ export type Product = {
    */
   metaDescription?: string;
   hero: ProductMedia;
-  /** Frame recipe for the hero media frame; defaults to "wash". */
+  /** Frame recipe for the hero media frame; dormant, see `FrameVariant`. */
   heroFrameVariant?: FrameVariant;
   /**
    * Accent hue for this product's "bloom" frames, from `frameAccents`.
-   * Bloom frames without an accent fall back to the tide token.
+   * Dormant along with `FrameVariant`/`heroFrameVariant`/`frameVariant`.
    */
   frameAccent?: FrameAccent;
   quickAnswer: ProductFaq;

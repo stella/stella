@@ -16,23 +16,19 @@ type Props = {
   deferThemeImage?: boolean;
   thumbnail?: boolean;
   /**
-   * Frame background recipe; "wash" keeps the neutral glass gradient and is
-   * the default (menu thumbnails always stay on it for calm).
+   * Frame recipe inputs (kept for call-site/type compatibility only).
+   * Product pages now use the homepage's frameless language: each media
+   * type paints its own window (chrome, border, shadow) and this component
+   * no longer wraps it in a glass ring, so `variant` and `accent` render
+   * nothing here. They stay wired through the data files, `types.ts`, and
+   * every call site for a planned faint background-accent pass; do not
+   * delete them as dead props before that pass lands.
    */
   variant?: FrameVariant;
-  /** Accent hue for the "bloom" glow, from `frameAccents`. */
   accent?: FrameAccent;
 };
-const {
-  media,
-  compact = false,
-  deferThemeImage = false,
-  thumbnail = false,
-  variant = "wash",
-  accent,
-} = Astro.props;
+const { media, compact = false, deferThemeImage = false, thumbnail = false } = Astro.props;
 const aspect = media.aspect ?? "16 / 9";
-const accentStyle = accent === undefined ? "" : `; --frame-accent: ${accent}`;
 
 // A video slot upgrades from skeleton to <video> the moment its file lands in
 // public/. The build's cwd is the Astro project dir (apps/landing), so resolve
@@ -43,32 +39,7 @@ const posterReady = media.type === "video" && media.poster !== undefined && vide
 const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sceneId] : undefined;
 ---
 
-<div
-  class:list={[
-    "product-media relative overflow-hidden",
-    variant === "bloom" && "frame-bloom",
-    compact
-      ? "rounded-xl p-1.5"
-      : "rounded-[2rem] p-[clamp(1rem,3vw,2.5rem)]",
-  ]}
-  style={`aspect-ratio: ${aspect}${accentStyle}`}
->
-  {
-    variant === "ripple" && (
-      <div class="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div class="frame-ripple-layer frame-ripple-light" />
-        <div class="frame-ripple-layer frame-ripple-dark" />
-      </div>
-    )
-  }
-
-  <div
-    class="product-media-sheen pointer-events-none absolute -top-1/2 start-[8%] z-10 h-full w-[42%] rotate-[18deg] rounded-full blur-3xl"
-    style="background: color-mix(in srgb, white 20%, transparent)"
-    aria-hidden="true"
-  >
-  </div>
-
+<div class="product-media relative" style={`aspect-ratio: ${aspect}`}>
   {
     media.type === "preview" && (
       <div class="absolute inset-0">
@@ -124,7 +95,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
         lightSrc={storyThumbnail.src}
         darkSrc={storyThumbnail.darkSrc}
         alt={storyThumbnail.alt}
-        class="relative z-1 h-full w-full rounded-lg border object-cover"
+        class="h-full w-full rounded-lg border object-cover"
         style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"
         loading="lazy"
         decoding="async"
@@ -139,8 +110,8 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
         lightSrc={media.src}
         darkSrc={media.darkSrc}
         alt={media.alt}
-        class={`relative z-1 h-full w-full border object-cover object-top ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
-        style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 28px 70px -38px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255,255,255,.24)"
+        class={`h-full w-full border object-cover object-top ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
+        style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5)"
         loading="lazy"
         decoding="async"
         defer={deferThemeImage ? "manual" : undefined}
@@ -151,7 +122,8 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
   {
     media.type === "video" && videoReady && (
       <video
-        class="absolute inset-0 h-full w-full object-cover"
+        class={`absolute inset-0 h-full w-full border object-cover ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
+        style="border-color: color-mix(in srgb, var(--foreground) 11%, transparent); box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5)"
         poster={posterReady ? media.poster : undefined}
         aria-label={media.alt}
         autoplay
@@ -170,64 +142,15 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
 </div>
 
 <style>
-  /* Neutral glass base shared by every recipe; "wash" is exactly this. The
-     variants layer on top of it so the frame never loses its glass footing. */
+  /* Frameless: the wrapper only reserves the aspect ratio and stays visible
+     (no clipping), so every media type's own window shadow can breathe past
+     its box edge, matching HomeProductStory's .story-window. Each branch
+     above supplies its own chrome, border, and shadow (MacWindow, the
+     mac-window scenes in CliMcpPreview, PreviewSurface, or the border+shadow
+     on the plain <img>/<video> element) instead of relying on a shared ring
+     here. */
   .product-media {
-    background: linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--card) 88%, var(--background)),
-      color-mix(in srgb, var(--muted) 52%, var(--background))
-    );
-    box-shadow: inset 0 1px 0 color-mix(in srgb, white 22%, transparent);
-  }
-
-  /* "bloom": a radial accent glow anchored to the frame's end corner via
-     logical insets, so it mirrors correctly under RTL like the sheen does.
-     The accent stays at a low mix percentage; it is a background, never a
-     competitor to the screenshot. ::before paints below every positioned
-     child (tree order), keeping the glow under the media. */
-  .frame-bloom::before {
-    content: "";
-    position: absolute;
-    pointer-events: none;
-    inset-block-start: -22%;
-    inset-inline-end: -14%;
-    inline-size: 62%;
-    block-size: 78%;
-    background: radial-gradient(
-      closest-side,
-      color-mix(in srgb, var(--frame-accent, var(--auth-gradient-end)) 12%, transparent),
-      transparent
-    );
-  }
-
-  /* "ripple": a faint excerpt of the hero gradient artwork under the glass,
-     theme-switched with the same light/dark opacity toggle the hero and the
-     footer art use. Static background-image only; no animation in frames. */
-  .frame-ripple-layer {
-    position: absolute;
-    inset: 0;
-    background-size: cover;
-    background-position: center 30%;
-    transition: opacity 500ms ease;
-  }
-
-  .frame-ripple-light {
-    background-image: url("/images/gradients/hero-light.svg");
-    opacity: 0.4;
-  }
-
-  .frame-ripple-dark {
-    background-image: url("/images/gradients/hero-dark.svg");
-    opacity: 0;
-  }
-
-  :global(.dark) .frame-ripple-light {
-    opacity: 0;
-  }
-
-  :global(.dark) .frame-ripple-dark {
-    opacity: 0.35;
+    overflow: visible;
   }
 
   /* Portrait document window: full frame height, width derived from the

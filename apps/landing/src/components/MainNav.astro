@@ -257,22 +257,13 @@ const compactMenus = [
   /* Frameless previews: the pane's own media (ThemeImage's border + shadow,
      or the recorded scene's own window chrome) is the only frame, matching
      the homepage's frameless story windows (HomeProductStory .story-window /
-     .story-shot-main). ProductMediaFrame's outer glass frame is shared with
-     product-page heroes, so it is stripped here rather than in that
-     component; !important overrides its own scoped background/shadow rule
-     and the compact variant's padding/radius utility classes. */
+     .story-shot-main) and ProductMediaFrame everywhere else now. The only
+     override still needed here is aspect: every pane shares one preview
+     size regardless of the media's own aspect (the CLI scene is 2.03
+     elsewhere), and the scene thumbnails lay out in percentages, so they
+     adapt to the unified box. */
   .nav-mega-pane :global(.product-media) {
-    background: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    border-radius: 0 !important;
-    /* Every pane shares one preview size regardless of the media's own
-       aspect (the CLI scene is 2.03 elsewhere); the scene thumbnails lay
-       out in percentages, so they adapt to the unified box. */
     aspect-ratio: 16 / 10 !important;
-  }
-  .nav-mega-pane :global(.product-media-sheen) {
-    display: none !important;
   }
 </style>
 
