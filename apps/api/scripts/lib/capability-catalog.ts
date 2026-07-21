@@ -1172,24 +1172,6 @@ const READ_SCOPE_BY_DOMAIN_SCOPE: Record<string, string> = {
 export const readScopeForDomainScope = (domainScope: string): string =>
   READ_SCOPE_BY_DOMAIN_SCOPE[domainScope] ?? domainScope;
 
-/**
- * True when a handler decides authorization at runtime — the access-control
- * `.authorize(` method, or an `authorize<Name>(` helper such as
- * `authorizeUploadPurpose`. Matched against the handler's OWN source, never the
- * route macro (which lives in the framework, not the handler file).
- *
- * The export guard uses this to catch the class the uploads bug belonged to: a
- * capability inferred `read` from its route permission whose handler enforces a
- * write at runtime. `access` is only soundly inferable when the declared
- * permission is an upper bound on what the handler enforces; a runtime
- * authorization can exceed it, so such a handler must be classified explicitly.
- */
-export const RUNTIME_AUTHORIZATION_PATTERN =
-  /\.authorize\(|\bauthorize[A-Z]\w*\(/u;
-
-export const performsRuntimeAuthorization = (source: string): boolean =>
-  RUNTIME_AUTHORIZATION_PATTERN.test(source);
-
 export type ScopeResolution =
   | { status: "resolved"; readScope: string; writeScope: string }
   | { status: "acknowledged-unmapped" }

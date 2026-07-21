@@ -592,7 +592,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["case-law", "analysis", "generate"],
                 capabilityId: "case-law.analysis.generate",
-                access: "read",
+                access: "write",
                 flags: [
                   {
                     kind: "string",
@@ -607,7 +607,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "read",
+                scope: "matters_write",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -7763,7 +7763,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "versions-summarize"],
             capabilityId: "clauses.versions-summarize",
-            access: "read",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -7787,7 +7787,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "read",
+            scope: "knowledge_write",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -13769,7 +13769,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "organize-suggestions"],
             capabilityId: "entities.organize-suggestions",
-            access: "read",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -13802,7 +13802,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: ["body.existingFolders", "body.files"],
             paginated: false,
             destructive: false,
-            scope: "read",
+            scope: "matters_write",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -21015,7 +21015,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "version-summarize"],
             capabilityId: "entities.version-summarize",
-            access: "read",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -21048,7 +21048,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "read",
+            scope: "matters_write",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -48544,7 +48544,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["reports", "read-export"],
             capabilityId: "reports.read-export",
-            access: "read",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -48568,7 +48568,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "read",
+            scope: "matters_write",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -57144,7 +57144,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "versions-summarize"],
             capabilityId: "templates.versions-summarize",
-            access: "read",
+            access: "write",
             flags: [
               {
                 kind: "string",

@@ -29,7 +29,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability                     | Access             | Scope                | Feature            | Reachable via                                          |
 | ------------------------------ | ------------------ | -------------------- | ------------------ | ------------------------------------------------------ |
-| `case-law.analysis.generate`   | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella case-law analysis generate`   |
+| `case-law.analysis.generate`   | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella case-law analysis generate`   |
 | `case-law.ingestion.status`    | read               | stella:read          | FEATURE_PUBLIC_LAW | generic invoke → `stella case-law ingestion status`    |
 | `case-law.matter-links.create` | write              | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella case-law matter-links create` |
 | `case-law.matter-links.delete` | write, destructive | stella:matters_write | FEATURE_PUBLIC_LAW | generic invoke → `stella case-law matter-links delete` |
@@ -77,7 +77,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `clauses.variants-update`       | write              | stella:knowledge_write | —       | generic invoke → `stella clauses variants-update`                    |
 | `clauses.versions-diff`         | read               | stella:read            | —       | generic invoke → `stella clauses versions-diff`                      |
 | `clauses.versions-restore`      | write              | stella:knowledge_write | —       | generic invoke → `stella clauses versions-restore`                   |
-| `clauses.versions-summarize`    | read               | stella:read            | —       | generic invoke → `stella clauses versions-summarize`                 |
+| `clauses.versions-summarize`    | write              | stella:knowledge_write | —       | generic invoke → `stella clauses versions-summarize`                 |
 
 ## contacts
 
@@ -121,7 +121,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.list-files`                 | read               | stella:read            | —       | covered by `list_documents`                                          |
 | `entities.list-folders`               | read               | stella:read            | —       | covered by `list_documents`                                          |
 | `entities.move`                       | write              | stella:documents_write | —       | covered by `save_document`                                           |
-| `entities.organize-suggestions`       | read               | stella:read            | —       | generic invoke → `stella entities organize-suggestions`              |
+| `entities.organize-suggestions`       | write              | stella:matters_write   | —       | generic invoke → `stella entities organize-suggestions`              |
 | `entities.read-filesystem-tree`       | read               | stella:read            | —       | covered by `list_documents`                                          |
 | `entities.read-summaries`             | read               | stella:read            | —       | covered by `list_documents`                                          |
 | `entities.read-summaries-count`       | read               | stella:read            | —       | covered by `list_documents`                                          |
@@ -136,7 +136,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.upload`                     | write              | stella:matters_write   | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 | `entities.upload-version`             | write              | stella:matters_write   | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 | `entities.version-diff`               | read               | stella:read            | —       | covered by `read_document`                                           |
-| `entities.version-summarize`          | read               | stella:read            | —       | generic invoke → `stella entities version-summarize`                 |
+| `entities.version-summarize`          | write              | stella:matters_write   | —       | generic invoke → `stella entities version-summarize`                 |
 
 ## expenses
 
@@ -261,7 +261,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `reports.export-view`    | write  | stella:matters_write | —       | generic invoke → `stella reports export-view`    |
 | `reports.list-exports`   | read   | stella:read          | —       | generic invoke → `stella reports list-exports`   |
 | `reports.list-templates` | read   | stella:read          | —       | generic invoke → `stella reports list-templates` |
-| `reports.read-export`    | read   | stella:read          | —       | generic invoke → `stella reports read-export`    |
+| `reports.read-export`    | write  | stella:matters_write | —       | generic invoke → `stella reports read-export`    |
 
 ## skills
 
@@ -353,7 +353,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `templates.list`                  | read               | stella:templates | —       | curated tool `list_templates`                                        |
 | `templates.lookup-preview`        | read               | stella:templates | —       | generic invoke → `stella templates lookup-preview`                   |
 | `templates.manifest`              | read               | stella:templates | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
-| `templates.prefill`               | read               | stella:templates | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `templates.prefill`               | write              | stella:templates | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 | `templates.prepare`               | write              | stella:templates | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 | `templates.preview`               | read               | stella:templates | —       | generic invoke → `stella templates preview`                          |
 | `templates.save-document`         | write              | stella:templates | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
@@ -362,7 +362,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `templates.versions-diff`         | read               | stella:templates | —       | generic invoke → `stella templates versions-diff`                    |
 | `templates.versions-get`          | read               | stella:templates | —       | generic invoke → `stella templates versions-get`                     |
 | `templates.versions-list`         | read               | stella:templates | —       | generic invoke → `stella templates versions-list`                    |
-| `templates.versions-summarize`    | read               | stella:templates | —       | generic invoke → `stella templates versions-summarize`               |
+| `templates.versions-summarize`    | write              | stella:templates | —       | generic invoke → `stella templates versions-summarize`               |
 
 ## time-entries
 
