@@ -1,5 +1,9 @@
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
+  BACKFILL_SK_DOCUMENTS_TASK,
+  backfillSkDocuments,
+} from "@/api/lib/scheduler/tasks/case-law-sk-documents";
+import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
@@ -27,4 +31,5 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     [INFO_SOUD_SYNC_TRACKED_CASES_TASK, syncInfoSoudTrackedCases],
     [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
     [FLOW_RUN_TASK, runScheduledFlow],
+    [BACKFILL_SK_DOCUMENTS_TASK, backfillSkDocuments],
   ]);
