@@ -17,20 +17,6 @@
       "reason": "Transitive; defu merges internal config objects, not untrusted input."
     },
     {
-      "id": "GHSA-v39h-62p7-jpjc",
-      "severity": "high",
-      "package": "fast-uri",
-      "title": "fast-uri host confusion via percent-encoded authority delimiters",
-      "reason": "Transitive URI parser in tooling; outbound fetches use the SSRF-guarded resolver, not fast-uri."
-    },
-    {
-      "id": "GHSA-q3j6-qgpj-74h6",
-      "severity": "high",
-      "package": "fast-uri",
-      "title": "fast-uri path traversal via percent-encoded dot segments",
-      "reason": "See GHSA-v39h-62p7-jpjc."
-    },
-    {
       "id": "GHSA-88fw-hqm2-52qc",
       "severity": "high",
       "package": "hono",
