@@ -122,6 +122,7 @@ export const createStoredStyleSet = async ({
                 cause,
               }),
           }),
+          "Rejected style set package cleanup failed",
         );
       }
     }
@@ -384,6 +385,7 @@ export const replaceStoredStyleSet = async ({
                 cause,
               }),
           }),
+          "Replacement style set package cleanup failed",
         );
       }
     }

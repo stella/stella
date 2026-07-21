@@ -156,7 +156,9 @@ export const deleteWorkspaceHandler = async function* ({
         fileRows: fileRefs,
         organizationId,
         workspaceId,
-      }).then((result) => Result.unwrap(result)),
+      }).then((result) =>
+        Result.unwrap(result, "Workspace entity file cleanup failed"),
+      ),
     );
   }
 
@@ -175,7 +177,9 @@ export const deleteWorkspaceHandler = async function* ({
               ]
             : [file.s3Key],
         ),
-      ).then((result) => Result.unwrap(result)),
+      ).then((result) =>
+        Result.unwrap(result, "Workspace chat file cleanup failed"),
+      ),
     );
   }
 

@@ -59,7 +59,10 @@ const deleteTemplateHandler = async function* ({
     s3Keys.add(v.s3Key);
   }
 
-  Result.unwrap(await deleteS3Keys([...s3Keys]));
+  Result.unwrap(
+    await deleteS3Keys([...s3Keys]),
+    "Template file cleanup must succeed before deleting database records",
+  );
 
   yield* Result.await(
     safeDb(async (tx) => {
