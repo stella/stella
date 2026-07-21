@@ -63,6 +63,7 @@ import {
 import type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat-session";
 
 export const ChatThreadMessages = ({
+  activeFileName,
   approvalPendingMessageId,
   error,
   hasOlderMessages = false,
@@ -199,6 +200,7 @@ export const ChatThreadMessages = ({
         {message.role === "assistant" ? (
           <>
             <AssistantMessageParts
+              activeFileName={activeFileName}
               activeOrganizationId={activeOrganizationId}
               isGenerating={generationActive}
               isLatestAssistantMessage={
@@ -995,6 +997,14 @@ const getRetryableAssistantMessageId = (
 };
 
 type ChatThreadMessagesProps = {
+  /**
+   * The active file's display name, when one is open (the DOCX/PDF file
+   * overlay). Threaded down to `ToolApprovalCard` so an
+   * `edit_workspace_document` approval can show which document the edits
+   * target; surfaces with no active file (main chat, Template Studio,
+   * inspector) omit it and the card falls back to a generic summary.
+   */
+  activeFileName?: string | undefined;
   approvalPendingMessageId: string | null;
   error?: Error | undefined;
   /** Whether an older page exists to load above the current top. */
@@ -1138,6 +1148,7 @@ const QueuedUserMessages = ({
 
 type AssistantMessagePartsProps = Pick<
   ChatThreadMessagesProps,
+  | "activeFileName"
   | "onAskUserEditAndRerun"
   | "onAskUserEditingChange"
   | "onAskUserSubmit"
@@ -1162,6 +1173,7 @@ type AssistantMessagePartsProps = Pick<
  * remount on every streaming text delta.
  */
 const AssistantMessageParts = ({
+  activeFileName,
   activeOrganizationId,
   isGenerating,
   isLatestAssistantMessage,
@@ -1291,6 +1303,7 @@ const AssistantMessageParts = ({
           if (isApprovalPart(part)) {
             return (
               <ToolApprovalCard
+                activeFileName={activeFileName}
                 key={part.id}
                 part={part}
                 workspaceId={workspaceId}

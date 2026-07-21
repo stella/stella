@@ -55,6 +55,7 @@ import { useChatEditor } from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
+import { ChatEditModeSelector } from "@/components/chat/chat-edit-mode-selector";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
@@ -85,6 +86,11 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
+import { docxEditRepresentationForSelection } from "@/lib/chat-edit-mode";
+import {
+  getChatEditModeSelection,
+  useChatEditModeStore,
+} from "@/lib/chat-edit-mode-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -1024,6 +1030,18 @@ const FileChatOverlayInner = ({
   }, [docxComments]);
   const hasDocxEditSurface =
     activeFile !== undefined && docxEditorRef !== undefined;
+  // The composer's edit-mode selector (auto · track changes / auto ·
+  // rewrite / manual review) is only meaningful -- and only shown --
+  // when there's an actual editable DOCX to apply edits to, mirroring
+  // `docxEditSnapshot.canApplyEdits` below (`Boolean(docxEditable)`).
+  // A locked/read-only DOCX still has `hasDocxEditSurface` true (the
+  // editor bridge is mounted) but no edits can land, so the selector
+  // would offer a choice with nothing to apply it to.
+  const canSelectEditMode = hasDocxEditSurface && Boolean(docxEditable);
+  const editModeOptionId = useChatEditModeStore((state) => state.optionId);
+  const setEditModeOptionId = useChatEditModeStore(
+    (state) => state.setOptionId,
+  );
   // Folio's PM view exists almost immediately after DocxBrowserEditor
   // mounts but there is a sub-100ms window where the ref is set but
   // `createAIEditSnapshot()` still returns null. Sending a message in
@@ -1219,6 +1237,17 @@ const FileChatOverlayInner = ({
       ? {
           handleActiveDocxEditToolCall: (input: ApplyActiveDocxEditsInput) =>
             handleActiveDocxEditToolCall(input),
+        }
+      : {}),
+    // Only sent when an editable DOCX is actually open (see
+    // `canSelectEditMode`'s doc comment) -- reads the live store value at
+    // send time rather than the closed-over render value, same as
+    // `getSendMode`/`getChatSendMode` above.
+    ...(canSelectEditMode
+      ? {
+          getEditApplyMode: () => getChatEditModeSelection().editApplyMode,
+          getDocxEditRepresentation: () =>
+            docxEditRepresentationForSelection(getChatEditModeSelection()),
         }
       : {}),
   };
@@ -1833,6 +1862,7 @@ const FileChatOverlayInner = ({
           handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
           handleApprove: handleApproveWithDocxUnlock,
           handleDeny,
+          handleRetryAfterAuthorNameSet: resendLatestMessage,
           blockedApprovalTools,
         }}
       >
@@ -1842,6 +1872,7 @@ const FileChatOverlayInner = ({
             scrollRef={threadScrollRef}
           >
             <ChatThreadMessages
+              activeFileName={activeFile?.fileName}
               approvalPendingMessageId={approvalPendingMessageId}
               error={error}
               hasOlderMessages={olderCursor !== null}
@@ -1967,6 +1998,14 @@ const FileChatOverlayInner = ({
                   <ChatMatterPicker
                     matterIds={contextMatterIds}
                     onChange={setContextMatterIds}
+                  />
+                ) : undefined
+              }
+              endExtras={
+                canSelectEditMode ? (
+                  <ChatEditModeSelector
+                    onChange={setEditModeOptionId}
+                    optionId={editModeOptionId}
                   />
                 ) : undefined
               }

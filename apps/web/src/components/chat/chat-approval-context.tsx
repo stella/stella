@@ -44,6 +44,17 @@ type ChatApprovalContextValue = {
    * read this directly so the policy stays close to the gate.
    */
   blockedApprovalTools?: ReadonlySet<ApprovalToolName> | undefined;
+  /**
+   * Regenerates the current turn after the user has just set a preferred
+   * name from `edit_workspace_document`'s "author name required" modal
+   * (see `EDIT_WORKSPACE_DOCUMENT_AUTHOR_NAME_REQUIRED_CODE` on the
+   * backend). Maps to `chat.reload()` (via `resendLatestMessage`) so the
+   * model can re-issue the same tool call now that
+   * `resolveDocxEditAuthorName` resolves. Optional: surfaces that never
+   * register the `auto` DOCX-edit tool (every surface but the file
+   * overlay) never need to supply it.
+   */
+  handleRetryAfterAuthorNameSet?: (() => void | PromiseLike<void>) | undefined;
 };
 
 export const ChatApprovalContext =

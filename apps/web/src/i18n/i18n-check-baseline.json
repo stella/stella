@@ -55,7 +55,6 @@
     "billing.invoices.dueDate",
     "billing.invoices.statuses.draft",
     "billing.invoices.statuses.paid",
-    "billing.running",
     "billing.selectedCount",
     "billing.statuses.approved",
     "billing.statuses.draft",
@@ -118,7 +117,6 @@
     "flows.status.cancelled",
     "flows.status.failed",
     "flows.status.pending",
-    "flows.status.running",
     "flows.status.skipped",
     "flows.steps.createDocument",
     "flows.trigger.manual",
@@ -183,7 +181,6 @@
     "search.updatedWithinOptions.month",
     "search.updatedWithinOptions.week",
     "selfhost.dismissUpdate",
-    "settings.account.desktop",
     "settings.account.title",
     "settings.account.twoFactor.enabledStatus",
     "settings.account.wordEditShortcutPlaceholder",
@@ -357,6 +354,90 @@
     "chat.contextMeter.tools": [
       "de"
     ],
+    "chat.editMode.autoDirect": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "chat.editMode.autoDirectDescription": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "chat.editMode.autoTrackedChanges": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "chat.editMode.autoTrackedChangesDescription": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "chat.editMode.manual": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "chat.editMode.manualDescription": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "chat.folioCitationFallback": [
       "es",
       "fr"
@@ -367,7 +448,7 @@
     "chat.suggestionSeverity.style": [
       "fr"
     ],
-    "chat.tool.add_comment": [
+    "chat.tool.edit_workspace_document": [
       "ar",
       "cs",
       "de",
@@ -381,7 +462,7 @@
       "pt-BR",
       "sk"
     ],
-    "chat.tool.compare_versions": [
+    "chat.tool.editWorkspaceDocumentApplied": [
       "ar",
       "cs",
       "de",
@@ -395,7 +476,7 @@
       "pt-BR",
       "sk"
     ],
-    "chat.tool.find_text": [
+    "chat.tool.editWorkspaceDocumentAppliedWithSkipped": [
       "ar",
       "cs",
       "de",
@@ -409,7 +490,7 @@
       "pt-BR",
       "sk"
     ],
-    "chat.tool.read_changes": [
+    "chat.tool.editWorkspaceDocumentAuthorNameDialogDescription": [
       "ar",
       "cs",
       "de",
@@ -423,7 +504,7 @@
       "pt-BR",
       "sk"
     ],
-    "chat.tool.read_comments": [
+    "chat.tool.editWorkspaceDocumentAuthorNameDialogTitle": [
       "ar",
       "cs",
       "de",
@@ -437,7 +518,7 @@
       "pt-BR",
       "sk"
     ],
-    "chat.tool.read_document": [
+    "chat.tool.editWorkspaceDocumentRepresentationDirect": [
       "ar",
       "cs",
       "de",
@@ -451,7 +532,7 @@
       "pt-BR",
       "sk"
     ],
-    "chat.tool.reply_comment": [
+    "chat.tool.editWorkspaceDocumentRepresentationTrackedChanges": [
       "ar",
       "cs",
       "de",
@@ -465,7 +546,21 @@
       "pt-BR",
       "sk"
     ],
-    "chat.tool.resolve_comment": [
+    "chat.tool.editWorkspaceDocumentSetNameAction": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "chat.tool.editWorkspaceDocumentSummary": [
       "ar",
       "cs",
       "de",
@@ -1895,9 +1990,6 @@
       "pt-BR",
       "sk"
     ],
-    "knowledge.sections.agents.title": [
-      "fr"
-    ],
     "knowledge.sections.prompts.title": [
       "de"
     ],
@@ -2646,34 +2738,6 @@
       "fr"
     ],
     "workspaces.properties.editConditionsWhen": [
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.properties.markedAsReviewed": [
-      "ar",
-      "cs",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "workspaces.properties.markThisGroupAsReviewed": [
-      "ar",
       "cs",
       "de",
       "es",

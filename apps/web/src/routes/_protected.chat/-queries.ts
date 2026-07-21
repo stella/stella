@@ -26,6 +26,10 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
+import type {
+  ChatEditApplyMode,
+  DocxEditRepresentation,
+} from "@/lib/chat-edit-mode";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
@@ -138,6 +142,24 @@ export type ChatThreadOptionsContext = {
    * next send carries the latest set.
    */
   getContextMatterIds?: (() => string[]) | undefined;
+  /**
+   * Which DOCX-edit review mode this turn uses ("manual" or "auto");
+   * omitted means the backend's own default (`DEFAULT_CHAT_EDIT_APPLY_MODE`).
+   * The file overlay reads this from the composer's edit-mode selector
+   * (`chat-edit-mode-store.ts`); Template Studio pins a literal `"manual"`
+   * instead, since it has no entity-backed active file for the `auto`
+   * tool (`edit_workspace_document`) to target.
+   */
+  getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
+  /**
+   * Redline representation for the `auto` review mode only
+   * ("tracked-changes" or "direct"); `undefined` when the current
+   * selection is "manual" (the representation is chosen per-suggestion
+   * at accept time on that path, not up front).
+   */
+  getDocxEditRepresentation?:
+    | (() => DocxEditRepresentation | undefined)
+    | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
   handleActiveDocxEditToolCall?:
@@ -994,6 +1016,16 @@ export const buildSendRequestBody = ({
     );
   }
 
+  const editApplyMode = context?.getEditApplyMode?.();
+  if (editApplyMode !== undefined) {
+    body.editApplyMode = editApplyMode;
+  }
+
+  const docxEditRepresentation = context?.getDocxEditRepresentation?.();
+  if (docxEditRepresentation !== undefined) {
+    body.docxEditRepresentation = docxEditRepresentation;
+  }
+
   if (import.meta.env.DEV) {
     const devModelId = useDevStore.getState().chatModelId;
     if (devModelId) {
@@ -1336,6 +1368,8 @@ const CHAT_CONTEXT_CAPABILITY_KEYS = [
   "getActiveSkill",
   "getActiveTemplate",
   "getContextMatterIds",
+  "getDocxEditRepresentation",
+  "getEditApplyMode",
   "getSendMode",
   "getUserContext",
   "handleActiveDocxEditToolCall",

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 process.env["VITE_API_URL"] ??= "https://api.example.test";
-const { hasAutomaticApproval } =
+const { describeEditWorkspaceDocumentOutcome, hasAutomaticApproval } =
   await import("@/components/chat/tool-approval-card.logic");
 
 const noGrants = new Set<never>();
@@ -31,5 +31,40 @@ describe("automatic tool approval", () => {
         name: "spawn_subagents",
       }),
     ).toBe(false);
+  });
+});
+
+describe("describeEditWorkspaceDocumentOutcome", () => {
+  test("reports applied and skipped counts on success", () => {
+    expect(
+      describeEditWorkspaceDocumentOutcome({
+        success: true,
+        applied: [{ id: "a" }, { id: "b" }],
+        skipped: [{ id: "c" }],
+      }),
+    ).toEqual({ kind: "applied", appliedCount: 2, skippedCount: 1 });
+  });
+
+  test("triggers the author-name-required modal for that exact code", () => {
+    expect(
+      describeEditWorkspaceDocumentOutcome({
+        success: false,
+        code: "author_name_required",
+        message: "Set a preferred name before using automatic document edits.",
+      }),
+    ).toEqual({
+      kind: "author-name-required",
+      message: "Set a preferred name before using automatic document edits.",
+    });
+  });
+
+  test("renders nothing for an unrecognized failure code", () => {
+    expect(
+      describeEditWorkspaceDocumentOutcome({
+        success: false,
+        code: "some_other_code",
+        message: "unused",
+      }),
+    ).toBeNull();
   });
 });

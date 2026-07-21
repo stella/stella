@@ -124,6 +124,9 @@ const CHAT_TOOL_TITLE_KEYS = {
   // Code-mode discovery companion to execute_typescript: fetches a read tool's
   // full signature on demand.
   discover_tools: "chat.tool.discover_tools",
+  // Headless (auto) counterpart to apply-active-docx-edits: writes a new
+  // entity version directly, no per-suggestion review step.
+  edit_workspace_document: "chat.tool.edit_workspace_document",
   // Code-mode sandbox runner (replaces run-stella-query).
   execute_typescript: "chat.tool.execute_typescript",
   "expand-chat-history": "chat.tool.expand-chat-history",
