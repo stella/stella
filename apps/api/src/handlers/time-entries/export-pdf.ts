@@ -281,6 +281,7 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "billing_admin" },
+  access: "read",
   query: exportPdfQuerySchema,
 } satisfies HandlerConfig;
 

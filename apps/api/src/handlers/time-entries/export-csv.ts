@@ -153,6 +153,7 @@ export const exportCsvHandler = async ({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "billing_admin" },
+  access: "read",
   query: exportCsvQuerySchema,
 } satisfies HandlerConfig;
 

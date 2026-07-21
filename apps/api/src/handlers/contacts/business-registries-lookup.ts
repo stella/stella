@@ -103,6 +103,7 @@ const businessRegistriesLookup = createSafeRootHandler(
       "registry-specific details.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "lookup_business_registry" },
+    access: "read",
     query: querySchema,
   },
   async function* ({ query, safeDb, session }) {

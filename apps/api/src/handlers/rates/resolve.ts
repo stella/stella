@@ -31,6 +31,7 @@ const resolveRateHandler = createSafeHandler(
       "rate applies.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "resolve_rate" },
+    access: "read",
     query: resolveRateQuerySchema,
   },
   async function* ({ safeDb, workspaceId, session, query }) {

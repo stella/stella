@@ -40,6 +40,7 @@ const readExpensesQuerySchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "billing_admin" },
+  access: "read",
   query: readExpensesQuerySchema,
 } satisfies HandlerConfig;
 
