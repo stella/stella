@@ -10,7 +10,6 @@ import {
 } from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { findDocxFieldForProperty } from "@/api/handlers/entities/desktop-edit-session-utils";
-import { validateDocxBuffer } from "@/api/handlers/entities/validate-docx-buffer";
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
@@ -32,6 +31,7 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import {

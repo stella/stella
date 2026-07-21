@@ -26,11 +26,11 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { resolveDocxEditAuthorName } from "@/api/handlers/chat/tools/resolve-docx-edit-author-name";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { createEntityVersionFromBuffer } from "@/api/handlers/entities/create-entity-version-from-buffer";
-import { validateDocxBuffer } from "@/api/handlers/entities/validate-docx-buffer";
-import { loadEntityVersionDocxBuffer } from "@/api/handlers/entities/version-diff-sources";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
+import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
+import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
 

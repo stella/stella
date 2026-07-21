@@ -335,7 +335,7 @@
     "files": {}
   },
   "cross-handler-imports": {
-    "count": 260,
+    "count": 252,
     "files": {
       "apps/api/src/handlers/catalogue/bundled-skill-resources.ts": 1,
       "apps/api/src/handlers/catalogue/install-skill.ts": 1,
@@ -352,7 +352,6 @@
       "apps/api/src/handlers/chat/send-message.ts": 2,
       "apps/api/src/handlers/chat/skills.ts": 1,
       "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts": 1,
-      "apps/api/src/handlers/chat/tools/edit-workspace-document-tools.ts": 3,
       "apps/api/src/handlers/chat/tools/infosoud-tools.ts": 2,
       "apps/api/src/handlers/chat/tools/skill-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/template-tools.ts": 4,
@@ -372,7 +371,6 @@
       "apps/api/src/handlers/entities/compute-version-diff.ts": 1,
       "apps/api/src/handlers/entities/copy-to-workspace.ts": 3,
       "apps/api/src/handlers/entities/copy-utils.ts": 4,
-      "apps/api/src/handlers/entities/create-entity-version-from-buffer.ts": 4,
       "apps/api/src/handlers/entities/create-from-buffer.ts": 4,
       "apps/api/src/handlers/entities/create-from-legal-source.ts": 1,
       "apps/api/src/handlers/entities/create.ts": 1,
@@ -387,7 +385,7 @@
       "apps/api/src/handlers/entities/version-utils.ts": 1,
       "apps/api/src/handlers/fields/mark-column-flag.ts": 1,
       "apps/api/src/handlers/folio-collab/checkpoint.ts": 1,
-      "apps/api/src/handlers/folio-collab/finalize.ts": 7,
+      "apps/api/src/handlers/folio-collab/finalize.ts": 6,
       "apps/api/src/handlers/legislation/corpus-index.ts": 1,
       "apps/api/src/handlers/legislation/get.ts": 2,
       "apps/api/src/handlers/legislation/ingestion.ts": 4,
