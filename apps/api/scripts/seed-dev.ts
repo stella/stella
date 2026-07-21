@@ -1088,7 +1088,12 @@ export const buildExportReviewMetadata = (
   );
   const jurisdiction = at(
     EXPORT_REVIEW_JURISDICTIONS,
-    (index * 5 + 2) % EXPORT_REVIEW_JURISDICTIONS.length,
+    // Stride must stay coprime with the list length or the "cycle" is a
+    // constant: the old *5 stride on this length-5 list pinned every row to
+    // Netherlands, which read as filler on camera. *2 varies row by row and
+    // keeps index 0 on Netherlands, which the review-citation recording's
+    // paint predicate quotes verbatim.
+    (index * 2 + 2) % EXPORT_REVIEW_JURISDICTIONS.length,
   );
   const riskLevel = at(
     EXPORT_REVIEW_RISK_LEVELS,
