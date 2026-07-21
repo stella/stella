@@ -71,7 +71,7 @@ describe("MCP protected resource metadata", () => {
       "Authorization, Content-Type, MCP-Protocol-Version",
     );
     expect(headers.get("Access-Control-Expose-Headers")).toBe(
-      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-cli-latest, x-request-id",
+      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-cli-latest, x-stella-organization, x-stella-scopes, x-request-id",
     );
     expect(headers.get("x-stella-api-contract-version")).toBe("1");
     expect(headers.get("x-stella-cli-minimum")).toBe(

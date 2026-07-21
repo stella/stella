@@ -451,16 +451,26 @@ describe("--input escape hatch (S3)", () => {
     });
   });
 
-  test("--input with a value flag conflicts, exit 2", async () => {
+  test("--input composes with a value flag; the explicit flag wins over its path", async () => {
     const server = startMockServer(() => ({ toolPayload: {} }));
     const result = await runCli({
-      args: ["matter", "save", "--input", "{}", "--name", "X"],
+      args: [
+        "matter",
+        "save",
+        "--input",
+        '{"name":"FromJson"}',
+        "--name",
+        "FromFlag",
+      ],
       url: server.url,
       token: WRITE,
     });
     server.stop();
-    expect(result.exitCode).toBe(2);
-    expect(server.requests).toHaveLength(0);
+    expect(result.exitCode).toBe(0);
+    // The flag overrides the JSON's `name`; both are threaded to the server.
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      name: "FromFlag",
+    });
   });
 
   test("--input failing schema validation exits 2", async () => {

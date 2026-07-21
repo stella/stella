@@ -25,6 +25,7 @@ import {
   confirmDestructive,
   errorEnvelope,
   flagKey,
+  hasInputPath,
   mapClientErrorExit,
   parsePayload,
   readAllStdin,
@@ -53,12 +54,20 @@ type InputResult =
   | { ok: true; input: Record<string, unknown> }
   | { ok: false; message: string };
 
-/** Build the `{ body?, params?, query? }` input object from parsed value flags. */
+/**
+ * Overlay parsed value flags onto `base` (the `{ body?, params?, query? }`
+ * object built from `--input`, or `{}` when no `--input` was given). Each SET
+ * flag is coerced and written at its known input path (`${part}.${partPath}` —
+ * the same mapping the flag would use on its own), so an explicit flag WINS over
+ * the same path in the JSON. A required flag is satisfied either by being set or
+ * by already being present in `base`, so `--input` can carry it.
+ */
 const buildInputFromFlags = async (
   spec: CapabilityLeafSpec,
   flags: LeafFlags,
+  base: Record<string, unknown> = {},
 ): Promise<InputResult> => {
-  const input: Record<string, unknown> = {};
+  const input = base;
   for (const flagSpec of spec.flags) {
     const value = flags[flagKey(flagSpec)];
     if (value === undefined) {
@@ -72,7 +81,10 @@ const buildInputFromFlags = async (
     setPath(input, `${flagSpec.part}.${flagSpec.partPath}`, coerced.value);
   }
   for (const flagSpec of spec.flags) {
-    if (flagSpec.required && flags[flagKey(flagSpec)] === undefined) {
+    if (
+      flagSpec.required &&
+      !hasInputPath(input, `${flagSpec.part}.${flagSpec.partPath}`)
+    ) {
       return { ok: false, message: `missing required flag ${flagSpec.flag}` };
     }
   }
@@ -82,11 +94,9 @@ const buildInputFromFlags = async (
 /** Resolve `--input` (`-` stdin / `@file` / literal) to the parsed input object. */
 const buildInputFromRaw = async ({
   inputRaw,
-  spec,
   writers,
 }: {
   inputRaw: string;
-  spec: CapabilityLeafSpec;
   writers: Writers;
 }): Promise<Record<string, unknown> | undefined> => {
   let jsonText: string;
@@ -115,17 +125,11 @@ const buildInputFromRaw = async ({
     writers.stderr("--input must be a JSON object.\n");
     return undefined;
   }
-  // Truncated entries carry no snapshot schema: skip client validation and let
-  // the server validate against the live handler schema.
-  if (!spec.schemaTruncated && spec.inputSchema !== undefined) {
-    const validation = validateAgainstSchema(spec.inputSchema, parsed.value);
-    if (!validation.valid) {
-      writers.stderr(
-        `--input invalid at ${validation.path}: ${validation.message}\n`,
-      );
-      return undefined;
-    }
-  }
+  // Parse only: schema validation runs on the COMPOSED input (after value flags
+  // overlay their paths), never on the raw `--input` alone. Validating here would
+  // reject a `--input` that legitimately omits a required flag-backed path (e.g.
+  // the synthetic `params.workspaceId` supplied by `--workspace`), defeating the
+  // compose semantics for exactly the required flags they target.
   return parsed.value;
 };
 
@@ -298,31 +302,45 @@ export const runCapabilityCommand = async ({
     return;
   }
 
+  // `--input` and value flags COMPOSE: the JSON is the base, then each explicit
+  // flag overlays its own input path on top (flag wins). A required value flag
+  // (e.g. --workspace) advertised on the usage line therefore stays usable
+  // alongside a body passed through --input, instead of forcing the caller to
+  // hand-relocate it into `params.workspaceId` in the JSON.
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  let input: Record<string, unknown>;
-  if (typeof inputRaw === "string") {
-    const conflicting = spec.flags.some(
-      (flagSpec) => flags[flagKey(flagSpec)] !== undefined,
-    );
-    if (conflicting) {
-      writers.stderr("--input is exclusive with per-capability value flags.\n");
+  const inputBase =
+    typeof inputRaw === "string"
+      ? await buildInputFromRaw({ inputRaw, writers })
+      : {};
+  if (inputBase === undefined) {
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+  const built = await buildInputFromFlags(spec, flags, inputBase);
+  if (!built.ok) {
+    writers.stderr(`${built.message}\n`);
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+  const input = built.input;
+
+  // Validate the COMPOSED input (JSON base + overlaid flags) against the snapshot
+  // schema, only when `--input` supplied JSON. Flags-only requests keep relying on
+  // the required-flag check plus server validation (unchanged surface); truncated
+  // entries carry no snapshot schema and defer to the server.
+  if (
+    typeof inputRaw === "string" &&
+    !spec.schemaTruncated &&
+    spec.inputSchema !== undefined
+  ) {
+    const validation = validateAgainstSchema(spec.inputSchema, input);
+    if (!validation.valid) {
+      writers.stderr(
+        `--input invalid at ${validation.path}: ${validation.message}\n`,
+      );
       setExit(context, EXIT_CODES.validation);
       return;
     }
-    const parsed = await buildInputFromRaw({ inputRaw, spec, writers });
-    if (parsed === undefined) {
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    input = parsed;
-  } else {
-    const built = await buildInputFromFlags(spec, flags);
-    if (!built.ok) {
-      writers.stderr(`${built.message}\n`);
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    input = built.input;
   }
 
   // Client-side scope precheck (spec S3): fail before any server call.

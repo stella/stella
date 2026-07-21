@@ -145,6 +145,27 @@ export const setPath = (
   node[segments.at(-1) ?? path] = value;
 };
 
+/**
+ * True when `path` (dot form, e.g. `body.workspaceId`) already resolves to a
+ * defined value inside `target`. Used to decide whether a required flag is
+ * satisfied by the `--input` JSON when the flag itself is unset (the flag and
+ * the JSON compose; see `runLeafCommand`/`runCapabilityCommand`).
+ */
+export const hasInputPath = (
+  target: Record<string, unknown>,
+  path: string,
+): boolean => {
+  const segments = path.split(".");
+  let node: unknown = target;
+  for (const segment of segments) {
+    if (!isRecord(node)) {
+      return false;
+    }
+    node = node[segment];
+  }
+  return node !== undefined;
+};
+
 type ArgsResult =
   | { ok: true; args: Record<string, unknown> }
   | { ok: false; message: string };
@@ -271,12 +292,19 @@ export const coerceFlagValue = async (
   return Result.ok(raw);
 };
 
-/** Build the tool-args object from parsed value flags (spec S3). Exported for tests. */
+/**
+ * Overlay parsed value flags onto `base` (spec S3). `base` is the args object
+ * built from `--input` (or `{}` when no `--input` was given): each SET flag is
+ * coerced and written at its `prop` path, so an explicit flag WINS over the same
+ * path in the JSON. A required flag is satisfied either by being set or by
+ * already being present in `base`, so `--input` can carry it. Exported for tests.
+ */
 export const buildArgsFromFlags = async (
   spec: LeafCommandSpec,
   flags: LeafFlags,
+  base: Record<string, unknown> = {},
 ): Promise<ArgsResult> => {
-  const args: Record<string, unknown> = {};
+  const args = base;
 
   for (const flagSpec of spec.flags) {
     const value = flags[flagKey(flagSpec)];
@@ -291,9 +319,10 @@ export const buildArgsFromFlags = async (
     setPath(args, flagSpec.prop, coerced.value);
   }
 
-  // Enforce required flags (spec S3): missing -> usage error (exit 2 upstream).
+  // Enforce required flags (spec S3): unset AND absent from `--input` -> usage
+  // error (exit 2 upstream), naming the missing flag.
   for (const flagSpec of spec.flags) {
-    if (flagSpec.required && flags[flagKey(flagSpec)] === undefined) {
+    if (flagSpec.required && !hasInputPath(args, flagSpec.prop)) {
       return { ok: false, message: `missing required flag ${flagSpec.flag}` };
     }
   }
@@ -303,11 +332,9 @@ export const buildArgsFromFlags = async (
 
 const buildArgsFromInput = async ({
   inputRaw,
-  spec,
   writers,
 }: {
   inputRaw: string;
-  spec: LeafCommandSpec;
   writers: Writers;
 }): Promise<Record<string, unknown> | undefined> => {
   let jsonText: string;
@@ -336,14 +363,10 @@ const buildArgsFromInput = async ({
     writers.stderr("--input must be a JSON object.\n");
     return undefined;
   }
-
-  const validation = validateAgainstSchema(spec.inputSchema, parsed.value);
-  if (!validation.valid) {
-    writers.stderr(
-      `--input invalid at ${validation.path}: ${validation.message}\n`,
-    );
-    return undefined;
-  }
+  // Parse only: schema validation runs on the COMPOSED args (after value flags
+  // overlay their paths), never on the raw `--input` alone. Validating here would
+  // reject a `--input` that legitimately omits a required flag-backed path (e.g.
+  // a `matter_id` supplied by `--matter-id`), defeating the compose semantics.
   return parsed.value;
 };
 
@@ -952,35 +975,45 @@ export const runLeafCommand = async ({
     return;
   }
 
+  // `--input` and value flags COMPOSE: the JSON is the base, then each explicit
+  // flag overlays its own path on top (flag wins). This lets a required value
+  // flag (e.g. --workspace, advertised on the usage line) coexist with a body
+  // passed through --input, instead of forcing the caller to hand-relocate it
+  // into the JSON under a different key.
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  let args: Record<string, unknown>;
-  if (typeof inputRaw === "string") {
-    const conflicting = spec.flags.some(
-      (flagSpec) => flags[flagKey(flagSpec)] !== undefined,
-    );
-    if (conflicting) {
-      writers.stderr("--input is exclusive with per-tool value flags.\n");
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    const parsed = await buildArgsFromInput({ inputRaw, spec, writers });
-    if (parsed === undefined) {
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    args = parsed;
-  } else {
-    const built = await buildArgsFromFlags(spec, flags);
-    if (!built.ok) {
-      writers.stderr(`${built.message}\n`);
-      setExit(context, EXIT_CODES.validation);
-      return;
-    }
-    args = built.args;
+  const argsBase =
+    typeof inputRaw === "string"
+      ? await buildArgsFromInput({ inputRaw, writers })
+      : {};
+  if (argsBase === undefined) {
+    setExit(context, EXIT_CODES.validation);
+    return;
   }
+  const built = await buildArgsFromFlags(spec, flags, argsBase);
+  if (!built.ok) {
+    writers.stderr(`${built.message}\n`);
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+  let args = built.args;
 
   if (spec.discriminatorInject !== undefined) {
     args = { ...args, ...spec.discriminatorInject };
+  }
+
+  // Validate the COMPOSED args (JSON base + overlaid flags + injected
+  // discriminator) against the schema, only when `--input` supplied JSON.
+  // Flags-only requests keep relying on the required-flag check plus server
+  // validation (unchanged surface).
+  if (typeof inputRaw === "string") {
+    const validation = validateAgainstSchema(spec.inputSchema, args);
+    if (!validation.valid) {
+      writers.stderr(
+        `--input invalid at ${validation.path}: ${validation.message}\n`,
+      );
+      setExit(context, EXIT_CODES.validation);
+      return;
+    }
   }
 
   // Client-side scope precheck (spec S3): fail before any server call.

@@ -448,6 +448,72 @@ describe("invoke_capability gates", () => {
   });
 });
 
+// --- invoke_capability: discriminated-union input errors --------------------
+
+// Guards the "path-less union error" class: a failed discriminated union must
+// name its discriminator field (and, once the discriminator matches a variant,
+// that variant's own missing fields), never collapse to an opaque, unplaceable
+// `Expected union value`. uploads.create's body is a flat union keyed by
+// `purpose`, so it is the canonical driver.
+describe("discriminated-union input validation names the field", () => {
+  const uploadIssues = async (
+    body: unknown,
+  ): Promise<{ path: string; message: string }[]> => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "uploads.create",
+        input: { params: { workspaceId: "ws_1" }, body },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    return asTestRaw<{ path: string; message: string }[]>(error.issues ?? []);
+  };
+
+  test("a body missing purpose names body.purpose with the allowed literals", async () => {
+    const issues = await uploadIssues({});
+    const purpose = issues.find((issue) => issue.path === "body.purpose");
+    expect(purpose).toBeDefined();
+    expect(purpose?.message).toContain('"entity_create"');
+    expect(purpose?.message).toContain('"entity_version"');
+    expect(purpose?.message).toContain('"agent_skill"');
+  });
+
+  test("a wrong purpose literal still names body.purpose", async () => {
+    const issues = await uploadIssues({ purpose: "not_a_purpose" });
+    expect(issues.some((issue) => issue.path === "body.purpose")).toBe(true);
+  });
+
+  test("a matched purpose drills into that variant's own missing fields", async () => {
+    const issues = await uploadIssues({ purpose: "entity_create" });
+    const paths = issues.map((issue) => issue.path);
+    // The entity_create variant's required file metadata surfaces by name,
+    // instead of a single opaque union error.
+    expect(paths).toContain("body.propertyId");
+    expect(issues.every((issue) => issue.path.startsWith("body."))).toBe(true);
+  });
+
+  test("INVARIANT: every union-body validation issue carries a non-empty path", async () => {
+    const bodies: unknown[] = [
+      {},
+      { purpose: "not_a_purpose" },
+      { purpose: "entity_create" },
+      { purpose: "agent_skill" },
+      { purpose: "entity_version", entityId: 5 },
+    ];
+    for (const body of bodies) {
+      // eslint-disable-next-line no-await-in-loop -- sequential invoke calls keep assertions ordered
+      const issues = await uploadIssues(body);
+      expect(issues.length).toBeGreaterThan(0);
+      for (const issue of issues) {
+        expect(issue.path.length).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
 // --- invoke_capability: workspace resolution --------------------------------
 
 describe("invoke_capability workspace resolution", () => {

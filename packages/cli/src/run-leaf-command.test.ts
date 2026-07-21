@@ -136,6 +136,29 @@ describe("buildArgsFromFlags (S3)", () => {
     const result = await buildArgsFromFlags(spec, { name: "@@handle" });
     expect(result).toEqual({ ok: true, args: { name: "@handle" } });
   });
+
+  test("flags overlay onto a --input base; an explicit flag wins over the same path", async () => {
+    const spec = specWith([stringFlag("name")]);
+    const base = { name: "fromJson", keep: 1 };
+    const result = await buildArgsFromFlags(spec, { name: "fromFlag" }, base);
+    // The flag overrides the JSON's `name`; the JSON's other keys survive.
+    expect(result).toEqual({ ok: true, args: { name: "fromFlag", keep: 1 } });
+  });
+
+  test("a required flag is satisfied by the --input base when the flag is unset", async () => {
+    const spec = specWith([stringFlag("matter_id", true)]);
+    const result = await buildArgsFromFlags(spec, {}, { matter_id: "m1" });
+    expect(result).toEqual({ ok: true, args: { matter_id: "m1" } });
+  });
+
+  test("a required flag absent from both flags and the --input base still errors", async () => {
+    const spec = specWith([stringFlag("matter_id", true)]);
+    const result = await buildArgsFromFlags(spec, {}, { other: "x" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toContain("--matter-id");
+    }
+  });
 });
 
 describe("classifyToolError: structured envelope -> exit map (S4)", () => {
@@ -364,6 +387,56 @@ const makeTtyContext = ({
     stdoutText: () => stdoutChunks.join(""),
   };
 };
+
+describe("--input composes with flags before schema validation (S5.5)", () => {
+  // Same class as the capability executor: the schema marks `matter_id`
+  // required; --input omits it and the --matter-id flag supplies it. Validating
+  // the RAW --input would reject it at `matter_id` before the flag overlays the
+  // value, defeating compose for required flag-backed fields.
+  const REQUIRED_FLAG_SPEC: LeafCommandSpec = {
+    commandPath: ["matter", "delete"],
+    toolName: "matter_delete",
+    flags: [
+      {
+        flag: "--matter-id",
+        prop: "matter_id",
+        kind: "string",
+        required: true,
+        repeatable: false,
+      },
+    ],
+    inputOnly: [],
+    paginated: false,
+    windowedText: false,
+    destructive: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        matter_id: { type: "string" },
+        confirm: { type: "boolean" },
+      },
+      required: ["matter_id"],
+    },
+  };
+
+  test("a required flag-backed path absent from --input but supplied by its flag is accepted", async () => {
+    const server = startConfirmGateServer();
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runLeafCommand({
+      context: tty.context,
+      flags: { input: '{"confirm":true}', matterId: "m1" },
+      spec: REQUIRED_FLAG_SPEC,
+    });
+    server.stop();
+    expect(tty.exitCode()).toBeUndefined();
+    expect(server.calls).toHaveLength(1);
+    expect(server.calls[0]?.args).toEqual({ confirm: true, matter_id: "m1" });
+  });
+});
 
 describe("confirm passthrough (capability invoke)", () => {
   test("--yes injects confirm: true upfront (single call)", async () => {

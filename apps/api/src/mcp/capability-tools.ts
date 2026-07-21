@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { TSchema } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
+import { KindGuard, type TSchema } from "@sinclair/typebox";
+import { ValueErrorType } from "@sinclair/typebox/errors";
+import { Value, type ValueError } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { ElysiaCustomStatusResponse } from "elysia";
 
@@ -232,6 +233,140 @@ const loadEndpoint = async (id: string): Promise<EndpointDefinition | null> => {
 const typeboxPathToDot = (path: string): string =>
   path.startsWith("/") ? path.slice(1).split("/").join(".") : path;
 
+/** Join two dot-paths, skipping empty segments (`""` + `x` -> `x`). */
+const joinDot = (head: string, tail: string): string => {
+  if (head.length === 0) {
+    return tail;
+  }
+  return tail.length === 0 ? head : `${head}.${tail}`;
+};
+
+/**
+ * Prefix a validated part name onto a dot-path so an agent sees `body.purpose`,
+ * never a bare `purpose` it cannot place. An empty dot-path (the whole part
+ * failed) renders as the bare part name.
+ */
+const prefixPartPath = (
+  part: "body" | "params" | "query",
+  dot: string,
+): string => joinDot(part, dot);
+
+/** A tagged-union discriminator: the shared key and the literal each variant fixes it to. */
+type UnionDiscriminator = { key: string; literals: readonly string[] };
+
+/**
+ * If every variant of a union is an object sharing one literal-typed property,
+ * return that key plus the literal each variant fixes it to (a tagged /
+ * discriminated union, e.g. uploads.create's `purpose`). Returns `null` for a
+ * non-discriminated union (e.g. `string | number`), which has no such key.
+ */
+const unionDiscriminator = (
+  variants: readonly TSchema[],
+): UnionDiscriminator | null => {
+  const objects = variants.filter((variant) => KindGuard.IsObject(variant));
+  const first = objects.at(0);
+  if (first === undefined || objects.length !== variants.length) {
+    return null;
+  }
+  for (const key of Object.keys(first.properties)) {
+    const literals: string[] = [];
+    const shared = objects.every((variant) => {
+      const prop = variant.properties[key];
+      if (prop !== undefined && KindGuard.IsLiteral(prop)) {
+        literals.push(JSON.stringify(prop.const));
+        return true;
+      }
+      return false;
+    });
+    if (shared) {
+      return { key, literals: [...new Set(literals)] };
+    }
+  }
+  return null;
+};
+
+/** The variant whose discriminator literal matches the value's, if any. */
+const matchingVariant = (
+  variants: readonly TSchema[],
+  discriminator: UnionDiscriminator,
+  value: unknown,
+): TSchema | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const provided = value[discriminator.key];
+  return variants.find((variant) => {
+    if (!KindGuard.IsObject(variant)) {
+      return false;
+    }
+    const prop = variant.properties[discriminator.key];
+    return KindGuard.IsLiteral(prop) && prop.const === provided;
+  });
+};
+
+/**
+ * Expand one TypeBox union error into field-level issues. TypeBox reports a
+ * failed union as a single opaque `Expected union value` naming no field. For a
+ * discriminated union we do better: name the discriminator and its allowed
+ * literals when it is missing/wrong, or drill into the matched variant so the
+ * caller sees that variant's own missing/invalid fields. A non-discriminated
+ * union falls back to the node-level message (which still carries a non-empty
+ * path). Every returned issue's path is part-prefixed, so none is ever empty.
+ */
+const expandUnionError = (
+  part: "body" | "params" | "query",
+  error: ValueError,
+): McpValidationIssue[] => {
+  const unionDot = typeboxPathToDot(error.path);
+  if (!KindGuard.IsUnion(error.schema)) {
+    return [{ path: prefixPartPath(part, unionDot), message: error.message }];
+  }
+  const variants = error.schema.anyOf;
+  const discriminator = unionDiscriminator(variants);
+  if (discriminator === null) {
+    return [{ path: prefixPartPath(part, unionDot), message: error.message }];
+  }
+  const variant = matchingVariant(variants, discriminator, error.value);
+  // No variant matched: the discriminator is missing or not one of the literals.
+  // Name it and its allowed values -- the single most useful thing to report.
+  if (variant === undefined) {
+    return [
+      {
+        path: prefixPartPath(part, joinDot(unionDot, discriminator.key)),
+        message: `expected one of ${discriminator.literals.join(" | ")}`,
+      },
+    ];
+  }
+  // A variant matched: report that variant's own field-level errors.
+  const nested = [...Value.Errors(variant, error.value)].map((sub) => ({
+    path: prefixPartPath(part, joinDot(unionDot, typeboxPathToDot(sub.path))),
+    message: sub.message,
+  }));
+  if (nested.length > 0) {
+    return nested;
+  }
+  // Matched with no field errors -- unreachable in practice (a clean match means
+  // the union would have passed). Fall back to the opaque node message rather
+  // than blaming the discriminator, which was correct.
+  return [{ path: prefixPartPath(part, unionDot), message: error.message }];
+};
+
+/** Map one TypeBox validation error to one or more part-prefixed issues. */
+const errorToIssues = (
+  part: "body" | "params" | "query",
+  error: ValueError,
+): McpValidationIssue[] => {
+  if (error.type === ValueErrorType.Union) {
+    return expandUnionError(part, error);
+  }
+  return [
+    {
+      path: prefixPartPath(part, typeboxPathToDot(error.path)),
+      message: error.message,
+    },
+  ];
+};
+
 type PartValidation =
   | { ok: true; value: unknown }
   | { ok: false; issues: McpValidationIssue[] };
@@ -268,13 +403,9 @@ const validatePart = (
   if (Value.Check(schema, cleaned)) {
     return { ok: true, value: cleaned };
   }
-  const issues = [...Value.Errors(schema, cleaned)].map((error) => {
-    const dot = typeboxPathToDot(error.path);
-    return {
-      path: dot.length > 0 ? `${part}.${dot}` : part,
-      message: error.message,
-    };
-  });
+  const issues = [...Value.Errors(schema, cleaned)].flatMap((error) =>
+    errorToIssues(part, error),
+  );
   return { ok: false, issues };
 };
 

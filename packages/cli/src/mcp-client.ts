@@ -352,6 +352,82 @@ export const fetchToolsListRaw = async ({
   return Result.ok(out);
 };
 
+/** Response headers the server echoes the authenticated session's identity on. */
+const STELLA_ORGANIZATION_HEADER = "x-stella-organization";
+const STELLA_SCOPES_HEADER = "x-stella-scopes";
+
+/** The org + granted scopes a credential resolves to, per the server. */
+export type MachineIdentity = {
+  organizationId: string;
+  scopes: readonly string[];
+};
+
+/**
+ * Resolve the identity a bearer credential (machine API key or access token)
+ * maps to, by making one real authenticated round-trip (`tools/list`) and
+ * reading the identity headers the server echoes on it. An invalid/expired
+ * credential fails here as an `http` 401/403 error, so `stella auth whoami`
+ * confirms auth rather than echoing static text. The org/scope headers are
+ * always present on an authenticated response; a server too old to send them
+ * yields an empty identity the caller reports as unknown.
+ */
+export const fetchMachineIdentity = async ({
+  serverUrl,
+  token,
+}: {
+  serverUrl: string;
+  token: string;
+}): Promise<Result<MachineIdentity, McpClientError>> => {
+  const body: JsonRpcRequest = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/list",
+    params: {},
+  };
+  const response = await Result.tryPromise({
+    try: async () =>
+      await fetch(mcpUrl(serverUrl), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(LIST_REQUEST_TIMEOUT_MS),
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(response)) {
+    return Result.err(
+      new McpClientError({
+        kind: "transport",
+        message: `Request to the MCP server failed: ${
+          response.error instanceof Error
+            ? response.error.message
+            : "network error"
+        }`,
+      }),
+    );
+  }
+  const httpResponse = response.value;
+  if (!httpResponse.ok) {
+    return Result.err(
+      new McpClientError({
+        kind: "http",
+        httpStatus: httpResponse.status,
+        message: `MCP server returned HTTP ${httpResponse.status}`,
+      }),
+    );
+  }
+  const scopesHeader = httpResponse.headers.get(STELLA_SCOPES_HEADER);
+  return Result.ok({
+    organizationId: httpResponse.headers.get(STELLA_ORGANIZATION_HEADER) ?? "",
+    scopes:
+      scopesHeader && scopesHeader.length > 0 ? scopesHeader.split(/\s+/u) : [],
+  });
+};
+
 /** Enumerate the server's static resources via `resources/list`. */
 export const listResources = async ({
   serverUrl,
