@@ -58,21 +58,35 @@ const leafAt = (
 };
 
 describe("capabilityCommandPath", () => {
-  test("kebab-cases each dotted segment, including a camelCase leaf", () => {
+  test("namespaces and kebab-cases every capability at a fixed depth", () => {
     expect(capabilityCommandPath("time-entries.create")).toEqual([
+      "capability",
       "time-entries",
       "create",
     ]);
     expect(capabilityCommandPath("skills.resources.upload")).toEqual([
+      "capability",
       "skills",
-      "resources",
-      "upload",
+      "resources-upload",
     ]);
     expect(
       capabilityCommandPath(
         "entities.legacy-summaries.readLegacySummariesCount",
       ),
-    ).toEqual(["entities", "legacy-summaries", "read-legacy-summaries-count"]);
+    ).toEqual([
+      "capability",
+      "entities",
+      "legacy-summaries-read-legacy-summaries-count",
+    ]);
+  });
+
+  test("rejects ids without both a domain and action", () => {
+    expect(() => capabilityCommandPath("entities")).toThrow(
+      /must contain a domain and action/u,
+    );
+    expect(() => capabilityCommandPath("entities..read")).toThrow(
+      /must contain a domain and action/u,
+    );
   });
 });
 
@@ -382,7 +396,7 @@ describe("deriveCapabilityLeaf: pagination + suppression + truncation", () => {
   });
 });
 
-describe("insertCapabilities: merge + collisions", () => {
+describe("insertCapabilities: namespaced merge", () => {
   test("suppresses file-input/output entries but generates the rest", () => {
     const { stats } = insertCapabilities({
       tree: { kind: "route", children: {} },
@@ -397,7 +411,7 @@ describe("insertCapabilities: merge + collisions", () => {
     expect(stats.suppressedIds).toEqual(["b.upload", "c.export"]);
   });
 
-  test("a curated command wins; the capability drops under `capability ...`", () => {
+  test("a curated root command and namespaced capability never compete", () => {
     // Curated tree already owns `legislation search`.
     const curated: RouteNode = {
       kind: "route",
@@ -422,21 +436,20 @@ describe("insertCapabilities: merge + collisions", () => {
         },
       },
     };
-    const { tree, stats } = insertCapabilities({
+    const { tree } = insertCapabilities({
       tree: curated,
       entries: [entry({ id: "legislation.search" })],
     });
-    expect(stats.collisionFallbacks).toEqual(["legislation.search"]);
     // Curated leaf untouched.
     expect(leafAt(tree, ["legislation", "search"])).toBeUndefined();
-    // Capability relocated under the `capability` group.
+    // Capability always lives under the `capability` group.
     expect(
       leafAt(tree, ["capability", "legislation", "search"])?.capabilityId,
     ).toBe("legislation.search");
   });
 
-  test("a reserved hand-wired namespace forces the capability fallback", () => {
-    const { tree, stats } = insertCapabilities({
+  test("a hand-wired root namespace cannot capture a capability domain", () => {
+    const { tree } = insertCapabilities({
       tree: { kind: "route", children: {} },
       entries: [entry({ id: "upload.create" })],
     });
@@ -445,23 +458,21 @@ describe("insertCapabilities: merge + collisions", () => {
     expect(leafAt(tree, ["capability", "upload", "create"])?.capabilityId).toBe(
       "upload.create",
     );
-    expect(stats.collisionFallbacks).toEqual(["upload.create"]);
   });
 
-  test("a capability that is a prefix of another falls back rather than clobbering", () => {
-    const { tree, stats } = insertCapabilities({
+  test("prefix capability ids coexist at fixed-depth action paths", () => {
+    const { tree } = insertCapabilities({
       tree: { kind: "route", children: {} },
       entries: [
         entry({ id: "entities.read-summaries" }),
         entry({ id: "entities.read-summaries.count" }),
       ],
     });
-    expect(leafAt(tree, ["entities", "read-summaries"])?.capabilityId).toBe(
-      "entities.read-summaries",
-    );
-    expect(stats.collisionFallbacks).toContain("entities.read-summaries.count");
     expect(
-      leafAt(tree, ["capability", "entities", "read-summaries", "count"])
+      leafAt(tree, ["capability", "entities", "read-summaries"])?.capabilityId,
+    ).toBe("entities.read-summaries");
+    expect(
+      leafAt(tree, ["capability", "entities", "read-summaries-count"])
         ?.capabilityId,
     ).toBe("entities.read-summaries.count");
   });
@@ -493,34 +504,16 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
 });
 
 /**
- * Namespaces where a curated, hand-written command still shares a top-level name
- * with generated capability commands. Each entry means a caller typing
- * `stella <namespace> …` cannot tell whether they get a named MCP tool or the
- * generic `invoke_capability` path — the exact drift this guard exists to stop.
- *
- * The list may only SHRINK: it is seeded with the four namespaces that were
- * already split when the guard landed, and is ratcheted by
- * `cli-shadowed-namespaces` in `scripts/ratchet.ts`. Adding a curated command in
- * a namespace a capability occupies fails this test rather than silently landing.
+ * Ratcheted by `cli-shadowed-namespaces` in `scripts/ratchet.ts`. This stays
+ * empty because the generator makes root-level capability leaves impossible.
  */
-const SHADOWED_NAMESPACE_ALLOWLIST: readonly string[] = [
-  "capability",
-  "case-law",
-  "legislation",
-  "usage",
-];
-
-/**
- * Capabilities whose natural command path is taken by a curated command, so they
- * are relocated under `stella capability <domain> <action>`. A relocation is a
- * symptom of the same shadowing problem, so it is pinned rather than merely counted.
- */
-const COLLISION_FALLBACK_ALLOWLIST: readonly string[] = ["legislation.search"];
+const SHADOWED_NAMESPACE_ALLOWLIST: readonly string[] = [];
 
 describe("curated commands must not shadow capability commands", () => {
   const namespacesByKind = (node: RouteNode) => {
     const curated = new Set<string>();
     const capability = new Set<string>();
+    const capabilityPaths: string[][] = [];
     const walk = (current: RouteNode, path: readonly string[]): void => {
       if (current.kind === "route") {
         for (const [segment, child] of Object.entries(current.children)) {
@@ -532,13 +525,18 @@ describe("curated commands must not shadow capability commands", () => {
       if (top === undefined) {
         return;
       }
-      (current.kind === "leaf" ? curated : capability).add(top);
+      if (current.kind === "leaf") {
+        curated.add(top);
+        return;
+      }
+      capability.add(top);
+      capabilityPaths.push([...path]);
     };
     walk(node, []);
-    return { capability, curated };
+    return { capability, capabilityPaths, curated };
   };
 
-  test("no curated command occupies a namespace a capability occupies", async () => {
+  test("every generated capability stays at one fixed-depth namespace", async () => {
     const catalog: CapabilityCatalogEntry[] = await Bun.file(
       new URL("generated/capability-catalog.json", import.meta.url),
     ).json();
@@ -549,13 +547,21 @@ describe("curated commands must not shadow capability commands", () => {
       entries: catalog,
       tree: generateRouteMap(listings, TOOL_ANNOTATIONS),
     });
-    const { capability, curated } = namespacesByKind(tree);
-    const shadowed = [...curated].filter((ns) => capability.has(ns)).sort();
+    const { capability, capabilityPaths, curated } = namespacesByKind(tree);
+    const shadowed = [...curated]
+      .filter((namespace) =>
+        namespace === "capability" ? false : capability.has(namespace),
+      )
+      .sort();
 
+    expect([...capability]).toEqual(["capability"]);
+    expect(
+      capabilityPaths.every(
+        (path) => path.length === 3 && path.at(0) === "capability",
+      ),
+    ).toBe(true);
     expect(shadowed).toEqual([...SHADOWED_NAMESPACE_ALLOWLIST].sort());
-    expect([...stats.collisionFallbacks].sort()).toEqual(
-      [...COLLISION_FALLBACK_ALLOWLIST].sort(),
-    );
+    expect(stats.generated).toBeGreaterThan(0);
   });
 });
 

@@ -583,10 +583,8 @@
     }
   },
   "cli-shadowed-namespaces": {
-    "count": 4,
-    "files": {
-      "packages/cli/src/generate-capability-tree.test.ts": 4
-    }
+    "count": 0,
+    "files": {}
   },
   "cross-feature-imports": {
     "count": 0,

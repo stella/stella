@@ -348,7 +348,7 @@ describe("generated capability flags", () => {
   test("a descriptive long flag can target a terse query property", async () => {
     const server = startMockServer(() => ({ toolPayload: { items: [] } }));
     const result = await runCli({
-      args: ["contacts", "search", "--query", "agreement"],
+      args: ["capability", "contacts", "search", "--query", "agreement"],
       url: server.url,
       token: READ,
     });
@@ -774,7 +774,7 @@ describe("help surfaces --input for inputOnly tools", () => {
   test("uploads create --help renders every union branch from the schema", async () => {
     const server = startMockServer(() => ({ toolPayload: {} }));
     const result = await runCli({
-      args: ["uploads", "create", "--help"],
+      args: ["capability", "uploads", "create", "--help"],
       url: server.url,
       token: WRITE,
     });

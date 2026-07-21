@@ -3,13 +3,14 @@
 // into the SAME `RouteNode` tree the curated 44-tool commands live in. Pure and
 // deterministic: same catalog + curated tree -> byte-identical merged tree.
 //
-// Every non-suppressed catalog entry becomes a `stella <domain> <action>` leaf
+// Every non-suppressed catalog entry becomes a
+// `stella capability <domain> <action>` leaf
 // whose executor calls the generic `invoke_capability` tool. Entries with
 // `requiresFileInput`/`returnsFileResponse` are suppressed (they can never
 // succeed through the JSON generic path) but stay reachable via
-// `stella capability describe` for discovery. Curated commands win every path
-// collision; a colliding capability leaf drops under `stella capability
-// <domain> <action>` instead.
+// `stella capability describe` for discovery. Keeping every generic capability
+// below one namespace makes it impossible for a future catalog domain to
+// recreate a parallel root command group beside the curated CLI.
 
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
 import { flagKey } from "./flag-name.js";
@@ -57,8 +58,6 @@ export type CapabilityTreeStats = {
   /** Entries suppressed for file input/output (unreachable through generic invoke). */
   suppressed: number;
   suppressedIds: readonly string[];
-  /** Capability ids relocated under `capability <domain> <action>` on a collision. */
-  collisionFallbacks: readonly string[];
   /** Per-flag cross-part/reserved collisions resolved by part-prefixing. */
   flagCollisions: readonly { id: string; flag: string }[];
 };
@@ -94,9 +93,30 @@ const toolScopeOf = (scope: string): ToolScope | undefined => {
   return isToolScope(bare) ? bare : undefined;
 };
 
-/** The command path for a capability id: kebab every dot-separated segment. */
-export const capabilityCommandPath = (id: string): readonly string[] =>
-  id.split(".").map((segment) => kebabCase(segment));
+/**
+ * The namespaced command path for a capability id. The domain stays grouped,
+ * while every remaining id segment is flattened into one action. Fixed-depth
+ * paths make prefix ids (for example `entities.read` and
+ * `entities.read.count`) representable without a leaf/route collision.
+ */
+export const capabilityCommandPath = (id: string): readonly string[] => {
+  const [rawDomain, ...rawAction] = id.split(".");
+  if (
+    rawDomain === undefined ||
+    rawDomain.length === 0 ||
+    rawAction.length === 0 ||
+    rawAction.some((segment) => segment.length === 0)
+  ) {
+    throw new RouteGenerationError(
+      `capability "${id}" must contain a domain and action`,
+    );
+  }
+  return [
+    "capability",
+    kebabCase(rawDomain),
+    rawAction.map((segment) => kebabCase(segment)).join("-"),
+  ];
+};
 
 const propertyMap = (
   schema: JsonSchema | undefined,
@@ -534,10 +554,9 @@ const insertAt = (
 };
 
 /**
- * Merge every non-suppressed capability into `tree` (mutated in place and
- * returned). Curated commands win: a capability whose natural path collides
- * drops under `capability <domain> <action>`; if even that collides the codegen
- * fails hard (a real ambiguity a reviewer must resolve).
+ * Merge every non-suppressed capability into the dedicated `capability`
+ * namespace (mutating and returning `tree`). Any collision fails generation;
+ * generic capability leaves can never leak back into a root domain.
  */
 export const insertCapabilities = ({
   tree,
@@ -547,7 +566,6 @@ export const insertCapabilities = ({
   entries: readonly CapabilityCatalogEntry[];
 }): { tree: RouteNode; stats: CapabilityTreeStats } => {
   const suppressedIds: string[] = [];
-  const collisionFallbacks: string[] = [];
   const flagCollisions: { id: string; flag: string }[] = [];
   let generated = 0;
 
@@ -564,23 +582,12 @@ export const insertCapabilities = ({
     for (const flag of collisions) {
       flagCollisions.push({ id: entry.id, flag });
     }
-    const natural = spec.commandPath;
-    if (canInsert(tree, natural)) {
-      insertAt(tree, natural, { kind: "capability-leaf", spec });
-      generated += 1;
-      continue;
-    }
-    const fallback = ["capability", ...natural];
-    if (!canInsert(tree, fallback)) {
+    if (!canInsert(tree, spec.commandPath)) {
       throw new RouteGenerationError(
-        `capability "${entry.id}" collides at both ${natural.join(" ")} and capability ${natural.join(" ")}`,
+        `capability "${entry.id}" collides at ${spec.commandPath.join(" ")}`,
       );
     }
-    collisionFallbacks.push(entry.id);
-    insertAt(tree, fallback, {
-      kind: "capability-leaf",
-      spec: { ...spec, commandPath: fallback },
-    });
+    insertAt(tree, spec.commandPath, { kind: "capability-leaf", spec });
     generated += 1;
   }
 
@@ -590,7 +597,6 @@ export const insertCapabilities = ({
       generated,
       suppressed: suppressedIds.length,
       suppressedIds,
-      collisionFallbacks,
       flagCollisions,
     },
   };
