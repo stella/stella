@@ -56,6 +56,32 @@ const chapters = [
   },
 ] as const satisfies readonly StoryChapter[];
 
+// Data chapter: cycles through three different national decisions (CZE,
+// POL, SVK), each captured with the structured reader (structure/AI margin
+// populated) — see apps/web/e2e/marketing/product-screenshots.spec.ts,
+// "story-public-data-1/2/3". Keep in sync with that spec's decisionText
+// values.
+const storyShots = [
+  {
+    darkSrc: "/media/products/story-public-data-1-dark.png",
+    lightSrc: "/media/products/story-public-data-1.png",
+  },
+  {
+    darkSrc: "/media/products/story-public-data-2-dark.png",
+    lightSrc: "/media/products/story-public-data-2.png",
+  },
+  {
+    darkSrc: "/media/products/story-public-data-3-dark.png",
+    lightSrc: "/media/products/story-public-data-3.png",
+  },
+] as const;
+
+// Each shot holds at full opacity for ~3.6s and cross-fades over ~0.8s, for
+// a ~13.2s total loop. The keyframes (below, in .story-shot-layer) are
+// percentage-based so they scale with whatever duration is set here.
+const STORY_SHOT_SEGMENT_SECONDS = 4.4;
+const STORY_SHOT_TOTAL_SECONDS = STORY_SHOT_SEGMENT_SECONDS * storyShots.length;
+
 const proofItems = [
   { titleKey: "story.proofOpenSourceTitle", bodyKey: "story.proofOpenSourceBody" },
   { titleKey: "story.proofSelfHostTitle", bodyKey: "story.proofSelfHostBody" },
@@ -170,16 +196,42 @@ const proofItems = [
               )}
               {chapter.id === "data" && (
                 <div class="story-window story-window-shot">
-                  <div class="story-shot-main">
-                    <ThemeImage
-                      lightSrc="/media/products/story-public-data.png"
-                      darkSrc="/media/products/story-public-data-dark.png"
-                      alt={t("story.dataMainAlt")}
-                      class="h-full w-full object-cover object-top"
-                      loading="lazy"
-                      decoding="async"
-                      defer="visible"
-                    />
+                  <div class="story-shot-main mac-window">
+                    <div class="mac-titlebar relative flex shrink-0 items-center">
+                      <div aria-hidden="true" class="mac-traffic-lights">
+                        <span class="mac-traffic-light" style="background: var(--mac-close)">
+                          <span class="mac-traffic-glyph">×</span>
+                        </span>
+                        <span class="mac-traffic-light" style="background: var(--mac-minimize)">
+                          <span class="mac-traffic-glyph mac-traffic-minus">−</span>
+                        </span>
+                        <span class="mac-traffic-light" style="background: var(--mac-maximize)">
+                          <span class="mac-traffic-glyph">+</span>
+                        </span>
+                      </div>
+                      <div class="mac-titlebar-label">stella · Case Law</div>
+                    </div>
+                    <div class="story-shot-body">
+                      {
+                        storyShots.map((shot, shotIndex) => (
+                          <div
+                            aria-hidden={shotIndex === 0 ? undefined : "true"}
+                            class="story-shot-layer"
+                            style={`animation-duration: ${STORY_SHOT_TOTAL_SECONDS}s; animation-delay: ${(shotIndex - storyShots.length) * STORY_SHOT_SEGMENT_SECONDS}s`}
+                          >
+                            <ThemeImage
+                              alt={shotIndex === 0 ? t("story.dataMainAlt") : ""}
+                              class="h-full w-full object-cover object-top"
+                              darkSrc={shot.darkSrc}
+                              decoding="async"
+                              defer="visible"
+                              lightSrc={shot.lightSrc}
+                              loading="lazy"
+                            />
+                          </div>
+                        ))
+                      }
+                    </div>
                   </div>
                 </div>
               )}
@@ -265,22 +317,116 @@ const proofItems = [
     aspect-ratio: 16 / 10;
   }
 
-  /* The data chapter's screenshot is captured at 1440x760 (see
-     apps/web/e2e/marketing/product-screenshots.spec.ts, "story-public-data");
-     match that aspect exactly so object-cover doesn't crop the case-law
-     reader's side panels off camera. */
-  .story-window-shot {
-    aspect-ratio: 1440 / 760;
+  /* The data chapter renders a static mac-window (reusing the workspace/
+     agent chapters' .mac-window treatment from CliMcpPreview's WindowChrome,
+     whose global styles are injected once per page by the hero) so all
+     three chapters read as one consistent system instead of the data
+     chapter's screenshot floating frameless. The titlebar sits on top of the
+     1440:760 image aspect (.story-shot-body, matching
+     apps/web/e2e/marketing/product-screenshots.spec.ts's
+     "story-public-data-1/2/3" capture size); .story-window-shot lets the box
+     size to that content (titlebar height + aspect body) instead of forcing
+     its own aspect-ratio, so the screenshots render at native aspect with
+     zero internal cropping (same intent as the CLI preview's "editor"
+     companion box: content aspect + titlebar, just via auto content height
+     rather than a fixed clamp'd width). The compound selector beats both
+     the base .story-window aspect-ratio and its mobile override below. */
+  .story-window.story-window-shot {
+    aspect-ratio: unset;
   }
 
   .story-shot-main {
-    position: absolute;
-    inset: 0;
+    /* .mac-window's shared rules read these from an ancestor with class
+       "cli-story" (the hero's own scene wrapper); this window lives outside
+       that wrapper, so redeclare them locally. */
+    --mac-close: #ff5f57;
+    --mac-maximize: #28c840;
+    --mac-minimize: #febc2e;
+    --mac-titlebar-height: clamp(1.7rem, 2.35vw, 2.15rem);
+    position: relative;
     overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
-    border-radius: 0.9rem;
-    background: var(--background);
     box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5);
+  }
+
+  /* .mac-window's ::after focus overlay only clears once
+     aria-pressed="true"; this window is never interactive (no manual
+     focus/blur), so it should always read as the focused, fully-composited
+     window the workspace/agent chapters show at rest. */
+  .story-shot-main.mac-window::after {
+    opacity: 0;
+  }
+
+  .mac-traffic-lights {
+    align-items: center;
+    display: flex;
+    gap: clamp(0.28rem, 0.48vw, 0.48rem);
+    position: relative;
+    z-index: 1;
+  }
+
+  .mac-titlebar-label {
+    color: var(--muted-foreground);
+    display: flex;
+    font-size: clamp(0.62rem, 0.72vw, 0.72rem);
+    font-weight: 500;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .story-shot-body {
+    position: relative;
+    aspect-ratio: 1440 / 760;
+    overflow: hidden;
+  }
+
+  /* Cross-fade loop: each layer holds at full opacity for its own segment
+     and fades in/out over the shared boundary. The keyframes are
+     percentage-based (not time-based) so the same animation works for every
+     layer; each layer is phase-shifted with a negative animation-delay
+     (set inline, one segment apart) instead of duplicating the keyframes. */
+  .story-shot-layer {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    animation-name: story-shot-cycle;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+
+  .story-shot-layer:first-child {
+    opacity: 1;
+  }
+
+  @keyframes story-shot-cycle {
+    0%,
+    27.27% {
+      opacity: 1;
+    }
+    33.33%,
+    93.94% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .story-shot-layer {
+      animation: none;
+      opacity: 0;
+    }
+
+    .story-shot-layer:first-child {
+      opacity: 1;
+    }
   }
 
   @media (min-width: 1024px) {
