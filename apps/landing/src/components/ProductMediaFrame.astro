@@ -3,10 +3,12 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { FrameAccent, FrameVariant, ProductMedia } from "../data/products/types";
 import { productStoryThumbnails } from "../data/product-story";
+import MacWindow from "./MacWindow.astro";
 import MediaSkeleton from "./MediaSkeleton.astro";
 import ThemeImage from "./ThemeImage.astro";
 import { ProductPreview } from "./react/previews/ProductPreview";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
+import { RecordedStellaScene } from "./react/product-story/RecordedStellaScene";
 
 type Props = {
   media: ProductMedia;
@@ -76,7 +78,24 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
   }
 
   {
-    media.type === "story" && !thumbnail && !compact && (
+    media.type === "story" && media.variant === "portrait" && !thumbnail && (
+      <div class="absolute inset-0 flex items-center justify-center py-4">
+        {/* Only the editor has a portrait document capture; the media type
+            documents this and the literal keeps the scene union honest. */}
+        <MacWindow class="portrait-doc-window" label="stella · Supplier Agreement">
+          <RecordedStellaScene
+            client:visible
+            isActive
+            sceneId="editor"
+            variant="portrait"
+          />
+        </MacWindow>
+      </div>
+    )
+  }
+
+  {
+    media.type === "story" && media.variant !== "portrait" && !thumbnail && !compact && (
       <div class="absolute inset-0">
         <CliMcpPreview
           client:visible
@@ -88,7 +107,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
   }
 
   {
-    media.type === "story" && !thumbnail && compact && (
+    media.type === "story" && media.variant !== "portrait" && !thumbnail && compact && (
       <div class="absolute inset-0">
         <CliMcpPreview
           includeStyles={false}
@@ -209,5 +228,17 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
 
   :global(.dark) .frame-ripple-dark {
     opacity: 0.35;
+  }
+
+  /* Portrait document window: full frame height, width derived from the
+     recording's 0.869 content aspect via the window body, so the Word page
+     renders at its native proportions centred in the wide frame. */
+  .portrait-doc-window {
+    block-size: 100%;
+    max-inline-size: 100%;
+  }
+
+  .portrait-doc-window :global(.macwin-body) {
+    aspect-ratio: 0.869;
   }
 </style>

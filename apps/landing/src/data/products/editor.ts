@@ -57,6 +57,7 @@ export const editor: Product = {
       media: {
         type: "story",
         sceneId: "editor",
+        variant: "portrait",
         aspect: "16 / 10",
       },
       frameVariant: "ripple",

@@ -1,0 +1,97 @@
+---
+// Self-contained static mac-style window: chrome bar (traffic lights +
+// centred label) over a slotted body. Mirrors the visual definition of the
+// scene windows in CliMcpPreview (.mac-window/.mac-titlebar) without
+// depending on that component's injected styles, so it works on pages with
+// no hydrated scene. HomeProductStory's data chapter carries an earlier
+// inline copy of this chrome; consolidate onto this component when that
+// section is next touched.
+type Props = { label: string; class?: string };
+
+const { label, class: className } = Astro.props;
+---
+
+<div class:list={["macwin", className]}>
+  <div class="macwin-titlebar">
+    <div aria-hidden="true" class="macwin-lights">
+      <span class="macwin-light" style="background: #ff5f57"></span>
+      <span class="macwin-light" style="background: #febc2e"></span>
+      <span class="macwin-light" style="background: #28c840"></span>
+    </div>
+    <div class="macwin-label">{label}</div>
+  </div>
+  <div class="macwin-body">
+    <slot />
+  </div>
+</div>
+
+<style>
+  .macwin {
+    --macwin-titlebar-height: clamp(1.7rem, 2.35vw, 2.15rem);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
+    border-radius: clamp(0.62rem, 1vw, 0.9rem);
+    /* --card is translucent in the dark theme; composite it over the page
+       background for an opaque surface. */
+    background: linear-gradient(var(--card), var(--card)) var(--background);
+    box-shadow: 0 42px 110px -54px rgba(15, 23, 42, 0.5);
+  }
+
+  .macwin-titlebar {
+    position: relative;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    block-size: var(--macwin-titlebar-height);
+    padding-inline: clamp(0.52rem, 0.78vw, 0.7rem);
+    border-block-end: 1px solid
+      color-mix(in srgb, var(--foreground) 8%, transparent);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card) 98%, white 2%),
+      color-mix(in srgb, var(--card) 94%, var(--muted) 6%)
+    );
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 50%, transparent);
+  }
+
+  .macwin-lights {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: clamp(0.28rem, 0.48vw, 0.48rem);
+  }
+
+  .macwin-light {
+    display: inline-block;
+    inline-size: clamp(0.5rem, 0.7vw, 0.62rem);
+    block-size: clamp(0.5rem, 0.7vw, 0.62rem);
+    border-radius: 999px;
+  }
+
+  .macwin-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: clamp(0.62rem, 0.72vw, 0.72rem);
+    font-weight: 500;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    pointer-events: none;
+  }
+
+  .macwin-body {
+    position: relative;
+    flex: 1;
+    min-block-size: 0;
+    overflow: hidden;
+    background: var(--background);
+  }
+</style>

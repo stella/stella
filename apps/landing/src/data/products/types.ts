@@ -15,6 +15,9 @@ export type ProductMedia =
       type: "story";
       sceneId: ProductStorySceneId;
       showCompanions?: boolean;
+      /** "portrait" renders the full-page document capture (editor only)
+       *  as a centred portrait window instead of the wide app scene. */
+      variant?: "portrait";
       aspect?: string;
     }
   | { type: "placeholder"; note: string; aspect?: string }
