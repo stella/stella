@@ -96,11 +96,14 @@ const mismatchForWorkspace = async (
   workspaceDir: string,
 ): Promise<string | null> => {
   const pkgPath = path.join(ROOT, workspaceDir, "package.json");
-  if (!(await Bun.file(pkgPath).exists())) {
+  // A directory matched by a workspace glob is not necessarily a real
+  // workspace: skip it (rather than crash the guard) if its package.json is
+  // missing or fails to parse.
+  const pkg = await readJson(pkgPath).catch(() => null);
+  if (pkg === null) {
     return null;
   }
 
-  const pkg = await readJson(pkgPath);
   const { name, version } = pkg;
   if (typeof name !== "string" || typeof version !== "string") {
     return null;
