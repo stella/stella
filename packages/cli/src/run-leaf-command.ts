@@ -44,6 +44,25 @@ export const flagKey = (spec: Pick<FlagSpec, "prop">): string =>
     char.toUpperCase(),
   );
 
+/**
+ * Whether a parsed flag value counts as caller-provided when overlaying flags
+ * onto `--input`. A scalar flag is provided iff it is not `undefined`. An
+ * omitted optional variadic flag parses to `[]` (Stricli) rather than
+ * `undefined`, and the CLI has no way to pass an explicit empty array, so an
+ * empty repeatable value means "left off" — treating it as provided would
+ * overwrite an array supplied through `--input` with `[]`. Both command
+ * executors route through here so they cannot diverge on this.
+ */
+export const flagValueProvided = (
+  flagSpec: Pick<FlagSpec, "repeatable">,
+  value: unknown,
+): boolean => {
+  if (value === undefined) {
+    return false;
+  }
+  return !(flagSpec.repeatable && Array.isArray(value) && value.length === 0);
+};
+
 /** Reserved global flag keys present on generated commands (spec S1/S3). */
 export const RESERVED_FLAG_KEYS = {
   input: "input",
@@ -308,7 +327,7 @@ export const buildArgsFromFlags = async (
 
   for (const flagSpec of spec.flags) {
     const value = flags[flagKey(flagSpec)];
-    if (value === undefined) {
+    if (!flagValueProvided(flagSpec, value)) {
       continue;
     }
     // eslint-disable-next-line no-await-in-loop -- @file/@- reads must stay sequential

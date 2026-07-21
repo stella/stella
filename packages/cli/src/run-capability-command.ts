@@ -25,6 +25,7 @@ import {
   confirmDestructive,
   errorEnvelope,
   flagKey,
+  flagValueProvided,
   hasInputPath,
   mapClientErrorExit,
   parsePayload,
@@ -70,7 +71,7 @@ const buildInputFromFlags = async (
   const input = base;
   for (const flagSpec of spec.flags) {
     const value = flags[flagKey(flagSpec)];
-    if (value === undefined) {
+    if (!flagValueProvided(flagSpec, value)) {
       continue;
     }
     // eslint-disable-next-line no-await-in-loop -- @file/@- reads must stay sequential

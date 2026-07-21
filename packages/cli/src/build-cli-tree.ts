@@ -35,11 +35,29 @@ type RoutingTarget = Command<Context> | RouteMap<Context>;
 
 const identity = (value: string): string => value;
 
+/**
+ * Every generated value flag is OPTIONAL at the stricli layer, and this shared
+ * return type makes that non-negotiable: a flag builder that forgets
+ * `optional: true` is a type error, not a runtime surprise. The invariant holds
+ * because any field can instead be supplied through `--input`, and required-ness
+ * is enforced after the `--input`/flag merge against the JSON schema. A required
+ * stricli flag would reject the whole command the moment the field is omitted —
+ * exactly the bug that made optional array flags (e.g. `--assignee-ids`)
+ * unusable when left off.
+ */
+type OptionalStricliFlag = { readonly optional: true };
+
 const parsedStringFlag = (brief: string) =>
   ({ brief, kind: "parsed", optional: true, parse: identity }) as const;
 
 const variadicFlag = (brief: string) =>
-  ({ brief, kind: "parsed", variadic: true, parse: identity }) as const;
+  ({
+    brief,
+    kind: "parsed",
+    variadic: true,
+    optional: true,
+    parse: identity,
+  }) as const;
 
 const booleanFlag = (brief: string, withNegated: boolean) =>
   ({ brief, kind: "boolean", optional: true, withNegated }) as const;
@@ -70,6 +88,23 @@ const mechanicalFlagFacts = (spec: FlagSpec): string => {
   return parts.join(" ");
 };
 
+/**
+ * Build the stricli flag for one capability/tool input field. The single
+ * construction site for both the tool and capability command builders, so the
+ * optional-at-the-stricli-layer invariant cannot drift between them. The return
+ * annotation enforces it for every branch.
+ */
+export const buildFlag = (flagSpec: FlagSpec): OptionalStricliFlag => {
+  const brief = flagBrief(flagSpec);
+  if (flagSpec.kind === "boolean") {
+    return booleanFlag(brief, true);
+  }
+  if (flagSpec.repeatable) {
+    return variadicFlag(brief);
+  }
+  return parsedStringFlag(brief);
+};
+
 const hasLimitProp = (spec: LeafCommandSpec): boolean => {
   const properties = spec.inputSchema["properties"];
   if (typeof properties !== "object" || properties === null) {
@@ -82,17 +117,7 @@ const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
   const flags: Record<string, unknown> = {};
 
   for (const flagSpec of spec.flags) {
-    const key = flagKey(flagSpec);
-    const brief = flagBrief(flagSpec);
-    if (flagSpec.kind === "boolean") {
-      flags[key] = booleanFlag(brief, true);
-      continue;
-    }
-    if (flagSpec.repeatable) {
-      flags[key] = variadicFlag(brief);
-      continue;
-    }
-    flags[key] = parsedStringFlag(brief);
+    flags[flagKey(flagSpec)] = buildFlag(flagSpec);
   }
 
   // Reserved global flags every command carries (spec S1/S3).
@@ -200,17 +225,7 @@ const buildCapabilityLeafFlags = (
   const flags: Record<string, unknown> = {};
 
   for (const flagSpec of spec.flags) {
-    const key = flagKey(flagSpec);
-    const brief = flagBrief(flagSpec);
-    if (flagSpec.kind === "boolean") {
-      flags[key] = booleanFlag(brief, true);
-      continue;
-    }
-    if (flagSpec.repeatable) {
-      flags[key] = variadicFlag(brief);
-      continue;
-    }
-    flags[key] = parsedStringFlag(brief);
+    flags[flagKey(flagSpec)] = buildFlag(flagSpec);
   }
 
   flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
