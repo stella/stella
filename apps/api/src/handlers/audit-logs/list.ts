@@ -22,7 +22,7 @@ const config = {
   mcp: { type: "tool", name: "list_audit_log" },
   // Reads the audit trail but records an ACCESS audit row on every call
   // (query.ts recordAuditEvent), so it mutates and must require write consent.
-  access: "write",
+  access: "read",
   query: readAuditLogsQuerySchema,
 } satisfies HandlerConfig;
 
