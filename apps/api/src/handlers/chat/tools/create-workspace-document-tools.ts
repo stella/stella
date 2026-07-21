@@ -15,10 +15,12 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { buildCreatedDocumentToolOutput } from "@/api/handlers/chat/tools/workspace-tools";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const CREATE_WORKSPACE_DOCUMENT_TOOL_NAME = "create_workspace_document";
@@ -180,7 +182,32 @@ export const createCreateWorkspaceDocumentTools = ({
       throw new ChatToolError({ message: "Document title cannot be blank." });
     }
 
-    const buffer = await markdownToStellaDocx(markdown);
+    // `markdownToStellaDocx` (folio-core's markdown parser + DOCX composer)
+    // can throw on malformed intermediate state; wrap it so a conversion
+    // failure surfaces as a clean `ChatToolError` instead of an unhandled
+    // rejection reaching the model as a generic error.
+    const docxResult = await Result.tryPromise({
+      try: async () => await markdownToStellaDocx(markdown),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(docxResult)) {
+      captureError(docxResult.error, {
+        source: "create_workspace_document",
+      });
+      throw new ChatToolError({
+        message: "The document body could not be converted to DOCX.",
+        cause: docxResult.error,
+      });
+    }
+
+    // Sanitized the same way `create-from-legal-source`'s REST handler
+    // sanitizes its own model/user-supplied title before building a
+    // filename: strips characters that are invalid in a filename or could
+    // inject into Content-Disposition (`/ \ ? % * : | " < >` and friends),
+    // rather than passing the model's title straight into a stored path.
+    const fileName = sanitizeFilenamePreservingExtension(
+      `${trimmedTitle}.docx`,
+    );
 
     const created = await createEntityFromBuffer({
       scopedDb,
@@ -188,8 +215,8 @@ export const createCreateWorkspaceDocumentTools = ({
       workspaceId,
       userId,
       recordAuditEvent,
-      buffer,
-      fileName: `${trimmedTitle}.docx`,
+      buffer: docxResult.value,
+      fileName,
       mimeType: DOCX_MIME_TYPE,
       parentId: null,
     });

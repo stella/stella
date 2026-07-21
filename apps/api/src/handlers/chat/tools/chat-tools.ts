@@ -601,12 +601,35 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // requires `recordAuditEvent` (mirrors `createSkillTools`'s
   // `recordAuditEvent !== undefined` gate for its own mutation tools) since
   // `createEntityFromBuffer` always writes an audit event.
+  //
+  // Because this tool calls `createEntityFromBuffer` directly instead of
+  // going through the MCP `save_document` / REST `create-from-legal-source`
+  // dispatch, it does not inherit either of those paths' authorization
+  // checks — so both are mirrored here explicitly:
+  //   - `entity: ["create"]` permission, the same grant `save_document`'s
+  //     create branch checks in `document-tools.ts`
+  //     (`roles[context.memberRole].authorize({ entity: ["create"] })`) and
+  //     `create-from-legal-source`'s `permissions` config enforces. Without
+  //     it, a chat-capable-but-entity-create-less role (e.g. `intern`, which
+  //     has `chat` but `entity: []`) could create documents through chat
+  //     alone.
+  //   - Active (non-archived) matter status, read from the same
+  //     `workspaceStatusById` map the registry write tools thread into
+  //     `buildMcpContextFromChat` for their own `ensureActiveWorkspace` gate
+  //     (`toolWorkspaceIds` includes archived matters, so that alone is not
+  //     enough). Without it, an archived matter would stay writable through
+  //     this tool alone.
   // KNOWN LIMITATION: creates at the matter root every time — there is no
   // folder/parent targeting yet.
+  const canCreateWorkspaceDocument = roles[memberRole].authorize({
+    entity: ["create"],
+  }).success;
   const createWorkspaceDocumentTools =
     requestWorkspaceId !== null &&
     recordAuditEvent !== undefined &&
-    toolWorkspaceIds.includes(requestWorkspaceId)
+    toolWorkspaceIds.includes(requestWorkspaceId) &&
+    canCreateWorkspaceDocument &&
+    workspaceStatusById?.get(requestWorkspaceId) === "active"
       ? createCreateWorkspaceDocumentTools({
           scopedDb,
           organizationId,
