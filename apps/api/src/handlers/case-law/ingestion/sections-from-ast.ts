@@ -22,19 +22,28 @@ export const sectionsFromAst = (
   blocks: readonly Block[],
 ): DecisionSection[] => {
   const groups: { title: string | null; blocks: Block[] }[] = [];
+  let openKind: BlockKind = "body";
 
   for (const block of blocks) {
     if (block.type === "heading" && block.level === 1) {
       groups.push({ title: block.plainText, blocks: [] });
+      openKind = "body";
       continue;
     }
+
+    // The operative part carries no heading of its own: courts
+    // introduce it with a sentence ("On those grounds, the Court hereby
+    // rules:"), so a heading-only split leaves the ruling buried at the
+    // end of whichever section preceded it — for CJEU judgments that is
+    // "Costs", which then reads as the section holding the ruling.
+    const kind = blockKind(block);
     const current = groups.at(-1);
-    if (current) {
-      current.blocks.push(block);
+    if (!current || kind !== openKind) {
+      groups.push({ title: null, blocks: [block] });
+      openKind = kind;
       continue;
     }
-    // Anything before the first heading is the untitled opening group.
-    groups.push({ title: null, blocks: [block] });
+    current.blocks.push(block);
   }
 
   const sections: DecisionSection[] = [];
@@ -50,7 +59,7 @@ export const sectionsFromAst = (
 
     sections.push({
       index: sections.length,
-      type: sectionType(group.blocks, sections.length),
+      type: sectionType(group.blocks, sections.length, sections.at(-1)?.type),
       title: group.title,
       text,
     });
@@ -60,12 +69,26 @@ export const sectionsFromAst = (
 };
 
 /**
+ * Which run of the document a block belongs to. The ruling and the
+ * signatures that close it are one run; everything else, including the
+ * footnotes that follow, is body.
+ */
+type BlockKind = "body" | "ruling";
+
+const blockKind = (block: Block): BlockKind =>
+  block.type === "paragraph" &&
+  (block.role === "holding" || block.role === "signature")
+    ? "ruling"
+    : "body";
+
+/**
  * Classify a section by the roles its paragraphs carry. The roles are
  * positional (see the parser), so this stays language-independent.
  */
 const sectionType = (
   blocks: readonly Block[],
   index: number,
+  previous: DecisionSectionType | undefined,
 ): DecisionSectionType => {
   const hasRole = (role: string): boolean =>
     blocks.some((block) => block.type === "paragraph" && block.role === role);
@@ -74,6 +97,11 @@ const sectionType = (
     return "ruling";
   }
   if (hasRole("signature")) {
+    return "footer";
+  }
+  // Whatever trails the ruling is the document's tail: footnotes, the
+  // language-of-the-case line, and nothing a reader navigates to.
+  if (previous === "ruling") {
     return "footer";
   }
   if (index === 0 || hasRole("intro")) {

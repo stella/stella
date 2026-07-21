@@ -111,6 +111,9 @@ const cleanSupplement = (value: unknown): string | null => {
   return trimmed;
 };
 
+const getParagraphNumberPieceId = (blockId: string): string =>
+  `paragraph-number:${blockId}`;
+
 const getTableCellPieceId = ({
   blockId,
   columnIndex,
@@ -734,6 +737,18 @@ export const DecisionText = ({
           id: block.id,
           text: inlinesToPlainText(block.inlines),
         });
+
+        // The paragraph number is rendered beside the text, not inside
+        // `inlines`, so it needs a piece of its own: CJEU decisions are
+        // cited by that number, and searching it must scroll there.
+        // Folding it into the paragraph's own piece would shift every
+        // highlight offset in that paragraph.
+        if (block.type === "paragraph" && block.number !== undefined) {
+          pieces.push({
+            id: getParagraphNumberPieceId(block.id),
+            text: String(block.number),
+          });
+        }
       }
     } else if (decision.fulltext) {
       for (const [index, paragraph] of decision.fulltext
