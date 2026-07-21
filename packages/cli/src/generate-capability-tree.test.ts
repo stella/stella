@@ -149,6 +149,30 @@ describe("deriveCapabilityLeaf: flags", () => {
     expect(flagByCli(spec, "--body-query-version")?.part).toBe("body");
   });
 
+  test("flags with distinct spellings but one parser key are part-prefixed", () => {
+    // Stricli's allow-kebab-for-camel scanner normalizes both public spellings
+    // to `userId`. The generator must resolve the parser identity collision,
+    // not merely compare the rendered flag strings.
+    const { spec, flagCollisions } = deriveCapabilityLeaf(
+      entry({
+        id: "users.compare",
+        handlerKind: "root",
+        inputSchema: {
+          body: objectSchema({
+            user: objectSchema({ id: { type: "string" } }),
+          }),
+          query: objectSchema({ user_id: { type: "string" } }),
+        },
+      }),
+    );
+
+    expect(flagByCli(spec, "--user.id")).toBeUndefined();
+    expect(flagByCli(spec, "--user-id")).toBeUndefined();
+    expect(flagByCli(spec, "--body-user-id")?.partPath).toBe("user.id");
+    expect(flagByCli(spec, "--query-user-id")?.partPath).toBe("user_id");
+    expect(flagCollisions).toEqual(["--body-user-id", "--query-user-id"]);
+  });
+
   test("a prop colliding with the synthetic --workspace is part-prefixed", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({

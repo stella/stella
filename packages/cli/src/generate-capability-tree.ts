@@ -199,6 +199,8 @@ const candidatesForPart = ({
 const prefixedFlag = (part: CapabilityPart, partPath: string): string =>
   `--${[part, ...partPath.split(".")].map((segment) => kebabCase(segment)).join("-")}`;
 
+const parserKeyForFlag = (flag: string): string => flagKey({ flag });
+
 type BuiltFlags = {
   flags: CapabilityFlagSpec[];
   flagCollisions: string[];
@@ -226,40 +228,42 @@ const resolveFlags = ({
   /** Names owned outside the candidates (the synthetic `--workspace`). */
   takenNames: ReadonlySet<string>;
 }): BuiltFlags => {
-  const byBaseFlag = new Map<string, number>();
+  const reservedParserKeys = new Set([...RESERVED_FLAGS].map(parserKeyForFlag));
+  const takenParserKeys = new Set([...takenNames].map(parserKeyForFlag));
+  const byBaseParserKey = new Map<string, number>();
   for (const candidate of candidates) {
-    byBaseFlag.set(
-      candidate.baseFlag,
-      (byBaseFlag.get(candidate.baseFlag) ?? 0) + 1,
-    );
+    const parserKey = parserKeyForFlag(candidate.baseFlag);
+    byBaseParserKey.set(parserKey, (byBaseParserKey.get(parserKey) ?? 0) + 1);
   }
   const resolved = candidates.map((candidate) => ({
     candidate,
     prefixed:
-      RESERVED_FLAGS.has(candidate.baseFlag) ||
-      takenNames.has(candidate.baseFlag) ||
-      (byBaseFlag.get(candidate.baseFlag) ?? 0) > 1,
+      reservedParserKeys.has(parserKeyForFlag(candidate.baseFlag)) ||
+      takenParserKeys.has(parserKeyForFlag(candidate.baseFlag)) ||
+      (byBaseParserKey.get(parserKeyForFlag(candidate.baseFlag)) ?? 0) > 1,
   }));
   const finalName = (entry: (typeof resolved)[number]): string =>
     entry.prefixed
       ? prefixedFlag(entry.candidate.part, entry.candidate.partPath)
       : entry.candidate.baseFlag;
 
-  // Global-uniqueness fixpoint: any final-name group of size > 1 (or hitting a
-  // taken name) prefixes all of its unprefixed members. Prefixing only flips
-  // false -> true, so the loop terminates.
+  // Global-uniqueness fixpoint: group by Stricli's parsed identity rather than
+  // public spelling. For example, `--user.id` and `--user-id` both parse as
+  // `userId` under allow-kebab-for-camel. Any duplicate identity (or identity
+  // owned outside the candidates) prefixes all unprefixed members. Prefixing
+  // only flips false -> true, so the loop terminates.
   let changed = true;
   while (changed) {
     changed = false;
     const groups = new Map<string, (typeof resolved)[number][]>();
     for (const entry of resolved) {
-      const name = finalName(entry);
-      const group = groups.get(name) ?? [];
+      const parserKey = parserKeyForFlag(finalName(entry));
+      const group = groups.get(parserKey) ?? [];
       group.push(entry);
-      groups.set(name, group);
+      groups.set(parserKey, group);
     }
-    for (const [name, group] of groups) {
-      if (group.length <= 1 && !takenNames.has(name)) {
+    for (const [parserKey, group] of groups) {
+      if (group.length <= 1 && !takenParserKeys.has(parserKey)) {
         continue;
       }
       for (const entry of group) {
@@ -278,9 +282,9 @@ const resolveFlags = ({
     const { candidate } = entry;
     const flag = finalName(entry);
     const source = `${candidate.part}.${candidate.partPath}`;
-    const parserKey = flagKey({ flag });
+    const parserKey = parserKeyForFlag(flag);
     const existing = seenParserKeys.get(parserKey);
-    if (existing !== undefined || takenNames.has(flag)) {
+    if (existing !== undefined || takenParserKeys.has(parserKey)) {
       throw new RouteGenerationError(
         `capability "${capabilityId}": flag ${flag} (from ${source}) collides at parser key ${parserKey} with ${existing ?? "a reserved leaf flag"} even after part-prefixing`,
       );
