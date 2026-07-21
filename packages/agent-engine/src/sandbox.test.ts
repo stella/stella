@@ -57,6 +57,14 @@ describe("defineStellaSandbox", () => {
     expect(definition.policy?.capabilities?.network).toBe("deny");
   });
 
+  test("fails closed when a non-interactive harness needs fresh approval", () => {
+    const definition = defineStellaSandbox(baseInput);
+    expect(definition.policy?.default).toBe("ask");
+    expect(definition.policy?.commands?.deny).toEqual(
+      expect.arrayContaining(["sudo *", "rm -rf /*", "curl *", "wget *"]),
+    );
+  });
+
   test("destroys each run without snapshotting delegated credentials", () => {
     const definition = defineStellaSandbox(baseInput);
     expect(definition.lifecycle).toMatchObject({

@@ -11,6 +11,7 @@ export type JsonSchema = Record<string, unknown>;
 /** The MCP scope strings a tool annotation can require (client-side precheck only). */
 export type ToolScope =
   | "read"
+  | "contacts_write"
   | "matters_write"
   | "chat"
   | "documents_write"

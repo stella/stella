@@ -1135,7 +1135,7 @@ export const compareScopeStrictness = ({
 };
 
 /**
- * The five write-only OAuth grants. A capability whose `access` is `read` must
+ * The six write-only OAuth grants. A capability whose `access` is `read` must
  * never resolve to one of these — a read-only credential (`stella:read` /
  * `stella:admin_read`) would then be unable to invoke it. Enforced structurally
  * by the exporter's read-scope guard AND the `read-capabilities-with-write-scope`
@@ -1144,6 +1144,7 @@ export const compareScopeStrictness = ({
 export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set([
   "stella:admin_write",
   "stella:billing_write",
+  "stella:contacts_write",
   "stella:documents_write",
   "stella:knowledge_write",
   "stella:matters_write",
@@ -1162,6 +1163,7 @@ export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set([
 const READ_SCOPE_BY_DOMAIN_SCOPE: Record<string, string> = {
   "stella:admin_write": "stella:admin_read",
   "stella:billing_write": "stella:read",
+  "stella:contacts_write": "stella:read",
   "stella:documents_write": "stella:read",
   "stella:knowledge_write": "stella:read",
   "stella:matters_write": "stella:read",

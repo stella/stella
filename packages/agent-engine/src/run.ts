@@ -74,8 +74,9 @@ export const resolveStellaSandboxRun = (input: StellaSandboxRunInput) => {
   const adapter = codexText(input.harnessModel, {
     // The outer TanStack/Docker sandbox is the real isolation boundary; codex
     // may write within its workspace. Approval behavior is intentionally left
-    // to the Stella sandbox policy; an adapter-level override would take
-    // precedence and silently bypass that policy's stricter mapping.
+    // to the Stella sandbox policy. Its `ask`/`deny` rules map to on-request;
+    // in non-interactive `codex exec`, approval-requiring actions fail closed.
+    // An adapter override would take precedence and bypass that mapping.
     sandboxMode: "workspace-write",
     env: { [HARNESS_KEY_ENV]: input.harnessApiKey },
     // Raw codex `-c` overrides (verbatim TOML values). Point codex at the
