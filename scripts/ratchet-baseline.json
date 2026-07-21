@@ -1,8 +1,9 @@
 {
   "as-casts": {
-    "count": 4,
+    "count": 5,
     "files": {
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
+      "apps/api/src/handlers/chat/tools/edit-workspace-document-tools.ts": 1,
       "apps/api/src/lib/auth.ts": 1,
       "apps/web/src/app-providers.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions.ts": 1
@@ -41,7 +42,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 598,
+    "count": 599,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -85,6 +86,7 @@
       "apps/api/src/handlers/chat/stream-chat.ts": 2,
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
       "apps/api/src/handlers/chat/tools/boe-tools.ts": 1,
+      "apps/api/src/handlers/chat/tools/edit-workspace-document-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/execute/chat-code-mode.ts": 1,
       "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 4,
       "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 6,
@@ -333,7 +335,7 @@
     "files": {}
   },
   "cross-handler-imports": {
-    "count": 253,
+    "count": 260,
     "files": {
       "apps/api/src/handlers/catalogue/bundled-skill-resources.ts": 1,
       "apps/api/src/handlers/catalogue/install-skill.ts": 1,
@@ -349,12 +351,14 @@
       "apps/api/src/handlers/chat/resolve-file-thread.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
       "apps/api/src/handlers/chat/skills.ts": 1,
+      "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts": 1,
+      "apps/api/src/handlers/chat/tools/edit-workspace-document-tools.ts": 3,
       "apps/api/src/handlers/chat/tools/infosoud-tools.ts": 2,
       "apps/api/src/handlers/chat/tools/skill-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/template-tools.ts": 4,
       "apps/api/src/handlers/chat/tools/version-compare-tools.ts": 1,
       "apps/api/src/handlers/chat/types.ts": 1,
-      "apps/api/src/handlers/chat/upload-files.ts": 4,
+      "apps/api/src/handlers/chat/upload-files.ts": 3,
       "apps/api/src/handlers/clauses/clause-to-patch.ts": 1,
       "apps/api/src/handlers/clauses/template-slot-preview.ts": 2,
       "apps/api/src/handlers/clauses/types.ts": 1,
@@ -368,6 +372,7 @@
       "apps/api/src/handlers/entities/compute-version-diff.ts": 1,
       "apps/api/src/handlers/entities/copy-to-workspace.ts": 3,
       "apps/api/src/handlers/entities/copy-utils.ts": 4,
+      "apps/api/src/handlers/entities/create-entity-version-from-buffer.ts": 4,
       "apps/api/src/handlers/entities/create-from-buffer.ts": 4,
       "apps/api/src/handlers/entities/create-from-legal-source.ts": 1,
       "apps/api/src/handlers/entities/create.ts": 1,

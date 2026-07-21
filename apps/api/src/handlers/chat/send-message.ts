@@ -32,6 +32,8 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  DEFAULT_CHAT_EDIT_APPLY_MODE,
+  DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
   sendMessageBodySchema,
   validateMessage,
@@ -309,6 +311,15 @@ const sendMessage = createSafeRootHandler(
     // Computed once and reused for tool registration (validation +
     // streaming) and for the matching prompt guidance below.
     const hasActiveDocxFileClient = body.activeFile?.supportsDocxEdits === true;
+    // Per-turn DOCX-edit review-mode setting: which of the two mutually
+    // exclusive tools (`apply-active-docx-edits` manual /
+    // `edit_workspace_document` auto) `getChatTools` registers, and (for
+    // auto) which redline representation it applies with. Resolved once
+    // and reused for both the validation and streaming tool sets below,
+    // matching every other per-turn setting on this path.
+    const editApplyMode = body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE;
+    const docxEditRepresentation =
+      body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
     const validationThreadState = yield* Result.await(
       readThreadValidationState({
         organizationId: session.activeOrganizationId,
@@ -441,6 +452,8 @@ const sendMessage = createSafeRootHandler(
         activeFile: body.activeFile,
         hasActiveDocxEditClient: true,
         hasActiveDocxFileClient: true,
+        editApplyMode,
+        docxEditRepresentation,
         webSearchEnabled: validationThreadState.webSearchEnabled,
         webSearchProviders,
         externalTools: externalToolsForValidation,
@@ -946,6 +959,8 @@ const sendMessage = createSafeRootHandler(
         hasActiveDocxEditClient:
           hasActiveDocxFileClient || body.activeTemplate !== undefined,
         hasActiveDocxFileClient,
+        editApplyMode,
+        docxEditRepresentation,
         webSearchEnabled: thread.data.webSearchEnabled,
         webSearchProviders,
         externalTools: externalMcpTools.tools,

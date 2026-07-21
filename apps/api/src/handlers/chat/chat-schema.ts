@@ -113,6 +113,53 @@ export const activeSkillSchema = t.Object({
   skillName: t.String({ minLength: 1, maxLength: 64 }),
 });
 
+/**
+ * Which of the two DOCX-edit review modes a chat turn uses -- they are
+ * mutually exclusive tool surfaces, not independent toggles:
+ * - `manual`: `apply-active-docx-edits` (client-executed). Operations are
+ *   queued into the browser review panel; the user reviews and applies
+ *   each suggestion themselves.
+ * - `auto`: `edit_workspace_document` (server-executed). Operations are
+ *   applied headlessly and written straight to a new entity version.
+ * `getChatTools` registers exactly one of the two tools for a given mode,
+ * never both, so the model is never handed a choice between them.
+ */
+export const CHAT_EDIT_APPLY_MODE = {
+  manual: "manual",
+  auto: "auto",
+} as const;
+export type ChatEditApplyMode =
+  (typeof CHAT_EDIT_APPLY_MODE)[keyof typeof CHAT_EDIT_APPLY_MODE];
+
+/**
+ * Default review mode: AI edits auto-apply as tracked changes (attributed
+ * to the acting user's configured author name), writing a new version
+ * directly. The user can switch to manual (queued) review or direct
+ * (non-tracked) rewrite via the mode selectors. A single constant so the
+ * default is easy to change later.
+ */
+export const DEFAULT_CHAT_EDIT_APPLY_MODE: ChatEditApplyMode =
+  CHAT_EDIT_APPLY_MODE.auto;
+
+/**
+ * The redline representation `edit_workspace_document` (the `auto` review
+ * mode) writes operations with. Distinct from folio's own `mode` (the
+ * `FolioAIEditApplyMode` the `@stll/folio-core` apply layer accepts) and
+ * from the manual flow's per-suggestion `appliedMode` -- named separately so
+ * the three never get confused at a call site. `suggested` is deliberately
+ * excluded: that representation exists for the manual queued-review flow,
+ * which this setting does not apply to.
+ */
+export const DOCX_EDIT_REPRESENTATION = {
+  trackedChanges: "tracked-changes",
+  direct: "direct",
+} as const;
+export type DocxEditRepresentation =
+  (typeof DOCX_EDIT_REPRESENTATION)[keyof typeof DOCX_EDIT_REPRESENTATION];
+
+export const DEFAULT_DOCX_EDIT_REPRESENTATION: DocxEditRepresentation =
+  DOCX_EDIT_REPRESENTATION.trackedChanges;
+
 export const sendMessageBodySchema = t.Object({
   threadId: tSafeId("chatThread"),
   workspaceId: t.Optional(tSafeId("workspace")),
@@ -144,6 +191,29 @@ export const sendMessageBodySchema = t.Object({
   activeDecision: t.Optional(activeDecisionSchema),
   activeExternal: t.Optional(activeExternalSchema),
   activeSkill: t.Optional(activeSkillSchema),
+  /**
+   * Which DOCX-edit review mode this turn uses; omitted means
+   * `DEFAULT_CHAT_EDIT_APPLY_MODE`. Threaded into `getChatTools`, which
+   * registers exactly one of `apply-active-docx-edits` (manual) /
+   * `edit_workspace_document` (auto) accordingly -- never both.
+   */
+  editApplyMode: t.Optional(
+    t.Union([
+      t.Literal(CHAT_EDIT_APPLY_MODE.manual),
+      t.Literal(CHAT_EDIT_APPLY_MODE.auto),
+    ]),
+  ),
+  /**
+   * Redline representation for the `auto` review mode only; omitted means
+   * `DEFAULT_DOCX_EDIT_REPRESENTATION`. Ignored in `manual` mode, where the
+   * human picks the representation at accept time.
+   */
+  docxEditRepresentation: t.Optional(
+    t.Union([
+      t.Literal(DOCX_EDIT_REPRESENTATION.trackedChanges),
+      t.Literal(DOCX_EDIT_REPRESENTATION.direct),
+    ]),
+  ),
   devModelId: t.Optional(
     t.String({
       minLength: 1,

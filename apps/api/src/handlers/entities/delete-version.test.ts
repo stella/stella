@@ -259,6 +259,18 @@ describe("delete-version chain-of-custody guard", () => {
             "Presigned-upload finalize: reads the locked current version's fields to carry forward into a new version; currentVersionId is invariant-live.",
         },
       ],
+      "handlers/entities/create-entity-version-from-buffer.ts": [
+        {
+          anchor: "freshCurrentVersionId } }",
+          reason:
+            "New-version write-back from an already-built buffer (the " +
+            "edit_workspace_document chat tool): re-checks the locked " +
+            "entity's currentVersionId exists before carrying its fields " +
+            "forward. currentVersionId is invariant-live (tombstoning " +
+            "promotes it off a withdrawn row), same as upload-version.ts's " +
+            "identical carry-forward read.",
+        },
+      ],
       "handlers/entities/finalize-desktop-edit-session.ts": [
         {
           anchor: "editSession.baseVersionId",

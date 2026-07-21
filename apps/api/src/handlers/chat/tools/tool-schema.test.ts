@@ -34,6 +34,7 @@ import {
 } from "@/api/handlers/chat/tools/chat-history-tools";
 import { getChatTools as getChatToolsWithPin } from "@/api/handlers/chat/tools/chat-tools";
 import { CREATE_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import { EDIT_WORKSPACE_DOCUMENT_TOOL_NAME } from "@/api/handlers/chat/tools/edit-workspace-document-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   ADD_COMMENT_TOOL_NAME,
@@ -180,6 +181,13 @@ const buildFullCoverageChatTools = () => {
     }),
     hasActiveDocxEditClient: true,
     hasActiveDocxFileClient: true,
+    // Explicit "manual": DEFAULT_CHAT_EDIT_APPLY_MODE is now "auto", which
+    // would suppress apply-active-docx-edits here (this call sets no
+    // activeFile, so the auto tool never registers either) and drop it out
+    // of full coverage. Pin "manual" so this helper keeps exercising both
+    // the manual tool's schema and its own dedicated authorization tests
+    // below, independent of the production default.
+    editApplyMode: "manual",
     webSearchEnabled: true,
     webSearchProviders: { webSearchProvider, urlFetcher },
     activeSkillContext: editableActiveSkillContext,
@@ -551,6 +559,14 @@ describe("chat tool schemas", () => {
       }),
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      // Explicit "manual": Template Studio has no entity-backed
+      // `activeFile` (it uses `activeTemplate`), so the "auto" default
+      // could never register `edit_workspace_document` there anyway; pin
+      // "manual" so this test keeps exercising apply-active-docx-edits's
+      // registration independent of the production default, matching
+      // this test's actual subject (the folio-agents read tools' own
+      // narrower gate).
+      editApplyMode: "manual",
     } as const;
 
     const withoutClient = getChatTools({
@@ -1723,6 +1739,138 @@ describe("chat tool schemas", () => {
         memberRole: "owner",
       });
       expect(tools).not.toHaveProperty(CREATE_WORKSPACE_DOCUMENT_TOOL_NAME);
+    });
+  });
+
+  // Regression coverage mirroring `create_workspace_document authorization`
+  // above: `edit_workspace_document` writes a new entity version directly
+  // (no client review panel in the loop), so it must mirror the same class
+  // of explicit authorization mirror -- here `entity: ["update"]` (an edit
+  // to an EXISTING document) rather than `entity: ["create"]` -- plus the
+  // active-matter status gate, PLUS a review-mode gate
+  // (`editApplyMode === "auto"`) that has no analogue on the create tool:
+  // this tool and the manual, client-executed `apply-active-docx-edits`
+  // are mutually exclusive review-mode surfaces, never both registered for
+  // the same turn.
+  describe("edit_workspace_document authorization", () => {
+    const activeFile = {
+      entityId: toSafeId<"entity">("77777777-7777-4777-8777-777777777777"),
+      supportsDocxEdits: true,
+    } as const;
+
+    const baseArgs = {
+      orgAIConfig: null,
+      organizationId,
+      requestWorkspaceId: workspaceId,
+      thirdPartyBoundary: { type: "raw" },
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
+      recordAuditEvent: noopAuditRecorder,
+      activeFile,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+    } as const;
+
+    test("registers edit_workspace_document for an updater on an active matter with an editable active file", () => {
+      const tools = getChatTools({
+        ...baseArgs,
+        memberRole: "owner",
+        editApplyMode: "auto",
+        workspaceStatusById: new Map([[workspaceId, "active"]]),
+      });
+      expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+    });
+
+    // `intern` has `chat: [...]` but `entity: []` -- chat-capable, but not
+    // entitled to edit documents. Without this gate, the tool would let an
+    // entity-update-less role overwrite documents through chat alone.
+    test("does not register edit_workspace_document for a role without entity:update", () => {
+      const tools = getChatTools({
+        ...baseArgs,
+        memberRole: "intern",
+        editApplyMode: "auto",
+        workspaceStatusById: new Map([[workspaceId, "active"]]),
+      });
+      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+    });
+
+    test("does not register edit_workspace_document for an archived matter", () => {
+      const tools = getChatTools({
+        ...baseArgs,
+        memberRole: "owner",
+        editApplyMode: "auto",
+        workspaceStatusById: new Map([[workspaceId, "archived"]]),
+      });
+      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+    });
+
+    // Fail-closed: an unknown workspace status must NOT default to "active".
+    test("does not register edit_workspace_document when no workspace status is known", () => {
+      const tools = getChatTools({
+        ...baseArgs,
+        memberRole: "owner",
+        editApplyMode: "auto",
+      });
+      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+    });
+
+    test("does not register edit_workspace_document without an editable active DOCX file", () => {
+      const tools = getChatTools({
+        ...baseArgs,
+        activeFile: { entityId: activeFile.entityId },
+        memberRole: "owner",
+        editApplyMode: "auto",
+        workspaceStatusById: new Map([[workspaceId, "active"]]),
+      });
+      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+    });
+
+    // The two review modes are mutually exclusive tool surfaces: the model
+    // is never handed a choice between the headless writer and the
+    // client-executed queue-for-review tool on the same turn.
+    describe("mutual exclusion with apply-active-docx-edits", () => {
+      const mutualExclusionArgs = {
+        ...baseArgs,
+        memberRole: "owner" as const,
+        hasActiveDocxEditClient: true,
+        workspaceStatusById: new Map([[workspaceId, "active" as const]]),
+      };
+
+      test("auto mode registers edit_workspace_document and NOT apply-active-docx-edits", () => {
+        const tools = getChatTools({
+          ...mutualExclusionArgs,
+          editApplyMode: "auto",
+        });
+        expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+        expect(tools).not.toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+      });
+
+      test("manual mode registers apply-active-docx-edits and NOT edit_workspace_document", () => {
+        const tools = getChatTools({
+          ...mutualExclusionArgs,
+          editApplyMode: "manual",
+        });
+        expect(tools).toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+        expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+      });
+
+      // DEFAULT_CHAT_EDIT_APPLY_MODE is "auto": AI edits auto-apply as
+      // tracked changes by default, writing a new version directly; the
+      // user switches to manual (queued) review via the mode selector.
+      test("defaults to auto when editApplyMode is omitted", () => {
+        const tools = getChatTools(mutualExclusionArgs);
+        expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+        expect(tools).not.toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+      });
     });
   });
 });
