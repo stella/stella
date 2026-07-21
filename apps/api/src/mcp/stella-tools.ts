@@ -1,16 +1,24 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { COUNTRY_CODES } from "@stll/country-codes";
+import { docxToMarkdown } from "@stll/folio-core/server";
 import { roles } from "@stll/permissions";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
-import type { ContactEmail, ContactPhone } from "@/api/db/schema-validators";
+import type {
+  ContactEmail,
+  ContactPhone,
+  FieldContent,
+} from "@/api/db/schema-validators";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import { readEntityByIdHandler } from "@/api/handlers/entities/get";
+import { createFileKey } from "@/api/handlers/files/utils";
 import {
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
@@ -30,6 +38,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { getS3 } from "@/api/lib/s3";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
@@ -38,6 +47,8 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { findExtractionFileField } from "@/api/lib/search/types";
+import { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   defineTextFieldSpec,
@@ -73,6 +84,7 @@ import {
   textResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
 // Page size for each citation list on read_case_law_decision. The decision
@@ -552,9 +564,11 @@ export const STELLA_TOOL_DEFINITIONS = [
   {
     annotations: { readOnlyHint: true, openWorldHint: false },
     description:
-      "Read extracted text from a document found anywhere in your accessible " +
-      "matters. Use after search_across_matters. Long documents are returned " +
-      "in windows; pass the returned nextCursor back as cursor to read more.",
+      "Read a document's content, found anywhere in your accessible matters. " +
+      "DOCX files are converted to Markdown with structure preserved " +
+      "(headings, tables, lists); other formats return their extracted plain " +
+      "text. Use after search_across_matters. Long documents are returned in " +
+      "windows; pass the returned nextCursor back as cursor to read more.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1182,6 +1196,109 @@ const toIsoDateString = (value: unknown): string | null => {
   return null;
 };
 
+type DocxFieldContent = Extract<FieldContent, { type: "file" }>;
+
+// SAFETY: `content` is a NOT NULL jsonb column, but that only forbids a SQL
+// NULL -- a stored JSON `null` literal still reads back as JS `null` here,
+// so the predicate must not dereference `.type` before checking for it.
+const isDocxFileContent = (
+  content: FieldContent | null | undefined,
+): content is DocxFieldContent =>
+  content !== null &&
+  content !== undefined &&
+  content.type === "file" &&
+  content.mimeType === DOCX_MIME_TYPE;
+
+type LoadCurrentVersionDocxMarkdownProps = {
+  context: McpRequestContext;
+  entityId: ReturnType<typeof brandPersistedEntityId>;
+  workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
+};
+
+/**
+ * `not-docx`: the current version's extraction file (see below) is
+ * confirmed NOT a DOCX (or the version has no file at all) -- stable across
+ * every read of this entity, so the caller can always use plaintext with no
+ * cursor-consistency risk.
+ *
+ * `unavailable`: the file IS a DOCX (or its identity could not even be
+ * confirmed -- e.g. a transient entity/fields lookup failure) but Markdown
+ * could not be produced for THIS call (S3 read failed, conversion errored,
+ * or the attempt timed out). Unlike `not-docx`, this is not a stable fact
+ * about the document -- a retry could succeed -- so the caller must not
+ * treat it as equivalent to `not-docx` once a cursor is already in flight
+ * (see `handleReadContentAcrossMattersTool`).
+ */
+type DocxMarkdownOutcome =
+  | { kind: "not-docx" }
+  | { kind: "markdown"; text: string }
+  | { kind: "unavailable" };
+
+/**
+ * Convert the entity's CURRENT version file to folio's structure-preserving
+ * Markdown, but only when it is a DOCX. Reuses `readEntityByIdHandler` — the
+ * same TOCTOU-safe entity+currentVersion+fields lookup `read_document` uses
+ * — so this shares its auth boundary and never re-derives entity access.
+ *
+ * File selection uses `findExtractionFileField`, the SAME first-file-field
+ * selection `processExtraction` uses to produce the cached `extractedContent`
+ * plaintext (and what search hits reference). Scanning fields for the first
+ * DOCX instead would let an auxiliary DOCX field outrank the entity's actual
+ * indexed file (e.g. a PDF system file with an unrelated DOCX attachment),
+ * returning markdown for a different document than the plaintext fallback
+ * and search results describe.
+ *
+ * The S3 read and conversion are bounded by `docxMarkdownConversionTimeoutMs`
+ * (`withTimeout`) so a stalled fetch or hung conversion cannot hang the
+ * request; a timeout is reported as `unavailable`, same as any other
+ * conversion failure.
+ */
+const loadCurrentVersionDocxMarkdown = async ({
+  context,
+  entityId,
+  workspaceId,
+}: LoadCurrentVersionDocxMarkdownProps): Promise<DocxMarkdownOutcome> => {
+  const entityResult = await Result.gen(() =>
+    readEntityByIdHandler({ safeDb: context.safeDb, workspaceId, entityId }),
+  );
+  if (Result.isError(entityResult)) {
+    return { kind: "unavailable" };
+  }
+
+  const file = findExtractionFileField(entityResult.value.fields);
+  if (!isDocxFileContent(file)) {
+    return { kind: "not-docx" };
+  }
+
+  const markdownResult = await Result.tryPromise({
+    try: async () =>
+      await withTimeout(
+        async () => {
+          const buffer = await getS3()
+            .file(
+              createFileKey({
+                organizationId: context.organizationId,
+                workspaceId,
+                fileId: file.id,
+                mimeType: DOCX_MIME_TYPE,
+              }),
+            )
+            .arrayBuffer();
+          return await docxToMarkdown(buffer);
+        },
+        {
+          label: "read_content_across_matters:docx-to-markdown",
+          timeoutMs: LIMITS.docxMarkdownConversionTimeoutMs,
+        },
+      ),
+    catch: (cause) => cause,
+  });
+
+  return Result.isError(markdownResult)
+    ? { kind: "unavailable" }
+    : { kind: "markdown", text: markdownResult.value };
+};
+
 const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   args,
   context,
@@ -1232,17 +1349,54 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   );
 
   const workspaceId = row.entity.workspaceId;
-  // Carry the FULL decrypted text and window it in the egress pipeline, so an
+  const docxOutcome = await loadCurrentVersionDocxMarkdown({
+    context,
+    entityId,
+    workspaceId,
+  });
+
+  // Prefer the live DOCX-to-Markdown conversion (headings, tables, lists
+  // preserved) whenever the current version holds a DOCX file; every other
+  // format (PDF, images, non-document entities) uses the plain text already
+  // extracted at ingestion.
+  //
+  // `cursor` (the char offset windowed below) is only ever valid against the
+  // ONE text representation it was issued against. On a first read
+  // (`cursor === undefined`) nothing has been issued yet, so a conversion
+  // failure can safely fall back to plaintext. On a paginated read, the
+  // caller's cursor already encodes an offset into whatever the first read
+  // served; if the live conversion becomes `unavailable` mid-stream, silently
+  // switching to plaintext (or vice versa) would slice a different text than
+  // the cursor was computed against, producing skipped or duplicated
+  // content. Surface a retryable error instead of guessing.
+  let text: string;
+  if (docxOutcome.kind === "markdown") {
+    text = docxOutcome.text;
+  } else if (docxOutcome.kind === "not-docx") {
+    text = plaintext;
+  } else if (cursor === undefined) {
+    text = plaintext;
+  } else {
+    return structuredErrorResult({
+      code: "internal_error",
+      message:
+        "Could not continue reading this document's Markdown conversion.",
+      hint: "Retry the request with the same cursor.",
+      retryable: true,
+    });
+  }
+
+  // Carry the FULL text and window it in the egress pipeline, so an
   // anonymized read redacts the whole document before slicing (slicing raw text
   // first could split an entity name across the window boundary and leak its
   // prefix). Default mode leaves name/text as-is and windows the same way.
   const initialNextCursor = (): string | null => null;
   const payload = {
-    charCount: plaintext.length,
+    charCount: text.length,
     entityId,
     kind: row.entity.kind,
     name: row.entity.name,
-    text: plaintext,
+    text,
     truncated: false,
     nextCursor: initialNextCursor(),
     workspaceId,

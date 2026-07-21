@@ -219,6 +219,11 @@ export const LIMITS = {
   extractedContentMaxChars: 500_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */
   extractionTimeoutMs: 30_000,
+  /** Wall-clock ceiling (ms) for the live DOCX-to-Markdown read path in
+   *  `read_content_across_matters`: the S3 file fetch plus the in-process
+   *  folio conversion of a single document. Mirrors `extractionTimeoutMs`'s
+   *  budget for the same class of work (one document-sized file). */
+  docxMarkdownConversionTimeoutMs: 30_000,
   clauseExportLimit: 500,
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,

@@ -1,12 +1,74 @@
 import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import JSZip from "jszip";
 
 import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+/**
+ * Minimal DOCX with a Heading1 paragraph, a two-row table, and a body
+ * paragraph, for exercising `docxToMarkdown`'s real (unmocked) conversion in
+ * `read_content_across_matters`'s markdown branch.
+ */
+const makeDocxBytes = async () => {
+  const zip = new JSZip();
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>
+  <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Agreement</w:t></w:r></w:p>
+  <w:tbl>
+    <w:tr>
+      <w:tc><w:p><w:r><w:t>Party</w:t></w:r></w:p></w:tc>
+      <w:tc><w:p><w:r><w:t>Role</w:t></w:r></w:p></w:tc>
+    </w:tr>
+    <w:tr>
+      <w:tc><w:p><w:r><w:t>Acme s.r.o.</w:t></w:r></w:p></w:tc>
+      <w:tc><w:p><w:r><w:t>Seller</w:t></w:r></w:p></w:tc>
+    </w:tr>
+  </w:tbl>
+  <w:p><w:r><w:t>Signed below.</w:t></w:r></w:p>
+</w:body></w:document>`,
+  );
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="xml" ContentType="application/xml"/>
+</Types>`,
+  );
+  const bytes = await zip.generateAsync({ type: "uint8array" });
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  );
+};
+
+const s3ArrayBufferMock = mock(async () => await makeDocxBytes());
+const s3FileMock = mock(() => ({ arrayBuffer: s3ArrayBufferMock }));
+
+void mock.module("@/api/lib/s3", () => ({
+  getS3: () => ({ file: s3FileMock }),
+}));
+
+// Default passthrough: just await the wrapped operation, so every existing
+// test exercises the real S3-read-and-convert logic unchanged. Individual
+// tests override this with `mockImplementationOnce` to simulate the
+// operation timing out, without an actual wall-clock wait.
+const withTimeoutMock = mock(
+  async (operation: () => Promise<unknown>) => await operation(),
+);
+void mock.module("@/api/lib/with-timeout", () => ({
+  withTimeout: withTimeoutMock,
+}));
 
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
@@ -345,6 +407,8 @@ type MockEntityFindFirstInput = {
   };
 };
 
+type MockFieldContent = { type: string; [key: string]: unknown };
+
 type MockMcpTransaction = {
   query: {
     entities: {
@@ -356,7 +420,7 @@ type MockMcpTransaction = {
           fields: {
             id: string;
             propertyId: string;
-            content: { type: string };
+            content: MockFieldContent;
           }[];
         } | null;
       } | null>;
@@ -367,7 +431,7 @@ type MockMcpTransaction = {
     fields: {
       findMany: () => Promise<
         {
-          content: { type: string };
+          content: MockFieldContent;
           id: string;
           propertyId: string;
         }[]
@@ -400,9 +464,23 @@ const createExtractedContentRow = ({
   workspaceId,
 });
 
+// Non-DOCX file stub (no `mimeType`) so every pre-existing `createScopedDb`
+// caller keeps exercising the plaintext fallback path unchanged.
+const DEFAULT_CURRENT_VERSION_FILE_CONTENT: MockFieldContent = {
+  type: "file",
+};
+
 const createScopedDb = (
   rows: unknown[] = [],
   extractedContentRow: ExtractedContentRow | null = null,
+  // The current version's field contents, in field order. Pass a DOCX
+  // `FieldContent` as the sole entry to exercise the live docx-to-markdown
+  // branch, or list a non-DOCX field before a DOCX one to exercise the
+  // "first file field wins" selection (mirroring `processExtraction`, which
+  // produced `extractedContentRow`'s plaintext from that same first field).
+  currentVersionFields: MockFieldContent[] = [
+    DEFAULT_CURRENT_VERSION_FILE_CONTENT,
+  ],
 ) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
@@ -428,13 +506,11 @@ const createScopedDb = (
                   name: extractedContentRow.entity.name,
                   currentVersion: {
                     id: "entity_version_1",
-                    fields: [
-                      {
-                        id: "field_1",
-                        propertyId: "property_1",
-                        content: { type: "file" },
-                      },
-                    ],
+                    fields: currentVersionFields.map((content, index) => ({
+                      id: `field_${index + 1}`,
+                      propertyId: `property_${index + 1}`,
+                      content,
+                    })),
                   },
                 };
               },
@@ -507,6 +583,9 @@ describe("OpenAI-compatible MCP tools", () => {
     decryptContentMock.mockResolvedValue("Full document text");
     searchDecisionsHandlerMock.mockReset();
     readDecisionHandlerMock.mockReset();
+    s3FileMock.mockClear();
+    s3ArrayBufferMock.mockClear();
+    withTimeoutMock.mockClear();
   });
 
   afterAll(() => {
@@ -1380,6 +1459,187 @@ describe("OpenAI-compatible MCP tools", () => {
       nextCursor: null,
       workspaceId: "ws_1",
     });
+  });
+
+  test("read_content_across_matters returns folio Markdown when the current version holds a DOCX file", async () => {
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow(), [
+        {
+          type: "file",
+          id: "file_1",
+          fileName: "agreement.docx",
+          mimeType: DOCX_MIME_TYPE,
+        },
+      ]),
+    });
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
+      entityId: "entity_1",
+      kind: "document",
+      name: "Share Purchase Agreement",
+      workspaceId: "ws_1",
+    });
+    if (!isRecord(payload) || typeof payload["text"] !== "string") {
+      throw new Error("Expected payload.text to be a string");
+    }
+    const { text } = payload;
+    // Headings and tables survive the conversion; the cached plaintext
+    // extraction is not what gets served once markdown conversion succeeds.
+    expect(text).toContain("# Agreement");
+    expect(text).toContain("| Party | Role |");
+    expect(text).toContain("| Acme s.r.o. | Seller |");
+    expect(text).toContain("Signed below.");
+    expect(text).not.toContain("Full document text");
+  });
+
+  test("read_content_across_matters selects the SAME file the extraction pipeline indexed, not just any DOCX field", async () => {
+    // The current version's first file field (the one `processExtraction`
+    // would extract `extractedContentRow`'s plaintext from) is a non-DOCX
+    // system document; a later auxiliary field happens to hold a DOCX. The
+    // markdown branch must not scan past the first file field looking for a
+    // DOCX -- doing so would return a different document than the plaintext
+    // fallback and search hits reference.
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow(), [
+        {
+          type: "file",
+          id: "file_system",
+          fileName: "agreement.pdf",
+          mimeType: "application/pdf",
+        },
+        {
+          type: "file",
+          id: "file_auxiliary",
+          fileName: "exhibit.docx",
+          mimeType: DOCX_MIME_TYPE,
+        },
+      ]),
+    });
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    const payload = parseToolPayload(result);
+    // Falls back to the cached plaintext of the SYSTEM file, never the
+    // auxiliary DOCX's converted markdown.
+    expect(payload).toMatchObject({ text: "Full document text" });
+    if (!isRecord(payload) || typeof payload["text"] !== "string") {
+      throw new Error("Expected payload.text to be a string");
+    }
+    expect(payload["text"]).not.toContain("# Agreement");
+    expect(s3FileMock).not.toHaveBeenCalled();
+  });
+
+  test("read_content_across_matters falls back to plaintext when docx-to-markdown conversion fails", async () => {
+    s3ArrayBufferMock.mockImplementationOnce(async () => {
+      throw new Error("S3 read failed");
+    });
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow(), [
+        {
+          type: "file",
+          id: "file_1",
+          fileName: "agreement.docx",
+          mimeType: DOCX_MIME_TYPE,
+        },
+      ]),
+    });
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      text: "Full document text",
+    });
+  });
+
+  test("read_content_across_matters returns a retryable error instead of switching representation when a paginated DOCX conversion fails", async () => {
+    s3ArrayBufferMock.mockImplementationOnce(async () => {
+      throw new Error("S3 read failed");
+    });
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow(), [
+        {
+          type: "file",
+          id: "file_1",
+          fileName: "agreement.docx",
+          mimeType: DOCX_MIME_TYPE,
+        },
+      ]),
+    });
+
+    // Simulates a client mid-pagination: a cursor already encodes an offset
+    // into whatever representation the (unseen) first read served. This
+    // call's conversion attempt fails; the tool must not guess by silently
+    // falling back to plaintext, which could be a different length/content
+    // than the Markdown the cursor was computed against (skipped/duplicated
+    // content).
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1", cursor: encodePaginationCursor([5]) },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "internal_error",
+      message:
+        "Could not continue reading this document's Markdown conversion.",
+      hint: "Retry the request with the same cursor.",
+      retryable: true,
+    });
+  });
+
+  test("read_content_across_matters treats a DOCX conversion timeout the same as any other conversion failure", async () => {
+    withTimeoutMock.mockImplementationOnce(async () => {
+      throw new TimeoutError({
+        message: "docx-to-markdown timed out",
+        label: "read_content_across_matters:docx-to-markdown",
+        timeoutMs: 30_000,
+      });
+    });
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow(), [
+        {
+          type: "file",
+          id: "file_1",
+          fileName: "agreement.docx",
+          mimeType: DOCX_MIME_TYPE,
+        },
+      ]),
+    });
+
+    // First read: a timeout is funneled through the exact same
+    // `Result.tryPromise` catch as any other conversion failure, so it
+    // still falls back to the cached plaintext rather than hanging or
+    // erroring the whole request.
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      text: "Full document text",
+    });
+    expect(withTimeoutMock).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+    );
   });
 
   test("search anonymizes titles in anonymized mode", async () => {
