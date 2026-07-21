@@ -254,6 +254,11 @@ export const createContainer = async (
       WorkingDir: input.workdir,
       ...(input.env ? { Env: input.env } : {}),
       HostConfig: {
+        // The image runs as a non-root user and needs no Linux capabilities.
+        // Keep privilege escalation blocked even if model-authored code finds
+        // a vulnerable executable inside the container.
+        CapDrop: ["ALL"],
+        SecurityOpt: ["no-new-privileges"],
         ...(input.hostGateway
           ? { ExtraHosts: ["host.docker.internal:host-gateway"] }
           : {}),

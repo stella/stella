@@ -183,17 +183,36 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
       env: envArray(opts?.env),
     });
     const controller = new AbortController();
+    let teardownPromise: Promise<void> | undefined;
+    const teardown = async (): Promise<void> => {
+      teardownPromise ??= deps.removeOnDestroy
+        ? removeContainer(conn, containerId)
+        : stopContainer(conn, containerId);
+      await teardownPromise;
+    };
+    const forwardAbort = (): void => controller.abort();
+
     if (opts?.signal?.aborted) {
       // Already aborted: the `abort` event has fired, so a listener added now
       // would never run. Propagate immediately.
       controller.abort();
     } else {
-      opts?.signal?.addEventListener("abort", () => controller.abort(), {
+      opts?.signal?.addEventListener("abort", forwardAbort, {
         once: true,
       });
     }
 
-    const body = await startExecStream(conn, execId, controller.signal);
+    let body: ReadableStream<Uint8Array>;
+    try {
+      body = await startExecStream(conn, execId, controller.signal);
+    } catch (error) {
+      opts?.signal?.removeEventListener("abort", forwardAbort);
+      // A caller never receives a SpawnHandle when stream startup fails. Tear
+      // down the credential-bearing ephemeral sandbox here so an aborted or
+      // malformed daemon response cannot orphan a still-running harness.
+      await teardown();
+      throw error;
+    }
     const stdout = new StreamQueue();
     const stderr = new StreamQueue();
     const stdoutDecoder = new TextDecoder();
@@ -213,6 +232,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
           }
         }
       } finally {
+        opts?.signal?.removeEventListener("abort", forwardAbort);
         const stdoutRemainder = stdoutDecoder.decode();
         if (stdoutRemainder !== "") {
           stdout.push(stdoutRemainder);
@@ -223,6 +243,9 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         }
         stdout.close();
         stderr.close();
+        if (controller.signal.aborted) {
+          await teardown();
+        }
       }
     })();
     // Mark the eager pump's rejection as observed even when a caller kills the
@@ -259,11 +282,7 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         // Docker. Stop/remove the whole ephemeral sandbox so cancellation
         // cannot leave the harness consuming tokens unattended. The lifecycle
         // middleware may destroy it again; the API helpers treat 404 as done.
-        if (deps.removeOnDestroy) {
-          await removeContainer(conn, containerId);
-          return;
-        }
-        await stopContainer(conn, containerId);
+        await teardown();
       },
     };
   };
