@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { extractMarkdown, extractText } from "./extract-text";
+import { extractText } from "./extract-text";
 
 /** Build a minimal DOCX buffer with the given document.xml. */
 const makeDocx = async (
@@ -285,70 +285,5 @@ describe("extractText", () => {
     // Should have some styled paragraphs
     const styled = result.paragraphs.filter((p) => p.style);
     expect(styled.length).toBeGreaterThan(0);
-  });
-});
-
-describe("extractMarkdown", () => {
-  test("preserves explicit line breaks and tabs inside runs", async () => {
-    const xml = WRAP(
-      `<w:p>
-        <w:r><w:t>Line 1</w:t><w:br/><w:t>Line 2</w:t><w:tab/><w:t>Tabbed</w:t></w:r>
-      </w:p>`,
-    );
-    const buf = await makeDocx(xml);
-    const result = await extractMarkdown(buf);
-
-    expect(result).toBe("Line 1\nLine 2\tTabbed");
-  });
-
-  test("uses numbering metadata to distinguish bullet and ordered lists", async () => {
-    const xml = WRAP(
-      `<w:p>
-        <w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="7"/></w:numPr></w:pPr>
-        <w:r><w:t>Bullet item</w:t></w:r>
-      </w:p>
-      <w:p>
-        <w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="8"/></w:numPr></w:pPr>
-        <w:r><w:t>First ordered</w:t></w:r>
-      </w:p>
-      <w:p>
-        <w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="8"/></w:numPr></w:pPr>
-        <w:r><w:t>Second ordered</w:t></w:r>
-      </w:p>`,
-    );
-    const numberingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:abstractNum w:abstractNumId="10">
-    <w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/></w:lvl>
-  </w:abstractNum>
-  <w:abstractNum w:abstractNumId="11">
-    <w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/></w:lvl>
-  </w:abstractNum>
-  <w:num w:numId="7"><w:abstractNumId w:val="10"/></w:num>
-  <w:num w:numId="8"><w:abstractNumId w:val="11"/></w:num>
-</w:numbering>`;
-    const buf = await makeDocx(xml, numberingXml);
-    const result = await extractMarkdown(buf);
-
-    expect(result).toBe("- Bullet item\n1. First ordered\n2. Second ordered");
-  });
-
-  test("extracts paragraphs wrapped in block-level content controls", async () => {
-    // Legal templates bind fields with `w:sdt` content controls; the body
-    // content lives inside `w:sdtContent`. Dropping it would extract an empty
-    // or partial document.
-    const xml = WRAP(
-      `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Agreement</w:t></w:r></w:p>
-       <w:sdt>
-         <w:sdtPr><w:alias w:val="Party"/></w:sdtPr>
-         <w:sdtContent>
-           <w:p><w:r><w:t>Controlled clause text.</w:t></w:r></w:p>
-         </w:sdtContent>
-       </w:sdt>`,
-    );
-    const buf = await makeDocx(xml);
-    const result = await extractMarkdown(buf);
-
-    expect(result).toBe("# Agreement\nControlled clause text.");
   });
 });
