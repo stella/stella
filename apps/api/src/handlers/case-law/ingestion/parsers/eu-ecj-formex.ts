@@ -78,16 +78,27 @@ export const parseFormex = (xml: string): FormexDocument => {
     );
   });
 
+  // A NOTE inside a title is a footnote: the rendering prints it at the
+  // foot of the document, not in the heading.
+  $("NOTE").remove();
+
   const headings: FormexHeading[] = [];
   $("GR\\.SEQ").each((_, el) => {
     const title = $(el).children("TITLE").first();
     if (title.length === 0) {
       return;
     }
-    headings.push({
-      level: clampLevel($(el).attr("LEVEL")),
-      text: headingText($, title),
-    });
+    // A TITLE holds one TI per rendered line: a section named over two
+    // lines ("Belgian law" / the instrument it refers to) is two
+    // headings on the page, not one heading with a run-on name.
+    const level = clampLevel($(el).attr("LEVEL"));
+    const lines = title.children("TI").toArray();
+    for (const line of lines.length > 0 ? lines : title.toArray()) {
+      const text = headingText($, $(line));
+      if (text !== "") {
+        headings.push({ level, text });
+      }
+    }
   });
 
   const paragraphNumbers: number[] = [];

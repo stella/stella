@@ -26,6 +26,13 @@
  * body headings are `p.coj-normal` paragraphs set entirely in bold or
  * italic, with the section marker in its own span; the marker's shape
  * gives the depth.
+ *
+ * Completeness outranks fidelity throughout. Every classification here
+ * is a promotion — a paragraph that is not recognised as a heading is
+ * still emitted as a paragraph, and an element the vocabulary does not
+ * cover still contributes its text. A decision rendered with the wrong
+ * shape is a bad reading experience; a decision missing a paragraph is
+ * a wrong answer, and the reader cannot tell that it happened.
  */
 
 import * as cheerio from "cheerio";
@@ -136,25 +143,41 @@ const toFulltext = (blocks: readonly Block[]): string => {
 
 // ── Class vocabulary ───────────────────────────────────────
 
+/**
+ * Class vocabulary, written unprefixed.
+ *
+ * The Publications Office renamed these classes when its converter
+ * moved to version 9: documents generated before that carry `normal`,
+ * `count`, `sum-title-1`, and documents generated after carry
+ * `coj-normal`, `coj-count`, `coj-sum-title-1`. Nothing else about the
+ * markup changed, and both forms are served today — the prefix follows
+ * when the document was converted, not when it was decided. Class
+ * lookups here strip the prefix so one vocabulary covers both.
+ */
 const CLASS = {
-  bold: "coj-bold",
-  italic: "coj-italic",
+  bold: "bold",
+  italic: "italic",
   /** Ordinary body paragraph, inside a row cell or standing alone. */
-  normal: "coj-normal",
+  normal: "normal",
   /** Decision title lines and top-level section headings. */
-  title: "coj-sum-title-1",
+  title: "sum-title-1",
   /** Parenthesised keyword chain under the title. */
-  index: "coj-index",
+  index: "index",
   /** Marker cell of a two-column row (paragraph number, bullet, quote). */
-  count: "coj-count",
+  count: "count",
   /** Footnote separator and footnote bodies. */
-  note: "coj-note",
+  note: "note",
 } as const;
 
+const CLASS_PREFIX = "coj-";
+
+/** Selector matching a class in either converter's spelling. */
+const sel = (name: string): string => `.${CLASS_PREFIX}${name}, .${name}`;
+
 /** Sub-heading depth, e.g. `coj-title-grseq-2`. */
-const GRSEQ_CLASS = /^coj-title-grseq-(?<depth>\d+)$/u;
-/** Signature block wrappers: `coj-signaturecase`, `coj-signatory3left`, … */
-const SIGNATURE_CLASS_PREFIX = "coj-signat";
+const GRSEQ_CLASS = /^title-grseq-(?<depth>\d+)$/u;
+/** Signature block wrappers: `signaturecase`, `signatory3left`, … */
+const SIGNATURE_CLASS_PREFIX = "signat";
 /** Publisher paragraph anchor, e.g. `id="point42"`. */
 const POINT_ID = /^point(?<number>\d+)$/u;
 
@@ -193,7 +216,10 @@ const walkEcjInlines = (
   collapseWhitespace(
     walkInlines($, el, {
       sanitizeHref: sanitizeUrl,
-      emphasisClasses: { bold: CLASS.bold, italic: CLASS.italic },
+      emphasisClasses: {
+        bold: [CLASS.bold, `${CLASS_PREFIX}${CLASS.bold}`],
+        italic: [CLASS.italic, `${CLASS_PREFIX}${CLASS.italic}`],
+      },
     }),
   );
 
@@ -247,10 +273,12 @@ const textOf = (el: cheerio.Cheerio<AnyNode>): string =>
  * French, guillemets in Greek, low/high quotes in German and Bulgarian
  * (`„…“`, whose closer is an *initial* quote in Unicode). Strip the
  * bracket and quote classes from both ends rather than enumerating
- * pairs or trusting their directionality.
+ * pairs or trusting their directionality. Exactly one character at
+ * each end: a keyword can itself end in a bracket ("Article 7(1)(e)(ii)
+ * of Regulation No 40/94") and only the outermost one is the chain's.
  */
 const CHAIN_DELIMITERS =
-  /^[\p{Ps}\p{Pe}\p{Pi}\p{Pf}]+|[\p{Ps}\p{Pe}\p{Pi}\p{Pf}]+$/gu;
+  /^[\p{Ps}\p{Pe}\p{Pi}\p{Pf}]|[\p{Ps}\p{Pe}\p{Pi}\p{Pf}]$/gu;
 
 /**
  * Keyword separator: a non-breaking space, an en or em dash, then an
@@ -271,7 +299,7 @@ const LOOSE_KEYWORD_SEPARATOR = /\s[–—]\s/u;
 const extractKeywords = ($: cheerio.CheerioAPI): string[] => {
   // Read the raw text rather than `textOf`: the separator is defined by
   // its exact spacing, which whitespace collapsing would destroy.
-  const raw = $(`p.${CLASS.index}`).first().text().trim();
+  const raw = $(sel(CLASS.index)).first().text().trim();
   if (!raw) {
     return [];
   }
@@ -373,7 +401,7 @@ const buildBlocks = ($: cheerio.CheerioAPI): Block[] => {
   // a look-ahead, so resolve it before the forward walk.
   const lastPointIndex = children.findLastIndex((child) =>
     $(child)
-      .find(`p.${CLASS.count}[id]`)
+      .find(sel(CLASS.count))
       .toArray()
       .some((marker) => POINT_ID.test($(marker).attr("id") ?? "")),
   );
@@ -389,7 +417,12 @@ const tagNameOf = (node: AnyNode | undefined): string | undefined =>
   node !== undefined && isTag(node) ? node.tagName : undefined;
 
 const classListOf = (el: cheerio.Cheerio<AnyNode>): string[] =>
-  (el.attr("class") ?? "").split(/\s+/u).filter(Boolean);
+  (el.attr("class") ?? "")
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map((name) =>
+      name.startsWith(CLASS_PREFIX) ? name.slice(CLASS_PREFIX.length) : name,
+    );
 
 const visitChild = (
   $: cheerio.CheerioAPI,
@@ -416,10 +449,9 @@ const visitChild = (
     return;
   }
 
-  if (tag !== "p" && tag !== "div") {
-    return;
-  }
-
+  // Every other element falls through to the paragraph path rather
+  // than being skipped. Losing text is the one failure this parser
+  // must not have; rendering it with the wrong shape is recoverable.
   const inlines = walkEcjInlines($, $el);
   const plainText = inlinesToPlainText(inlines).trim();
   if (!plainText) {
@@ -467,17 +499,43 @@ const visitChild = (
   });
 };
 
-const dense = (text: string): number => text.replace(/\s/gu, "").length;
+/**
+ * Length in letters and digits. Punctuation is excluded so the
+ * brackets a court leaves around a footnote reference cannot tip a
+ * heading over the "fully emphasized" line.
+ */
+const dense = (text: string): number =>
+  (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
 
 /**
- * Outline depth of an Advocate General opinion's section heading.
+ * A copy of the paragraph without its footnote references. They sit
+ * outside the emphasis spans, so a heading that carries one would
+ * otherwise read as only partly emphasized.
+ */
+const withoutNotes = (
+  $el: cheerio.Cheerio<AnyNode>,
+): cheerio.Cheerio<AnyNode> => {
+  const clone = $el.clone();
+  clone.find(sel(CLASS.note)).remove();
+  return clone;
+};
+
+/**
+ * Deepest section marker in a judgment: an en dash, written as plain
+ * text before the emphasized title rather than inside a span of its
+ * own. Formex numbers this level 4, below the AST's three levels.
+ */
+const SECTION_DASH = /^[\u2013\u2014-]\s/u;
+
+/**
+ * Outline depth of a section heading the source does not classify.
  *
- * Opinions carry no heading class: the Court writes a section heading
- * as a `coj-normal` paragraph whose text is entirely emphasized (bold
- * at the top levels, italic at the deepest ones) and whose section
- * marker sits in its own emphasis span, separated from the title. Both
- * signals are required. Party names in the header are fully bold too,
- * but hold the whole name in one span; body prose is not emphasized.
+ * Opinions carry no heading class at all, and judgments express their
+ * deepest level the same way: a `coj-normal` paragraph carrying a
+ * section marker followed by an emphasized title (bold at the top
+ * levels, italic at the deepest ones). Both signals are required.
+ * Party names in the header are emphasized too, but hold no marker;
+ * body prose is not emphasized.
  *
  * Reading the marker from its span rather than from the text keeps
  * this working across translations that punctuate differently: Finnish
@@ -491,21 +549,36 @@ const sectionHeadingLevel = (
     return undefined;
   }
 
-  const total = dense(textOf($el));
-  const bold = dense($el.find(`.${CLASS.bold}`).text());
-  const italic = dense($el.find(`.${CLASS.italic}`).text());
-  if (total === 0 || (bold < total && italic < total)) {
+  const $body = withoutNotes($el);
+  const text = textOf($body);
+  const total = dense(text);
+  if (total === 0) {
     return undefined;
   }
 
-  const first = $el.find(`.${CLASS.bold}, .${CLASS.italic}`).first();
-  const marker = textOf(first);
-  // A marker span holds only the marker, and something must follow it.
-  if (marker === "" || dense(marker) >= total) {
+  // The marker is either a dash written as plain text, or the
+  // paragraph's first emphasis span. Everything after it must be
+  // emphasized: that is what separates a heading from body prose, and
+  // from a party name, which is emphasized but holds no marker.
+  const dash = SECTION_DASH.exec(text)?.[0];
+  const marker =
+    dash ??
+    textOf($body.find(`${sel(CLASS.bold)}, ${sel(CLASS.italic)}`).first());
+  const title = total - dense(marker);
+  if (marker === "" || title <= 0) {
     return undefined;
   }
 
-  return markerLevel(marker);
+  const emphasized = Math.max(
+    dense($body.find(sel(CLASS.bold)).text()),
+    dense($body.find(sel(CLASS.italic)).text()),
+  );
+  if (emphasized < title) {
+    return undefined;
+  }
+
+  // A dash is the Court's deepest marker; it carries no ordinal.
+  return dash === undefined ? markerLevel(marker) : 3;
 };
 
 /**
@@ -564,7 +637,7 @@ const visitTable = (
         return;
       }
 
-      const $marker = $(markerCell).find(`p.${CLASS.count}`).first();
+      const $marker = $(markerCell).find(sel(CLASS.count)).first();
       const pointNumber = POINT_ID.exec($marker.attr("id") ?? "")?.groups?.[
         "number"
       ];
@@ -598,6 +671,7 @@ const visitCell = (
 ): void => {
   const before = builder.blocks.length;
   const signature = isSignature($, $cell);
+  const cellText = textOf($cell);
 
   $cell.children().each((_, child) => {
     const $child = $(child);
@@ -613,10 +687,7 @@ const visitCell = (
       return;
     }
 
-    if (tag !== "p") {
-      return;
-    }
-
+    // As in `visitChild`: anything else still contributes its text.
     const inlines = walkEcjInlines($, $child);
     const plainText = inlinesToPlainText(inlines).trim();
     if (!plainText) {
@@ -629,6 +700,16 @@ const visitCell = (
       plainText,
     });
   });
+
+  // A cell holding bare text rather than paragraphs would otherwise
+  // contribute nothing.
+  if (builder.blocks.length === before && cellText !== "") {
+    pushParagraph(builder, {
+      ...roleOf(builder.zone, signature),
+      inlines: [{ type: "text", text: cellText }],
+      plainText: cellText,
+    });
+  }
 
   const first = builder.blocks[before];
   if (!first || first.type !== "paragraph") {

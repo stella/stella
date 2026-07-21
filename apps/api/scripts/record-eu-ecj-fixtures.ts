@@ -22,6 +22,7 @@
  * Usage:
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts
  *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --parser-only
+ *   bun apps/api/scripts/record-eu-ecj-fixtures.ts --seed-only
  */
 
 import JSZip from "jszip";
@@ -58,6 +59,11 @@ const PARSER_CORPUS = [
     celex: "62023CO0786",
     languages: ["EN"],
     why: "Order: the short form of the judgment layout, and the smallest complete document in the corpus.",
+  },
+  {
+    celex: "62017CJ0258",
+    languages: ["PL"],
+    why: "Converted by the pre-version-9 pipeline, which spells the whole class vocabulary without the `coj-` prefix (`normal`, `count`, `sum-title-1`). Roughly everything published before 2019 looks like this, and it parsed to a structureless wall of text until the parser accepted both spellings.",
   },
   {
     celex: "62023TJ0201",
@@ -303,18 +309,21 @@ const recordSeedFixture = async (): Promise<void> => {
         decisions: rows,
       },
       null,
-      1,
+      2,
     )}\n`,
   );
 };
 
 if (import.meta.main) {
   const parserOnly = process.argv.includes("--parser-only");
+  const seedOnly = process.argv.includes("--seed-only");
 
-  log(
-    `Recording parser fixtures → ${path.basename(PARSER_FIXTURES_DIR.pathname)}/`,
-  );
-  await recordParserFixtures();
+  if (!seedOnly) {
+    log(
+      `Recording parser fixtures → ${path.basename(PARSER_FIXTURES_DIR.pathname)}/`,
+    );
+    await recordParserFixtures();
+  }
 
   if (!parserOnly) {
     log("Recording seed fixture → __fixtures__/case-law/eu-ecj.json");

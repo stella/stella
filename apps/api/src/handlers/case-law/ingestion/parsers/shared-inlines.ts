@@ -71,7 +71,7 @@ export type WalkInlinesOptions = {
    * presentational `<span>` (`coj-bold`, `coj-italic`) and carries no
    * style attributes at all.
    */
-  emphasisClasses?: { bold: string; italic: string };
+  emphasisClasses?: { bold: readonly string[]; italic: readonly string[] };
 };
 
 export const walkInlines = (
@@ -187,8 +187,12 @@ export const walkInlines = (
       }
 
       if (options.emphasisClasses) {
-        const isBold = $child.hasClass(options.emphasisClasses.bold);
-        const isItalic = $child.hasClass(options.emphasisClasses.italic);
+        const isBold = options.emphasisClasses.bold.some((name) =>
+          $child.hasClass(name),
+        );
+        const isItalic = options.emphasisClasses.italic.some((name) =>
+          $child.hasClass(name),
+        );
         if (isBold || isItalic) {
           const children = walk($child, childAnon);
           if (children.length === 0) {

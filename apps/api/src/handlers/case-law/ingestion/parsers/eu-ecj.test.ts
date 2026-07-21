@@ -70,14 +70,26 @@ describe("parseEcjDecisionHtml", () => {
     });
     const blocks = parsed.documentAst.blocks;
 
+    // ── Completeness ─────────────────────────────────────────
+    // Text that never reaches the AST is invisible in the reader and
+    // to the AI pipeline, and nothing downstream can tell it is gone.
+    // These assertions come first because they are the ones that must
+    // never be relaxed to make a parser change land.
+
     // The pre-parser state of this adapter was an empty AST for every
     // ECJ decision, in every language. That must now be a failure, not
     // the accepted default.
     expect(blocks.length).toBeGreaterThan(0);
     expect(parsed.fulltext.length).toBeGreaterThan(1000);
-    // Content retention, heading presence and block-level anomalies, as
-    // checked by the shared AST validator during the parse.
+    // CONTENT_LOSS and MISSING_WORDS from the shared validator are the
+    // real completeness guard: they compare the AST's words against the
+    // source document's, so text dropped anywhere shows up here.
     expect(parsed.validationIssues).toEqual([]);
+
+    // ── Fidelity ─────────────────────────────────────────────
+    // Structure the parser recovered on top of that text. Wrong shape
+    // is a bad reading experience, not a wrong answer, so this is the
+    // part allowed a known tail on documents outside the corpus.
 
     // Paragraph numbers are structure, not text: 1..n, no gaps, and
     // anchored on the publisher's own `pointN` ids so deep links match
@@ -167,6 +179,26 @@ describe("parseEcjDecisionHtml", () => {
     // Dropping a document kind from the corpus would silently narrow
     // every assertion above, so the corpus itself is asserted.
     expect([...kinds].sort()).toEqual(["CONCLUSION", "JUDGMENT", "ORDER"]);
+  });
+
+  test("keeps both converter spellings in the corpus", async () => {
+    const spellings = new Set<string>();
+    for (const stem of fixtureStems) {
+      // oxlint-disable-next-line no-await-in-loop -- one fixture read per corpus entry, released before the next
+      const html = await readFixture(`${stem}.html.gz`);
+      if (html === undefined) {
+        continue;
+      }
+      spellings.add(
+        html.includes('class="coj-normal"') ? "coj-prefixed" : "unprefixed",
+      );
+    }
+
+    // Documents converted before the Publications Office's version 9
+    // pipeline spell the class vocabulary without the `coj-` prefix.
+    // They are most of the pre-2019 corpus, and they parsed to a
+    // structureless wall of text until the parser accepted both.
+    expect([...spellings].sort()).toEqual(["coj-prefixed", "unprefixed"]);
   });
 
   test("reads the keyword chain in a non-Latin script", async () => {

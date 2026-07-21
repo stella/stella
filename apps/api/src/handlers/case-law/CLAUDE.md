@@ -204,7 +204,24 @@ document's headings should return `sections` on its
 `IngestionResult`, so the pipeline uses those instead of falling back
 to `segmentDecision`, which matches heading wording per language.
 
-### 10. Check a parser against the publisher, not against yourself
+### 10. Never drop text; shape it wrong instead
+
+Completeness and fidelity are not equal goals. If a parser cannot tell
+what a piece of text is, it must still emit it — as a plain paragraph,
+in document order — rather than skip it. Classification is always a
+promotion from that baseline: an unrecognised heading stays a
+paragraph, an element outside the source's known vocabulary still
+contributes its text, a table row the shape rules do not match is
+still walked for content.
+
+A decision shown with a flat structure is visibly imperfect and a user
+can still read and cite it. A decision missing a paragraph looks
+complete and is wrong, and neither the reader nor the AI pipeline has
+any way to know. `validateAndLog`'s CONTENT_LOSS and MISSING_WORDS are
+the completeness guard and must be treated as errors; heading levels
+and section boundaries are fidelity and may carry a known tail.
+
+### 11. Check a parser against the publisher, not against yourself
 
 Where a source publishes the same document in two encodings, use the
 more semantic one as a test oracle. Cellar serves CJEU decisions both
@@ -215,7 +232,7 @@ asserts the parse against the Formex tree, so a reviewer who does not
 read Greek or Finnish can still see the parser is right in those
 languages. Snapshot tests only prove the output has not changed.
 
-### 11. Cursors must never cause full re-scans
+### 12. Cursors must never cause full re-scans
 
 After an adapter exhausts its range (reaches the oldest year
 in a backward crawl, or the current date in a forward crawl),
