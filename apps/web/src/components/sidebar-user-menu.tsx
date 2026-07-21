@@ -108,7 +108,7 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
                     <div className="flex min-w-0 items-center gap-1.5">
                       <BidiText
                         as="span"
-                        className="truncate text-sm font-medium"
+                        className="min-w-0 truncate text-sm font-medium"
                       >
                         {user.name}
                       </BidiText>
@@ -132,7 +132,7 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
                   <div className="flex min-w-0 items-center gap-1.5">
                     <BidiText
                       as="span"
-                      className="truncate text-sm font-medium"
+                      className="min-w-0 truncate text-sm font-medium"
                       direction={user.email ? "ltr" : "auto"}
                     >
                       {user.email || t("common.user")}
