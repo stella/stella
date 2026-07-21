@@ -44,6 +44,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0 # full history: the marketing-recordings check diffs against each capture's recorded-at commit, which can be arbitrarily far back
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: true # zizmor: ignore[artipacked] release tag push requires persisted App token
 
@@ -71,6 +72,19 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.value }}
         run: bash scripts/check-release-changelog.sh --version "$VERSION"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Require fresh marketing recordings
+        # Reads the committed captures.ts matrix and recordings-manifest.json
+        # only (no node_modules), so no install step is needed. `--strict`
+        # fails the tag push instead of just reporting; run
+        # `bun run marketing:reshoot` (re-records only the stale captures)
+        # before bumping VERSION to clear this.
+        run: bun run marketing:stale --strict
 
       - name: Skip if tag already exists
         env:

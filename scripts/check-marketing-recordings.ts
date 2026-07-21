@@ -26,7 +26,7 @@ import type {
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
 const STRICT = process.argv.includes("--strict");
 
-type Verdict = {
+export type Verdict = {
   captureId: string;
   theme: CaptureTheme;
   status: "FRESH" | "STALE";
@@ -102,7 +102,10 @@ const changedWatchedPaths = (entry: RecordingManifestEntry): string[] => {
   return output === "" ? [] : output.split("\n");
 };
 
-const rerecordCommand = (captureIds: readonly string[], theme?: CaptureTheme) =>
+export const rerecordCommand = (
+  captureIds: readonly string[],
+  theme?: CaptureTheme,
+) =>
   [
     "cd apps/web &&",
     `MARKETING_CAPTURE=${[...new Set(captureIds)].join(",")}`,
@@ -152,7 +155,10 @@ const judgeEntry = (entry: RecordingManifestEntry): Verdict => {
   };
 };
 
-const main = () => {
+// Shared with scripts/marketing-reshoot.ts so the reshoot script's stale set
+// always matches `bun run marketing:stale`'s verdicts instead of duplicating
+// the staleness logic.
+export const computeVerdicts = (): Verdict[] => {
   const entries = readManifestEntries();
   const entryKeys = new Set(
     entries.map((entry) => `${entry.captureId}:${entry.theme}`),
@@ -179,7 +185,11 @@ const main = () => {
     (a, b) =>
       a.captureId.localeCompare(b.captureId) || a.theme.localeCompare(b.theme),
   );
+  return verdicts;
+};
 
+const main = () => {
+  const verdicts = computeVerdicts();
   const stale = verdicts.filter(({ status }) => status === "STALE");
   for (const verdict of verdicts) {
     const label = `${verdict.captureId} (${verdict.theme})`;
@@ -214,4 +224,9 @@ const main = () => {
   }
 };
 
-main();
+// Guarded so scripts/marketing-reshoot.ts can import `computeVerdicts` (and
+// the other exports above) without triggering this script's own CLI output
+// or --strict exit code as a module-level side effect.
+if (import.meta.main) {
+  main();
+}

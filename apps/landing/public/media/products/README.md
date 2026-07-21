@@ -134,3 +134,36 @@ paths cover the feature slices each scene films plus the recorder and seed;
 rendering changes that arrive through dependency upgrades (notably
 `@stll/folio-react` for the editor scene) are not tracked, so judge those
 manually when bumping.
+
+## Reshooting on release
+
+`bun run marketing:reshoot` re-records only the captures `marketing:stale`
+finds stale — never the whole matrix, so a reshoot never pays to re-record
+scenes that already match the product:
+
+```sh
+bun run marketing:reshoot          # re-record whatever is stale
+bun run marketing:reshoot --dry-run # print the stale set and the commands, do nothing
+```
+
+If everything is already fresh, it prints `all N recordings fresh — nothing
+to reshoot` and exits without touching the app. Otherwise it preflights the
+local stack (`E2E_WEB_URL` / `E2E_API_URL`, defaulting to the URLs above), and
+if either is unreachable it prints the same "Refreshing the images" commands
+from this file and exits without recording anything — it never starts
+servers itself. Once the stack answers, it re-records only the stale capture
+ids in one `capture:product-story` invocation (both themes), then re-checks
+staleness and reports what turned fresh.
+
+The script does not commit. Land the result in the two commits this
+directory's history already uses: one commit for the re-recorded footage and
+manifest, and a separate `chore(landing): stamp recording manifest against
+the committed tree` commit that rewrites `recordedAtCommit` to the commit
+that just landed the footage (the recorder stamps the pre-commit HEAD, so it
+is one commit behind once the footage lands). The reshoot script prints both
+commands, including a ready-to-run `jq` snippet for the second commit.
+
+`tag-on-version-bump.yml` runs `bun run marketing:stale --strict` before
+pushing a release tag, so a stale recording fails the tag push instead of
+shipping a landing page that has quietly drifted from the product. Clear it
+with `bun run marketing:reshoot` before bumping `VERSION`.
