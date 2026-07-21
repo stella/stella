@@ -39,15 +39,30 @@ export const RecordedStellaScene = ({
     objectPosition: crop === "top" ? ("0% 0%" as const) : ("0% 50%" as const),
   };
 
+  // The poster branch renders BOTH theme posters and lets CSS pick via the
+  // `.dark` variant. The server cannot know the visitor's theme
+  // (getServerTheme is a constant), so a JS-selected poster bakes the wrong
+  // theme into the SSR HTML of every below-fold client:visible island until
+  // hydration; CSS selection is correct from the first paint regardless of
+  // hydration timing.
   if (!shouldPlay) {
     return (
-      <img
-        alt={media.alt}
-        className="bg-background h-full w-full object-cover"
-        decoding="async"
-        src={posterSrc}
-        style={cropStyle}
-      />
+      <span className="relative block h-full w-full">
+        <img
+          alt={media.alt}
+          className="bg-background h-full w-full object-cover dark:hidden"
+          decoding="async"
+          src={media.posterSrc}
+          style={cropStyle}
+        />
+        <img
+          alt={media.alt}
+          className="bg-background absolute inset-0 hidden h-full w-full object-cover dark:block"
+          decoding="async"
+          src={media.darkPosterSrc}
+          style={cropStyle}
+        />
+      </span>
     );
   }
 

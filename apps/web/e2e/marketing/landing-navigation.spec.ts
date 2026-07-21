@@ -273,3 +273,57 @@ test("opening scene stays healthy after a navigation round-trip", async ({
 
   await expectHealthyOpeningScene(page);
 });
+
+// Recorded-scene posters must be theme-correct from the first paint: the
+// server cannot know the visitor's theme, so RecordedStellaScene renders BOTH
+// posters and CSS picks via the `.dark` variant. This guards the class of
+// bug where a JS-selected single poster bakes the light theme into the SSR
+// HTML of below-fold islands (dark visitors saw light posters in dark
+// chrome until hydration). A regression to one JS-picked <img> fails the
+// pair-structure assertion in both themes.
+for (const theme of ["light", "dark"] as const) {
+  test(`recorded-scene posters are ${theme}-correct by CSS`, async ({
+    page,
+  }) => {
+    await page.addInitScript((initialTheme) => {
+      localStorage.setItem("theme", initialTheme);
+    }, theme);
+    await page.goto("/product/templates", { waitUntil: "networkidle" });
+    await page.evaluate(() =>
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "instant" }),
+    );
+    await expect
+      .poll(
+        () =>
+          page.evaluate((expectedTheme) => {
+            const posters = [
+              ...document.querySelectorAll('.product-media img[src*="story-"]'),
+            ];
+            if (posters.length === 0 || posters.length % 2 !== 0) {
+              return `expected theme-poster pairs, found ${posters.length} posters`;
+            }
+            const issues: string[] = [];
+            for (const poster of posters) {
+              if (!(poster instanceof HTMLImageElement)) {
+                continue;
+              }
+              const src = poster.src.split("/").pop() ?? "";
+              const isDarkAsset = src.includes("-dark-poster");
+              const isVisible =
+                poster.offsetParent !== null &&
+                getComputedStyle(poster).display !== "none";
+              const shouldBeVisible =
+                expectedTheme === "dark" ? isDarkAsset : !isDarkAsset;
+              if (isVisible !== shouldBeVisible) {
+                issues.push(
+                  `${src}: visible=${isVisible} in ${expectedTheme} theme`,
+                );
+              }
+            }
+            return issues.length === 0 ? "ok" : issues.join("; ");
+          }, theme),
+        { message: "every visible scene poster matches the theme" },
+      )
+      .toBe("ok");
+  });
+}
