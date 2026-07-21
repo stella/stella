@@ -6,6 +6,7 @@ import {
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { docxToMarkdown } from "@stll/folio-core/server";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { userFiles } from "@/api/db/schema";
@@ -49,7 +50,6 @@ import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-import { extractMarkdown } from "../docx/extract-text";
 import type {
   ChatAttachmentPart,
   ChatMessage,
@@ -365,12 +365,13 @@ export const hydrateFilePart = async ({
 
     if (mimeType === DOCX_MIME_TYPE) {
       // Use folio's structure-preserving Markdown extraction (headings,
-      // tables, lists) rather than a flat paragraph join: document structure
-      // is high-signal context for the model reading a legal document.
+      // tables, lists, content controls) rather than a flat paragraph join:
+      // document structure is high-signal context for the model reading a
+      // legal document.
       const markdown = yield* Result.await(
         Result.tryPromise({
           try: async () =>
-            (await extractMarkdown(bytes)).slice(
+            (await docxToMarkdown(bytes)).slice(
               0,
               LIMITS.chatContextFileMaxChars,
             ),

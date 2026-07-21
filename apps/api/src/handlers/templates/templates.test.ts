@@ -63,23 +63,56 @@ const WRAP_FTR = (body: string) =>
  * Create a DOCX with headers and/or footers alongside the
  * main document body.
  */
+const REL_NS =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const PKG_REL_NS =
+  "http://schemas.openxmlformats.org/package/2006/relationships";
+
 const makeDocxWithParts = async (opts: {
   documentXml: string;
   headers?: Record<string, string>;
   footers?: Record<string, string>;
 }): Promise<Buffer> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", opts.documentXml);
-  if (opts.headers) {
-    for (const [name, xml] of Object.entries(opts.headers)) {
+  const relationships: string[] = [];
+  const sectionRefs: string[] = [];
+  let nextRId = 1;
+
+  // Wire each header/footer through `document.xml.rels` + a `sectPr`
+  // reference, the way Word authors them. `extractDocxText` resolves parts via
+  // this wiring and deliberately ignores orphan (unreferenced) parts, so an
+  // unwired part would be dropped as a content-leak risk.
+  const wire = (
+    parts: Record<string, string> | undefined,
+    kind: "header" | "footer",
+  ): void => {
+    for (const [name, xml] of Object.entries(parts ?? {})) {
       zip.file(`word/${name}`, xml);
+      const rId = `rId${nextRId++}`;
+      relationships.push(
+        `<Relationship Id="${rId}" Type="${REL_NS}/${kind}" Target="${name}"/>`,
+      );
+      sectionRefs.push(`<w:${kind}Reference w:type="default" r:id="${rId}"/>`);
     }
+  };
+  wire(opts.headers, "header");
+  wire(opts.footers, "footer");
+
+  let documentXml = opts.documentXml;
+  if (sectionRefs.length > 0) {
+    documentXml = documentXml
+      .replace("<w:document ", () => `<w:document xmlns:r="${REL_NS}" `)
+      .replace(
+        "</w:body>",
+        () => `<w:sectPr>${sectionRefs.join("")}</w:sectPr></w:body>`,
+      );
+    zip.file(
+      "word/_rels/document.xml.rels",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="${PKG_REL_NS}">${relationships.join("")}</Relationships>`,
+    );
   }
-  if (opts.footers) {
-    for (const [name, xml] of Object.entries(opts.footers)) {
-      zip.file(`word/${name}`, xml);
-    }
-  }
+  zip.file("word/document.xml", documentXml);
   zip.file(
     "[Content_Types].xml",
     [
