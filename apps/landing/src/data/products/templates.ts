@@ -67,15 +67,15 @@ export const templates: Product = {
       frameVariant: "bloom",
     },
     {
-      heading: "Fields and conditional logic",
+      heading: "Fill it from the matter's data",
       bullets: [
-        "Define the fields a document needs",
-        "Include or omit clauses based on the values provided",
-        "One template covers several variants",
+        "Prefill fields from a document already stored in the matter",
+        "Review and adjust every value before producing the draft",
+        "Conditional clauses still resolve from the values you keep",
       ],
       media: {
         type: "story",
-        sceneId: "templates",
+        sceneId: "template-fill",
         aspect: "16 / 10",
       },
       frameVariant: "wash",

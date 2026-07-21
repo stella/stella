@@ -393,6 +393,50 @@
       ]
     },
     {
+      "captureId": "template-fill",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "4d52053aefe977f4349c179592d029b068606665",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId",
+        "apps/web/src/routes/_protected.knowledge",
+        "apps/api/scripts/seed-templates.ts",
+        "apps/api/src/dev/register-mock-ai.ts"
+      ]
+    },
+    {
+      "captureId": "template-fill",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "4d52053aefe977f4349c179592d029b068606665",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId",
+        "apps/web/src/routes/_protected.knowledge",
+        "apps/api/scripts/seed-templates.ts",
+        "apps/api/src/dev/register-mock-ai.ts"
+      ]
+    },
+    {
       "captureId": "templates",
       "theme": "dark",
       "viewport": {

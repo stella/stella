@@ -82,6 +82,10 @@ type MarketingViewRoutes = {
   agent: string;
   files: string;
   table: string;
+  // Filesystem view of the Meridian workspace (MERIDIAN_WORKSPACE_ID): the
+  // template-fill scene's "Add" menu (New document from template) only
+  // lives there, not in the Table view's upload-only bottom row.
+  templateFillFiles: string;
 };
 
 // The clause-12 redline as painted on the page. Scoped to the painted layout
@@ -303,6 +307,125 @@ const waitForPassageHighlight = async (
   }
 };
 
+// ─── Template-fill scene: AI-assisted prefill from a matter's documents ──
+// "New document from template" inside the Meridian workspace, filling the
+// seeded Supply Agreement (tmpl-supply, seed-templates.ts) from that same
+// matter's own Supplier_Agreement.docx via the "Prefill from documents"
+// panel — the templates product page's H1 ("let AI fill them in") claim,
+// filmed for the first time. Every value this paints comes from the
+// tmpl-supply fixture in apps/api/src/dev/register-mock-ai.ts, frozen from a
+// real extraction hand-verified against the seeded document; it is not a
+// live model call (see that file's comment before touching either).
+const TEMPLATE_FILL_TEMPLATE_LABEL = "Supply Agreement";
+const TEMPLATE_FILL_SOURCE_DOCUMENT = "Supplier_Agreement.docx";
+const TEMPLATE_FILL_PREFILL_TOGGLE_LABEL = "Prefill from documents";
+const TEMPLATE_FILL_PREFILL_RUN_LABEL = "Prefill";
+const TEMPLATE_FILL_CUSTOMER_NAME_SELECTOR = 'textarea[name="customerName"]';
+const TEMPLATE_FILL_EXPECTED_CUSTOMER_NAME = "Northstar Robotics, Inc.";
+
+// Opens the dialog fresh: "Add" (the file tree's own add menu, not the
+// Table view's upload-only bottom row) -> "New document from template" ->
+// the seeded Supply Agreement. NewDocumentFromTemplateDialog only mounts its
+// body while open, so every open starts at a pristine template picker.
+// Three elements answer to the accessible name "Add" on this view: the view
+// switcher's own "Add view" trigger, the sort toolbar's "Add sort" trigger,
+// and the tree view's (filesystem/tree-view.tsx) real AddEntityMenu button —
+// plus a fourth, `sr-only` AddEntityMenu trigger the tree view renders purely
+// as a right-click context-menu anchor. The three decoys all set an explicit
+// `aria-label="Add"` (they have no visible text of their own); only the real
+// tree button gets its accessible name from rendered text content
+// (`<PlusIcon/>{t("common.add")}`, add-entity-menu.tsx), so excluding
+// anything with an `aria-label` lands on it uniquely.
+const templateFillAddButton = (page: Page) =>
+  page
+    .getByRole("button", { name: "Add", exact: true })
+    .and(page.locator(":not([aria-label])"));
+
+const openTemplateFillDialog = async (page: Page) => {
+  await clickWithCursor(page, templateFillAddButton(page));
+  await clickWithCursor(
+    page,
+    page.getByRole("menuitem", { name: "New document from template" }),
+  );
+  // Not `exact: true`: the row's accessible name concatenates the template
+  // name with its (unhidden) field-count span, e.g. "Supply Agreement 16
+  // fields", so match on the name as a leading substring instead.
+  await clickWithCursor(
+    page,
+    page.getByRole("button", {
+      name: new RegExp(`^${TEMPLATE_FILL_TEMPLATE_LABEL}\\b`, "u"),
+    }),
+  );
+  await page
+    .getByRole("button", { name: TEMPLATE_FILL_PREFILL_TOGGLE_LABEL })
+    .waitFor();
+};
+
+const closeTemplateFillDialog = async (page: Page) => {
+  await page
+    .getByRole("button", { name: /^close$/iu })
+    .last()
+    .click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+};
+
+// Expand the panel, pick the matter's own Supplier_Agreement.docx (scrolled
+// into view: it is the last of 7 documents in a fixed-height scrollable
+// checklist), and run the prefill. Shared by the prewarm and the on-camera
+// replay, exactly like the review-citation popover open.
+const runTemplateFillPrefill = async (page: Page) => {
+  await clickWithCursor(
+    page,
+    page.getByRole("button", { name: TEMPLATE_FILL_PREFILL_TOGGLE_LABEL }),
+  );
+  const sourceCheckbox = page.getByRole("checkbox", {
+    name: TEMPLATE_FILL_SOURCE_DOCUMENT,
+  });
+  await sourceCheckbox.scrollIntoViewIfNeeded();
+  await clickWithCursor(page, sourceCheckbox);
+  await clickWithCursor(
+    page,
+    page.getByRole("button", {
+      name: TEMPLATE_FILL_PREFILL_RUN_LABEL,
+      exact: true,
+    }),
+  );
+};
+
+// Painted-value predicate: the Customer Name field (a plain `<textarea
+// name="customerName">`, see template-form.tsx) actually holds the fixture's
+// known value, not a loading/blank state. Requiring the real value (rather
+// than e.g. a toast) means a build that lost the fixture, or reverted to a
+// live/broken model path, can never ship this scene's footage.
+const templateFillCustomerNameIsPainted = ({
+  selector,
+  expected,
+}: {
+  expected: string;
+  selector: string;
+}) => {
+  const field = document.querySelector(selector);
+  return field instanceof HTMLTextAreaElement && field.value === expected;
+};
+
+const waitForTemplateFillPaint = async (page: Page, timeoutMs: number) => {
+  try {
+    await page.waitForFunction(
+      templateFillCustomerNameIsPainted,
+      {
+        selector: TEMPLATE_FILL_CUSTOMER_NAME_SELECTOR,
+        expected: TEMPLATE_FILL_EXPECTED_CUSTOMER_NAME,
+      },
+      { timeout: timeoutMs },
+    );
+  } catch {
+    throw new Error(
+      "template-fill: the prefilled Customer Name did not paint within " +
+        `${timeoutMs}ms; refusing to ship footage with an unfilled form`,
+    );
+  }
+};
+
 const scenes = [
   {
     id: "workspace",
@@ -494,6 +617,41 @@ const scenes = [
       await moveCursorTo(page, {
         x: cellCenter.x - 70,
         y: cellCenter.y - 34,
+      });
+    },
+  },
+  {
+    // The AI-fill moment: opening the seeded Supply Agreement from within a
+    // matter, expanding "Prefill from documents", picking the matter's own
+    // Supplier_Agreement.docx, and the drafted field values actually
+    // appearing. Product-page section only
+    // (apps/landing/src/data/products/templates.ts), never part of the
+    // homepage story cycle.
+    id: "template-fill",
+    cursor: "visible",
+    path: ({ templateFillFiles }) => templateFillFiles,
+    durationSeconds: 5.3,
+    prepare: async (page) => {
+      await page.getByText(TEMPLATE_FILL_SOURCE_DOCUMENT).first().waitFor();
+      await openTemplateFillDialog(page);
+
+      // Pre-warm exactly like the citation scene: run the real prefill once,
+      // require the fixture's known Customer Name to actually paint (fails
+      // the run early if the fixture ever breaks), then close and reopen
+      // fresh so frame 0 keeps the pristine, nothing-filled form.
+      await runTemplateFillPrefill(page);
+      await waitForTemplateFillPaint(page, INSPECTOR_PREWARM_TIMEOUT_MS);
+      await closeTemplateFillDialog(page);
+      await openTemplateFillDialog(page);
+
+      // Rest: just off the "Prefill from documents" toggle, so the loop's
+      // first eased move is a short, natural approach onto it.
+      const toggleCenter = await locatorCenter(
+        page.getByRole("button", { name: TEMPLATE_FILL_PREFILL_TOGGLE_LABEL }),
+      );
+      await moveCursorTo(page, {
+        x: toggleCenter.x - 60,
+        y: toggleCenter.y - 24,
       });
     },
   },
@@ -1139,11 +1297,27 @@ const resolveMarketingViewRoutes = async (
     );
   }
   const threadId = getMarketingAgentThreadId(await threadsResponse.json());
+
+  // The template-fill scene's "Add" menu lives in the Meridian workspace's
+  // own filesystem view, a separate seeded workspace from Export Review.
+  const meridianViewsResponse = await context.request.get(
+    `${API_URL}/v1/views/${MERIDIAN_WORKSPACE_ID}`,
+  );
+  if (!meridianViewsResponse.ok()) {
+    throw new Error(
+      `Could not load marketing views: ${await meridianViewsResponse.text()}`,
+    );
+  }
+  const meridianFilesView = getViewRecords(
+    await meridianViewsResponse.json(),
+  ).find(({ layout }) => layout.type === "filesystem");
+
   await context.close();
 
-  if (!filesView || !tableView || !threadId) {
+  if (!filesView || !tableView || !threadId || !meridianFilesView) {
     throw new Error(
-      "The seeded marketing workspace is missing Files, Table, or its agent story",
+      "The seeded marketing workspaces are missing Files, Table, the agent " +
+        "story, or the Meridian workspace's Files view",
     );
   }
 
@@ -1151,6 +1325,7 @@ const resolveMarketingViewRoutes = async (
     agent: `/chat/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${threadId}`,
     files: `/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${filesView.id}`,
     table: `/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${tableView.id}`,
+    templateFillFiles: `/workspaces/${MERIDIAN_WORKSPACE_ID}/${meridianFilesView.id}`,
   };
 };
 
@@ -1530,6 +1705,23 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
     );
     await page.waitForTimeout(
       Math.max(0, 2800 - (Date.now() - paintStartedAt)),
+    );
+    return;
+  }
+  if (captureId === "template-fill") {
+    // Expand the panel, pick the matter's own Supplier_Agreement.docx, and
+    // run the prefill on camera; the paint wait is deducted from the hold
+    // so the loop's cadence stays fixed even on a slow re-layout. Scrolling
+    // onto the Customer Name field afterward puts the actual drafted value
+    // — the payoff — on screen for the back half of the cut.
+    await runTemplateFillPrefill(page);
+    const paintStartedAt = Date.now();
+    await waitForTemplateFillPaint(page, INSPECTOR_PREVIEW_PAINT_BUDGET_MS);
+    await scrollElementToCenter(
+      page.locator(TEMPLATE_FILL_CUSTOMER_NAME_SELECTOR),
+    );
+    await page.waitForTimeout(
+      Math.max(0, 1800 - (Date.now() - paintStartedAt)),
     );
     return;
   }

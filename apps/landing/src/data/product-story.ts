@@ -6,6 +6,7 @@ export const productStorySceneIds = [
   "agent",
   "cli",
   "templates",
+  "template-fill",
 ] as const;
 
 export type ProductStorySceneId = (typeof productStorySceneIds)[number];
@@ -125,6 +126,13 @@ export const productStoryThumbnails = {
     darkSrc: "/media/products/story-templates-dark-poster.jpg",
     alt: "A template with fields and conditional clauses in the stella template studio",
   },
+  // Product-page-only scene (same product area as "templates"); reuses its
+  // thumbnail since nothing lists this scene by icon.
+  "template-fill": {
+    src: "/media/products/story-templates-poster.jpg",
+    darkSrc: "/media/products/story-templates-dark-poster.jpg",
+    alt: "A template with fields and conditional clauses in the stella template studio",
+  },
 } as const satisfies Record<
   ProductStorySceneId,
   { alt: string; darkSrc: string; src: string }
@@ -182,6 +190,13 @@ export const productStoryMedia = {
     posterSrc: "/media/products/story-templates-poster.jpg",
     darkPosterSrc: "/media/products/story-templates-dark-poster.jpg",
     alt: "A template with fields and conditional clauses in the stella template studio",
+  },
+  "template-fill": {
+    videoSrc: "/media/products/story-template-fill.mp4",
+    darkVideoSrc: "/media/products/story-template-fill-dark.mp4",
+    posterSrc: "/media/products/story-template-fill-poster.jpg",
+    darkPosterSrc: "/media/products/story-template-fill-dark-poster.jpg",
+    alt: "Filling a template from a matter's own documents with AI in stella",
   },
 } as const satisfies Record<ProductStorySceneId, ProductStoryMedia>;
 
@@ -245,6 +260,17 @@ export const productStoryHeroMedia = {
     posterSrc: "/media/products/story-templates-poster.jpg",
     darkPosterSrc: "/media/products/story-templates-dark-poster.jpg",
     alt: "A template with fields and conditional clauses in the stella template studio",
+  },
+  // Product-page section only, wide capture only; the hero record reuses it,
+  // which object-cover crops slightly in the companion composition (which
+  // never renders this scene in practice — see productStoryScenes/
+  // openingProductStory).
+  "template-fill": {
+    videoSrc: "/media/products/story-template-fill.mp4",
+    darkVideoSrc: "/media/products/story-template-fill-dark.mp4",
+    posterSrc: "/media/products/story-template-fill-poster.jpg",
+    darkPosterSrc: "/media/products/story-template-fill-dark-poster.jpg",
+    alt: "Filling a template from a matter's own documents with AI in stella",
   },
 } as const satisfies Record<ProductStorySceneId, ProductStoryMedia>;
 

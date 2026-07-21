@@ -958,6 +958,7 @@ const DISCOVER_PRODUCTS: Record<
   agent: { href: "/product/agent", name: "AI agent" },
   cli: { href: "/product/cli-mcp", name: "CLI & MCP" },
   templates: { href: "/product/templates", name: "Templates" },
+  "template-fill": { href: "/product/templates", name: "Templates" },
 };
 
 // Gap between a selected window's bottom edge and its tag; the tag anchor
@@ -1112,6 +1113,9 @@ const getSceneChromeLabel = (sceneId: ProductStorySceneId) => {
   }
   if (sceneId === "templates") {
     return "stella · Supply Agreement · Templates";
+  }
+  if (sceneId === "template-fill") {
+    return "stella · Supply Agreement · Fill";
   }
   return "stella · Agent";
 };

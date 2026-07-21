@@ -22,6 +22,10 @@ export type CaptureViewport = { height: number; width: number };
 // through opens the source document at its exact-passage highlight.
 // Product-page-only (apps/landing/src/data/products/tabular-review.ts), so
 // unlike the other scenes it has no "-hero" companion variant.
+// "template-fill" films the seeded Supply Agreement's "Prefill from
+// documents" flow inside the Meridian workspace: expanding the panel,
+// picking the matter's own Supplier_Agreement.docx, and the AI-drafted
+// field values actually appearing. Product-page-only, like "review-citation".
 export type StoryCaptureId =
   | "agent"
   | "cli"
@@ -29,6 +33,7 @@ export type StoryCaptureId =
   | "editor-doc"
   | "review"
   | "review-citation"
+  | "template-fill"
   | "templates"
   | "workspace";
 
@@ -113,6 +118,18 @@ const SCENE_WATCHED_PATHS: Record<StoryCaptureId, readonly string[]> = {
   ],
   // Knowledge tools catalogue (the MCP/capability surface).
   cli: ["apps/web/src/routes/_protected.knowledge"],
+  // "New document from template" inside the Meridian workspace (workspace
+  // slice) plus the Prefill-from-documents panel (knowledge slice, same
+  // TemplateForm/TemplatePrefillPanel the Template Studio Fill tab uses).
+  // Mirrors both "templates"' and "review"/"workspace"'s watched roots, plus
+  // the dev-only mock fixture the seeded fill values are frozen from — that
+  // fixture, not a live model, is what this scene actually films.
+  "template-fill": [
+    "apps/web/src/routes/_protected.workspaces/$workspaceId",
+    "apps/web/src/routes/_protected.knowledge",
+    "apps/api/scripts/seed-templates.ts",
+    "apps/api/src/dev/register-mock-ai.ts",
+  ],
 };
 
 // Scenes consumed at both the wide (scene-only embeds) and hero (companion
@@ -145,6 +162,9 @@ export const captureDefinitions: readonly CaptureDefinition[] = [
   // Product-page section only (tabular-review.ts section 2): no hero/
   // companion variant.
   toDefinition("review-citation", "review-citation", WIDE_VIEWPORT),
+  // Product-page section only (templates.ts section 2): no hero/companion
+  // variant.
+  toDefinition("template-fill", "template-fill", WIDE_VIEWPORT),
 ];
 
 export const RECORDINGS_MANIFEST_PATH =
