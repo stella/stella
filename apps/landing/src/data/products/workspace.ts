@@ -27,7 +27,7 @@ export const workspace: Product = {
   capabilities: [
     {
       title: "Matters",
-      body: "Organise documents, contacts, review, and chat around the matter they belong to.",
+      body: "Organise documents, contacts, review, and chat around the matter they belong to. Everything added to a matter stays attached to it, searchable across the whole workspace, so the context is there when you come back.",
     },
     {
       title: "Documents and .docx editing",
@@ -66,11 +66,11 @@ export const workspace: Product = {
       frameVariant: "wash",
     },
     {
-      heading: "A bridge to local Office editing",
+      heading: "Word documents, edited where you need them",
       bullets: [
-        "The desktop app is a local bridge for editing Office documents",
-        "Open a document from stella and edit it on your machine",
-        "Keep your existing Office editing where the workspace cannot reach",
+        "Open and edit Word .docx documents directly in the workspace",
+        "The redline stays a Word file: no conversion, no copies",
+        "Use the desktop bridge when a document needs Microsoft Word",
       ],
       media: {
         type: "story",
