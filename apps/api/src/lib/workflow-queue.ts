@@ -40,6 +40,7 @@ import { logger } from "@/api/lib/observability/logger";
 import {
   createBullMqConnection,
   createRedisClient,
+  isRecoverableRedisPollError,
 } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
@@ -1182,6 +1183,11 @@ const handleWorkflowJobFailed = (
   );
 };
 
+// The Bun-adapter poll blip (see `isRecoverableRedisPollError`) recurs every
+// few seconds, so warn once per interval rather than per occurrence, carrying
+// the tally so a rising real problem is still visible.
+const REDIS_POLL_WARN_INTERVAL_MS = 60 * 1000;
+
 const createWorkflowWorker = ({
   concurrency,
   queueClass,
@@ -1202,7 +1208,28 @@ const createWorkflowWorker = ({
   );
 
   worker.on("failed", handleWorkflowJobFailed);
+  // Per-worker rate-limit state for the recoverable Bun-adapter poll blip:
+  // count every occurrence but emit at most one warn per interval, carrying
+  // the tally so a rising real problem is still visible.
+  let redisPollBlipsSinceWarn = 0;
+  let redisPollLastWarnAtMs = 0;
   worker.on("error", (error) => {
+    if (isRecoverableRedisPollError(error)) {
+      redisPollBlipsSinceWarn += 1;
+      const nowMs = Date.now();
+      if (nowMs - redisPollLastWarnAtMs < REDIS_POLL_WARN_INTERVAL_MS) {
+        return;
+      }
+      redisPollLastWarnAtMs = nowMs;
+      logger.warn("workflow.worker_redis_poll_blip", {
+        ...connectionErrorFields(error),
+        queueClass,
+        queueName,
+        blipsSinceLastWarn: String(redisPollBlipsSinceWarn),
+      });
+      redisPollBlipsSinceWarn = 0;
+      return;
+    }
     logger.error("workflow.worker_error", {
       ...connectionErrorFields(error),
       queueClass,
