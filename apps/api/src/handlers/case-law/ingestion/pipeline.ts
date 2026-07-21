@@ -202,6 +202,15 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
     sourceUrl: strip(r.sourceUrl),
     documentUrl: strip(r.documentUrl),
     metadata: sanitizeMetadata(r.metadata),
+    // Adapter-supplied sections come from court HTML like every other
+    // field and must go through the same strip. The fallback path was
+    // safe only incidentally: `segmentDecision` runs on the already
+    // sanitized `fulltext`.
+    sections: r.sections?.map((section) => ({
+      ...section,
+      title: section.title === null ? null : stripDangerousChars(section.title),
+      text: collapseSpacedLetters(strip(section.text) ?? ""),
+    })),
     documentAst: sanitizedAst,
     sourceRaw: strip(r.sourceRaw),
   };

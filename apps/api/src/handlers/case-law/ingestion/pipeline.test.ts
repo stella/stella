@@ -6,6 +6,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst, Inline } from "@/api/handlers/case-law/document-ast";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
@@ -63,6 +64,38 @@ const originalCzNsFetchPage = czNsAdapter.fetchPage;
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
+});
+
+describe("sanitizeResult — adapter-supplied sections", () => {
+  test("strips control characters the way every other field is stripped", () => {
+    // Sections arrive from court HTML like `fulltext` and `documentAst`
+    // do. The wording-based fallback was safe only because
+    // `segmentDecision` runs on already-sanitized `fulltext`; a parser
+    // that supplies its own sections bypasses that.
+    const sanitized = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      sections: [
+        {
+          index: 0,
+          type: "ruling",
+          title: "Vy\u0000rok",
+          text: "Text\u0000with\u200Bcontrol\uFEFFchars.",
+        },
+      ],
+    });
+
+    expect(sanitized.sections?.at(0)?.title).toBe("Vyrok");
+    expect(sanitized.sections?.at(0)?.text).toBe("Textwithcontrolchars.");
+  });
+
+  test("leaves a section without a title as null", () => {
+    const sanitized = sanitizeResult({
+      ...baseResult(EMPTY_AST),
+      sections: [{ index: 0, type: "ruling", title: null, text: "Text." }],
+    });
+
+    expect(sanitized.sections?.at(0)?.title).toBeNull();
+  });
 });
 
 describe("sanitizeResult — documentAst text fields", () => {
