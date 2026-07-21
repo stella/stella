@@ -1431,6 +1431,13 @@ const CLI_STYLES = `
       width: 94%;
       height: 60%;
     }
+    /* The 60% height above makes room for the terminal card in the hero's
+       mobile layout; frameless scene-only embeds have no companions, so the
+       main window keeps filling its box. */
+    .cli-story-scene-only .cli-main-window {
+      inset: 3% auto auto 3%;
+      height: 94%;
+    }
     .cli-window {
       inset: auto auto 2.5% 5%;
       width: 90%;
