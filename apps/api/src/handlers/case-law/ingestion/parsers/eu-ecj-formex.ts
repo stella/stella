@@ -101,13 +101,21 @@ export const parseFormex = (xml: string): FormexDocument => {
     }
   });
 
+  // Numbered paragraphs are `NP.ECR` in the current schema. Documents
+  // published before roughly 2016 use a plain `NP` for the same thing,
+  // which the current schema reserves for quoted list items — so only
+  // fall back to it when the document has no `NP.ECR` at all.
   const paragraphNumbers: number[] = [];
-  $("NP\\.ECR > NO\\.P").each((_, el) => {
+  const numbered = $("NP\\.ECR > NO\\.P");
+  for (const el of (numbered.length > 0
+    ? numbered
+    : $("NP > NO\\.P")
+  ).toArray()) {
     const value = Number.parseInt(normalizeOracleText($(el).text()), 10);
     if (Number.isInteger(value)) {
       paragraphNumbers.push(value);
     }
-  });
+  }
 
   const operativeItems: string[] = [];
   $("JURISDICTION ITEM > NP > TXT").each((_, el) => {

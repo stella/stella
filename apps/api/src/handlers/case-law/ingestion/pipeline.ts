@@ -21,7 +21,10 @@ import {
   createAvailableCaseLawDecisionSlug,
   createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
-import { isDocumentAst } from "@/api/handlers/case-law/document-ast";
+import {
+  hasUsableAst,
+  isDocumentAst,
+} from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -29,6 +32,10 @@ import {
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import {
+  AST_MISSING,
+  DECISION_EMPTY,
+} from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import {
   DANGEROUS_CHARS,
@@ -356,6 +363,29 @@ export const processDecision = async (
   const sections =
     result.sections ??
     (result.fulltext ? segmentDecision(result.fulltext) : []);
+
+  // Parsers report their own quality through `validateAndLog`, but a
+  // source whose parser never runs reports nothing at all. Emit the
+  // same signal here so every stored decision is accounted for, and
+  // split the severity the same way: no text is an error, text without
+  // structure is a warning.
+  const astBlocks = hasUsableAst(result.documentAst)
+    ? result.documentAst.blocks.length
+    : 0;
+  const subject = {
+    sourceId,
+    caseNumber: result.caseNumber,
+    language: result.language,
+    url: result.sourceUrl ?? result.documentUrl ?? "",
+  };
+  if (!result.fulltext && astBlocks === 0) {
+    logger.error(DECISION_EMPTY, subject);
+  } else if (astBlocks === 0) {
+    logger.warn(AST_MISSING, {
+      ...subject,
+      fulltextLength: result.fulltext?.length ?? 0,
+    });
+  }
 
   const citations = extractCitations(
     sections.map((s) => ({ index: s.index, text: s.text })),

@@ -221,7 +221,32 @@ any way to know. `validateAndLog`'s CONTENT_LOSS and MISSING_WORDS are
 the completeness guard and must be treated as errors; heading levels
 and section boundaries are fidelity and may carry a known tail.
 
-### 11. Check a parser against the publisher, not against yourself
+### 11. Emit a parse signal every stored decision is covered by
+
+Parse quality is reported through structured logs, split by severity
+along the completeness/fidelity line so an operator or an agent can
+filter for the class that matters. All four carry `caseNumber`,
+`language` and a `url`, because a case number alone does not identify
+a document: a court publishing in 24 languages emits 24 variants under
+one number, and a case can carry both a judgment and an opinion.
+
+| Event                                       | Level | Meaning                                                                                  |
+| ------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `case_law.ingestion.decision_empty`         | ERROR | Stored with neither text nor AST. Nothing is readable.                                   |
+| `case_law.ingestion.ast_content_lost`       | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`). |
+| `case_law.ingestion.ast_missing`            | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
+| `case_law.ingestion.ast_structure_degraded` | WARN  | Text is complete, structure is imperfect.                                                |
+
+The two ERROR events are the ones to act on. Sweep for them to find
+decisions worth re-ingesting after a parser fix; `sourceRaw` in S3
+means most can be re-parsed without touching the court's site.
+
+The last two events come from the pipeline rather than from a parser,
+so they also cover sources whose parser never runs — which is the case
+that would otherwise be silent, since a parser that is not called
+cannot report anything.
+
+### 12. Check a parser against the publisher, not against yourself
 
 Where a source publishes the same document in two encodings, use the
 more semantic one as a test oracle. Cellar serves CJEU decisions both
@@ -232,7 +257,7 @@ asserts the parse against the Formex tree, so a reviewer who does not
 read Greek or Finnish can still see the parser is right in those
 languages. Snapshot tests only prove the output has not changed.
 
-### 12. Cursors must never cause full re-scans
+### 13. Cursors must never cause full re-scans
 
 After an adapter exhausts its range (reaches the oldest year
 in a backward crawl, or the current date in a forward crawl),

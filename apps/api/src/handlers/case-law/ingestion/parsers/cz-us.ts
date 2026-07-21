@@ -123,7 +123,11 @@ export const parseUsDecisionHtml = (
   // phantom words like "tarifu.ii.skutkové" that aren't in
   // the AST. Using per-line <p> tags preserves word boundaries.
   const validationHtml = buildValidationHtml(lines.map((l) => l.plainText));
-  validateAndLog("cz-us", input.caseNumber, validationHtml, blocks);
+  validateAndLog(
+    { parser: "cz-us", caseNumber: input.caseNumber },
+    validationHtml,
+    blocks,
+  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))

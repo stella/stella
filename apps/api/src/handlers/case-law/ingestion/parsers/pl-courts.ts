@@ -487,7 +487,11 @@ export const parsePlDecisionContent = (
     const $ = cheerio.load(input.content);
     const root = $("body").length > 0 ? $("body") : $.root();
     parseChildren($, state, root);
-    validateAndLog("pl-courts", input.caseNumber, input.content, state.blocks);
+    validateAndLog(
+      { parser: "pl-courts", caseNumber: input.caseNumber },
+      input.content,
+      state.blocks,
+    );
   } else {
     const normalizedContent = normalizeLegacyPlainText(
       stripHtml(input.content),
@@ -500,8 +504,7 @@ export const parsePlDecisionContent = (
         return normalized ? [normalized] : [];
       });
     validateAndLog(
-      "pl-courts",
-      input.caseNumber,
+      { parser: "pl-courts", caseNumber: input.caseNumber },
       buildValidationHtml(paragraphs),
       state.blocks,
     );

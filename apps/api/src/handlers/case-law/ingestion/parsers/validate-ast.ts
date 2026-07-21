@@ -356,41 +356,93 @@ export const validateAst = (
 };
 
 /**
- * Convenience: validate and log issues. Returns the result
- * for callers that want to inspect it.
+ * Identity of the document being validated.
+ *
+ * A case number alone does not identify a document: courts that
+ * publish in several languages emit one variant per language under the
+ * same number, and a case can carry both a judgment and an Advocate
+ * General's opinion. Anything acting on these logs — a person or an
+ * agent sweeping for bad parses — needs enough here to fetch the exact
+ * document back.
+ */
+export type ValidationSubject = {
+  /** Adapter key, e.g. "eu-ecj". */
+  parser: string;
+  caseNumber: string;
+  language?: string | undefined;
+  /** Where this exact document can be re-fetched. */
+  url?: string | undefined;
+};
+
+/**
+ * Log event emitted when source text did not survive into the AST.
+ * Reported at ERROR: the text is unrecoverable from the stored
+ * decision, and neither the reader nor the AI pipeline can tell.
+ */
+export const AST_CONTENT_LOST = "case_law.ingestion.ast_content_lost";
+
+/**
+ * Log event emitted when the text is all present but its structure is
+ * wrong or missing. Reported at WARN: degraded, not incorrect.
+ */
+export const AST_STRUCTURE_DEGRADED =
+  "case_law.ingestion.ast_structure_degraded";
+
+/**
+ * Log event emitted when a decision is stored with neither text nor an
+ * AST. Reported at ERROR: nothing about the decision is readable, and
+ * a source that starts doing this emits no other signal, because its
+ * parser never runs.
+ */
+export const DECISION_EMPTY = "case_law.ingestion.decision_empty";
+
+/**
+ * Log event emitted when a decision is stored with text but no AST —
+ * the unstructured-wall-of-text state. Reported at WARN.
+ */
+export const AST_MISSING = "case_law.ingestion.ast_missing";
+
+/**
+ * Validate, then log the outcome under a severity that reflects what
+ * kind of failure it is. Returns the result for callers that want to
+ * assert on it.
  */
 export const validateAndLog = (
-  parserName: string,
-  caseNumber: string,
+  subject: ValidationSubject,
   html: string,
   blocks: Block[],
 ): ValidationResult => {
   const result = validateAst(html, blocks);
+  if (result.issues.length === 0) {
+    return result;
+  }
 
   // Court decisions are public documents; log full diagnostics so a
   // failure is actionable straight from the log line, without
   // re-fetching and re-parsing the source.
-  if (!result.ok) {
-    logger.error("case_law.ingestion.ast_validation_failed", {
-      parser: parserName,
-      caseNumber,
-      issues: result.issues
-        .map((issue) => `${issue.code}: ${issue.message}`)
-        .join("; "),
-      missingWords: result.stats.missingWords.slice(0, 25).join(", "),
-      missingWordCount: result.stats.missingWords.length,
-      retainedPct: result.stats.retainedPct,
-      blockCount: result.stats.blockCount,
-    });
-  } else if (result.issues.length > 0) {
-    logger.warn("case_law.ingestion.ast_validation_warning", {
-      parser: parserName,
-      caseNumber,
-      issues: result.issues
-        .map((issue) => `${issue.code}: ${issue.message}`)
-        .join("; "),
-    });
+  const common = {
+    parser: subject.parser,
+    caseNumber: subject.caseNumber,
+    ...(subject.language === undefined ? {} : { language: subject.language }),
+    ...(subject.url === undefined ? {} : { url: subject.url }),
+    codes: result.issues.map((issue) => issue.code).join(","),
+    issues: result.issues
+      .map((issue) => `${issue.code}: ${issue.message}`)
+      .join("; "),
+    blockCount: result.stats.blockCount,
+  };
+
+  if (result.ok) {
+    logger.warn(AST_STRUCTURE_DEGRADED, common);
+    return result;
   }
+
+  logger.error(AST_CONTENT_LOST, {
+    ...common,
+    retainedPct: result.stats.retainedPct,
+    missingWordCount: result.stats.missingWords.length,
+    missingWords: result.stats.missingWords.slice(0, 25).join(", "),
+  });
 
   return result;
 };

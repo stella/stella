@@ -74,8 +74,11 @@ export const parseNsDecisionHtml = (
   const fulltext = blocksToPlainText(blocks);
 
   validateAndLog(
-    "cz-ns",
-    canonical.caseNumber ?? "",
+    {
+      parser: "cz-ns",
+      caseNumber: canonical.caseNumber ?? input.documentId,
+      url: input.webUrl,
+    },
     validationHtml($),
     blocks,
   );

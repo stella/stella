@@ -61,6 +61,11 @@ export type ParseEcjDecisionInput = {
   decisionType: string | undefined;
   /** Human-facing EUR-Lex URL for the decision. */
   sourceUrl: string | undefined;
+  /**
+   * Language of this variant. A CJEU case number identifies up to 24
+   * documents, so a diagnostic log without it cannot be acted on.
+   */
+  language?: string | undefined;
   /** CELEX number, used as the AST document id. */
   celex: string;
   /** Cellar XHTML manifestation. */
@@ -88,8 +93,12 @@ export const parseEcjDecisionHtml = (
   const keywords = extractKeywords($);
 
   const validation = validateAndLog(
-    "eu-ecj",
-    input.caseNumber,
+    {
+      parser: "eu-ecj",
+      caseNumber: input.caseNumber,
+      language: input.language,
+      url: input.sourceUrl,
+    },
     input.html,
     blocks,
   );
@@ -532,13 +541,6 @@ const withoutNotes = (
 };
 
 /**
- * Deepest section marker in a judgment: an en dash, written as plain
- * text before the emphasized title rather than inside a span of its
- * own. Formex numbers this level 4, below the AST's three levels.
- */
-const SECTION_DASH = /^[\u2013\u2014-]\s/u;
-
-/**
  * Outline depth of a section heading the source does not classify.
  *
  * Opinions carry no heading class at all, and judgments express their
@@ -563,33 +565,38 @@ const sectionHeadingLevel = (
   const $body = withoutNotes($el);
   const text = textOf($body);
   const total = dense(text);
-  if (total === 0) {
+  const $first = $body.find(`${sel(CLASS.bold)}, ${sel(CLASS.italic)}`).first();
+  if (total === 0 || $first.length === 0) {
     return undefined;
   }
 
-  // The marker is either a dash written as plain text, or the
-  // paragraph's first emphasis span. Everything after it must be
-  // emphasized: that is what separates a heading from body prose, and
-  // from a party name, which is emphasized but holds no marker.
-  const dash = SECTION_DASH.exec(text)?.[0];
-  const marker =
-    dash ??
-    textOf($body.find(`${sel(CLASS.bold)}, ${sel(CLASS.italic)}`).first());
-  const title = total - dense(marker);
-  if (marker === "" || title <= 0) {
+  // The marker is whatever precedes the emphasized title. Where the
+  // Court sets the marker itself (`I.` in its own bold span) that is
+  // the first emphasis span; where it does not (`I – ` before a bold
+  // title, or a bare dash before an italic one) it is the plain text
+  // in front of that span.
+  const title = textOf($first);
+  const cut = text.indexOf(title);
+  const lead = cut > 0 ? text.slice(0, cut).trim() : "";
+  const marker = lead === "" ? title : lead;
+
+  const titleLength = total - dense(marker);
+  if (titleLength <= 0) {
     return undefined;
   }
 
+  // Everything after the marker must be emphasized. That is what
+  // separates a heading from body prose, and from a party name, which
+  // is emphasized but carries no marker.
   const emphasized = Math.max(
     dense($body.find(sel(CLASS.bold)).text()),
     dense($body.find(sel(CLASS.italic)).text()),
   );
-  if (emphasized < title) {
+  if (emphasized < titleLength) {
     return undefined;
   }
 
-  // A dash is the Court's deepest marker; it carries no ordinal.
-  return dash === undefined ? markerLevel(marker) : 3;
+  return markerLevel(marker);
 };
 
 /**
@@ -603,7 +610,15 @@ const sectionHeadingLevel = (
  * than the AST's three levels, so its levels 3 and below land on 3.
  */
 const markerLevel = (marker: string): HeadingLevel | undefined => {
-  const token = marker.replace(/^\(|[.)]$/gu, "");
+  const token = marker
+    .replace(/^[(\s]+/u, "")
+    .replace(/[\s.)\u2013\u2014-]+$/u, "");
+
+  // A bare dash is the Court's deepest marker: it carries no ordinal.
+  if (token === "") {
+    return /[\u2013\u2014-]/u.test(marker) ? 3 : undefined;
+  }
+
   // Below the letter level the Court switches to brackets and to lower
   // case (`a)`, `(1)`), which is how `A.` and `a)` stay distinguishable
   // in scripts where they are otherwise the same character class.
