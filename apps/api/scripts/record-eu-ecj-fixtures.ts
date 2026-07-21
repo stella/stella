@@ -56,6 +56,11 @@ const PARSER_CORPUS = [
     why: "Advocate General opinion: no heading classes at all, a six-level outline that switches from bold to italic with depth, and 220 footnotes. Finnish numbers its sections without a trailing period, so the depth cannot be read off punctuation.",
   },
   {
+    celex: "62013TO0488",
+    languages: ["CS"],
+    why: "The oldest XHTML layout, which wraps the whole decision in `div.listNotice > div.texte` and uses anchor links rather than classes for its sections. It collapsed into a single block until containers were flattened, and its operative part is only classified correctly if flattening also assigns document-wide positions.",
+  },
+  {
     celex: "62023CO0786",
     languages: ["EN"],
     why: "Order: the short form of the judgment layout, and the smallest complete document in the corpus.",
@@ -135,6 +140,10 @@ SELECT DISTINCT ?manifestation WHERE {
     },
     body: new URLSearchParams({ query }).toString(),
   });
+
+  if (!response.ok) {
+    return undefined;
+  }
 
   const payload: unknown = await response.json();
   const uri = firstManifestationUri(payload);

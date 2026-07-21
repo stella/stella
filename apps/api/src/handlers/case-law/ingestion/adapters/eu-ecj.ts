@@ -416,7 +416,15 @@ const parseManifestation = (
 ): ParsedManifestation => {
   try {
     const parsed = parseEcjDecisionHtml(input);
-    if (parsed.documentAst.blocks.length > 0) {
+    // A parse that lost source text is worse than no parse: the reader
+    // renders the AST, so the missing paragraphs would be invisible.
+    // Fall through to the stripped-text fallback, which keeps
+    // everything, and let the ERROR the validator already logged say
+    // which decision needs the parser fixed.
+    const lostContent = parsed.validationIssues.some(
+      (code) => code === "CONTENT_LOSS" || code === "MISSING_WORDS",
+    );
+    if (parsed.documentAst.blocks.length > 0 && !lostContent) {
       return {
         documentAst: parsed.documentAst,
         sections: sectionsFromAst(parsed.documentAst.blocks),
@@ -469,6 +477,12 @@ export const fetchDecisionsByCelex = async ({
   languages,
   signal,
 }: FetchDecisionsByCelexOptions): Promise<IngestionResult[]> => {
+  // An empty filter emits no FILTER clause, which would turn a lookup
+  // for named decisions into an unbounded sweep of the whole corpus.
+  if (celexNumbers.length === 0) {
+    return [];
+  }
+
   const bindings = await queryDecisions({
     dateFrom: COURT_EPOCH,
     dateTo: toIsoDate(new Date()),

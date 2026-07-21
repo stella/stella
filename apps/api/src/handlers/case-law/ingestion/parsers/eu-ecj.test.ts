@@ -121,6 +121,21 @@ describe("parseEcjDecisionHtml", () => {
     if (formex === undefined) {
       return;
     }
+
+    // Everything above is completeness and applies to every layout.
+    // What follows compares structure against Formex, and only the
+    // layouts that publish structure can be held to it: the oldest one
+    // prints paragraph numbers as ordinary text, names its sections
+    // with `<h2>` where Formex declares more, and omits the keyword
+    // chain from the rendering entirely. Recovering those would mean
+    // guessing at text, so the parser does not, and neither does this.
+    // Its `pointN` anchors are the marker for the layouts that do.
+    if (!html.includes('id="point')) {
+      expect(parsed.keywords).toEqual([]);
+      expect(numbered).toHaveLength(0);
+      return;
+    }
+
     const oracle = parseFormex(formex);
 
     expect(parsed.keywords).toEqual(oracle.keywords);

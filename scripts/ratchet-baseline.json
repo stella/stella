@@ -41,7 +41,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 599,
+    "count": 598,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -58,7 +58,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 5,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 5,
-      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 4,
+      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/health-check.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/pagination.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/retry.ts": 3,

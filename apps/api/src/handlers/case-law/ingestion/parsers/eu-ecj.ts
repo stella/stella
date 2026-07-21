@@ -190,6 +190,16 @@ const SIGNATURE_CLASS_PREFIX = "signat";
 /** Publisher paragraph anchor, e.g. `id="point42"`. */
 const POINT_ID = /^point(?<number>\d+)$/u;
 
+/** Semantic heading tags, mapped onto the AST's three levels. */
+const HEADING_TAGS: Record<string, 1 | 2 | 3 | undefined> = {
+  h1: 1,
+  h2: 1,
+  h3: 2,
+  h4: 3,
+  h5: 3,
+  h6: 3,
+};
+
 const HEADING_LEVELS = [1, 2, 3] as const;
 type HeadingLevel = (typeof HEADING_LEVELS)[number];
 
@@ -395,8 +405,33 @@ const pushParagraph = (
   });
 };
 
+/**
+ * Expand block containers into the element list, depth first.
+ *
+ * The Publications Office's oldest XHTML wraps a whole decision in
+ * `div.listNotice > div.texte`. Walking those wrappers in place would
+ * give every element inside them the wrapper's own position, and
+ * position is what separates the operative part from the body — so the
+ * document is flattened first and every element gets a real one.
+ */
+const flattenChildren = (
+  $: cheerio.CheerioAPI,
+  elements: readonly AnyNode[],
+): AnyNode[] => {
+  const flat: AnyNode[] = [];
+  for (const element of elements) {
+    const $element = $(element);
+    if ($element.children("p, div, table").length > 0) {
+      flat.push(...flattenChildren($, $element.children().toArray()));
+      continue;
+    }
+    flat.push(element);
+  }
+  return flat;
+};
+
 const buildBlocks = ($: cheerio.CheerioAPI): Block[] => {
-  const children = $("body").children().toArray();
+  const children = flattenChildren($, $("body").children().toArray());
   const builder: BlockBuilder = {
     blocks: [],
     sequence: 0,
@@ -450,22 +485,18 @@ const visitChild = (
   }
 
   if (tag === "table") {
-    if (builder.zone !== "footnotes" && index > lastPointIndex) {
+    // A document with no numbered paragraphs has no operative part to
+    // find; without this guard `index > -1` would mark its very first
+    // table as the ruling.
+    if (
+      builder.zone !== "footnotes" &&
+      lastPointIndex >= 0 &&
+      index > lastPointIndex
+    ) {
       builder.zone = "operative";
     }
     visitTable($, builder, $el);
     builder.inTitleRun = false;
-    return;
-  }
-
-  // A container of block-level children is walked, not flattened.
-  // The Publications Office's oldest XHTML wraps a whole decision in
-  // `div.listNotice > div.texte`, which would otherwise collapse into
-  // a single paragraph holding the entire judgment.
-  if ($el.children("p, div, table").length > 0) {
-    for (const child of $el.children().toArray()) {
-      visitChild($, builder, $(child), index, lastPointIndex);
-    }
     return;
   }
 
@@ -475,6 +506,21 @@ const visitChild = (
   const inlines = walkEcjInlines($, $el);
   const plainText = inlinesToPlainText(inlines).trim();
   if (!plainText) {
+    return;
+  }
+
+  // The oldest layout drops the class vocabulary entirely and marks
+  // its sections with semantic heading tags. It never emits `h1`, so
+  // its `h2` is the document's top level.
+  const tagLevel = HEADING_TAGS[tag ?? ""];
+  if (tagLevel !== undefined) {
+    pushHeading(builder, {
+      level: tagLevel,
+      role: "section-heading",
+      inlines,
+      plainText,
+    });
+    builder.inTitleRun = false;
     return;
   }
 
@@ -525,7 +571,7 @@ const visitChild = (
  * heading over the "fully emphasized" line.
  */
 const dense = (text: string): number =>
-  (text.match(/[\p{L}\p{N}]/gu) ?? []).length;
+  text.replace(/[^\p{L}\p{N}]/gu, "").length;
 
 /**
  * A copy of the paragraph without its footnote references. They sit

@@ -411,10 +411,9 @@ export const AST_MISSING = "case_law.ingestion.ast_missing";
  * that silently downgrades it would otherwise be invisible, and the
  * one place it must not be invisible is here.
  */
-export type StoredDecisionSignal = {
-  event: typeof DECISION_EMPTY | typeof AST_MISSING;
-  level: "error" | "warn";
-};
+export type StoredDecisionSignal =
+  | { event: typeof DECISION_EMPTY; level: "error" }
+  | { event: typeof AST_MISSING; level: "warn" };
 
 export const storedDecisionSignal = (stored: {
   hasFulltext: boolean;
@@ -433,10 +432,9 @@ export const storedDecisionSignal = (stored: {
  * kind of failure it is. Returns the result for callers that want to
  * assert on it.
  */
-export type ValidationSignal = {
-  event: typeof AST_CONTENT_LOST | typeof AST_STRUCTURE_DEGRADED;
-  level: "error" | "warn";
-};
+export type ValidationSignal =
+  | { event: typeof AST_CONTENT_LOST; level: "error" }
+  | { event: typeof AST_STRUCTURE_DEGRADED; level: "warn" };
 
 /**
  * Map a validation outcome onto the event an operator sweeps for.
