@@ -10,6 +10,7 @@ import {
   classifyToolError,
   errorEnvelope,
   flagKey,
+  flagValueProvided,
   readRequestReceipt,
   requestIdLine,
   reservedFlagUsageError,
@@ -33,6 +34,54 @@ const stringFlag = (prop: string, required = false): FlagSpec => ({
   kind: "string",
   required,
   repeatable: false,
+});
+
+const arrayFlag = (prop: string): FlagSpec => ({
+  flag: `--${prop.replace(/_/gu, "-")}`,
+  prop,
+  kind: "string-array",
+  required: false,
+  repeatable: true,
+});
+
+describe("flagValueProvided", () => {
+  test("scalar flags are provided iff not undefined (including empty string)", () => {
+    expect(flagValueProvided(stringFlag("name"), undefined)).toBe(false);
+    expect(flagValueProvided(stringFlag("name"), "Ada")).toBe(true);
+    expect(flagValueProvided(stringFlag("name"), "")).toBe(true);
+  });
+
+  test("an omitted variadic ([]) is treated as not provided", () => {
+    // Stricli parses an omitted optional variadic flag to [], and the CLI
+    // cannot pass an explicit empty array, so [] always means "left off".
+    expect(flagValueProvided(arrayFlag("assignee_ids"), [])).toBe(false);
+    expect(flagValueProvided(arrayFlag("assignee_ids"), ["u1"])).toBe(true);
+  });
+});
+
+describe("buildArgsFromFlags variadic/--input overlay", () => {
+  test("an omitted variadic flag does not overwrite a base array", async () => {
+    const spec = specWith([arrayFlag("assignee_ids")]);
+    const result = await buildArgsFromFlags(
+      spec,
+      { [flagKey({ prop: "assignee_ids" })]: [] },
+      { assignee_ids: ["from-input"] },
+    );
+    expect(result).toEqual({
+      ok: true,
+      args: { assignee_ids: ["from-input"] },
+    });
+  });
+
+  test("a supplied variadic flag overlays the base array", async () => {
+    const spec = specWith([arrayFlag("assignee_ids")]);
+    const result = await buildArgsFromFlags(
+      spec,
+      { [flagKey({ prop: "assignee_ids" })]: ["from-flag"] },
+      { assignee_ids: ["from-input"] },
+    );
+    expect(result).toEqual({ ok: true, args: { assignee_ids: ["from-flag"] } });
+  });
 });
 
 describe("buildArgsFromFlags (S3)", () => {
