@@ -829,6 +829,7 @@ export default defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
+        "react/jsx-key": "error",
         "react/no-array-index-key": "error",
         // Direct useEffect is banned; route external-system sync through
         // useMountEffect / useExternalSyncEffect. See /conventions-use-effect.
