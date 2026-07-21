@@ -1,3 +1,4 @@
+import type { SafeId } from "@/api/lib/branded-types";
 import type { SupportedLang } from "@/api/lib/locale";
 import type { ViewLayout, ViewLayoutType } from "@/api/lib/views-schema";
 
@@ -184,6 +185,45 @@ export const getDefaultViews = (
     position: tmpl.position,
   }));
 };
+
+// Default views are seeded once, when a workspace is created, in the source
+// language. Their names are re-localized to the reader's language on every
+// read (see `localizeDefaultViewName`), so the persisted language is invisible
+// to users and a single fixed seed language keeps the write path request-free.
+export const DEFAULT_VIEW_SEED_LANG: SupportedLang = "en";
+
+type DefaultViewRow = {
+  workspaceId: SafeId<"workspace">;
+  name: string;
+  layout: ViewLayout;
+  position: number;
+};
+
+type BuildDefaultViewRowsInput = {
+  workspaceId: SafeId<"workspace">;
+  // The workspace's system file property, pinned as the first column of the
+  // table view. Null only for the defensive path where no file property
+  // exists yet (in which case the table view is seeded with no pinned column).
+  filePropertyId: string | null;
+};
+
+/**
+ * Build the default workspace views as insert-ready rows for a fresh
+ * workspace. Callers own the `INSERT` (and any audit trail) so this stays a
+ * pure, side-effect-free transform shared by the create handler and dev seed.
+ */
+export const buildDefaultViewRows = ({
+  workspaceId,
+  filePropertyId,
+}: BuildDefaultViewRowsInput): DefaultViewRow[] =>
+  getDefaultViews(DEFAULT_VIEW_SEED_LANG, {
+    tableColumnPinning: filePropertyId ? [filePropertyId] : [],
+  }).map((view) => ({
+    workspaceId,
+    name: view.name,
+    layout: view.layout,
+    position: view.position,
+  }));
 
 // A default view's layout type → its VIEW_NAMES key.
 const LAYOUT_TYPE_TO_NAME_KEY: Partial<
