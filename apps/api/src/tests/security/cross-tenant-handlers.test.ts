@@ -18,6 +18,7 @@ import readVersions from "@/api/handlers/entities/read-versions";
 import readExpenses from "@/api/handlers/expenses/list";
 import { readFileHandler } from "@/api/handlers/files/get";
 import readInvoiceById from "@/api/handlers/invoices/get";
+import listMemories from "@/api/handlers/memories/list";
 import readRateEntries from "@/api/handlers/rates/entries-read";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
@@ -268,6 +269,24 @@ const isolationCases: IsolationCase[] = [
       expectPageExcludesId(result, testIds.billingCodeB1),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.billingCodeB1),
+  },
+  {
+    // Firm-scope memory reads org-wide for any chat-capable member, so the
+    // organization boundary is the only thing keeping firm B's memory out
+    // of firm A's prompt context. Probe it directly.
+    name: "memory list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listMemories, workspaceA, {
+        query: { scope: "organization", status: "active", limit: 100 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listMemories, workspaceB, {
+        query: { scope: "organization", status: "active", limit: 100 },
+      }),
+    expectDenied: (result, { ids: testIds }) =>
+      expectPageExcludesId(result, testIds.aiMemoryFirmB),
+    expectPositive: (result, { ids: testIds }) =>
+      expectPageContainsId(result, testIds.aiMemoryFirmB),
   },
   {
     name: "organization contact read by id",

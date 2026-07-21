@@ -150,6 +150,25 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("only owner and admin can manage firm memory", () => {
+    for (const role of ["owner", "admin"] as const) {
+      expect(roles[role].authorize({ firmMemory: ["create"] }).success).toBe(
+        true,
+      );
+      expect(roles[role].authorize({ firmMemory: ["update"] }).success).toBe(
+        true,
+      );
+    }
+    for (const role of ["member", "intern", "external"] as const) {
+      expect(roles[role].authorize({ firmMemory: ["create"] }).success).toBe(
+        false,
+      );
+      expect(roles[role].authorize({ firmMemory: ["update"] }).success).toBe(
+        false,
+      );
+    }
+  });
+
   test("every role can read its workspace", () => {
     for (const role of [
       "owner",
