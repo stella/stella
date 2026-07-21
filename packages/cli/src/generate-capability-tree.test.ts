@@ -439,9 +439,7 @@ describe("curated commands must not shadow capability commands", () => {
 // `${part}.${partPath}` resolves to a declared property in the leaf's wrapper
 // schema, so drift fails CI instead of shipping.
 describe("every capability flag maps to a real path in its wrapper schema", () => {
-  const isObjectSchema = (
-    value: unknown,
-  ): value is { properties?: Record<string, unknown> } =>
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
 
   const pathResolves = (
@@ -449,13 +447,20 @@ describe("every capability flag maps to a real path in its wrapper schema", () =
     part: string,
     partPath: string,
   ): boolean => {
-    const properties = isObjectSchema(wrapper) ? wrapper.properties : undefined;
-    let node = isObjectSchema(properties) ? properties[part] : undefined;
+    const topProperties = wrapper["properties"];
+    if (!isRecord(topProperties)) {
+      return false;
+    }
+    let node: unknown = topProperties[part];
     for (const segment of partPath.split(".")) {
-      if (!isObjectSchema(node) || !isObjectSchema(node.properties)) {
+      if (!isRecord(node)) {
         return false;
       }
-      node = node.properties[segment];
+      const properties = node["properties"];
+      if (!isRecord(properties)) {
+        return false;
+      }
+      node = properties[segment];
       if (node === undefined) {
         return false;
       }
