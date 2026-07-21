@@ -320,7 +320,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "4f496048762f07beb4c1538232c76918200a64e1",
+      "recordedAtCommit": "da621e76c2421df625413f73966c8e98e3fc1bb4",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -341,7 +341,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "4f496048762f07beb4c1538232c76918200a64e1",
+      "recordedAtCommit": "da621e76c2421df625413f73966c8e98e3fc1bb4",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
