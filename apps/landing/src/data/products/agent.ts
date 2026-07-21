@@ -26,7 +26,7 @@ export const agent: Product = {
   capabilities: [
     {
       title: "Works across your matters",
-      body: "Ask questions over the matters, documents, and contacts you already have in stella.",
+      body: "Ask questions over the matters, documents, and contacts you already have in stella. One conversation can reach every matter you have access to, with the same permissions that govern the rest of your workspace.",
     },
     {
       title: "Reads your files",
@@ -87,8 +87,7 @@ export const agent: Product = {
       media: {
         type: "story",
         sceneId: "cli",
-        showCompanions: true,
-        aspect: "2.03",
+        aspect: "16 / 10",
       },
       frameVariant: "wash",
     },
