@@ -14,9 +14,13 @@ state, and stops. Do not schedule future runs from inside this skill.
    # Get PR number for this branch
    gh pr view --json number -q '.number'
 
-   # Get current GitHub username (for CC attribution)
+   # Get current GitHub username (for plain-text CC attribution)
    gh api user --jq '.login'
    ```
+
+   Every published reply must end with `CC on behalf of {username}`. Keep the
+   username as plain text: never prefix it with `@` or turn it into a link,
+   because that would trigger a GitHub mention notification.
 
 2. **Fetch all bot comments** - Prefer GraphQL for review threads to only process unresolved ones:
 
@@ -75,7 +79,7 @@ state, and stops. Do not schedule future runs from inside this skill.
      -X POST \
      -f body="[response]
 
-   CC on behalf of @{username}" \
+   CC on behalf of {username}" \
      -f commit_id="{commit_sha}" \
      -f path="{file_path}" \
      -F in_reply_to={comment_id}
@@ -88,7 +92,7 @@ state, and stops. Do not schedule future runs from inside this skill.
      -X POST \
      -f body="[response]
 
-   CC on behalf of @{username}"
+   CC on behalf of {username}"
    ```
 
 5. **Resolve addressed bot review threads** using GraphQL (never resolve human
@@ -238,14 +242,16 @@ state, and stops. Do not schedule future runs from inside this skill.
 
 ## Response Templates
 
-Reply format: Put the response first, then sign with `CC on behalf of @{username}`.
+Reply format: Put the response first, then sign with
+`CC on behalf of {username}`. Substitute the current GitHub username without
+an `@` prefix or profile link.
 
 **Accepting:**
 
 ```text
 Accepted and implemented. [Brief description of change].
 
-CC on behalf of @username
+CC on behalf of username
 ```
 
 **Accepting with modification:**
@@ -253,7 +259,7 @@ CC on behalf of @username
 ```text
 Agreed with the principle. Implementing with a slight modification: [explain].
 
-CC on behalf of @username
+CC on behalf of username
 ```
 
 **Pushing back:**
@@ -262,7 +268,7 @@ CC on behalf of @username
 Pushing back on this. [Reason]. Our convention is [explain pattern/reference
 CLAUDE.md].
 
-CC on behalf of @username
+CC on behalf of username
 ```
 
 **Already addressed:**
@@ -270,5 +276,5 @@ CC on behalf of @username
 ```text
 Already addressed in commit [hash]. [Brief description].
 
-CC on behalf of @username
+CC on behalf of username
 ```
