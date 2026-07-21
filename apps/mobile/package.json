@@ -1,0 +1,52 @@
+{
+  "name": "@stll/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "expo-router/entry",
+  "scripts": {
+    "android": "expo start --android",
+    "build": "expo export --platform all",
+    "clean": "git clean -xdf .cache .expo .turbo dist node_modules",
+    "dev": "expo start",
+    "doctor": "EXPO_OFFLINE=1 expo-doctor .",
+    "format": "oxfmt -c ../../.oxfmtrc.json .",
+    "ios": "expo start --ios",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/mobile",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/mobile",
+    "start": "expo start",
+    "test": "bun test --pass-with-no-tests",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "expo": "~57.0.6",
+    "expo-constants": "~57.0.5",
+    "expo-linking": "~57.0.3",
+    "expo-router": "~57.0.6",
+    "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.1",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "react-native": "0.86.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2",
+    "react-native-web": "~0.21.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@stll/typescript-config": "workspace:*",
+    "@types/react": "catalog:react19",
+    "expo-doctor": "1.20.1"
+  },
+  "crawlPosture": "unserved",
+  "expo": {
+    "install": {
+      "exclude": [
+        "react",
+        "react-dom"
+      ]
+    }
+  }
+}

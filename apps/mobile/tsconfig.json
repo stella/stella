@@ -1,0 +1,17 @@
+{
+  "extends": ["@stll/typescript-config/base.json", "expo/tsconfig.base"],
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "strict": true,
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}
