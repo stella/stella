@@ -958,6 +958,7 @@ type Messages = {
     "saveChanges": "Save changes";
     "scrollToTop": "Scroll to top";
     "search": "Search...";
+    "selectAMatter": "Select a matter";
     "selectARole": "Select a role";
     "selectDate": "Select date…";
     "sessions": "Sessions";
@@ -1449,7 +1450,6 @@ type Messages = {
       "frequency": "Frequency";
       "hour": "Hour (UTC)";
       "monthly": "Monthly";
-      "selectWorkspace": "Select a matter";
       "utcHint": "Scheduled times are in UTC.";
       "weekly": "Weekly";
       "workspaceRequired": "Select a matter for the schedule.";
@@ -2090,7 +2090,6 @@ type Messages = {
     };
     "matterPicker": {
       "empty": "Select a matter to view its memory.";
-      "placeholder": "Select a matter";
     };
     "pageDescription": "Notes and context the assistant remembers across chats.";
     "pageTitle": "Memory";

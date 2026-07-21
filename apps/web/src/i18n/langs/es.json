@@ -955,6 +955,7 @@
     "saveChanges": "Guardar cambios",
     "scrollToTop": "Ir arriba",
     "search": "Buscar...",
+    "selectAMatter": "Selecciona un asunto",
     "selectARole": "Seleccione un rol",
     "selectDate": "Seleccionar fecha…",
     "sessions": "Sesiones",
@@ -1446,7 +1447,6 @@
       "frequency": "Frecuencia",
       "hour": "Hora (UTC)",
       "monthly": "Mensualmente",
-      "selectWorkspace": "Selecciona un asunto",
       "utcHint": "Las horas programadas están en UTC.",
       "weekly": "Semanalmente",
       "workspaceRequired": "Selecciona un asunto para la programación."
@@ -2086,8 +2086,7 @@
       "relationship": "Relación"
     },
     "matterPicker": {
-      "empty": "Seleccione un asunto para ver su memoria.",
-      "placeholder": "Seleccione un asunto"
+      "empty": "Seleccione un asunto para ver su memoria."
     },
     "pageDescription": "Notas y contexto que el asistente recuerda entre chats.",
     "pageTitle": "Memoria",

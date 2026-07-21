@@ -955,6 +955,7 @@
     "saveChanges": "Enregistrer les modifications",
     "scrollToTop": "Retour en haut",
     "search": "Rechercher...",
+    "selectAMatter": "Sélectionnez un dossier",
     "selectARole": "Sélectionner un rôle",
     "selectDate": "Sélectionner une date…",
     "sessions": "Sessions",
@@ -1446,7 +1447,6 @@
       "frequency": "Fréquence",
       "hour": "Heure (UTC)",
       "monthly": "Mensuel",
-      "selectWorkspace": "Sélectionnez un dossier",
       "utcHint": "Les horaires programmés sont en UTC.",
       "weekly": "Hebdomadaire",
       "workspaceRequired": "Sélectionnez un dossier pour la planification."
@@ -2086,8 +2086,7 @@
       "relationship": "Relation"
     },
     "matterPicker": {
-      "empty": "Sélectionnez un dossier pour afficher sa mémoire.",
-      "placeholder": "Sélectionner un dossier"
+      "empty": "Sélectionnez un dossier pour afficher sa mémoire."
     },
     "pageDescription": "Notes et contexte dont l'assistant se souvient d'un chat à l'autre.",
     "pageTitle": "Mémoire",

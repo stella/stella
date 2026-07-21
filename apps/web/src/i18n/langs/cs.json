@@ -955,6 +955,7 @@
     "saveChanges": "Uložit změny",
     "scrollToTop": "Posunout nahoru",
     "search": "Hledat...",
+    "selectAMatter": "Vyberte spis",
     "selectARole": "Vyberte roli",
     "selectDate": "Vybrat datum…",
     "sessions": "Sezení",
@@ -1446,7 +1447,6 @@
       "frequency": "Frekvence",
       "hour": "Hodina (UTC)",
       "monthly": "Měsíčně",
-      "selectWorkspace": "Vyberte spis",
       "utcHint": "Naplánované časy jsou v UTC.",
       "weekly": "Týdně",
       "workspaceRequired": "Vyberte spis pro plán."
@@ -2086,8 +2086,7 @@
       "relationship": "Vztah"
     },
     "matterPicker": {
-      "empty": "Vyberte spis, abyste zobrazili jeho paměť.",
-      "placeholder": "Vyberte spis"
+      "empty": "Vyberte spis, abyste zobrazili jeho paměť."
     },
     "pageDescription": "Poznámky a kontext, které si asistent pamatuje napříč chaty.",
     "pageTitle": "Paměť",

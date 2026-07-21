@@ -955,6 +955,7 @@
     "saveChanges": "Uložiť zmeny",
     "scrollToTop": "Posunúť nahor",
     "search": "Hľadať...",
+    "selectAMatter": "Vyberte spis",
     "selectARole": "Vyberte rolu",
     "selectDate": "Vybrať dátum…",
     "sessions": "Relácie",
@@ -1446,7 +1447,6 @@
       "frequency": "Frekvencia",
       "hour": "Hodina (UTC)",
       "monthly": "Mesačne",
-      "selectWorkspace": "Vyberte spis",
       "utcHint": "Naplánované časy sú v UTC.",
       "weekly": "Týždenne",
       "workspaceRequired": "Vyberte spis pre plán."
@@ -2086,8 +2086,7 @@
       "relationship": "Vzťah"
     },
     "matterPicker": {
-      "empty": "Vyberte spis, aby ste zobrazili jeho pamäť.",
-      "placeholder": "Vyberte spis"
+      "empty": "Vyberte spis, aby ste zobrazili jeho pamäť."
     },
     "pageDescription": "Poznámky a kontext, ktoré si asistent pamätá naprieč chatmi.",
     "pageTitle": "Pamäť",

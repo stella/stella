@@ -955,6 +955,7 @@
     "saveChanges": "Išsaugoti pakeitimus",
     "scrollToTop": "Slinkti į viršų",
     "search": "Ieškoti...",
+    "selectAMatter": "Pasirinkite bylą",
     "selectARole": "Pasirinkite rolę",
     "selectDate": "Pasirinkti datą…",
     "sessions": "Sesijos",
@@ -1446,7 +1447,6 @@
       "frequency": "Dažnumas",
       "hour": "Valanda (UTC)",
       "monthly": "Kas mėnesį",
-      "selectWorkspace": "Pasirinkite bylą",
       "utcHint": "Suplanuoti laikai nurodyti UTC.",
       "weekly": "Kas savaitę",
       "workspaceRequired": "Pasirinkite bylą tvarkaraščiui."
@@ -2086,8 +2086,7 @@
       "relationship": "Ryšys"
     },
     "matterPicker": {
-      "empty": "Pasirinkite bylą, kad matytumėte jos atmintį.",
-      "placeholder": "Pasirinkite bylą"
+      "empty": "Pasirinkite bylą, kad matytumėte jos atmintį."
     },
     "pageDescription": "Pastabos ir kontekstas, kuriuos asistentas įsimena visuose pokalbiuose.",
     "pageTitle": "Atmintis",

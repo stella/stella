@@ -955,6 +955,7 @@
     "saveChanges": "Saglabāt izmaiņas",
     "scrollToTop": "Ritināt uz augšu",
     "search": "Meklēt...",
+    "selectAMatter": "Izvēlieties lietu",
     "selectARole": "Izvēlieties lomu",
     "selectDate": "Izvēlēties datumu…",
     "sessions": "Sesijas",
@@ -1446,7 +1447,6 @@
       "frequency": "Biežums",
       "hour": "Stunda (UTC)",
       "monthly": "Katru mēnesi",
-      "selectWorkspace": "Izvēlieties lietu",
       "utcHint": "Ieplānotie laiki ir norādīti UTC.",
       "weekly": "Katru nedēļu",
       "workspaceRequired": "Izvēlieties lietu grafikam."
@@ -2086,8 +2086,7 @@
       "relationship": "Saistība"
     },
     "matterPicker": {
-      "empty": "Izvēlieties lietu, lai skatītu tās atmiņu.",
-      "placeholder": "Izvēlieties lietu"
+      "empty": "Izvēlieties lietu, lai skatītu tās atmiņu."
     },
     "pageDescription": "Piezīmes un konteksts, ko asistents atceras visās sarunās.",
     "pageTitle": "Atmiņa",

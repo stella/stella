@@ -955,6 +955,7 @@
     "saveChanges": "Salvesta muudatused",
     "scrollToTop": "Keri üles",
     "search": "Otsi...",
+    "selectAMatter": "Vali toimik",
     "selectARole": "Valige roll",
     "selectDate": "Vali kuupäev…",
     "sessions": "Seansid",
@@ -1446,7 +1447,6 @@
       "frequency": "Sagedus",
       "hour": "Tund (UTC)",
       "monthly": "Iga kuu",
-      "selectWorkspace": "Vali toimik",
       "utcHint": "Ajastatud ajad on UTC-s.",
       "weekly": "Iga nädal",
       "workspaceRequired": "Vali ajastuse jaoks toimik."
@@ -2086,8 +2086,7 @@
       "relationship": "Suhe"
     },
     "matterPicker": {
-      "empty": "Valige toimik, et näha selle mälu.",
-      "placeholder": "Valige toimik"
+      "empty": "Valige toimik, et näha selle mälu."
     },
     "pageDescription": "Märkused ja kontekst, mida assistent vestlustes meeles peab.",
     "pageTitle": "Mälu",

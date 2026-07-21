@@ -955,6 +955,7 @@
     "saveChanges": "Változtatások mentése",
     "scrollToTop": "Görgetés a tetejére",
     "search": "Keresés...",
+    "selectAMatter": "Válasszon ügyet",
     "selectARole": "Válasszon szerepkört",
     "selectDate": "Dátum kiválasztása…",
     "sessions": "Munkamenetek",
@@ -1446,7 +1447,6 @@
       "frequency": "Gyakoriság",
       "hour": "Óra (UTC)",
       "monthly": "Havonta",
-      "selectWorkspace": "Válasszon ügyet",
       "utcHint": "Az ütemezett időpontok UTC szerint értendők.",
       "weekly": "Hetente",
       "workspaceRequired": "Válasszon ügyet az ütemezéshez."
@@ -2086,8 +2086,7 @@
       "relationship": "Kapcsolat"
     },
     "matterPicker": {
-      "empty": "Válasszon ügyet a memóriájának megtekintéséhez.",
-      "placeholder": "Válasszon ügyet"
+      "empty": "Válasszon ügyet a memóriájának megtekintéséhez."
     },
     "pageDescription": "Megjegyzések és kontextus, amelyeket az asszisztens a beszélgetéseken át megjegyez.",
     "pageTitle": "Memória",

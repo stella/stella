@@ -955,6 +955,7 @@
     "saveChanges": "Änderungen speichern",
     "scrollToTop": "Nach oben scrollen",
     "search": "Suchen...",
+    "selectAMatter": "Akte auswählen",
     "selectARole": "Rolle auswählen",
     "selectDate": "Datum wählen…",
     "sessions": "Sitzungen",
@@ -1446,7 +1447,6 @@
       "frequency": "Häufigkeit",
       "hour": "Stunde (UTC)",
       "monthly": "Monatlich",
-      "selectWorkspace": "Akte auswählen",
       "utcHint": "Geplante Zeiten sind in UTC.",
       "weekly": "Wöchentlich",
       "workspaceRequired": "Wählen Sie eine Akte für den Zeitplan aus."
@@ -2086,8 +2086,7 @@
       "relationship": "Beziehung"
     },
     "matterPicker": {
-      "empty": "Wählen Sie eine Akte, um ihr Gedächtnis anzuzeigen.",
-      "placeholder": "Akte auswählen"
+      "empty": "Wählen Sie eine Akte, um ihr Gedächtnis anzuzeigen."
     },
     "pageDescription": "Notizen und Kontext, die sich der Assistent über Chats hinweg merkt.",
     "pageTitle": "Gedächtnis",

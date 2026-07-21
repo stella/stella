@@ -955,6 +955,7 @@
     "saveChanges": "حفظ التغييرات",
     "scrollToTop": "التمرير إلى الأعلى",
     "search": "بحث...",
+    "selectAMatter": "اختر ملفًا",
     "selectARole": "اختر دورًا",
     "selectDate": "اختر تاريخًا…",
     "sessions": "الجلسات",
@@ -1446,7 +1447,6 @@
       "frequency": "التكرار",
       "hour": "الساعة (بالتوقيت العالمي المنسّق)",
       "monthly": "شهريًا",
-      "selectWorkspace": "اختر ملفًا",
       "utcHint": "الأوقات المجدولة بالتوقيت العالمي المنسّق (UTC).",
       "weekly": "أسبوعيًا",
       "workspaceRequired": "اختر ملفًا للجدولة."
@@ -2086,8 +2086,7 @@
       "relationship": "علاقة"
     },
     "matterPicker": {
-      "empty": "اختر ملفًا لعرض ذاكرته.",
-      "placeholder": "اختر ملفًا"
+      "empty": "اختر ملفًا لعرض ذاكرته."
     },
     "pageDescription": "ملاحظات وسياق يتذكرها المساعد عبر المحادثات.",
     "pageTitle": "الذاكرة",
