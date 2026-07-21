@@ -46,6 +46,10 @@ import {
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import {
+  createReadWorkspaceDocumentTools,
+  READ_WORKSPACE_DOCUMENT_TOOL_NAME,
+} from "@/api/handlers/chat/tools/read-workspace-document-tools";
+import {
   buildChatWriteTools,
   type ChatRegistryWriteToolMap,
 } from "@/api/handlers/chat/tools/registry-write-tools";
@@ -164,6 +168,9 @@ type InfosoudTools = ReturnType<typeof createInfosoudTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
 type FolioAgentDocTools = ReturnType<typeof createFolioAgentDocTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
+type ReadWorkspaceDocumentTools = ReturnType<
+  typeof createReadWorkspaceDocumentTools
+>;
 type WebSearchTools = ReturnType<typeof createWebSearchTools>;
 type ChatHistoryTools = ReturnType<typeof createChatHistoryTools>;
 type CurrentSkillEditToolName =
@@ -190,6 +197,7 @@ type BuiltInChatTools = OrgTools &
   ActiveDocxEditTools &
   FolioAgentDocTools &
   CreateDocumentTools &
+  ReadWorkspaceDocumentTools &
   WebSearchTools &
   ChatHistoryTools &
   TemplateTools &
@@ -384,6 +392,11 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   list_templates: CHAT_TOOL_POLICY_KIND.internal,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   [READ_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
+  // Server-executed, read-only document read: resolves an entity/version id
+  // to a DOCX buffer under the caller's authorized workspaces and returns
+  // Markdown, so it runs immediately without per-call approval — same class
+  // as compare_versions.
+  [READ_WORKSPACE_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
@@ -604,6 +617,19 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           toolWorkspaceIds,
         });
 
+  // Server-executed document-read tool: reads any authorized document by
+  // entity/version id, converted to Markdown. Gated on a non-empty
+  // workspace set only — unlike `versionCompareTools`, it is not tied to
+  // the active file, so it works from any chat surface with matter access.
+  const readWorkspaceDocumentTools =
+    toolWorkspaceIds.length === 0
+      ? {}
+      : createReadWorkspaceDocumentTools({
+          safeDb,
+          organizationId,
+          toolWorkspaceIds,
+        });
+
   const registryWriteTools =
     toolWorkspaceIds.length === 0
       ? {}
@@ -665,6 +691,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...activeDocxEditTools,
       ...folioAgentDocTools,
       ...versionCompareTools,
+      ...readWorkspaceDocumentTools,
       ...webSearchTools,
       ...registryWriteTools,
       ...externalChatTools,
