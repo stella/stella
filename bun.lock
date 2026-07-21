@@ -219,7 +219,6 @@
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.0.0",
         "@base-ui/react": "catalog:",
         "@better-auth/oauth-provider": "catalog:",
-        "@elysiajs/eden": "^1.4.9",
         "@fontsource-variable/source-serif-4": "^5.2.9",
         "@hocuspocus/provider": "^4.4.0",
         "@libpdf/core": "catalog:",
@@ -230,6 +229,7 @@
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
+        "@stll/api-client": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/chat-limits": "workspace:*",
@@ -328,7 +328,6 @@
         "@types/react-dom": "catalog:react19",
         "@vitejs/plugin-react": "catalog:",
         "babel-plugin-react-compiler": "^1.0.0",
-        "elysia": "catalog:",
         "jszip": "catalog:",
         "react-grab": "^0.1.48",
         "rollup-plugin-visualizer": "^7.0.1",
@@ -362,6 +361,18 @@
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
         "fast-check": "catalog:",
+      },
+    },
+    "packages/api-client": {
+      "name": "@stll/api-client",
+      "version": "0.0.0",
+      "dependencies": {
+        "@elysiajs/eden": "^1.4.9",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "elysia": "catalog:",
       },
     },
     "packages/api-contract": {
@@ -1732,6 +1743,8 @@
     "@stll/anonymize-wasm": ["@stll/anonymize-wasm@2.1.0", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.6" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-9VVyr1TRmYt9Mp0JMHa/MNAyQckkdsLIZ6Kc7buafLA+PzLBr7EPKy2k9si8u3Z0raxEo8mysdczIS4dgl0lSw=="],
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
+
+    "@stll/api-client": ["@stll/api-client@workspace:packages/api-client"],
 
     "@stll/api-contract": ["@stll/api-contract@workspace:packages/api-contract"],
 
