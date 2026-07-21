@@ -65,6 +65,9 @@ export type CapabilityTreeStats = {
 /** The three input parts, in the deterministic order flags are emitted. */
 const PARTS: readonly CapabilityPart[] = ["params", "body", "query"];
 
+/** The single root beneath which all generated capability commands live. */
+const CAPABILITY_NAMESPACE = "capability";
+
 /** Valid `ToolScope` strings, for mapping a catalog `stella:*` scope to a precheck. */
 const TOOL_SCOPES: ReadonlySet<string> = new Set<ToolScope>([
   "read",
@@ -112,7 +115,7 @@ export const capabilityCommandPath = (id: string): readonly string[] => {
     );
   }
   return [
-    "capability",
+    CAPABILITY_NAMESPACE,
     kebabCase(rawDomain),
     rawAction.map((segment) => kebabCase(segment)).join("-"),
   ];
