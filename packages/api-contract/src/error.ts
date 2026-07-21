@@ -7,7 +7,7 @@ export type ApiValidationErrorValue = {
   on: string;
   property?: string;
   summary?: string;
-  type: "validation";
+  type: typeof API_VALIDATION_ERROR_CODE;
 };
 
 export type ApiErrorObjectValue = {
@@ -57,7 +57,7 @@ export const normalizeApiError = ({
   if (typeof value === "string") {
     return { rawMessage: value, status };
   }
-  if (value.type === "validation") {
+  if (value.type === API_VALIDATION_ERROR_CODE) {
     return {
       code: API_VALIDATION_ERROR_CODE,
       rawMessage: JSON.stringify(value),
