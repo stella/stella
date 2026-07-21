@@ -8,8 +8,10 @@ import { defineSandboxPolicy, type SandboxPolicy } from "@tanstack/ai-sandbox";
  * this policy is defense-in-depth, not the sole control.
  *
  * Destructive shell verbs are denied outright; everything unmatched falls to
- * `ask` so a surprising command surfaces an approval rather than running
- * silently.
+ * `ask`. The Codex adapter maps that policy to `on-request`, and `codex exec`
+ * is non-interactive, so an operation that needs fresh approval is refused
+ * rather than paused or silently escalated. This fail-closed behavior is the
+ * deliberate cloud-run policy.
  */
 export const stellaSandboxPolicy = (): SandboxPolicy =>
   defineSandboxPolicy({

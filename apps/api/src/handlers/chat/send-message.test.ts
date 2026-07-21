@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import { chatThreads } from "@/api/db/schema";
+import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -64,7 +65,8 @@ void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
   },
 }));
 
-const sendMessage = (await import("./send-message")).default;
+const { default: sendMessage, shouldLoadExternalMcpToolsForStreaming } =
+  await import("./send-message");
 
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
 
@@ -179,6 +181,15 @@ describe("send message context-matter authorization", () => {
       code: 403,
       response: { message: "contextMatterIds includes inaccessible matter" },
     });
+  });
+});
+
+describe("agent connector isolation", () => {
+  test("does not load external MCP clients for agent streaming", () => {
+    expect(shouldLoadExternalMcpToolsForStreaming(CHAT_RUN_MODE.agent)).toBe(
+      false,
+    );
+    expect(shouldLoadExternalMcpToolsForStreaming(undefined)).toBe(true);
   });
 });
 

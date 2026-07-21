@@ -34,9 +34,12 @@ afterAll(async () => {
 });
 
 describe("MCP workspace enumeration", () => {
-  test("keeps the organization predicate when RLS allows cross-org explicit IDs", async () => {
+  test("keeps the organization predicate and explicit subset when membership allows more", async () => {
     const explicitScope = createScopedDb(
       testDb,
+      // userA1 also belongs to wsA2; a signed token subset must not inherit it
+      // through membership mode. The foreign ID independently proves the
+      // organization predicate remains active.
       [ids.wsA1, ids.wsB1],
       ids.orgA,
       ids.userA1,

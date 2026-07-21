@@ -689,6 +689,15 @@ describe("OpenAI-compatible MCP tools", () => {
     ).toBe("stella:search");
   });
 
+  test("separates organization-wide contact mutations from matter writes", async () => {
+    expect(
+      (await getMcpToolDefinition("save_contact", createContext()))?.scope,
+    ).toBe("stella:contacts_write");
+    expect(
+      (await getMcpToolDefinition("delete_contact", createContext()))?.scope,
+    ).toBe("stella:contacts_write");
+  });
+
   test("hints dynamic tool scopes from names before resolving definitions", () => {
     expect(getMcpToolScopeHint("search_case_law")).toBe("stella:search");
     expect(getMcpToolScopeHint("mcp__registry__lookup")).toBe(

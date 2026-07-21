@@ -45,6 +45,8 @@ describe("buildAgentRunTokenClaims", () => {
     const scopeSet = new Set(claims().scope.split(" "));
     expect(scopeSet.has("stella:read")).toBe(true);
     expect(scopeSet.has("stella:chat")).toBe(true);
+    expect(scopeSet.has("stella:matters_write")).toBe(true);
+    expect(scopeSet.has("stella:contacts_write")).toBe(false);
     expect(scopeSet.has("stella:admin_write")).toBe(false);
     expect(scopeSet.has("stella:billing_write")).toBe(false);
     expect(scopeSet.has("stella:onboarding")).toBe(false);

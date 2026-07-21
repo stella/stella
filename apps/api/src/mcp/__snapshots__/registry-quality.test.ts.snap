@@ -1186,7 +1186,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "save_contact",
-    "scope": "stella:matters_write",
+    "scope": "stella:contacts_write",
     "access": "write",
     "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type and display_name required); pass contact_id to update. String fields other than display_name accept null to clear them.",
     "annotations": {
@@ -1249,7 +1249,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   },
   {
     "name": "delete_contact",
-    "scope": "stella:matters_write",
+    "scope": "stella:contacts_write",
     "access": "write",
     "description": "Permanently delete a contact from the organization address book. Rejected while the contact is still the client of any matter. This is irreversible.",
     "annotations": {

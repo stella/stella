@@ -32,6 +32,7 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  CHAT_RUN_MODE,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
@@ -962,17 +963,17 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      // The streaming pass always needs the external MCP tool set (for the
-      // tool map, the connector system hint, and the `externalMcpToolSource`
-      // handed to `streamChat` below). This is the point where discovery
-      // actually runs for a message that didn't already trigger it during
-      // validation — deferred this far so a request that fails or aborts
-      // earlier (malformed parts, thread scope mismatch, upload/compaction
-      // failure, client disconnect) never contacts a single connector.
-      // `getExternalMcpTools` reuses the validation-triggered load instead
-      // of loading again when one already happened.
-      const externalMcpTools =
-        await externalMcpToolsLoader.getExternalMcpTools();
+      // Normal streaming needs the external MCP tool set for the tool map,
+      // connector hint, and source handed to `streamChat`. Agent runs reach
+      // tools only through their workspace-scoped Stella MCP binding, so
+      // loading per-user external connectors here would create unused clients.
+      // If validation loaded them for a persisted tool part, the outer finally
+      // still closes that cached load because it is not handed to streaming.
+      const externalMcpTools = shouldLoadExternalMcpToolsForStreaming(
+        body.runMode,
+      )
+        ? await externalMcpToolsLoader.getExternalMcpTools()
+        : undefined;
 
       // Streaming tools mirror the surface the user is on: only the
       // DOCX file-overlay client knows how to satisfy
@@ -984,10 +985,6 @@ const sendMessage = createSafeRootHandler(
       // folio-agents `read_document`/`find_text` tools are narrower
       // still — `hasActiveDocxFileClient` only, since Template Studio
       // mounts no watcher to resolve them.
-      const toolWorkspaceIds = resolveToolWorkspaceIds({
-        pinnedIds: effectiveContextMatterIds,
-        accessibleWorkspaceIds,
-      });
       const chatTools = getChatTools({
         organizationId: session.activeOrganizationId,
         memberRole: memberRole.role,
@@ -1010,13 +1007,16 @@ const sendMessage = createSafeRootHandler(
         docxEditRepresentation,
         webSearchEnabled: thread.data.webSearchEnabled,
         webSearchProviders,
-        externalTools: externalMcpTools.tools,
+        externalTools: externalMcpTools?.tools ?? {},
         disabledNativeToolSlugs,
         skillMetadata: chatContext.skillMetadata,
         activeSkillContext: chatContext.activeSkillContext,
         recordAuditEvent,
         workspaceStatusById,
       });
+      const externalMcpConnectors = externalMcpTools
+        ? externalMcpTools.connectors
+        : [];
       // A named scope narrows the streaming turn to its server-defined
       // allowlist (validation above stays broad so persisted tool parts
       // keep validating). The scope name is schema-validated; unknown
@@ -1027,7 +1027,7 @@ const sendMessage = createSafeRootHandler(
           : restrictChatToolsToScope(chatTools, body.toolScope);
 
       const externalMcpSystemHint = buildExternalMcpSystemHint(
-        externalMcpTools.connectors,
+        externalMcpConnectors,
       );
       // The "safe" half is whatever the prompt builder declared
       // safe. The anonymized-mode hint is a fixed assembler-owned
@@ -1044,13 +1044,10 @@ const sendMessage = createSafeRootHandler(
         [externalMcpSystemHint],
       );
 
-      // From here, the try/catch below owns closing `externalMcpTools` (on a
-      // non-streaming response or a thrown error) or hands it to `streamChat`
-      // to close once the actual token stream finishes; the outer `finally`
-      // must not close it again. `externalMcpTools` is guaranteed loaded at
-      // this point (the `await` above), so `externalMcpToolsLoader.closeIfLoaded`
-      // in the outer `finally` would otherwise close the same clients again.
-      externalMcpToolsHandedOffToStreaming = true;
+      // From here, the try/catch owns a normal chat's loaded clients or hands
+      // them to `streamChat`. Agent runs leave this false so the outer finally
+      // closes any validation-only load instead of leaking unused clients.
+      externalMcpToolsHandedOffToStreaming = externalMcpTools !== undefined;
       const response = yield* Result.await(
         Result.tryPromise({
           try: async () => {
@@ -1228,20 +1225,25 @@ const sendMessage = createSafeRootHandler(
                 thirdPartyBoundary,
                 threadId: body.threadId,
                 tools: streamingTools,
-                externalMcpToolSource: externalMcpTools.source,
+                externalMcpToolSource: externalMcpTools?.source,
                 systemSafe,
                 systemUntrusted,
                 userId: user.id,
                 workspaceId,
               });
 
-              if (!isChatStreamResponse(chatResponse)) {
+              if (
+                externalMcpTools !== undefined &&
+                !isChatStreamResponse(chatResponse)
+              ) {
                 await externalMcpTools.close();
               }
 
               return chatResponse;
             } catch (error) {
-              await externalMcpTools.close();
+              if (externalMcpTools !== undefined) {
+                await externalMcpTools.close();
+              }
               throw error;
             }
           },
@@ -1586,6 +1588,10 @@ const resolveExternalToolsForValidation = async (
   const loaded = await loader.getExternalMcpTools();
   return loaded.tools;
 };
+
+export const shouldLoadExternalMcpToolsForStreaming = (
+  runMode: ChatSendRequest["runMode"],
+): boolean => runMode !== CHAT_RUN_MODE.agent;
 
 type PrepareChatContextProps = {
   activeDecision: IncomingActiveDecision | undefined;
