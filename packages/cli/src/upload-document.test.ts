@@ -5,7 +5,7 @@ import type {
   UploadDocumentDependencies,
   UploadDocumentInput,
 } from "./upload-document.js";
-import { uploadDocument } from "./upload-document.js";
+import { DOCUMENT_UPLOAD_POLICY, uploadDocument } from "./upload-document.js";
 
 type InvocationCall = {
   capability: string;
@@ -48,6 +48,18 @@ const createDependencies = ({
   invoke,
   put,
   readLocalFile: async () => Result.ok(localFile),
+});
+
+test("upload timeout covers a maximum-size file at the supported slow rate", () => {
+  const minimumTransferMs = Math.ceil(
+    (DOCUMENT_UPLOAD_POLICY.maxBytes /
+      DOCUMENT_UPLOAD_POLICY.minimumBytesPerSecond) *
+      1000,
+  );
+
+  expect(DOCUMENT_UPLOAD_POLICY.putTimeoutMs).toBeGreaterThanOrEqual(
+    minimumTransferMs,
+  );
 });
 
 describe("document upload state machine", () => {

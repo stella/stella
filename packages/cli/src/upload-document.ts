@@ -16,8 +16,11 @@ const UPLOAD_CAPABILITIES = {
   listProperties: "properties.list",
 } as const;
 const ENTITY_CREATE_PURPOSE = "entity_create";
-const DOCUMENT_SIZE_LIMIT_BYTES = 50 * 1024 * 1024;
-const UPLOAD_TIMEOUT_MS = 5 * 60_000;
+export const DOCUMENT_UPLOAD_POLICY = {
+  maxBytes: 52_428_800, // 50 MiB
+  minimumBytesPerSecond: 32_768, // 32 KiB/s
+  putTimeoutMs: 1_800_000, // 30 minutes
+} as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -101,9 +104,9 @@ const readBoundedLocalFile = async (
       if (stats.size < 1) {
         return Result.err("The upload file must contain at least one byte");
       }
-      if (stats.size > DOCUMENT_SIZE_LIMIT_BYTES) {
+      if (stats.size > DOCUMENT_UPLOAD_POLICY.maxBytes) {
         return Result.err(
-          `The upload file exceeds the ${DOCUMENT_SIZE_LIMIT_BYTES}-byte document limit`,
+          `The upload file exceeds the ${DOCUMENT_UPLOAD_POLICY.maxBytes}-byte document limit`,
         );
       }
 
@@ -170,7 +173,7 @@ const putPresignedObject = async ({
         method: "PUT",
         headers,
         body: bytes,
-        signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+        signal: AbortSignal.timeout(DOCUMENT_UPLOAD_POLICY.putTimeoutMs),
       }),
     catch: (cause) => cause,
   });
