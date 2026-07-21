@@ -19,6 +19,8 @@ export type McpSession = {
     | { type: "oauth_client"; clientId: string }
     | { type: "machine_api_key"; id: string; name: string }
     | { type: "delegated_user" };
+  /** Optional server-issued attenuation; absent means the full live access set. */
+  workspaceIds?: string[];
 };
 
 let verifyAccessToken:
@@ -43,6 +45,10 @@ export const getMcpAccessTokenVerificationOptions = (
   },
 });
 
+const isNonEmptyStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) &&
+  value.every((item) => typeof item === "string" && item.length > 0);
+
 export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const userId = payload.sub;
   if (!userId) {
@@ -65,11 +71,22 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
       ? ({ type: "oauth_client", clientId: rawClientId } as const)
       : ({ type: "delegated_user" } as const);
 
+  const rawWorkspaceIds = payload["workspace_ids"];
+  if (
+    rawWorkspaceIds !== undefined &&
+    !isNonEmptyStringArray(rawWorkspaceIds)
+  ) {
+    throw new McpAuthenticationError({
+      message: "Token has invalid workspace_ids claim",
+    });
+  }
+
   return {
     credential,
     userId,
     organizationId: rawOrganizationId,
     scopes,
+    ...(rawWorkspaceIds === undefined ? {} : { workspaceIds: rawWorkspaceIds }),
   };
 };
 

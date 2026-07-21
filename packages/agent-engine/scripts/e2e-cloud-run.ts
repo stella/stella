@@ -16,15 +16,13 @@
  * The credential here is the harness's own model key (OpenAI/codex). It is NOT
  * a stella org key and NOT a user subscription — those never enter a sandbox.
  *
- * NOTE: the `e2e:cloud` script bundles this to a Node target and runs it under
- * Node, not bun. dockerode's container attach uses an HTTP 101 socket hijack
- * that docker-modem mishandles under bun; Node drives it correctly. This is
- * also why the production cloud engine must provision sandboxes from a Node
- * context, not directly in the bun api process (see plan 050).
+ * The engine uses Bun's native unix-socket fetch support to speak directly to
+ * Docker's HTTP API. It deliberately avoids Docker's socket-hijack path, so
+ * the same Bun runtime drives this smoke test and the production API.
  */
 import { chat, EventType } from "@tanstack/ai";
 
-import { resolveStellaSandboxRun, type HarnessProvider } from "../src/run";
+import { resolveStellaSandboxRun } from "../src/run";
 import { SANDBOX_NO_MCP } from "../src/sandbox";
 
 const IMAGE = process.env["AGENT_SANDBOX_IMAGE"] ?? "stella/agent-sandbox:dev";
@@ -38,7 +36,6 @@ const socketPath = process.env["AGENT_SANDBOX_DOCKER_SOCKET"];
 // self-declared Responses-compatible gateway (the org's BYOK in production).
 const apiKey = process.env["OPENAI_API_KEY"] ?? process.env["CODEX_API_KEY"];
 const baseUrl = process.env["AGENT_HARNESS_BASE_URL"];
-const provider: HarnessProvider = baseUrl ? "openai-compatible" : "openai";
 
 if (!apiKey) {
   console.error(
@@ -51,10 +48,11 @@ const { adapter, middleware } = resolveStellaSandboxRun({
   runId: "e2e-cloud-run",
   engine: "cloud",
   harness: "codex",
-  harnessProvider: provider,
   harnessModel: HARNESS_MODEL,
   harnessApiKey: apiKey,
-  ...(baseUrl ? { harnessBaseUrl: baseUrl } : {}),
+  ...(baseUrl
+    ? { harnessProvider: "openai-compatible", harnessBaseUrl: baseUrl }
+    : { harnessProvider: "openai" }),
   cloudImage: IMAGE,
   ...(socketPath ? { cloudSocketPath: socketPath } : {}),
   // Smoke test: prove the harness boots in the sandbox and streams back, not
@@ -82,12 +80,12 @@ for await (const chunk of stream) {
 }
 
 process.stdout.write("\n");
-if (text.trim().length === 0) {
+if (text.trim() !== "READY") {
   console.error(
-    "e2e-cloud-run: FAILED — no text streamed back from the harness.",
+    `e2e-cloud-run: FAILED; expected exactly READY, received ${JSON.stringify(text.trim())}.`,
   );
   process.exit(1);
 }
 console.log(
-  "e2e-cloud-run: OK — harness ran in the sandbox and streamed output.",
+  "e2e-cloud-run: OK; harness ran in the sandbox and streamed READY.",
 );

@@ -67,6 +67,3 @@ i18n.cache
 
 # Claude Code runtime artifacts
 .claude/scheduled_tasks.lock
-
-# agent-engine e2e node bundle (build artifact)
-packages/agent-engine/.e2e-build/

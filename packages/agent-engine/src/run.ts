@@ -28,12 +28,16 @@ export type HarnessProvider = (typeof HARNESS_PROVIDERS)[number];
  */
 export type StellaSandboxRunInput = StellaSandboxInput & {
   harness: AgentHarness;
-  harnessProvider: HarnessProvider;
   harnessModel: string;
   harnessApiKey: string;
-  /** Required for `openai-compatible`: the Responses-API base URL. */
-  harnessBaseUrl?: string;
-};
+} & (
+    | { harnessProvider: "openai" }
+    | {
+        harnessProvider: "openai-compatible";
+        /** Responses-API base URL for the explicitly compatible gateway. */
+        harnessBaseUrl: string;
+      }
+  );
 
 const HARNESS_KEY_ENV = "STELLA_HARNESS_KEY";
 const HARNESS_PROVIDER_ID = "stella";
@@ -42,11 +46,6 @@ const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const harnessBaseUrl = (input: StellaSandboxRunInput): string => {
   if (input.harnessProvider === "openai") {
     return OPENAI_BASE_URL;
-  }
-  if (!input.harnessBaseUrl) {
-    panic(
-      "resolveStellaSandboxRun: harnessBaseUrl is required for the openai-compatible provider",
-    );
   }
   return input.harnessBaseUrl;
 };
@@ -74,10 +73,10 @@ export const resolveStellaSandboxRun = (input: StellaSandboxRunInput) => {
   const provider = HARNESS_PROVIDER_ID;
   const adapter = codexText(input.harnessModel, {
     // The outer TanStack/Docker sandbox is the real isolation boundary; codex
-    // may write within its workspace. Never auto-approve unknown commands —
-    // the stella sandbox policy is the gate.
+    // may write within its workspace. Approval behavior is intentionally left
+    // to the Stella sandbox policy; an adapter-level override would take
+    // precedence and silently bypass that policy's stricter mapping.
     sandboxMode: "workspace-write",
-    approvalPolicy: "never",
     env: { [HARNESS_KEY_ENV]: input.harnessApiKey },
     // Raw codex `-c` overrides (verbatim TOML values). Point codex at the
     // resolved provider via a custom model_provider reading the key from env.

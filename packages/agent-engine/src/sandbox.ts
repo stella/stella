@@ -58,16 +58,10 @@ export type StellaSandboxMcpBinding = {
 export const SANDBOX_NO_MCP = "connectivity-smoke-test-no-mcp";
 export type SandboxMcp = StellaSandboxMcpBinding | typeof SANDBOX_NO_MCP;
 
-export type StellaSandboxInput = {
+type StellaSandboxBaseInput = {
   /** Stable per-run id; also the sandbox definition id. */
   runId: string;
   engine: AgentEngine;
-  /**
-   * Bridged stella MCP server the harness talks to — the sole tool surface of
-   * a real run. Required: pass a binding, or the explicit `SANDBOX_NO_MCP`
-   * sentinel for a connectivity smoke test. It cannot be omitted.
-   */
-  mcp: SandboxMcp;
   /** Container image for the `cloud` engine (must ship the harness CLIs). */
   cloudImage: string;
   /**
@@ -76,19 +70,28 @@ export type StellaSandboxInput = {
    * stella-operated host pool's socket.
    */
   cloudSocketPath?: string;
-  /**
-   * Docker network for the `cloud` engine's container
-   * (`HostConfig.NetworkMode`). Omit to use the daemon default bridge; set a
-   * locked-down network to deny the run arbitrary egress so injected secrets
-   * (the MCP token, the harness key) cannot leave over unrestricted outbound
-   * connections.
-   */
-  cloudNetworkMode?: string;
   /** AGENTS.md guidance written into the sandbox for the harness. */
   instructions: string;
-  /** Keep a cloud sandbox warm between turns of one thread. Defaults to 10m. */
-  keepAlive?: string;
 };
+
+type StellaSandboxMcpInput =
+  | {
+      /** Real runs require a locked-down Docker network. */
+      mcp: StellaSandboxMcpBinding;
+      cloudNetworkMode: string;
+    }
+  | {
+      /** Connectivity smoke tests may use the daemon's default network. */
+      mcp: typeof SANDBOX_NO_MCP;
+      cloudNetworkMode?: string;
+    };
+
+/**
+ * A real run cannot compile without both its MCP binding and an explicit
+ * locked-down network. The no-MCP smoke-test sentinel is the only shape that
+ * may omit the network because it carries no Stella workspace credential.
+ */
+export type StellaSandboxInput = StellaSandboxBaseInput & StellaSandboxMcpInput;
 
 const MCP_TOKEN_SECRET = "STELLA_MCP_TOKEN";
 
@@ -108,6 +111,12 @@ export const defineStellaSandbox = (
   if (input.engine === "local") {
     panic(
       "defineStellaSandbox: the local engine (desktop bridge provider) is not implemented yet",
+    );
+  }
+
+  if (input.mcp !== SANDBOX_NO_MCP && !input.cloudNetworkMode) {
+    panic(
+      "defineStellaSandbox: a real MCP binding requires a locked-down cloudNetworkMode",
     );
   }
 
@@ -147,13 +156,14 @@ export const defineStellaSandbox = (
     workspace,
     policy: stellaSandboxPolicy(),
     lifecycle: {
-      // The provider implements image-commit snapshots, but v1 deliberately
-      // does not drive them here: warm reuse is by keeping the container alive
-      // per thread (`reuse: "thread"`), not by snapshotting. Wiring snapshot
-      // lifecycle is a follow-up (plan 050).
-      reuse: "thread",
-      keepAlive: input.keepAlive ?? "10m",
-      destroyOnComplete: false,
+      // V1 is deliberately ephemeral per attempt. This prevents thread state
+      // and delegated credentials from surviving completion, and guarantees
+      // errors/aborts tear down a potentially still-running harness process.
+      // Snapshotting must stay explicit: TanStack otherwise defaults a
+      // snapshot-capable provider to `after-setup`.
+      reuse: "none",
+      snapshot: "none",
+      destroyOnComplete: true,
     },
   });
 };

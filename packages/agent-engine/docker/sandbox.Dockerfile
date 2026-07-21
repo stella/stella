@@ -9,7 +9,7 @@
 #
 # Production hosts run this under gVisor (runsc) behind an egress-proxy
 # allowlist; those controls live in the infra layer, not this image.
-FROM node:22-slim
+FROM node:22-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3
 
 # Pin the harness CLI. Bump deliberately; the pinned-content CI check and the
 # engine both assume a known codex surface.
@@ -21,8 +21,12 @@ RUN apt-get update \
   && npm install -g @openai/codex@${CODEX_VERSION} \
   && npm cache clean --force
 
-# Non-root: the agent process never needs root inside the sandbox.
-RUN useradd --create-home --shell /bin/bash agent
+# Non-root: the agent process never needs root inside the sandbox. Create the
+# workspace explicitly so its ownership does not depend on builder-specific
+# WORKDIR behavior.
+RUN useradd --create-home --shell /bin/bash agent \
+  && mkdir -p /workspace \
+  && chown agent:agent /workspace
 USER agent
 WORKDIR /workspace
 
