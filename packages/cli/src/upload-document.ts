@@ -8,6 +8,13 @@ import { callTool } from "./mcp-client.js";
 import { parsePayload } from "./run-leaf-command.js";
 
 const INVOKE_CAPABILITY_TOOL = "invoke_capability";
+const UPLOAD_CAPABILITIES = {
+  abort: "uploads.delete",
+  create: "uploads.create",
+  finalize: "uploads.update",
+  listProperties: "properties.list",
+} as const;
+const ENTITY_CREATE_PURPOSE = "entity_create";
 const DOCUMENT_SIZE_LIMIT_BYTES = 50 * 1024 * 1024;
 const UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
@@ -223,7 +230,7 @@ const resolveFilePropertyId = async ({
   dependencies: UploadDocumentDependencies;
   workspaceId: string;
 }): Promise<Result<string, UploadFailure>> => {
-  const listed = await dependencies.invoke("properties.list", {
+  const listed = await dependencies.invoke(UPLOAD_CAPABILITIES.listProperties, {
     params: { workspaceId },
   });
   if (listed.status !== "ok") {
@@ -303,7 +310,7 @@ const abortUpload = async ({
   workspaceId: string;
 }): Promise<string | undefined> => {
   const aborted = await dependencies.invoke(
-    "uploads.delete",
+    UPLOAD_CAPABILITIES.abort,
     { params: { uploadId, workspaceId } },
     true,
   );
@@ -342,7 +349,7 @@ export const uploadDocument = async ({
   }
 
   const body: Record<string, unknown> = {
-    purpose: "entity_create",
+    purpose: ENTITY_CREATE_PURPOSE,
     propertyId: propertyId.value,
     name: input.name ?? localFile.value.name,
     mimeType: input.mimeType,
@@ -353,7 +360,7 @@ export const uploadDocument = async ({
     body["parentId"] = input.parentId;
   }
 
-  const created = await dependencies.invoke("uploads.create", {
+  const created = await dependencies.invoke(UPLOAD_CAPABILITIES.create, {
     body,
     params: { workspaceId: input.workspaceId },
   });
@@ -403,7 +410,7 @@ export const uploadDocument = async ({
     });
   }
 
-  const finalized = await dependencies.invoke("uploads.update", {
+  const finalized = await dependencies.invoke(UPLOAD_CAPABILITIES.finalize, {
     params: {
       uploadId: reservation.uploadId,
       workspaceId: input.workspaceId,
