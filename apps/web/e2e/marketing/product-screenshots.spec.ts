@@ -97,8 +97,13 @@ test("capture landing product screenshots", async ({
         await expect(page.locator(capture.readySelector).first()).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
+        // Film the ECJ's Schrems II judgment (C-311/18) deterministically,
+        // rather than whatever happens to be newest in the seeded corpus.
         // eslint-disable-next-line no-await-in-loop -- see above
-        await page.locator('main a[href*="/cases/"]').first().click();
+        await page
+          .locator('main a[href*="/cases/"]')
+          .filter({ hasText: "C-311/18" })
+          .click();
         // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
         // eslint-disable-next-line no-await-in-loop -- see above
