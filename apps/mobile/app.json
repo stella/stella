@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "stella",
+    "slug": "stella",
+    "version": "0.1.0",
+    "orientation": "default",
+    "scheme": "stella",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

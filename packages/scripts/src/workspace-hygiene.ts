@@ -25,6 +25,12 @@ const CSS_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//gu;
 const TURBO_INSTALL_PATTERN =
   /\bbun\s+install\s+-g\s+turbo@(?<version>\d+\.\d+\.\d+)\b/gu;
 const TURBO_VERSION_PATTERN = /^\^?(?<version>\d+\.\d+\.\d+)$/u;
+const BABEL_CORE_DEPENDENCY = "@babel/core";
+const BABEL_MAJOR_PATTERN = /^[~^]?(?<major>\d+)\./u;
+const BABEL_TOOLCHAINS = [
+  { expectedMajor: 7, packagePath: "apps/mobile/package.json" },
+  { expectedMajor: 8, packagePath: "apps/web/package.json" },
+] as const;
 
 export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];
 
@@ -93,6 +99,68 @@ const readDependencyNames = (packageJson: Record<string, unknown>) => {
   }
 
   return dependencyNames;
+};
+
+const readDependencySpecifier = (
+  packageJsonPath: string,
+  dependencyName: string,
+): string | null => {
+  let packageJson: unknown;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(packageJson)) {
+    return null;
+  }
+
+  for (const field of DEPENDENCY_FIELDS) {
+    const dependencies = packageJson[field];
+    if (!isRecord(dependencies)) {
+      continue;
+    }
+
+    const specifier = dependencies[dependencyName];
+    if (typeof specifier === "string") {
+      return specifier;
+    }
+  }
+
+  return null;
+};
+
+const validateBabelToolchains = (rootDir: string): WorkspaceIssue[] => {
+  const mobilePackagePath = path.resolve(
+    rootDir,
+    BABEL_TOOLCHAINS[0].packagePath,
+  );
+  if (!existsSync(mobilePackagePath)) {
+    return [];
+  }
+
+  const issues: WorkspaceIssue[] = [];
+  for (const { expectedMajor, packagePath } of BABEL_TOOLCHAINS) {
+    const packageJsonPath = path.resolve(rootDir, packagePath);
+    const specifier = existsSync(packageJsonPath)
+      ? readDependencySpecifier(packageJsonPath, BABEL_CORE_DEPENDENCY)
+      : null;
+    const declaredMajor = specifier
+      ? Number(BABEL_MAJOR_PATTERN.exec(specifier)?.groups?.["major"])
+      : Number.NaN;
+
+    if (declaredMajor === expectedMajor) {
+      continue;
+    }
+
+    issues.push({
+      message: `${BABEL_CORE_DEPENDENCY} must declare major ${expectedMajor} for this runtime; found ${specifier ?? "no direct dependency"}`,
+      path: packagePath,
+    });
+  }
+
+  return issues;
 };
 
 const readRootTurboVersion = (rootDir: string): string | null => {
@@ -282,7 +350,10 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
 };
 
 export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
-  const issues: WorkspaceIssue[] = validateTurboInstallPins(rootDir);
+  const issues: WorkspaceIssue[] = [
+    ...validateTurboInstallPins(rootDir),
+    ...validateBabelToolchains(rootDir),
+  ];
 
   for (const parentDir of WORKSPACE_PARENT_DIRS) {
     const parentPath = path.resolve(rootDir, parentDir);

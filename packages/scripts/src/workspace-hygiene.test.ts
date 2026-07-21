@@ -144,14 +144,58 @@ describe("workspace hygiene", () => {
 
     expect(validateWorkspaceRoot(rootDir)).toEqual([]);
   });
+
+  test("accepts the deliberate Babel major split between native and web", () => {
+    const rootDir = createWorkspaceRoot({
+      mobilePackageJson: {
+        devDependencies: { "@babel/core": "^7.29.0" },
+        name: "@stll/mobile",
+      },
+      rootPackageJson: {
+        devDependencies: { turbo: "^2.10.3" },
+      },
+      webPackageJson: {
+        dependencies: {},
+        devDependencies: { "@babel/core": "^8.0.1" },
+        name: "@stll/web",
+      },
+    });
+
+    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+  });
+
+  test("rejects Babel major drift in a runtime workspace", () => {
+    const rootDir = createWorkspaceRoot({
+      mobilePackageJson: {
+        devDependencies: { "@babel/core": "^8.0.1" },
+        name: "@stll/mobile",
+      },
+      rootPackageJson: {
+        devDependencies: { turbo: "^2.10.3" },
+      },
+      webPackageJson: {
+        dependencies: {},
+        devDependencies: { "@babel/core": "^8.0.1" },
+        name: "@stll/web",
+      },
+    });
+
+    expect(validateWorkspaceRoot(rootDir)).toContainEqual({
+      message:
+        "@babel/core must declare major 7 for this runtime; found ^8.0.1",
+      path: "apps/mobile/package.json",
+    });
+  });
 });
 
 type CreateWorkspaceRootOptions = {
+  mobilePackageJson?: Record<string, unknown>;
   rootPackageJson: Record<string, unknown>;
   webPackageJson: Record<string, unknown>;
 };
 
 const createWorkspaceRoot = ({
+  mobilePackageJson,
   rootPackageJson,
   webPackageJson,
 }: CreateWorkspaceRootOptions) => {
@@ -168,6 +212,14 @@ const createWorkspaceRoot = ({
     path.join(rootDir, "apps/web/package.json"),
     JSON.stringify(webPackageJson),
   );
+
+  if (mobilePackageJson) {
+    mkdirSync(path.join(rootDir, "apps/mobile"), { recursive: true });
+    writeFileSync(
+      path.join(rootDir, "apps/mobile/package.json"),
+      JSON.stringify(mobilePackageJson),
+    );
+  }
 
   return rootDir;
 };
