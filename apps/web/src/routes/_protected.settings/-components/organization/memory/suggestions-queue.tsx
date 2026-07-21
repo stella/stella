@@ -11,6 +11,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -91,9 +92,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
         <p className="text-sm">{tErrors("actionFailed")}</p>
         <Button
           onClick={() => {
-            void refetch().catch((error: unknown) => {
-              analytics.captureError(error);
-            });
+            detached(refetch(), "memory-suggestions.refetch");
           }}
           size="sm"
           variant="outline"
@@ -155,9 +154,7 @@ export const SuggestionsQueue = (props: SuggestionsQueueProps) => {
         <Button
           disabled={isFetchingNextPage}
           onClick={() => {
-            void fetchNextPage().catch((error: unknown) => {
-              analytics.captureError(error);
-            });
+            detached(fetchNextPage(), "memory-suggestions.fetch-next-page");
           }}
           size="sm"
           variant="outline"

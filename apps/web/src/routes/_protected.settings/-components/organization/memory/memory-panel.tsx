@@ -17,7 +17,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 
 import { usePermissions } from "@/hooks/use-permissions";
-import { useAnalytics } from "@/lib/analytics/provider";
+import { detached } from "@/lib/detached";
 import { MemoryCreateForm } from "@/routes/_protected.settings/-components/organization/memory/memory-create-form";
 import { MemoryRow } from "@/routes/_protected.settings/-components/organization/memory/memory-row";
 import { SuggestionsQueue } from "@/routes/_protected.settings/-components/organization/memory/suggestions-queue";
@@ -112,7 +112,6 @@ type MatterMemoriesProps = {
 const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
   const t = useTranslations("memory");
   const commonT = useTranslations("common");
-  const analytics = useAnalytics();
   const activeOrganizationId = useActiveOrganizationId();
   const { data, isError, refetch } = useQuery(
     workspacesNavigationOptions(activeOrganizationId),
@@ -129,9 +128,7 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
         </p>
         <Button
           onClick={() => {
-            void refetch().catch((error: unknown) => {
-              analytics.captureError(error);
-            });
+            detached(refetch(), "memory-panel.refetch");
           }}
           size="sm"
           variant="outline"
@@ -153,7 +150,7 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
           value={workspaceId ?? ""}
         >
           <SelectTrigger className="w-full" id="memory-matter-picker">
-            <SelectValue placeholder={t("matterPicker.placeholder")} />
+            <SelectValue placeholder={commonT("selectAMatter")} />
           </SelectTrigger>
           <SelectPopup>
             {workspaces.map((workspace) => (
@@ -291,7 +288,6 @@ const MemoryListBody = ({
 }: MemoryListBodyProps) => {
   const t = useTranslations("memory");
   const commonT = useTranslations("common");
-  const analytics = useAnalytics();
 
   if (isPending) {
     return <MemoryListSkeleton />;
@@ -326,9 +322,7 @@ const MemoryListBody = ({
           className="self-center"
           disabled={isFetchingNextPage}
           onClick={() => {
-            void fetchNextPage().catch((error: unknown) => {
-              analytics.captureError(error);
-            });
+            detached(fetchNextPage(), "memory-panel.fetch-next-page");
           }}
           size="sm"
           variant="ghost"
