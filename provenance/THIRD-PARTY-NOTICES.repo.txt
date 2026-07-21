@@ -20,6 +20,7 @@ Project: root
 - @babel/core 7.29.7 — MIT
 - @babel/core 8.0.1 — MIT
 - @base-ui/react 1.6.0 — MIT
+- @better-auth/api-key 1.6.23 — MIT
 - @better-auth/oauth-provider 1.6.23 — MIT
 - @elysiajs/cors 1.4.2 — MIT
 - @elysiajs/eden 1.4.9 — MIT
