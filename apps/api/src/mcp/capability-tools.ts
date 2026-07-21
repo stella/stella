@@ -81,15 +81,6 @@ type CatalogEntry = {
   destructive: boolean;
   scope: string;
   /**
-   * For a READ capability whose domain has a distinct write/consent scope: that
-   * elevating write scope. Write implies read WITHIN THE SAME DOMAIN, so a
-   * session holding this write grant satisfies the read gate even without
-   * `scope`. Scoped to the one domain — holding `stella:matters_write` reads
-   * matters, not billing. Absent on writes and on reads whose read scope equals
-   * their write scope (non-tiered domains). Set by the export script.
-   */
-  elevatedByScope?: string;
-  /**
    * When true, this capability's REST route resolves workspace access through
    * `validateWorkspaceAccessIncludingArchived` (e.g. `workspaces.unarchive`), so
    * the generic write gate must let it run against an archived workspace.
@@ -160,8 +151,6 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   (value["access"] === "read" || value["access"] === "write") &&
   typeof value["destructive"] === "boolean" &&
   typeof value["scope"] === "string" &&
-  (value["elevatedByScope"] === undefined ||
-    typeof value["elevatedByScope"] === "string") &&
   (value["feature"] === undefined || typeof value["feature"] === "string") &&
   isMcpDisposition(value["mcp"]);
 
@@ -830,15 +819,10 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  // 4. Scope: the session must hold the capability's catalog scope, OR — for a
-  // read capability — the domain write scope that elevates it (write implies
-  // read within the SAME domain; `elevatedByScope` is that one domain's write
-  // grant, so an unrelated domain's write scope never satisfies this gate).
-  const scopeSatisfied =
-    context.grantedScopes.includes(entry.scope) ||
-    (entry.elevatedByScope !== undefined &&
-      context.grantedScopes.includes(entry.elevatedByScope));
-  if (!scopeSatisfied) {
+  // 4. Scope: the session must hold the capability's catalog scope. Read
+  // capabilities now resolve to a read scope (see the exporter's access-keyed
+  // resolution), so a `stella:read` grant reaches them directly.
+  if (!context.grantedScopes.includes(entry.scope)) {
     return structuredErrorResult({
       code: "missing_scope",
       message: `Insufficient permissions. Capability "${id}" requires scope: ${entry.scope}`,

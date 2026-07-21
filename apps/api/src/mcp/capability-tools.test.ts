@@ -381,19 +381,13 @@ describe("invoke_capability gates", () => {
     return "ok";
   };
 
-  test("write implies read in-domain: matters_write satisfies a matters read", async () => {
-    // entities.get is a matters-domain read (scope stella:read) elevated by
-    // stella:matters_write. A token holding ONLY the domain write scope must
-    // satisfy the read gate.
-    expect(
-      await scopeGateCode("entities.get", ["stella:matters_write"]),
-    ).not.toBe("missing_scope");
-  });
-
-  test("write elevation is domain-scoped: billing_write cannot read matters", async () => {
-    // The elevator is entities.get's OWN domain write scope only; an unrelated
-    // domain's write grant must not satisfy the read gate.
-    expect(await scopeGateCode("entities.get", ["stella:billing_write"])).toBe(
+  test("a domain write scope alone does not satisfy a read", async () => {
+    // entities.get is a matters-domain read whose scope is stella:read. The
+    // gate is a flat scope check, so holding only stella:matters_write does not
+    // reach it — a read credential must carry the read scope (which the default
+    // consent bundle always includes). This pins the gate as flat, so a future
+    // "write implies read" change is a deliberate edit here, not an accident.
+    expect(await scopeGateCode("entities.get", ["stella:matters_write"])).toBe(
       "missing_scope",
     );
   });

@@ -519,14 +519,6 @@ type CapabilityEntry = {
   access: "read" | "write";
   destructive: boolean;
   scope: string;
-  /**
-   * For a READ capability whose domain has a distinct write/consent scope: that
-   * write scope. It elevates the read (write implies read within the SAME
-   * domain), so the runtime scope gate is satisfied by either `scope` or this.
-   * Absent on writes and on reads whose domain read scope equals its write scope
-   * (non-tiered domains, where holding `scope` already suffices).
-   */
-  elevatedByScope?: string;
   /** REST route uses `validateWorkspaceAccessIncludingArchived` (fix-4). */
   allowsArchivedWorkspace?: true;
   /** Success payload is a file: a `Response` or raw binary bytes (fix-6). */
@@ -715,8 +707,6 @@ type BuildCatalogEntryOptions = {
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
   scope: string;
-  /** Write scope elevating a read capability (see CapabilityEntry). */
-  elevatedByScope: string | undefined;
   hasPermissions: boolean;
   permissions: unknown;
   /** Live (pre-cap) input schema; flag derivation must see the full schema. */
@@ -738,7 +728,6 @@ const buildCatalogEntry = ({
   kind,
   access,
   scope,
-  elevatedByScope,
   hasPermissions,
   permissions,
   inputSchema,
@@ -752,7 +741,6 @@ const buildCatalogEntry = ({
   access: access.access,
   destructive: access.destructive,
   scope,
-  ...(elevatedByScope === undefined ? {} : { elevatedByScope }),
   ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
     ? { allowsArchivedWorkspace: true as const }
     : {}),
@@ -1203,14 +1191,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
       scopeOverrideUses.add(id);
     }
 
-    // Write-implies-read, domain-scoped: a READ capability whose resolved scope
-    // is weaker than its domain write/consent scope carries that write scope as
-    // an elevator, so holding the domain's write grant also satisfies the read
-    // gate (see capability-tools.ts). Absent when the read scope already equals
-    // the consent scope (non-tiered domains).
-    const elevatedByScope =
-      isRead && scope !== consentScope ? consentScope : undefined;
-
     const inputSchema = buildInputSchema(endpoint.config);
     const capped = capInputSchema(inputSchema);
     if (capped.truncated) {
@@ -1230,7 +1210,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
         kind: kindResolution.kind,
         access: accessResolution,
         scope,
-        elevatedByScope,
         hasPermissions,
         permissions,
         inputSchema,
