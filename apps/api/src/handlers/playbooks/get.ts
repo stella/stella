@@ -7,6 +7,7 @@ import { playbookDefinitionParamsSchema } from "./schema";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_playbooks" },
+  access: "read",
   params: playbookDefinitionParamsSchema,
 } satisfies HandlerConfig;
 

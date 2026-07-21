@@ -6,6 +6,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
+  access: "read",
   query: listFlowDefinitionsQuerySchema,
 } satisfies HandlerConfig;
 

@@ -13,6 +13,7 @@ const listEntityLinks = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "list_tasks" },
+    access: "read",
     params: listEntityLinksParamsSchema,
   },
   async function* ({ workspaceId, params, safeDb }) {
