@@ -33,8 +33,10 @@ details unless they are already public in the repository.
 
 ## GitHub Interactions
 
-- When commenting on GitHub (PRs, issues), include "CC on behalf of @username" where
-  username is the GitHub handle of the person who requested the comment.
+- When commenting on GitHub (PRs, issues), append `CC on behalf of username`, where
+  `username` is the GitHub handle of the person who requested the comment. Keep the
+  handle as plain text: never prefix it with `@` or link the account, because the
+  attribution must not trigger a GitHub mention notification.
 - This repository (including PRs, commits, comments) is public. Never include
   marketing language, internal business context, pricing, competitive analysis, user
   identities, conversation specifics, or security architecture beyond what the diff
