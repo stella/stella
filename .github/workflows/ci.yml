@@ -421,6 +421,15 @@ jobs:
           bun test
           scripts/check-api-deployment.test.ts
 
+      # The api test runner only globs `src/**`, so this seed-side regression
+      # guard (it imports `createMockDocx` and the Export Review citation
+      # seeds) needs an explicit invocation to run in CI, like the scripts
+      # tests above. Gated on workspace checks so it is skipped on
+      # workflow-only PRs where dependencies are not installed.
+      - name: Test seed citation-anchor guard
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        run: bun test apps/api/scripts/seed-dev.test.ts
+
       - name: Test API and CLI contract invariants
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         run: >-
