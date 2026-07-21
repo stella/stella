@@ -92,7 +92,7 @@ export const ToolCallCodeBlock = ({
         style={TOOL_CODE_THEME.plain}
       >
         {keyedLines.map(({ key, lineNumber, tokens: lineTokens }) => (
-          <div key={key}>
+          <span className="block" key={key}>
             {shouldShowLineNumbers && (
               <span className="text-foreground-ghost me-4 inline-block w-5 text-end tabular-nums select-none">
                 {lineNumber}
@@ -103,7 +103,7 @@ export const ToolCallCodeBlock = ({
                 {token.content}
               </span>
             ))}
-          </div>
+          </span>
         ))}
       </pre>
     </div>
