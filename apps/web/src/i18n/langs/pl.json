@@ -990,6 +990,7 @@
     "saveChanges": "Zapisz zmiany",
     "scrollToTop": "Przewiń do góry",
     "search": "Szukaj...",
+    "selectAMatter": "Wybierz sprawę",
     "selectARole": "Wybierz rolę",
     "selectDate": "Wybierz datę…",
     "sessions": "Sesje",
@@ -1487,7 +1488,6 @@
       "frequency": "Częstotliwość",
       "hour": "Godzina (UTC)",
       "monthly": "Miesięcznie",
-      "selectWorkspace": "Wybierz sprawę",
       "utcHint": "Zaplanowane godziny są w UTC.",
       "weekly": "Tygodniowo",
       "workspaceRequired": "Wybierz sprawę dla harmonogramu."
@@ -2271,8 +2271,7 @@
       "relationship": "Relacja"
     },
     "matterPicker": {
-      "empty": "Wybierz sprawę, aby zobaczyć jej pamięć.",
-      "placeholder": "Wybierz sprawę"
+      "empty": "Wybierz sprawę, aby zobaczyć jej pamięć."
     },
     "pageDescription": "Notatki i kontekst, które asystent zapamiętuje między czatami.",
     "pageTitle": "Pamięć",
