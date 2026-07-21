@@ -156,7 +156,7 @@ const errorClassName = (error: Error): string => {
   return "Error";
 };
 
-const safeErrorCode = (error: Error): string | undefined =>
+export const safeErrorCode = (error: Error): string | undefined =>
   safeErrorStringProperty(error, "code");
 
 const safeErrorMessage = (error: Error): string | undefined =>

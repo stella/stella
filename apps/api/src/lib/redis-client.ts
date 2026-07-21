@@ -3,9 +3,21 @@ import { type BunRedisRawClient, createBunRedisClient } from "bullmq";
 import { type RedisOptions, RedisClient, sleep } from "bun";
 
 import { env } from "@/api/env";
-import { connectionErrorFields } from "@/api/lib/errors/utils";
+import { connectionErrorFields, safeErrorCode } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
+
+// Bun's experimental BullMQ Redis adapter intermittently fails to parse a reply
+// on a worker's idle blocking poll, surfacing an opaque
+// `ERR_REDIS_INVALID_RESPONSE` ("Failed to read data") roughly every few
+// seconds. It is self-recovering — the worker keeps draining jobs — so callers
+// must not treat it as a real outage. A persistent Redis outage manifests as
+// different codes / reconnection failures, which stay unclassified here.
+const RECOVERABLE_REDIS_POLL_ERROR_CODE = "ERR_REDIS_INVALID_RESPONSE";
+
+export const isRecoverableRedisPollError = (error: unknown): boolean =>
+  error instanceof Error &&
+  safeErrorCode(error) === RECOVERABLE_REDIS_POLL_ERROR_CODE;
 
 class ConfiguredRedisClient extends RedisClient implements BunRedisRawClient {
   readonly #connectHandlers = new Set<() => void>();

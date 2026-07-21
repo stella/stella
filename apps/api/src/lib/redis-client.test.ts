@@ -9,8 +9,11 @@ void mock.module("bullmq", () => ({
   },
 }));
 
-const { connectWithColdStartRetries, createBullMqConnection } =
-  await import("@/api/lib/redis-client");
+const {
+  connectWithColdStartRetries,
+  createBullMqConnection,
+  isRecoverableRedisPollError,
+} = await import("@/api/lib/redis-client");
 
 describe("BullMQ Redis connection", () => {
   test("lets BullMQ own connection startup", () => {
@@ -60,5 +63,35 @@ describe("connectWithColdStartRetries", () => {
     // Identity check: the retries-exhausted rethrow must preserve the
     // original error object, not wrap it.
     expect(caught).toBe(originalError);
+  });
+});
+
+describe("isRecoverableRedisPollError", () => {
+  const withCode = (code: string): Error =>
+    Object.assign(new Error(code), { code });
+
+  test("classifies the Bun-adapter poll blip as recoverable", () => {
+    expect(
+      isRecoverableRedisPollError(withCode("ERR_REDIS_INVALID_RESPONSE")),
+    ).toBe(true);
+  });
+
+  test("leaves any other error to surface loudly", () => {
+    // A real outage (wrong code) and a message-only lookalike must NOT be
+    // downgraded, or a genuine failure would be silenced.
+    expect(isRecoverableRedisPollError(withCode("ECONNREFUSED"))).toBe(false);
+    expect(isRecoverableRedisPollError(new Error("Failed to read data"))).toBe(
+      false,
+    );
+  });
+
+  test("never matches non-Error values", () => {
+    expect(isRecoverableRedisPollError("ERR_REDIS_INVALID_RESPONSE")).toBe(
+      false,
+    );
+    expect(isRecoverableRedisPollError(undefined)).toBe(false);
+    expect(
+      isRecoverableRedisPollError({ code: "ERR_REDIS_INVALID_RESPONSE" }),
+    ).toBe(false);
   });
 });
