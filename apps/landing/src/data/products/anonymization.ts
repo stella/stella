@@ -7,10 +7,10 @@ export const anonymization: Product = {
   eyebrow: "Anonymization",
   title: "Prepare material for AI without exposing identifying details.",
   summary:
-    "Remove names, entities, and identifying details before material reaches AI. Anonymization runs in your browser, directly from chat and document review, so unredacted text never leaves your machine.",
+    "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check before anything moves on.",
   metaTitle: "Document anonymization for legal AI | stella",
   metaDescription:
-    "Remove names, entities, and identifying details before material reaches AI. Runs in the browser from chat and review; unredacted text stays on your machine.",
+    "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
   hero: {
     type: "image",
     src: "/media/products/anonymization.png",
@@ -24,7 +24,7 @@ export const anonymization: Product = {
   quickAnswer: {
     question: "What is anonymization in stella?",
     answer:
-      "It removes names, entities, and identifying details before material enters an AI workflow. Anonymization runs in your browser, so unredacted text never leaves your machine, and it is integrated directly into chat and document review.",
+      "It removes names, entities, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
   },
   capabilities: [
     {
@@ -36,8 +36,8 @@ export const anonymization: Product = {
       body: "Runs directly in the chat composer and in document review, not in a separate tool.",
     },
     {
-      title: "Nothing leaves your machine",
-      body: "Anonymization runs in your browser; material is never sent anywhere to be redacted.",
+      title: "Your terms included",
+      body: "Add your organisation's terms and blacklists so the names that matter to you are always caught.",
     },
     {
       title: "Reviewable output",
@@ -63,7 +63,7 @@ export const anonymization: Product = {
       bullets: [
         "Available from chat and document review",
         "No copy-pasting into an external redaction tool",
-        "Runs in your browser on stella's own open-source engine",
+        "Built on stella's own open-source anonymization engine",
       ],
       media: {
         type: "story",
