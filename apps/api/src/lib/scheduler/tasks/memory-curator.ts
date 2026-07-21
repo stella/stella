@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -7,6 +6,7 @@ import { aiMemories, auditLogs } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { drainMemoryLifecyclePhase } from "@/api/lib/memory/drain-lifecycle-phase";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const MEMORY_CURATOR_TASK = "memory.curator" as const;
@@ -22,6 +22,10 @@ const STALE_AFTER_DAYS = 30;
 const ARCHIVE_AFTER_DAYS = 90;
 const SUGGESTION_ARCHIVE_AFTER_DAYS = 30;
 const CURATION_BATCH_SIZE = 500;
+// Ceiling on batches per phase per run (500k rows). A backlog larger than
+// this drains across successive runs rather than holding the scheduler slot
+// for an unbounded stretch.
+const MAX_CURATION_BATCHES_PER_RUN = 1000;
 const MEMORY_CURATOR_AUDIT_ACTOR = "system:memory-curator";
 
 /**
@@ -80,8 +84,12 @@ type SweepLifecyclePhaseOptions = {
   signal: AbortSignal;
   fromStatus: "active" | "stale" | "suggested";
   newStatus: "stale" | "archived";
-  /** Inactivity column the cutoff compares against (also the batch order). */
-  cutoffColumn: typeof aiMemories.lastUsedAt | typeof aiMemories.createdAt;
+  /**
+   * Inactivity column the cutoff compares against (also the batch order):
+   * `lastUsedAt` for the active/stale phases, `createdAt` for suggestions.
+   * Both share one column type, so the union would be duplicated.
+   */
+  cutoffColumn: typeof aiMemories.lastUsedAt;
   cutoff: Date;
   archivedAt?: Date;
 };
@@ -90,6 +98,10 @@ type SweepLifecyclePhaseOptions = {
  * Drain every memory past the cutoff, one bounded batch per transaction,
  * until the phase is empty. A single capped batch per nightly run would
  * strand any backlog beyond the cap for weeks.
+ *
+ * The batch-to-batch control flow (abort checks, the no-progress guard, and
+ * the per-run ceiling) lives in `drainMemoryLifecyclePhase` so those
+ * termination properties can be tested without the scheduler or a database.
  */
 const sweepLifecyclePhase = async ({
   signal,
@@ -98,64 +110,45 @@ const sweepLifecyclePhase = async ({
   cutoffColumn,
   cutoff,
   archivedAt,
-}: SweepLifecyclePhaseOptions): Promise<number> => {
-  let total = 0;
-  while (true) {
-    if (signal.aborted) {
-      panic("SchedulerAborted");
-    }
-
-    // oxlint-disable-next-line no-await-in-loop -- sequential batch drain; each batch depends on the previous one's commit
-    const batch = await rootDb
-      .select({ id: aiMemories.id })
-      .from(aiMemories)
-      .where(
-        and(
-          eq(aiMemories.status, fromStatus),
-          eq(aiMemories.pinned, false),
-          lt(cutoffColumn, cutoff),
-        ),
-      )
-      .orderBy(asc(cutoffColumn))
-      .limit(CURATION_BATCH_SIZE);
-
-    if (batch.length === 0) {
-      return total;
-    }
-
-    // oxlint-disable-next-line no-await-in-loop -- sequential batch drain; each batch depends on the previous one's commit
-    const transitioned = await rootDb.transaction(async (tx) => {
-      const rows = await tx
-        .update(aiMemories)
-        .set({ status: newStatus, ...(archivedAt && { archivedAt }) })
+}: SweepLifecyclePhaseOptions): Promise<number> =>
+  await drainMemoryLifecyclePhase({
+    batchSize: CURATION_BATCH_SIZE,
+    maxBatches: MAX_CURATION_BATCHES_PER_RUN,
+    signal,
+    selectBatch: async () =>
+      await rootDb
+        .select({ id: aiMemories.id })
+        .from(aiMemories)
         .where(
           and(
             eq(aiMemories.status, fromStatus),
             eq(aiMemories.pinned, false),
             lt(cutoffColumn, cutoff),
-            inArray(
-              aiMemories.id,
-              batch.map(({ id }) => id),
-            ),
           ),
         )
-        .returning(memoryLifecycleReturning);
-      await recordMemoryLifecycleAuditEvents(tx, rows, {
-        oldStatus: fromStatus,
-        newStatus,
-      });
-      return rows;
-    });
-    total += transitioned.length;
-
-    // Every selected row was concurrently pinned or transitioned between the
-    // select and the update; stop rather than risk spinning on a batch the
-    // update can never claim.
-    if (transitioned.length === 0 || batch.length < CURATION_BATCH_SIZE) {
-      return total;
-    }
-  }
-};
+        .orderBy(asc(cutoffColumn))
+        .limit(CURATION_BATCH_SIZE),
+    transitionBatch: async (ids) =>
+      await rootDb.transaction(async (tx) => {
+        const rows = await tx
+          .update(aiMemories)
+          .set({ status: newStatus, ...(archivedAt && { archivedAt }) })
+          .where(
+            and(
+              eq(aiMemories.status, fromStatus),
+              eq(aiMemories.pinned, false),
+              lt(cutoffColumn, cutoff),
+              inArray(aiMemories.id, ids),
+            ),
+          )
+          .returning(memoryLifecycleReturning);
+        await recordMemoryLifecycleAuditEvents(tx, rows, {
+          oldStatus: fromStatus,
+          newStatus,
+        });
+        return rows;
+      }),
+  });
 
 const memoryLifecycleReturning = {
   id: aiMemories.id,
