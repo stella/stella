@@ -23,10 +23,31 @@ const captures = [
     prepare: "open-table",
     readyText: "Export Review - Project Atlas Data Room",
   },
+  // Three different national decisions (CZE, POL, SVK), each rendering with
+  // the structured reader (structure/AI margin populated) so the chapter can
+  // cross-fade between jurisdictions. Keep in sync with
+  // HomeProductStory.astro's data chapter.
   {
-    name: "story-public-data",
+    name: "story-public-data-1",
     path: "/law/cases",
     prepare: "open-decision",
+    decisionText: "IV.ÚS 1394/24",
+    readyText: "Case Law",
+    clip: { x: 0, y: 0, width: 1440, height: 760 },
+  },
+  {
+    name: "story-public-data-2",
+    path: "/law/cases",
+    prepare: "open-decision",
+    decisionText: "IV C 1273/16",
+    readyText: "Case Law",
+    clip: { x: 0, y: 0, width: 1440, height: 760 },
+  },
+  {
+    name: "story-public-data-3",
+    path: "/law/cases",
+    prepare: "open-decision",
+    decisionText: "25Cbr/166/2024",
     readyText: "Case Law",
     clip: { x: 0, y: 0, width: 1440, height: 760 },
   },
@@ -45,6 +66,7 @@ const captures = [
     name: "public-data",
     path: "/law/cases",
     prepare: "open-decision",
+    decisionText: "IV.ÚS 1394/24",
     readyText: "Case Law",
   },
   { name: "templates", path: "/knowledge/templates", readyText: "Templates" },
@@ -97,17 +119,45 @@ test("capture landing product screenshots", async ({
         await expect(page.locator(capture.readySelector).first()).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
-        // Film the ECJ's Schrems II judgment (C-311/18) deterministically,
-        // rather than whatever happens to be newest in the seeded corpus.
+        // Film a specific national decision deterministically, rather than
+        // whatever happens to be newest in the seeded corpus.
         // eslint-disable-next-line no-await-in-loop -- see above
         await page
           .locator('main a[href*="/cases/"]')
-          .filter({ hasText: "C-311/18" })
+          .filter({ hasText: capture.decisionText })
           .click();
         // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
         // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page.locator("article").first()).toBeVisible();
+        // The reader briefly renders a logged-out "locked" AI button while
+        // the client-side session query settles (useClientAuthStatus), then
+        // swaps in the authenticated workspace. Wait for that swap so the
+        // click below hits the real analyze button, not the sign-in prompt.
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await page.waitForLoadState("networkidle");
+        // The structure/AI margin is generated on demand. These decisions
+        // already have their analysis cached server-side, but the client
+        // still needs one round trip to fetch it; trigger it explicitly and
+        // wait for the outline rail so the capture never lands on the
+        // empty/loading margin state.
+        // eslint-disable-next-line no-await-in-loop -- see above
+        const analyzeButton = page.getByRole("button", {
+          name: "Analyze with AI",
+        });
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await expect(analyzeButton).toBeVisible();
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await analyzeButton.click();
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await expect(
+          page.getByRole("group", { name: "Outline" }),
+        ).toBeVisible();
+        // The first margin annotation may sit below a long headnote (e.g. a
+        // Constitutional Court "legal sentence" summary); scroll it into view
+        // so the capture shows the structure margin, not just headnote text.
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await page.locator("aside button").first().scrollIntoViewIfNeeded();
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
         // eslint-disable-next-line no-await-in-loop -- see above
