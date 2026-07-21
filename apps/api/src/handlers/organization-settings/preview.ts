@@ -69,6 +69,7 @@ const previewOrganizationSettingsHandler = async function* ({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  access: "read",
   mcp: { type: "capability", reason: "anonymization_admin" },
   body: previewOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;

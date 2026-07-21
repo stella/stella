@@ -141,6 +141,7 @@ const config = {
     "Step 3: call uploads.update with the uploadId to commit the record. " +
     "Call uploads.delete instead if the PUT fails.",
   permissions: uploadRoutePermission,
+  access: "write",
   mcp: { type: "capability", reason: "file_transport" },
   body: presignBodySchema,
 } satisfies HandlerConfig;

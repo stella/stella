@@ -41,6 +41,7 @@ const unwrapTxRead = <T>(result: Result<T, SafeDbError>): T =>
 
 const config = {
   permissions: { chat: ["create"] },
+  access: "read",
   mcp: { type: "capability", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({

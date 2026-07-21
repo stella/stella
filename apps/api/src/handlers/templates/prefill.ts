@@ -157,6 +157,7 @@ const extractFieldValues = async ({
 
 const config = {
   permissions: { template: ["use"] },
+  access: "write",
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: prefillParamsSchema,
   body: prefillBodySchema,

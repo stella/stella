@@ -11,6 +11,7 @@ import { readStyleSetPackage } from "@/api/lib/style-sets";
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
   permissions: { styleSet: ["use"] },
+  access: "read",
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: paramsSchema,
 } satisfies HandlerConfig;

@@ -18,6 +18,7 @@ import {
 
 const config = {
   permissions: { flow: ["run"] },
+  access: "write",
   mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowRunsWorkspaceParamsSchema,
   body: startFlowRunBodySchema,

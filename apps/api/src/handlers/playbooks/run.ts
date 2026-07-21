@@ -15,6 +15,7 @@ const config = {
     "workspaceId and playbookId. Returns the number of columns queued for " +
     "review.",
   permissions: { playbook: ["apply"] },
+  access: "write",
   mcp: { type: "tool", name: "run_playbook" },
   params: workspaceParams({
     playbookId: tSafeId("playbookDefinition", {

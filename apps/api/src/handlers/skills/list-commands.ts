@@ -17,6 +17,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 //      away unrelated catalogue/inspector reads
 const config = {
   permissions: { chat: ["create"] },
+  access: "read",
   mcp: { type: "capability", reason: "agent_tool_authoring" },
 } satisfies HandlerConfig;
 
