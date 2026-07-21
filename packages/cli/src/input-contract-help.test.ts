@@ -125,6 +125,32 @@ describe("--input contract help", () => {
       `--input '{"value":"client'\\''s"}'`,
     );
   });
+
+  test("synthesizes examples that satisfy anchored scalar patterns", () => {
+    const patterns = [
+      "^BOE-[A-Z]-\\d{4}-\\d+$",
+      "^[0-9A-Fa-f]{6}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "^[A-Za-z0-9]{7}$",
+      "^[A-Za-z]{2}$",
+      "^\\d+$",
+      "^\\d{8}$",
+    ];
+
+    for (const pattern of patterns) {
+      const schema: JsonSchema = {
+        type: "object",
+        properties: { value: { type: "string", pattern } },
+        required: ["value"],
+      };
+      const help = buildInputContractHelp({
+        schema,
+        inputOnly: ["value"],
+      });
+
+      expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
+    }
+  });
 });
 
 type GeneratedLeaf = Exclude<RouteNode, { kind: "route" }>;

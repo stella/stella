@@ -267,6 +267,85 @@ const pathRequired = (schema: JsonSchema, path: string): boolean => {
   return false;
 };
 
+const characterForClass = (characterClass: string): string | undefined => {
+  if (characterClass.includes("0-9")) {
+    return "0";
+  }
+  if (characterClass.includes("A-Z")) {
+    return "A";
+  }
+  if (characterClass.includes("a-z")) {
+    return "a";
+  }
+  return characterClass.at(0);
+};
+
+const patternExample = (pattern: string): string | undefined => {
+  if (!pattern.startsWith("^") || !pattern.endsWith("$")) {
+    return undefined;
+  }
+
+  const body = pattern.slice(1, -1);
+  const tokens: string[] = [];
+  for (let index = 0; index < body.length; index += 1) {
+    const character = body[index];
+    if (character === undefined) {
+      return undefined;
+    }
+
+    let token: string;
+    if (character === "[") {
+      const end = body.indexOf("]", index + 1);
+      if (end === -1) {
+        return undefined;
+      }
+      const classCharacter = characterForClass(body.slice(index + 1, end));
+      if (classCharacter === undefined) {
+        return undefined;
+      }
+      token = classCharacter;
+      index = end;
+    } else if (character === "\\") {
+      const escaped = body[index + 1];
+      if (escaped === undefined) {
+        return undefined;
+      }
+      token = escaped === "d" ? "0" : escaped;
+      index += 1;
+    } else if ("().|".includes(character)) {
+      return undefined;
+    } else {
+      token = character;
+    }
+
+    const remainder = body.slice(index + 1);
+    const exact = /^\{(\d+)\}/u.exec(remainder);
+    if (exact !== null) {
+      tokens.push(token.repeat(Number(exact[1])));
+      index += exact[0].length;
+      continue;
+    }
+    if (remainder.startsWith("+")) {
+      tokens.push(token);
+      index += 1;
+      continue;
+    }
+    if (remainder.startsWith("?")) {
+      tokens.push(token);
+      index += 1;
+      continue;
+    }
+    if (remainder.startsWith("*")) {
+      index += 1;
+      continue;
+    }
+    tokens.push(token);
+  }
+
+  const example = tokens.join("");
+  return new RegExp(pattern, "u").test(example) ? example : undefined;
+};
+
 const stringExample = (schema: JsonSchema): string => {
   const format = schema["format"];
   if (format === "date") {
@@ -282,6 +361,12 @@ const stringExample = (schema: JsonSchema): string => {
   const pattern = schema["pattern"];
   if (typeof pattern === "string" && pattern.includes("[0-9a-fA-F]{8}")) {
     return "00000000-0000-4000-8000-000000000000";
+  }
+  if (typeof pattern === "string") {
+    const example = patternExample(pattern);
+    if (example !== undefined) {
+      return example;
+    }
   }
   const source = schema["source"];
   if (source === "^[0-9a-f]{64}$") {

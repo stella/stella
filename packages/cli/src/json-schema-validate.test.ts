@@ -62,6 +62,26 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     expect(validateAgainstSchema(schema, { type: "robot" }).valid).toBe(false);
   });
 
+  test("enforces string length and pattern constraints", () => {
+    const schema = objectSchema({
+      lawId: {
+        type: "string",
+        minLength: 12,
+        maxLength: 32,
+        pattern: "^BOE-[A-Z]-\\d{4}-\\d+$",
+      },
+    });
+
+    expect(validateAgainstSchema(schema, { lawId: "BOE-A-2026-1" }).valid).toBe(
+      true,
+    );
+    expect(validateAgainstSchema(schema, { lawId: "xxxxx" }).valid).toBe(false);
+    expect(
+      validateAgainstSchema(schema, { lawId: `BOE-A-2026-${"1".repeat(30)}` })
+        .valid,
+    ).toBe(false);
+  });
+
   test("validates arrays and their items with minItems", () => {
     const schema = objectSchema({
       jurisdictions: {

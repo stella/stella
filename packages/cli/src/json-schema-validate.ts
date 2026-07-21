@@ -40,9 +40,17 @@ const validateString = (
   value: string,
   path: string,
 ): ValidationResult => {
+  const minLength = schema["minLength"];
+  if (typeof minLength === "number" && value.length < minLength) {
+    return fail(path, `string shorter than minLength ${minLength}`);
+  }
   const maxLength = schema["maxLength"];
   if (typeof maxLength === "number" && value.length > maxLength) {
     return fail(path, `string longer than maxLength ${maxLength}`);
+  }
+  const pattern = schema["pattern"];
+  if (typeof pattern === "string" && !new RegExp(pattern, "u").test(value)) {
+    return fail(path, `string does not match pattern ${pattern}`);
   }
   return ok;
 };
