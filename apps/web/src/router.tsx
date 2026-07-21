@@ -48,10 +48,16 @@ export function getRouter() {
     defaultPendingMinMs: 300,
   });
 
-  router.subscribe("onResolved", ({ toLocation }) => {
-    analyticsValue.analytics.capturePageViewed({
-      path: toLocation.pathname,
-    });
+  router.subscribe("onResolved", () => {
+    // Report the matched route template (e.g. `/workspaces/$workspaceId`),
+    // not the resolved pathname. Templates aggregate into a small, stable
+    // set of routes; resolved paths embed per-resource ids that fragment
+    // every navigation into a unique path and defeat page-view grouping.
+    const path = router.state.matches.at(-1)?.fullPath;
+    if (path === undefined) {
+      return;
+    }
+    analyticsValue.analytics.capturePageViewed({ path });
   });
 
   setupRouterSsrQueryIntegration({

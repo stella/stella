@@ -203,10 +203,11 @@ export const createPostHogAnalytics = (
         posthog.reset();
       }
 
-      posthog.identify(user.id, {
-        email: user.email,
-        name: user.name,
-      });
+      // Identify by the stable user id only. Profile attributes such as
+      // name and email already live server-side keyed by this id, so
+      // duplicating them into PostHog person properties adds no analytical
+      // value and only widens the person-property surface.
+      posthog.identify(user.id);
     },
     reset: ({ onlyIfIdentified } = {}) => {
       if (onlyIfIdentified && !posthog._isIdentified()) {

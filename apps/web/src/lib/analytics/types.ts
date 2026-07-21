@@ -24,6 +24,4 @@ export type PageViewedProperties = {
 
 export type AnalyticsUserIdentity = {
   id: string;
-  email?: string;
-  name?: string;
 };
