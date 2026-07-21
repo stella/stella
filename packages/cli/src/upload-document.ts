@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { lookup as lookupMimeType } from "mime-types";
 import { createHash } from "node:crypto";
 import { open } from "node:fs/promises";
 import path from "node:path";
@@ -15,6 +16,7 @@ const UPLOAD_CAPABILITIES = {
   listProperties: "properties.list",
 } as const;
 const ENTITY_CREATE_PURPOSE = "entity_create";
+const DEFAULT_MIME_TYPE = "application/octet-stream";
 const DOCUMENT_SIZE_LIMIT_BYTES = 50 * 1024 * 1024;
 const UPLOAD_TIMEOUT_MS = 5 * 60_000;
 
@@ -23,13 +25,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 type LocalFile = {
   bytes: Uint8Array;
+  mimeType: string;
   name: string;
   sha256Hex: string;
 };
 
 export type UploadDocumentInput = {
   filePath: string;
-  mimeType: string;
+  mimeType: string | undefined;
   name: string | undefined;
   parentId: string | undefined;
   propertyId: string | undefined;
@@ -127,8 +130,11 @@ const readBoundedLocalFile = async (
         return Result.err("The upload file changed while it was being read");
       }
 
+      const inferredMimeType = lookupMimeType(filePath);
       return Result.ok({
         bytes,
+        mimeType:
+          inferredMimeType === false ? DEFAULT_MIME_TYPE : inferredMimeType,
         name: path.basename(filePath),
         sha256Hex: createHash("sha256").update(bytes).digest("hex"),
       });
@@ -352,7 +358,7 @@ export const uploadDocument = async ({
     purpose: ENTITY_CREATE_PURPOSE,
     propertyId: propertyId.value,
     name: input.name ?? localFile.value.name,
-    mimeType: input.mimeType,
+    mimeType: input.mimeType ?? localFile.value.mimeType,
     size: localFile.value.bytes.byteLength,
     sha256Hex: localFile.value.sha256Hex,
   };

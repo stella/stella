@@ -50,12 +50,14 @@
   "dependencies": {
     "@stricli/core": "^1.3.0",
     "better-result": "catalog:",
+    "mime-types": "catalog:",
     "re2-wasm": "^1.0.2",
     "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:"
+    "@types/bun": "catalog:",
+    "@types/mime-types": "^3.0.1"
   },
   "engines": {
     "node": ">=20"

@@ -24,6 +24,7 @@ const uploadInput: UploadDocumentInput = {
 
 const localFile = {
   bytes: new TextEncoder().encode("agreement"),
+  mimeType: "text/plain",
   name: "agreement.txt",
   sha256Hex: "a".repeat(64),
 };
@@ -125,6 +126,38 @@ describe("document upload state machine", () => {
 
     expect(Result.isOk(result)).toBe(true);
     expect(capabilities).toEqual(["uploads.create", "uploads.update"]);
+  });
+
+  test("uses the local file's inferred MIME type unless explicitly overridden", async () => {
+    const createBodies: Record<string, unknown>[] = [];
+    const dependencies = createDependencies({
+      invoke: async (capability, input) => {
+        if (capability === "uploads.create") {
+          createBodies.push(input);
+          return { status: "ok", payload: reservation };
+        }
+        return { status: "ok", payload: { entityId: "entity-1" } };
+      },
+    });
+
+    const result = await uploadDocument({
+      dependencies,
+      input: {
+        ...uploadInput,
+        mimeType: undefined,
+        propertyId: "chosen-property",
+      },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(createBodies.at(0)?.["body"]).toEqual({
+      purpose: "entity_create",
+      propertyId: "chosen-property",
+      name: "agreement.txt",
+      mimeType: "text/plain",
+      size: localFile.bytes.byteLength,
+      sha256Hex: localFile.sha256Hex,
+    });
   });
 
   test("ambiguous discovery fails before reserving an upload", async () => {

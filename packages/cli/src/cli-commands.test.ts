@@ -240,15 +240,7 @@ describe("one-command document upload", () => {
     putUrl = `${server.url}/presigned/upload-1`;
 
     const result = await runCli({
-      args: [
-        "upload",
-        "--workspace",
-        "workspace-1",
-        "--file",
-        filePath,
-        "--mime-type",
-        "text/plain",
-      ],
+      args: ["upload", "--workspace", "workspace-1", "--file", filePath],
       url: server.url,
       token: WRITE,
     });

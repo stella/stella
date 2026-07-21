@@ -69,7 +69,7 @@ export const uploadCommand: Command<Context> = buildCommand<
   docs: {
     brief: "Upload a local file as a document in one command",
     fullDescription:
-      "Reads the local file, computes its SHA-256 checksum, resolves the matter's file property when --property-id is omitted, reserves a presigned upload, PUTs the exact bytes with the signed headers, and finalizes the document. A failed PUT is abandoned automatically; a finalize failure prints the upload id so finalization can be retried without uploading the bytes again.",
+      "Reads the local file, computes its SHA-256 checksum, infers its MIME type from the standard extension database unless overridden, resolves the matter's file property when --property-id is omitted, reserves a presigned upload, PUTs the exact bytes with the signed headers, and finalizes the document. A failed PUT is abandoned automatically; a finalize failure prints the upload id so finalization can be retried without uploading the bytes again.",
   },
   func: async function func(this: Context, flags) {
     const writers = writersFor(this);
@@ -105,7 +105,7 @@ export const uploadCommand: Command<Context> = buildCommand<
       }),
       input: {
         filePath: flags.file,
-        mimeType: flags.mimeType ?? "application/octet-stream",
+        mimeType: flags.mimeType,
         name: flags.name,
         parentId: flags.parentId,
         propertyId: flags.propertyId,
@@ -146,7 +146,7 @@ export const uploadCommand: Command<Context> = buildCommand<
         "Document name override; defaults to the local file name",
       ),
       mimeType: optionalStringFlag(
-        "MIME type override; defaults to application/octet-stream and the server normalizes known extensions",
+        "MIME type override; by default it is inferred from the standard extension database",
       ),
     },
   },
