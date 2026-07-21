@@ -570,6 +570,7 @@
       "business_registry_lookup": "البحث في السجل التجاري",
       "compare_versions": "مقارنة الإصدارات",
       "create-document": "جارٍ تجهيز المستند",
+      "create_workspace_document": "جارٍ إنشاء المستند",
       "delete_clause": "حذف البند",
       "delete_contact": "حذف جهة الاتصال",
       "delete_document": "حذف المستند",

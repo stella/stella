@@ -570,6 +570,7 @@
       "business_registry_lookup": "Äriregistrist otsimine",
       "compare_versions": "Versioonide võrdlemine",
       "create-document": "Dokumendi ettevalmistamine",
+      "create_workspace_document": "Dokumendi loomine",
       "delete_clause": "Kustuta klausel",
       "delete_contact": "Kustuta kontakt",
       "delete_document": "Kustuta dokument",

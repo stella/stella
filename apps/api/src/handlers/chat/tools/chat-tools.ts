@@ -29,6 +29,10 @@ import {
   createCreateDocumentTool,
 } from "@/api/handlers/chat/tools/create-document-tool";
 import {
+  CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
+  createCreateWorkspaceDocumentTools,
+} from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
@@ -164,6 +168,9 @@ type InfosoudTools = ReturnType<typeof createInfosoudTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
 type FolioAgentDocTools = ReturnType<typeof createFolioAgentDocTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
+type CreateWorkspaceDocumentTools = ReturnType<
+  typeof createCreateWorkspaceDocumentTools
+>;
 type WebSearchTools = ReturnType<typeof createWebSearchTools>;
 type ChatHistoryTools = ReturnType<typeof createChatHistoryTools>;
 type CurrentSkillEditToolName =
@@ -190,6 +197,7 @@ type BuiltInChatTools = OrgTools &
   ActiveDocxEditTools &
   FolioAgentDocTools &
   CreateDocumentTools &
+  CreateWorkspaceDocumentTools &
   WebSearchTools &
   ChatHistoryTools &
   TemplateTools &
@@ -353,6 +361,10 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   [COMPARE_VERSIONS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
+  // Renders Markdown into a Stella-styled DOCX and creates a new entity in
+  // the active matter (`create-from-buffer.ts`'s S3 + DB write path): a
+  // mutation, gated on per-call approval like every other write.
+  [CREATE_WORKSPACE_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
   describe_template: CHAT_TOOL_POLICY_KIND.internal,
   // Code-mode tool discovery: read-only, gated by the same authorization that
   // let the request reach chat at all; runs immediately without per-call
@@ -579,6 +591,55 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // model can see and call it from any chat surface.
   const createDocumentTools = createCreateDocumentTools();
 
+  // create_workspace_document is server-executed (immediate, no client
+  // matter-pick round trip like `create-document`), so its destination
+  // workspace must come from server-validated context rather than model
+  // input or a client-side picker. `requestWorkspaceId` is that context: the
+  // request's single pinned/active matter. Gated on it being set (chat
+  // surfaces with no active matter, e.g. global chat, never see this tool)
+  // and re-checked against `toolWorkspaceIds` as defense in depth. Also
+  // requires `recordAuditEvent` (mirrors `createSkillTools`'s
+  // `recordAuditEvent !== undefined` gate for its own mutation tools) since
+  // `createEntityFromBuffer` always writes an audit event.
+  //
+  // Because this tool calls `createEntityFromBuffer` directly instead of
+  // going through the MCP `save_document` / REST `create-from-legal-source`
+  // dispatch, it does not inherit either of those paths' authorization
+  // checks — so both are mirrored here explicitly:
+  //   - `entity: ["create"]` permission, the same grant `save_document`'s
+  //     create branch checks in `document-tools.ts`
+  //     (`roles[context.memberRole].authorize({ entity: ["create"] })`) and
+  //     `create-from-legal-source`'s `permissions` config enforces. Without
+  //     it, a chat-capable-but-entity-create-less role (e.g. `intern`, which
+  //     has `chat` but `entity: []`) could create documents through chat
+  //     alone.
+  //   - Active (non-archived) matter status, read from the same
+  //     `workspaceStatusById` map the registry write tools thread into
+  //     `buildMcpContextFromChat` for their own `ensureActiveWorkspace` gate
+  //     (`toolWorkspaceIds` includes archived matters, so that alone is not
+  //     enough). Without it, an archived matter would stay writable through
+  //     this tool alone.
+  // KNOWN LIMITATION: creates at the matter root every time — there is no
+  // folder/parent targeting yet.
+  const canCreateWorkspaceDocument = roles[memberRole].authorize({
+    entity: ["create"],
+  }).success;
+  const createWorkspaceDocumentTools =
+    requestWorkspaceId !== null &&
+    recordAuditEvent !== undefined &&
+    toolWorkspaceIds.includes(requestWorkspaceId) &&
+    canCreateWorkspaceDocument &&
+    workspaceStatusById?.get(requestWorkspaceId) === "active"
+      ? createCreateWorkspaceDocumentTools({
+          scopedDb,
+          organizationId,
+          userId,
+          workspaceId: requestWorkspaceId,
+          recordAuditEvent,
+          refRegistry,
+        })
+      : {};
+
   // Registry write projections: per-call mutation tools (save/delete/etc.),
   // each behind approval. Gated on a non-empty workspace set exactly like the
   // hand-written workspace mutation tool (`createWorkspaceTools`), so
@@ -662,6 +723,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...templateAuthoringTools,
       ...historyTools,
       ...createDocumentTools,
+      ...createWorkspaceDocumentTools,
       ...activeDocxEditTools,
       ...folioAgentDocTools,
       ...versionCompareTools,

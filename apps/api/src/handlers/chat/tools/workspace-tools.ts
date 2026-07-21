@@ -89,7 +89,7 @@ export const buildCreatedDocumentToolOutput = ({
   const href = `${CHAT_ENTITY_REF_PREFIX}${entityRef}`;
 
   return {
-    success: true,
+    success: true as const,
     fileName,
     entityRef,
     matterRef,

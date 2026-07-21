@@ -35,6 +35,7 @@ import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-car
 import { hasAutomaticApproval } from "@/components/chat/tool-approval-card.logic";
 import {
   buildRegistryWriteSummaryRows,
+  formatReadableInputValue,
   getReadableInputRows,
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
@@ -51,6 +52,8 @@ import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-que
 
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
+type CreateWorkspaceDocumentInput =
+  ChatUITools["create_workspace_document"]["input"];
 
 const getApprovalId = (part: ApprovalToolPart): string | null => {
   switch (part.state) {
@@ -272,6 +275,41 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
   );
 };
 
+// -- Create workspace document summary --
+
+type CreateWorkspaceDocumentSummaryProps = {
+  input: CreateWorkspaceDocumentInput;
+};
+
+/**
+ * Approval preview for `create_workspace_document`: the model-supplied
+ * title/filename and a truncated preview of the Markdown body, so the user
+ * can see what will be written before approving a document write — rather
+ * than the bare label the generic `ToolApprovalCard` falls back to.
+ */
+const CreateWorkspaceDocumentSummary = ({
+  input,
+}: CreateWorkspaceDocumentSummaryProps) => {
+  const t = useTranslations();
+  const trimmedTitle = input.title.trim();
+  const fileName = `${trimmedTitle.length > 0 ? trimmedTitle : input.title}.docx`;
+  const markdownPreview = formatReadableInputValue({
+    emptyLabel: t("common.empty"),
+    value: input.markdown,
+  });
+
+  return (
+    <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
+      <div className="text-foreground-strong-muted truncate font-medium">
+        {fileName}
+      </div>
+      <div className="text-muted-foreground line-clamp-4 whitespace-pre-wrap">
+        {markdownPreview}
+      </div>
+    </div>
+  );
+};
+
 // -- Main card --
 
 type ToolApprovalCardProps = {
@@ -486,6 +524,11 @@ export const ToolApprovalCard = ({
         part.state !== "input-streaming" &&
         part.input !== undefined && (
           <ActiveDocxEditSummary input={part.input} />
+        )}
+      {part.name === "create_workspace_document" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <CreateWorkspaceDocumentSummary input={part.input} />
         )}
       {part.name === "spawn_subagents" &&
         part.state !== "input-streaming" &&
