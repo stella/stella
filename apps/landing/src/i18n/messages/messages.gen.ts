@@ -90,7 +90,7 @@ type Messages = {
     "controlTitle": "Keep control of the stack.";
     "dataBody": "Case law from official sources with its structure preserved, and company registries queried straight into the matter, jurisdiction by jurisdiction. Anonymization keeps identifying details out of AI workflows.";
     "dataEyebrow": "Legal data";
-    "dataMainAlt": "An official Slovak court decision open in stella";
+    "dataMainAlt": "An official court decision open in stella";
     "dataTitle": "Bring the law and the data with you.";
     "discover": "Discover";
     "exploreAgent": "Explore AI agent";
