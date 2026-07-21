@@ -607,7 +607,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "read",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -645,7 +645,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "read",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -811,7 +811,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "read",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -5333,7 +5333,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -6154,7 +6154,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -6543,7 +6543,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -6601,7 +6601,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -6683,7 +6683,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -6902,7 +6902,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -7421,7 +7421,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -7669,7 +7669,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -7787,7 +7787,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -7869,7 +7869,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -8548,7 +8548,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -8594,7 +8594,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -8663,7 +8663,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: ["query.type"],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -9381,7 +9381,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -9686,7 +9686,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -10323,7 +10323,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -10413,7 +10413,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "body",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -13578,7 +13578,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -13644,7 +13644,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -13802,7 +13802,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: ["body.existingFolders", "body.files"],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -13923,7 +13923,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: ["body.filters", "body.sorts", "body.fieldMode"],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -17053,7 +17053,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -17116,7 +17116,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -17177,7 +17177,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -17252,7 +17252,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -17349,7 +17349,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "body",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -20973,7 +20973,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -21048,7 +21048,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -21447,7 +21447,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -25689,7 +25689,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -25724,7 +25724,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -25847,7 +25847,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -25899,7 +25899,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -26798,7 +26798,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -26850,7 +26850,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -27252,7 +27252,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "admin_write",
+            scope: "admin_read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -27281,7 +27281,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: ["body.matterNumberPadding"],
             paginated: false,
             destructive: false,
-            scope: "admin_write",
+            scope: "admin_read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -27328,7 +27328,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "admin_write",
+            scope: "admin_read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -27350,7 +27350,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "admin_write",
+            scope: "admin_read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -27369,7 +27369,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "admin_write",
+            scope: "admin_read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -31997,7 +31997,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -32032,7 +32032,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -32081,7 +32081,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -32110,7 +32110,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: ["query.limit"],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -32258,7 +32258,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "knowledge_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -43510,7 +43510,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -43571,7 +43571,7 @@ export const generatedRouteMap: RouteNode = {
             ],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -47802,7 +47802,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -47999,7 +47999,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -48085,7 +48085,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -48448,7 +48448,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -48516,7 +48516,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -48568,7 +48568,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -50983,7 +50983,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: ["body.filters", "body.sorts"],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -54702,7 +54702,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -54761,7 +54761,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -57704,7 +57704,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -57805,7 +57805,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -57878,7 +57878,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -57996,7 +57996,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "billing_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -58611,7 +58611,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -58843,7 +58843,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: true,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -58904,7 +58904,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -59028,7 +59028,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -59239,7 +59239,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -59545,7 +59545,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "read",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -59735,7 +59735,7 @@ export const generatedRouteMap: RouteNode = {
                 inputOnly: [],
                 paginated: false,
                 destructive: false,
-                scope: "matters_write",
+                scope: "read",
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,
@@ -60091,7 +60091,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -60129,7 +60129,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -60186,7 +60186,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -60234,7 +60234,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "read",
             inputSchema: {
               type: "object",
               additionalProperties: false,
