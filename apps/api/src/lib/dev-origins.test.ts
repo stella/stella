@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { frontendOrigins } from "@/api/lib/dev-origins";
+import { frontendOrigins, mobileAppOrigins } from "@/api/lib/dev-origins";
 
 describe("frontend origins", () => {
   test("keeps production origins exact", () => {
@@ -61,5 +61,15 @@ describe("frontend origins", () => {
         isDev: true,
       }),
     ).toEqual(["localhost:3000"]);
+  });
+});
+
+describe("mobile app origins", () => {
+  test("trusts only the application scheme in production", () => {
+    expect(mobileAppOrigins(false)).toEqual(["stella://"]);
+  });
+
+  test("adds Expo development schemes only in development", () => {
+    expect(mobileAppOrigins(true)).toEqual(["stella://", "exp://", "exp://**"]);
   });
 });

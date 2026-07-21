@@ -1,7 +1,19 @@
+import { STELLA_MOBILE_ORIGIN } from "@stll/api-contract";
+
 export const DEV_INSPECTOR_ORIGINS = [
   "http://localhost:6274",
   "http://127.0.0.1:6274",
 ] as const;
+
+const EXPO_DEV_ORIGINS = ["exp://", "exp://**"] as const;
+
+/** Custom-scheme origins accepted from the native client. */
+export const mobileAppOrigins = (isDev: boolean) => {
+  if (!isDev) {
+    return [STELLA_MOBILE_ORIGIN];
+  }
+  return [STELLA_MOBILE_ORIGIN, ...EXPO_DEV_ORIGINS];
+};
 
 export const frontendOrigins = ({
   frontendUrl,

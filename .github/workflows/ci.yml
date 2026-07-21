@@ -936,6 +936,8 @@ jobs:
       - name: Bundle Android, iOS, and web
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/mobile build
+        env:
+          EXPO_PUBLIC_API_URL: https://api.example.com
 
   # Astro landing build. The required checks run lint, typecheck,
   # and test, but no `astro build`, so plugin/runtime

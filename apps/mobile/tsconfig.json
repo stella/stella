@@ -5,7 +5,9 @@
     "checkJs": false,
     "strict": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@/api/*": ["../api/src/*"],
+      "@stll/infosoud": ["../../packages/infosoud/src/index.ts"]
     }
   },
   "include": [

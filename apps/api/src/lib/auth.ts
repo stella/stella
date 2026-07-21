@@ -1,4 +1,5 @@
 import { apiKey } from "@better-auth/api-key";
+import { expo } from "@better-auth/expo";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
@@ -21,6 +22,7 @@ import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 
+import { STELLA_DEV_AUTH_COOKIE_PREFIX } from "@stll/api-contract";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -42,7 +44,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { isUuid, tUuid } from "@/api/lib/custom-schema";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
-import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
+import {
+  DEV_INSPECTOR_ORIGINS,
+  frontendOrigins,
+  mobileAppOrigins,
+} from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import {
   isTransactionalEmailConfigured,
@@ -250,7 +256,7 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
 const authCookiePrefix = env.isDev
-  ? (env.BETTER_AUTH_COOKIE_PREFIX ?? "stella-dev")
+  ? (env.BETTER_AUTH_COOKIE_PREFIX ?? STELLA_DEV_AUTH_COOKIE_PREFIX)
   : undefined;
 
 /**
@@ -507,6 +513,7 @@ const createAuth = () => {
         frontendUrl: env.FRONTEND_URL,
         isDev: env.isDev,
       }),
+      ...mobileAppOrigins(env.isDev),
       ...(env.isDev ? ["chrome-extension://*"] : []),
       ...(env.isDev ? DEV_INSPECTOR_ORIGINS : []),
       ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
@@ -675,6 +682,9 @@ const createAuth = () => {
         : {}),
     },
     plugins: [
+      // Translates Expo's explicit origin header into Better Auth's normal
+      // origin validation and carries OAuth cookies through native deep links.
+      expo(),
       bearer(),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.

@@ -38,6 +38,7 @@
     "@aws-sdk/client-sts": "^3.1094.0",
     "@aws-sdk/s3-request-presigner": "^3.1094.0",
     "@better-auth/api-key": "catalog:",
+    "@better-auth/expo": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/cors": "^1.4.2",
     "@google/genai": "^2.13.0",

@@ -8,10 +8,20 @@ It uses Expo Router with typed routes and React Compiler enabled.
 From the repository root:
 
 ```sh
+cp apps/mobile/.env.example apps/mobile/.env
 bun --filter @stll/mobile ios
 bun --filter @stll/mobile android
 bun --filter @stll/mobile web
 ```
+
+`EXPO_PUBLIC_API_URL` is the API base URL. A simulator can normally use the
+example's `localhost` value; a physical device needs an address reachable from
+the device, such as the development computer's LAN address. This is public
+runtime configuration, never a place for secrets.
+
+Native sessions are managed by Better Auth's Expo integration and persisted in
+the platform secure store. Typed Eden requests read the current cookie for each
+request; Expo web previews use browser-managed cookies instead.
 
 Run the native compatibility and repository checks with:
 

@@ -21,18 +21,27 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@better-auth/expo": "catalog:",
+    "@stll/api": "workspace:*",
+    "@stll/api-client": "workspace:*",
+    "@stll/api-contract": "workspace:*",
+    "better-auth": "catalog:",
     "expo": "~57.0.6",
     "expo-constants": "~57.0.5",
     "expo-linking": "~57.0.3",
+    "expo-network": "~57.0.1",
     "expo-router": "~57.0.6",
+    "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.1",
+    "expo-web-browser": "~57.0.1",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-native": "0.86.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.26.2",
-    "react-native-web": "~0.21.0"
+    "react-native-web": "~0.21.0",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
