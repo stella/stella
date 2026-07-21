@@ -7,6 +7,7 @@ import {
   countCapabilityDispositions,
   deriveCapabilityId,
   deriveDomain,
+  performsRuntimeAuthorization,
   deriveHandlerImportPath,
   detectContextFidelityFeatures,
   finalIdSegment,
@@ -1384,5 +1385,37 @@ describe("context-fidelity scan", () => {
     });
     expect(scan.violations).toEqual([]);
     expect(scan.staleWaivers).toEqual([]);
+  });
+});
+
+describe("performsRuntimeAuthorization", () => {
+  test("detects a handler that authorizes at runtime", () => {
+    // The two shapes the uploads slice uses: the ac `.authorize(` method and an
+    // `authorize<Name>(` helper. Both must be caught, or a write-behind-a-read
+    // handler slips past the export guard.
+    expect(
+      performsRuntimeAuthorization(
+        'const a = roles[role].authorize({ entity: ["create"] });',
+      ),
+    ).toBe(true);
+    expect(
+      performsRuntimeAuthorization(
+        "const r = authorizeUploadPurpose({ memberRole, purpose });",
+      ),
+    ).toBe(true);
+  });
+
+  test("does not flag a handler that only reads", () => {
+    expect(
+      performsRuntimeAuthorization(
+        "const rows = await safeDb.query.contact.findMany();",
+      ),
+    ).toBe(false);
+    // A comment or identifier merely mentioning authorization must not trip it.
+    expect(
+      performsRuntimeAuthorization(
+        "// authorization happens in the macro\nconst x = 1;",
+      ),
+    ).toBe(false);
   });
 });

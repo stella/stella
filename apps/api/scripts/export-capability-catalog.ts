@@ -63,6 +63,7 @@ import {
   isDestructiveName,
   isWellFormedCapabilityId,
   readScopeForDomainScope,
+  performsRuntimeAuthorization,
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
@@ -783,11 +784,13 @@ const collectClassGuardErrors = ({
   entrySources,
   routeFiles,
   toolFeatureByName,
+  overriddenAccessIds,
 }: {
   entries: readonly CapabilityEntry[];
   entrySources: readonly { id: string; source: string }[];
   routeFiles: readonly { id: string; source: string }[];
   toolFeatureByName: ReadonlyMap<string, string>;
+  overriddenAccessIds: ReadonlySet<string>;
 }): string[] => {
   const errors: string[] = [];
   const capabilityIdSet = new Set(entries.map((entry) => entry.id));
@@ -802,6 +805,32 @@ const collectClassGuardErrors = ({
     if (entry.access === "read" && WRITE_ONLY_SCOPES.has(entry.scope)) {
       errors.push(
         `read capability "${entry.id}" resolves to write-only scope "${entry.scope}"; a read-only credential could never invoke it. A read must resolve to its domain read scope (see readScopeForDomainScope): fix DOMAIN_SCOPE / the access-keyed scope resolver, do not pin a write scope onto a read`,
+      );
+    }
+  }
+
+  // Runtime-authorization guard: `access` is inferred from the declared route
+  // permission, which is only a sound basis when it is an UPPER BOUND on what
+  // the handler enforces. A handler that authorizes at runtime (a `.authorize(`
+  // call or an `authorize<Name>(` helper in its own body) can enforce a WRITE
+  // its route permission understates — exactly the uploads case, where a
+  // `workspace:["read"]` floor hid a per-purpose `entity:["create"]` write and,
+  // once reads resolve to `stella:read`, let a read scope perform writes. So a
+  // read-classified capability whose handler authorizes at runtime must be an
+  // explicit, reviewed decision in ACCESS_OVERRIDES (write for a real mutation;
+  // a documented read for a genuine read-time check). Writes are safe by
+  // construction — they already resolve to a write scope.
+  const sourceById = new Map(
+    entrySources.map(({ id, source }) => [id, source]),
+  );
+  for (const entry of entries) {
+    if (entry.access !== "read" || overriddenAccessIds.has(entry.id)) {
+      continue;
+    }
+    const source = sourceById.get(entry.id);
+    if (source !== undefined && performsRuntimeAuthorization(source)) {
+      errors.push(
+        `read capability "${entry.id}" authorizes at runtime (its handler calls .authorize/authorize<Name>) but classifies as read from its route permission alone. That permission may understate a write the handler enforces, which would resolve to a read scope. Classify it explicitly in ACCESS_OVERRIDES: "write" if it mutates, or "read" with a reason if the runtime check is genuinely read-time.`,
       );
     }
   }
@@ -1246,6 +1275,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
     entrySources,
     routeFiles: files.filter((file) => file.id.endsWith("routes.ts")),
     toolFeatureByName,
+    overriddenAccessIds: new Set(Object.keys(ACCESS_OVERRIDES)),
   })) {
     errors.push(message);
   }
