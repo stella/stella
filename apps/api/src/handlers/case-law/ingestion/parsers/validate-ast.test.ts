@@ -5,7 +5,15 @@ import type {
   HeadingBlock,
   ParagraphBlock,
 } from "@/api/handlers/case-law/document-ast";
-import { validateAst } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+import {
+  AST_CONTENT_LOST,
+  AST_MISSING,
+  AST_STRUCTURE_DEGRADED,
+  DECISION_EMPTY,
+  storedDecisionSignal,
+  validateAst,
+  validationSignal,
+} from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -441,5 +449,71 @@ describe("validateAst", () => {
       expect(result.stats.blockTypeCounts["paragraph-closing"]).toBe(1);
       expect(result.stats.blockTypeCounts["paragraph-signature"]).toBe(1);
     });
+  });
+});
+
+// ── Parse signal ────────────────────────────────────────────
+
+describe("storedDecisionSignal", () => {
+  test("a decision with neither text nor AST is an error", () => {
+    // The state sk-courts has been storing since PDF fetching was
+    // deferred: nothing about the decision is readable, and no parser
+    // ran to report it.
+    expect(storedDecisionSignal({ hasFulltext: false, astBlocks: 0 })).toEqual({
+      event: DECISION_EMPTY,
+      level: "error",
+    });
+  });
+
+  test("text without structure is a warning, not an error", () => {
+    // The wall-of-text state: degraded, but the decision is readable
+    // and citable, so it must not compete with real loss for attention.
+    expect(storedDecisionSignal({ hasFulltext: true, astBlocks: 0 })).toEqual({
+      event: AST_MISSING,
+      level: "warn",
+    });
+  });
+
+  test("a parsed decision reports nothing", () => {
+    expect(
+      storedDecisionSignal({ hasFulltext: true, astBlocks: 12 }),
+    ).toBeUndefined();
+  });
+});
+
+describe("validationSignal", () => {
+  const signalFor = (html: string, blocks: Block[]) =>
+    validationSignal(validateAst(html, blocks));
+
+  const body = (text: string) => `<html><body><p>${text}</p></body></html>`;
+  const LONG =
+    "Alpha bravo charlie delta echo foxtrot golf hotel india juliet " +
+    "kilo lima mike november oscar papa quebec romeo sierra tango";
+
+  test("source text missing from the AST is an error", () => {
+    expect(signalFor(body(LONG), [])).toEqual({
+      event: AST_CONTENT_LOST,
+      level: "error",
+    });
+  });
+
+  test("a complete AST with imperfect structure is a warning", () => {
+    // Headingless, but every word survived: readable and citable, so
+    // it must not compete with real loss for attention.
+    const text = "Alpha bravo charlie delta echo foxtrot golf hotel india.";
+    expect(signalFor(body(text), [makeBlock({ plainText: text })])).toEqual({
+      event: AST_STRUCTURE_DEGRADED,
+      level: "warn",
+    });
+  });
+
+  test("a clean parse reports nothing", () => {
+    const text = "Alpha bravo charlie delta echo foxtrot golf hotel india.";
+    expect(
+      signalFor(body(text), [
+        makeHeading("Judgment"),
+        makeBlock({ plainText: text }),
+      ]),
+    ).toBeUndefined();
   });
 });

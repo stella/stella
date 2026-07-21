@@ -20,7 +20,7 @@ type Issue = {
   severity: "error" | "warning";
 };
 
-type ValidationResult = {
+export type ValidationResult = {
   ok: boolean;
   issues: Issue[];
   stats: {
@@ -403,17 +403,66 @@ export const DECISION_EMPTY = "case_law.ingestion.decision_empty";
 export const AST_MISSING = "case_law.ingestion.ast_missing";
 
 /**
+ * What a stored decision reports about itself, before any parser
+ * result is considered.
+ *
+ * Kept as a pure function rather than inline branching in the pipeline
+ * because this is the signal an operator or agent sweeps for; a change
+ * that silently downgrades it would otherwise be invisible, and the
+ * one place it must not be invisible is here.
+ */
+export type StoredDecisionSignal = {
+  event: typeof DECISION_EMPTY | typeof AST_MISSING;
+  level: "error" | "warn";
+};
+
+export const storedDecisionSignal = (stored: {
+  hasFulltext: boolean;
+  astBlocks: number;
+}): StoredDecisionSignal | undefined => {
+  if (stored.astBlocks > 0) {
+    return undefined;
+  }
+  return stored.hasFulltext
+    ? { event: AST_MISSING, level: "warn" }
+    : { event: DECISION_EMPTY, level: "error" };
+};
+
+/**
  * Validate, then log the outcome under a severity that reflects what
  * kind of failure it is. Returns the result for callers that want to
  * assert on it.
  */
+export type ValidationSignal = {
+  event: typeof AST_CONTENT_LOST | typeof AST_STRUCTURE_DEGRADED;
+  level: "error" | "warn";
+};
+
+/**
+ * Map a validation outcome onto the event an operator sweeps for.
+ * Pure, and tested as such: this mapping is the whole value of the
+ * signal, and a change that quietly turns loss into a warning would
+ * otherwise show up only as an absence in a log search.
+ */
+export const validationSignal = (
+  result: Pick<ValidationResult, "ok" | "issues">,
+): ValidationSignal | undefined => {
+  if (result.issues.length === 0) {
+    return undefined;
+  }
+  return result.ok
+    ? { event: AST_STRUCTURE_DEGRADED, level: "warn" }
+    : { event: AST_CONTENT_LOST, level: "error" };
+};
+
 export const validateAndLog = (
   subject: ValidationSubject,
   html: string,
   blocks: Block[],
 ): ValidationResult => {
   const result = validateAst(html, blocks);
-  if (result.issues.length === 0) {
+  const signal = validationSignal(result);
+  if (!signal) {
     return result;
   }
 
@@ -432,12 +481,12 @@ export const validateAndLog = (
     blockCount: result.stats.blockCount,
   };
 
-  if (result.ok) {
-    logger.warn(AST_STRUCTURE_DEGRADED, common);
+  if (signal.level === "warn") {
+    logger.warn(signal.event, common);
     return result;
   }
 
-  logger.error(AST_CONTENT_LOST, {
+  logger.error(signal.event, {
     ...common,
     retainedPct: result.stats.retainedPct,
     missingWordCount: result.stats.missingWords.length,

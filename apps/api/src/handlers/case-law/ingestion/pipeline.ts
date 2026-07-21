@@ -32,10 +32,7 @@ import {
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import {
-  AST_MISSING,
-  DECISION_EMPTY,
-} from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
+import { storedDecisionSignal } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import {
   DANGEROUS_CHARS,
@@ -372,19 +369,23 @@ export const processDecision = async (
   const astBlocks = hasUsableAst(result.documentAst)
     ? result.documentAst.blocks.length
     : 0;
-  const subject = {
-    sourceId,
-    caseNumber: result.caseNumber,
-    language: result.language,
-    url: result.sourceUrl ?? result.documentUrl ?? "",
-  };
-  if (!result.fulltext && astBlocks === 0) {
-    logger.error(DECISION_EMPTY, subject);
-  } else if (astBlocks === 0) {
-    logger.warn(AST_MISSING, {
-      ...subject,
+  const signal = storedDecisionSignal({
+    hasFulltext: Boolean(result.fulltext),
+    astBlocks,
+  });
+  if (signal) {
+    const subject = {
+      sourceId,
+      caseNumber: result.caseNumber,
+      language: result.language,
+      url: result.sourceUrl ?? result.documentUrl ?? "",
       fulltextLength: result.fulltext?.length ?? 0,
-    });
+    };
+    if (signal.level === "error") {
+      logger.error(signal.event, subject);
+    } else {
+      logger.warn(signal.event, subject);
+    }
   }
 
   const citations = extractCitations(
