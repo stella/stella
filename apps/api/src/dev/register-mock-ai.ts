@@ -7,6 +7,7 @@ import type {
   TextPart,
   TokenUsage,
 } from "@tanstack/ai";
+import { panic } from "better-result";
 
 import { isMockAI } from "@/api/consts";
 import { registerTanStackMockTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
@@ -167,20 +168,20 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   },
 });
 
-// The default `{}` fails any strict valibot schema, so the playbook grade/derive
-// paths have no working dev mock. Return a minimal schema-valid object for the
-// two playbook structured-output features (keyed off the JSON-schema property
-// set, since the adapter never sees the feature name), and keep `{}` for every
-// other structured-output caller.
-const mockStructuredData = (outputSchema: unknown): Record<string, unknown> => {
-  const properties =
-    typeof outputSchema === "object" &&
-    outputSchema !== null &&
-    "properties" in outputSchema &&
-    typeof outputSchema.properties === "object" &&
-    outputSchema.properties !== null
-      ? outputSchema.properties
-      : {};
+// Two playbook structured-output features have curated fixtures below because
+// their semantic *values* matter (a grade, a derived question) beyond mere
+// schema validity. Every other structured-output caller falls through to
+// `synthesizeJsonSchemaObject`, which walks the JSON schema TanStack hands the
+// adapter (already converted from the caller's Valibot schema, see
+// `generateTanStackObjectForRole` in tanstack-ai-generate.ts) and builds the
+// minimal value that satisfies it. Returning `{}` here previously passed
+// schema validation to the caller's `v.parse`, which throws on any missing
+// required field — every new structured-output feature was born broken
+// under the documented `USE_MOCK_AI=true` dev default.
+export const mockStructuredData = (
+  outputSchema: unknown,
+): Record<string, unknown> => {
+  const properties = jsonSchemaProperties(outputSchema);
 
   // playbook.verdict — tier-match. Return a plain "deviation" with no `matched`
   // so the object is valid regardless of whether the prompt listed fallbacks.
@@ -196,7 +197,166 @@ const mockStructuredData = (outputSchema: unknown): Record<string, unknown> => {
     };
   }
 
-  return {};
+  return synthesizeJsonSchemaObject(outputSchema);
+};
+
+const jsonSchemaProperties = (outputSchema: unknown): JsonSchemaNode => {
+  if (
+    !isJsonSchemaNode(outputSchema) ||
+    !isJsonSchemaNode(outputSchema["properties"])
+  ) {
+    return {};
+  }
+  return outputSchema["properties"];
+};
+
+type JsonSchemaNode = Record<string, unknown>;
+
+const isJsonSchemaNode = (value: unknown): value is JsonSchemaNode =>
+  typeof value === "object" && value !== null;
+
+// `Array.isArray` narrows an `unknown` argument to `any[]`, not `unknown[]`
+// (a long-standing TypeScript lib.d.ts gap), which would otherwise leak `any`
+// into every caller below.
+const isUnknownArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value);
+
+// A branch list (`anyOf`/`oneOf`) that contains an explicit `{ type: "null" }`
+// member is how Valibot's `v.nullable()` reaches the mock: a genuinely
+// nullable, still-required field. Synthesizing `null` is always valid for it.
+const hasExplicitNullBranch = (node: JsonSchemaNode): boolean => {
+  const branches = node["anyOf"] ?? node["oneOf"];
+  if (!isUnknownArray(branches)) {
+    return false;
+  }
+  return branches.some(
+    (branch) => isJsonSchemaNode(branch) && isNullOnlyType(branch["type"]),
+  );
+};
+
+const isNullOnlyType = (type: unknown): boolean =>
+  type === "null" || (isUnknownArray(type) && type.every((t) => t === "null"));
+
+// TanStack's `forStructuredOutput` conversion (`convertSchemaForStructuredOutput`,
+// applied to every schema before an adapter's `structuredOutput` sees it)
+// widens originally-optional properties into `required` entries whose `type`
+// gains a `"null"` member (e.g. `"string"` -> `["string", "null"]`), tracked in
+// a `nullWideningMap` the caller uses to undo the widening once the real
+// provider replies. The mock never receives that map, so this is the only
+// signal left that a property was optional in the original Valibot schema:
+// unlike `v.nullable()` (an `anyOf`/`oneOf` null branch, see above), the
+// widening mutates `type` in place. Detecting it lets the synthesized object
+// omit the key, matching what the original schema actually requires.
+const isWidenedOptional = (node: JsonSchemaNode): boolean => {
+  const type = node["type"];
+  if (!isUnknownArray(type) || !type.includes("null")) {
+    return false;
+  }
+  return (
+    type.some((t) => t !== "null") &&
+    node["anyOf"] === undefined &&
+    node["oneOf"] === undefined
+  );
+};
+
+const primaryType = (type: unknown): string | undefined => {
+  if (typeof type === "string") {
+    return type;
+  }
+  if (isUnknownArray(type)) {
+    return type.find((t): t is string => typeof t === "string" && t !== "null");
+  }
+  return undefined;
+};
+
+const synthesisFailure = (node: unknown): never =>
+  panic(
+    "mock AI adapter cannot synthesise structured output for this schema; " +
+      `add a fixture in register-mock-ai.ts (schema node: ${JSON.stringify(node)})`,
+  );
+
+// Generic JSON-schema-shaped value synthesis: walks `outputSchema` and builds
+// the minimal value that satisfies it, so any structured-output caller — not
+// just the two curated playbook fixtures above — gets a schema-valid mock
+// response instead of `{}`.
+const synthesizeJsonSchemaValue = (node: unknown): unknown => {
+  if (!isJsonSchemaNode(node)) {
+    return synthesisFailure(node);
+  }
+
+  if ("const" in node) {
+    return node["const"];
+  }
+
+  if (isUnknownArray(node["enum"]) && node["enum"].length > 0) {
+    return node["enum"][0];
+  }
+
+  if (hasExplicitNullBranch(node)) {
+    return null;
+  }
+
+  switch (primaryType(node["type"])) {
+    case "object":
+      return synthesizeJsonSchemaObject(node);
+    case "array":
+      return synthesizeJsonSchemaArray(node);
+    case "string":
+      return "mock";
+    case "number":
+    case "integer":
+      return 0;
+    case "boolean":
+      return false;
+    case "null":
+      return null;
+    default:
+      return synthesisFailure(node);
+  }
+};
+
+const synthesizeJsonSchemaObject = (node: unknown): Record<string, unknown> => {
+  if (!isJsonSchemaNode(node)) {
+    return synthesisFailure(node);
+  }
+
+  const properties = isJsonSchemaNode(node["properties"])
+    ? node["properties"]
+    : {};
+  const required = isUnknownArray(node["required"]) ? node["required"] : [];
+
+  const result: Record<string, unknown> = {};
+  for (const [key, propertySchema] of Object.entries(properties)) {
+    if (!isJsonSchemaNode(propertySchema)) {
+      continue;
+    }
+    if (isWidenedOptional(propertySchema)) {
+      continue;
+    }
+    if (hasExplicitNullBranch(propertySchema)) {
+      result[key] = null;
+      continue;
+    }
+    if (!required.includes(key)) {
+      continue;
+    }
+    result[key] = synthesizeJsonSchemaValue(propertySchema);
+  }
+  return result;
+};
+
+const synthesizeJsonSchemaArray = (node: JsonSchemaNode): unknown[] => {
+  const minItems = typeof node["minItems"] === "number" ? node["minItems"] : 0;
+  if (minItems <= 0) {
+    return [];
+  }
+
+  const itemsSchema = isUnknownArray(node["items"])
+    ? node["items"].at(0)
+    : node["items"];
+  return Array.from({ length: minItems }, () =>
+    synthesizeJsonSchemaValue(itemsSchema),
+  );
 };
 
 if (isMockAI()) {
