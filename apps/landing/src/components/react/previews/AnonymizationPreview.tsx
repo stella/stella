@@ -46,9 +46,9 @@ export const AnonymizationPreview = () => (
         className="text-justify text-[0.7rem] leading-relaxed"
         style={{ color: "var(--foreground)" }}
       >
-        Smluvní strany, na straně jedné <Pill type="person">Jana Nováková</Pill>
-        , nar.{" "}
-        {/* live detect-and-mask span: raw name crossfades into the masked pill */}
+        This agreement is made between{" "}
+        <Pill type="person">Jonathan Meredith</Pill>, tax no.{" "}
+        {/* live detect-and-mask span: raw id crossfades into the masked pill */}
         <span className="relative inline-block align-baseline">
           <span
             className="whitespace-nowrap"
@@ -57,19 +57,19 @@ export const AnonymizationPreview = () => (
               color: "var(--muted-foreground)",
             }}
           >
-            880512/1234
+            542-11-8837
           </span>
           <span
             className="absolute inset-0 flex items-center justify-center"
             style={{ animation: "stella-anon-mask 3.5s ease-in-out infinite" }}
           >
-            <Pill type="id">880512/1234</Pill>
+            <Pill type="id">542-11-8837</Pill>
           </span>
         </span>
-        , bytem <Pill type="organization">Nábřeží 123, Praha</Pill>, a na straně
-        druhé společnost <Pill type="organization">ACME Corp s.r.o.</Pill>,
-        zapsaná pod ev. č. <Pill type="id">ČAK 12345</Pill>, uzavírají níže
-        uvedeného dne tuto smlouvu o poskytování právních služeb.
+        , of <Pill type="organization">Aldercross Chambers</Pill>, and{" "}
+        <Pill type="organization">Northwind Trading Ltd</Pill>, registered under{" "}
+        <Pill type="id">reg. no. 09182736</Pill>, for the provision of legal
+        services.
       </p>
       <div
         className="mt-2 flex items-center gap-3 border-t pt-2 text-[0.58rem]"
