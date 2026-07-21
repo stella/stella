@@ -449,6 +449,17 @@ const visitChild = (
     return;
   }
 
+  // A container of block-level children is walked, not flattened.
+  // The Publications Office's oldest XHTML wraps a whole decision in
+  // `div.listNotice > div.texte`, which would otherwise collapse into
+  // a single paragraph holding the entire judgment.
+  if ($el.children("p, div, table").length > 0) {
+    for (const child of $el.children().toArray()) {
+      visitChild($, builder, $(child), index, lastPointIndex);
+    }
+    return;
+  }
+
   // Every other element falls through to the paragraph path rather
   // than being skipped. Losing text is the one failure this parser
   // must not have; rendering it with the wrong shape is recoverable.
