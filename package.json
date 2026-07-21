@@ -128,7 +128,6 @@
     "fast-check": "^4.9.0",
     "jszip": "3.10.1",
     "lucide-react": "1.24.0",
-    "mime-types": "3.0.2",
     "oxfmt": "0.59.0",
     "oxlint": "1.74.0",
     "sherif": "1.13.0",
