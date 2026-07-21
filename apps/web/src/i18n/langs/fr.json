@@ -570,6 +570,7 @@
       "business_registry_lookup": "Recherche dans le registre des entreprises",
       "compare_versions": "Comparaison des versions",
       "create-document": "Préparation du document",
+      "create_workspace_document": "Création du document",
       "delete_clause": "Supprimer la clause",
       "delete_contact": "Supprimer le contact",
       "delete_document": "Supprimer le document",

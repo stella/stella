@@ -113,6 +113,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   business_registry_lookup: "chat.tool.business_registry_lookup",
   compare_versions: "chat.tool.compare_versions",
   "create-document": "chat.tool.create-document",
+  create_workspace_document: "chat.tool.create_workspace_document",
   "create-current-skill-resource": "common.edit",
   delete_clause: "chat.tool.delete_clause",
   delete_contact: "chat.tool.delete_contact",
