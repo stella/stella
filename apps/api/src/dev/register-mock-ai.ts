@@ -237,6 +237,20 @@ const hasExplicitNullBranch = (node: JsonSchemaNode): boolean => {
 const isNullOnlyType = (type: unknown): boolean =>
   type === "null" || (isUnknownArray(type) && type.every((t) => t === "null"));
 
+// A field is nullable to the mock through either of two encodings, depending
+// on which provider the pipeline projected the schema for before handing it
+// over (the mock runs under whatever provider `resolveProvider` picks, which
+// defaults to Google when `AI_PROVIDER` is unset): an OpenAI-style `anyOf`
+// null branch, or a Google-style `nullable: true` flag
+// (provider-safe-json-schema.ts lowers null unions to `nullable`). Real
+// structured-output schemas make nullable members `required` rather than
+// optional (OpenAI strict output rejects optional properties), so `null` is
+// the correct minimal value — and, unlike the `"string"` primitive, it also
+// satisfies a nullable field that carries a format constraint (e.g. an ISO
+// date), which a mock string would fail.
+const isNullable = (node: JsonSchemaNode): boolean =>
+  hasExplicitNullBranch(node) || node["nullable"] === true;
+
 // TanStack's `forStructuredOutput` conversion (`convertSchemaForStructuredOutput`,
 // applied to every schema before an adapter's `structuredOutput` sees it)
 // widens originally-optional properties into `required` entries whose `type`
@@ -292,7 +306,7 @@ const synthesizeJsonSchemaValue = (node: unknown): unknown => {
     return node["enum"][0];
   }
 
-  if (hasExplicitNullBranch(node)) {
+  if (isNullable(node)) {
     return null;
   }
 
@@ -333,7 +347,7 @@ const synthesizeJsonSchemaObject = (node: unknown): Record<string, unknown> => {
     if (isWidenedOptional(propertySchema)) {
       continue;
     }
-    if (hasExplicitNullBranch(propertySchema)) {
+    if (isNullable(propertySchema)) {
       result[key] = null;
       continue;
     }
