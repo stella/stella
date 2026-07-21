@@ -7,10 +7,10 @@ export const anonymization: Product = {
   eyebrow: "Anonymization",
   title: "Prepare material for AI without exposing identifying details.",
   summary:
-    "Rust-powered anonymization for legal AI workflows, compiled to WebAssembly. Prepare material without exposing names, entities, or identifying details, directly from chat and document review.",
+    "Remove names, entities, and identifying details before material reaches AI. Anonymization runs in your browser, directly from chat and document review, so unredacted text never leaves your machine.",
   metaTitle: "Document anonymization for legal AI | stella",
   metaDescription:
-    "Rust-powered anonymization compiled to WebAssembly. Prepare material for AI without exposing names, entities, or identifying details, from chat and review.",
+    "Remove names, entities, and identifying details before material reaches AI. Runs in the browser from chat and review; unredacted text stays on your machine.",
   hero: {
     type: "image",
     src: "/media/products/anonymization.png",
@@ -24,7 +24,7 @@ export const anonymization: Product = {
   quickAnswer: {
     question: "What is anonymization in stella?",
     answer:
-      "A Rust anonymization engine, compiled to WebAssembly, that prepares material for AI workflows without exposing names, entities, or identifying details. It is integrated directly into chat and document review.",
+      "It removes names, entities, and identifying details before material enters an AI workflow. Anonymization runs in your browser, so unredacted text never leaves your machine, and it is integrated directly into chat and document review.",
   },
   capabilities: [
     {
@@ -36,8 +36,8 @@ export const anonymization: Product = {
       body: "Runs directly in the chat composer and in document review, not in a separate tool.",
     },
     {
-      title: "A Rust engine in the browser",
-      body: "Built on stella's own anonymization engine, written in Rust and compiled to WebAssembly.",
+      title: "Nothing leaves your machine",
+      body: "Anonymization runs in your browser; material is never sent anywhere to be redacted.",
     },
     {
       title: "Reviewable output",
@@ -63,7 +63,7 @@ export const anonymization: Product = {
       bullets: [
         "Available from chat and document review",
         "No copy-pasting into an external redaction tool",
-        "Built on stella's own Rust anonymization engine, compiled to WebAssembly",
+        "Runs in your browser on stella's own open-source engine",
       ],
       media: {
         type: "story",
