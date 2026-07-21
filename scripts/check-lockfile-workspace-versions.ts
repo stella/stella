@@ -70,16 +70,16 @@ const lockText = await Bun.file(path.join(ROOT, "bun.lock")).text();
 // so a plain JSON.parse fails on it. Rather than hand-roll a tolerant parser
 // for the whole file (risking mis-parsing the many base64 `sha512-...`
 // strings that legitimately contain `//`), extract just the one shape we
-// need directly: the `"<workspace path>": { "name": ..., "version": ... }`
-// block bun emits per workspace entry. bun always writes `name` and
-// `version` first in that block, before any nested `dependencies` /
-// `devDependencies` / `bin` maps, so matching up to the *first* `}` (rather
-// than balancing braces) is safe: it always captures past the version field
-// even when it stops short of the block's real close.
+// need directly: the `"<workspace path>": { "name": ..., "version": ...,
+// "dependencies": { ... }, ... }` block bun emits per workspace entry.
+// Anchor on the block's own indentation and match everything up to the `}`
+// that closes at that same indentation, rather than stopping at the first
+// `}`: a nested map (`dependencies`, `devDependencies`, `bin`, ...) closing
+// before `version` would otherwise truncate the capture and hide the field.
 const versionForWorkspace = (workspaceDir: string): string | null => {
   const escaped = workspaceDir.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  const blockRe = new RegExp(`"${escaped}":\\s*\\{([^}]*)\\}`, "u");
-  const block = blockRe.exec(lockText)?.[1];
+  const blockRe = new RegExp(`^(\\s*)"${escaped}":\\s*\\{([^]*?)^\\1\\}`, "mu");
+  const block = blockRe.exec(lockText)?.[2];
   if (!block) {
     return null;
   }
