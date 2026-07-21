@@ -1,16 +1,24 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { COUNTRY_CODES } from "@stll/country-codes";
+import { docxToMarkdown } from "@stll/folio-core/server";
 import { roles } from "@stll/permissions";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
-import type { ContactEmail, ContactPhone } from "@/api/db/schema-validators";
+import type {
+  ContactEmail,
+  ContactPhone,
+  FieldContent,
+} from "@/api/db/schema-validators";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import { readEntityByIdHandler } from "@/api/handlers/entities/get";
+import { createFileKey } from "@/api/handlers/files/utils";
 import {
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
@@ -30,6 +38,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { getS3 } from "@/api/lib/s3";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
@@ -73,6 +82,7 @@ import {
   textResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
 // Page size for each citation list on read_case_law_decision. The decision
@@ -552,9 +562,11 @@ export const STELLA_TOOL_DEFINITIONS = [
   {
     annotations: { readOnlyHint: true, openWorldHint: false },
     description:
-      "Read extracted text from a document found anywhere in your accessible " +
-      "matters. Use after search_across_matters. Long documents are returned " +
-      "in windows; pass the returned nextCursor back as cursor to read more.",
+      "Read a document's content, found anywhere in your accessible matters. " +
+      "DOCX files are converted to Markdown with structure preserved " +
+      "(headings, tables, lists); other formats return their extracted plain " +
+      "text. Use after search_across_matters. Long documents are returned in " +
+      "windows; pass the returned nextCursor back as cursor to read more.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1182,6 +1194,72 @@ const toIsoDateString = (value: unknown): string | null => {
   return null;
 };
 
+type DocxFieldContent = Extract<FieldContent, { type: "file" }>;
+
+const isDocxFileContent = (
+  content: FieldContent,
+): content is DocxFieldContent =>
+  content.type === "file" && content.mimeType === DOCX_MIME_TYPE;
+
+const findCurrentVersionDocxFile = (
+  fieldList: readonly { content: FieldContent }[],
+): DocxFieldContent | undefined =>
+  fieldList.find((field): field is { content: DocxFieldContent } =>
+    isDocxFileContent(field.content),
+  )?.content;
+
+type LoadCurrentVersionDocxMarkdownProps = {
+  context: McpRequestContext;
+  entityId: ReturnType<typeof brandPersistedEntityId>;
+  workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
+};
+
+/**
+ * Convert the entity's CURRENT version DOCX file (if any) to folio's
+ * structure-preserving Markdown. Reuses `readEntityByIdHandler` — the same
+ * TOCTOU-safe entity+currentVersion+fields lookup `read_document` uses — so
+ * this shares its auth boundary and never re-derives entity access. Returns
+ * `null` (never throws) when the current version holds no DOCX file or the
+ * conversion fails, so the caller can fall back to the cached plaintext
+ * extraction instead of failing the whole read.
+ */
+const loadCurrentVersionDocxMarkdown = async ({
+  context,
+  entityId,
+  workspaceId,
+}: LoadCurrentVersionDocxMarkdownProps): Promise<string | null> => {
+  const entityResult = await Result.gen(() =>
+    readEntityByIdHandler({ safeDb: context.safeDb, workspaceId, entityId }),
+  );
+  if (Result.isError(entityResult)) {
+    return null;
+  }
+
+  const file = findCurrentVersionDocxFile(entityResult.value.fields);
+  if (!file) {
+    return null;
+  }
+
+  const markdownResult = await Result.tryPromise({
+    try: async () => {
+      const buffer = await getS3()
+        .file(
+          createFileKey({
+            organizationId: context.organizationId,
+            workspaceId,
+            fileId: file.id,
+            mimeType: DOCX_MIME_TYPE,
+          }),
+        )
+        .arrayBuffer();
+      return await docxToMarkdown(buffer);
+    },
+    catch: (cause) => cause,
+  });
+
+  return Result.isError(markdownResult) ? null : markdownResult.value;
+};
+
 const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   args,
   context,
@@ -1232,17 +1310,28 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   );
 
   const workspaceId = row.entity.workspaceId;
-  // Carry the FULL decrypted text and window it in the egress pipeline, so an
+  const markdown = await loadCurrentVersionDocxMarkdown({
+    context,
+    entityId,
+    workspaceId,
+  });
+  // Prefer the live DOCX-to-Markdown conversion (headings, tables, lists
+  // preserved) whenever the current version holds a DOCX file; every other
+  // format (PDF, images, non-document entities, or a conversion failure)
+  // falls back to the plain text already extracted at ingestion.
+  const text = markdown ?? plaintext;
+
+  // Carry the FULL text and window it in the egress pipeline, so an
   // anonymized read redacts the whole document before slicing (slicing raw text
   // first could split an entity name across the window boundary and leak its
   // prefix). Default mode leaves name/text as-is and windows the same way.
   const initialNextCursor = (): string | null => null;
   const payload = {
-    charCount: plaintext.length,
+    charCount: text.length,
     entityId,
     kind: row.entity.kind,
     name: row.entity.name,
-    text: plaintext,
+    text,
     truncated: false,
     nextCursor: initialNextCursor(),
     workspaceId,

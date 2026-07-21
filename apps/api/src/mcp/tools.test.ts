@@ -1,12 +1,61 @@
 import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import JSZip from "jszip";
 
 import { env } from "@/api/env";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
+
+/**
+ * Minimal DOCX with a Heading1 paragraph, a two-row table, and a body
+ * paragraph, for exercising `docxToMarkdown`'s real (unmocked) conversion in
+ * `read_content_across_matters`'s markdown branch.
+ */
+const makeDocxBytes = async () => {
+  const zip = new JSZip();
+  zip.file(
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>
+  <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Agreement</w:t></w:r></w:p>
+  <w:tbl>
+    <w:tr>
+      <w:tc><w:p><w:r><w:t>Party</w:t></w:r></w:p></w:tc>
+      <w:tc><w:p><w:r><w:t>Role</w:t></w:r></w:p></w:tc>
+    </w:tr>
+    <w:tr>
+      <w:tc><w:p><w:r><w:t>Acme s.r.o.</w:t></w:r></w:p></w:tc>
+      <w:tc><w:p><w:r><w:t>Seller</w:t></w:r></w:p></w:tc>
+    </w:tr>
+  </w:tbl>
+  <w:p><w:r><w:t>Signed below.</w:t></w:r></w:p>
+</w:body></w:document>`,
+  );
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="xml" ContentType="application/xml"/>
+</Types>`,
+  );
+  const bytes = await zip.generateAsync({ type: "uint8array" });
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  );
+};
+
+const s3ArrayBufferMock = mock(async () => await makeDocxBytes());
+const s3FileMock = mock(() => ({ arrayBuffer: s3ArrayBufferMock }));
+
+void mock.module("@/api/lib/s3", () => ({
+  getS3: () => ({ file: s3FileMock }),
+}));
 
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
@@ -345,6 +394,8 @@ type MockEntityFindFirstInput = {
   };
 };
 
+type MockFieldContent = { type: string; [key: string]: unknown };
+
 type MockMcpTransaction = {
   query: {
     entities: {
@@ -356,7 +407,7 @@ type MockMcpTransaction = {
           fields: {
             id: string;
             propertyId: string;
-            content: { type: string };
+            content: MockFieldContent;
           }[];
         } | null;
       } | null>;
@@ -367,7 +418,7 @@ type MockMcpTransaction = {
     fields: {
       findMany: () => Promise<
         {
-          content: { type: string };
+          content: MockFieldContent;
           id: string;
           propertyId: string;
         }[]
@@ -400,9 +451,18 @@ const createExtractedContentRow = ({
   workspaceId,
 });
 
+// Non-DOCX file stub (no `mimeType`) so every pre-existing `createScopedDb`
+// caller keeps exercising the plaintext fallback path unchanged.
+const DEFAULT_CURRENT_VERSION_FILE_CONTENT: MockFieldContent = {
+  type: "file",
+};
+
 const createScopedDb = (
   rows: unknown[] = [],
   extractedContentRow: ExtractedContentRow | null = null,
+  // The current version's sole field content; pass a DOCX `FieldContent` to
+  // exercise the live docx-to-markdown branch.
+  currentVersionFileContent: MockFieldContent = DEFAULT_CURRENT_VERSION_FILE_CONTENT,
 ) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
@@ -432,7 +492,7 @@ const createScopedDb = (
                       {
                         id: "field_1",
                         propertyId: "property_1",
-                        content: { type: "file" },
+                        content: currentVersionFileContent,
                       },
                     ],
                   },
@@ -507,6 +567,8 @@ describe("OpenAI-compatible MCP tools", () => {
     decryptContentMock.mockResolvedValue("Full document text");
     searchDecisionsHandlerMock.mockReset();
     readDecisionHandlerMock.mockReset();
+    s3FileMock.mockClear();
+    s3ArrayBufferMock.mockClear();
   });
 
   afterAll(() => {
@@ -1379,6 +1441,66 @@ describe("OpenAI-compatible MCP tools", () => {
       truncated: false,
       nextCursor: null,
       workspaceId: "ws_1",
+    });
+  });
+
+  test("read_content_across_matters returns folio Markdown when the current version holds a DOCX file", async () => {
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow(), {
+        type: "file",
+        id: "file_1",
+        fileName: "agreement.docx",
+        mimeType: DOCX_MIME_TYPE,
+      }),
+    });
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
+      entityId: "entity_1",
+      kind: "document",
+      name: "Share Purchase Agreement",
+      workspaceId: "ws_1",
+    });
+    if (!isRecord(payload) || typeof payload["text"] !== "string") {
+      throw new Error("Expected payload.text to be a string");
+    }
+    const { text } = payload;
+    // Headings and tables survive the conversion; the cached plaintext
+    // extraction is not what gets served once markdown conversion succeeds.
+    expect(text).toContain("# Agreement");
+    expect(text).toContain("| Party | Role |");
+    expect(text).toContain("| Acme s.r.o. | Seller |");
+    expect(text).toContain("Signed below.");
+    expect(text).not.toContain("Full document text");
+  });
+
+  test("read_content_across_matters falls back to plaintext when docx-to-markdown conversion fails", async () => {
+    s3ArrayBufferMock.mockImplementationOnce(async () => {
+      throw new Error("S3 read failed");
+    });
+    const context = createContext({
+      accessibleWorkspaceIds: ["ws_1", "ws_3"],
+      scopedDb: createScopedDb([], createExtractedContentRow(), {
+        type: "file",
+        id: "file_1",
+        fileName: "agreement.docx",
+        mimeType: DOCX_MIME_TYPE,
+      }),
+    });
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context,
+      toolName: "read_content_across_matters",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      text: "Full document text",
     });
   });
 

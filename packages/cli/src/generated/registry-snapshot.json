@@ -207,7 +207,7 @@
       "windowedText": true
     },
     "name": "read_content_across_matters",
-    "description": "Read extracted text from a document found anywhere in your accessible matters. Use after search_across_matters. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "description": "Read a document's content, found anywhere in your accessible matters. DOCX files are converted to Markdown with structure preserved (headings, tables, lists); other formats return their extracted plain text. Use after search_across_matters. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "inputSchema": {
       "type": "object",
       "properties": {
