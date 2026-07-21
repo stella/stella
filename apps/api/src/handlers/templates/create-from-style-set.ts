@@ -64,6 +64,7 @@ const createTemplateFromStyleSetHandler = async function* ({
 
 const config = {
   permissions: { template: ["create"], styleSet: ["use"] },
+  access: "write",
   mcp: { type: "capability", reason: "template_authoring_ui" },
   body: bodySchema,
 } satisfies HandlerConfig;

@@ -32,6 +32,7 @@ import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
+  access: "read",
 } satisfies HandlerConfig;
 
 /**

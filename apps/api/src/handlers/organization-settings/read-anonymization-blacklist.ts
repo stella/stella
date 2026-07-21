@@ -8,6 +8,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  access: "read",
   mcp: { type: "capability", reason: "anonymization_admin" },
 } satisfies HandlerConfig;
 

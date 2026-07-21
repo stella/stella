@@ -147,6 +147,7 @@ const config = {
     "whenToUse matches the request and skip any whose whenNotToUse applies.",
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "list_templates" },
+  access: "read",
   query: listTemplatesQuerySchema,
 } satisfies HandlerConfig;
 

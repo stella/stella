@@ -41,6 +41,7 @@ const config = {
     "upload was already finalized -- delete the resulting entity or skill " +
     "instead.",
   permissions: uploadRoutePermission,
+  access: "write",
   mcp: { type: "capability", reason: "file_transport" },
   params: abortParamsSchema,
 } satisfies HandlerConfig;

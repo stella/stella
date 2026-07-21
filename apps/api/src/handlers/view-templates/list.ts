@@ -10,6 +10,7 @@ import { parseViewLayout } from "@/api/lib/views-schema";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workspace_schema" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const toResponse = (template: typeof workspaceViewTemplates.$inferSelect) => {

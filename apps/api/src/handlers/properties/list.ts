@@ -13,6 +13,7 @@ const config = {
     "set_field_value to set a document's value for that property.",
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "list_properties" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const readProperties = createSafeHandler(

@@ -32,6 +32,7 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { ensureDefaultDocumentTypes } from "@/api/handlers/document-types/defaults";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -729,6 +730,19 @@ const createAuth = () => {
         // valid. Single-use is enforced by the plugin's invitation status.
         invitationExpiresIn: 60 * 60 * 48,
         organizationHooks: {
+          async afterCreateOrganization({ organization: org }) {
+            // Seed the org's starter document-type taxonomy at creation so
+            // listing it stays a pure read: a read-only credential must not be
+            // able to mint document types by listing them. `org.id` is read off
+            // the row the plugin just created, so it becomes the ownership id
+            // here. Idempotent via the (organization_id, key) unique. Runs on
+            // the owner connection (`rootDb`), which bypasses RLS the same way
+            // the org row's own creation did.
+            await ensureDefaultDocumentTypes(
+              brandPersistedOrganizationId(org.id),
+              rootDb,
+            );
+          },
           async afterRemoveMember({
             member: removedMember,
             organization: org,

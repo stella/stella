@@ -429,6 +429,7 @@ export const searchLegislationHandler = async (
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
+  access: "read",
   body: searchLegislationBodySchema,
 } satisfies HandlerConfig;
 

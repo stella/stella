@@ -26,6 +26,7 @@ const readRateTables = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "capability", reason: "billing_admin" },
+    access: "read",
     query: readRateTablesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {

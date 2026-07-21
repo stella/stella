@@ -49,6 +49,7 @@ import {
   workspaceContacts,
   workspaceMembers,
   workspaces,
+  workspaceViews,
 } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
 import type {
@@ -67,6 +68,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { getS3 } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
+import { buildDefaultViewRows } from "@/api/lib/views";
 
 import { seedCaseLaw } from "./seed-case-law";
 import { seedTemplates } from "./seed-templates";
@@ -4321,6 +4323,40 @@ export async function seed(organizationId?: string, userId?: string) {
   }
   console.log(
     `  Properties: ${allProperties.length} (${allProperties.length / seedWorkspaces.length}/workspace)`,
+  );
+
+  // 3b. Default views — one set per workspace, pinned to the file column.
+  // Listing views is now a pure read, so directly-seeded workspaces (which
+  // never hit the create handler) must have their default views seeded here,
+  // exactly as production does at workspace creation.
+  const fileProperties = allProperties.filter(
+    (prop) => prop.system === true && prop.content.type === "file",
+  );
+  // Skip workspaces that already have views: `workspace_views` has only a
+  // primary key, so `onConflictDoNothing` catches nothing on the fresh ids a
+  // reseed generates and would accumulate duplicate default tabs each run.
+  // Seed only workspaces with none, matching the production create path and the
+  // backfill migration's NOT EXISTS guard.
+  const seededViewWorkspaceIds = new Set(
+    (
+      await rootDb
+        .select({ workspaceId: workspaceViews.workspaceId })
+        .from(workspaceViews)
+    ).map((row) => row.workspaceId),
+  );
+  const viewRows = fileProperties
+    .filter((prop) => !seededViewWorkspaceIds.has(prop.workspaceId))
+    .flatMap((prop) =>
+      buildDefaultViewRows({
+        workspaceId: toWs(prop.workspaceId),
+        filePropertyId: prop.id,
+      }),
+    );
+  if (viewRows.length > 0) {
+    await rootDb.insert(workspaceViews).values(viewRows);
+  }
+  console.log(
+    `  Views: ${viewRows.length} (${fileProperties.length} workspaces × default set)`,
   );
 
   // 4. Entities + entity versions

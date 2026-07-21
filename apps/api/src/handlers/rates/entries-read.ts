@@ -53,6 +53,7 @@ const readRateEntries = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "capability", reason: "billing_admin" },
+    access: "read",
     params: rateEntryParamsSchema,
     query: readRateEntriesQuerySchema,
   },

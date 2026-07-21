@@ -5,16 +5,15 @@ import { workspaceViews } from "@/api/db/schema";
 import { cleanStalePropertyIds } from "@/api/handlers/views/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { AuditEvent } from "@/api/lib/audit-log";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest, type SupportedLang } from "@/api/lib/locale";
-import { getDefaultViews, localizeDefaultViewName } from "@/api/lib/views";
+import { localizeDefaultViewName } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workspace_schema" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const toViewResponse = (
@@ -40,9 +39,14 @@ const toViewResponse = (
   createdAt: view.createdAt.toISOString(),
 });
 
+// Pure read. Default views are seeded when a workspace is created
+// (`handlers/workspaces/create.ts`) and backfilled for pre-existing
+// workspaces by migration, so listing never writes. This keeps the handler's
+// `read` access truthful: a read-only credential cannot mint workspace views
+// by listing them.
 const readViews = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, request, recordAuditEvent }) {
+  async function* ({ safeDb, workspaceId, request }) {
     const lang = extractLangFromRequest(request);
     const views = yield* Result.await(
       safeDb((tx) =>
@@ -55,80 +59,11 @@ const readViews = createSafeHandler(
       ),
     );
 
-    // Seed default views on first access (replaces actor onWake).
     if (views.length === 0) {
-      const workspaceProperties = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.properties.findMany({
-            where: { workspaceId: { eq: workspaceId } },
-            columns: { id: true, content: true },
-            orderBy: { createdAt: "asc" },
-            limit: LIMITS.propertiesCount,
-          }),
-        ),
-      );
-      const filePropertyId = workspaceProperties.find(
-        (property) => property.content.type === "file",
-      )?.id;
-      const defaults = getDefaultViews(lang, {
-        tableColumnPinning: filePropertyId ? [filePropertyId] : [],
-      }).map((v) => ({
-        workspaceId,
-        name: v.name,
-        layout: v.layout,
-        position: v.position,
-      }));
-
-      const inserted = yield* Result.await(
-        safeDb(async (tx) => {
-          const rows = await tx
-            .insert(workspaceViews)
-            .values(defaults)
-            .onConflictDoNothing()
-            .returning();
-
-          const auditEvents: AuditEvent[] = rows.map((row) => ({
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.VIEW,
-            resourceId: row.id,
-            changes: {
-              created: {
-                old: null,
-                new: {
-                  name: row.name,
-                  layoutType: parseViewLayoutSafe(row.layout).type,
-                  position: row.position,
-                },
-              },
-            },
-            metadata: { reason: "default-seed" },
-          }));
-
-          await recordAuditEvent(tx, auditEvents);
-
-          return rows;
-        }),
-      );
-
-      // If another request won the race, fetch instead.
-      if (inserted.length === 0) {
-        const existing = yield* Result.await(
-          safeDb((tx) =>
-            tx
-              .select()
-              .from(workspaceViews)
-              .where(eq(workspaceViews.workspaceId, workspaceId))
-              .orderBy(workspaceViews.position)
-              .limit(LIMITS.viewsCount),
-          ),
-        );
-        return Result.ok(existing.map((view) => toViewResponse(view, lang)));
-      }
-
-      return Result.ok(inserted.map((view) => toViewResponse(view, lang)));
+      return Result.ok([]);
     }
 
-    // Clean stale property references from layouts.
+    // Clean stale property references from layouts before returning.
     const properties = yield* Result.await(
       safeDb((tx) =>
         tx.query.properties.findMany({

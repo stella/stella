@@ -18,3 +18,19 @@ describe("style set document capability scopes", () => {
     );
   });
 });
+
+describe("write capabilities behind an internal authorization guard", () => {
+  test("the upload lifecycle stays a write, so a read scope cannot upload", () => {
+    // uploads.* mint presigned PUT URLs and finalize/abort file writes, but
+    // their ROUTE permission is only `workspace:["read"]` (the real write check
+    // is `authorizeUploadPurpose`, inside the handler). Verb classification
+    // therefore reads them as `read`; an ACCESS_OVERRIDE pins them to `write`.
+    // Since read capabilities resolve to `stella:read`, dropping that override
+    // would let a read-only consent perform file writes — so pin it here.
+    for (const id of ["uploads.create", "uploads.update", "uploads.delete"]) {
+      const entry = capabilityCatalog.find((c) => c.id === id);
+      expect(entry?.access).toBe("write");
+      expect(entry?.scope).toBe("stella:matters_write");
+    }
+  });
+});

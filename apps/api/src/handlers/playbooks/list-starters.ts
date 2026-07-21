@@ -7,6 +7,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
+  access: "read",
 } satisfies HandlerConfig;
 
 // Minimal metadata only (no positions/tiers): the gallery just needs enough

@@ -12,12 +12,13 @@ import {
   properties,
   workspaceMembers,
   workspaces,
+  workspaceViews,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -36,6 +37,8 @@ import {
 } from "@/api/lib/matter-reference";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
+import { buildDefaultViewRows } from "@/api/lib/views";
+import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 
 // A request without `clientId` creates a personal matter (initially
 // visible only to the creator). With `clientId`, it's a normal
@@ -252,19 +255,61 @@ export const createWorkspaceHandler = async function* ({
         })),
       );
 
-      await tx.insert(properties).values([
-        {
-          workspaceId,
-          name: body.filePropertyName,
-          content: { type: "file", version: 1 },
-          tool: { version: 1, type: "manual-input" },
-          // The system file column is user-managed (uploads), not
-          // computed — fresh from creation.
-          status: "fresh",
-          system: true,
-          kinds: ["document"],
+      const fileProperty = await tx
+        .insert(properties)
+        .values([
+          {
+            workspaceId,
+            name: body.filePropertyName,
+            content: { type: "file", version: 1 },
+            tool: { version: 1, type: "manual-input" },
+            // The system file column is user-managed (uploads), not
+            // computed — fresh from creation.
+            status: "fresh",
+            system: true,
+            kinds: ["document"],
+          },
+        ])
+        .returning({ id: properties.id })
+        .then((rows) => rows.at(0));
+
+      if (!fileProperty) {
+        panic("Failed to create workspace file property");
+      }
+
+      // Seed the default views at creation so listing them stays a pure read
+      // (a read-only credential must not be able to mint views by listing).
+      // The table view pins the file column, which is why this runs after the
+      // file property exists.
+      const seededViews = await tx
+        .insert(workspaceViews)
+        .values(
+          buildDefaultViewRows({
+            workspaceId,
+            filePropertyId: fileProperty.id,
+          }),
+        )
+        .returning();
+
+      const viewAuditEvents: AuditEvent[] = seededViews.map((view) => ({
+        workspaceId,
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.VIEW,
+        resourceId: view.id,
+        changes: {
+          created: {
+            old: null,
+            new: {
+              name: view.name,
+              layoutType: parseViewLayoutSafe(view.layout).type,
+              position: view.position,
+            },
+          },
         },
-      ]);
+        metadata: { reason: "default-seed" },
+      }));
+
+      await recordAuditEvent(tx, viewAuditEvents);
 
       await recordAuditEvent(tx, {
         workspaceId,

@@ -9,6 +9,7 @@ import {
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "list_playbooks" },
+  access: "read",
   query: listPlaybookDefinitionsQuerySchema,
 } satisfies HandlerConfig;
 

@@ -46,7 +46,6 @@ import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability
 import type { RouteNode } from "../../../packages/cli/src/route-types";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import {
-  type AccessClassification,
   type CapabilityDispatchRecord,
   capInputSchema,
   CANONICAL_ACTION_VERBS,
@@ -58,10 +57,10 @@ import {
   deriveDomain,
   deriveHandlerImportPath,
   findInlineCapabilityMismatches,
-  findStaleAccessOverrides,
   isAllowedActionVerb,
   isDestructiveName,
   isWellFormedCapabilityId,
+  readScopeForDomainScope,
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
@@ -72,6 +71,7 @@ import {
   serializeCatalog,
   serializeCoverageDoc,
   serializeDispatchModule,
+  WRITE_ONLY_SCOPES,
 } from "./lib/capability-catalog";
 import {
   discoverSafeHandlers,
@@ -144,12 +144,16 @@ const formatGeneratedArtifact = async (
 };
 
 /**
- * MCP OAuth scope per capability domain (the first id segment). One scope per
- * domain: writes reuse their domain's write consent bucket, read-only domains
- * map to the read/admin-read scope their curated tools already use. A domain
- * that appears in the catalog but is absent here (and from UNMAPPED_DOMAINS)
- * fails the export, so a new domain cannot ship without a scope decision. Every
- * value must be a real scope in `apps/api/src/mcp/constants.ts`.
+ * MCP OAuth WRITE/consent scope per capability domain (the first id segment).
+ * Each value is the scope a WRITE capability in that domain requires; a READ
+ * capability resolves to the scope's read tier (`readScopeForDomainScope`), so
+ * a read-only credential is never forced to hold a write grant. Writes reuse
+ * their domain's write consent bucket; read-only domains map to the
+ * read/admin-read scope their curated tools already use (read == write there).
+ * A domain that appears in the catalog but is absent here (and from
+ * UNMAPPED_DOMAINS) fails the export, so a new domain cannot ship without a
+ * scope decision. Every value must be a real scope in
+ * `apps/api/src/mcp/constants.ts`.
  */
 const DOMAIN_SCOPE: Record<string, string> = {
   "audit-logs": "stella:admin_read",
@@ -278,101 +282,6 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
  * fails the export until the ambiguous export is pinned here.
  */
 const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
-
-/**
- * Access classification pins, each a reviewed decision. An override WINS over
- * the mechanical derivation, and is required in two cases:
- *  - unclassifiable permission verbs (outside read/list/view/create/update/
- *    delete/manage/write) or a permissionless handler whose name is not
- *    get/list/read: the export fails until pinned;
- *  - a read misclassified as write because its AUTHORIZING verb is a write on
- *    the parent resource (no read verb exists for it): pin it back to read so
- *    the catalog's `access` reflects what the handler does, not what consent
- *    gates it. `access` feeds the doc, `list_capabilities` filters/labels, and
- *    the CLI's write-receipt line; scope/permission enforcement is untouched.
- * Kept tight by a stale-entry check: a pin that resolves identically to the
- * derivation (so it changes nothing) fails the export.
- *
- * Unclassifiable-verb / permissionless pins:
- * - `playbooks.run`: `playbook:["apply"]` — running a playbook produces a run
- *   record; treat as a (non-destructive) write.
- * - `playbooks.auto-run`: `playbook:["apply"]` — materializes playbook-run
- *   columns/properties over the files table, so write.
- * - `playbooks.approve`: `playbook:["approve"]` — snapshots a version and flips
- *   the definition status, so write.
- * - `playbooks.review`: `playbook:["apply"]` — ephemeral single-document grading
- *   that persists no fields/justifications (only an audit row) and returns
- *   findings inline, so read.
- * - `templates.fill` / `templates.fill-by-id`: `template:["use"]` — both persist
- *   a template-fill record, so write.
- * - `templates.fill-preview` / `templates.prefill`: `template:["use"]` — compute
- *   only, no persistence, so read.
- * - `templates.fill-to-workspace`: `template:["use"], entity:["create"]` —
- *   creates a workspace entity, so write.
- *
- * Read-repins (write-verb-gated reads; sweep of read-shaped ids with
- * access: write, each handler verified to persist nothing):
- * - `chat.get-messages` / `chat.get-older-messages` / `chat.get-threads`:
- *   `chat:["create"]` (the only chat verb) gates pure thread/message reads.
- * - `organization-settings.preview`: `organizationSettings:["update"]` gates a
- *   matter-number-pattern preview that only reads existing references.
- * - `organization-settings.read-anonymization-blacklist`:
- *   `organizationSettings:["update"]` gates a pure blacklist read (admin-only
- *   visibility, no mutation).
- * - `properties.preview`: `property:["create"]` gates an AI dry-run over
- *   documents that returns computed values without persisting them (usage is
- *   metered by the framework, same as `templates.fill-preview`).
- * - `skills.get` / `skills.list` / `skills.list-commands`: `chat:["create"]`
- *   gates pure skill-catalog reads.
- * - `style-sets.read-editor` / `style-sets.read-stella-editor`:
- *   `styleSet:["use"]` gates pure formatting-preset reads.
- * - `usage.get-entitlement`: `organizationSettings:["update"]` gates a pure
- *   entitlement/remaining-units read (the Phase 1 judgment call, now pinned).
- * - `workspaces.read-workflow-target-count`: `workspace:["update"]` gates a
- *   pure count read used before running a workflow.
- */
-const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
-  // `flow:["run"]` / `flow:["review"]` gate run lifecycle mutations (start a
-  // run, cancel an in-progress run, submit a review-gate decision). All are
-  // non-destructive writes: they change run state, they do not delete data.
-  "flows.run-start": { access: "write", destructive: false },
-  "flows.run-cancel": { access: "write", destructive: false },
-  "flows.run-review": { access: "write", destructive: false },
-  "playbooks.run": { access: "write", destructive: false },
-  "playbooks.auto-run": { access: "write", destructive: false },
-  "playbooks.approve": { access: "write", destructive: false },
-  "playbooks.review": { access: "read", destructive: false },
-  "templates.fill": { access: "write", destructive: false },
-  "templates.fill-by-id": { access: "write", destructive: false },
-  "templates.fill-preview": { access: "read", destructive: false },
-  "templates.prefill": { access: "read", destructive: false },
-  "templates.fill-to-workspace": { access: "write", destructive: false },
-  "chat.get-messages": { access: "read", destructive: false },
-  "chat.get-older-messages": { access: "read", destructive: false },
-  "chat.get-threads": { access: "read", destructive: false },
-  "organization-settings.preview": { access: "read", destructive: false },
-  "organization-settings.read-anonymization-blacklist": {
-    access: "read",
-    destructive: false,
-  },
-  "properties.preview": { access: "read", destructive: false },
-  "skills.get": { access: "read", destructive: false },
-  "skills.list": { access: "read", destructive: false },
-  "skills.list-commands": { access: "read", destructive: false },
-  "style-sets.download": { access: "read", destructive: false },
-  "style-sets.list": { access: "read", destructive: false },
-  "style-sets.read-editor": { access: "read", destructive: false },
-  "style-sets.read-stella-editor": { access: "read", destructive: false },
-  "templates.create-from-style-set": {
-    access: "write",
-    destructive: false,
-  },
-  "usage.get-entitlement": { access: "read", destructive: false },
-  "workspaces.read-workflow-target-count": {
-    access: "read",
-    destructive: false,
-  },
-};
 
 /**
  * Reviewed opt-outs from the delete/remove name heuristic (see
@@ -629,22 +538,21 @@ type EntryScopeResult =
  * Final scope for a `tool`/`covered` entry: the entry must never advertise a
  * weaker consent than the curated tool that backs it, or the generic capability
  * path would gate the same operation behind less consent than the tool. The
- * domain scope (or an ENTRY_SCOPE_OVERRIDES pin) is kept when it is at least as
- * strict as the covering tool's scope, the tool's scope is inherited when
- * stricter, and an incomparable/unknown pairing fails the export.
+ * entry's access-resolved base scope (its read-tier scope for a read capability,
+ * its write/consent scope for a write) is kept when it is at least as strict as
+ * the covering tool's scope, the tool's scope is inherited when stricter, and an
+ * incomparable/unknown pairing fails the export.
  */
 const resolveEntryScopeAgainstTool = ({
   id,
-  domainScope,
+  base,
   toolName,
   toolScope,
-  override,
 }: {
   id: string;
-  domainScope: string;
+  base: string;
   toolName: string;
   toolScope: string | undefined;
-  override: string | undefined;
 }): EntryScopeResult => {
   if (toolScope === undefined) {
     return {
@@ -652,7 +560,6 @@ const resolveEntryScopeAgainstTool = ({
       message: `capability "${id}" names covering tool "${toolName}", which is not in the static registry`,
     };
   }
-  const base = override ?? domainScope;
   const comparison = compareScopeStrictness({
     first: base,
     second: toolScope,
@@ -778,6 +685,20 @@ const collectClassGuardErrors = ({
 }): string[] => {
   const errors: string[] = [];
   const capabilityIdSet = new Set(entries.map((entry) => entry.id));
+
+  // Read-scope guard: a READ capability must never require a write-only scope,
+  // or a read-only credential (`stella:read` / `stella:admin_read`) could not
+  // invoke it. The access-keyed resolver above already downgrades reads to their
+  // domain read tier, so this can only fire if that resolver is later broken —
+  // which is exactly when it must fail the export (companion to the
+  // `read-capabilities-with-write-scope` ratchet over the committed mirrors).
+  for (const entry of entries) {
+    if (entry.access === "read" && WRITE_ONLY_SCOPES.has(entry.scope)) {
+      errors.push(
+        `read capability "${entry.id}" resolves to write-only scope "${entry.scope}"; a read-only credential could never invoke it. A read must resolve to its domain read scope (see readScopeForDomainScope): fix DOMAIN_SCOPE / the access-keyed scope resolver, do not pin a write scope onto a read`,
+      );
+    }
+  }
 
   const fidelity = scanContextFidelity({
     entries: entrySources,
@@ -926,7 +847,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const entrySources: { id: string; source: string }[] = [];
   const idToFile = new Map<string, string>();
   const presentDomains = new Set<string>();
-  const accessOverrideUses: string[] = [];
   const kindOverrideUses: string[] = [];
   const optOutUses = new Set<string>();
   const scopeOverrideUses = new Set<string>();
@@ -1036,13 +956,43 @@ const buildCatalog = async (): Promise<BuildResult> => {
     const permissions = endpoint.config["permissions"];
     const hasPermissions = "permissions" in endpoint.config;
     const verbs = extractVerbs(permissions);
-    const accessResolution = resolveAccess({
+    // `access` is DECLARED on the config, not inferred: a handler's permission
+    // gate answers "who may call this", a different axis from whether it reads
+    // or writes (the same `workspace:["read"]` gate fronts a pure list and a
+    // cache-filling write). When declared it is authoritative; inference only
+    // proposes, and the affirmation guard below refuses to ship an unaffirmed
+    // read (which would resolve to a `stella:read`-reachable scope).
+    const declaredAccess = endpoint.config["access"];
+    const inferredAccess = resolveAccess({
       id,
       verbs,
       hasPermissions,
-      overrides: ACCESS_OVERRIDES,
+      overrides: {},
       destructiveNameOptOuts: DESTRUCTIVE_NAME_OPT_OUTS,
     });
+    const accessResolution =
+      declaredAccess === undefined
+        ? inferredAccess
+        : {
+            status: "resolved",
+            access: declaredAccess,
+            destructive:
+              !DESTRUCTIVE_NAME_OPT_OUTS.has(id) && isDestructiveName(id),
+          };
+    // Affirmation guard: a read resolves to a `stella:read`-reachable scope, so
+    // it must be an explicit, reviewed decision — never an inference. An
+    // inferred read (no `access` on the config) fails the export until someone
+    // affirms it read or corrects it to write.
+    if (
+      accessResolution.status === "resolved" &&
+      accessResolution.access === "read" &&
+      declaredAccess !== "read"
+    ) {
+      errors.push(
+        `capability "${id}" resolves to a read scope by inference, not affirmation. A read scope is reachable with stella:read consent, so it must be a reviewed decision: declare access: "read" on the handler config if it is a pure read, or access: "write" if it mutates (a DB write, an AI generation, a job enqueue).`,
+      );
+    }
+
     if (
       DESTRUCTIVE_NAME_OPT_OUTS.has(id) &&
       accessResolution.status === "resolved" &&
@@ -1053,28 +1003,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
       // escalated, and the verbs did not already make it destructive).
       optOutUses.add(id);
     }
-    if (accessResolution.status === "resolved" && id in ACCESS_OVERRIDES) {
-      // An override counts as "used" only when it CHANGED the outcome: the
-      // derivation without it either fails (unclassifiable/permissionless) or
-      // resolves to a different classification (a read-repin over a
-      // write-verb-gated read). A pin the derivation resolves identically
-      // without is stale clutter and stays reportable.
-      const withoutOverride = resolveAccess({
-        id,
-        verbs,
-        hasPermissions,
-        overrides: {},
-        destructiveNameOptOuts: DESTRUCTIVE_NAME_OPT_OUTS,
-      });
-      const changedOutcome =
-        withoutOverride.status !== "resolved" ||
-        withoutOverride.access !== accessResolution.access ||
-        withoutOverride.destructive !== accessResolution.destructive;
-      if (changedOutcome) {
-        accessOverrideUses.push(id);
-      }
-    }
-
     const scopeResolution = resolveScope({
       domain,
       scopeTable: DOMAIN_SCOPE,
@@ -1118,7 +1046,22 @@ const buildCatalog = async (): Promise<BuildResult> => {
       );
       continue;
     }
-    let scope = override ?? scopeResolution.scope;
+    const isRead = accessResolution.access === "read";
+    // The write/consent scope for this entry: an ENTRY_SCOPE_OVERRIDES pin names
+    // a stricter consent family for a specific endpoint, else the domain's write
+    // bucket. A READ capability resolves to that scope's read tier; a WRITE to
+    // the scope itself, so scope depends on (access, domain), not domain alone.
+    const consentScope = override ?? scopeResolution.writeScope;
+    const accessBaseScope = isRead
+      ? readScopeForDomainScope(consentScope)
+      : consentScope;
+    // The base the domain resolves to WITHOUT the override, for the stale-pin
+    // check below (a pin that changes nothing is fail-open clutter).
+    const domainBaseScope = isRead
+      ? scopeResolution.readScope
+      : scopeResolution.writeScope;
+
+    let scope = accessBaseScope;
     if (
       endpoint.exposure.type === "tool" ||
       endpoint.exposure.type === "covered"
@@ -1129,10 +1072,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
           : endpoint.exposure.by;
       const entryScope = resolveEntryScopeAgainstTool({
         id,
-        domainScope: scopeResolution.scope,
+        base: accessBaseScope,
         toolName,
         toolScope: toolScopeByName.get(toolName),
-        override,
       });
       if (entryScope.status === "error") {
         errors.push(entryScope.message);
@@ -1140,14 +1082,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
       }
       scope = entryScope.scope;
       if (override !== undefined) {
-        // The pin is "used" only when it changed the outcome; a pin the
-        // domain scope would have resolved identically without is stale.
+        // The pin is "used" only when it changed the outcome; a pin the domain
+        // scope would have resolved identically without is stale.
         const withoutPin = resolveEntryScopeAgainstTool({
           id,
-          domainScope: scopeResolution.scope,
+          base: domainBaseScope,
           toolName,
           toolScope: toolScopeByName.get(toolName),
-          override: undefined,
         });
         if (
           withoutPin.status === "error" ||
@@ -1156,7 +1097,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
           scopeOverrideUses.add(id);
         }
       }
-    } else if (override !== undefined && override !== scopeResolution.scope) {
+    } else if (override !== undefined && accessBaseScope !== domainBaseScope) {
       scopeOverrideUses.add(id);
     }
 
@@ -1210,17 +1151,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
     errors.push(message);
   }
 
-  // Keep the mapping/override tables honest: a table entry that no longer
-  // applies is fail-open clutter, so a stale entry fails the export.
-  const staleAccess = findStaleAccessOverrides({
-    overrides: ACCESS_OVERRIDES,
-    usedIds: accessOverrideUses,
-  });
-  for (const id of staleAccess) {
-    errors.push(
-      `stale ACCESS_OVERRIDES entry "${id}": it no longer needs an override (remove it)`,
-    );
-  }
   for (const id of Object.keys(HANDLER_KIND_OVERRIDES)) {
     if (!kindOverrideUses.includes(id)) {
       errors.push(

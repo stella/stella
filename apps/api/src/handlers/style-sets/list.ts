@@ -21,6 +21,7 @@ const querySchema = t.Object({
 
 const config = {
   permissions: { styleSet: ["use"] },
+  access: "read",
   mcp: { type: "capability", reason: "template_authoring_ui" },
   query: querySchema,
 } satisfies HandlerConfig;

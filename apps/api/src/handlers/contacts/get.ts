@@ -17,6 +17,7 @@ const readContactById = createSafeRootHandler(
     description: "Read a contact by ID.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "read_contact" },
+    access: "read",
     params: readContactByIdParamsSchema,
   },
   async function* ({ safeDb, session, params }) {

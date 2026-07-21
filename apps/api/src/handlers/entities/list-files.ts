@@ -120,6 +120,7 @@ const listFilesHandler = async function* ({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_documents" },
+  access: "read",
   query: listFilesQuerySchema,
 } satisfies HandlerConfig;
 

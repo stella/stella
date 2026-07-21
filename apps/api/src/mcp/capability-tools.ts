@@ -819,7 +819,9 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  // 4. Scope: the session must hold the capability's catalog scope.
+  // 4. Scope: the session must hold the capability's catalog scope. Read
+  // capabilities now resolve to a read scope (see the exporter's access-keyed
+  // resolution), so a `stella:read` grant reaches them directly.
   if (!context.grantedScopes.includes(entry.scope)) {
     return structuredErrorResult({
       code: "missing_scope",

@@ -75,6 +75,7 @@ const boeSearch = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "search_legislation" },
+    access: "read",
     query: querySchema,
   },
   async function* ({ query }) {

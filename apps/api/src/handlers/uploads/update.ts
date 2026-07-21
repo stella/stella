@@ -69,6 +69,7 @@ const config = {
     "upload was created with. Idempotent: replaying it on an already " +
     "finalized upload returns the same result rather than duplicating.",
   permissions: uploadRoutePermission,
+  access: "write",
   mcp: { type: "capability", reason: "file_transport" },
   params: finalizeParamsSchema,
 } satisfies HandlerConfig;

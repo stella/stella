@@ -15,6 +15,7 @@ const getSkillParamsSchema = t.Object({
 
 const config = {
   permissions: { chat: ["create"] },
+  access: "read",
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: getSkillParamsSchema,
 } satisfies HandlerConfig;

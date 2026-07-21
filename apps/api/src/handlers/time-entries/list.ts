@@ -106,6 +106,7 @@ const readTimeEntries = createSafeHandler(
       "units), currency, narrative, and status.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "list_time_entries" },
+    access: "read",
     query: readTimeEntriesQuerySchema,
   },
   async function* ({ safeDb, session, workspaceId, query }) {

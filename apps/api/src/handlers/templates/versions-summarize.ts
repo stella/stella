@@ -19,6 +19,7 @@ const templateVersionSummarizeParamsSchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  access: "write",
   params: templateVersionSummarizeParamsSchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

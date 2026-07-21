@@ -21,6 +21,7 @@ const config = {
   // hosted setup/management endpoints and the other organization-settings
   // reads. Non-managers have no settings UI for it and cannot manage it.
   permissions: { organizationSettings: ["update"] },
+  access: "read",
   mcp: { type: "tool", name: "get_usage" },
 } satisfies HandlerConfig;
 

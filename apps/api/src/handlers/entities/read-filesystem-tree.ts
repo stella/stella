@@ -28,6 +28,7 @@ const readFilesystemTreeBodySchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_documents" },
+  access: "read",
   body: readFilesystemTreeBodySchema,
 } satisfies HandlerConfig;
 

@@ -6,6 +6,7 @@ import { createStellaStyleEditorPreset } from "@/api/lib/style-set-editor";
 
 const config = {
   permissions: { styleSet: ["use"] },
+  access: "read",
   mcp: { type: "capability", reason: "template_authoring_ui" },
 } satisfies HandlerConfig;
 

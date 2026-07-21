@@ -17,6 +17,7 @@ const templateVersionDiffParamsSchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  access: "read",
   params: templateVersionDiffParamsSchema,
 } satisfies HandlerConfig;
 

@@ -257,24 +257,44 @@ type CapabilityDescription = {
   description?: string;
 };
 
+/**
+ * Explicit read/write nature of a capability, for the MCP/CLI consent scope it
+ * resolves to. This is a DECLARATION, not an inference: a handler's `permissions`
+ * gate answers "who may call this" (a caller access level), which is a separate
+ * axis from whether the handler reads or writes — the same `workspace:["read"]`
+ * gate legitimately fronts a pure list and a cache-filling write. Only the
+ * author knows which. A capability that would resolve to a read scope must carry
+ * `access: "read"` to affirm it is a pure read; anything that mutates (a DB
+ * write, an AI generation kickoff, a job enqueue) must declare `access: "write"`
+ * so a read-only consent cannot reach it. The exporter fails if an inferred read
+ * lacks this affirmation. Omit it only when the capability resolves to a write
+ * by inference — over-classifying a write is safe (it just requires write
+ * consent), so writes need no affirmation.
+ */
+type CapabilityAccess = {
+  access?: "read" | "write";
+};
+
 export type HandlerConfig = InputSchema &
-  CapabilityDescription & {
+  CapabilityDescription &
+  CapabilityAccess & {
     permissions: PermissionInput;
     requiresUsage?: UsageMeteringConfig;
     mcp: McpExposure;
   };
 
 export type SessionHandlerConfig = InputSchema &
-  CapabilityDescription & {
+  CapabilityDescription &
+  CapabilityAccess & {
     mcp: McpExposure;
   };
 
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
-  Omit<TConfig, "permissions" | "mcp" | "description">
+  Omit<TConfig, "permissions" | "mcp" | "description" | "access">
 >;
 
 type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
-  UnwrapRoute<Omit<TConfig, "mcp" | "description">>;
+  UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access">>;
 
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,
@@ -859,7 +879,8 @@ export type TokenHandlerConfig = Omit<
   InputSchema,
   "body" | "query" | "params"
 > &
-  CapabilityDescription & {
+  CapabilityDescription &
+  CapabilityAccess & {
     body?: AnyPermissiveRouteSchema;
     query?: AnyPermissiveRouteSchema;
     params?: AnyPermissiveRouteSchema;
@@ -868,7 +889,7 @@ export type TokenHandlerConfig = Omit<
 
 type TokenHandlerContext<
   TConfig extends TokenHandlerConfig = TokenHandlerConfig,
-> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description">>>;
+> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access">>>;
 
 /**
  * Like `createSafeSessionHandler`, but the framework does not
@@ -888,13 +909,14 @@ export const createSafeTokenHandler = <
   createSafeDirectHandler(config, handler);
 
 export type PublicHandlerConfig = InputSchema &
-  CapabilityDescription & {
+  CapabilityDescription &
+  CapabilityAccess & {
     mcp: McpExposure;
   };
 
 type PublicHandlerContext<
   TConfig extends PublicHandlerConfig = PublicHandlerConfig,
-> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description">>>;
+> = Context<UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access">>>;
 
 /**
  * For unauthenticated routes that intentionally expose public data.

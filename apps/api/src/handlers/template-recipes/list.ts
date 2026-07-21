@@ -9,6 +9,7 @@ import { listTemplateRecipesHandler } from "./recipes";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const listTemplateRecipes = createSafeRootHandler(

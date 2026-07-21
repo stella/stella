@@ -19,6 +19,7 @@ const searchContacts = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "capability", reason: "contact_directory" },
+    access: "read",
     query: searchContactsQuerySchema,
   },
   async function* ({ safeDb, session, query }) {

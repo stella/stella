@@ -279,6 +279,7 @@ export const exportLedesHandler = async ({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "billing_admin" },
+  access: "read",
   query: exportLedesQuerySchema,
 } satisfies HandlerConfig;
 

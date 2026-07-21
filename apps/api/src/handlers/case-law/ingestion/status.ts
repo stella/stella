@@ -187,6 +187,7 @@ const config = {
   // gate. Keep this as the single source of the role check for this endpoint.
   permissions: { auditLog: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
+  access: "read",
 } satisfies HandlerConfig;
 
 const getCaseLawIngestionStatus = createSafeRootHandler(

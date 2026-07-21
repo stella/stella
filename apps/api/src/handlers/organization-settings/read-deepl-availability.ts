@@ -10,6 +10,7 @@ const config = {
   // read-deepl-config.
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
+  access: "read",
 } satisfies HandlerConfig;
 
 /**

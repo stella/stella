@@ -9,6 +9,7 @@ import { LIMITS } from "@/api/lib/limits";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "reporting_export" },
+  access: "read",
   params: workspaceParams({}),
   query: t.Object({
     cursor: t.Optional(t.String({ maxLength: 512 })),

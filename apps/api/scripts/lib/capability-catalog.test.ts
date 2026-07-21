@@ -690,16 +690,52 @@ describe("compareScopeStrictness", () => {
 });
 
 describe("resolveScope", () => {
-  const scopeTable = { entities: "stella:matters_write" };
+  const scopeTable = {
+    entities: "stella:matters_write",
+    "organization-settings": "stella:admin_write",
+    legislation: "stella:read",
+  };
 
-  test("resolves a mapped domain", () => {
+  test("resolves a write-tiered domain to a read/write scope pair", () => {
     expect(
       resolveScope({
         domain: "entities",
         scopeTable,
         unmappedDomains: new Set(),
       }),
-    ).toEqual({ status: "resolved", scope: "stella:matters_write" });
+    ).toEqual({
+      status: "resolved",
+      readScope: "stella:read",
+      writeScope: "stella:matters_write",
+    });
+  });
+
+  test("downgrades an admin_write domain read to admin_read", () => {
+    expect(
+      resolveScope({
+        domain: "organization-settings",
+        scopeTable,
+        unmappedDomains: new Set(),
+      }),
+    ).toEqual({
+      status: "resolved",
+      readScope: "stella:admin_read",
+      writeScope: "stella:admin_write",
+    });
+  });
+
+  test("a non-tiered domain reads and writes under the same scope", () => {
+    expect(
+      resolveScope({
+        domain: "legislation",
+        scopeTable,
+        unmappedDomains: new Set(),
+      }),
+    ).toEqual({
+      status: "resolved",
+      readScope: "stella:read",
+      writeScope: "stella:read",
+    });
   });
 
   test("acknowledges an explicitly-unmapped domain", () => {

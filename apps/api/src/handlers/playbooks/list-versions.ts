@@ -12,6 +12,7 @@ import { LIMITS } from "@/api/lib/limits";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
+  access: "read",
   params: playbookDefinitionParamsSchema,
   query: t.Object({
     limit: t.Optional(

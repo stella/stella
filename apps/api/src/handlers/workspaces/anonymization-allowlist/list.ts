@@ -31,6 +31,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
+  access: "read",
   query: t.Object({
     entityId: t.Optional(tSafeId("entity")),
   }),

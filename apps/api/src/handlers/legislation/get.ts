@@ -104,6 +104,7 @@ export const readLegislationHandler = async (
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
+  access: "read",
   params: t.Object({ documentId: tSafeId("legislationDocument") }),
 } satisfies HandlerConfig;
 

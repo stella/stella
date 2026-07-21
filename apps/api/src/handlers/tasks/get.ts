@@ -10,6 +10,7 @@ const readTaskById = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "list_tasks" },
+    access: "read",
     params: readTaskByIdParamsSchema,
   },
   async function* ({ workspaceId, params, safeDb }) {

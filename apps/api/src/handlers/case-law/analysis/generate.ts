@@ -308,6 +308,9 @@ export const generateAnalysis = async (
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
+  // Writes a "generating" sentinel and kicks off background AI generation
+  // that updates the decision row.
+  access: "write",
   params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
 } satisfies HandlerConfig;
 

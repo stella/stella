@@ -36,6 +36,7 @@ const readInvoices = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "list_invoices" },
+    access: "read",
     query: readInvoicesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {

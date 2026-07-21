@@ -43,6 +43,7 @@ const readEntitiesWindowBodySchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "read_content_across_matters" },
+  access: "read",
   body: readEntitiesWindowBodySchema,
 } satisfies HandlerConfig;
 

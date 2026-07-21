@@ -69,6 +69,7 @@ export const readJustificationsHandler = async ({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
+  access: "read",
   body: t.Object({
     entityIds: t.Array(tSafeId("entity"), {
       minItems: 1,

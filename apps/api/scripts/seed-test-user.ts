@@ -26,6 +26,8 @@ import path from "node:path";
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
+import { ensureDefaultDocumentTypes } from "@/api/handlers/document-types/defaults";
+import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   ALL_TEST_USER_IDS,
@@ -134,6 +136,12 @@ export const ensureOrganizationExists = async (organizationId: string) => {
     slug: org.slug,
     createdAt: now,
   });
+
+  // Listing document types is a pure read, and this seed inserts the org
+  // directly (bypassing the `afterCreateOrganization` hook that seeds it in
+  // production), so seed the starter taxonomy here for parity. Idempotent via
+  // the (organization_id, key) unique.
+  await ensureDefaultDocumentTypes(toSafeId<"organization">(org.id), rootDb);
 };
 
 export const ensureMembershipExists = async ({

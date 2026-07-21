@@ -439,6 +439,7 @@ const fillByIdHandler = async function* ({
 
 const config = {
   permissions: { template: ["use"] },
+  access: "write",
   mcp: { type: "covered", by: "fill_template" },
   params: fillByIdParamsSchema,
   body: fillByIdBodySchema,
