@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
+  CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
   getModelReasoningEfforts,
   MODEL_ROLES,
   supportsTemperature,
@@ -42,6 +44,8 @@ const {
   isAllowedBYOKModelForRole,
   isDeferredServiceTierAvailableForRole,
   isTanStackAIProviderSupported,
+  modelAcceptsPdfDocumentInput,
+  modelAcceptsTextualDocumentInput,
   requireTanStackAIAvailableForRole,
   resolveEffectiveServiceTierForProvider,
   resolveTanStackAIProviderSupport,
@@ -153,6 +157,85 @@ describe("isAllowedBYOKModel", () => {
         role: "pdf",
       }),
     ).toBe(true);
+  });
+});
+
+describe("chat document-attachment capability", () => {
+  // The chat-send document-attachment gate (stream-chat.ts) rejects a document
+  // attachment before dispatch when the resolved model's adapter would throw
+  // on it, because some adapters (e.g. Mistral) map only a subset of document
+  // formats and crash on the rest. The gate is only correct if these predicates
+  // match the catalog's typed capability sets for EVERY offered model, not just
+  // the ones we happened to think of. Iterating the whole catalog turns "add a
+  // model/provider without wiring its document modality" into a test failure
+  // rather than a latent crash: a new model defaults to not document-capable
+  // (safe), and these properties pin that to the catalog.
+  test.each([...TANSTACK_AI_PROVIDERS])(
+    "pins textual + PDF document capability for every offered %s model to the catalog",
+    (provider) => {
+      const textualCapable: readonly string[] =
+        BYOK_DOCUMENT_INPUT_MODEL_OPTIONS[provider];
+      const pdfCapable: readonly string[] =
+        CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider];
+      for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+        expect(modelAcceptsTextualDocumentInput({ provider, modelId })).toBe(
+          textualCapable.includes(modelId),
+        );
+        expect(modelAcceptsPdfDocumentInput({ provider, modelId })).toBe(
+          pdfCapable.includes(modelId),
+        );
+        // Superset invariant: anything that takes a textual document also
+        // takes a PDF one. A model that accepted text but not PDF would be a
+        // catalog bug (the gate would send it a PDF it cannot read).
+        if (modelAcceptsTextualDocumentInput({ provider, modelId })) {
+          expect(modelAcceptsPdfDocumentInput({ provider, modelId })).toBe(
+            true,
+          );
+        }
+      }
+    },
+  );
+
+  test("Mistral vision models accept PDF but not textual documents; other Mistral models accept neither", () => {
+    // Mistral's document_url path (patched in from the upstream document-input
+    // change) takes PDF only, and Mistral is deliberately not a pdf-role
+    // provider, so textual documents must never route to it.
+    expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.mistral).toHaveLength(0);
+    const mistralPdfModels: readonly string[] =
+      CHAT_PDF_ATTACHMENT_MODEL_OPTIONS.mistral;
+    for (const modelId of BYOK_MODEL_OPTIONS.mistral) {
+      expect(
+        modelAcceptsTextualDocumentInput({ provider: "mistral", modelId }),
+      ).toBe(false);
+      expect(
+        modelAcceptsPdfDocumentInput({ provider: "mistral", modelId }),
+      ).toBe(mistralPdfModels.includes(modelId));
+    }
+    expect(
+      modelAcceptsPdfDocumentInput({
+        provider: "mistral",
+        modelId: "mistral-large-latest",
+      }),
+    ).toBe(false);
+    expect(
+      modelAcceptsPdfDocumentInput({
+        provider: "mistral",
+        modelId: "mistral-medium-latest",
+      }),
+    ).toBe(true);
+  });
+
+  test("both predicates fail closed for an unrecognized provider", () => {
+    expect(
+      // @ts-expect-error -- exercising the runtime fail-closed guard for a
+      // provider outside the BYOK catalog union.
+      modelAcceptsTextualDocumentInput({ provider: "acme", modelId: "x" }),
+    ).toBe(false);
+    expect(
+      // @ts-expect-error -- exercising the runtime fail-closed guard for a
+      // provider outside the BYOK catalog union.
+      modelAcceptsPdfDocumentInput({ provider: "acme", modelId: "x" }),
+    ).toBe(false);
   });
 });
 

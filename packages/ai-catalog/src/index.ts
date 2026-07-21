@@ -319,6 +319,42 @@ export const isBYOKModelRoleSupported = ({
 };
 
 /**
+ * Models whose provider adapter can receive a PDF `document` content part in a
+ * chat turn without throwing. This is a narrower, runtime question than the
+ * pdf ROLE (`BYOK_DOCUMENT_INPUT_MODEL_OPTIONS`, which curates model selection
+ * for PDF-processing flows): it only asks "will the chat stream survive this
+ * attachment." The Mistral text adapter maps PDF `document` parts to
+ * `document_url` (patched in via the upstream document-input change), so its
+ * vision models accept PDF attachments even though Mistral is deliberately not
+ * offered as a pdf-role provider. Mistral's `document_url` takes PDF but NOT
+ * textual documents (docx/txt/csv/md), so those still gate on
+ * `BYOK_DOCUMENT_INPUT_MODEL_OPTIONS` (which excludes Mistral). Superset
+ * invariant: every pdf-role document model also accepts a PDF chat attachment.
+ */
+export const CHAT_PDF_ATTACHMENT_MODEL_OPTIONS = {
+  ...BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
+  mistral: [
+    "mistral-medium-latest",
+    "mistral-small-latest",
+    "pixtral-large-latest",
+  ],
+} as const satisfies {
+  [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
+};
+
+export const isChatPdfAttachmentModelSupported = ({
+  provider,
+  modelId,
+}: {
+  provider: BYOKProvider;
+  modelId: string;
+}): boolean => {
+  const supportedModels: readonly string[] =
+    CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider];
+  return supportedModels.includes(modelId);
+};
+
+/**
  * Whether a model id is currently offered for this provider+role: it
  * must be in the curated catalog for the provider AND satisfy the
  * role's input-modality constraint (PDF needs a document-capable

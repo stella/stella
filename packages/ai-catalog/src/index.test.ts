@@ -7,6 +7,8 @@ import {
   BYOK_DEFAULT_MODELS,
   BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
+  CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
+  isChatPdfAttachmentModelSupported,
   CONTEXT_WINDOW_TOKENS,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   getContextWindowTokens,
@@ -78,6 +80,42 @@ describe("BYOK provider role support", () => {
     expect(
       isBYOKProviderRoleSupported({ provider: "mistral", role: "pdf" }),
     ).toBe(false);
+  });
+
+  test("PDF chat attachments accept a superset that adds Mistral vision models", () => {
+    // Distinct from the pdf ROLE: this set only answers whether a PDF chat
+    // attachment survives the adapter. Mistral is intentionally absent from
+    // the pdf role above but its vision models accept PDF chat attachments, so
+    // the chat-attachment set is a strict superset for Mistral and identical
+    // elsewhere.
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      const roleModels: readonly string[] =
+        BYOK_DOCUMENT_INPUT_MODEL_OPTIONS[provider];
+      const attachmentModels: readonly string[] =
+        CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider];
+      for (const modelId of roleModels) {
+        expect(attachmentModels).toContain(modelId);
+      }
+    }
+    expect(CHAT_PDF_ATTACHMENT_MODEL_OPTIONS.mistral).toContain(
+      "mistral-medium-latest",
+    );
+    expect(
+      isChatPdfAttachmentModelSupported({
+        provider: "mistral",
+        modelId: "mistral-medium-latest",
+      }),
+    ).toBe(true);
+    expect(
+      isChatPdfAttachmentModelSupported({
+        provider: "mistral",
+        modelId: "mistral-large-latest",
+      }),
+    ).toBe(false);
+    // Every Mistral PDF-attachment model must actually be offered to users.
+    for (const modelId of CHAT_PDF_ATTACHMENT_MODEL_OPTIONS.mistral) {
+      expect(BYOK_MODEL_OPTIONS.mistral).toContain(modelId);
+    }
   });
 
   test("does not route PDF flows through Bedrock text-only models", () => {

@@ -25,10 +25,13 @@ import {
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
+  getChatAttachmentMimeType,
   getUserFileIdFromAttachmentPart,
   isChatPart,
   isChatAttachmentPart,
+  isChatDocumentPart,
 } from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatSafePrompt,
@@ -215,7 +218,37 @@ export const streamChat = async ({
     orgAIConfig,
     role: "chat",
   });
-  const fallbackModel =
+
+  // Provider adapters accept different document formats: the Mistral adapter
+  // takes a PDF `document` part (via `document_url`) but throws on a textual
+  // one, and no adapter accepts a raw docx. A document attachment reaches the
+  // model as a `document` part, and `resolveEffectiveChatModelId` selects the
+  // chat model without gating by modality, so reject here — before dispatch —
+  // any document whose format the model cannot ingest, rather than let the
+  // adapter crash the stream.
+  const documentAttachmentMimeTypes = preparedMessages.value.flatMap(
+    (message) =>
+      message.parts.filter(isChatDocumentPart).map(getChatAttachmentMimeType),
+  );
+  const modelRejectsAnyDocument = (model: ResolvedTanStackTextModel): boolean =>
+    documentAttachmentMimeTypes.some(
+      (mimeType) => !modelAcceptsDocumentAttachment({ model, mimeType }),
+    );
+
+  if (modelRejectsAnyDocument(primaryModel)) {
+    // A plain 422, NOT a third-party-boundary refusal: that code is the sole
+    // trigger for the "send without anonymization" retry, which cannot fix a
+    // model that simply cannot read the attachment's format.
+    return new Response(
+      JSON.stringify({
+        message:
+          "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
+      }),
+      { status: 422, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const resolvedFallbackModel =
     devModelId === undefined
       ? resolveFallbackTextModel({
           organizationId,
@@ -224,6 +257,13 @@ export const streamChat = async ({
           threadId,
         })
       : null;
+  // Drop a fallback that would crash on a document the primary accepted; a
+  // failover must not resurrect the modality mismatch.
+  const fallbackModel =
+    resolvedFallbackModel !== null &&
+    modelRejectsAnyDocument(resolvedFallbackModel)
+      ? null
+      : resolvedFallbackModel;
   const abortController = abortControllerFromSignal(abortSignal);
   const modelTools = chatToolMapToArray(
     prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
