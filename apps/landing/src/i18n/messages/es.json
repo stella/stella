@@ -55,7 +55,7 @@
     "workspace": "Espacio de trabajo"
   },
   "hero": {
-    "badge": "Lanzamos sorprendentemente rápido",
+    "badge": "En desarrollo activo",
     "selfHost": "Autoalojar",
     "subtitle": "Asuntos, documentos, revisión y un agente que responde con citas.",
     "subtitle2": "Gratis de usar, abierto de inspeccionar, tuyo para conservar.",
@@ -79,13 +79,13 @@
     "security": "Seguridad"
   },
   "story": {
-    "agentBody": "El agente busca en el asunto, lee el texto relevante y devuelve evidencia enlazada. Úsalo en stella, Microsoft Teams o a través de MCP y la CLI; los mismos permisos y fuentes acompañan cada solicitud.",
+    "agentBody": "El agente busca en el asunto, lee el texto relevante y responde con citas que abren la fuente exactamente en el pasaje correspondiente. Úsalo en stella, Microsoft Teams o a través de MCP y la CLI; los mismos permisos y fuentes acompañan cada solicitud.",
     "agentEyebrow": "Flujos de trabajo del agente",
     "agentTitle": "Pregunta una vez. Cada respuesta cita su fuente.",
-    "controlBody": "stella es software legal de código abierto que puedes autoalojar: inspecciona el código y ejecútalo a tu manera.",
+    "controlBody": "stella es software legal de código abierto que puedes autoalojar: inspecciona el código, ejecútalo a tu manera y exporta todo en formatos estándar; sin dependencia del proveedor.",
     "controlEyebrow": "Diseñado para el control",
     "controlTitle": "Mantén el control de la infraestructura.",
-    "dataBody": "Busca en fuentes jurídicas oficiales, incorpora datos registrales al asunto, revisa conjuntos de documentos como tablas estructuradas y anonimiza los datos identificativos antes de que el material sensible entre en un flujo de trabajo con IA.",
+    "dataBody": "Jurisprudencia de fuentes oficiales con su estructura preservada, y registros mercantiles consultados directamente en el asunto, jurisdicción por jurisdicción. La anonimización mantiene los datos identificativos fuera de los flujos de trabajo con IA.",
     "dataEyebrow": "Datos jurídicos",
     "dataMainAlt": "Una resolución judicial oficial eslovaca abierta en stella",
     "dataTitle": "Lleva contigo la ley y los datos.",
@@ -114,7 +114,7 @@
     "title": "Un asunto. Cada parte del trabajo.",
     "velocityAll": "Todas las novedades",
     "velocityTitle": "Lo último que hemos lanzado.",
-    "workspaceBody": "Documentos, plazos, revisión estructurada y redacción permanecen juntos. Abre un asunto, ve el trabajo en contexto y pasa de una tabla al documento subyacente sin reconstruir el recorrido.",
+    "workspaceBody": "Documentos, plazos, revisión estructurada y redacción permanecen juntos y son buscables en todos los asuntos. Abre un asunto, ve el trabajo en contexto y pasa de una tabla al documento subyacente sin reconstruir el recorrido.",
     "workspaceEyebrow": "Espacio de trabajo del asunto",
     "workspaceTitle": "Lleva todo el asunto en un solo lugar."
   }

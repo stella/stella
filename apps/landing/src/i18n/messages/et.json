@@ -55,7 +55,7 @@
     "workspace": "Tööruum"
   },
   "hero": {
-    "badge": "Me arendame imekiiresti",
+    "badge": "Aktiivses arenduses",
     "selfHost": "Majuta ise",
     "subtitle": "Toimikud, dokumendid, ülevaatus ja agent, kes vastab allikaviidetega.",
     "subtitle2": "Tasuta kasutada, avatud uurida, sinu hoida.",
@@ -79,13 +79,13 @@
     "security": "Turvalisus"
   },
   "story": {
-    "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja tagastab lingitud tõendid. Kasuta seda stellas, Microsoft Teamsis või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
+    "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta seda stellas, Microsoft Teamsis või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
     "agentEyebrow": "Agendi töövood",
     "agentTitle": "Küsi üks kord. Iga vastus viitab oma allikale.",
-    "controlBody": "stella on avatud lähtekoodiga õigustarkvara, mida saad ise majutada: uuri koodi ja käita seda oma moodi.",
+    "controlBody": "stella on avatud lähtekoodiga õigustarkvara, mida saad ise majutada: uuri koodi, käita seda oma moodi ja ekspordi kõik standardvormingutes; tarnijalõksuta.",
     "controlEyebrow": "Loodud kontrolli hoidmiseks",
     "controlTitle": "Hoia taristu enda kontrolli all.",
-    "dataBody": "Otsi ametlikest õigusallikatest, too registriandmed toimikusse, vaata dokumendikogumeid üle struktureeritud tabelitena ja anonüümi tuvastavad andmed enne, kui tundlik materjal jõuab tehisintellekti töövoogu.",
+    "dataBody": "Ametlikest allikatest pärit kohtupraktika säilinud struktuuriga ning ettevõtete registriandmed otse toimikusse, jurisdiktsioon jurisdiktsiooni haaval. Anonüümimine hoiab tuvastavad andmed tehisintellekti töövoogudest eemal.",
     "dataEyebrow": "Õigusandmed",
     "dataMainAlt": "Slovakkia kohtu ametlik lahend, avatud stellas",
     "dataTitle": "Võta seadus ja andmed endaga kaasa.",
@@ -114,7 +114,7 @@
     "title": "Üks toimik. Kõik töö osad.",
     "velocityAll": "Kogu muudatuste logi",
     "velocityTitle": "Mis on viimati valminud.",
-    "workspaceBody": "Dokumendid, tähtajad, struktureeritud ülevaatus ja koostamine püsivad koos. Ava toimik, näe tööd kontekstis ja liigu tabelist aluseks oleva dokumendini, ilma et peaksid rada uuesti kokku panema.",
+    "workspaceBody": "Dokumendid, tähtajad, struktureeritud ülevaatus ja koostamine püsivad koos ning on otsitavad kõigi toimikute lõikes. Ava toimik, näe tööd kontekstis ja liigu tabelist aluseks oleva dokumendini, ilma et peaksid rada uuesti kokku panema.",
     "workspaceEyebrow": "Toimiku keskkond",
     "workspaceTitle": "Halda kogu toimikut ühes kohas."
   }

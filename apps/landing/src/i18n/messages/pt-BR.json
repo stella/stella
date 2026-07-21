@@ -55,7 +55,7 @@
     "workspace": "Espaço de trabalho"
   },
   "hero": {
-    "badge": "Lançamos surpreendentemente rápido",
+    "badge": "Em desenvolvimento ativo",
     "selfHost": "Auto-hospedar",
     "subtitle": "Casos, documentos, revisão e um agente que responde com citações.",
     "subtitle2": "Grátis para usar, aberto para inspecionar, seu para manter.",
@@ -79,13 +79,13 @@
     "security": "Segurança"
   },
   "story": {
-    "agentBody": "O agente pesquisa no caso, lê o texto relevante e retorna evidências vinculadas. Use-o na stella, no Microsoft Teams ou via MCP e CLI; as mesmas permissões e fontes acompanham cada solicitação.",
+    "agentBody": "O agente pesquisa no caso, lê o texto relevante e responde com citações que abrem a fonte exatamente na passagem correspondente. Use-o na stella, no Microsoft Teams ou via MCP e CLI; as mesmas permissões e fontes acompanham cada solicitação.",
     "agentEyebrow": "Fluxos de trabalho do agente",
     "agentTitle": "Pergunte uma vez. Cada resposta cita sua fonte.",
-    "controlBody": "A stella é um software jurídico de código aberto que você pode auto-hospedar: inspecione o código e rode do seu jeito.",
+    "controlBody": "A stella é um software jurídico de código aberto que você pode auto-hospedar: inspecione o código, rode do seu jeito e exporte tudo em formatos padrão; sem dependência de fornecedor.",
     "controlEyebrow": "Feito para o controle",
     "controlTitle": "Mantenha o controle da infraestrutura.",
-    "dataBody": "Pesquise em fontes jurídicas oficiais, traga dados de registros para o caso, revise conjuntos de documentos como tabelas estruturadas e anonimize dados identificadores antes que material sensível entre em um fluxo de trabalho com IA.",
+    "dataBody": "Jurisprudência de fontes oficiais com a estrutura preservada, e registros de empresas consultados diretamente no caso, jurisdição por jurisdição. A anonimização mantém os dados identificadores fora dos fluxos de trabalho de IA.",
     "dataEyebrow": "Dados jurídicos",
     "dataMainAlt": "Uma decisão judicial oficial eslovaca aberta na stella",
     "dataTitle": "Leve a lei e os dados com você.",
@@ -114,7 +114,7 @@
     "title": "Um caso. Cada parte do trabalho.",
     "velocityAll": "Todas as novidades",
     "velocityTitle": "O que lançamos ultimamente.",
-    "workspaceBody": "Documentos, prazos, revisão estruturada e redação ficam juntos. Abra um caso, veja o trabalho em contexto e vá de uma tabela ao documento subjacente sem reconstruir o caminho.",
+    "workspaceBody": "Documentos, prazos, revisão estruturada e redação ficam juntos, pesquisáveis em todos os casos. Abra um caso, veja o trabalho em contexto e vá de uma tabela ao documento subjacente sem reconstruir o caminho.",
     "workspaceEyebrow": "Espaço de trabalho do caso",
     "workspaceTitle": "Conduza o caso inteiro em um só lugar."
   }

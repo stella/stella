@@ -55,7 +55,7 @@
     "workspace": "Pracovní prostředí"
   },
   "hero": {
-    "badge": "Vyvíjíme nezvykle rychle",
+    "badge": "Aktivně vyvíjeno",
     "selfHost": "Vlastní hosting",
     "subtitle": "Spisy, dokumenty, revize a agent, který odpovídá s citacemi.",
     "subtitle2": "Zdarma k užívání, otevřené k nahlédnutí, vaše napořád.",
@@ -79,13 +79,13 @@
     "security": "Zabezpečení"
   },
   "story": {
-    "agentBody": "Agent prohledá spis, přečte relevantní text a vrátí odpověď s propojenými důkazy. Použijte ho ve stelle, v Microsoft Teams nebo přes MCP a CLI; s požadavkem putují stejná oprávnění i zdroje.",
+    "agentBody": "Agent prohledá spis, přečte relevantní text a odpoví s citacemi, které otevřou zdroj přesně v dané pasáži. Použijte ho ve stelle, v Microsoft Teams nebo přes MCP a CLI; s požadavkem putují stejná oprávnění i zdroje.",
     "agentEyebrow": "Pracovní postupy agenta",
     "agentTitle": "Zeptejte se jednou. Každá odpověď cituje svůj zdroj.",
-    "controlBody": "stella je open source právní software, který si můžete sami hostovat: nahlédněte do kódu a provozujte ho po svém.",
+    "controlBody": "stella je open source právní software, který si můžete sami hostovat: nahlédněte do kódu, provozujte ho po svém a exportujte vše ve standardních formátech; bez závislosti na dodavateli.",
     "controlEyebrow": "Navrženo pro plnou kontrolu",
     "controlTitle": "Mějte technologie pod kontrolou.",
-    "dataBody": "Prohledávejte oficiální právní zdroje, přenášejte data z rejstříků do spisu, procházejte sady dokumentů jako strukturované tabulky a anonymizujte identifikační údaje dřív, než se citlivý materiál dostane do pracovního postupu s AI.",
+    "dataBody": "Judikatura z oficiálních zdrojů se zachovanou strukturou a obchodní rejstříky načítané přímo do spisu, jurisdikci po jurisdikci. Anonymizace udržuje identifikační údaje mimo pracovní postupy s AI.",
     "dataEyebrow": "Právní data",
     "dataMainAlt": "Oficiální rozhodnutí slovenského soudu otevřené ve stelle",
     "dataTitle": "Vezměte si právo i data s sebou.",
@@ -114,7 +114,7 @@
     "title": "Jeden spis. Každá část práce.",
     "velocityAll": "Celý seznam změn",
     "velocityTitle": "Co jsme nedávno vydali.",
-    "workspaceBody": "Dokumenty, termíny, strukturovaná revize i příprava dokumentů zůstávají pohromadě. Otevřete spis, vidíte práci v kontextu a z tabulky přejdete rovnou k podkladovému dokumentu, aniž byste museli znovu dohledávat souvislosti.",
+    "workspaceBody": "Dokumenty, termíny, strukturovaná revize i příprava dokumentů zůstávají pohromadě, prohledávatelné napříč všemi spisy. Otevřete spis, vidíte práci v kontextu a z tabulky přejdete rovnou k podkladovému dokumentu, aniž byste museli znovu dohledávat souvislosti.",
     "workspaceEyebrow": "Pracovní prostředí spisu",
     "workspaceTitle": "Veďte celý spis na jednom místě."
   }

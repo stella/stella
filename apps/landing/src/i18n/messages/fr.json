@@ -55,7 +55,7 @@
     "workspace": "Espace de travail"
   },
   "hero": {
-    "badge": "On livre à une vitesse folle",
+    "badge": "Développement actif",
     "selfHost": "Auto-hébergement",
     "subtitle": "Dossiers, documents, revue et un agent qui répond en citant ses sources.",
     "subtitle2": "Libre d'utilisation, ouvert à l'inspection, à vous pour toujours.",
@@ -79,13 +79,13 @@
     "security": "Sécurité"
   },
   "story": {
-    "agentBody": "L'agent recherche dans le dossier, lit le texte pertinent et renvoie des preuves reliées aux sources. Utilisez-le dans stella, Microsoft Teams ou via MCP et la CLI ; les mêmes permissions et les mêmes sources suivent la demande.",
+    "agentBody": "L'agent recherche dans le dossier, lit le texte pertinent et répond avec des citations qui ouvrent la source exactement au passage concerné. Utilisez-le dans stella, Microsoft Teams ou via MCP et la CLI ; les mêmes permissions et les mêmes sources suivent la demande.",
     "agentEyebrow": "Flux de travail de l'agent",
     "agentTitle": "Demandez une fois. Chaque réponse cite sa source.",
-    "controlBody": "stella est un logiciel juridique open source que vous pouvez auto-héberger : inspectez le code et exécutez-le à votre façon.",
+    "controlBody": "stella est un logiciel juridique open source que vous pouvez auto-héberger : inspectez le code, exécutez-le à votre façon et exportez tout dans des formats standards ; sans dépendance.",
     "controlEyebrow": "Conçu pour garder le contrôle",
     "controlTitle": "Gardez le contrôle de votre infrastructure.",
-    "dataBody": "Recherchez dans les sources juridiques officielles, importez les données des registres dans le dossier, examinez des ensembles de documents sous forme de tableaux structurés et anonymisez les éléments identifiants avant qu'un contenu sensible n'entre dans un flux de travail IA.",
+    "dataBody": "Jurisprudence issue de sources officielles avec sa structure préservée, et registres d'entreprises interrogés directement dans le dossier, juridiction par juridiction. L'anonymisation garde les éléments identifiants hors des flux de travail IA.",
     "dataEyebrow": "Données juridiques",
     "dataMainAlt": "Une décision de justice slovaque officielle ouverte dans stella",
     "dataTitle": "Emportez le droit et les données avec vous.",
@@ -114,7 +114,7 @@
     "title": "Un dossier. Chaque étape du travail.",
     "velocityAll": "Journal des modifications complet",
     "velocityTitle": "Ce qu'on a livré récemment.",
-    "workspaceBody": "Documents, échéances, revue structurée et rédaction restent ensemble. Ouvrez un dossier, visualisez le travail dans son contexte et passez d'un tableau au document sous-jacent sans reconstituer le fil.",
+    "workspaceBody": "Documents, échéances, revue structurée et rédaction restent ensemble et sont recherchables dans tous les dossiers. Ouvrez un dossier, visualisez le travail dans son contexte et passez d'un tableau au document sous-jacent sans reconstituer le fil.",
     "workspaceEyebrow": "L'espace du dossier",
     "workspaceTitle": "Gérez tout le dossier au même endroit."
   }

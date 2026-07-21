@@ -55,7 +55,7 @@
     "workspace": "Munkaterület"
   },
   "hero": {
-    "badge": "Furcsán gyorsan szállítunk",
+    "badge": "Aktív fejlesztés alatt",
     "selfHost": "Saját üzemeltetés",
     "subtitle": "Ügyek, dokumentumok, felülvizsgálat és egy ügynök, amely forráshivatkozásokkal válaszol.",
     "subtitle2": "Ingyen használható, szabadon átvizsgálható, az öné marad.",
@@ -79,13 +79,13 @@
     "security": "Biztonság"
   },
   "story": {
-    "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és hivatkozott bizonyítékokat ad vissza. Használja a stellában, a Microsoft Teamsben vagy MCP-n és parancssoron keresztül; a kérést ugyanazok a jogosultságok és források kísérik.",
+    "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és hivatkozásokkal válaszol, amelyek a pontos szövegrésznél nyitják meg a forrást. Használja a stellában, a Microsoft Teamsben vagy MCP-n és parancssoron keresztül; a kérést ugyanazok a jogosultságok és források kísérik.",
     "agentEyebrow": "Ügynöki munkafolyamatok",
     "agentTitle": "Kérdezzen egyszer. Minden válasz megjelöli a forrását.",
-    "controlBody": "A stella nyílt forráskódú jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, és futtassa a maga módján.",
+    "controlBody": "A stella nyílt forráskódú jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, futtassa a maga módján, és exportáljon mindent szabványos formátumokban; bezártság nélkül.",
     "controlEyebrow": "Irányításra tervezve",
     "controlTitle": "Tartsa kézben a rendszerét.",
-    "dataBody": "Keressen hivatalos jogforrásokban, emelje be a nyilvántartási adatokat az ügybe, tekintse át a dokumentumkészleteket strukturált táblázatokként, és anonimizálja az azonosító adatokat, mielőtt érzékeny anyag kerülne egy AI-munkafolyamatba.",
+    "dataBody": "Hivatalos forrásokból származó ítélkezési gyakorlat megőrzött szerkezettel, valamint cégnyilvántartási adatok közvetlenül az ügybe, joghatóságonként. Az anonimizálás távol tartja az azonosító adatokat az AI-munkafolyamatoktól.",
     "dataEyebrow": "Jogi adatok",
     "dataMainAlt": "Egy hivatalos szlovák bírósági határozat a stellában megnyitva",
     "dataTitle": "Hozza magával a jogot és az adatokat.",
@@ -114,7 +114,7 @@
     "title": "Egy ügy. A munka minden része.",
     "velocityAll": "Teljes változásnapló",
     "velocityTitle": "Amit mostanában szállítottunk.",
-    "workspaceBody": "A dokumentumok, a határidők, a strukturált felülvizsgálat és a szövegezés együtt maradnak. Nyisson meg egy ügyet, lássa a munkát a maga kontextusában, és lépjen a táblázatból az alapul szolgáló dokumentumra anélkül, hogy újra össze kellene raknia az előzményeket.",
+    "workspaceBody": "A dokumentumok, a határidők, a strukturált felülvizsgálat és a szövegezés együtt maradnak, és minden ügyben kereshetők. Nyisson meg egy ügyet, lássa a munkát a maga kontextusában, és lépjen a táblázatból az alapul szolgáló dokumentumra anélkül, hogy újra össze kellene raknia az előzményeket.",
     "workspaceEyebrow": "Az ügy munkaterülete",
     "workspaceTitle": "Intézze az egész ügyet egy helyen."
   }

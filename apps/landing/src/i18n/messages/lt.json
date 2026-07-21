@@ -55,7 +55,7 @@
     "workspace": "Darbo erdvė"
   },
   "hero": {
-    "badge": "Tobuliname stebėtinai greitai",
+    "badge": "Aktyviai tobulinama",
     "selfHost": "Talpinkite patys",
     "subtitle": "Bylos, dokumentai, peržiūra ir agentas, kuris atsako nurodydamas šaltinius.",
     "subtitle2": "Nemokama naudoti, atvira tikrinti, jūsų pasilikti.",
@@ -79,13 +79,13 @@
     "security": "Saugumas"
   },
   "story": {
-    "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir grąžina susietus įrodymus. Naudokite jį stella, Microsoft Teams arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
+    "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir atsako citatomis, kurios atveria šaltinį tiksliai reikiamoje vietoje. Naudokite jį stella, Microsoft Teams arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
     "agentEyebrow": "Agento darbo eigos",
     "agentTitle": "Paklauskite kartą. Kiekvienas atsakymas nurodo savo šaltinį.",
-    "controlBody": "stella – atvirojo kodo teisinė programinė įranga, kurią galite talpinti patys: peržiūrėkite kodą ir paleiskite ją savaip.",
+    "controlBody": "stella – atvirojo kodo teisinė programinė įranga, kurią galite talpinti patys: peržiūrėkite kodą, paleiskite ją savaip ir eksportuokite viską standartiniais formatais; be pririšimo.",
     "controlEyebrow": "Sukurta kontrolei",
     "controlTitle": "Išlaikykite infrastruktūros kontrolę.",
-    "dataBody": "Ieškokite oficialiuose teisės šaltiniuose, perkelkite registrų duomenis į bylą, peržiūrėkite dokumentų rinkinius kaip struktūruotas lenteles ir anonimizuokite tapatybę atskleidžiančius duomenis prieš jautriai medžiagai patenkant į DI darbo eigą.",
+    "dataBody": "Teismų praktika iš oficialių šaltinių su išsaugota struktūra ir įmonių registrų duomenys, tiesiogiai įtraukiami į bylą, jurisdikcija po jurisdikcijos. Anonimizavimas neleidžia identifikuojantiems duomenims patekti į DI darbo eigas.",
     "dataEyebrow": "Teisiniai duomenys",
     "dataMainAlt": "Oficialus Slovakijos teismo sprendimas, atvertas programoje stella",
     "dataTitle": "Pasiimkite teisę ir duomenis su savimi.",
@@ -114,7 +114,7 @@
     "title": "Viena byla. Kiekviena darbo dalis.",
     "velocityAll": "Visas pakeitimų žurnalas",
     "velocityTitle": "Ką neseniai išleidome.",
-    "workspaceBody": "Dokumentai, terminai, struktūruota peržiūra ir rengimas lieka kartu. Atverkite bylą, matykite darbą kontekste ir iš lentelės pereikite prie pirminio dokumento iš naujo neatkurdami sekos.",
+    "workspaceBody": "Dokumentai, terminai, struktūruota peržiūra ir rengimas lieka kartu, juos galima surasti visose bylose. Atverkite bylą, matykite darbą kontekste ir iš lentelės pereikite prie pirminio dokumento iš naujo neatkurdami sekos.",
     "workspaceEyebrow": "Bylos darbo erdvė",
     "workspaceTitle": "Tvarkykite visą bylą vienoje vietoje."
   }

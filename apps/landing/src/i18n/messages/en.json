@@ -55,7 +55,7 @@
     "workspace": "Workspace"
   },
   "hero": {
-    "badge": "We ship weirdly fast",
+    "badge": "Actively developed",
     "selfHost": "Self-host",
     "subtitle": "One legal workspace for matters, documents, research, and agents.",
     "subtitle2": "Grounded in sources, governed by your permissions, and built without lock-in.",
@@ -79,13 +79,13 @@
     "security": "Security"
   },
   "story": {
-    "agentBody": "The agent searches the matter, reads the relevant text, and returns linked evidence. Use it in stella, Microsoft Teams, or through MCP and the CLI; the same permissions and sources follow the request.",
+    "agentBody": "The agent searches the matter, reads the relevant text, and answers with citations that open the source at the exact passage. Use it in stella, Microsoft Teams, or through MCP and the CLI; the same permissions and sources follow the request.",
     "agentEyebrow": "Agent workflows",
     "agentTitle": "Ask once. Every answer cites its source.",
-    "controlBody": "stella is open-source legal software you can self-host: inspect the code, run it your way.",
+    "controlBody": "stella is open-source legal software you can self-host: inspect the code, run it your way, and export everything in standard formats; no lock-in.",
     "controlEyebrow": "Built for control",
     "controlTitle": "Keep control of the stack.",
-    "dataBody": "Search official legal sources, bring registry data into the matter, review document sets as structured tables, and anonymize identifying details before sensitive material enters an AI workflow.",
+    "dataBody": "Case law from official sources with its structure preserved, and company registries queried straight into the matter, jurisdiction by jurisdiction. Anonymization keeps identifying details out of AI workflows.",
     "dataEyebrow": "Legal data",
     "dataMainAlt": "An official Slovak court decision open in stella",
     "dataTitle": "Bring the law and the data with you.",
@@ -114,7 +114,7 @@
     "title": "One matter. Every part of the work.",
     "velocityAll": "Full changelog",
     "velocityTitle": "What shipped lately.",
-    "workspaceBody": "Documents, deadlines, structured review, and drafting stay together. Open a matter, see the work in context, and move from a table to the underlying document without rebuilding the trail.",
+    "workspaceBody": "Documents, deadlines, structured review, and drafting stay together, searchable across every matter. Open a matter, see the work in context, and move from a table to the underlying document without rebuilding the trail.",
     "workspaceEyebrow": "Matter workspace",
     "workspaceTitle": "Run the whole matter in one place."
   }
