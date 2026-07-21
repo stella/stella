@@ -10,6 +10,9 @@ export const CHAT_TURN_INTENT = {
   regenerate: "regenerate",
 } as const;
 
+export const CHAT_RUN_MODE = { agent: "agent" } as const;
+export type ChatRunMode = (typeof CHAT_RUN_MODE)[keyof typeof CHAT_RUN_MODE];
+
 export type SafeId<TType extends string> = string &
   Brand<"SafeId"> & {
     readonly __safeIdType?: TType;
@@ -73,6 +76,7 @@ export type ChatSendRequest = {
     parts: unknown[];
     role: "assistant" | "system" | "user";
   };
+  runMode?: ChatRunMode;
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   turnIntent?: (typeof CHAT_TURN_INTENT)["regenerate"];

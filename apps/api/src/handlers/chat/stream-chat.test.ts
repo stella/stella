@@ -129,6 +129,7 @@ describe("tool-call history pruning", () => {
         part.type === "tool-call" ? [part.state] : [],
       ),
     ).toEqual(["input-complete", "approval-responded", "complete", "error"]);
+  });
 });
 
 describe("agent sandbox third-party boundary", () => {
