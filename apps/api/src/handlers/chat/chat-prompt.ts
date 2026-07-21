@@ -790,8 +790,8 @@ const buildActiveFilePrompt = ({
 
   return [
     `ACTIVE FILE: The user is viewing "${safeName}" (entity ref ${entityRef}) in the inspector sidebar.`,
-    `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents with \`read.getMatterEntityContents\` using \`matterRefs: ["${matterRef}"]\` and \`entityRefs: ["${entityRef}"]\`, and answer ONLY from that file.`,
-    `LONG-DOCUMENT LOOKUPS: \`read.getMatterEntityContents\` only returns the START of the document (server truncates long files). If the user asks where, whether, or how a specific term/phrase appears — definitions ("how is X defined?"), citations ("does it mention Y?"), references ("which section covers Z?") — call \`read.searchInEntityContent\` with that term as \`query\` instead. It scans the FULL document and returns matching snippets in document order, so an Index entry pointing to "Article I" never blocks you from finding the actual definition. Treat \`totalHits\` as a lower bound when \`totalHitsCapped\` is true.`,
+    `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents by calling \`execute_typescript\` with \`external_read_content_across_matters({ entity_id: "${entityRef}" })\`, and answer ONLY from that file.`,
+    `LONG-DOCUMENT LOOKUPS: \`external_read_content_across_matters\` returns the document as Markdown (headings, tables, and lists preserved) for DOCX files, or plain text otherwise, one truncated window at a time starting from the beginning. If the answer is not in the first window, call it again with \`cursor\` set to the previous response's \`nextCursor\` to keep reading further into the document — page through until you find it or \`nextCursor\` comes back null.`,
     "DIRECT FILE FALLBACK: If the latest user message includes the active file as a direct attachment, inspect that attachment directly before answering. Do not claim the file has no extracted text when a direct attachment is available for this turn.",
     activeFile.supportsDocxEdits
       ? "`create-document` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. If live DOCX editing is available below, use `apply-active-docx-edits`; otherwise explain that the document must be opened for editing first. Never create a substitute document."
@@ -799,8 +799,8 @@ const buildActiveFilePrompt = ({
     activeFile.supportsDocxEdits
       ? buildActiveDocxEditPrompt(activeFile, toolAvailability)
       : "",
-    `Do NOT call matter-wide retrieval (\`read.searchMatterDocuments\`, \`read.listMatterEntities\`, or \`read.getMatterEntities\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
-    `Widen the scope to the rest of the matter ONLY when the user explicitly asks (e.g., "compare with the other contracts", "search across the matter", or names another document). When that happens, the matter-wide retrieval functions above are allowed again; scope them to \`matterRefs: ["${matterRef}"]\` as usual.`,
+    `Do NOT call matter-wide retrieval (\`external_search_across_matters\` or \`external_list_documents\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
+    `Widen the scope to the rest of the matter ONLY when the user explicitly asks (e.g., "compare with the other contracts", "search across the matter", or names another document). When that happens, the matter-wide retrieval functions above are allowed again; scope \`external_list_documents\` calls to \`matter_id: "${matterRef}"\` as usual.`,
   ]
     .filter((section) => section.length > 0)
     .join("\n");
