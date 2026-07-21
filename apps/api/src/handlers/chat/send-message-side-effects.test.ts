@@ -11,7 +11,9 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const s3Delete = mock(async () => undefined);
 
+const realS3 = await import("@/api/lib/s3");
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   getS3: () => ({ delete: s3Delete }),
 }));
 

@@ -55,7 +55,9 @@ const makeDocxBytes = async () => {
 const s3ArrayBufferMock = mock(async () => await makeDocxBytes());
 const s3FileMock = mock(() => ({ arrayBuffer: s3ArrayBufferMock }));
 
+const realS3 = await import("@/api/lib/s3");
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   getS3: () => ({ file: s3FileMock }),
 }));
 

@@ -99,7 +99,9 @@ void mock.module("@/api/lib/tanstack-ai-generate", () => ({
 
 const s3WriteMock = mock(async () => {});
 const s3DeleteMock = mock(async () => {});
+const realS3 = await import("@/api/lib/s3");
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   getS3: () => ({ write: s3WriteMock, delete: s3DeleteMock }),
 }));
 

@@ -41,7 +41,9 @@ void mock.module("@/api/lib/flows/flow-run-events", () => ({
 void mock.module("@/api/lib/tanstack-ai-generate", () => ({
   generateTanStackTextForRole: mock(async () => await Promise.resolve("")),
 }));
+const realS3 = await import("@/api/lib/s3");
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   getS3: () => ({ write: mock(async () => {}), delete: mock(async () => {}) }),
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
