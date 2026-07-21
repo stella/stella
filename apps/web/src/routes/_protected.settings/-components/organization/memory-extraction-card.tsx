@@ -6,14 +6,14 @@ import { Field, FieldLabel } from "@stll/ui/components/field";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import {
+  organizationSettingsKeys,
+  organizationSettingsOptions,
+} from "@/features/organization-settings/organization-settings-queries";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors/api";
-import {
-  organizationSettingsKeys,
-  organizationSettingsOptions,
-} from "@/routes/_protected.organization/-settings-queries";
 
 export const MemoryExtractionCard = () => {
   const t = useTranslations("settings.organization.memoryExtraction");

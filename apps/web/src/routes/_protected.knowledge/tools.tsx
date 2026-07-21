@@ -13,6 +13,7 @@ import type {
   InspectorRailIconProps,
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
+import { organizationSettingsOptions } from "@/features/organization-settings/organization-settings-queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { BoundedSet } from "@/lib/bounded-set";
@@ -27,7 +28,6 @@ import {
   catalogueKeys,
   catalogueOptions,
 } from "@/routes/_protected.knowledge/-queries/catalogue";
-import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
 const LazyToolDetailView = lazy(async () => {
   const module =

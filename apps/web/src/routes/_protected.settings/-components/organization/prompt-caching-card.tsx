@@ -5,13 +5,13 @@ import { Checkbox } from "@stll/ui/components/checkbox";
 import { Field, FieldLabel } from "@stll/ui/components/field";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 
-import { api } from "@/lib/api";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
-} from "@/routes/_protected.organization/-settings-queries";
+} from "@/features/organization-settings/organization-settings-queries";
+import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unwrapEden } from "@/lib/errors/api";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 export const PromptCachingCard = () => {

@@ -16,13 +16,13 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 
-import { api } from "@/lib/api";
-import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
-} from "@/routes/_protected.organization/-settings-queries";
+} from "@/features/organization-settings/organization-settings-queries";
+import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unwrapEden } from "@/lib/errors/api";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 const PATTERN_PRESETS = [
