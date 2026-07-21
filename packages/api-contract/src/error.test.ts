@@ -7,6 +7,9 @@ describe("normalizeApiError", () => {
     expect(normalizeApiError({ status: 502, value: null })).toEqual({
       status: 502,
     });
+    expect(normalizeApiError({ status: 502, value: undefined })).toEqual({
+      status: 502,
+    });
   });
 
   test("preserves a string response as the raw message", () => {
