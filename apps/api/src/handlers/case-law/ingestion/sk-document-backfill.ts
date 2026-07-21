@@ -13,7 +13,7 @@
  * short rather than merely bounded.
  */
 
-import { eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -141,9 +141,11 @@ export const loadPendingDocuments = async (
         eq(caseLawDecisions.sourceId, caseLawSources.id),
       )
       .where(
-        sql`${eq(caseLawSources.adapterKey, ADAPTER_KEYS.SK_COURTS)}
-          AND ${isNull(caseLawDecisions.fulltext)}
-          AND ${caseLawDecisions.documentUrl} IS NOT NULL`,
+        and(
+          eq(caseLawSources.adapterKey, ADAPTER_KEYS.SK_COURTS),
+          isNull(caseLawDecisions.fulltext),
+          isNotNull(caseLawDecisions.documentUrl),
+        ),
       )
       .orderBy(caseLawDecisions.createdAt)
       .limit(limit),
@@ -159,10 +161,9 @@ export const storeBackfilledDocument = async (
   document: BackfilledDocument,
   scopedDb: ScopedDb,
 ): Promise<void> => {
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await scopedDb((tx) => {
+  await scopedDb(async (tx) => {
     // audit: skip — scheduler backfill of public case-law text; no user action
-    return tx
+    await tx
       .update(caseLawDecisions)
       .set({
         fulltext: document.fulltext,
@@ -185,10 +186,9 @@ export const markDocumentUnavailable = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
 ): Promise<void> => {
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await scopedDb((tx) => {
+  await scopedDb(async (tx) => {
     // audit: skip — scheduler backfill of public case-law text; no user action
-    return tx
+    await tx
       .update(caseLawDecisions)
       .set({ fulltext: "" })
       .where(eq(caseLawDecisions.id, decisionId));

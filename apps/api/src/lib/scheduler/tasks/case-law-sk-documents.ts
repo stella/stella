@@ -13,7 +13,9 @@
  */
 
 import { rlsDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { createIngestionDb } from "@/api/db/scoped";
+import type { PendingDocument } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
 import {
   fetchPdfBytes,
   loadPendingDocuments,
@@ -32,6 +34,35 @@ const BATCH_SIZE = 40;
 /** Delay between PDF downloads, matching the adapter's crawl manners. */
 const FETCH_DELAY_MS = 500;
 
+/**
+ * Fetch, parse and store one decision's document. All the awaiting
+ * happens here rather than in the sweep loop below, which keeps the
+ * loop to a single sequential step.
+ */
+const processPending = async (
+  decision: PendingDocument,
+  scopedDb: ScopedDb,
+  signal: AbortSignal,
+): Promise<"filled" | "unavailable"> => {
+  const pdfBytes = decision.documentUrl
+    ? await fetchPdfBytes(decision.documentUrl, signal)
+    : undefined;
+  const document = pdfBytes
+    ? await parsePendingDocument(decision, pdfBytes)
+    : undefined;
+
+  if (!document) {
+    await markDocumentUnavailable(decision.id, scopedDb);
+    return "unavailable";
+  }
+
+  await storeBackfilledDocument(decision.id, document, scopedDb);
+  // Pace the next download; the court's site is the reason these
+  // fetches were taken off the crawl.
+  await Bun.sleep(FETCH_DELAY_MS);
+  return "filled";
+};
+
 export const backfillSkDocuments: SchedulerTask = async ({
   logger,
   signal,
@@ -44,56 +75,30 @@ export const backfillSkDocuments: SchedulerTask = async ({
     return;
   }
 
-  let filled = 0;
-  let unavailable = 0;
-  let failed = 0;
+  const counts = { filled: 0, unavailable: 0, failed: 0 };
 
   for (const decision of pending) {
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip between scheduler awaits.
-    if (signal.aborted || !decision.documentUrl) {
+    if (signal.aborted) {
       break;
     }
 
     try {
       // oxlint-disable-next-line no-await-in-loop -- rate-limited court downloads run one at a time by design
-      const pdfBytes = await fetchPdfBytes(decision.documentUrl, signal);
-      const document = pdfBytes
-        ? // oxlint-disable-next-line no-await-in-loop -- parse depends on the fetch above
-          await parsePendingDocument(decision, pdfBytes)
-        : undefined;
-
-      if (!document) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential per decision
-        await markDocumentUnavailable(decision.id, scopedDb);
-        unavailable++;
-        continue;
-      }
-
-      // oxlint-disable-next-line no-await-in-loop -- sequential per decision
-      await storeBackfilledDocument(decision.id, document, scopedDb);
-      filled++;
+      counts[await processPending(decision, scopedDb, signal)]++;
     } catch (error) {
       // Leave fulltext NULL so a transient failure is retried, unlike
       // an unparseable document which is marked and moved past.
-      failed++;
+      counts.failed++;
       logger.warn("case_law.sk_documents.failed", {
         caseNumber: decision.caseNumber,
-        url: decision.documentUrl,
+        url: decision.documentUrl ?? "",
         errorType: errorTag(error),
       });
-    }
-
-    // eslint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip between scheduler awaits.
-    if (!signal.aborted) {
-      // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between downloads
-      await Bun.sleep(FETCH_DELAY_MS);
     }
   }
 
   logger.info("case_law.sk_documents.swept", {
     attempted: pending.length,
-    filled,
-    unavailable,
-    failed,
+    ...counts,
   });
 };
