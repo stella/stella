@@ -9,6 +9,7 @@ import type { Static } from "elysia";
 import { t } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_RUN_MODE, type ChatRunMode } from "@stll/api-contract";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
@@ -34,8 +35,8 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 
-export const CHAT_RUN_MODE = { agent: "agent" } as const;
-export type ChatRunMode = (typeof CHAT_RUN_MODE)[keyof typeof CHAT_RUN_MODE];
+export { CHAT_RUN_MODE };
+export type { ChatRunMode };
 
 const rawMessageSchema = t.Object(
   {

@@ -1,8 +1,8 @@
 /** Version of the public REST request and response contract. */
 export const STELLA_REST_API_CONTRACT_VERSION = 1 as const;
 
-export { CHAT_TOOL_SCOPE } from "./chat";
-export type { ChatSendRequest, SafeId } from "./chat";
+export { CHAT_RUN_MODE, CHAT_TOOL_SCOPE } from "./chat";
+export type { ChatRunMode, ChatSendRequest, SafeId } from "./chat";
 export { API_VALIDATION_ERROR_CODE, normalizeApiError } from "./error";
 export type {
   ApiErrorInput,

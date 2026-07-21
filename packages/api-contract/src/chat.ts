@@ -6,6 +6,9 @@ export const CHAT_TOOL_SCOPE = {
   suggestTemplateFields: "suggest-template-fields",
 } as const;
 
+export const CHAT_RUN_MODE = { agent: "agent" } as const;
+export type ChatRunMode = (typeof CHAT_RUN_MODE)[keyof typeof CHAT_RUN_MODE];
+
 export type SafeId<TType extends string> = string &
   Brand<"SafeId"> & {
     readonly __safeIdType?: TType;
@@ -62,6 +65,7 @@ export type ChatSendRequest = {
     parts: unknown[];
     role: "assistant" | "system" | "user";
   };
+  runMode?: ChatRunMode;
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   toolScope?: (typeof CHAT_TOOL_SCOPE)["suggestTemplateFields"];
