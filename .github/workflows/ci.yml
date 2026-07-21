@@ -428,7 +428,9 @@ jobs:
       # workflow-only PRs where dependencies are not installed.
       - name: Test seed citation-anchor guard
         if: needs.ci-changes.outputs.package_checks_required == 'true'
-        run: bun test apps/api/scripts/seed-dev.test.ts
+        run: >-
+          bun test --preload ./apps/api/src/tests/setup-env.ts
+          apps/api/scripts/seed-dev.test.ts
 
       - name: Test API and CLI contract invariants
         if: needs.ci-changes.outputs.package_checks_required == 'true'
