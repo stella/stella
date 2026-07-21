@@ -3,11 +3,16 @@ import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
-import { ensureRouteQueryData } from "@/lib/react-query";
+import {
+  ensureRouteInfiniteQueryData,
+  ensureRouteQueryData,
+} from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
 import { MemoryPanel } from "@/routes/_protected.settings/-components/organization/memory/memory-panel";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";
 
 export const Route = createFileRoute("/_protected/settings/account/memory")({
   beforeLoad: async ({ context }) => {
@@ -20,10 +25,42 @@ export const Route = createFileRoute("/_protected/settings/account/memory")({
     if (!canUseMemory) {
       throw redirect({ to: "/settings/account/profile", replace: true });
     }
+
+    return { activeOrganizationId: context.user.activeOrganizationId };
+  },
+  // The panel opens on the "mine" tab, which reads two different slices of
+  // /memories: the suggestions queue (status=suggested) and the list below it
+  // (status=active). They are separate cursors over separate result sets, so
+  // they cannot collapse into one request — but both would otherwise start on
+  // component mount, after the route has already resolved. Priming them here
+  // starts both during route load instead.
+  loader: async ({ context }) => {
+    await Promise.all(
+      MEMORY_TAB_PRIMED_STATUSES.map(async (status) => {
+        // Priming is best-effort: the panel renders its own error state with a
+        // retry, so a failed prefetch must not take the whole route down.
+        try {
+          await ensureRouteInfiniteQueryData(
+            context.queryClient,
+            memoriesOptions({
+              activeOrganizationId: context.activeOrganizationId,
+              scope: "user",
+              status,
+            }),
+          );
+        } catch (error: unknown) {
+          getAnalytics().captureError(error);
+        }
+      }),
+    );
   },
   component: MemoryPage,
   pendingComponent: MemoryPagePending,
 });
+
+// Must match the default tab/view in MemoryPanel; priming anything else would
+// warm a cache entry the first paint never reads.
+const MEMORY_TAB_PRIMED_STATUSES = ["suggested", "active"] as const;
 
 const MEMORY_TAB_SKELETON_KEYS = ["mine", "firm", "matter"] as const;
 const MEMORY_ROW_SKELETON_KEYS = ["primary", "secondary", "tertiary"] as const;
