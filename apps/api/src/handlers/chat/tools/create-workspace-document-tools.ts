@@ -2,16 +2,16 @@ import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { fromMarkdown } from "@stll/folio-core/markdown";
 import {
   createDocx,
   createEmptyDocument,
   createStellaStyleDocumentPreset,
-} from "@stll/folio-core/server";
+  mergeDocumentContent,
+} from "@stll/folio-core";
+import { fromMarkdown } from "@stll/folio-core/markdown";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import { remapMarkdownListNumbering } from "@/api/handlers/chat/tools/markdown-list-numbering";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { buildCreatedDocumentToolOutput } from "@/api/handlers/chat/tools/workspace-tools";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
@@ -82,28 +82,21 @@ const createWorkspaceDocumentOutputSchema = v.strictObject({
  * `createEmptyDocument({ preset: createStellaStyleDocumentPreset() })` —
  * the same call `create-template-buffer.ts` uses for the blank-document
  * tools — which carries Stella's style set, numbering, font table, and A4
- * section/page geometry. The parsed markdown blocks are then swapped onto
- * that document's body before serializing with `createDocx`.
- *
- * Stella's preset numbering reserves `numId` 1-5 for its own legal clause /
- * definitions / recitals / parties / bullet lists, which collides with the
- * small `numId`s `fromMarkdown` mints for its own bullet/ordered lists
- * (1, 2, 3, …) — left alone, a markdown list would silently render with
- * Stella's clause numbering instead of a plain bullet/number.
- * `remapMarkdownListNumbering` renumbers the merged content's lists above
- * whatever the target already uses and gives them their own definitions.
+ * section/page geometry. `mergeDocumentContent` appends the parsed markdown
+ * blocks onto that document's body, renumbering their lists strictly above
+ * Stella's preset numbering (which reserves `numId` 1-5 for its own legal
+ * clause / definitions / recitals / parties / bullet lists) so a markdown
+ * list never collides with and silently renders as Stella's clause
+ * numbering.
  */
 export const markdownToStellaDocx = async (
   markdown: string,
 ): Promise<ArrayBuffer> => {
-  const parsed = fromMarkdown(markdown);
   const target = createEmptyDocument({
     preset: createStellaStyleDocumentPreset(),
   });
-  const { content } = parsed.package.document;
-  remapMarkdownListNumbering(target, content);
-  target.package.document.content = content;
-  return await createDocx(target);
+  const merged = mergeDocumentContent(target, fromMarkdown(markdown));
+  return await createDocx(merged);
 };
 
 type CreateWorkspaceDocumentToolsProps = {
