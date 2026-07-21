@@ -1,7 +1,5 @@
 import { useSyncExternalStore } from "react";
 
-import { cn } from "@stll/ui/lib/utils";
-
 import {
   productStoryEditorPortraitMedia,
   productStoryHeroMedia,
@@ -31,21 +29,21 @@ export const RecordedStellaScene = ({
   const videoSrc = isDark ? media.darkVideoSrc : media.videoSrc;
   const shouldPlay = isActive && !prefersReducedMotion;
 
-  // Residual horizontal crop anchors to the recording's start edge (0%): the
-  // app's sidebar and logo stay whole and only the content area's far edge is
-  // trimmed. The recordings are LTR app UI, so the percentage anchor is
-  // correct on RTL pages too.
-  const cropStyle =
-    crop === "top" ? undefined : { objectPosition: "0% 50%" as const };
+  // Residual horizontal crop always anchors to the recording's start edge
+  // (x 0%): the app's sidebar and logo stay whole and only the content
+  // area's far edge is trimmed. Note object-top alone would re-centre the
+  // x axis (50% 0%), which is exactly the half-cut-logo bug. "top" keeps
+  // the toolbar edge (y 0%); "document" centres the page body vertically.
+  // The recordings are LTR app UI, so the anchors hold on RTL pages too.
+  const cropStyle = {
+    objectPosition: crop === "top" ? ("0% 0%" as const) : ("0% 50%" as const),
+  };
 
   if (!shouldPlay) {
     return (
       <img
         alt={media.alt}
-        className={cn(
-          "bg-background h-full w-full object-cover",
-          crop === "top" && "object-top",
-        )}
+        className="bg-background h-full w-full object-cover"
         decoding="async"
         src={posterSrc}
         style={cropStyle}
@@ -57,10 +55,7 @@ export const RecordedStellaScene = ({
     <video
       aria-label={media.alt}
       autoPlay
-      className={cn(
-        "bg-background h-full w-full object-cover",
-        crop === "top" && "object-top",
-      )}
+      className="bg-background h-full w-full object-cover"
       style={cropStyle}
       key={videoSrc}
       loop
