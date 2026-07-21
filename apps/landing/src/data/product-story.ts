@@ -1,6 +1,7 @@
 export const productStorySceneIds = [
   "workspace",
   "review",
+  "review-citation",
   "editor",
   "agent",
   "cli",
@@ -96,6 +97,14 @@ export const productStoryThumbnails = {
     darkSrc: "/media/products/tabular-review-dark.png",
     alt: "Contract review table in stella",
   },
+  // Product-page-only scene (same product area as "review"); reuses its
+  // thumbnail since nothing lists this scene by icon (nav mega-menu,
+  // homepage chapters) the way "review" itself is.
+  "review-citation": {
+    src: "/media/products/tabular-review.png",
+    darkSrc: "/media/products/tabular-review-dark.png",
+    alt: "Contract review table in stella",
+  },
   editor: {
     src: "/media/products/editor.png",
     darkSrc: "/media/products/editor-dark.png",
@@ -138,6 +147,13 @@ export const productStoryMedia = {
     posterSrc: "/media/products/story-review-poster.jpg",
     darkPosterSrc: "/media/products/story-review-dark-poster.jpg",
     alt: "A contract review table running in stella",
+  },
+  "review-citation": {
+    videoSrc: "/media/products/story-review-citation.mp4",
+    darkVideoSrc: "/media/products/story-review-citation-dark.mp4",
+    posterSrc: "/media/products/story-review-citation-poster.jpg",
+    darkPosterSrc: "/media/products/story-review-citation-dark-poster.jpg",
+    alt: "Clicking a cited table cell to open its source passage in stella",
   },
   editor: {
     videoSrc: "/media/products/story-editor.mp4",
@@ -188,6 +204,17 @@ export const productStoryHeroMedia = {
     posterSrc: "/media/products/story-review-hero-poster.jpg",
     darkPosterSrc: "/media/products/story-review-hero-dark-poster.jpg",
     alt: "A contract review table running in stella",
+  },
+  // Product-page section only; like templates below, this has a wide
+  // capture only, so the hero record reuses it (object-cover crops
+  // slightly in the companion composition, which never renders this scene
+  // in practice — see productStoryScenes/openingProductStory).
+  "review-citation": {
+    videoSrc: "/media/products/story-review-citation.mp4",
+    darkVideoSrc: "/media/products/story-review-citation-dark.mp4",
+    posterSrc: "/media/products/story-review-citation-poster.jpg",
+    darkPosterSrc: "/media/products/story-review-citation-dark-poster.jpg",
+    alt: "Clicking a cited table cell to open its source passage in stella",
   },
   editor: {
     videoSrc: "/media/products/story-editor-hero.mp4",

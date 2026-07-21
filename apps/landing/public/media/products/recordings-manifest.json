@@ -313,6 +313,48 @@
       ]
     },
     {
+      "captureId": "review-citation",
+      "theme": "dark",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "4f496048762f07beb4c1538232c76918200a64e1",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId",
+        "apps/web/src/components/inspector",
+        "apps/web/src/routes/_protected.tsx"
+      ]
+    },
+    {
+      "captureId": "review-citation",
+      "theme": "light",
+      "viewport": {
+        "height": 720,
+        "width": 1280
+      },
+      "dpr": 2,
+      "recordedAtCommit": "4f496048762f07beb4c1538232c76918200a64e1",
+      "watchedPaths": [
+        "apps/web/e2e/marketing/captures.ts",
+        "apps/web/e2e/marketing/record-product-story.ts",
+        "apps/api/scripts/seed-dev.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/app-sidebar.logic.ts",
+        "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId",
+        "apps/web/src/components/inspector",
+        "apps/web/src/routes/_protected.tsx"
+      ]
+    },
+    {
       "captureId": "review-hero",
       "theme": "dark",
       "viewport": {

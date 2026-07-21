@@ -72,7 +72,7 @@ export const tabularReview: Product = {
       ],
       media: {
         type: "story",
-        sceneId: "review",
+        sceneId: "review-citation",
         aspect: "16 / 10",
       },
       frameVariant: "ripple",

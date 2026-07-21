@@ -3642,79 +3642,79 @@ export const buildExportReviewCitationSeeds = (
     fieldSuffix: "document-type",
     statement: `Document type extracted as ${metadata.documentType}.`,
     quote: `Document type: ${metadata.documentType}`,
-    blockIndex: 4,
+    blockIndex: 6,
   },
   {
     fieldSuffix: "counterparty",
     statement: `Counterparty extracted as ${metadata.counterparty}.`,
     quote: `Counterparty: ${metadata.counterparty}`,
-    blockIndex: 5,
+    blockIndex: 7,
   },
   {
     fieldSuffix: "jurisdiction",
     statement: `Jurisdiction extracted as ${metadata.jurisdiction}.`,
     quote: `Jurisdiction: ${metadata.jurisdiction}`,
-    blockIndex: 6,
+    blockIndex: 8,
   },
   {
     fieldSuffix: "governing-law",
     statement: `Governing law extracted as ${metadata.governingLaw}.`,
     quote: `Governing law: ${metadata.governingLaw}`,
-    blockIndex: 7,
+    blockIndex: 9,
   },
   {
     fieldSuffix: "effective-date",
     statement: `Effective date extracted as ${metadata.effectiveDate}.`,
     quote: `Effective date: ${metadata.effectiveDate}`,
-    blockIndex: 8,
+    blockIndex: 10,
   },
   {
     fieldSuffix: "expiry-date",
     statement: `Expiry date extracted as ${metadata.expiryDate}.`,
     quote: `Expiry date: ${metadata.expiryDate}`,
-    blockIndex: 9,
+    blockIndex: 11,
   },
   {
     fieldSuffix: "contract-value",
     statement: `Contract value extracted as EUR ${metadata.contractValue}.`,
     quote: `Contract value: EUR ${metadata.contractValue}`,
-    blockIndex: 10,
+    blockIndex: 12,
   },
   {
     fieldSuffix: "risk-level",
     statement: `Risk level classified as ${metadata.riskLevel}.`,
     quote: `Risk level: ${metadata.riskLevel}`,
-    blockIndex: 11,
+    blockIndex: 13,
   },
   {
     fieldSuffix: "evidence-quality",
     statement: `Evidence quality classified as ${metadata.evidenceQuality}.`,
     quote: `Evidence quality: ${metadata.evidenceQuality}`,
-    // Position 12 is "Review status: ..." (not a citation field); evidence
+    // Position 14 is "Review status: ..." (not a citation field); evidence
     // quality is the next line.
-    blockIndex: 13,
+    blockIndex: 15,
   },
   {
     fieldSuffix: "tags",
     statement: `Tags extracted as ${metadata.tags.join(", ")}.`,
     quote: `Tags: ${metadata.tags.join(", ")}`,
-    blockIndex: 14,
+    blockIndex: 16,
   },
   {
     fieldSuffix: "key-obligation",
     statement: "Key obligation extracted from the obligation section.",
     quote: metadata.keyObligation,
-    // Position 15 is the "Key obligation:" heading; the obligation text
+    // Position 17 is the "Key obligation" heading; the obligation text
     // itself is the next line.
-    blockIndex: 16,
+    blockIndex: 18,
   },
   {
     fieldSuffix: "risk-finding",
     statement: "Risk finding extracted from the risk section.",
     quote: metadata.riskFinding,
-    // Position 17 is the "Risk finding:" heading; the finding text itself
+    // Position 19 is the "Risk finding" heading; the finding text itself
     // is the next line.
-    blockIndex: 18,
+    blockIndex: 20,
   },
 ];
 

@@ -950,6 +950,10 @@ const DISCOVER_PRODUCTS: Record<
 > = {
   workspace: { href: "/product/workspace", name: "Workspace" },
   review: { href: "/product/tabular-review", name: "Tabular Review" },
+  "review-citation": {
+    href: "/product/tabular-review",
+    name: "Tabular Review",
+  },
   editor: { href: "/product/editor", name: "Editor" },
   agent: { href: "/product/agent", name: "AI agent" },
   cli: { href: "/product/cli-mcp", name: "CLI & MCP" },
@@ -1095,6 +1099,9 @@ const getSceneChromeLabel = (sceneId: ProductStorySceneId) => {
     return "stella · Project Atlas · Files";
   }
   if (sceneId === "review") {
+    return "stella · Project Atlas · Table";
+  }
+  if (sceneId === "review-citation") {
     return "stella · Project Atlas · Table";
   }
   if (sceneId === "editor") {

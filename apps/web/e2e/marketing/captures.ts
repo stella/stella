@@ -17,12 +17,18 @@ export type CaptureViewport = { height: number; width: number };
 // "cli" films the Knowledge tools catalogue: the real MCP/capability surface
 // the CLI and MCP expose, recorded as its own scene instead of reusing the
 // agent chat footage.
+// "review-citation" films the cell-to-passage click-through in the same
+// Table view as "review": hovering a citation-bearing cell and clicking
+// through opens the source document at its exact-passage highlight.
+// Product-page-only (apps/landing/src/data/products/tabular-review.ts), so
+// unlike the other scenes it has no "-hero" companion variant.
 export type StoryCaptureId =
   | "agent"
   | "cli"
   | "editor"
   | "editor-doc"
   | "review"
+  | "review-citation"
   | "templates"
   | "workspace";
 
@@ -78,6 +84,15 @@ const SCENE_WATCHED_PATHS: Record<StoryCaptureId, readonly string[]> = {
   workspace: ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
   // Table view of the same workspace.
   review: ["apps/web/src/routes/_protected.workspaces/$workspaceId"],
+  // Same Table view, clicking a citation-bearing cell through to its source
+  // passage: reaches the global inspector (outside the workspace route
+  // slice) and folio's docx exact-passage-highlight wiring, neither of
+  // which the plain "review" scene exercises.
+  "review-citation": [
+    "apps/web/src/routes/_protected.workspaces/$workspaceId",
+    "apps/web/src/components/inspector",
+    "apps/web/src/routes/_protected.tsx",
+  ],
   // DOCX editor over the seeded Supplier Agreement redline
   // ($viewId.document.tsx and -components/docx live inside the workspace
   // slice).
@@ -127,6 +142,9 @@ export const captureDefinitions: readonly CaptureDefinition[] = [
   ]),
   toDefinition("templates", "templates", WIDE_VIEWPORT),
   toDefinition("editor-doc", "editor-portrait", PORTRAIT_VIEWPORT),
+  // Product-page section only (tabular-review.ts section 2): no hero/
+  // companion variant.
+  toDefinition("review-citation", "review-citation", WIDE_VIEWPORT),
 ];
 
 export const RECORDINGS_MANIFEST_PATH =

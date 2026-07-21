@@ -187,6 +187,122 @@ const SECOND_SOURCE_PREVIEW = {
   label: "Edison_Bank_Permit_2018",
 } as const satisfies InspectorPreviewMarker;
 
+// ─── Review-citation scene: cell-to-passage click-through ───────────────
+// The Export Review table's Governing Law column for the seeded
+// Aurora_Retail_Shareholder_Register_2018.docx row (seed-dev.ts row index 0:
+// a "Direct citation" evidence-quality DOCX). Its citation quote
+// ("Governing law: Netherlands") is a verbatim line in the seeded document
+// body, and seed-dev.ts's ExportReviewCitationSeed.blockIndex points the
+// citation at that exact paragraph, so opening it resolves to a real
+// folio exact-passage highlight (PR #1215) instead of a degraded block
+// flash — required for this scene to ever have something to hold on.
+const EXPORT_REVIEW_GOVERNING_LAW_QUOTE = "Governing law: Netherlands";
+
+// AICellSourceCard's own PreviewCardTrigger hover delay is 650ms; a plain
+// click on the cell instead enters row-cells.tsx's cell-expansion mode
+// (data-expanded-cell) and, via the trigger's own onPointerDown dismiss
+// guard, actively prevents this same popover from opening — so the cell
+// must be hovered, never clicked, for the popover to appear.
+const CITATION_POPOVER_HOVER_DELAY_MS = 850;
+const CITATION_POPOVER_CONTENT_SELECTOR = '[data-slot="preview-card-content"]';
+
+// Resolves the Governing Law column's grid cell for the Aurora row by
+// correlating the column header's aria-colindex with the row's own
+// gridcells (the table has no direct header/column id association in the
+// DOM), then scrolls it into view: at 1280px wide the table's ~17 columns
+// overflow far past the viewport, and Governing Law sits well off-screen
+// by default.
+const locateExportReviewGoverningLawCell = async (
+  page: Page,
+): Promise<Locator> => {
+  const columnIndex = await page
+    .getByRole("columnheader", { name: "Governing Law" })
+    .first()
+    .getAttribute("aria-colindex");
+  if (!columnIndex) {
+    throw new Error(
+      "review-citation: could not resolve the Governing Law column index",
+    );
+  }
+  const row = page
+    .getByRole("row")
+    .filter({ hasText: /Aurora_Retail_Shareholder_Register_2018/u })
+    .first();
+  const cell = row.locator(`[role="gridcell"][aria-colindex="${columnIndex}"]`);
+  await cell.scrollIntoViewIfNeeded();
+  return cell;
+};
+
+// Hover the citation cell long enough for the AICellSourceCard popover to
+// open (showing the citation quote), then click through it: the popover's
+// whole content is a button wrapping the same onOpen() the cell's inline
+// Preview action calls, so this opens the source document with the
+// citation's justification active.
+const openGoverningLawCitationPopover = async (page: Page, cell: Locator) => {
+  await hoverWithCursor(page, cell);
+  await page.waitForTimeout(CITATION_POPOVER_HOVER_DELAY_MS);
+  await clickWithCursor(
+    page,
+    page.locator(`${CITATION_POPOVER_CONTENT_SELECTOR} button`).first(),
+  );
+};
+
+// Painted DOCX body text plus folio's exact-passage highlight overlay
+// (`.folio-passage-highlight`, only painted when the passage text match
+// succeeds — see PassageHighlightOverlay in @stll/folio-react). Requiring
+// both means a build that lost either the folio preview or the
+// exact-passage highlight itself can never ship this scene's footage.
+const passageHighlightIsPainted = ({
+  bodyMarker,
+  minLength,
+}: {
+  bodyMarker: string;
+  minLength: number;
+}) => {
+  const painted = [
+    ...document.querySelectorAll(".layout-run-text, [data-text-layer]"),
+  ]
+    .map((run) => run.textContent ?? "")
+    .join("");
+  if (painted.trim().length < minLength || !painted.includes(bodyMarker)) {
+    return false;
+  }
+  return [...document.querySelectorAll(".folio-passage-highlight")].some(
+    (highlight) => {
+      const rect = highlight.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    },
+  );
+};
+
+const GOVERNING_LAW_CITATION_MARKER = {
+  bodyMarker: EXPORT_REVIEW_GOVERNING_LAW_QUOTE,
+  label: "Governing Law citation (Aurora_Retail_Shareholder_Register_2018)",
+} as const satisfies InspectorPreviewMarker;
+
+const waitForPassageHighlight = async (
+  page: Page,
+  marker: InspectorPreviewMarker,
+  timeoutMs: number,
+) => {
+  try {
+    await page.waitForFunction(
+      passageHighlightIsPainted,
+      {
+        bodyMarker: marker.bodyMarker,
+        minLength: MIN_INSPECTOR_PREVIEW_TEXT_LENGTH,
+      },
+      { timeout: timeoutMs },
+    );
+  } catch {
+    throw new Error(
+      `review-citation: the exact-passage highlight for ${marker.label} did ` +
+        `not paint within ${timeoutMs}ms; refusing to ship footage with an ` +
+        "unhighlighted citation",
+    );
+  }
+};
+
 const scenes = [
   {
     id: "workspace",
@@ -340,6 +456,44 @@ const scenes = [
       await moveCursorTo(page, {
         x: firstSource.x + 56,
         y: firstSource.y + 44,
+      });
+    },
+  },
+  {
+    // The cell-to-passage moment: a citation-bearing Table cell opens its
+    // source document at the exact passage it was extracted from. Product-
+    // page section only (apps/landing/src/data/products/tabular-review.ts),
+    // never part of the homepage story cycle.
+    id: "review-citation",
+    cursor: "visible",
+    path: ({ table }) => table,
+    durationSeconds: 5.2,
+    prepare: async (page) => {
+      await page
+        .getByText("Export Review - Project Atlas Data Room")
+        .first()
+        .waitFor();
+      await page.getByRole("grid").waitFor();
+      const cell = await locateExportReviewGoverningLawCell(page);
+
+      // Pre-warm exactly like the agent scene: open the citation, require
+      // the real exact-passage highlight to paint (fails the run early if
+      // it cannot), then close the inspector so frame 0 keeps the plain
+      // table and the loop's hover-and-click perform the open on camera.
+      await openGoverningLawCitationPopover(page, cell);
+      await waitForPassageHighlight(
+        page,
+        GOVERNING_LAW_CITATION_MARKER,
+        INSPECTOR_PREWARM_TIMEOUT_MS,
+      );
+      await closeInspectorIfOpen(page);
+
+      // Rest: just off the citation cell, so the loop's first eased move is
+      // a short, natural approach onto it.
+      const cellCenter = await locatorCenter(cell);
+      await moveCursorTo(page, {
+        x: cellCenter.x - 70,
+        y: cellCenter.y - 34,
       });
     },
   },
@@ -1356,6 +1510,27 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
   }
   if (captureId === "cli") {
     await animateRowHoverLoop(page, /^ARES$/u, /^Anonymise$/u);
+    return;
+  }
+  if (captureId === "review-citation") {
+    // Glide onto the citation cell and hover long enough for the citation
+    // popover to open — a genuine click on the cell instead enters
+    // row-cells.tsx's cell-expansion mode and, via AICellSourceCard's own
+    // click-to-dismiss guard, prevents this same popover from opening — then
+    // click through the popover so the source document opens at the
+    // pre-warmed exact-passage highlight. The paint wait is deducted from
+    // the hold so the loop's cadence stays fixed even on a slow re-layout.
+    const cell = await locateExportReviewGoverningLawCell(page);
+    await openGoverningLawCitationPopover(page, cell);
+    const paintStartedAt = Date.now();
+    await waitForPassageHighlight(
+      page,
+      GOVERNING_LAW_CITATION_MARKER,
+      INSPECTOR_PREVIEW_PAINT_BUDGET_MS,
+    );
+    await page.waitForTimeout(
+      Math.max(0, 2800 - (Date.now() - paintStartedAt)),
+    );
     return;
   }
   // Only "agent" remains. The cursor starts from its just-off-the-source
