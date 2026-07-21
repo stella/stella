@@ -6,6 +6,7 @@ import { listClausesHandler, listClausesQuerySchema } from "./read";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "list_clauses" },
+  access: "read",
   query: listClausesQuerySchema,
 } satisfies HandlerConfig;
 

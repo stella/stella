@@ -17,6 +17,7 @@ const clauseVersionDiffParamsSchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
+  access: "read",
   params: clauseVersionDiffParamsSchema,
 } satisfies HandlerConfig;
 

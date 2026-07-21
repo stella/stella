@@ -19,6 +19,7 @@ const clauseVersionSummarizeParamsSchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
+  access: "write",
   params: clauseVersionSummarizeParamsSchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
