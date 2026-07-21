@@ -1092,13 +1092,45 @@ const buildCatalog = async (): Promise<BuildResult> => {
     const permissions = endpoint.config["permissions"];
     const hasPermissions = "permissions" in endpoint.config;
     const verbs = extractVerbs(permissions);
-    const accessResolution = resolveAccess({
+    // `access` is DECLARED on the config, not inferred: a handler's permission
+    // gate answers "who may call this", a different axis from whether it reads
+    // or writes (the same `workspace:["read"]` gate fronts a pure list and a
+    // cache-filling write). When declared it is authoritative; inference only
+    // proposes, and the affirmation guard below refuses to ship an unaffirmed
+    // read (which would resolve to a `stella:read`-reachable scope).
+    const declaredAccess = endpoint.config["access"];
+    const inferredAccess = resolveAccess({
       id,
       verbs,
       hasPermissions,
       overrides: ACCESS_OVERRIDES,
       destructiveNameOptOuts: DESTRUCTIVE_NAME_OPT_OUTS,
     });
+    const accessResolution =
+      declaredAccess === undefined
+        ? inferredAccess
+        : {
+            status: "resolved",
+            access: declaredAccess,
+            destructive:
+              !DESTRUCTIVE_NAME_OPT_OUTS.has(id) && isDestructiveName(id),
+          };
+    // Affirmation guard: a read resolves to a `stella:read`-reachable scope, so
+    // it must be an explicit, reviewed decision — never an inference. An
+    // inferred read (no `access` on the config, and not a legacy ACCESS_OVERRIDES
+    // entry during migration) fails the export until someone affirms it read or
+    // corrects it to write.
+    if (
+      accessResolution.status === "resolved" &&
+      accessResolution.access === "read" &&
+      declaredAccess !== "read" &&
+      !(id in ACCESS_OVERRIDES)
+    ) {
+      errors.push(
+        `capability "${id}" resolves to a read scope by inference, not affirmation. A read scope is reachable with stella:read consent, so it must be a reviewed decision: declare access: "read" on the handler config if it is a pure read, or access: "write" if it mutates (a DB write, an AI generation, a job enqueue).`,
+      );
+    }
+
     if (
       DESTRUCTIVE_NAME_OPT_OUTS.has(id) &&
       accessResolution.status === "resolved" &&
