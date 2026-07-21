@@ -493,6 +493,11 @@ export const TemplateFillFacet = ({
           setFillValues(values);
           pushFillPreview(values, discovered.fields, clausePreview?.slotTexts);
         }}
+        // No matter context here (Studio previews the fill form in
+        // isolation), so the panel offers only its upload/paste-text
+        // sources — never the matter-documents picker, which needs a
+        // workspaceId this facet doesn't have.
+        prefill={{}}
         saveTarget={fillSaveTarget}
         structureErrors={discovered.structureErrors}
         templateId={templateId}
