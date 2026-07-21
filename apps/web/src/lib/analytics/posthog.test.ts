@@ -72,12 +72,6 @@ Object.defineProperty(globalThis, "__APP_COMMIT_SHA__", {
   value: "abc123",
 });
 
-void mock.module("@/env", () => ({
-  env: {
-    VITE_POSTHOG_LOCAL_DEBUG: true,
-  },
-}));
-
 void mock.module("posthog-js", () => ({
   posthog: posthogMock,
 }));
