@@ -266,6 +266,10 @@ const compactMenus = [
     box-shadow: none !important;
     padding: 0 !important;
     border-radius: 0 !important;
+    /* Every pane shares one preview size regardless of the media's own
+       aspect (the CLI scene is 2.03 elsewhere); the scene thumbnails lay
+       out in percentages, so they adapt to the unified box. */
+    aspect-ratio: 16 / 10 !important;
   }
   .nav-mega-pane :global(.product-media-sheen) {
     display: none !important;
