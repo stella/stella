@@ -10,6 +10,8 @@ import { panic } from "better-result";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
+import type { ChatSendRequest } from "@stll/api-contract";
 
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type {
@@ -109,7 +111,7 @@ export type GroupedChatThreads = Pick<
 
 const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
-  "suggest-template-fields" as const;
+  CHAT_TOOL_SCOPE.suggestTemplateFields;
 const CHAT_THREADS_PAGE_SIZE = 50;
 const CHAT_TRANSPORT_VERSION = 2;
 
@@ -843,6 +845,25 @@ const toPersistedChatMessages = (
   messages: readonly UIMessage<ChatClientTools>[],
 ): PersistedChatMessage[] => [...messages];
 
+const toChatSendDocxEditSnapshot = (
+  snapshot: NonNullable<ActiveFileContext["docxEditSnapshot"]>,
+): NonNullable<
+  NonNullable<ChatSendRequest["activeFile"]>["docxEditSnapshot"]
+> => ({
+  blocks: snapshot.blocks.map((block) => ({
+    id: block.id,
+    kind: block.kind,
+    text: block.text,
+    ...(block.displayLabel === undefined
+      ? {}
+      : { displayLabel: block.displayLabel }),
+    ...(block.styleId === undefined ? {} : { styleId: block.styleId }),
+  })),
+  ...(snapshot.canApplyEdits === undefined
+    ? {}
+    : { canApplyEdits: snapshot.canApplyEdits }),
+});
+
 export const buildSendRequestBody = ({
   context,
   key,
@@ -853,29 +874,17 @@ export const buildSendRequestBody = ({
   key: ChatThreadKey;
   messages: PersistedChatMessage[];
   requestBody?: ChatContinuationRequestBody | undefined;
-}) => {
+}): ChatSendRequest => {
   const message = messages.at(-1);
   if (!message) {
     panic("Missing chat message");
   }
 
-  const body: {
-    activeDecision?: ActiveDecisionContext | undefined;
-    activeExternal?: ActiveExternalContext | undefined;
-    activeFile?: ActiveFileContext | undefined;
-    activeSkill?: ActiveSkillContext | undefined;
-    activeTemplate?: ActiveTemplateContext | undefined;
-    contextMatterIds?: string[] | undefined;
-    devModelId?: string | undefined;
-    message: PersistedChatMessage;
-    sendMode: ChatSendMode;
-    threadId: ChatThreadId;
-    toolScope?: ChatToolScope | undefined;
-    truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
-    userContext?: ChatUserContext | undefined;
-    workspaceId?: string | undefined;
-  } = {
-    message,
+  const body: ChatSendRequest = {
+    message: {
+      ...message,
+      id: toSafeId<"chatMessage">(message.id),
+    },
     sendMode: resolveChatRequestSendMode({
       context,
       key,
@@ -894,7 +903,7 @@ export const buildSendRequestBody = ({
   }
 
   if (key.scope === "workspace") {
-    body.workspaceId = key.workspaceId;
+    body.workspaceId = toSafeId<"workspace">(key.workspaceId);
   }
 
   const userContext = context?.getUserContext?.();
@@ -904,32 +913,85 @@ export const buildSendRequestBody = ({
 
   const activeFile = context?.getActiveFile?.();
   if (activeFile) {
-    body.activeFile = activeFile;
+    body.activeFile = {
+      entityId: toSafeId<"entity">(activeFile.entityId),
+      fileName: activeFile.fileName,
+      ...(activeFile.fileFieldId === undefined
+        ? {}
+        : { fileFieldId: toSafeId<"field">(activeFile.fileFieldId) }),
+      ...(activeFile.supportsDocxEdits === undefined
+        ? {}
+        : { supportsDocxEdits: activeFile.supportsDocxEdits }),
+      ...(activeFile.docxEditSnapshot === undefined
+        ? {}
+        : {
+            docxEditSnapshot: toChatSendDocxEditSnapshot(
+              activeFile.docxEditSnapshot,
+            ),
+          }),
+    };
   }
 
   const activeDecision = context?.getActiveDecision?.();
   if (activeDecision) {
-    body.activeDecision = activeDecision;
+    body.activeDecision = {
+      decisionId: toSafeId<"caseLawDecision">(activeDecision.decisionId),
+    };
   }
 
   const activeExternal = context?.getActiveExternal?.();
   if (activeExternal) {
-    body.activeExternal = activeExternal;
+    body.activeExternal = {
+      title: activeExternal.title,
+      url: activeExternal.url,
+      ...(activeExternal.connectorSlug === undefined
+        ? {}
+        : { connectorSlug: activeExternal.connectorSlug }),
+      ...(activeExternal.provider === undefined
+        ? {}
+        : { provider: activeExternal.provider }),
+      ...(activeExternal.snippet === undefined
+        ? {}
+        : { snippet: activeExternal.snippet }),
+      ...(activeExternal.sourceToolName === undefined
+        ? {}
+        : { sourceToolName: activeExternal.sourceToolName }),
+      ...(activeExternal.text === undefined
+        ? {}
+        : { text: activeExternal.text }),
+    };
   }
 
   const activeSkill = context?.getActiveSkill?.();
   if (activeSkill) {
-    body.activeSkill = activeSkill;
+    body.activeSkill = {
+      skillName: activeSkill.skillName,
+      ...(activeSkill.skillId === undefined
+        ? {}
+        : { skillId: toSafeId<"agentSkill">(activeSkill.skillId) }),
+    };
   }
 
   const activeTemplate = context?.getActiveTemplate?.();
   if (activeTemplate) {
-    body.activeTemplate = activeTemplate;
+    body.activeTemplate = {
+      fileName: activeTemplate.fileName,
+      templateId: toSafeId<"template">(activeTemplate.templateId),
+      ...(activeTemplate.docxEditSnapshot === undefined
+        ? {}
+        : {
+            docxEditSnapshot: toChatSendDocxEditSnapshot(
+              activeTemplate.docxEditSnapshot,
+            ),
+          }),
+    };
   }
 
   const contextMatterIds = context?.getContextMatterIds?.();
   if (contextMatterIds !== undefined) {
-    body.contextMatterIds = contextMatterIds;
+    body.contextMatterIds = contextMatterIds.map((id) =>
+      toSafeId<"workspace">(id),
+    );
   }
 
   if (import.meta.env.DEV) {

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import Elysia from "elysia";
 
+import { STELLA_REST_API_CONTRACT_VERSION } from "@stll/api-contract";
+
 import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
 import { createProbeCache } from "@/api/lib/health/probe-cache";
 import type { ProbeOutcome } from "@/api/lib/health/probe-cache";
@@ -8,6 +10,7 @@ import { probeDatabase } from "@/api/lib/health/probe-database";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 const BUILD_METADATA = {
+  apiContractVersion: STELLA_REST_API_CONTRACT_VERSION,
   version: APP_VERSION,
   commit: APP_COMMIT_SHA,
 };

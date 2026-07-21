@@ -50,6 +50,7 @@
         "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
+        "@stll/api-contract": "workspace:*",
         "@stll/boe": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/catalogue": "workspace:*",
@@ -59,6 +60,7 @@
         "@stll/docx-core": "0.5.0",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
+        "@stll/fetch": "workspace:*",
         "@stll/folio-agents": "^0.7.0",
         "@stll/folio-core": "^0.15.0",
         "@stll/infosoud": "workspace:*",
@@ -228,6 +230,7 @@
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
+        "@stll/api-contract": "workspace:*",
         "@stll/catalogue": "workspace:*",
         "@stll/chat-limits": "workspace:*",
         "@stll/conditions": "workspace:*",
@@ -235,6 +238,7 @@
         "@stll/docx-core": "0.5.0",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
+        "@stll/fetch": "workspace:*",
         "@stll/folio-agents": "^0.7.0",
         "@stll/folio-core": "^0.15.0",
         "@stll/folio-react": "^0.11.0",
@@ -360,6 +364,18 @@
         "fast-check": "catalog:",
       },
     },
+    "packages/api-contract": {
+      "name": "@stll/api-contract",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/anonymize-chat": "workspace:*",
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+      },
+    },
     "packages/boe": {
       "name": "@stll/boe",
       "version": "0.1.0",
@@ -458,6 +474,14 @@
       "dependencies": {
         "better-result": "catalog:",
       },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+      },
+    },
+    "packages/fetch": {
+      "name": "@stll/fetch",
+      "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
@@ -1707,6 +1731,8 @@
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
 
+    "@stll/api-contract": ["@stll/api-contract@workspace:packages/api-contract"],
+
     "@stll/boe": ["@stll/boe@workspace:packages/boe"],
 
     "@stll/business-registries": ["@stll/business-registries@workspace:packages/business-registries"],
@@ -1730,6 +1756,8 @@
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
     "@stll/errors": ["@stll/errors@workspace:packages/errors"],
+
+    "@stll/fetch": ["@stll/fetch@workspace:packages/fetch"],
 
     "@stll/folio-agents": ["@stll/folio-agents@0.7.0", "", { "dependencies": { "@stll/folio-core": "^0.6.0" } }, "sha512-E1PcbIGB2nM9jVJhJrTvH8CxbDi6dY9KaQRwDBpeXxxbSmRreRAxTEpZeu5Yr4D9yM5Hv7DIxofZ5L9v8eyaFQ=="],
 

@@ -1,3 +1,5 @@
+import { buildVersionedApiUrl } from "@stll/api-contract";
+
 import { env } from "@/env";
 
 /**
@@ -14,4 +16,4 @@ import { env } from "@/env";
  * of the API.
  */
 export const apiUrl = (path: `/${string}`): string =>
-  `${env.VITE_API_URL}/v1${path}`;
+  buildVersionedApiUrl(env.VITE_API_URL, path);
