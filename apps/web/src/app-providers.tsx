@@ -154,13 +154,7 @@ const AnalyticsAuthIdentity = () => {
       return;
     }
 
-    analytics.identifyUser({
-      email: authStatus.user.email,
-      id: authStatus.user.id,
-      ...(authStatus.user.name === undefined
-        ? {}
-        : { name: authStatus.user.name }),
-    });
+    analytics.identifyUser({ id: authStatus.user.id });
   }, [analytics, authStatus]);
 
   return null;

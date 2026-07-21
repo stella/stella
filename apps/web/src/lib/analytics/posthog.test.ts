@@ -274,25 +274,7 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
-  test("identifies users with optional person properties", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
-
-    analytics.identifyUser({
-      id: "user_123",
-      email: "user@example.com",
-      name: "Ada Lovelace",
-    });
-
-    expect(identifyMock).toHaveBeenCalledWith("user_123", {
-      email: "user@example.com",
-      name: "Ada Lovelace",
-    });
-  });
-
-  test("passes missing identity properties through as undefined", () => {
+  test("identifies users by stable id without person properties", () => {
     const { analytics } = createPostHogAnalytics(
       "phc_test",
       "https://posthog.test",
@@ -300,10 +282,7 @@ describe("PostHog browser analytics adapter", () => {
 
     analytics.identifyUser({ id: "user_123" });
 
-    expect(identifyMock).toHaveBeenCalledWith("user_123", {
-      email: undefined,
-      name: undefined,
-    });
+    expect(identifyMock).toHaveBeenCalledWith("user_123");
   });
 
   test("identifies the same user only once per browser app session", () => {
@@ -312,8 +291,8 @@ describe("PostHog browser analytics adapter", () => {
       "https://posthog.test",
     );
 
-    analytics.identifyUser({ id: "user_123", email: "first@example.com" });
-    analytics.identifyUser({ id: "user_123", email: "second@example.com" });
+    analytics.identifyUser({ id: "user_123" });
+    analytics.identifyUser({ id: "user_123" });
 
     expect(identifyMock).toHaveBeenCalledTimes(1);
     expect(resetMock).not.toHaveBeenCalled();
@@ -329,10 +308,7 @@ describe("PostHog browser analytics adapter", () => {
     analytics.identifyUser({ id: "user_456" });
 
     expect(resetMock).toHaveBeenCalledTimes(1);
-    expect(identifyMock).toHaveBeenNthCalledWith(2, "user_456", {
-      email: undefined,
-      name: undefined,
-    });
+    expect(identifyMock).toHaveBeenNthCalledWith(2, "user_456");
   });
 
   test("reset can be limited to identified sessions", () => {
