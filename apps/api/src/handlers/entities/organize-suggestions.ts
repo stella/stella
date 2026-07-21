@@ -1051,6 +1051,7 @@ const hashSummarySource = ({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
+  access: "write",
   body: organizeSuggestionsBodySchema,
   // Folder-organisation is queued / "background"-shaped from the
   // user's perspective; they kick it off and read results later.

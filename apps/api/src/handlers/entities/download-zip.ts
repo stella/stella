@@ -322,6 +322,7 @@ const downloadZipHandler = async function* ({
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
+  access: "write",
   params: downloadZipParamsSchema,
 } satisfies HandlerConfig;
 

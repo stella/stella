@@ -9,6 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_documents" },
+  access: "read",
   query: t.Object({}),
 } satisfies HandlerConfig;
 

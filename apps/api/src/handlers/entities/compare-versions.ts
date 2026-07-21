@@ -22,6 +22,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
+  access: "read",
   params: workspaceParams({
     entityId: tSafeId("entity"),
   }),

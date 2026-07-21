@@ -12,6 +12,7 @@ import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
+  access: "write",
   params: workspaceParams({
     entityId: tSafeId("entity"),
     versionId: tSafeId("entityVersion"),
