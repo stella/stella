@@ -39,4 +39,15 @@ describe("tool-call timing", () => {
       }),
     ).toEqual({ status: "finished", durationMs: 8000 });
   });
+
+  test("replaces an estimated duration when the precise duration arrives", () => {
+    expect(
+      advanceToolCallTiming({
+        current: { status: "finished", durationMs: 2450 },
+        durationMs: 2312,
+        isRunning: false,
+        now: 9000,
+      }),
+    ).toEqual({ status: "finished", durationMs: 2312 });
+  });
 });

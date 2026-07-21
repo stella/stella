@@ -36,6 +36,10 @@ export const advanceToolCallTiming = ({
   }
 
   if (current.status === "finished") {
+    if (durationMs !== undefined && durationMs !== current.durationMs) {
+      return { status: "finished", durationMs };
+    }
+
     return current;
   }
 

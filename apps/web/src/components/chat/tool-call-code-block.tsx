@@ -1,5 +1,7 @@
+import type { CSSProperties } from "react";
+
 import { CopyIcon } from "lucide-react";
-import { Highlight } from "prism-react-renderer";
+import { Prism, useTokenize } from "prism-react-renderer";
 import type { PrismTheme, Token } from "prism-react-renderer";
 import { useTranslations } from "use-intl";
 
@@ -48,13 +50,16 @@ const TOOL_CODE_THEME = {
 export const ToolCallCodeBlock = ({
   code,
   language,
-  lineNumbers = false,
+  lineNumbers,
 }: {
   code: string;
   language: "json" | "text" | "typescript";
   lineNumbers?: boolean;
 }) => {
   const t = useTranslations();
+  const shouldShowLineNumbers = lineNumbers ?? false;
+  const tokens = useTokenize({ code, language, prism: Prism });
+  const keyedLines = addStableKeys(tokens);
 
   const handleCopy = async () => {
     try {
@@ -82,30 +87,25 @@ export const ToolCallCodeBlock = ({
           <CopyIcon className="size-3.5" />
         </Button>
       </div>
-      <Highlight code={code} language={language} theme={TOOL_CODE_THEME}>
-        {({ getLineProps, getTokenProps, tokens }) => {
-          const keyedLines = addStableKeys(tokens);
-
-          return (
-            <pre className="max-h-96 overflow-auto px-3 pb-3 font-mono text-xs leading-5">
-              {keyedLines.map(
-                ({ key, line, lineNumber, tokens: lineTokens }) => (
-                  <div key={key} {...getLineProps({ line })}>
-                    {lineNumbers && (
-                      <span className="text-foreground-ghost me-4 inline-block w-5 text-end tabular-nums select-none">
-                        {lineNumber}
-                      </span>
-                    )}
-                    {lineTokens.map(({ key: tokenKey, token }) => (
-                      <span key={tokenKey} {...getTokenProps({ token })} />
-                    ))}
-                  </div>
-                ),
-              )}
-            </pre>
-          );
-        }}
-      </Highlight>
+      <pre
+        className="max-h-96 overflow-auto px-3 pb-3 font-mono text-xs leading-5"
+        style={TOOL_CODE_THEME.plain}
+      >
+        {keyedLines.map(({ key, lineNumber, tokens: lineTokens }) => (
+          <div key={key}>
+            {shouldShowLineNumbers && (
+              <span className="text-foreground-ghost me-4 inline-block w-5 text-end tabular-nums select-none">
+                {lineNumber}
+              </span>
+            )}
+            {lineTokens.map(({ key: tokenKey, token }) => (
+              <span key={tokenKey} style={getTokenStyle(token)}>
+                {token.content}
+              </span>
+            ))}
+          </div>
+        ))}
+      </pre>
     </div>
   );
 };
@@ -139,3 +139,15 @@ const addStableKeys = (lines: Token[][]) => {
 
 const getTokenSignature = ({ content, types }: Token): string =>
   `${types.join(".")}:${content}`;
+
+const getTokenStyle = ({ types }: Token) => {
+  const style: CSSProperties = {};
+
+  for (const themeEntry of TOOL_CODE_THEME.styles) {
+    if (themeEntry.types.some((type) => types.includes(type))) {
+      Object.assign(style, themeEntry.style);
+    }
+  }
+
+  return style;
+};
