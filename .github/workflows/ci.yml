@@ -39,6 +39,7 @@ jobs:
       contents: read
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
+      agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
@@ -90,6 +91,7 @@ jobs:
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             {
+              echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
@@ -110,6 +112,7 @@ jobs:
 
           if (( ${#changed_files[@]} == 0 )); then
             {
+              echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
@@ -145,6 +148,7 @@ jobs:
           # Path scopes for the build/smoke jobs, computed here so a job whose
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
+          agent_sandbox_docker_required=false
           api_image_deps_required=false
           landing_build_required=false
           legal_atlas_image_required=false
@@ -153,6 +157,11 @@ jobs:
           web_build_required=false
           windows_scripts_required=false
           for file in "${changed_files[@]}"; do
+            case "$file" in
+              .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/bun-ci-retry.sh)
+                agent_sandbox_docker_required=true
+                ;;
+            esac
             case "$file" in
               apps/web/*|packages/*|patches/*|scripts/bundle-baseline.ts|scripts/bundle-baseline.json|VERSION|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
                 web_build_required=true
@@ -199,6 +208,7 @@ jobs:
           printf 'Changed files:\n'
           printf ' - %s\n' "${changed_files[@]}"
           {
+            echo "agent_sandbox_docker_required=$agent_sandbox_docker_required"
             echo "api_image_deps_required=$api_image_deps_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
@@ -289,6 +299,103 @@ jobs:
             packages/template-conditions/package.json
             packages/docx-utils/package.json
           version-file: bun.lock
+
+  # The agent sandbox must be exercised before the standalone protected
+  # canary can exist on the default branch. This job is safe for draft PRs: it
+  # receives no secrets, keeps the token read-only, and runs on an ephemeral
+  # hosted runner. Same-repository branches run immediately; forks retain the
+  # repository's explicit run-ci approval gate.
+  agent-sandbox-docker:
+    name: Agent sandbox Docker isolation and lifecycle
+    needs: ci-plan
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      AGENT_ENGINE_DOCKER_IMAGE: stella/agent-sandbox:ci
+      AGENT_ENGINE_DOCKER_NETWORK: stella-agent-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      AGENT_ENGINE_DOCKER_CANARY_URL: http://stella-agent-network-canary:8787/health
+      NETWORK_CANARY_CONTAINER: stella-agent-network-canary-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Run protocol and malformed-stream tests
+        run: bun --filter @stll/agent-engine test
+
+      - name: Build pinned sandbox image
+        run: >-
+          docker build
+          --file packages/agent-engine/docker/sandbox.Dockerfile
+          --tag "$AGENT_ENGINE_DOCKER_IMAGE"
+          packages/agent-engine/docker
+
+      - name: Create internal sandbox network
+        run: docker network create --internal "$AGENT_ENGINE_DOCKER_NETWORK"
+
+      - name: Start the only reachable network canary
+        run: |
+          bun build packages/agent-engine/scripts/mcp-canary-server.ts \
+            --target=node \
+            --outfile="$RUNNER_TEMP/mcp-canary-server.mjs"
+          docker run --detach \
+            --name "$NETWORK_CANARY_CONTAINER" \
+            --network "$AGENT_ENGINE_DOCKER_NETWORK" \
+            --network-alias stella-agent-network-canary \
+            --read-only \
+            --cap-drop=ALL \
+            --security-opt=no-new-privileges \
+            --tmpfs /state:rw,noexec,nosuid,size=1m,mode=1777 \
+            --volume "$RUNNER_TEMP/mcp-canary-server.mjs:/workspace/mcp-canary-server.mjs:ro" \
+            "$AGENT_ENGINE_DOCKER_IMAGE" \
+            node /workspace/mcp-canary-server.mjs
+          for attempt in {1..40}; do
+            if docker exec "$NETWORK_CANARY_CONTAINER" node -e \
+              'fetch("http://127.0.0.1:8787/health", { signal: AbortSignal.timeout(1000) }).then(async (response) => process.exit(response.ok && await response.text() === "sandbox-network-canary" ? 0 : 1), () => process.exit(1))'; then
+              exit 0
+            fi
+            sleep 0.1
+          done
+          docker logs "$NETWORK_CANARY_CONTAINER"
+          exit 1
+
+      - name: Exercise Docker provider isolation and cleanup
+        run: bun --filter @stll/agent-engine test:docker
+
+      - name: Assert provider left no sandbox containers
+        run: |
+          mapfile -t container_ids < <(
+            docker ps --all --no-trunc --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE"
+          )
+          if [[ "${#container_ids[@]}" -ne 1 || "${container_ids[0]}" != "$(docker inspect --format '{{.Id}}' "$NETWORK_CANARY_CONTAINER")" ]]; then
+            echo "::error title=Sandbox cleanup failed::Unexpected sandbox image container survived the integration suite."
+            docker ps --all --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE"
+            exit 1
+          fi
+
+      - name: Cleanup Docker resources
+        if: always()
+        run: |
+          docker ps --all --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE" | xargs --no-run-if-empty docker rm --force
+          docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
 
   ci-checks:
     needs: ci-plan
@@ -1760,6 +1867,7 @@ jobs:
       [
         ci-plan,
         changeset,
+        agent-sandbox-docker,
         ci-checks,
         code-quality,
         typecheck-baseline,
@@ -1780,6 +1888,7 @@ jobs:
       - name: Evaluate CI outcome
         env:
           API_IMAGE_DEPS_RESULT: ${{ needs.api-image-deps.result }}
+          AGENT_SANDBOX_DOCKER_RESULT: ${{ needs.agent-sandbox-docker.result }}
           CHANGESET_RESULT: ${{ needs.changeset.result }}
           CI_RESULT: ${{ needs.ci-checks.result }}
           DESKTOP_CLIPPY_RESULT: ${{ needs.desktop-clippy.result }}
@@ -1806,6 +1915,7 @@ jobs:
 
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
             if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
+                  || "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" \
                   || "$CODE_QUALITY_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "cancelled" \
                   || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
@@ -1842,12 +1952,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
