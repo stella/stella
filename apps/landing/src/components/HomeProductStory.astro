@@ -169,7 +169,7 @@ const proofItems = [
                 </div>
               )}
               {chapter.id === "data" && (
-                <div class="story-window">
+                <div class="story-window story-window-shot">
                   <div class="story-shot-main">
                     <ThemeImage
                       lightSrc="/media/products/story-public-data.png"
@@ -271,6 +271,14 @@ const proofItems = [
   .story-window {
     position: relative;
     aspect-ratio: 16 / 10;
+  }
+
+  /* The data chapter's screenshot is captured at 1440x760 (see
+     apps/web/e2e/marketing/product-screenshots.spec.ts, "story-public-data");
+     match that aspect exactly so object-cover doesn't crop the case-law
+     reader's side panels off camera. */
+  .story-window-shot {
+    aspect-ratio: 1440 / 760;
   }
 
   .story-shot-main {
