@@ -44,6 +44,7 @@ import {
   useI18nStore,
 } from "@/i18n/i18n-store";
 import { getInitials } from "@/lib/get-initials";
+import { roleOptions } from "@/routes/-queries";
 import { organizationSummaryOptions } from "@/routes/_protected.organization/-queries";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
@@ -73,6 +74,7 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
   const { data: organization } = useChromeQuery(
     organizationSummaryOptions(user.activeOrganizationId),
   );
+  const { data: role } = useChromeQuery(roleOptions);
 
   const displayName = user.name ?? user.email;
   const orgName = organization?.name;
@@ -103,12 +105,19 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
               <div className="flex min-w-0 flex-col justify-center">
                 {user.name ? (
                   <>
-                    <BidiText
-                      as="span"
-                      className="truncate text-sm font-medium"
-                    >
-                      {user.name}
-                    </BidiText>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <BidiText
+                        as="span"
+                        className="truncate text-sm font-medium"
+                      >
+                        {user.name}
+                      </BidiText>
+                      {role && (
+                        <span className="bg-muted text-muted-foreground inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[0.625rem] font-medium select-none">
+                          {t(`organization.roles.${role}`)}
+                        </span>
+                      )}
+                    </div>
                     {user.email && (
                       <BidiText
                         as="span"
@@ -120,13 +129,20 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
                     )}
                   </>
                 ) : (
-                  <BidiText
-                    as="span"
-                    className="truncate text-sm font-medium"
-                    direction={user.email ? "ltr" : "auto"}
-                  >
-                    {user.email || t("common.user")}
-                  </BidiText>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <BidiText
+                      as="span"
+                      className="truncate text-sm font-medium"
+                      direction={user.email ? "ltr" : "auto"}
+                    >
+                      {user.email || t("common.user")}
+                    </BidiText>
+                    {role && (
+                      <span className="bg-muted text-muted-foreground inline-flex shrink-0 items-center rounded-md px-1.5 py-0.5 text-[0.625rem] font-medium select-none">
+                        {t(`organization.roles.${role}`)}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
               <ChevronsUpDownIcon className="ms-auto size-4 opacity-50" />
@@ -137,7 +153,16 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
           {orgName && (
             <>
               <MenuGroup>
-                <MenuGroupLabel className="text-sm">{orgName}</MenuGroupLabel>
+                <MenuGroupLabel className="pb-1 text-sm">
+                  {orgName}
+                </MenuGroupLabel>
+                {role && (
+                  <div className="px-2 pb-1.5">
+                    <span className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium select-none">
+                      {t(`organization.roles.${role}`)}
+                    </span>
+                  </div>
+                )}
               </MenuGroup>
               <MenuSeparator />
             </>
