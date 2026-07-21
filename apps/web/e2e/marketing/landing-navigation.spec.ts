@@ -309,14 +309,24 @@ for (const theme of ["light", "dark"] as const) {
               }
               const src = poster.src.split("/").pop() ?? "";
               const isDarkAsset = src.includes("-dark-poster");
+              // Visibility is opacity-driven (both posters keep their layout
+              // box so the light one can size the window in either theme), so
+              // a display check alone is not enough.
+              const style = getComputedStyle(poster);
               const isVisible =
                 poster.offsetParent !== null &&
-                getComputedStyle(poster).display !== "none";
+                style.display !== "none" &&
+                style.opacity !== "0";
               const shouldBeVisible =
                 expectedTheme === "dark" ? isDarkAsset : !isDarkAsset;
-              if (isVisible !== shouldBeVisible) {
+              // The window must also have a real height: the collapse bug
+              // showed a correctly-selected poster in a zero-height box.
+              const hasBox = poster.getBoundingClientRect().height > 1;
+              if (isVisible !== shouldBeVisible || (isVisible && !hasBox)) {
                 issues.push(
-                  `${src}: visible=${isVisible} in ${expectedTheme} theme`,
+                  `${src}: visible=${isVisible} box=${Math.round(
+                    poster.getBoundingClientRect().height,
+                  )} in ${expectedTheme} theme`,
                 );
               }
             }

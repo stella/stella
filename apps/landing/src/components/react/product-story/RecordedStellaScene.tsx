@@ -45,19 +45,27 @@ export const RecordedStellaScene = ({
   // theme into the SSR HTML of every below-fold client:visible island until
   // hydration; CSS selection is correct from the first paint regardless of
   // hydration timing.
+  //
+  // The light poster stays IN FLOW in both themes and is the only element
+  // sizing the box: this embed's height chain is indefinite, so the box
+  // takes its height from the poster's intrinsic aspect. Toggling with
+  // `display` would remove that sizer in dark and collapse the window to
+  // zero height, so visibility is switched with opacity while both posters
+  // keep their layout box. The dark poster overlays absolutely on top.
   if (!shouldPlay) {
     return (
       <span className="relative block h-full w-full">
         <img
           alt={media.alt}
-          className="bg-background h-full w-full object-cover dark:hidden"
+          className="bg-background h-full w-full object-cover dark:opacity-0"
           decoding="async"
           src={media.posterSrc}
           style={cropStyle}
         />
         <img
-          alt={media.alt}
-          className="bg-background absolute inset-0 hidden h-full w-full object-cover dark:block"
+          aria-hidden="true"
+          alt=""
+          className="bg-background pointer-events-none absolute inset-0 h-full w-full object-cover opacity-0 dark:opacity-100"
           decoding="async"
           src={media.darkPosterSrc}
           style={cropStyle}
