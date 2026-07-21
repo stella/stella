@@ -482,12 +482,16 @@ const BlockRenderer = ({
         id={block.anchorId}
       >
         {block.number !== undefined && (
-          <span
-            aria-hidden
+          <HighlightedText
+            activeMatchIndex={activeMatchIndex}
             className="text-muted-foreground absolute start-0 font-sans text-[0.8em] select-none"
-          >
-            {block.number}
-          </span>
+            pieceId={getParagraphNumberPieceId(block.id)}
+            ranges={rangesForPiece(
+              rangesByPieceId,
+              getParagraphNumberPieceId(block.id),
+            )}
+            text={String(block.number)}
+          />
         )}
         <InlineContent
           activeMatchIndex={activeMatchIndex}

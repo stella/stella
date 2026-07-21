@@ -58,20 +58,22 @@ const SKIP_WORDS = new Set([
   "pokračování",
 ]);
 
-// Letters across the supported corpora: base Latin, Czech, Polish,
-// Slovak, German. A letter missing here gets trimmed from word edges,
-// silently shrinking the compared word sets for that language.
-const LETTERS = new Set(
-  "abcdefghijklmnopqrstuvwxyzáäąčćďéěęíĺľłňńóôöřŕšśťúůüýžźżß",
-);
+// Any Unicode letter, not an enumerated alphabet. This was a Latin
+// list covering Czech, Polish, Slovak and German, which trimmed every
+// Greek and Cyrillic word to nothing: such words then dropped out of
+// both the source and the AST word set, so MISSING_WORDS could never
+// fire for those languages. The CJEU corpus is published in all of
+// them, and a completeness check that is silent for a script is worse
+// than no check, because it reads as a pass.
+const LETTER = /\p{L}/u;
 const trimNonLetters = (word: string): string => {
   let start = 0;
   let end = word.length;
 
-  while (start < end && !LETTERS.has(word.charAt(start))) {
+  while (start < end && !LETTER.test(word.charAt(start))) {
     start += 1;
   }
-  while (end > start && !LETTERS.has(word.charAt(end - 1))) {
+  while (end > start && !LETTER.test(word.charAt(end - 1))) {
     end -= 1;
   }
 

@@ -14,9 +14,9 @@ import type {
  * and the section's kind follows from what it contains, so no wording
  * is consulted at all.
  *
- * Sections are cut at level-1 headings: those are the parts a reader
- * navigates between. Deeper headings stay inside their section, as
- * part of its text.
+ * Sections are cut at level-1 headings, and at the operative part,
+ * which courts introduce with a sentence rather than a heading.
+ * Deeper headings stay inside their section, as part of its text.
  */
 export const sectionsFromAst = (
   blocks: readonly Block[],
