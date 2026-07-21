@@ -1,17 +1,10 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import {
-  ChevronDownIcon,
-  CodeIcon,
-  CircleHelpIcon,
-  FileTextIcon,
-  LibraryIcon,
-  SearchIcon,
-  UserIcon,
-} from "lucide-react";
-import { useTranslations } from "use-intl";
+import { ChevronRightIcon, CircleHelpIcon } from "lucide-react";
+import { useFormatter, useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import {
   Popover,
   PopoverPopup,
@@ -24,8 +17,13 @@ import {
   getChatToolTitleKey,
   isRunningToolPart,
 } from "@/components/chat/chat-ui-tools";
+import { ToolCallCodeBlock } from "@/components/chat/tool-call-code-block";
+import {
+  advanceToolCallTiming,
+  createToolCallTiming,
+} from "@/components/chat/tool-call-timing.logic";
 import Tooltip from "@/components/tooltip";
-import { sanitizeHref } from "@/lib/sanitize-href";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
@@ -306,54 +304,32 @@ const getMcpToolInfo = (toolName: string): McpToolInfo | null => {
   return { connectorSlug: connector };
 };
 
-const NATIVE_TOOL_BRANDS: Record<string, { slug: string; brand: string }> = {
+const NATIVE_TOOL_BRANDS: Record<string, string> = {
   // Historical aliases for chat history that predates the unified
   // `business_registry_lookup` tool. New turns route through the
   // unified tool; the per-jurisdiction brand is resolved at render
   // time from the call input rather than from the tool name.
-  ares_lookup_company: { slug: "ares", brand: "ARES" },
-  ares_search_companies: { slug: "ares", brand: "ARES" },
-};
-
-const TOOL_ICONS: Record<string, typeof SearchIcon> = {
-  "ask-user": CircleHelpIcon,
-  "describe-stella-api": CircleHelpIcon,
-  "describe-stella-function": CircleHelpIcon,
-  discover_tools: CircleHelpIcon,
-  execute_typescript: CodeIcon,
-  "execute-typescript": CodeIcon,
-  "run-stella-query": CodeIcon,
-  "load-skill": LibraryIcon,
-  "read-contact": UserIcon,
-  "read-skill-resource": FileTextIcon,
-  "create-current-skill-resource": FileTextIcon,
-  "update-current-skill-body": FileTextIcon,
-  "update-current-skill-resource": FileTextIcon,
+  ares_lookup_company: "ARES",
+  ares_search_companies: "ARES",
 };
 
 type CatalogEntry = {
   brand: string;
-  iconHref: string | undefined;
 };
 
 type CatalogItem = {
   slug: string;
   displayName: string;
-  description: string;
-  url: string;
-  iconUrl: string | null;
 };
 
 const findCatalogEntry = ({
   toolName,
   mcpToolInfo,
   connectors,
-  nativeTools,
 }: {
   toolName: string;
   mcpToolInfo: McpToolInfo | null;
   connectors: CatalogItem[];
-  nativeTools: CatalogItem[];
 }): CatalogEntry | null => {
   if (mcpToolInfo !== null) {
     const connector = connectors.find(
@@ -365,52 +341,44 @@ const findCatalogEntry = ({
     }
     return {
       brand: connector.displayName,
-      iconHref: resolveIconHref(connector),
     };
   }
 
-  const native = NATIVE_TOOL_BRANDS[toolName];
-  if (native === undefined) {
+  const nativeBrand = NATIVE_TOOL_BRANDS[toolName];
+  if (nativeBrand === undefined) {
     return null;
   }
-  const tool = nativeTools.find((item) => item.slug === native.slug);
   return {
-    brand: native.brand,
-    iconHref: tool === undefined ? undefined : resolveIconHref(tool),
+    brand: nativeBrand,
   };
-};
-
-const resolveIconHref = (item: CatalogItem): string | undefined => {
-  const raw = item.iconUrl ?? fallbackIconUrl(item.url);
-  return raw === undefined ? undefined : sanitizeHref(raw);
 };
 
 export const ToolCallCard = ({
   activeOrganizationId,
+  durationMs,
   part,
   showDetails,
 }: {
   activeOrganizationId: string;
+  /** Known elapsed time, used by persisted callers and visual fixtures. */
+  durationMs?: number;
   part: ToolPart;
-  /** Show expandable raw output (dev mode). */
+  /** Open rich tool details initially in development surfaces. */
   showDetails?: boolean;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const name = part.name;
   const mcpToolInfo = getMcpToolInfo(name);
-  const hasCatalogEntry =
-    mcpToolInfo !== null || NATIVE_TOOL_BRANDS[name] !== undefined;
   const { data: catalogData } = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
-    enabled: hasCatalogEntry,
+    enabled: mcpToolInfo !== null,
   });
   const connectors = catalogData ? catalogData.connectors : [];
-  const nativeTools = catalogData ? catalogData.nativeTools : [];
   const catalogEntry = findCatalogEntry({
     toolName: name,
     mcpToolInfo,
     connectors,
-    nativeTools,
   });
   const [expanded, setExpanded] = useState(() =>
     Boolean(
@@ -420,7 +388,6 @@ export const ToolCallCard = ({
         isSkillResourceOutputToolName(name)),
     ),
   );
-  const Icon = TOOL_ICONS[name] ?? SearchIcon;
   const label = catalogEntry?.brand ?? t(getChatToolTitleKey(name));
   const subtitle = getToolSubtitle({
     formatCharacterCount: (count) =>
@@ -430,6 +397,27 @@ export const ToolCallCard = ({
   });
 
   const isLoading = isRunningToolPart(part);
+  const [timing, setTiming] = useState(() =>
+    createToolCallTiming({ durationMs, isRunning: isLoading, now: Date.now() }),
+  );
+  useExternalSyncEffect(() => {
+    setTiming((current) =>
+      advanceToolCallTiming({
+        current,
+        durationMs,
+        isRunning: isLoading,
+        now: Date.now(),
+      }),
+    );
+  }, [durationMs, isLoading]);
+  const elapsed =
+    timing.status === "finished" && timing.durationMs !== undefined
+      ? format.number(Math.max(1, Math.round(timing.durationMs / 1000)), {
+          style: "unit",
+          unit: "second",
+          unitDisplay: "narrow",
+        })
+      : null;
   const hasOutput = part.output !== undefined;
   // A tool-call rewritten to the terminal "error" state at hydration (its
   // stream died mid call, so it never produced an `output.error`) still
@@ -451,28 +439,31 @@ export const ToolCallCard = ({
     showMcpExactCall ||
     codeToolSource !== undefined ||
     showCodeToolOutput ||
-    (showDetails && toolInput !== undefined) ||
-    (showDetails && hasOutput);
+    toolInput !== undefined ||
+    hasOutput;
   const headerOpensSkillResource = skillResourceOutput !== undefined;
   const headerInteractive = headerOpensSkillResource || canExpand;
 
   return (
-    <div className="my-1 text-xs">
+    <div className="my-0.5 max-w-xl text-sm">
       <Tooltip
         content={errorMessage}
         render={
           <div
             className={cn(
-              "bg-muted/30 inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 align-top",
+              "group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-lg transition-colors duration-150",
+              expanded && "bg-muted/25 rounded-b-none",
               hasError &&
-                "bg-destructive/10 border-destructive/60 text-destructive border",
+                "bg-destructive/10 text-destructive hover:bg-destructive/15",
             )}
           />
         }
       >
         <button
           className={cn(
-            "flex min-w-0 items-center gap-1.5 text-start",
+            "flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 text-start transition-colors duration-150",
+            !hasError &&
+              "text-muted-foreground group-hover/tool-step:text-foreground-muted",
             !headerInteractive && "cursor-default",
           )}
           onClick={() => {
@@ -501,23 +492,33 @@ export const ToolCallCard = ({
           }}
           type="button"
         >
-          <ToolCallLeadingIcon
-            Icon={Icon}
-            iconHref={catalogEntry?.iconHref}
-            isLoading={isLoading}
-          />
-          <span className="min-w-0 truncate">
-            <span className="font-medium">{label}</span>
+          <span
+            className={cn(
+              "min-w-0 truncate",
+              isLoading &&
+                "animate-skeleton motion-reduce:text-muted-foreground bg-[linear-gradient(90deg,var(--color-foreground-ghost)_35%,var(--color-muted-foreground)_50%,var(--color-foreground-ghost)_65%)] bg-[length:250%_100%] bg-clip-text text-transparent motion-reduce:animate-none rtl:[animation-name:skeleton-rtl]",
+            )}
+          >
+            <span>{label}</span>
             {subtitle && (
-              <span className="text-muted-foreground ms-1.5">{subtitle}</span>
+              <span
+                className={cn("ms-1.5", !isLoading && "text-foreground-ghost")}
+              >
+                {subtitle}
+              </span>
             )}
           </span>
+          {elapsed && (
+            <span className="text-foreground-ghost shrink-0 text-xs font-normal tabular-nums">
+              {elapsed}
+            </span>
+          )}
         </button>
         {mcpToolInfo !== null && (
           <Popover>
             <PopoverTrigger
               aria-label={t("knowledge.mcp.whatIsAnMcpServer")}
-              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 shrink-0 rounded focus-visible:ring-2 focus-visible:outline-none"
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded focus-visible:ring-2 focus-visible:outline-none"
             >
               <CircleHelpIcon className="size-3" />
             </PopoverTrigger>
@@ -530,20 +531,25 @@ export const ToolCallCard = ({
             </PopoverPopup>
           </Popover>
         )}
-        {canExpand && (!headerOpensSkillResource || showDetails) && (
+        {canExpand && (
           <button
             aria-label={t("chat.toolCall.toggleDetails")}
-            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 shrink-0 rounded focus-visible:ring-2 focus-visible:outline-none"
+            className={cn(
+              "text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex size-11 shrink-0 items-center justify-center rounded opacity-0 transition-opacity duration-150 group-hover/tool-step:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none",
+              expanded && "opacity-100",
+            )}
             onClick={() => {
               setExpanded((e) => !e);
             }}
             type="button"
           >
-            <ChevronDownIcon
+            <DirectionalIcon
               className={cn(
-                "size-3 transition-transform",
-                expanded && "rotate-180",
+                "size-3.5 transition-transform duration-150",
+                expanded && "rotate-90",
               )}
+              flip={!expanded}
+              icon={ChevronRightIcon}
             />
           </button>
         )}
@@ -552,37 +558,47 @@ export const ToolCallCard = ({
         (showMcpExactCall ||
           codeToolSource !== undefined ||
           showCodeToolOutput ||
-          (showDetails && toolInput !== undefined) ||
-          (showDetails && hasOutput)) && (
-          <div className="space-y-2 border-t px-2 py-1.5">
+          toolInput !== undefined ||
+          hasOutput) && (
+          <div className="bg-muted/25 space-y-3 rounded-b-lg px-3 pt-1 pb-3">
             {showMcpExactCall && (
               <div>
                 <div className="text-muted-foreground mb-1 text-[11px] font-medium">
                   {t("chat.toolCall.exactCall")}
                 </div>
-                <pre className="text-muted-foreground max-h-40 overflow-auto font-mono text-[11px] whitespace-pre-wrap">
-                  {`${name}\n${JSON.stringify(toolInput, null, 2)}`}
-                </pre>
+                <ToolCallCodeBlock
+                  code={JSON.stringify(
+                    { input: toolInput, tool: name },
+                    null,
+                    2,
+                  )}
+                  language="json"
+                />
               </div>
             )}
-            {showDetails && toolInput !== undefined && (
-              <div>
-                <div className="text-muted-foreground mb-1 text-[11px] font-medium">
-                  {t("chat.toolCall.input")}
+            {!showMcpExactCall &&
+              codeToolSource === undefined &&
+              toolInput !== undefined && (
+                <div>
+                  <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                    {t("chat.toolCall.input")}
+                  </div>
+                  <ToolCallCodeBlock
+                    code={JSON.stringify(toolInput, null, 2)}
+                    language="json"
+                  />
                 </div>
-                <pre className="text-muted-foreground max-h-40 overflow-auto font-mono text-[11px] whitespace-pre-wrap">
-                  {JSON.stringify(toolInput, null, 2)}
-                </pre>
-              </div>
-            )}
+              )}
             {codeToolSource !== undefined && (
               <div>
                 <div className="text-muted-foreground mb-1 text-[11px] font-medium">
                   {t("chat.toolCall.sourceCode")}
                 </div>
-                <pre className="bg-background/60 text-foreground max-h-96 overflow-auto rounded border px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap">
-                  {codeToolSource}
-                </pre>
+                <ToolCallCodeBlock
+                  code={codeToolSource}
+                  language="typescript"
+                  lineNumbers
+                />
               </div>
             )}
             {codeToolLogs.length > 0 && (
@@ -590,27 +606,27 @@ export const ToolCallCard = ({
                 <div className="text-muted-foreground mb-1 text-[11px] font-medium">
                   {t("chat.toolCall.consoleLogs")}
                 </div>
-                <pre className="bg-background/60 text-muted-foreground max-h-40 overflow-auto rounded border px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap">
-                  {codeToolLogs.join("\n")}
-                </pre>
+                <ToolCallCodeBlock
+                  code={codeToolLogs.join("\n")}
+                  language="text"
+                />
               </div>
             )}
-            {hasOutput &&
-              (showDetails || showCodeToolOutput) &&
-              "output" in part && (
-                <div>
-                  <div className="text-muted-foreground mb-1 text-[11px] font-medium">
-                    {t("chat.toolCall.output")}
-                  </div>
-                  <pre className="text-muted-foreground max-h-40 overflow-auto font-mono text-[11px] whitespace-pre-wrap">
-                    {JSON.stringify(part.output, null, 2)}
-                  </pre>
+            {hasOutput && "output" in part && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                  {t("chat.toolCall.output")}
                 </div>
-              )}
+                <ToolCallCodeBlock
+                  code={JSON.stringify(part.output, null, 2)}
+                  language="json"
+                />
+              </div>
+            )}
           </div>
         )}
       {hasError && errorMessage && (
-        <p className="text-destructive mt-1 max-w-xl px-2 py-1 text-[11px] leading-relaxed whitespace-pre-wrap">
+        <p className="text-destructive max-w-xl px-2 py-1 text-[11px] leading-relaxed whitespace-pre-wrap">
           {errorMessage}
         </p>
       )}
@@ -638,51 +654,5 @@ const getToolOutputError = (output: unknown): string | undefined => {
   return undefined;
 };
 
-function ToolCallLeadingIcon({
-  Icon,
-  iconHref,
-  isLoading,
-}: {
-  Icon: typeof SearchIcon;
-  iconHref?: string | undefined;
-  isLoading: boolean;
-}) {
-  if (iconHref) {
-    return (
-      <span className="bg-background relative flex size-4 shrink-0 items-center justify-center rounded-sm border">
-        <img
-          alt=""
-          className={cn(
-            "size-3 rounded-[2px] object-contain",
-            isLoading && "opacity-70",
-          )}
-          height={12}
-          src={iconHref}
-          width={12}
-        />
-        {isLoading && (
-          <span className="border-foreground/20 border-t-foreground absolute -inset-0.5 animate-spin rounded-sm border" />
-        )}
-      </span>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="border-foreground/20 border-t-foreground size-3 animate-spin rounded-full border" />
-    );
-  }
-
-  return <Icon className="text-muted-foreground size-3 shrink-0" />;
-}
-
 const sanitizeMcpToolNamePart = (value: string): string =>
   value.replace(/[^a-zA-Z0-9_-]/gu, "_");
-
-const fallbackIconUrl = (rawUrl: string): string | undefined => {
-  try {
-    return new URL("/favicon.ico", rawUrl).toString();
-  } catch {
-    return undefined;
-  }
-};

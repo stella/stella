@@ -4,19 +4,16 @@ import type * as React from "react";
 import {
   ArchiveIcon,
   BellIcon,
-  CheckIcon,
   ChevronDownIcon,
   ClockIcon,
   CopyIcon,
   FileTextIcon,
   FilterIcon,
   LinkIcon,
-  LoaderIcon,
   MailIcon,
   SearchIcon,
   SettingsIcon,
   ShieldIcon,
-  SquarePenIcon,
   Trash2Icon,
   UserIcon,
 } from "lucide-react";
@@ -187,18 +184,14 @@ import {
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
 
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from "@/components/ai-elements/message";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
-import {
-  ChatErrorMessage,
-  ChatThreadMessages,
-} from "@/components/chat/chat-thread-messages";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import type {
+  ChatToolCallPart,
+  PersistedChatMessage,
+} from "@/components/chat/chat-ui-tools";
+import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { AIKeyRequiredDialog } from "@/components/require-ai-key";
 import { detached } from "@/lib/detached";
@@ -1181,22 +1174,16 @@ export function UiPlayground() {
           <TabsPanel value="chat">
             <PlaygroundGrid>
               <PlaygroundSection
+                description="Production streaming-step rows. Hover to reveal the disclosure control; expand a row to inspect its input and output."
+                title="Tool activity"
+              >
+                <ToolActivityPlayground />
+              </PlaygroundSection>
+              <PlaygroundSection
                 description="Production chat renderer sample. Use this to review shared assistant response controls."
                 title="Shared renderer"
               >
                 <SharedChatRendererSample />
-              </PlaygroundSection>
-              <PlaygroundSection
-                description="Existing assistant + user bubble types from the standalone chat panel. We need to lift each into the unified file-anchored chat (Phase C)."
-                title="Chat bubbles"
-              >
-                <ChatBubbleSink />
-              </PlaygroundSection>
-              <PlaygroundSection
-                description="One row per bubble type that exists today and isn't in the unified chat yet."
-                title="Inventory"
-              >
-                <ChatBubbleInventory />
               </PlaygroundSection>
             </PlaygroundGrid>
           </TabsPanel>
@@ -1355,337 +1342,78 @@ function SharedChatRendererSample() {
   );
 }
 
-/**
- * Mock chat bubbles — rendered with hand-built JSX so we don't have
- * to construct AI-SDK `ChatMessage` fixtures that match the strict
- * tool schemas. These reproduce the visual surface of every bubble
- * type so we can review them in one place; the actual production
- * renderer (ChatThreadMessages) still drives real chat.
- */
-function ChatBubbleSink() {
+const COMPLETED_TOOL_STEP = {
+  type: "tool-call",
+  id: "playground-tool-complete",
+  name: "search-chat-history",
+  arguments: JSON.stringify({ query: "indemnity survival period" }),
+  state: "complete",
+  input: { query: "indemnity survival period" },
+  output: {
+    query: "indemnity survival period",
+    results: [
+      {
+        messageId: "playground-message-indemnity",
+        role: "assistant",
+        excerpt: "The playbook uses a 36-month survival period.",
+        createdAt: "2026-07-21T10:30:00.000Z",
+      },
+    ],
+  },
+} satisfies ChatToolCallPart;
+
+const COMPLETED_CODE_TOOL_STEP = {
+  type: "tool-call",
+  id: "playground-tool-complete-second",
+  name: "execute_typescript",
+  arguments: JSON.stringify({
+    typescriptCode:
+      "const matches = await searchWorkspace({ query: 'environmental indemnity carve-outs' });",
+  }),
+  state: "complete",
+  input: {
+    typescriptCode: `const matches = await searchWorkspace({
+  query: "environmental indemnity carve-outs",
+  limit: 5,
+});
+
+return matches.map(({ title, excerpt }) => ({ title, excerpt }));`,
+  },
+  output: {
+    logs: ["Found 3 matching clauses", "Normalized citations"],
+    value: [
+      { title: "Indemnity playbook", excerpt: "Excluded from the general cap" },
+    ],
+  },
+} satisfies ChatToolCallPart;
+
+const RUNNING_TOOL_STEP = {
+  type: "tool-call",
+  id: "playground-tool-running",
+  name: "search-chat-history",
+  arguments: JSON.stringify({ query: "closing conditions" }),
+  state: "input-complete",
+  input: { query: "closing conditions" },
+} satisfies ChatToolCallPart;
+
+function ToolActivityPlayground() {
   return (
-    <div className="bg-popover/40 flex max-h-[70dvh] flex-col gap-6 overflow-y-auto rounded-2xl border p-4">
-      <Message from="user">
-        <MessageContent>
-          <span className="whitespace-pre-wrap">
-            Summarise the SPA in matter Acme/EnerGo and flag the indemnity
-            exposure.
-          </span>
-        </MessageContent>
-      </Message>
-
-      <Message from="assistant">
-        <MessageContent>
-          <MessageResponse>
-            {[
-              "**Summary.** The SPA is a share purchase between Acme Holdings and EnerGo Distribuce, dated 1 Feb 2025.",
-              "",
-              "Key terms:",
-              "- Purchase price: EUR 50,000,000 with EUR 5,000,000 escrow.",
-              "- Closing conditional on antitrust clearance.",
-              "- Caps and baskets are aggressive vs. our standard playbook (5% / 0.1%).",
-              "",
-              "I'd rate the indemnity exposure **medium** — the carve-outs for tax and environmental are wider than typical.",
-            ].join("\n")}
-          </MessageResponse>
-        </MessageContent>
-      </Message>
-
-      <Message from="user">
-        <MessageContent>
-          <span className="whitespace-pre-wrap">
-            Compare the indemnity clause against my version of the playbook.
-          </span>
-          <button
-            type="button"
-            className="text-muted-foreground bg-muted/60 hover:bg-muted inline-flex w-fit items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
-          >
-            <FileTextIcon className="size-3" />
-            indemnity-playbook.pdf
-          </button>
-        </MessageContent>
-      </Message>
-
-      <Message from="assistant">
-        <MessageContent>
-          <MessageResponse>
-            {`Cross-checked against your playbook. The SPA's indemnity in §8.2 sets a survival period of 24 months — your standard is 36.`}
-          </MessageResponse>
-          <button
-            type="button"
-            className="text-info hover:bg-info/10 inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-0.5 text-xs no-underline"
-          >
-            <FileTextIcon className="size-3" />
-            EnerGo SPA Final.docx
-          </button>
-        </MessageContent>
-      </Message>
-
-      <ApprovalCardMock
-        title="Create document"
-        description="EnerGo SPA Final — redline §8.2.docx"
-        path="Drafts/"
+    <div className="flex flex-col">
+      <ToolCallCard
+        activeOrganizationId="playground"
+        durationMs={8000}
+        part={COMPLETED_TOOL_STEP}
       />
-
-      <UpdateFieldsCardMock />
-
-      <AskUserCardMock />
-
-      <ToolCallMock />
-
-      <ChatErrorMock />
-
-      <Message from="assistant">
-        <MessageContent>
-          <MessageResponse>
-            {`Czech labour code §52 lists six redundancy grounds — restructuring is one. The relevant case is **30 Cdo 161/2024**.`}
-          </MessageResponse>
-          <div className="flex flex-wrap gap-1.5 pt-1">
-            <SourceChipMock label="30 Cdo 161/2024" kind="case-law" />
-            <SourceChipMock
-              label="EnerGo SPA Final.docx · §8.2"
-              kind="entity"
-            />
-          </div>
-        </MessageContent>
-      </Message>
-
-      <Message from="assistant">
-        <MessageContent>
-          <span className="text-muted-foreground inline-flex items-center gap-2 text-xs">
-            <LoaderIcon
-              className="text-foreground-ghost size-3 animate-spin"
-              aria-hidden="true"
-            />
-            Thinking…
-          </span>
-        </MessageContent>
-      </Message>
+      <ToolCallCard
+        activeOrganizationId="playground"
+        durationMs={2000}
+        part={COMPLETED_CODE_TOOL_STEP}
+        showDetails
+      />
+      <ToolCallCard
+        activeOrganizationId="playground"
+        part={RUNNING_TOOL_STEP}
+      />
     </div>
-  );
-}
-
-function ApprovalCardMock(props: {
-  title: string;
-  description: string;
-  path: string;
-}) {
-  return (
-    <Message from="assistant">
-      <MessageContent className="max-w-[460px]">
-        <MessageResponse>
-          {`I can draft a redline reverting §8.2 to a 36-month survival. Approve to create.`}
-        </MessageResponse>
-        <div className="flex flex-col gap-2.5 rounded-lg border p-3">
-          <div className="flex items-center gap-2">
-            <SquarePenIcon
-              className="text-muted-foreground size-4"
-              aria-hidden="true"
-            />
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">{props.title}</span>
-              <span className="text-muted-foreground text-xs">
-                {props.path}
-                {props.description}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Button size="xs">Approve</Button>
-            <Button size="xs" variant="outline">
-              Deny
-            </Button>
-            <Button size="xs" variant="ghost" className="ms-auto">
-              Always allow
-            </Button>
-          </div>
-        </div>
-      </MessageContent>
-    </Message>
-  );
-}
-
-function UpdateFieldsCardMock() {
-  return (
-    <Message from="assistant">
-      <MessageContent className="max-w-[460px]">
-        <MessageResponse>
-          {`I extracted the closing date and parties. Update the matter record?`}
-        </MessageResponse>
-        <div className="flex flex-col gap-2.5 rounded-lg border p-3">
-          <div className="flex items-center gap-2">
-            <SettingsIcon
-              className="text-muted-foreground size-4"
-              aria-hidden="true"
-            />
-            <span className="text-sm font-medium">Update entity fields</span>
-          </div>
-          <ul className="text-muted-foreground flex flex-col gap-1 text-xs">
-            <li>
-              <span className="font-medium">Closing</span>: 2025-04-30
-            </li>
-            <li>
-              <span className="font-medium">Parties</span>: Acme Holdings;
-              EnerGo Distribuce
-            </li>
-          </ul>
-          <div className="flex items-center gap-1.5">
-            <Button size="xs">Approve</Button>
-            <Button size="xs" variant="outline">
-              Deny
-            </Button>
-          </div>
-        </div>
-      </MessageContent>
-    </Message>
-  );
-}
-
-function AskUserCardMock() {
-  return (
-    <Message from="assistant">
-      <MessageContent className="max-w-[460px]">
-        <MessageResponse>
-          {`Two of the schedules reference different governing-law clauses. Which one should I treat as canonical?`}
-        </MessageResponse>
-        <div className="flex flex-col gap-2 rounded-lg border p-3">
-          <span className="text-muted-foreground text-xs">
-            Schedule 4 says English law; Schedule 7 says Czech law with English
-            seat. Which governs?
-          </span>
-          <div className="flex flex-col gap-1.5">
-            <Button size="xs" variant="outline">
-              English law (Schedule 4)
-            </Button>
-            <Button size="xs" variant="outline">
-              Czech law, English seat (Schedule 7)
-            </Button>
-            <Button size="xs" variant="outline">
-              Other / I'll explain in chat
-            </Button>
-          </div>
-        </div>
-      </MessageContent>
-    </Message>
-  );
-}
-
-function ToolCallMock() {
-  return (
-    <Message from="assistant">
-      <MessageContent className="max-w-[460px]">
-        <MessageResponse>
-          {`Pulled the redlines from version history.`}
-        </MessageResponse>
-        <div className="bg-muted/40 flex flex-col gap-1.5 rounded-md border p-2 text-xs">
-          <div className="flex items-center gap-1.5">
-            <CheckIcon className="text-success size-3" aria-hidden="true" />
-            <span className="text-muted-foreground">search-entities</span>
-          </div>
-          <ul className="text-muted-foreground ms-4 list-disc">
-            <li>SPA v3 (final).docx</li>
-            <li>SPA v2 (Smith comments).docx</li>
-          </ul>
-        </div>
-      </MessageContent>
-    </Message>
-  );
-}
-
-// Mirrors `AIErrorKind` in apps/api/src/lib/ai-error.ts. The
-// backend returns one of these strings on the chat stream's error
-// channel; passing them as `error.message` exercises the real
-// translation path the user will see.
-const CHAT_ERROR_VARIANTS = [
-  { label: "Generic", message: "unknown" },
-  { label: "Quota exhausted", message: "quota_exhausted" },
-  { label: "Provider billing", message: "provider_billing" },
-  { label: "Provider unavailable", message: "provider_unavailable" },
-] as const;
-
-function ChatErrorMock() {
-  return (
-    <div className="flex flex-col gap-3">
-      {CHAT_ERROR_VARIANTS.map((variant) => (
-        <div className="flex flex-col gap-1" key={variant.message}>
-          <div className="text-muted-foreground text-[10px] uppercase">
-            {variant.label}
-          </div>
-          <ChatErrorMessage
-            error={new Error(variant.message)}
-            isGenerating={false}
-            onResend={() => {
-              /* no-op in playground */
-            }}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SourceChipMock(props: { label: string; kind: "case-law" | "entity" }) {
-  return (
-    <button
-      type="button"
-      className="text-info bg-info/10 hover:bg-info/15 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs"
-    >
-      <span className="bg-info inline-block size-1.5 rounded-full" />
-      <span className="text-muted-foreground text-[10px] uppercase">
-        {props.kind === "case-law" ? "case" : "doc"}
-      </span>
-      <span className="text-foreground">{props.label}</span>
-    </button>
-  );
-}
-
-const CHAT_BUBBLE_INVENTORY_ROWS: { name: string; status: string }[] = [
-  { name: "User text", status: "✓ unified" },
-  { name: "User file attachment", status: "✗ not in unified" },
-  { name: "Assistant text + markdown", status: "✓ unified (Streamdown)" },
-  {
-    name: "Assistant with entity-mention links",
-    status: "✗ not in unified",
-  },
-  {
-    name: "Tool-approval card (create-document)",
-    status: "✗ not in unified",
-  },
-  {
-    name: "Tool-approval card (update-entity-fields)",
-    status: "✗ not in unified",
-  },
-  { name: "Ask-user card", status: "✗ not in unified" },
-  {
-    name: "Tool-call result card (non-approval)",
-    status: "✗ not in unified",
-  },
-  { name: "Chat send error", status: "✓ unified" },
-  {
-    name: "Source chips (case-law + entity)",
-    status: "partial — own model",
-  },
-  { name: "Thinking indicator", status: "partial — simpler spinner" },
-  { name: "Edit-suggestion review queue", status: "✓ unified only" },
-  {
-    name: "In-document citations (folio + pdf)",
-    status: "✓ unified only",
-  },
-];
-
-function ChatBubbleInventory() {
-  const rows = CHAT_BUBBLE_INVENTORY_ROWS;
-  return (
-    <ul className="text-sm">
-      {rows.map((row) => (
-        <li
-          key={row.name}
-          className="border-border/50 flex items-center justify-between gap-2 border-b py-2 last:border-b-0"
-        >
-          <span>{row.name}</span>
-          <span className="text-muted-foreground text-xs">{row.status}</span>
-        </li>
-      ))}
-    </ul>
   );
 }
