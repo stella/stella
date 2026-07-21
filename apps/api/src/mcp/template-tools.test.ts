@@ -519,6 +519,60 @@ describe("MCP template tools", () => {
     );
   });
 
+  test("fill_template rejects non-empty unused values by default", async () => {
+    fillStoredTemplateWithTextMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: Buffer.from("filled"),
+      text: "Lease",
+      unmatchedPlaceholders: [],
+      unusedValues: ["first", "second"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: { first: "value" } },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)).toEqual(
+      expect.objectContaining({
+        code: "validation_error",
+        message: "Unused template value keys: first, second",
+      }),
+    );
+  });
+
+  test("fill_template permits intentional unused values only with an explicit override", async () => {
+    fillStoredTemplateWithTextMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: Buffer.from("filled"),
+      text: "Lease",
+      unmatchedPlaceholders: [],
+      unusedValues: ["intentional"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: "t1",
+        values: { intentional: "value" },
+        allow_unused_values: true,
+      },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(parseToolPayload(result)).toEqual(
+      expect.objectContaining({ unusedValues: ["intentional"] }),
+    );
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({ unusedCount: 1 }),
+    );
+  });
+
   test("fill_template surfaces an AI usage rejection as an error", async () => {
     // The fill service runs the usage preflight only when the template declares
     // AI fields; an over-quota org gets a rejection the MCP tool surfaces

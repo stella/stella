@@ -405,8 +405,9 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       'e.g. {"tenant.name": "ACME Sp. z o.o.", "signing_date": "2026-06-08"}. ' +
       "Registry lookups, composite fields, formula fields, and AI-fillable " +
       "fields are resolved automatically; AI-fillable fields are drafted when " +
-      "you omit them. Returns the rendered text and any placeholders left " +
-      "unfilled.",
+      "you omit them. Value keys that do not match template fields fail by " +
+      "default; set allow_unused_values only when extra keys are intentional. " +
+      "Returns the rendered text and any placeholders left unfilled.",
     inputSchema: {
       type: "object",
       properties: {
@@ -415,6 +416,11 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
           type: "object",
           description: "Map of field path to value.",
           additionalProperties: true,
+        },
+        allow_unused_values: {
+          type: "boolean",
+          description:
+            "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
         },
       },
       required: ["template_id", "values"],
@@ -622,6 +628,7 @@ const describeTemplateDetail: McpToolHandler = async ({ args, context }) => {
 const fillTemplateArgsSchema = v.strictObject({
   template_id: v.pipe(v.string(), v.minLength(1)),
   values: v.record(v.string(), v.unknown()),
+  allow_unused_values: v.optional(v.boolean()),
 });
 
 const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
@@ -710,6 +717,23 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   }
   if ("error" in filled) {
     return errorResult(filled.error);
+  }
+  if (
+    filled.unusedValues.length > 0 &&
+    parsed.output.allow_unused_values !== true
+  ) {
+    const preview = filled.unusedValues.slice(0, 10);
+    const omitted = filled.unusedValues.length - preview.length;
+    const suffix = omitted > 0 ? ` (${omitted} more omitted)` : "";
+    return structuredErrorResult({
+      code: "validation_error",
+      message: `Unused template value keys: ${preview.join(", ")}${suffix}`,
+      issues: preview.map((key) => ({
+        path: `values.${key}`,
+        message: "Value key does not match a template field",
+      })),
+      hint: "Correct the value keys using list_templates detail mode, or set allow_unused_values to true when the extra keys are intentional.",
+    });
   }
 
   // Record the execution (fill row + EXECUTE audit) like the REST fill routes,
