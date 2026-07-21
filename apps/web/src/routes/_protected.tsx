@@ -605,10 +605,11 @@ const getInspectorTabWorkspaceId = (
     case "skill-resource":
     case "view":
       return undefined;
+    default: {
+      const exhaustive: never = tab;
+      return exhaustive;
+    }
   }
-
-  const exhaustive: never = tab;
-  return exhaustive;
 };
 
 /**

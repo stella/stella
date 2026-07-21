@@ -535,9 +535,11 @@ const parseCursorValue = (
       }
       return isValidTimestampCursorValue(value) ? value : null;
     }
+    default: {
+      const exhaustive: never = key.type;
+      return exhaustive;
+    }
   }
-
-  return null;
 };
 
 const cursorValueSql = (key: EntitySortKey, value: number | string): SQL => {
