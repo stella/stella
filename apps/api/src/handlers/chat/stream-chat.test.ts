@@ -3,11 +3,15 @@ import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import {
+  CHAT_SEND_MODE,
+  CHAT_TRANSPORT_ERROR_CODE,
+} from "@stll/anonymize-chat";
 import { createPipelineContext } from "@stll/anonymize-wasm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
+import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type {
@@ -34,6 +38,8 @@ import {
   processServerChatStream,
   recordChatAttemptFinish,
   remapOutgoingMessageIds,
+  resolveAgentRunBoundaryError,
+  shouldAttemptChatFallback,
   transformOutgoingStream,
 } from "./stream-chat";
 
@@ -77,6 +83,29 @@ const stripTimestamps = (chunks: readonly StreamChunk[]) =>
 const scopedDb: ScopedDb = async () => {
   throw new Error("Expected stream deanonymization test not to access DB");
 };
+
+describe("agent sandbox third-party boundary", () => {
+  test("refuses raw MCP access in anonymized mode", () => {
+    const error = resolveAgentRunBoundaryError({
+      boundary: { type: CHAT_SEND_MODE.anonymized },
+      runMode: CHAT_RUN_MODE.agent,
+    });
+
+    expect(error).toMatchObject({
+      code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+      status: 422,
+    });
+  });
+
+  test("allows an explicit agent run at the raw boundary", () => {
+    expect(
+      resolveAgentRunBoundaryError({
+        boundary: { type: "raw" },
+        runMode: CHAT_RUN_MODE.agent,
+      }),
+    ).toBeNull();
+  });
+});
 
 describe("outgoing chat stream message ids", () => {
   test("normalizes provider assistant message ids to one stable stella UUID", async () => {
@@ -552,6 +581,26 @@ describe("chat message usage metadata", () => {
 });
 
 describe("chat attempt terminal classification", () => {
+  test("does not cross execution boundaries to fallback an agent run", () => {
+    expect(
+      shouldAttemptChatFallback({
+        hasFallbackModel: true,
+        primaryError: new ChatEmptyCompletionError({ message: "empty" }),
+        runMode: CHAT_RUN_MODE.agent,
+      }),
+    ).toBe(false);
+  });
+
+  test("keeps empty-completion fallback for normal chat", () => {
+    expect(
+      shouldAttemptChatFallback({
+        hasFallbackModel: true,
+        primaryError: new ChatEmptyCompletionError({ message: "empty" }),
+        runMode: undefined,
+      }),
+    ).toBe(true);
+  });
+
   test("captures empty stop completions", () => {
     const state = createChatAttemptState();
     const capturedErrors: unknown[] = [];

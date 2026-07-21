@@ -12,10 +12,8 @@ import {
 } from "@tanstack/ai-sandbox";
 
 import {
-  commitContainer,
   createContainer,
   createExec,
-  decodeChunk,
   decodeFrames,
   demuxExecStream,
   DockerApiError,
@@ -32,17 +30,14 @@ import {
 
 const DEFAULT_WORKDIR = "/workspace";
 const KEEP_ALIVE_CMD = ["sh", "-c", "tail -f /dev/null"];
-const SNAPSHOT_REPO = "stella-agent-sandbox-snapshot";
-
-// Process-local counter for unique snapshot image tags (avoids Date.now()).
-let snapshotSeq = 0;
 
 /**
  * Capabilities of the bun-native Docker provider. `writableStdin` is false by
  * design: exec output streams over a plain (non-hijacked) response body, which
  * has no host→process stdin, so harness adapters deliver the prompt via a file
- * (they already branch on this flag). Snapshots use image commit; ports/fork
- * are out of scope for v1. `networkPolicy` is false because Docker's
+ * (they already branch on this flag). Ports/fork are out of scope for v1.
+ * Snapshots stay disabled because Docker image commit would persist injected
+ * credential environment variables. `networkPolicy` is false because Docker's
  * `HostConfig` cannot express per-connection egress allowlisting; egress is
  * constrained at the network layer instead (see `config.networkMode`), so the
  * policy's `network: "deny"` is defense-in-depth, not the sole control.
@@ -54,7 +49,7 @@ const BUN_DOCKER_CAPS: SandboxCapabilities = {
   ports: false,
   backgroundProcesses: true,
   writableStdin: false,
-  snapshots: true,
+  snapshots: false,
   networkPolicy: false,
   durableFilesystem: true,
   fork: false,
@@ -65,7 +60,7 @@ export type BunDockerSandboxConfig = {
   workdir?: string;
   /** Docker daemon unix socket. Defaults to `/var/run/docker.sock`. */
   socketPath?: string;
-  /** Add `host.docker.internal:host-gateway` for host-side MCP bridging. */
+  /** Add `host.docker.internal:host-gateway` for local-only bridging. */
   hostGateway?: boolean;
   /**
    * Pin the container onto a specific Docker network (`HostConfig.NetworkMode`).
@@ -201,21 +196,39 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
     const body = await startExecStream(conn, execId, controller.signal);
     const stdout = new StreamQueue();
     const stderr = new StreamQueue();
+    const stdoutDecoder = new TextDecoder();
+    const stderrDecoder = new TextDecoder();
 
     // Pump the multiplexed stream into the two queues; completes when the exec
     // stream ends. `wait()` awaits this, then reads the recorded exit code.
     const pump = (async () => {
       try {
         for await (const frame of demuxExecStream(body)) {
-          (frame.stream === "stdout" ? stdout : stderr).push(
-            decodeChunk(frame.data),
-          );
+          const queue = frame.stream === "stdout" ? stdout : stderr;
+          const decoder =
+            frame.stream === "stdout" ? stdoutDecoder : stderrDecoder;
+          const text = decoder.decode(frame.data, { stream: true });
+          if (text !== "") {
+            queue.push(text);
+          }
         }
       } finally {
+        const stdoutRemainder = stdoutDecoder.decode();
+        if (stdoutRemainder !== "") {
+          stdout.push(stdoutRemainder);
+        }
+        const stderrRemainder = stderrDecoder.decode();
+        if (stderrRemainder !== "") {
+          stderr.push(stderrRemainder);
+        }
         stdout.close();
         stderr.close();
       }
     })();
+    // Mark the eager pump's rejection as observed even when a caller kills the
+    // process without calling wait(). wait() still awaits the original promise
+    // and surfaces the same failure to callers that do observe completion.
+    void pump.catch(() => undefined);
 
     return {
       pid: -1,
@@ -228,21 +241,29 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         // eslint-disable-next-line promise-function-async
         write: () =>
           Promise.reject(
-            new Error(
-              "bun-docker: exec stdin is not writable (writableStdin=false)",
-            ),
+            new DockerApiError({
+              message:
+                "bun-docker: exec stdin is not writable (writableStdin=false)",
+            }),
           ),
         // eslint-disable-next-line promise-function-async -- sync no-op; stdin unused when writableStdin=false
         end: () => Promise.resolve(),
       },
       wait: async () => {
         await pump;
-        return await inspectExecExitCode(conn, execId).catch(() => 0);
+        return await inspectExecExitCode(conn, execId);
       },
-      // eslint-disable-next-line promise-function-async -- sync abort, returns a resolved promise
-      kill: () => {
+      kill: async () => {
         controller.abort();
-        return Promise.resolve();
+        // Disconnecting an exec stream does not terminate the process in
+        // Docker. Stop/remove the whole ephemeral sandbox so cancellation
+        // cannot leave the harness consuming tokens unattended. The lifecycle
+        // middleware may destroy it again; the API helpers treat 404 as done.
+        if (deps.removeOnDestroy) {
+          await removeContainer(conn, containerId);
+          return;
+        }
+        await stopContainer(conn, containerId);
       },
     };
   };
@@ -342,22 +363,12 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         return r.exitCode === 0;
       },
     },
-    snapshot: async (label) => {
-      snapshotSeq += 1;
-      const tag = `${containerId.slice(0, 12)}-${snapshotSeq}`;
-      const imageId = await commitContainer(
-        conn,
-        containerId,
-        SNAPSHOT_REPO,
-        tag,
-      );
-      return { id: imageId, ...(label ? { label } : {}) };
-    },
     destroy: async () => {
-      await stopContainer(conn, containerId);
       if (deps.removeOnDestroy) {
         await removeContainer(conn, containerId);
+        return;
       }
+      await stopContainer(conn, containerId);
     },
   };
 };
@@ -377,7 +388,7 @@ export const bunDockerSandbox = (
   };
   const workdir = config.workdir ?? DEFAULT_WORKDIR;
   const removeOnDestroy = config.removeOnDestroy ?? true;
-  const hostGateway = config.hostGateway ?? true;
+  const hostGateway = config.hostGateway ?? false;
 
   const start = async (opts?: {
     image?: string;
@@ -397,15 +408,24 @@ export const bunDockerSandbox = (
         ? { env: Object.entries(opts.env).map(([k, v]) => `${k}=${v}`) }
         : {}),
     });
-    await startContainer(conn, containerId);
-    const handle = createBunDockerHandle({
-      conn,
-      containerId,
-      workdir,
-      removeOnDestroy,
-    });
-    await handle.fs.mkdir(workdir);
-    return handle;
+    try {
+      await startContainer(conn, containerId);
+      const handle = createBunDockerHandle({
+        conn,
+        containerId,
+        workdir,
+        removeOnDestroy,
+      });
+      await handle.fs.mkdir(workdir);
+      return handle;
+    } catch (error) {
+      // Provider lifecycle boundary: a partially initialized container must
+      // not survive a failed create. Surface cleanup failures too; otherwise
+      // the caller would believe an inaccessible credential-bearing container
+      // was removed.
+      await removeContainer(conn, containerId);
+      throw error;
+    }
   };
 
   return {
@@ -413,11 +433,6 @@ export const bunDockerSandbox = (
     capabilities: () => BUN_DOCKER_CAPS,
     create: async (input: SandboxCreateInput) =>
       await start(input.env ? { env: input.env } : {}),
-    restoreSnapshot: async (input) =>
-      await start({
-        image: input.snapshotId,
-        ...(input.env ? { env: input.env } : {}),
-      }),
     resume: async (input: SandboxResumeInput) => {
       const running = await inspectContainerRunning(conn, input.id);
       if (running === null) {
@@ -434,10 +449,11 @@ export const bunDockerSandbox = (
       });
     },
     destroy: async (input) => {
-      await stopContainer(conn, input.id);
       if (removeOnDestroy) {
         await removeContainer(conn, input.id);
+        return;
       }
+      await stopContainer(conn, input.id);
     },
   };
 };

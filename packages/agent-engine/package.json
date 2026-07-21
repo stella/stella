@@ -15,6 +15,7 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "e2e:cloud": "bun --env-file=.env.e2e scripts/e2e-cloud-run.ts",
     "test": "bun test src",
+    "test:docker": "AGENT_ENGINE_DOCKER_TEST=1 bun test src/bun-docker/provider.integration.test.ts",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/agent-engine",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/agent-engine",

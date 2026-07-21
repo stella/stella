@@ -15,6 +15,8 @@ export type McpSession = {
   userId: string;
   organizationId: string;
   scopes: string[];
+  /** Optional server-issued attenuation; absent means the full live access set. */
+  workspaceIds?: string[];
 };
 
 let verifyAccessToken:
@@ -39,6 +41,10 @@ export const getMcpAccessTokenVerificationOptions = (
   },
 });
 
+const isNonEmptyStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) &&
+  value.every((item) => typeof item === "string" && item.length > 0);
+
 export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const userId = payload.sub;
   if (!userId) {
@@ -56,10 +62,21 @@ export const extractMcpSession = (payload: JWTPayload): McpSession => {
   const scopes =
     typeof rawScopes === "string" ? rawScopes.split(" ").filter(Boolean) : [];
 
+  const rawWorkspaceIds = payload["workspace_ids"];
+  if (
+    rawWorkspaceIds !== undefined &&
+    !isNonEmptyStringArray(rawWorkspaceIds)
+  ) {
+    throw new McpAuthenticationError({
+      message: "Token has invalid workspace_ids claim",
+    });
+  }
+
   return {
     userId,
     organizationId: rawOrganizationId,
     scopes,
+    ...(rawWorkspaceIds === undefined ? {} : { workspaceIds: rawWorkspaceIds }),
   };
 };
 

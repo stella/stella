@@ -349,11 +349,11 @@ const envApi = createEnv({
     AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
 
     /**
-     * Agent-sandbox engine config (plan 050). All optional: when
-     * AGENT_SANDBOX_RUNS_ENABLED is true, a run is dispatched to the sandbox
-     * only if the required fields below are present; otherwise the run falls
-     * back to the normal server-side model path. Harness credential sourcing
-     * from org BYOK is a follow-up; for now the harness key is env-provided.
+     * Agent-sandbox engine config (plan 050). The schema keeps these optional
+     * so deployments with the feature disabled need no sandbox infrastructure.
+     * An explicit agent request fails closed unless every required field is
+     * present. Harness credential sourcing from org BYOK is a follow-up; for
+     * now the harness key is env-provided.
      */
     AGENT_SANDBOX_IMAGE: v.optional(v.string()),
     AGENT_SANDBOX_HARNESS_MODEL: v.optional(v.string()),
@@ -365,8 +365,8 @@ const envApi = createEnv({
     AGENT_SANDBOX_DOCKER_SOCKET: v.optional(v.string()),
     /**
      * Docker network for the sandbox container (`HostConfig.NetworkMode`).
-     * Omit to use the daemon default bridge; set a locked-down network to deny
-     * the run arbitrary egress so injected secrets cannot be exfiltrated.
+     * Required when agent runs are enabled. It must name a locked-down network
+     * that denies arbitrary egress so injected secrets cannot be exfiltrated.
      */
     AGENT_SANDBOX_DOCKER_NETWORK: v.optional(v.string()),
 

@@ -34,6 +34,9 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 
+export const CHAT_RUN_MODE = { agent: "agent" } as const;
+export type ChatRunMode = (typeof CHAT_RUN_MODE)[keyof typeof CHAT_RUN_MODE];
+
 const rawMessageSchema = t.Object(
   {
     id: tSafeId("chatMessage"),
@@ -188,13 +191,14 @@ export const sendMessageBodySchema = t.Object({
   /**
    * Execution mode for this turn. Absent (the default) runs the normal
    * server-side chat model with the user's selected model, tools, and MCP.
-   * `"agent"` explicitly requests an agent-sandbox run (plan 050); it only
-   * takes effect when the deployment also enables the sandbox engine. Making
-   * this an explicit opt-in means a normal, BYOK, or model-selected chat is
-   * never silently rerouted into a sandbox just because the engine is enabled.
+   * `"agent"` explicitly requests an agent-sandbox run (plan 050); the request
+   * fails when the deployment has not enabled and fully configured that
+   * engine. Making this an explicit opt-in means a normal, BYOK, or
+   * model-selected chat is never silently rerouted into a sandbox just because
+   * the engine is enabled.
    * A single-value literal today; it grows to a union as engines/harnesses land.
    */
-  runMode: t.Optional(t.Literal("agent")),
+  runMode: t.Optional(t.Literal(CHAT_RUN_MODE.agent)),
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),
   activeTemplate: t.Optional(activeTemplateSchema),

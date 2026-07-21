@@ -984,6 +984,10 @@ const sendMessage = createSafeRootHandler(
       // folio-agents `read_document`/`find_text` tools are narrower
       // still — `hasActiveDocxFileClient` only, since Template Studio
       // mounts no watcher to resolve them.
+      const toolWorkspaceIds = resolveToolWorkspaceIds({
+        pinnedIds: effectiveContextMatterIds,
+        accessibleWorkspaceIds,
+      });
       const chatTools = getChatTools({
         organizationId: session.activeOrganizationId,
         memberRole: memberRole.role,
@@ -1072,6 +1076,7 @@ const sendMessage = createSafeRootHandler(
               );
 
               const chatResponse = await streamChat({
+                agentWorkspaceIds: toolWorkspaceIds,
                 abortSignal: createMeteredAIAbortSignal(),
                 messages: chatContext.hydratedMessages,
                 latestMessageId: parsedMessage.message.id,

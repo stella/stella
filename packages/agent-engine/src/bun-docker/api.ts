@@ -25,7 +25,8 @@ export type ExecFrame = { stream: "stdout" | "stderr"; data: Uint8Array };
 
 export type DockerConn = { socketPath: string };
 
-const textDecoder = new TextDecoder();
+const DOCKER_REQUEST_TIMEOUT_MS = 30_000;
+const DOCKER_EXEC_TIMEOUT_MS = 15 * 60_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -44,6 +45,7 @@ const send = async (
   const init: BunFetchInit = {
     method,
     unix: conn.socketPath,
+    signal: AbortSignal.timeout(DOCKER_REQUEST_TIMEOUT_MS),
     ...(body === undefined
       ? {}
       : {
@@ -123,6 +125,11 @@ export async function* demuxExecStream(
           break;
         }
         const streamType = buffer[0];
+        if (streamType !== 1 && streamType !== 2) {
+          throw new DockerApiError({
+            message: `Docker exec stream returned invalid stream type ${streamType}`,
+          });
+        }
         const payload = buffer.slice(8, 8 + size);
         buffer = buffer.slice(8 + size);
         yield { stream: streamType === 2 ? "stderr" : "stdout", data: payload };
@@ -131,6 +138,11 @@ export async function* demuxExecStream(
     if (done) {
       break;
     }
+  }
+  if (buffer.length > 0) {
+    throw new DockerApiError({
+      message: `Docker exec stream ended with ${buffer.length} incomplete frame bytes`,
+    });
   }
 }
 
@@ -167,7 +179,9 @@ export const startExecStream = async (
     unix: conn.socketPath,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ Detach: false, Tty: false }),
-    ...(signal ? { signal } : {}),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(DOCKER_EXEC_TIMEOUT_MS)])
+      : AbortSignal.timeout(DOCKER_EXEC_TIMEOUT_MS),
   };
   const res = await ensureOk(
     await fetch(dockerUrl(`/exec/${execId}/start`), init),
@@ -188,11 +202,16 @@ export const inspectExecExitCode = async (
 ): Promise<number> => {
   const info = await sendJson(conn, "GET", `/exec/${execId}/json`);
   const exitCode = isRecord(info) ? info["ExitCode"] : undefined;
-  return typeof exitCode === "number" ? exitCode : 0;
+  if (typeof exitCode === "number") {
+    return exitCode;
+  }
+  throw new DockerApiError({
+    message: `Docker exec ${execId} did not report a numeric exit code`,
+  });
 };
 
 export const decodeFrames = (frames: Uint8Array[]): string =>
-  textDecoder.decode(concatBytes(frames));
+  new TextDecoder().decode(concatBytes(frames));
 
 const concatBytes = (parts: Uint8Array[]): Uint8Array => {
   const total = parts.reduce((sum, p) => sum + p.length, 0);
@@ -204,9 +223,6 @@ const concatBytes = (parts: Uint8Array[]): Uint8Array => {
   }
   return out;
 };
-
-export const decodeChunk = (chunk: Uint8Array): string =>
-  textDecoder.decode(chunk);
 
 // --- Container lifecycle ---------------------------------------------------
 
@@ -275,34 +291,26 @@ export const stopContainer = async (
   conn: DockerConn,
   containerId: string,
 ): Promise<void> => {
-  // Best-effort: a stopped/removed container is not an error to the caller.
-  await send(conn, "POST", `/containers/${containerId}/stop?t=5`);
+  const res = await send(conn, "POST", `/containers/${containerId}/stop?t=5`);
+  if (res.status === 304 || res.status === 404) {
+    return;
+  }
+  await ensureOk(res, `stop ${containerId}`);
 };
 
 export const removeContainer = async (
   conn: DockerConn,
   containerId: string,
 ): Promise<void> => {
-  await send(conn, "DELETE", `/containers/${containerId}?force=true&v=true`);
-};
-
-/** Commit a container to a new image `repo:tag`; returns the image id. */
-export const commitContainer = async (
-  conn: DockerConn,
-  containerId: string,
-  repo: string,
-  tag: string,
-): Promise<string> => {
-  const params = new URLSearchParams({ container: containerId, repo, tag });
-  return readId(await sendJson(conn, "POST", `/commit?${params.toString()}`));
-};
-
-/** Remove an image (best-effort; used to clean up snapshot images). */
-export const removeImage = async (
-  conn: DockerConn,
-  image: string,
-): Promise<void> => {
-  await send(conn, "DELETE", `/images/${encodeURIComponent(image)}?force=true`);
+  const res = await send(
+    conn,
+    "DELETE",
+    `/containers/${containerId}?force=true&v=true`,
+  );
+  if (res.status === 404) {
+    return;
+  }
+  await ensureOk(res, `remove ${containerId}`);
 };
 
 export const imageExists = async (
@@ -314,7 +322,11 @@ export const imageExists = async (
     "GET",
     `/images/${encodeURIComponent(image)}/json`,
   );
-  return res.ok;
+  if (res.status === 404) {
+    return false;
+  }
+  await ensureOk(res, `inspect image ${image}`);
+  return true;
 };
 
 const parseProgressLine = (line: string): unknown => {

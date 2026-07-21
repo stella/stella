@@ -42,6 +42,10 @@ import type {
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
 import { resolveChatSandboxPlan } from "@/api/handlers/chat/chat-sandbox-plan";
+import {
+  CHAT_RUN_MODE,
+  type ChatRunMode,
+} from "@/api/handlers/chat/chat-schema";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -60,6 +64,7 @@ import {
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
+import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
   chatToolMapToArray,
   type ChatToolMap,
@@ -125,6 +130,7 @@ type StreamChatFinishEvent = {
 };
 
 type StreamChatProps = {
+  agentWorkspaceIds: AuthorizedToolWorkspaceIds;
   abortSignal: AbortSignal;
   /**
    * Explicit chat model override for this turn: the dev-only
@@ -147,7 +153,7 @@ type StreamChatProps = {
    * sandbox plan on this makes it structurally impossible for a normal/BYOK
    * chat to be rerouted just because the sandbox engine is enabled.
    */
-  runMode: "agent" | undefined;
+  runMode: ChatRunMode | undefined;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
   safeDb: SafeDb;
@@ -183,6 +189,7 @@ export const pruneOrphanedToolParts = (
   });
 
 export const streamChat = async ({
+  agentWorkspaceIds,
   abortSignal,
   devModelId,
   latestMessageId,
@@ -206,6 +213,13 @@ export const streamChat = async ({
   workspaceId,
 }: StreamChatProps): Promise<Response> => {
   const messages = pruneOrphanedToolParts(rawMessages);
+  const agentBoundaryError = resolveAgentRunBoundaryError({
+    boundary: thirdPartyBoundary,
+    runMode,
+  });
+  if (agentBoundaryError !== null) {
+    return thirdPartyBoundaryRefusalResponse(agentBoundaryError);
+  }
   const preparedUntrusted = await prepareTextForThirdParty({
     boundary: thirdPartyBoundary,
     text: systemUntrusted,
@@ -298,6 +312,7 @@ export const streamChat = async ({
   });
 
   const stream = runChatAttempts({
+    agentWorkspaceIds,
     abortController,
     abortSignal,
     baseSystem: system,
@@ -355,6 +370,30 @@ const thirdPartyBoundaryRefusalResponse = (
       status: error.status,
     },
   );
+
+type ResolveAgentRunBoundaryErrorInput = {
+  boundary: Pick<ChatThirdPartyBoundary, "type">;
+  runMode: ChatRunMode | undefined;
+};
+
+export const resolveAgentRunBoundaryError = ({
+  boundary,
+  runMode,
+}: ResolveAgentRunBoundaryErrorInput): HandlerError<422> | null => {
+  if (
+    runMode !== CHAT_RUN_MODE.agent ||
+    boundary.type !== CHAT_SEND_MODE.anonymized
+  ) {
+    return null;
+  }
+
+  return new HandlerError({
+    code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+    status: 422,
+    message:
+      "Agent sandbox access is not available in anonymized mode because its MCP tools can return raw workspace data.",
+  });
+};
 
 type ChatAttemptState = {
   emptyCompletion: ChatEmptyCompletionError | null;
@@ -415,6 +454,21 @@ const chatAttemptTerminalError = (
   state: ChatAttemptState,
 ): ChatLoopDetectedError | ChatEmptyCompletionError | null =>
   state.finalLoopDetection ?? state.emptyCompletion;
+
+type ShouldAttemptChatFallbackInput = {
+  hasFallbackModel: boolean;
+  primaryError: ChatLoopDetectedError | ChatEmptyCompletionError;
+  runMode: ChatRunMode | undefined;
+};
+
+export const shouldAttemptChatFallback = ({
+  hasFallbackModel,
+  primaryError,
+  runMode,
+}: ShouldAttemptChatFallbackInput): boolean =>
+  runMode !== CHAT_RUN_MODE.agent &&
+  primaryError instanceof ChatEmptyCompletionError &&
+  hasFallbackModel;
 
 export const projectChatToolSchemasForProvider = ({
   modelTools,
@@ -580,6 +634,7 @@ const createChatAttemptAnalytics = ({
 type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
 
 type RunChatAttemptsProps = {
+  agentWorkspaceIds: AuthorizedToolWorkspaceIds;
   abortController: AbortController;
   abortSignal: AbortSignal;
   baseSystem: string;
@@ -593,7 +648,7 @@ type RunChatAttemptsProps = {
   primaryModel: ResolvedTanStackTextModel;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
-  runMode: "agent" | undefined;
+  runMode: ChatRunMode | undefined;
   safeDb: SafeDb;
   thirdPartyBoundary: ChatThirdPartyBoundary;
   threadId: SafeId<"chatThread">;
@@ -602,6 +657,7 @@ type RunChatAttemptsProps = {
 };
 
 const runChatAttempts = async function* ({
+  agentWorkspaceIds,
   abortController,
   abortSignal,
   baseSystem,
@@ -627,11 +683,12 @@ const runChatAttempts = async function* ({
   // (runMode undefined) is never rerouted, even when the sandbox engine is
   // enabled — so BYOK/model-selected turns keep the user's chosen adapter.
   const sandboxRun =
-    runMode === "agent"
+    runMode === CHAT_RUN_MODE.agent
       ? await resolveChatSandboxPlan({
           userId,
           organizationId,
-          runId: threadId,
+          runId: Bun.randomUUIDv7(),
+          workspaceIds: agentWorkspaceIds,
         })
       : undefined;
   yield* runChatAttempt({
@@ -665,10 +722,19 @@ const runChatAttempts = async function* ({
   }
 
   if (
-    !(primaryError instanceof ChatEmptyCompletionError) ||
-    fallbackModel === null
+    !shouldAttemptChatFallback({
+      hasFallbackModel: fallbackModel !== null,
+      primaryError,
+      runMode,
+    })
   ) {
+    // An explicit sandbox request must never cross execution or credential
+    // boundaries by falling back to the ordinary server-side model.
     throw primaryError;
+  }
+
+  if (fallbackModel === null) {
+    panic("Fallback model disappeared after fallback eligibility check");
   }
 
   const fallbackState = createChatAttemptState();
@@ -723,8 +789,8 @@ type RunChatAttemptProps = {
    * When set, this attempt runs inside an agent sandbox (plan 050): the
    * harness adapter replaces the model adapter and the sandbox middleware is
    * added. When absent (the default for every normal chat), the attempt is
-   * unchanged. Only the primary attempt may carry a plan; the fallback stays a
-   * plain server-side model attempt.
+   * unchanged. Explicit agent runs never fall back to a plain server-side
+   * model attempt.
    */
   sandboxRun?: StellaSandboxRunInput | undefined;
   state: ChatAttemptState;

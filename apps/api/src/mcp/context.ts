@@ -22,6 +22,7 @@ import {
 import type { McpSession } from "@/api/mcp/auth";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
+import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
 
 export type McpOperationDatabaseScope = {
   /**
@@ -146,9 +147,10 @@ export const resolveMcpSessionContext = async (
   // Business-logic fields exclude deleting workspaces so MCP tools don't
   // surface content from sealed workspaces. RLS derives membership from the
   // organization/user transaction settings independently.
-  const usableWorkspaces = accessibleWorkspaces.filter(
-    (w) => w.status !== "deleting",
-  );
+  const usableWorkspaces = filterUsableMcpWorkspaces({
+    accessibleWorkspaces,
+    tokenWorkspaceIds: session.workspaceIds,
+  });
   const usableWorkspaceIds = usableWorkspaces.map((workspace) =>
     brandPersistedWorkspaceId(workspace.id),
   );

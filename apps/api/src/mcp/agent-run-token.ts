@@ -1,5 +1,6 @@
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import type { SafeId } from "@/api/lib/branded-types";
 import { getMcpResourceUrl, type McpOAuthScope } from "@/api/mcp/constants";
 
 /**
@@ -22,7 +23,9 @@ import { getMcpResourceUrl, type McpOAuthScope } from "@/api/mcp/constants";
 /**
  * Least-privilege default scope for an agent run: read/search + the write
  * surfaces a legal agent legitimately needs, but NOT admin, billing, or
- * onboarding. Callers pass a narrower set when a run needs less.
+ * onboarding. The minting boundary always applies this fixed set; the pure
+ * claim builder accepts a narrower set so attenuation remains testable and can
+ * be introduced deliberately with a typed run profile later.
  */
 export const AGENT_RUN_DEFAULT_SCOPES = [
   "stella:search",
@@ -47,13 +50,15 @@ export type AgentRunTokenClaims = {
   iat: number;
   exp: number;
   run_id: string;
+  workspace_ids: string[];
   purpose: "agent-run";
 };
 
 type BuildAgentRunTokenClaimsInput = {
-  userId: string;
-  organizationId: string;
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
   runId: string;
+  workspaceIds: readonly SafeId<"workspace">[];
   scopes: readonly McpOAuthScope[];
   audience: string;
   issuer: string;
@@ -69,6 +74,7 @@ export const buildAgentRunTokenClaims = ({
   userId,
   organizationId,
   runId,
+  workspaceIds,
   scopes,
   audience,
   issuer,
@@ -83,15 +89,16 @@ export const buildAgentRunTokenClaims = ({
   iat: nowSeconds,
   exp: nowSeconds + ttlSeconds,
   run_id: runId,
+  workspace_ids: [...workspaceIds],
   purpose: "agent-run",
 });
 
 export type MintAgentRunTokenInput = {
-  userId: string;
-  organizationId: string;
+  userId: SafeId<"user">;
+  organizationId: SafeId<"organization">;
   runId: string;
-  scopes?: readonly McpOAuthScope[];
-  ttlSeconds?: number;
+  /** Server-authorized workspace subset this run may access. */
+  workspaceIds: readonly SafeId<"workspace">[];
 };
 
 export type MintedAgentRunToken = {
@@ -103,17 +110,20 @@ export const mintAgentRunToken = async (
   input: MintAgentRunTokenInput,
 ): Promise<MintedAgentRunToken> => {
   const nowSeconds = Math.floor(Date.now() / 1000);
-  const ttlSeconds = input.ttlSeconds ?? AGENT_RUN_TOKEN_TTL_SECONDS;
   const claims = buildAgentRunTokenClaims({
     userId: input.userId,
     organizationId: input.organizationId,
     runId: input.runId,
-    scopes: input.scopes ?? AGENT_RUN_DEFAULT_SCOPES,
+    workspaceIds: input.workspaceIds,
+    scopes: AGENT_RUN_DEFAULT_SCOPES,
     audience: getMcpResourceUrl(),
     issuer: getAuthIssuerUrl(),
     nowSeconds,
-    ttlSeconds,
+    ttlSeconds: AGENT_RUN_TOKEN_TTL_SECONDS,
   });
   const { token } = await getAuth().api.signJWT({ body: { payload: claims } });
-  return { token, expiresAt: new Date((nowSeconds + ttlSeconds) * 1000) };
+  return {
+    token,
+    expiresAt: new Date((nowSeconds + AGENT_RUN_TOKEN_TTL_SECONDS) * 1000),
+  };
 };
