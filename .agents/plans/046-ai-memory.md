@@ -24,7 +24,7 @@ not just a UX nicety.
 - **Memory is untrusted free text.** It is injected into the chat prompt's
   `untrustedSuffix` (the anonymized boundary path), **never** the `safePrompt` /
   `cacheStablePrefix` (which is sent verbatim, no anonymization) and **not** via
-  the existing `userContext` seam (which feeds the *safe* half). Memory may carry
+  the existing `userContext` seam (which feeds the _safe_ half). Memory may carry
   client names / PII / privileged content, so it must cross the anonymizer like
   any other user-supplied context. The prompt-cache cost is moot — memory changes
   over time, so it was never cache-stable anyway. See `chat-prompt.ts:105-128`.
@@ -40,10 +40,10 @@ not just a UX nicety.
      derived from matter A's content can never surface once the lawyer loses
      access to matter A, even at user scope. Mirrors `chatThreadDataScopeCheck`
      in `rls.ts:62`.
-  The extractor sets `sourceDataWorkspaceIds` from the source thread and **never**
-  promotes matter-specific facts into user/firm scope.
+     The extractor sets `sourceDataWorkspaceIds` from the source thread and **never**
+     promotes matter-specific facts into user/firm scope.
 - **Firm memory write-gating is a separate route, not a dynamic permission.**
-  `statements` in `@stll/permissions` are static and checked *before* the handler
+  `statements` in `@stll/permissions` are static and checked _before_ the handler
   sees the body, so "admin only when `scope=organization`" cannot live on one
   `POST /memories`. Firm-scope writes get their own handler/route
   (`POST /organization/memories`) gated by a dedicated `firmMemory`
@@ -70,7 +70,8 @@ not just a UX nicety.
 - **Scope/id integrity is structural, not runtime.** A CHECK constraint makes
   illegal scope/id combinations impossible to persist (branded-safety over
   manual discipline).
-- **Archive-only, never delete** (the curator invariant): lifecycle
+- **Archive-only during the tenant lifecycle** (the curator invariant):
+  direct deletion is denied and lifecycle uses
   `active → stale@30d → archive@90d`, pinned bypasses, `supersededById` for
   dedup. Reversible by construction. Explicit exception: deleting the parent
   organization/user/workspace cascades and physically removes memory rows —
@@ -106,7 +107,8 @@ not just a UX nicety.
 ### Phase 0 — Schema + migration + RLS
 
 - `apps/api/src/db/schema.ts` — new `aiMemories` table:
-  - `id` uuid pk; `organizationId` text → `organization` (cascade).
+  - `id` uuid pk; `organizationId` text → `organization` (cascade on explicit
+    parent erasure; direct memory deletion remains denied).
   - `scope` enum `organization | user | workspace`.
   - `userId` text → `user` (cascade, set iff scope=user);
     `workspaceId` uuid → `workspaces` (cascade, set iff scope=workspace).
@@ -121,7 +123,7 @@ not just a UX nicety.
     `chatMessages` (set null); `confidence` real (null for user/tool).
   - `createdBy` text → `user`; `supersededById` uuid self-FK (set null).
   - `createdAt`/`updatedAt`/`lastUsedAt`/`archivedAt`.
-  - **CHECK** `ai_memories_scope_ids` — mutually exclusive ids *and* kind-by-scope
+  - **CHECK** `ai_memories_scope_ids` — mutually exclusive ids _and_ kind-by-scope
     in one constraint (valid SQL, `IS NULL` / `IS NOT NULL`):
     ```sql
     (scope = 'user'
@@ -168,10 +170,9 @@ not just a UX nicety.
   use elsewhere). Ownership IDs from server context: `organizationId` from
   `session.activeOrganizationId`, `userId` from `session`, never from the body.
 - `apps/api/src/handlers/memories/create-firm.ts` — firm (organization) writes,
-  separate handler with a **static** permission in `config` (reuse
-  `organizationSettings: ["update"]`, or add a `firmMemory` statement to
-  `packages/permissions/src/index.ts` + role mappings). Body `scope` is fixed to
-  `organization`.
+  separate handler with the dedicated static `firmMemory.create` permission in
+  `config`; owner/admin role mappings grant create/update and all lower roles
+  are denied. Body `scope` is fixed to `organization`.
 - `apps/api/src/handlers/memories/routes.ts` — thin route file:
   `POST /memories` (user/matter) and `POST /organization/memories` (firm). Mount
   in the API root router.
@@ -196,7 +197,7 @@ not just a UX nicety.
 
 - `apps/api/src/handlers/memories/list.ts` — `GET /memories?scope=&cursor=&limit=`
   via `createSafeRootHandler` (spans scopes; RLS enforces visibility), returning
-  `Page<T>` (cursor over `(updatedAt, id)`); `limit` is schema-validated with a
+  `Page<T>` (cursor over `(createdAt, id)`); `limit` is schema-validated with a
   default and a hard maximum (1–100), so the result set is always bounded.
 - `apps/api/src/handlers/memories/update.ts` — `PATCH /memories/:id`
   (`createSafeRootHandler`) for pin/edit/status (accept suggestion → `active`,
@@ -212,7 +213,16 @@ not just a UX nicety.
 
 - `apps/api/src/lib/scheduler/tasks/memory-extractor.ts` — reads recent
   `chatThreadCompactions.summaryMarkdown` (Decisions / Constraints / Critical
-  Context) + thread recaps; proposes memories as `status: "suggested"`, setting
+  Context) **and the message range that summary replaced**
+  (`firstSummarizedMessageId`..`lastSummarizedMessageId`, rendered by
+  `lib/memory/compaction-transcript.ts`). The summary is written for
+  conversational continuity, so a preference stated once is exactly what it
+  drops; compaction is a checkpoint rather than a delete, so the original
+  messages are still readable. Both blocks enter the prompt inside separate
+  untrusted delimiters, escaped and hard-capped. Provenance is unaffected:
+  `sourceDataWorkspaceIds` still comes from the thread's `dataWorkspaceIds`,
+  never from extracted text, so the transcript cannot widen the ethical wall.
+  Proposes memories as `status: "suggested"`, setting
   `sourceDataWorkspaceIds` from the source thread's `dataWorkspaceIds` /
   `contextMatterIds`. Matter-specific kinds (`fact|decision|relationship`) are
   proposed **only** at `workspace` scope — never promoted into user/firm scope.
@@ -250,9 +260,11 @@ not just a UX nicety.
 - **Suggest-first:** extractor output lands as `suggested`; accept →
   `active` (injected), dismiss → `archived` (never re-proposed). Nothing
   auto-commits except opted-in user preferences.
-- **Archive-only:** no code path deletes a row; curator transitions and
-  supersedes only.
-- **Pagination:** list endpoint returns a stable `Page<T>`; cursor round-trips.
+- **Archive-only:** direct memory deletion is denied; curator transitions and
+  supersedes only. Cascading parent deletion is the explicit tenant-erasure
+  exception.
+- **Pagination:** list endpoint returns a stable `Page<T>`; cursor round-trips,
+  the default is 50, and the hard maximum is 100.
 - **Anon tolerance:** memory resolver with no user/workspace returns empty,
   doesn't throw.
 
@@ -280,7 +292,7 @@ folded in above.
   `workspace` scope); extractor never promotes matter facts to user/firm.
 - **[High] Firm-write gating.** Static permissions can't branch on `body.scope`;
   firm writes split to `POST /organization/memories` with a real static
-  permission (`organizationSettings.update` or a new `firmMemory` statement).
+  `firmMemory.create` permission; updates require `firmMemory.update`.
 - **[High] Handler scope.** Multi-scope endpoints use `createSafeRootHandler`
   (not the workspace-scoped `createSafeHandler`), validating `workspaceId`
   against `accessibleWorkspaces`.
