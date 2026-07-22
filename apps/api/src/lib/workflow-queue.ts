@@ -10,6 +10,7 @@ import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   cellMetadata,
+  type ExtractionRunScope,
   fields,
   justifications,
   properties,
@@ -35,6 +36,7 @@ import {
   errorSystemFields,
   errorTag,
 } from "@/api/lib/errors/utils";
+import { extractionRunStore } from "@/api/lib/extraction-runs/store";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -44,6 +46,7 @@ import {
 } from "@/api/lib/redis-client";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
+  brandPersistedExtractionRunId,
   brandPersistedEntityId,
   brandPersistedPropertyId,
   brandPersistedUserId,
@@ -320,6 +323,27 @@ type StartWorkflowResult = {
   status: "started" | "already-running" | "skipped" | "failed";
 };
 
+const extractionRunScope = ({
+  entityIds,
+  propertyIds,
+}: {
+  entityIds: StartWorkflowArgs["entityIds"] | undefined;
+  propertyIds: StartWorkflowArgs["propertyIds"] | undefined;
+}): ExtractionRunScope => {
+  const hasEntities = entityIds !== undefined && entityIds.length > 0;
+  const hasProperties = propertyIds !== undefined && propertyIds.length > 0;
+  if (hasEntities && hasProperties) {
+    return "cells";
+  }
+  if (hasProperties) {
+    return "properties";
+  }
+  if (hasEntities) {
+    return "entities";
+  }
+  return "workspace";
+};
+
 type EnqueueEntityJobsArgs = {
   entityIds: readonly SafeId<"entity">[];
   executionPlan: ExecutionLevel[];
@@ -450,7 +474,9 @@ export const startWorkflow = async ({
   serviceTier = "standard",
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const redis = getRedis();
-  const requestId = Bun.randomUUIDv7();
+  const requestId = createSafeId<"extractionRun">();
+  const runKey = { id: requestId, organizationId, workspaceId };
+  let runCreated = false;
 
   // Check if already running (atomic check-and-set). The TTL is the
   // safety net for an uncleanly-killed worker; tuned tight enough that
@@ -474,6 +500,16 @@ export const startWorkflow = async ({
   );
 
   try {
+    await extractionRunStore.create({
+      ...runKey,
+      requestedBy: userId,
+      scope: extractionRunScope({
+        entityIds: inputEntityIds,
+        propertyIds: inputPropertyIds,
+      }),
+    });
+    runCreated = true;
+
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
 
     // Property-status freshness is an optimization for full-workspace
@@ -507,6 +543,7 @@ export const startWorkflow = async ({
     );
 
     if (!hasWork) {
+      await extractionRunStore.skip(runKey);
       await clearWorkflowRunState(redis, workspaceId);
       return { status: "skipped" };
     }
@@ -556,6 +593,7 @@ export const startWorkflow = async ({
     const targetCount = targetEntityIds.length;
 
     if (targetCount === 0) {
+      await extractionRunStore.skip(runKey);
       await clearWorkflowRunState(redis, workspaceId);
       return { status: "skipped" };
     }
@@ -628,6 +666,8 @@ export const startWorkflow = async ({
       );
     }
 
+    await extractionRunStore.start({ ...runKey, total: targetCount });
+
     // Broadcast running status
     broadcastWorkflowStatus(workspaceId, true);
 
@@ -670,6 +710,11 @@ export const startWorkflow = async ({
 
     return { status: "started" };
   } catch (error: unknown) {
+    if (runCreated) {
+      await extractionRunStore
+        .fail({ ...runKey, errorCode: errorTag(error) })
+        .catch((runError: unknown) => captureError(runError, { workspaceId }));
+    }
     await clearWorkflowRunState(redis, workspaceId);
     broadcastWorkflowStatus(workspaceId, false);
     captureError(error, { workspaceId });
@@ -983,6 +1028,13 @@ const recoverOrphanedWorkflow = async ({
       ),
     )
     .returning({ id: fields.id });
+
+  await extractionRunStore
+    .failActiveForWorkspace({
+      errorCode: "ExtractionRunOrphaned",
+      workspaceId,
+    })
+    .catch((error: unknown) => captureError(error, { workspaceId }));
 
   // Then release the run-state so retries / new runs stop hitting the
   // "a workflow is already running" 409.
@@ -1963,6 +2015,16 @@ const onEntityCompleted = async ({
     return;
   }
 
+  await extractionRunStore
+    .syncProgress({
+      completed: result.completed,
+      id: brandPersistedExtractionRunId(requestId),
+      organizationId,
+      total: result.total,
+      workspaceId,
+    })
+    .catch((error: unknown) => captureError(error, { workspaceId }));
+
   if (result.completed >= result.total) {
     await finishWorkflow(workspaceId, organizationId, userId, requestId);
     return;
@@ -2131,6 +2193,14 @@ const finishWorkflow = async (
       captureError(error, { workspaceId });
     }
   }
+
+  await extractionRunStore
+    .complete({
+      id: brandPersistedExtractionRunId(requestId),
+      organizationId,
+      workspaceId,
+    })
+    .catch((error: unknown) => captureError(error, { workspaceId }));
 
   // Clean up Redis state
   await clearWorkflowRunState(redis, workspaceId);
