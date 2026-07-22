@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { buildFlag } from "./build-cli-tree.js";
-import type { FlagSpec } from "./route-types.js";
+import { flagKey } from "./flag-name.js";
+import { generatedRouteMap } from "./generated/route-map.js";
+import type { FlagSpec, RouteNode } from "./route-types.js";
 
 const flagSpec = (overrides: Partial<FlagSpec>): FlagSpec => ({
   flag: "example",
@@ -56,5 +58,22 @@ describe("buildFlag optionality invariant", () => {
       unknown
     >;
     expect(boolean).toMatchObject({ kind: "boolean", optional: true });
+  });
+});
+
+const generatedFlags = (node: RouteNode): FlagSpec[] => {
+  if (node.kind === "leaf" || node.kind === "capability-leaf") {
+    return [...node.spec.flags];
+  }
+  return Object.values(node.children).flatMap(generatedFlags);
+};
+
+describe("generated flag parser conformance", () => {
+  test("every generated long flag has a Stricli-supported key", () => {
+    for (const spec of generatedFlags(generatedRouteMap)) {
+      // Stricli reserves one-character names for aliases. Its long-flag scanner
+      // requires a letter followed by at least one supported character.
+      expect(flagKey(spec)).toMatch(/^[a-z][a-zA-Z0-9]+$/u);
+    }
   });
 });

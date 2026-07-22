@@ -6589,7 +6589,7 @@ export const generatedRouteMap: RouteNode = {
                 repeatable: false,
                 description:
                   "Filter clauses by a text query over title and body (list mode)",
-                flag: "--q",
+                flag: "--query",
                 prop: "q",
                 required: false,
                 part: "query",
@@ -7859,7 +7859,7 @@ export const generatedRouteMap: RouteNode = {
                 repeatable: false,
                 description:
                   "Canonical identifier (e.g. company number, VAT number) or company name",
-                flag: "--q",
+                flag: "--query",
                 prop: "q",
                 required: true,
                 part: "query",
@@ -8582,7 +8582,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
-                flag: "--q",
+                flag: "--query",
                 prop: "q",
                 required: false,
                 part: "query",
@@ -8653,7 +8653,7 @@ export const generatedRouteMap: RouteNode = {
               {
                 kind: "string",
                 repeatable: false,
-                flag: "--q",
+                flag: "--query",
                 prop: "q",
                 required: true,
                 part: "query",

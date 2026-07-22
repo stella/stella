@@ -233,6 +233,24 @@ describe("auth and scope gating (S4)", () => {
   });
 });
 
+describe("generated capability flags", () => {
+  test("a descriptive long flag can target a terse query property", async () => {
+    const server = startMockServer(() => ({ toolPayload: { items: [] } }));
+    const result = await runCli({
+      args: ["contacts", "search", "--query", "agreement"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.name).toBe("invoke_capability");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      capability: "contacts.search",
+      input: { query: { q: "agreement" } },
+    });
+  });
+});
+
 describe("list rendering and pagination (S4)", () => {
   test("matter list renders a table and hints the next cursor on stderr", async () => {
     const server = startMockServer(() => ({

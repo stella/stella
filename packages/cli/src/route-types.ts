@@ -71,7 +71,9 @@ export type ToolAnnotation = {
 
 /** One generated CLI flag, derived from an `inputSchema` prop (spec S3). */
 export type FlagSpec = {
+  /** Canonical public long flag name, separate from its destination path. */
   flag: string;
+  /** Input destination path; it need not match the public flag name. */
   prop: string;
   kind:
     | "string"
@@ -120,13 +122,10 @@ export type CapabilityPart = "body" | "params" | "query";
 
 /**
  * One generated flag on a capability leaf: a `FlagSpec` tagged with the input
- * part it routes into. `FlagSpec.prop` drives the stricli flag identity (the
- * user-facing flag name), while `part` + `partPath` drive where the coerced
- * value lands inside the `invoke_capability` `input` object (`input[part]` at
- * `partPath`). For a flag whose bare name is unique they coincide; on a
- * cross-part or reserved-flag collision the generator part-prefixes `prop`
- * (e.g. `query.version` -> `--query-version`) while `partPath` stays the raw
- * property path (`version`).
+ * part it routes into. `FlagSpec.flag` is the canonical user-facing name;
+ * `part` + `partPath` drive where the coerced value lands inside the
+ * `invoke_capability` input object. `FlagSpec.prop` remains the unique local
+ * destination identity used while resolving cross-part collisions.
  */
 export type CapabilityFlagSpec = FlagSpec & {
   part: CapabilityPart;
