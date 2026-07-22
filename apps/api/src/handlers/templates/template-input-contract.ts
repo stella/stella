@@ -25,14 +25,15 @@ const findUnusedPaths = (
 
   for (const [key, value] of Object.entries(values)) {
     const path = parentPath === "" ? key : `${parentPath}.${key}`;
-    if (declaredKeys.has(path)) {
-      continue;
-    }
-
-    if (hasDeclaredDescendant(path, declaredKeys) && isRecord(value)) {
+    const pathHasDeclaredDescendant = hasDeclaredDescendant(path, declaredKeys);
+    if (pathHasDeclaredDescendant && isRecord(value)) {
       for (const unusedPath of findUnusedPaths(value, path, declaredKeys)) {
         unusedPaths.push(unusedPath);
       }
+      continue;
+    }
+
+    if (declaredKeys.has(path)) {
       continue;
     }
 

@@ -5,7 +5,9 @@ import { propertyConfig } from "@stll/property-testing";
 
 import { findUnusedTemplateValueKeys } from "./template-input-contract";
 
-const DECLARED_KEYS = ["name", "company.name"] as const;
+// Discovery emits structural object roots as fields alongside terminal
+// placeholders, so production declares both `company` and `company.name`.
+const DECLARED_KEYS = ["name", "company", "company.name"] as const;
 
 describe("template input contract", () => {
   test("accepts top-level and flattened declared paths", () => {
@@ -63,6 +65,20 @@ describe("template input contract", () => {
             values: { unknown: value },
           }),
         ).toEqual(["unknown"]);
+      }),
+      propertyConfig(),
+    );
+  });
+
+  test("INVARIANT: terminal fields accept every JSON value shape", () => {
+    fc.assert(
+      fc.property(fc.jsonValue(), (value) => {
+        expect(
+          findUnusedTemplateValueKeys({
+            declaredKeys: DECLARED_KEYS,
+            values: { name: value },
+          }),
+        ).toEqual([]);
       }),
       propertyConfig(),
     );
