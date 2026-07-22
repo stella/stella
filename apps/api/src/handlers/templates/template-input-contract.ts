@@ -3,6 +3,23 @@ type FindUnusedTemplateValueKeysOptions = {
   values: Record<string, unknown>;
 };
 
+type CollectTemplateInputKeysOptions = {
+  discoveredFieldPaths: Iterable<string>;
+  manifestFieldPaths: Iterable<string>;
+  placeholderPaths: Iterable<string>;
+};
+
+export const collectTemplateInputKeys = ({
+  discoveredFieldPaths,
+  manifestFieldPaths,
+  placeholderPaths,
+}: CollectTemplateInputKeysOptions): ReadonlySet<string> =>
+  new Set([
+    ...discoveredFieldPaths,
+    ...manifestFieldPaths,
+    ...placeholderPaths,
+  ]);
+
 /**
  * Compare submitted top-level or already-flattened keys with every value path
  * declared by the template. Value types are deliberately irrelevant: a typo
@@ -29,6 +46,18 @@ const findUnusedPaths = (
     if (pathHasDeclaredDescendant && isRecord(value)) {
       for (const unusedPath of findUnusedPaths(value, path, declaredKeys)) {
         unusedPaths.push(unusedPath);
+      }
+      continue;
+    }
+
+    if (pathHasDeclaredDescendant && Array.isArray(value)) {
+      for (const item of value) {
+        if (!isRecord(item)) {
+          continue;
+        }
+        for (const unusedPath of findUnusedPaths(item, path, declaredKeys)) {
+          unusedPaths.push(unusedPath);
+        }
       }
       continue;
     }

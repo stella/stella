@@ -3,13 +3,28 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import { findUnusedTemplateValueKeys } from "./template-input-contract";
+import {
+  collectTemplateInputKeys,
+  findUnusedTemplateValueKeys,
+} from "./template-input-contract";
 
 // Discovery emits structural object roots as fields alongside terminal
 // placeholders, so production declares both `company` and `company.name`.
 const DECLARED_KEYS = ["name", "company", "company.name"] as const;
 
 describe("template input contract", () => {
+  test("combines discovery, placeholders, and manifest-only fields", () => {
+    expect(
+      collectTemplateInputKeys({
+        discoveredFieldPaths: ["client.name"],
+        manifestFieldPaths: ["rent", "rent_annual"],
+        placeholderPaths: ["signature_date"],
+      }),
+    ).toEqual(
+      new Set(["client.name", "rent", "rent_annual", "signature_date"]),
+    );
+  });
+
   test("accepts top-level and flattened declared paths", () => {
     expect(
       findUnusedTemplateValueKeys({
@@ -54,6 +69,15 @@ describe("template input contract", () => {
         values: { company: { name: "Stella", namme: "typo" } },
       }),
     ).toEqual(["company.namme"]);
+  });
+
+  test("rejects unknown leaves inside repeated namespace rows", () => {
+    expect(
+      findUnusedTemplateValueKeys({
+        declaredKeys: ["sellers", "sellers.name"],
+        values: { sellers: [{ name: "Ada" }, { namme: "Grace" }] },
+      }),
+    ).toEqual(["sellers.namme"]);
   });
 
   test("INVARIANT: value shape cannot change whether an unknown key is rejected", () => {

@@ -47,7 +47,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { getS3 } from "@/api/lib/s3";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 
-import { findUnusedTemplateValueKeys } from "./template-input-contract";
+import {
+  collectTemplateInputKeys,
+  findUnusedTemplateValueKeys,
+} from "./template-input-contract";
 
 // Data a template is filled with: open-ended field-path → value map (paths come
 // from the template's manifest/markers, not a fixed entity), patched in place
@@ -308,14 +311,19 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 > => {
   const loaded = source;
   const { templateId } = source;
+  const manifest = await readManifest(loaded.buffer);
 
   if (unusedValuePolicy === "reject") {
     const discovered = await discoverTemplate(loaded.buffer);
     const unusedKeys = findUnusedTemplateValueKeys({
-      declaredKeys: [
-        ...discovered.fields.map((field) => field.path),
-        ...discovered.placeholders.map((placeholder) => placeholder.name),
-      ],
+      declaredKeys: collectTemplateInputKeys({
+        discoveredFieldPaths: discovered.fields.map((field) => field.path),
+        manifestFieldPaths:
+          manifest === null ? [] : manifest.fields.map((field) => field.path),
+        placeholderPaths: discovered.placeholders.map(
+          (placeholder) => placeholder.name,
+        ),
+      }),
       values,
     });
     if (unusedKeys.length > 0) {
@@ -355,7 +363,6 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
   let fillBuffer = loaded.buffer;
   let adaptedPaths: readonly string[] = [];
-  const manifest = await readManifest(loaded.buffer);
   if (manifest) {
     // Resolve the data-binding context only when this fill targets a matter and
     // the manifest actually declares a bound field, so a transient fill or a
