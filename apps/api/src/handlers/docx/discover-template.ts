@@ -11,6 +11,8 @@
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { parseCondition, type ConditionNode } from "@stll/template-conditions";
+
 import { compareCodepoint } from "@/api/lib/collation";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
@@ -24,19 +26,6 @@ import type {
   TemplateFieldKind,
   TemplateStructureError,
 } from "./types";
-
-// ── Condition expression analysis ────────────────────────
-
-/**
- * Extract variable paths referenced in a condition expression.
- * Strips string literals, operators, and keywords.
- */
-const CONDITION_TOKEN_RE =
-  /"(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|(?<ident>[\p{L}\p{N}_.]+)/gu;
-
-const NUMERIC_LITERAL_RE = /^[\d_]+$/u;
-
-const COMPARISON_OPS = new Set(["==", "!=", ">=", "<=", ">", "<"]);
 
 // ── Field inference ──────────────────────────────────────
 
@@ -85,45 +74,39 @@ const registerConditionFields = (
   fields: FieldAccumulator,
   condition: string,
 ): void => {
-  if (condition === "") {
+  const root = parseCondition(condition);
+  if (!root) {
     return;
   }
 
-  // Group tokens by and/or to check comparisons per
-  // sub-expression. Uses the tokenizer (not string split)
-  // so `and`/`or` inside string literals are ignored.
-  type SubExpr = { paths: string[]; hasComparison: boolean };
-  const subExprs: SubExpr[] = [];
-  let current: SubExpr = { paths: [], hasComparison: false };
-  subExprs.push(current);
-
-  for (const match of condition.matchAll(CONDITION_TOKEN_RE)) {
-    const raw = match[0];
-    if (!raw) {
-      continue;
+  const visit = (node: ConditionNode): void => {
+    if (node.type === "group") {
+      for (const child of node.children) {
+        visit(child);
+      }
+      return;
     }
-    const ident = match.groups?.["ident"];
 
-    if (raw === "and" || raw === "or") {
-      current = { paths: [], hasComparison: false };
-      subExprs.push(current);
-    } else if (COMPARISON_OPS.has(raw)) {
-      current.hasComparison = true;
-    } else if (
-      ident &&
-      ident !== "true" &&
-      ident !== "false" &&
-      !NUMERIC_LITERAL_RE.test(ident)
-    ) {
-      current.paths.push(ident);
+    if (node.type === "compare") {
+      if (node.left.type === "path") {
+        registerField(fields, node.left.path, "string");
+      }
+      if (node.right.type === "path") {
+        registerField(fields, node.right.path, "string");
+      }
+      return;
     }
-  }
 
-  for (const { paths, hasComparison } of subExprs) {
-    for (const path of paths) {
-      registerField(fields, path, hasComparison ? "string" : "boolean");
+    if (node.operand.type === "path") {
+      registerField(
+        fields,
+        node.operand.path,
+        node.op === "is_truthy" ? "boolean" : "string",
+      );
     }
-  }
+  };
+
+  visit(root);
 };
 
 const attachNestedArrayFields = (fields: FieldAccumulator): void => {
@@ -390,24 +373,30 @@ const analyzeContainer = (
     const paraCondition = conditionMap.get(i);
 
     const inline = parseInlineConditions(text);
-    if (inline.ok) {
+    if (!inline.ok) {
+      errors.push({
+        message: inline.message,
+        paragraphIndex: i,
+        directive: inline.directive,
+      });
+    } else {
       for (const group of inline.groups) {
-        if (group.kind === "if") {
-          for (const branch of group.branches) {
-            registerConditionFields(fields, branch.condition);
+        if (group.kind === "each") {
+          registerField(fields, group.arrayPath, "array");
+          const entry = fields.get(group.arrayPath);
+          const content = text.slice(group.contentStart, group.contentEnd);
+          const prefix = `${group.arrayPath}.`;
+          for (const match of content.matchAll(PLACEHOLDER_RE)) {
+            const name = match.groups?.["name"];
+            if (name?.startsWith(prefix)) {
+              entry?.itemPaths.add(name.slice(prefix.length));
+            }
           }
           continue;
         }
 
-        registerField(fields, group.arrayPath, "array");
-        const entry = fields.get(group.arrayPath);
-        const content = text.slice(group.contentStart, group.contentEnd);
-        const prefix = `${group.arrayPath}.`;
-        for (const match of content.matchAll(PLACEHOLDER_RE)) {
-          const name = match.groups?.["name"];
-          if (name?.startsWith(prefix)) {
-            entry?.itemPaths.add(name.slice(prefix.length));
-          }
+        for (const branch of group.branches) {
+          registerConditionFields(fields, branch.condition);
         }
       }
     }

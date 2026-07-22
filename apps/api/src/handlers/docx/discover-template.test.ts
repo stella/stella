@@ -89,6 +89,30 @@ describe("discoverTemplate", () => {
     });
   });
 
+  test("inline condition discovery shares the canonical operator grammar", async () => {
+    const xml = WRAP(P('{{#if roles contains "admin"}}Administrator{{/if}}'));
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields).toEqual([
+      { path: "roles", kind: "string", count: 1 },
+    ]);
+  });
+
+  test("inline parse errors are part of template discovery", async () => {
+    const xml = WRAP(P("Buyer {{#if has_spouse}} and spouse"));
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.structureErrors).toEqual([
+      expect.objectContaining({
+        directive: "{{#if has_spouse}}",
+        paragraphIndex: 0,
+        source: "body",
+      }),
+    ]);
+  });
+
   test("loop infers array field with item fields", async () => {
     const xml = WRAP(
       [
