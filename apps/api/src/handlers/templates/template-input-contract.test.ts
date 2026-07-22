@@ -341,6 +341,14 @@ describe("template input contract", () => {
         values: { company: { name: "Acme" } },
       }),
     ).toEqual([]);
+    fc.assert(
+      fc.property(fc.array(fc.jsonValue()), (company) => {
+        expect(
+          findUnusedTemplateValueKeys({ contract, values: { company } }),
+        ).toEqual(["company"]);
+      }),
+      propertyConfig(),
+    );
   });
 
   test("forbidden derived paths win through nested and flattened input", () => {
@@ -415,7 +423,10 @@ describe("template input contract", () => {
   test("rejects unknown leaves inside repeated namespace rows", () => {
     expect(
       findUnusedTemplateValueKeys({
-        contract: contractFor(["sellers", "sellers.name"]),
+        contract: {
+          ...contractFor(["sellers", "sellers.name"]),
+          arrayPaths: new Set(["sellers"]),
+        },
         values: { sellers: [{ name: "Ada" }, { namme: "Grace" }] },
       }),
     ).toEqual(["sellers.namme"]);

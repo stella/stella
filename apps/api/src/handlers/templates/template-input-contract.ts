@@ -193,6 +193,10 @@ const findUnusedPaths = (
     }
 
     if (pathHasContractDescendant && Array.isArray(value)) {
+      if (!contract.arrayPaths.has(path)) {
+        unusedPaths.push(path);
+        continue;
+      }
       let hasInvalidItem = false;
       for (const item of value) {
         if (!isRecord(item)) {
