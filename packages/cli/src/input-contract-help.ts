@@ -90,6 +90,10 @@ const describesObject = (schema: JsonSchema): boolean =>
   Object.keys(propertiesOf(schema)).length > 0 ||
   allOf(schema).some(describesObject);
 
+const hasNamedPropertiesAcrossAllOf = (schema: JsonSchema): boolean =>
+  Object.keys(propertiesOf(schema)).length > 0 ||
+  allOf(schema).some(hasNamedPropertiesAcrossAllOf);
+
 const findComposedExample = (
   schema: JsonSchema,
   base: JsonSchema,
@@ -334,7 +338,7 @@ const renderSchema = ({
   ) {
     const mapEntries = mapEntrySchemas(schema);
     const freeMap =
-      mapEntries.length > 0 && Object.keys(properties).length === 0;
+      mapEntries.length > 0 && !hasNamedPropertiesAcrossAllOf(schema);
     if (freeMap) {
       renderMapEntries({
         path,

@@ -659,6 +659,57 @@ describe("--input contract help", () => {
     });
   });
 
+  test.each([
+    [
+      { additionalProperties: true },
+      { patternProperties: { "^meta-": { type: "string" } } },
+    ],
+    [
+      { patternProperties: { "^meta-": { type: "string" } } },
+      { additionalProperties: true },
+    ],
+  ])("exemplifies composed maps independently of allOf order", (...allOf) => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: { type: "object", allOf },
+      },
+      required: ["body"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(completeExample(help)).toEqual({
+      body: { "meta-key": "xxxxx" },
+    });
+  });
+
+  test("documents inherited named fields beside inherited dynamic keys", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          allOf: [
+            {
+              properties: { token: { type: "string" } },
+              required: ["token"],
+              patternProperties: { "^meta-": { type: "string" } },
+            },
+          ],
+        },
+      },
+      required: ["body"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(help?.fields).toContain("  body.token  string  required");
+    expect(help?.fields).toContain(
+      "  body.<key>  string; key matches ^meta-  required",
+    );
+  });
+
   test("shell-quotes apostrophes in generated examples", () => {
     expect(formatInputExample({ value: "client's" })).toBe(
       `--input '{"value":"client'\\''s"}'`,
