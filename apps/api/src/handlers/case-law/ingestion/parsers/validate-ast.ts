@@ -20,7 +20,7 @@ type Issue = {
   severity: "error" | "warning";
 };
 
-type ValidationResult = {
+export type ValidationResult = {
   ok: boolean;
   issues: Issue[];
   stats: {
@@ -58,20 +58,22 @@ const SKIP_WORDS = new Set([
   "pokračování",
 ]);
 
-// Letters across the supported corpora: base Latin, Czech, Polish,
-// Slovak, German. A letter missing here gets trimmed from word edges,
-// silently shrinking the compared word sets for that language.
-const LETTERS = new Set(
-  "abcdefghijklmnopqrstuvwxyzáäąčćďéěęíĺľłňńóôöřŕšśťúůüýžźżß",
-);
+// Any Unicode letter, not an enumerated alphabet. This was a Latin
+// list covering Czech, Polish, Slovak and German, which trimmed every
+// Greek and Cyrillic word to nothing: such words then dropped out of
+// both the source and the AST word set, so MISSING_WORDS could never
+// fire for those languages. The CJEU corpus is published in all of
+// them, and a completeness check that is silent for a script is worse
+// than no check, because it reads as a pass.
+const LETTER = /\p{L}/u;
 const trimNonLetters = (word: string): string => {
   let start = 0;
   let end = word.length;
 
-  while (start < end && !LETTERS.has(word.charAt(start))) {
+  while (start < end && !LETTER.test(word.charAt(start))) {
     start += 1;
   }
-  while (end > start && !LETTERS.has(word.charAt(end - 1))) {
+  while (end > start && !LETTER.test(word.charAt(end - 1))) {
     end -= 1;
   }
 
@@ -162,18 +164,22 @@ export const validateAst = (
         return;
       }
 
-      // Skip if a parent element in our selector already
-      // captured this text (prevents double-counting).
-      if ($el.parents(contentSelector).length > 0) {
-        const parentText = $el
-          .parent()
-          .closest(contentSelector)
-          .text()
-          .replace(/\s+/gu, " ")
-          .trim();
-        if (seen.has(parentText)) {
-          return;
-        }
+      // Skip if any ancestor in our selector already captured this
+      // text. Checking every ancestor rather than just the nearest one
+      // matters for sources that nest content two or more levels deep
+      // (Cellar quotes legislation as a table inside the cell of the
+      // numbered paragraph that introduces it): with only the nearest
+      // ancestor checked, the inner text is counted once inside the
+      // outer cell and again on its own, and the inflated original
+      // length reads as content loss in an otherwise complete AST.
+      const capturedByAncestor = $el
+        .parents(contentSelector)
+        .toArray()
+        .some((ancestor) =>
+          seen.has($(ancestor).text().replace(/\s+/gu, " ").trim()),
+        );
+      if (capturedByAncestor) {
+        return;
       }
       const text = $el.text().replace(/\s+/gu, " ").trim();
       if (text && !seen.has(text)) {
@@ -352,41 +358,140 @@ export const validateAst = (
 };
 
 /**
- * Convenience: validate and log issues. Returns the result
- * for callers that want to inspect it.
+ * Identity of the document being validated.
+ *
+ * A case number alone does not identify a document: courts that
+ * publish in several languages emit one variant per language under the
+ * same number, and a case can carry both a judgment and an Advocate
+ * General's opinion. Anything acting on these logs — a person or an
+ * agent sweeping for bad parses — needs enough here to fetch the exact
+ * document back.
  */
+export type ValidationSubject = {
+  /** Adapter key, e.g. "eu-ecj". */
+  parser: string;
+  caseNumber: string;
+  language?: string | undefined;
+  /** Where this exact document can be re-fetched. */
+  url?: string | undefined;
+};
+
+/**
+ * Log event emitted when source text did not survive into the AST.
+ * Reported at ERROR: the text is unrecoverable from the stored
+ * decision, and neither the reader nor the AI pipeline can tell.
+ */
+export const AST_CONTENT_LOST = "case_law.ingestion.ast_content_lost";
+
+/**
+ * Log event emitted when the text is all present but its structure is
+ * wrong or missing. Reported at WARN: degraded, not incorrect.
+ */
+export const AST_STRUCTURE_DEGRADED =
+  "case_law.ingestion.ast_structure_degraded";
+
+/**
+ * Log event emitted when a decision is stored with neither text nor an
+ * AST. Reported at ERROR: nothing about the decision is readable, and
+ * a source that starts doing this emits no other signal, because its
+ * parser never runs.
+ */
+export const DECISION_EMPTY = "case_law.ingestion.decision_empty";
+
+/**
+ * Log event emitted when a decision is stored with text but no AST —
+ * the unstructured-wall-of-text state. Reported at WARN.
+ */
+export const AST_MISSING = "case_law.ingestion.ast_missing";
+
+/**
+ * What a stored decision reports about itself, before any parser
+ * result is considered.
+ *
+ * Kept as a pure function rather than inline branching in the pipeline
+ * because this is the signal an operator or agent sweeps for; a change
+ * that silently downgrades it would otherwise be invisible, and the
+ * one place it must not be invisible is here.
+ */
+export type StoredDecisionSignal =
+  | { event: typeof DECISION_EMPTY; level: "error" }
+  | { event: typeof AST_MISSING; level: "warn" };
+
+export const storedDecisionSignal = (stored: {
+  hasFulltext: boolean;
+  astBlocks: number;
+}): StoredDecisionSignal | undefined => {
+  if (stored.astBlocks > 0) {
+    return undefined;
+  }
+  return stored.hasFulltext
+    ? { event: AST_MISSING, level: "warn" }
+    : { event: DECISION_EMPTY, level: "error" };
+};
+
+/**
+ * Validate, then log the outcome under a severity that reflects what
+ * kind of failure it is. Returns the result for callers that want to
+ * assert on it.
+ */
+export type ValidationSignal =
+  | { event: typeof AST_CONTENT_LOST; level: "error" }
+  | { event: typeof AST_STRUCTURE_DEGRADED; level: "warn" };
+
+/**
+ * Map a validation outcome onto the event an operator sweeps for.
+ * Pure, and tested as such: this mapping is the whole value of the
+ * signal, and a change that quietly turns loss into a warning would
+ * otherwise show up only as an absence in a log search.
+ */
+export const validationSignal = (
+  result: Pick<ValidationResult, "ok" | "issues">,
+): ValidationSignal | undefined => {
+  if (result.issues.length === 0) {
+    return undefined;
+  }
+  return result.ok
+    ? { event: AST_STRUCTURE_DEGRADED, level: "warn" }
+    : { event: AST_CONTENT_LOST, level: "error" };
+};
+
 export const validateAndLog = (
-  parserName: string,
-  caseNumber: string,
+  subject: ValidationSubject,
   html: string,
   blocks: Block[],
 ): ValidationResult => {
   const result = validateAst(html, blocks);
+  const signal = validationSignal(result);
+  if (!signal) {
+    return result;
+  }
 
   // Court decisions are public documents; log full diagnostics so a
   // failure is actionable straight from the log line, without
   // re-fetching and re-parsing the source.
-  if (!result.ok) {
-    logger.error("case_law.ingestion.ast_validation_failed", {
-      parser: parserName,
-      caseNumber,
-      issues: result.issues
-        .map((issue) => `${issue.code}: ${issue.message}`)
-        .join("; "),
-      missingWords: result.stats.missingWords.slice(0, 25).join(", "),
-      missingWordCount: result.stats.missingWords.length,
-      retainedPct: result.stats.retainedPct,
-      blockCount: result.stats.blockCount,
-    });
-  } else if (result.issues.length > 0) {
-    logger.warn("case_law.ingestion.ast_validation_warning", {
-      parser: parserName,
-      caseNumber,
-      issues: result.issues
-        .map((issue) => `${issue.code}: ${issue.message}`)
-        .join("; "),
-    });
+  const common = {
+    parser: subject.parser,
+    caseNumber: subject.caseNumber,
+    ...(subject.language === undefined ? {} : { language: subject.language }),
+    ...(subject.url === undefined ? {} : { url: subject.url }),
+    codes: result.issues.map((issue) => issue.code).join(","),
+    issues: result.issues
+      .map((issue) => `${issue.code}: ${issue.message}`)
+      .join("; "),
+    blockCount: result.stats.blockCount,
+  };
+
+  if (signal.level === "warn") {
+    logger.warn(signal.event, common);
+    return result;
   }
+
+  logger.error(signal.event, {
+    ...common,
+    retainedPct: result.stats.retainedPct,
+    missingWordCount: result.stats.missingWords.length,
+    missingWords: result.stats.missingWords.slice(0, 25).join(", "),
+  });
 
   return result;
 };

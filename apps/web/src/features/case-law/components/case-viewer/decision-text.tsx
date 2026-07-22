@@ -111,6 +111,9 @@ const cleanSupplement = (value: unknown): string | null => {
   return trimmed;
 };
 
+const getParagraphNumberPieceId = (blockId: string): string =>
+  `paragraph-number:${blockId}`;
+
 const getTableCellPieceId = ({
   blockId,
   columnIndex,
@@ -471,9 +474,25 @@ const BlockRenderer = ({
           block.role === "closing" && "mt-8 text-center",
           block.role === "signature" &&
             "reader-signature text-muted-foreground mt-1 text-end",
+          // Courts that number their paragraphs are cited by that
+          // number, so it hangs in the margin rather than running into
+          // the sentence, the way the published decision prints it.
+          block.number !== undefined && "relative ps-8",
         )}
         id={block.anchorId}
       >
+        {block.number !== undefined && (
+          <HighlightedText
+            activeMatchIndex={activeMatchIndex}
+            className="text-muted-foreground absolute start-0 font-sans text-[0.8em] select-none"
+            pieceId={getParagraphNumberPieceId(block.id)}
+            ranges={rangesForPiece(
+              rangesByPieceId,
+              getParagraphNumberPieceId(block.id),
+            )}
+            text={String(block.number)}
+          />
+        )}
         <InlineContent
           activeMatchIndex={activeMatchIndex}
           inlines={block.inlines}
@@ -722,6 +741,18 @@ export const DecisionText = ({
           id: block.id,
           text: inlinesToPlainText(block.inlines),
         });
+
+        // The paragraph number is rendered beside the text, not inside
+        // `inlines`, so it needs a piece of its own: CJEU decisions are
+        // cited by that number, and searching it must scroll there.
+        // Folding it into the paragraph's own piece would shift every
+        // highlight offset in that paragraph.
+        if (block.type === "paragraph" && block.number !== undefined) {
+          pieces.push({
+            id: getParagraphNumberPieceId(block.id),
+            text: String(block.number),
+          });
+        }
       }
     } else if (decision.fulltext) {
       for (const [index, paragraph] of decision.fulltext

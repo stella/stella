@@ -21,7 +21,10 @@ import {
   createAvailableCaseLawDecisionSlug,
   createCaseLawDecisionSlug,
 } from "@/api/handlers/case-law/decisions/slug";
-import { isDocumentAst } from "@/api/handlers/case-law/document-ast";
+import {
+  hasUsableAst,
+  isDocumentAst,
+} from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -29,6 +32,7 @@ import {
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { storedDecisionSignal } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import {
   DANGEROUS_CHARS,
@@ -198,6 +202,15 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
     sourceUrl: strip(r.sourceUrl),
     documentUrl: strip(r.documentUrl),
     metadata: sanitizeMetadata(r.metadata),
+    // Adapter-supplied sections come from court HTML like every other
+    // field and must go through the same strip. The fallback path was
+    // safe only incidentally: `segmentDecision` runs on the already
+    // sanitized `fulltext`.
+    sections: r.sections?.map((section) => ({
+      ...section,
+      title: section.title === null ? null : stripDangerousChars(section.title),
+      text: collapseSpacedLetters(strip(section.text) ?? ""),
+    })),
     documentAst: sanitizedAst,
     sourceRaw: strip(r.sourceRaw),
   };
@@ -350,7 +363,39 @@ export const processDecision = async (
     }
   }
 
-  const sections = result.fulltext ? segmentDecision(result.fulltext) : [];
+  // Structure-derived sections win: an adapter only supplies them when
+  // its parser recovered the document's own headings, which is strictly
+  // better than re-deriving boundaries from the flattened text.
+  const sections =
+    result.sections ??
+    (result.fulltext ? segmentDecision(result.fulltext) : []);
+
+  // Parsers report their own quality through `validateAndLog`, but a
+  // source whose parser never runs reports nothing at all. Emit the
+  // same signal here so every stored decision is accounted for, and
+  // split the severity the same way: no text is an error, text without
+  // structure is a warning.
+  const astBlocks = hasUsableAst(result.documentAst)
+    ? result.documentAst.blocks.length
+    : 0;
+  const signal = storedDecisionSignal({
+    hasFulltext: Boolean(result.fulltext),
+    astBlocks,
+  });
+  if (signal) {
+    const subject = {
+      sourceId,
+      caseNumber: result.caseNumber,
+      language: result.language,
+      url: result.sourceUrl ?? result.documentUrl ?? "",
+      fulltextLength: result.fulltext?.length ?? 0,
+    };
+    if (signal.level === "error") {
+      logger.error(signal.event, subject);
+    } else {
+      logger.warn(signal.event, subject);
+    }
+  }
 
   const citations = extractCitations(
     sections.map((s) => ({ index: s.index, text: s.text })),

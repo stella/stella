@@ -187,7 +187,77 @@ Examples per country:
 - PL: `wyrok`, `postanowienie`
 - AT/DE: `Urteil`, `Beschluss`
 
-### 9. Cursors must never cause full re-scans
+### 9. Prefer the publisher's structure over its wording
+
+A parser that keys off headings ("Odůvodnění", "Uzasadnienie") is
+bound to one language. Where the source annotates structure —
+classes, element names, `id` attributes — key off that instead, and
+derive roles from position rather than from what a paragraph says.
+The CJEU parser (`parsers/eu-ecj.ts`) handles all 24 official
+languages, plus judgments, orders and Advocate General opinions,
+with no language table: headings come from `coj-*` classes and from
+the numbering scheme, paragraph numbers from the publisher's own
+`id="pointN"` anchors.
+
+The same applies downstream: an adapter whose parser recovered the
+document's headings should return `sections` on its
+`IngestionResult`, so the pipeline uses those instead of falling back
+to `segmentDecision`, which matches heading wording per language.
+
+### 10. Never drop text; shape it wrong instead
+
+Completeness and fidelity are not equal goals. If a parser cannot tell
+what a piece of text is, it must still emit it — as a plain paragraph,
+in document order — rather than skip it. Classification is always a
+promotion from that baseline: an unrecognised heading stays a
+paragraph, an element outside the source's known vocabulary still
+contributes its text, a table row the shape rules do not match is
+still walked for content.
+
+A decision shown with a flat structure is visibly imperfect and a user
+can still read and cite it. A decision missing a paragraph looks
+complete and is wrong, and neither the reader nor the AI pipeline has
+any way to know. `validateAndLog`'s CONTENT_LOSS and MISSING_WORDS are
+the completeness guard and must be treated as errors; heading levels
+and section boundaries are fidelity and may carry a known tail.
+
+### 11. Emit a parse signal every stored decision is covered by
+
+Parse quality is reported through structured logs, split by severity
+along the completeness/fidelity line so an operator or an agent can
+filter for the class that matters. All four carry `caseNumber`,
+`language` and a `url`, because a case number alone does not identify
+a document: a court publishing in 24 languages emits 24 variants under
+one number, and a case can carry both a judgment and an opinion.
+
+| Event                                       | Level | Meaning                                                                                  |
+| ------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
+| `case_law.ingestion.decision_empty`         | ERROR | Stored with neither text nor AST. Nothing is readable.                                   |
+| `case_law.ingestion.ast_content_lost`       | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`). |
+| `case_law.ingestion.ast_missing`            | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
+| `case_law.ingestion.ast_structure_degraded` | WARN  | Text is complete, structure is imperfect.                                                |
+
+The two ERROR events are the ones to act on. Sweep for them to find
+decisions worth re-ingesting after a parser fix; `sourceRaw` in S3
+means most can be re-parsed without touching the court's site.
+
+The last two events come from the pipeline rather than from a parser,
+so they also cover sources whose parser never runs — which is the case
+that would otherwise be silent, since a parser that is not called
+cannot report anything.
+
+### 12. Check a parser against the publisher, not against yourself
+
+Where a source publishes the same document in two encodings, use the
+more semantic one as a test oracle. Cellar serves CJEU decisions both
+as the `coj-*` XHTML we parse and as Formex XML, which states heading
+depth (`GR.SEQ LEVEL`), paragraph numbers (`NP.ECR/NO.P`) and the
+keyword chain (`INDEX/KEYWORD`) outright. `parsers/eu-ecj.test.ts`
+asserts the parse against the Formex tree, so a reviewer who does not
+read Greek or Finnish can still see the parser is right in those
+languages. Snapshot tests only prove the output has not changed.
+
+### 13. Cursors must never cause full re-scans
 
 After an adapter exhausts its range (reaches the oldest year
 in a backward crawl, or the current date in a forward crawl),
@@ -265,7 +335,34 @@ case-law/
 │       ├── cz-nss.ts      # NSS Aspose HTML parser
 │       ├── cz-us.ts       # ÚS RTF/HTML parser
 │       ├── cz-regional.ts # Regional structured JSON parser
+│       ├── eu-ecj.ts      # CJEU Cellar XHTML parser (all languages)
+│       ├── eu-ecj-formex.ts  # Formex reader; test oracle only
 │       └── validate-ast.ts # AST content-loss validator
 ├── polarity/              # Citation polarity classification
 └── matter-links/          # Link decisions to matters
 ```
+
+## Backfilling the CJEU corpus
+
+Decisions ingested before the parser landed hold `document_ast: {}`,
+and their XHTML was not kept (`sourceRaw` was `undefined`), so there
+is nothing to re-parse locally: the corpus has to be re-fetched.
+Deploying the parser alone changes nothing for them, because the
+adapter's cursor parks at the current date and never revisits a past
+publication day on its own.
+
+A re-fetch does update them. The parser's output feeds `fulltext`,
+`fulltext` feeds `rawHash`, so a re-fetched decision hashes
+differently from the stripped-text row already stored and the
+pipeline writes the new AST, sections and metadata over it.
+
+To backfill, set the source's `sync_cursor` back to `1952-01-01` and
+let the scheduler walk forward. Every day re-fetched this way also
+stores `sourceRaw`, so later parser changes can be replayed without
+touching Cellar again. The crawl is rate-limited per decision, not
+per language variant, so a full sweep is long-running; run it as a
+deliberate operation rather than as part of a deploy.
+
+`scripts/record-eu-ecj-fixtures.ts` reaches individual decisions by
+CELEX number through the same adapter path, which is the quicker way
+to re-ingest a specific case.

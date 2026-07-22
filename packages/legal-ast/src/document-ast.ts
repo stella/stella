@@ -41,6 +41,13 @@ export type ParagraphBlock = {
   anchorId: string;
   type: "paragraph";
   role?: ParagraphRole;
+  /**
+   * Paragraph number assigned by the publishing court, when the source
+   * numbers its paragraphs (CJEU judgments, opinions and orders do).
+   * Citations reference these numbers, so they are kept as structure
+   * rather than as a prefix inside `plainText`.
+   */
+  number?: number;
   inlines: Inline[];
   plainText: string;
 };

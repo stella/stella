@@ -239,7 +239,11 @@ export const parseRegionalDecision = (
   const validationHtml = buildValidationHtml(
     allParagraphs.map((para) => para.texts.map((s) => s.text).join("")),
   );
-  validateAndLog("cz-regional", input.caseNumber, validationHtml, blocks);
+  validateAndLog(
+    { parser: "cz-regional", caseNumber: input.caseNumber },
+    validationHtml,
+    blocks,
+  );
 
   const ast: DocumentAst = {
     version: 1,

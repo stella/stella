@@ -70,7 +70,11 @@ export const parseNssDecisionHtml = (
   const chunks = extractChunks($);
   const blocks = classifyChunks(chunks);
 
-  validateAndLog("cz-nss", input.caseNumber, input.html, blocks);
+  validateAndLog(
+    { parser: "cz-nss", caseNumber: input.caseNumber, url: input.sourceUrl },
+    input.html,
+    blocks,
+  );
 
   const fulltext = blocks
     .flatMap((b) => (b.plainText ? [b.plainText] : []))

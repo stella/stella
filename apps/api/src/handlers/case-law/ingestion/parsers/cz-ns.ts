@@ -19,6 +19,7 @@ import type {
   Inline,
   TableCell,
 } from "@/api/handlers/case-law/document-ast";
+import { validateAndLog } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import {
@@ -30,6 +31,20 @@ import {
   inlinesToPlainText,
   walkInlines as walkInlinesShared,
 } from "./shared-inlines";
+
+/**
+ * Source text the AST is expected to account for.
+ *
+ * The metadata table above the decision body is extracted into
+ * `metadata` rather than into blocks, so validating against the whole
+ * page would report it as lost text. Everything else on the page must
+ * reach the AST.
+ */
+const validationHtml = ($: cheerio.CheerioAPI): string => {
+  const $body = $("body").clone();
+  $body.find("#box-table-a").remove();
+  return `<html><body>${$body.html() ?? ""}</body></html>`;
+};
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -57,6 +72,16 @@ export const parseNsDecisionHtml = (
   const rawChunks = extractRawChunks($);
   const blocks = classifyBlocks(rawChunks, relatedProceedingsTable);
   const fulltext = blocksToPlainText(blocks);
+
+  validateAndLog(
+    {
+      parser: "cz-ns",
+      caseNumber: canonical.caseNumber ?? input.documentId,
+      url: input.webUrl,
+    },
+    validationHtml($),
+    blocks,
+  );
 
   const documentAst: DocumentAst = {
     version: 1,

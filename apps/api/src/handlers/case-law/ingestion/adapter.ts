@@ -1,6 +1,7 @@
 import type { Result } from "better-result";
 
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
+import type { DecisionSection } from "@/api/handlers/case-law/types";
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 
 /**
@@ -32,6 +33,12 @@ export type IngestionResult = {
   rawHash: string;
   /** Parsed document AST, or empty object for courts without a parser. */
   documentAst: DocumentAst | EmptyAst;
+  /**
+   * Structural sections, when the adapter's parser can derive them from
+   * the document itself. Omitted by adapters that rely on the
+   * wording-based `segmentDecision` fallback in the pipeline.
+   */
+  sections?: DecisionSection[] | undefined;
   /** Parser version that produced the AST. Enables lazy re-parsing. */
   parserVersion?: number | undefined;
   /**

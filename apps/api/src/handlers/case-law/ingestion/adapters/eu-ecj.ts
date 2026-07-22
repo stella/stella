@@ -5,8 +5,10 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSION,
 } from "@/api/handlers/case-law/consts";
+import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
+  EmptyAst,
   IngestionResult,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -16,6 +18,10 @@ import {
   hashContent,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import { parseEcjDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
+import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
+import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   AdapterFetchError,
@@ -197,12 +203,22 @@ type QueryDecisionsOptions = {
   dateFrom: string;
   dateTo: string;
   signal: AbortSignal;
+  /**
+   * Restrict the page to these CELEX numbers. Used to record fixtures
+   * for named decisions through the same query the crawl runs, instead
+   * of crawling a whole publication day to reach them.
+   */
+  celexFilter?: readonly string[];
 };
+
+/** CELEX numbers are alphanumeric with optional bracketed suffixes. */
+const CELEX = /^[0-9A-Z()]+$/u;
 
 const queryDecisions = async ({
   dateFrom,
   dateTo,
   signal,
+  celexFilter,
 }: QueryDecisionsOptions): Promise<SparqlResult[]> => {
   if (!ISO_DATE.test(dateFrom) || !ISO_DATE.test(dateTo)) {
     throw new AdapterFetchError({
@@ -211,6 +227,20 @@ const queryDecisions = async ({
       cursor: dateFrom,
     });
   }
+
+  const invalidCelex = celexFilter?.find((celex) => !CELEX.test(celex));
+  if (invalidCelex !== undefined) {
+    throw new AdapterFetchError({
+      message: `Invalid CELEX number: ${invalidCelex}`,
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      cursor: dateFrom,
+    });
+  }
+
+  const celexClause =
+    celexFilter && celexFilter.length > 0
+      ? `\n  FILTER(STR(?celex) IN (${celexFilter.map((celex) => `"${celex}"`).join(", ")}))`
+      : "";
 
   const query = `
 PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
@@ -233,7 +263,7 @@ WHERE {
   ))
   FILTER(STR(?manifestationType) = "xhtml")
   FILTER(STR(?date) >= "${dateFrom}")
-  FILTER(STR(?date) <= "${dateTo}")
+  FILTER(STR(?date) <= "${dateTo}")${celexClause}
 }
 ORDER BY ASC(?date) ASC(?celex) ASC(?language)
 LIMIT ${SPARQL_LIMIT}`.trim();
@@ -320,22 +350,26 @@ export const celexToCaseNumber = (celex: string): string => {
 // -- Fulltext --
 
 /**
- * Fetch fulltext from a validated Cellar XHTML content stream.
- * Returns stripped text or undefined on failure.
+ * Fetch one language's XHTML manifestation from a validated Cellar
+ * content stream. Returns the verbatim document, or undefined when the
+ * translation is unavailable or the request fails.
  */
-type FetchFulltextOptions = {
+type FetchManifestationOptions = {
   contentUrl: string;
   celex: string;
   lang: EcjLanguage;
   signal: AbortSignal;
 };
 
-const fetchFulltext = async ({
+/** Shortest plausible decision; below this the response is not a document. */
+const MIN_DOCUMENT_LENGTH = 100;
+
+const fetchManifestation = async ({
   contentUrl,
   celex,
   lang,
   signal,
-}: FetchFulltextOptions): Promise<string | undefined> => {
+}: FetchManifestationOptions): Promise<string | undefined> => {
   try {
     const response = await fetchWithTimeout(contentUrl, {
       signal,
@@ -348,44 +382,226 @@ const fetchFulltext = async ({
     }
 
     const html = await response.text();
-
-    // Extract the main content div. Greedy match captures
-    // everything up to the outermost </div> before <!--,
-    // avoiding early termination on inner div comments.
-    const bodyMatch =
-      /<div[^>]*id="TexteOnly"[^>]*>(?<body>[\s\S]*)<\/div>\s*<!--/iu.exec(
-        html,
-      );
-    if (!bodyMatch) {
-      // Fallback: extract <body> content
-      const fallback = /<body[^>]*>(?<body>[\s\S]*)<\/body>/iu.exec(html);
-      if (!fallback?.groups?.["body"]) {
-        return undefined;
-      }
-      const text = stripHtml(fallback.groups["body"])
-        // eslint-disable-next-line no-control-regex -- strip control chars for PG
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/gu, "")
-        .trim();
-      return text.length > 100 ? text : undefined;
-    }
-
-    const text = stripHtml(bodyMatch.groups?.["body"] ?? "")
-      // eslint-disable-next-line no-control-regex -- strip control chars for PG
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/gu, "")
-      .trim();
-    return text.length > 100 ? text : undefined;
+    return html.length > MIN_DOCUMENT_LENGTH ? html : undefined;
   } catch (error) {
     // AbortErrors are expected (timeout, page cancellation)
     if (!(error instanceof DOMException)) {
       captureError(
         new TelemetryError({
-          message: `[eu-ecj] fulltext fetch failed for ${celex}/${lang}`,
+          message: `[eu-ecj] manifestation fetch failed for ${celex}/${lang}`,
           cause: error,
         }),
       );
     }
     return undefined;
   }
+};
+
+/**
+ * Parse a manifestation into an AST, sections and fulltext.
+ *
+ * A parse failure must not lose the decision: the raw XHTML is stored
+ * either way, so fall back to stripped text and an empty AST and let
+ * the guard tests and the validator surface the regression.
+ */
+type ParsedManifestation = {
+  documentAst: DocumentAst | EmptyAst;
+  sections: DecisionSection[] | undefined;
+  fulltext: string | undefined;
+  keywords: string[];
+};
+
+const parseManifestation = (
+  input: ParseEcjDecisionInput,
+): ParsedManifestation => {
+  try {
+    const parsed = parseEcjDecisionHtml(input);
+    // A parse that lost source text is worse than no parse: the reader
+    // renders the AST, so the missing paragraphs would be invisible.
+    // Fall through to the stripped-text fallback, which keeps
+    // everything, and let the ERROR the validator already logged say
+    // which decision needs the parser fixed.
+    const lostContent = parsed.validationIssues.some(
+      (code) => code === "CONTENT_LOSS" || code === "MISSING_WORDS",
+    );
+    if (parsed.documentAst.blocks.length > 0 && !lostContent) {
+      return {
+        documentAst: parsed.documentAst,
+        sections: sectionsFromAst(parsed.documentAst.blocks),
+        fulltext: parsed.fulltext,
+        keywords: parsed.keywords,
+      };
+    }
+  } catch (error) {
+    captureError(
+      new TelemetryError({
+        message: `[eu-ecj] parse failed for ${input.celex}`,
+        cause: error,
+      }),
+    );
+  }
+
+  const text = stripHtml(input.html).trim();
+  return {
+    documentAst: EMPTY_AST,
+    sections: undefined,
+    fulltext: text.length > MIN_DOCUMENT_LENGTH ? text : undefined,
+    keywords: [],
+  };
+};
+
+/** Crawl delay between decisions (not between language variants). */
+const CRAWL_DELAY_MS = 500;
+
+/** First day the Court sat; the widest range a CELEX lookup can need. */
+const COURT_EPOCH = "1952-01-01";
+
+type FetchDecisionsByCelexOptions = {
+  celexNumbers: readonly string[];
+  /** Restrict to these languages; all published languages when omitted. */
+  languages?: readonly EcjLanguage[];
+  signal: AbortSignal;
+};
+
+/**
+ * Ingest named decisions by CELEX number, through the adapter's own
+ * query and build path.
+ *
+ * The crawl reaches a decision by walking to its publication date,
+ * which is the wrong shape for recording fixtures or backfilling a
+ * specific case. This takes the same bindings the crawl would have
+ * seen and runs them through the same `buildDecision`.
+ */
+export const fetchDecisionsByCelex = async ({
+  celexNumbers,
+  languages,
+  signal,
+}: FetchDecisionsByCelexOptions): Promise<IngestionResult[]> => {
+  // An empty filter emits no FILTER clause, which would turn a lookup
+  // for named decisions into an unbounded sweep of the whole corpus.
+  if (celexNumbers.length === 0) {
+    return [];
+  }
+
+  const bindings = await queryDecisions({
+    dateFrom: COURT_EPOCH,
+    dateTo: toIsoDate(new Date()),
+    celexFilter: celexNumbers,
+    signal,
+  });
+
+  const decisions: IngestionResult[] = [];
+  const seen = new Set<string>();
+  for (const binding of bindings) {
+    const lang = toEcjLanguage(binding.language.value);
+    if (lang === undefined || (languages && !languages.includes(lang))) {
+      continue;
+    }
+    // A work can expose several XHTML manifestations of one language
+    // (re-publications); the first is the one the crawl would take.
+    const variantKey = `${binding.celex.value}:${lang}`;
+    if (seen.has(variantKey)) {
+      continue;
+    }
+    seen.add(variantKey);
+    // oxlint-disable-next-line no-await-in-loop -- rate-limited external calls stay sequential instead of fanning out across every manifestation
+    const decision = await buildDecision(binding, signal);
+    if (decision) {
+      decisions.push(decision);
+    }
+  }
+  return decisions;
+};
+
+/**
+ * Turn one SPARQL binding into an ingestion result: fetch the language
+ * variant's XHTML manifestation, parse it, and attach the metadata the
+ * query already resolved.
+ *
+ * Exported so fixture recording goes through the same path the crawl
+ * does; a fixture that drifts from adapter output is worse than none.
+ */
+export const buildDecision = async (
+  binding: SparqlResult,
+  signal: AbortSignal,
+): Promise<IngestionResult | undefined> => {
+  const celex = binding.celex.value;
+  const ecli = binding.ecli.value;
+  const date = binding.date.value;
+  const caseNumber = celexToCaseNumber(celex);
+  const decisionType = CDM_TYPE_MAP[binding.type.value] ?? "unknown";
+  const lang = toEcjLanguage(binding.language.value);
+  const documentUrl = toCellarContentUrl(binding.manifestation.value);
+
+  if (!lang || !documentUrl) {
+    return undefined;
+  }
+
+  const court = ecli.includes(":T:") ? "General Court" : "Court of Justice";
+
+  // Fetch the language-specific XHTML stream from Cellar. The
+  // human-facing EUR-Lex HTML endpoint is WAF-protected and may return
+  // a challenge instead of document content to server-side callers.
+  const html = await fetchManifestation({
+    contentUrl: documentUrl,
+    celex,
+    lang,
+    signal: AbortSignal.any([
+      signal,
+      AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+    ]),
+  });
+
+  if (!html) {
+    return undefined;
+  }
+
+  const sourceUrl = eurLexSourceUrl(lang, celex);
+  const { documentAst, sections, fulltext, keywords } = parseManifestation({
+    caseNumber,
+    ecli,
+    court,
+    decisionDate: date,
+    decisionType,
+    sourceUrl,
+    celex,
+    html,
+  });
+
+  if (!fulltext) {
+    return undefined;
+  }
+
+  const language = lang.toLowerCase();
+
+  return {
+    caseNumber,
+    ecli,
+    court,
+    country: "EU",
+    language,
+    decisionDate: date,
+    decisionType,
+    fulltext,
+    sourceUrl,
+    documentUrl,
+    metadata: {
+      celex,
+      ecli,
+      decisionDate: date,
+      decisionType,
+      keywords,
+      manifestationUri: binding.manifestation.value,
+      languageUri: binding.language.value,
+      cdmType: binding.type.value,
+    },
+    rawHash: hashContent(`${celex}|${ecli}|${date}|${language}|${fulltext}`),
+    parserVersion: PARSER_VERSION,
+    documentAst,
+    sections,
+    sourceRaw: html,
+    sourceRawContentType: "application/xhtml+xml",
+  };
 };
 
 // -- Date helpers --
@@ -439,77 +655,31 @@ export const euEcjAdapter: SourceAdapter = {
         const completedVariants = new Set<string>();
         let previousCelex: string | undefined;
 
-        // 2. Process each SPARQL result
+        // 2. Fetch and parse each language variant
         for (const binding of bindings) {
           if (abortSignal.aborted) {
             break;
           }
+
           const celex = binding.celex.value;
-          const ecli = binding.ecli.value;
-          const date = binding.date.value;
-          const caseNumber = celexToCaseNumber(celex);
-          const decisionType = CDM_TYPE_MAP[binding.type.value] ?? "unknown";
-          const lang = toEcjLanguage(binding.language.value);
-          const documentUrl = toCellarContentUrl(binding.manifestation.value);
-
-          if (!lang || !documentUrl) {
-            continue;
-          }
-
-          const variantKey = `${celex}:${lang}`;
+          const variantKey = `${celex}:${binding.language.value}`;
           if (completedVariants.has(variantKey)) {
             continue;
           }
 
-          if (previousCelex && previousCelex !== celex) {
+          if (previousCelex !== undefined && previousCelex !== celex) {
             // oxlint-disable-next-line no-await-in-loop -- deliberate crawl delay between decisions; language variants within one decision remain contiguous and unslept
-            await Bun.sleep(500);
+            await Bun.sleep(CRAWL_DELAY_MS);
           }
           previousCelex = celex;
 
-          const court = ecli.includes(":T:")
-            ? "General Court"
-            : "Court of Justice";
-
-          // 3. Fetch the language-specific XHTML stream from Cellar. The
-          // human-facing EUR-Lex HTML endpoint is WAF-protected and may return
-          // a challenge instead of document content to server-side callers.
           // oxlint-disable-next-line no-await-in-loop -- rate-limited external calls stay sequential instead of fanning out across every language manifestation
-          const fulltext = await fetchFulltext({
-            contentUrl: documentUrl,
-            celex,
-            lang,
-            signal: AbortSignal.any([
-              abortSignal,
-              AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-            ]),
-          });
-
-          if (!fulltext) {
+          const decision = await buildDecision(binding, abortSignal);
+          if (!decision) {
             continue;
           }
 
-          const langLower = lang.toLowerCase();
-          const raw = `${celex}|${ecli}|${date}|${langLower}|${fulltext}`;
-
-          decisions.push({
-            caseNumber,
-            ecli,
-            court,
-            country: "EU",
-            language: langLower,
-            decisionDate: date,
-            decisionType,
-            fulltext,
-            sourceUrl: eurLexSourceUrl(lang, celex),
-            documentUrl,
-            metadata: { celex },
-            rawHash: hashContent(raw),
-            parserVersion: PARSER_VERSION,
-            // Court-specific AST parsing is not available for Cellar yet.
-            documentAst: EMPTY_AST,
-            sourceRaw: undefined,
-          });
+          decisions.push(decision);
           completedVariants.add(variantKey);
         }
 
