@@ -45,7 +45,9 @@ export type ResolvedExternalMcpTool = {
  * a `tools/call` with a retryable error instead of a non-retryable
  * `unknown_tool`. The underlying failure was captured at the load site.
  */
-export const gatewayLoadErrorResult = (error: unknown): CallToolResult | null =>
+export const gatewayLoadErrorResult = (
+  error: unknown,
+): CallToolResult | null =>
   error instanceof McpGatewayLoadError
     ? structuredErrorResult({
         code: "internal_error",

@@ -16,7 +16,9 @@ const EMAIL_EXTENSION_MIME_TYPES: Record<string, string> = {
 };
 const MARKDOWN_EXTENSIONS = [".md", ".markdown"] as const;
 
-export const isEmailMimeType = (mimeType: string | null | undefined): boolean =>
+export const isEmailMimeType = (
+  mimeType: string | null | undefined,
+): boolean =>
   mimeType === undefined || mimeType === null
     ? false
     : EMAIL_MIME_TYPES.includes(mimeType);

@@ -95,7 +95,9 @@ const FIELD_TYPE_CHOICES = [
 
 /** What the type picker (and the field row) shows: "company" when a lookup
  *  is configured, the manifest input type otherwise. */
-const fieldTypeChoice = (field: TemplateEditableField): InputType | "company" =>
+const fieldTypeChoice = (
+  field: TemplateEditableField,
+): InputType | "company" =>
   field.lookup === undefined ? field.inputType : "company";
 
 const PART_INPUT_TYPES = ["text", "select"] as const;
