@@ -573,7 +573,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_templates",
     "scope": "stella:templates",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration (path, label, inputType, required, hint, options, optionsFrom, aiPrompt / aiAdapt, date format, composite parts, registry-lookup formats) plus its named conditions and formula fields; feed the same shape to save_template to update it.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration (path, label, inputType, required, hint, options, optionsFrom, aiPrompt / aiAdapt, date format, composite parts, registry-lookup formats) plus its named conditions and formula fields; feed the same shape to save_template to update it. \`required\` controls form validation; omitted optional scalar placeholders render blank.",
     "annotations": {
       "readOnlyHint": true,
       "openWorldHint": false
@@ -2660,7 +2660,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "list_templates",
     "scope": "stella:templates_anonymized",
     "access": "read",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration (path, label, inputType, required, hint, options, optionsFrom, aiPrompt / aiAdapt, date format, composite parts, registry-lookup formats) plus its named conditions and formula fields; feed the same shape to save_template to update it.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration (path, label, inputType, required, hint, options, optionsFrom, aiPrompt / aiAdapt, date format, composite parts, registry-lookup formats) plus its named conditions and formula fields; feed the same shape to save_template to update it. \`required\` controls form validation; omitted optional scalar placeholders render blank.",
     "annotations": {
       "readOnlyHint": true,
       "openWorldHint": false

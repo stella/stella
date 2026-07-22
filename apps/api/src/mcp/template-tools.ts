@@ -377,7 +377,8 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "configuration (path, label, inputType, required, hint, options, " +
       "optionsFrom, aiPrompt / aiAdapt, date format, composite parts, " +
       "registry-lookup formats) plus its named conditions and formula fields; " +
-      "feed the same shape to save_template to update it.",
+      "feed the same shape to save_template to update it. `required` controls " +
+      "form validation; omitted optional scalar placeholders render blank.",
     inputSchema: {
       type: "object",
       properties: {
@@ -744,11 +745,11 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     return structuredErrorResult({
       code: "validation_error",
       message: `Unused template value keys: ${preview.join(", ")}${suffix}`,
-      issues: preview.map((key) => ({
+      issues: filled.inputRejection.keys.map((key) => ({
         path: `values.${key}`,
         message: "Value key does not match a template field",
       })),
-      hint: "Correct the value keys using list_templates detail mode, or set allow_unused_values to true when the extra keys are intentional.",
+      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and correct the value keys, or set allow_unused_values to true when the extra keys are intentional.",
     });
   }
 
@@ -782,11 +783,11 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     return structuredErrorResult({
       code: "validation_error",
       message: `Template fill incomplete; unmatched placeholders: ${preview.join(", ")}${suffix}`,
-      issues: preview.map((placeholder) => ({
+      issues: completion.unmatchedPlaceholders.map((placeholder) => ({
         path: `values.${placeholder}`,
         message: "Template placeholder was not filled",
       })),
-      hint: "Use list_templates detail mode to provide the missing values, or set completion_mode to allow_partial when an incomplete document is intentional.",
+      hint: "Call list_templates with template_id (CLI: template list --template-id ID) and provide the missing values, or set completion_mode to allow_partial when an incomplete document is intentional.",
     });
   }
 
