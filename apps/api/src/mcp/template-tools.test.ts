@@ -10,6 +10,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const describeStoredTemplateMock = mock();
 const fillStoredTemplateWithTextMock = mock();
+const fillStoredTemplateWithTextStrictMock = mock();
 const createStoredTemplateMock = mock();
 const recordTemplateFillMock = mock();
 const configureTemplateFieldsMock = mock();
@@ -41,8 +42,11 @@ void mock.module("@/api/lib/anonymization-blacklist", () => ({
 void mock.module("@/api/handlers/templates/template-fill-service", () => ({
   describeStoredTemplate: describeStoredTemplateMock,
   fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
+  fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
   fillStoredTemplate: mock(),
   fillStoredTemplateDocx: mock(),
+  fillTemplateDocx: mock(),
+  fillTemplateDocxStrict: mock(),
 }));
 
 void mock.module("@/api/handlers/templates/create-template-service", () => ({
@@ -168,6 +172,7 @@ describe("MCP template tools", () => {
   beforeEach(() => {
     describeStoredTemplateMock.mockReset();
     fillStoredTemplateWithTextMock.mockReset();
+    fillStoredTemplateWithTextStrictMock.mockReset();
     createStoredTemplateMock.mockReset();
     recordTemplateFillMock.mockReset();
     configureTemplateFieldsMock.mockReset();
@@ -476,7 +481,7 @@ describe("MCP template tools", () => {
 
   test("fill_template returns rendered text plus the DOCX as base64", async () => {
     const docxBytes = Buffer.from("PK filled docx bytes");
-    fillStoredTemplateWithTextMock.mockResolvedValue({
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
       fileName: "lease.docx",
       buffer: docxBytes,
@@ -491,7 +496,7 @@ describe("MCP template tools", () => {
       toolName: "fill_template",
     });
 
-    expect(fillStoredTemplateWithTextMock).toHaveBeenCalledWith(
+    expect(fillStoredTemplateWithTextStrictMock).toHaveBeenCalledWith(
       expect.objectContaining({
         templateId: "t1",
         values: { "tenant.name": "ACME" },
@@ -520,13 +525,11 @@ describe("MCP template tools", () => {
   });
 
   test("fill_template rejects non-empty unused values by default", async () => {
-    fillStoredTemplateWithTextMock.mockResolvedValue({
-      templateName: "Lease",
-      fileName: "lease.docx",
-      buffer: Buffer.from("filled"),
-      text: "Lease",
-      unmatchedPlaceholders: [],
-      unusedValues: ["first", "second"],
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      inputRejection: {
+        type: "unused-values",
+        keys: ["first", "second"],
+      },
     });
 
     const result = await handleMcpToolCall({
@@ -542,6 +545,7 @@ describe("MCP template tools", () => {
         message: "Unused template value keys: first, second",
       }),
     );
+    expect(recordTemplateFillMock).not.toHaveBeenCalled();
   });
 
   test("fill_template permits intentional unused values only with an explicit override", async () => {
@@ -568,6 +572,8 @@ describe("MCP template tools", () => {
     expect(parseToolPayload(result)).toEqual(
       expect.objectContaining({ unusedValues: ["intentional"] }),
     );
+    expect(fillStoredTemplateWithTextMock).toHaveBeenCalled();
+    expect(fillStoredTemplateWithTextStrictMock).not.toHaveBeenCalled();
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
       expect.objectContaining({ unusedCount: 1 }),
     );
@@ -577,7 +583,7 @@ describe("MCP template tools", () => {
     // The fill service runs the usage preflight only when the template declares
     // AI fields; an over-quota org gets a rejection the MCP tool surfaces
     // instead of spending model calls.
-    fillStoredTemplateWithTextMock.mockResolvedValue({
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       usageRejection: { message: "Monthly AI usage limit reached." },
     });
 

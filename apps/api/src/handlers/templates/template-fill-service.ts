@@ -47,10 +47,24 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { getS3 } from "@/api/lib/s3";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 
+import { findUnusedTemplateValueKeys } from "./template-input-contract";
+
 // Data a template is filled with: open-ended field-path → value map (paths come
 // from the template's manifest/markers, not a fixed entity), patched in place
 // with resolved clause slots and AI-drafted fields before fill.
 type FillValues = Record<string, unknown>;
+
+type UnusedValuePolicy = "allow" | "reject";
+
+type TemplateInputRejection = {
+  type: "unused-values";
+  keys: string[];
+};
+
+type FillRejection<TUsageRejection> =
+  | { error: string }
+  | { inputRejection: TemplateInputRejection }
+  | { usageRejection: TUsageRejection };
 
 const loadTemplate = async (
   templateId: SafeId<"template">,
@@ -264,6 +278,11 @@ type FillDocxOptions<TRejection = never> = Omit<
   source: FillTemplateSource;
 };
 
+type FillDocxWithPolicyOptions<TRejection = never> =
+  FillDocxOptions<TRejection> & {
+    unusedValuePolicy: UnusedValuePolicy;
+  };
+
 /**
  * Shared fill recipe over an already-loaded DOCX: resolve clause slots (stored
  * templates only), run the manifest fill steps (lookups, composites, formulas,
@@ -272,7 +291,7 @@ type FillDocxOptions<TRejection = never> = Omit<
  * fill below and the built-in report export, so a template fills identically at
  * every boundary.
  */
-export const fillTemplateDocx = async <TRejection = never>({
+const fillTemplateDocxWithPolicy = async <TRejection = never>({
   source,
   values,
   scopedDb,
@@ -283,11 +302,24 @@ export const fillTemplateDocx = async <TRejection = never>({
   adaptAiValue,
   assertUsageAvailable,
   workspaceId,
-}: FillDocxOptions<TRejection>): Promise<
-  FilledDocx | { error: string } | { usageRejection: TRejection }
+  unusedValuePolicy,
+}: FillDocxWithPolicyOptions<TRejection>): Promise<
+  FilledDocx | FillRejection<TRejection>
 > => {
   const loaded = source;
   const { templateId } = source;
+
+  if (unusedValuePolicy === "reject") {
+    const unusedKeys = await findUnusedTemplateValueKeys({
+      buffer: loaded.buffer,
+      values,
+    });
+    if (unusedKeys.length > 0) {
+      return {
+        inputRejection: { type: "unused-values", keys: unusedKeys },
+      };
+    }
+  }
 
   let record: FillValues = { ...values };
 
@@ -428,6 +460,27 @@ export const fillTemplateDocx = async <TRejection = never>({
   };
 };
 
+export const fillTemplateDocx = async <TRejection = never>(
+  options: FillDocxOptions<TRejection>,
+): Promise<FilledDocx | { error: string } | { usageRejection: TRejection }> => {
+  const filled = await fillTemplateDocxWithPolicy({
+    ...options,
+    unusedValuePolicy: "allow",
+  });
+  if ("inputRejection" in filled) {
+    panic("allow-policy template fill returned an input rejection");
+  }
+  return filled;
+};
+
+export const fillTemplateDocxStrict = async <TRejection = never>(
+  options: FillDocxOptions<TRejection>,
+): Promise<FilledDocx | FillRejection<TRejection>> =>
+  await fillTemplateDocxWithPolicy({
+    ...options,
+    unusedValuePolicy: "reject",
+  });
+
 /**
  * Load a stored template's DOCX from S3 and fill it via {@link fillTemplateDocx}.
  * Mirrors the fill-by-id route's pipeline so a stored template fills identically
@@ -486,19 +539,15 @@ export type FillTemplateWithDocxResult =
     }
   | { error: string };
 
-export const fillStoredTemplateWithText = async <TRejection = never>(
-  options: FillServiceOptions<TRejection>,
-): Promise<FillTemplateWithDocxResult | { usageRejection: TRejection }> => {
-  const filled = await fillStoredTemplateDocx(options);
-  if ("usageRejection" in filled) {
-    return filled;
-  }
-  if ("error" in filled) {
-    return filled;
-  }
+type FilledTemplateWithText = Exclude<
+  FillTemplateWithDocxResult,
+  { error: string }
+>;
 
+const withExtractedText = async (
+  filled: FilledDocx,
+): Promise<FilledTemplateWithText> => {
   const { paragraphs } = await extractText(filled.buffer);
-
   return {
     templateName: filled.templateName,
     fileName: filled.fileName,
@@ -510,6 +559,45 @@ export const fillStoredTemplateWithText = async <TRejection = never>(
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
   };
+};
+
+export const fillStoredTemplateWithText = async <TRejection = never>(
+  options: FillServiceOptions<TRejection>,
+): Promise<FillTemplateWithDocxResult | { usageRejection: TRejection }> => {
+  const filled = await fillStoredTemplateDocx(options);
+  if ("usageRejection" in filled) {
+    return filled;
+  }
+  if ("error" in filled) {
+    return filled;
+  }
+
+  return await withExtractedText(filled);
+};
+
+export const fillStoredTemplateWithTextStrict = async <TRejection = never>(
+  options: FillServiceOptions<TRejection>,
+): Promise<
+  | FillTemplateWithDocxResult
+  | { inputRejection: TemplateInputRejection }
+  | { usageRejection: TRejection }
+> => {
+  const loaded = await loadTemplate(options.templateId, options.scopedDb);
+  if (!loaded) {
+    return { error: "Template not found." };
+  }
+  const filled = await fillTemplateDocxStrict({
+    ...options,
+    source: { ...loaded, templateId: options.templateId },
+  });
+  if ("usageRejection" in filled || "inputRejection" in filled) {
+    return filled;
+  }
+  if ("error" in filled) {
+    return filled;
+  }
+
+  return await withExtractedText(filled);
 };
 
 export const fillStoredTemplate = async (

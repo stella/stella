@@ -20,6 +20,7 @@ import type { DescribeTemplateResult } from "@/api/handlers/templates/template-f
 import {
   describeStoredTemplate,
   fillStoredTemplateWithText,
+  fillStoredTemplateWithTextStrict,
 } from "@/api/handlers/templates/template-fill-service";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -702,7 +703,11 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
           })
       : undefined;
 
-  const filled = await fillStoredTemplateWithText({
+  const fillStoredTemplate =
+    parsed.output.allow_unused_values === true
+      ? fillStoredTemplateWithText
+      : fillStoredTemplateWithTextStrict;
+  const filled = await fillStoredTemplate({
     templateId: brandPersistedTemplateId(parsed.output.template_id),
     values: parsed.output.values,
     scopedDb: context.scopedDb,
@@ -718,12 +723,9 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   if ("error" in filled) {
     return errorResult(filled.error);
   }
-  if (
-    filled.unusedValues.length > 0 &&
-    parsed.output.allow_unused_values !== true
-  ) {
-    const preview = filled.unusedValues.slice(0, 10);
-    const omitted = filled.unusedValues.length - preview.length;
+  if ("inputRejection" in filled) {
+    const preview = filled.inputRejection.keys.slice(0, 10);
+    const omitted = filled.inputRejection.keys.length - preview.length;
     const suffix = omitted > 0 ? ` (${omitted} more omitted)` : "";
     return structuredErrorResult({
       code: "validation_error",
