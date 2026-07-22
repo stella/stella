@@ -15,6 +15,11 @@ import { INPUT_TYPES, isFieldMeta } from "@/api/handlers/docx/types";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import { createStoredTemplate } from "@/api/handlers/templates/create-template-service";
 import { recordTemplateFill } from "@/api/handlers/templates/record-use";
+import {
+  decideTemplateFillCompletion,
+  DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+  TEMPLATE_FILL_COMPLETION_MODES,
+} from "@/api/handlers/templates/template-fill-completion";
 import type { DescribeTemplateResult } from "@/api/handlers/templates/template-fill-service";
 import {
   describeStoredTemplate,
@@ -408,7 +413,9 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "fields are resolved automatically; AI-fillable fields are drafted when " +
       "you omit them. Value keys that do not match template fields fail by " +
       "default; set allow_unused_values only when extra keys are intentional. " +
-      "Returns the rendered text and any placeholders left unfilled.",
+      "Unfilled placeholders fail by default; set completion_mode to " +
+      "allow_partial only when an incomplete document is intentional. Returns " +
+      "the rendered text and completionStatus.",
     inputSchema: {
       type: "object",
       properties: {
@@ -422,6 +429,13 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
           type: "boolean",
           description:
             "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
+        },
+        completion_mode: {
+          ...enumProp(
+            "Whether every placeholder must be filled. Defaults to require_complete; use allow_partial only when an incomplete document is intentional.",
+            TEMPLATE_FILL_COMPLETION_MODES,
+          ),
+          default: DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
         },
       },
       required: ["template_id", "values"],
@@ -630,6 +644,10 @@ const fillTemplateArgsSchema = v.strictObject({
   template_id: v.pipe(v.string(), v.minLength(1)),
   values: v.record(v.string(), v.unknown()),
   allow_unused_values: v.optional(v.boolean()),
+  completion_mode: v.optional(
+    v.picklist(TEMPLATE_FILL_COMPLETION_MODES),
+    DEFAULT_TEMPLATE_FILL_COMPLETION_MODE,
+  ),
 });
 
 const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
@@ -757,9 +775,32 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     )
     .catch(captureError);
 
+  const completion = decideTemplateFillCompletion({
+    mode: parsed.output.completion_mode,
+    unmatchedPlaceholders: filled.unmatchedPlaceholders,
+  });
+  if (completion.type === "rejected_partial") {
+    const preview = completion.unmatchedPlaceholders.slice(0, 10);
+    const omitted = completion.unmatchedPlaceholders.length - preview.length;
+    const suffix = omitted > 0 ? ` (${omitted} more omitted)` : "";
+    return structuredErrorResult({
+      code: "validation_error",
+      message: `Template fill incomplete; unmatched placeholders: ${preview.join(", ")}${suffix}`,
+      issues: preview.map((placeholder) => ({
+        path: `values.${placeholder}`,
+        message: "Template placeholder was not filled",
+      })),
+      hint: "Use list_templates detail mode to provide the missing values, or set completion_mode to allow_partial when an incomplete document is intentional.",
+    });
+  }
+
+  const completionStatus =
+    completion.type === "complete" ? "complete" : "partial";
+
   const truncated = filled.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS;
 
   return textResult({
+    completionStatus,
     templateName: filled.templateName,
     fileName: filled.fileName,
     text: truncated

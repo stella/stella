@@ -603,7 +603,7 @@
       "scope": "templates"
     },
     "name": "fill_template",
-    "description": "Fill a template with values and return the assembled document text plus the filled DOCX as base64. Call list_templates with a template_id first to learn the field paths. 'values' maps each field path to its value, e.g. {\"tenant.name\": \"ACME Sp. z o.o.\", \"signing_date\": \"2026-06-08\"}. Registry lookups, composite fields, formula fields, and AI-fillable fields are resolved automatically; AI-fillable fields are drafted when you omit them. Value keys that do not match template fields fail by default; set allow_unused_values only when extra keys are intentional. Returns the rendered text and any placeholders left unfilled.",
+    "description": "Fill a template with values and return the assembled document text plus the filled DOCX as base64. Call list_templates with a template_id first to learn the field paths. 'values' maps each field path to its value, e.g. {\"tenant.name\": \"ACME Sp. z o.o.\", \"signing_date\": \"2026-06-08\"}. Registry lookups, composite fields, formula fields, and AI-fillable fields are resolved automatically; AI-fillable fields are drafted when you omit them. Value keys that do not match template fields fail by default; set allow_unused_values only when extra keys are intentional. Unfilled placeholders fail by default; set completion_mode to allow_partial only when an incomplete document is intentional. Returns the rendered text and completionStatus.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -619,6 +619,12 @@
         "allow_unused_values": {
           "type": "boolean",
           "description": "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly."
+        },
+        "completion_mode": {
+          "type": "string",
+          "enum": ["require_complete", "allow_partial"],
+          "description": "Whether every placeholder must be filled. Defaults to require_complete; use allow_partial only when an incomplete document is intentional.",
+          "default": "require_complete"
         }
       },
       "required": ["template_id", "values"]
