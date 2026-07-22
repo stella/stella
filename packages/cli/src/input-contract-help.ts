@@ -128,20 +128,28 @@ const findComposedExample = (
   return search(0);
 };
 
-const mapValueSchema = (schema: JsonSchema): JsonSchema | undefined => {
+type MapEntrySchema = {
+  keyPattern?: string;
+  valueSchema: JsonSchema;
+};
+
+const mapEntrySchemas = (schema: JsonSchema): MapEntrySchema[] => {
+  const entries: MapEntrySchema[] = [];
+  const patterns = schema["patternProperties"];
+  if (isRecord(patterns)) {
+    for (const [keyPattern, valueSchema] of Object.entries(patterns)) {
+      if (isRecord(valueSchema)) {
+        entries.push({ keyPattern, valueSchema });
+      }
+    }
+  }
   const additional = schema["additionalProperties"];
   if (additional === true) {
-    return {};
+    entries.push({ valueSchema: {} });
+  } else if (isRecord(additional)) {
+    entries.push({ valueSchema: additional });
   }
-  if (isRecord(additional)) {
-    return additional;
-  }
-  const patterns = schema["patternProperties"];
-  if (!isRecord(patterns)) {
-    return undefined;
-  }
-  const first = Object.values(patterns).find(isRecord);
-  return first;
+  return entries;
 };
 
 const scalarTypeLabel = (schema: JsonSchema): string => {
@@ -201,6 +209,38 @@ const lineFor = ({
 }): string => {
   const suffix = description === undefined ? "" : ` — ${description}`;
   return `${"  ".repeat(indent)}${path}  ${type}  ${required ? "required" : "optional"}${suffix}`;
+};
+
+const renderMapEntries = ({
+  path,
+  entries,
+  required,
+  description,
+  indent,
+  lines,
+}: {
+  path: string;
+  entries: readonly MapEntrySchema[];
+  required: boolean;
+  description: string | undefined;
+  indent: number;
+  lines: string[];
+}): void => {
+  for (const { keyPattern, valueSchema } of entries) {
+    const valueType = scalarTypeLabel(valueSchema);
+    lines.push(
+      lineFor({
+        path: `${path}.<key>`,
+        type:
+          keyPattern === undefined || keyPattern === "^(.*)$"
+            ? valueType
+            : `${valueType}; key matches ${keyPattern}`,
+        required,
+        description,
+        indent,
+      }),
+    );
+  }
 };
 
 const renderSchema = ({
@@ -289,20 +329,39 @@ const renderSchema = ({
     Object.keys(properties).length > 0 ||
     intersections.some(describesObject)
   ) {
-    const mapValue = mapValueSchema(schema);
+    const mapEntries = mapEntrySchemas(schema);
     const freeMap =
-      mapValue !== undefined && Object.keys(properties).length === 0;
+      mapEntries.length > 0 && Object.keys(properties).length === 0;
+    if (freeMap) {
+      renderMapEntries({
+        path,
+        entries: mapEntries,
+        required,
+        description: descriptionOf(schema),
+        indent,
+        lines,
+      });
+      return;
+    }
     lines.push(
       lineFor({
-        path: freeMap ? `${path}.<key>` : path,
-        type: freeMap ? scalarTypeLabel(mapValue) : "object",
+        path,
+        type: "object",
         required,
         description: descriptionOf(schema),
         indent,
       }),
     );
-    if (!freeMap) {
-      renderObjectChildren({ path, schema, indent: indent + 1, lines });
+    renderObjectChildren({ path, schema, indent: indent + 1, lines });
+    if (mapEntries.length > 0) {
+      renderMapEntries({
+        path,
+        entries: mapEntries,
+        required,
+        description: descriptionOf(schema),
+        indent: indent + 1,
+        lines,
+      });
     }
     return;
   }
@@ -552,6 +611,28 @@ const literalPatternFragment = (pattern: string): string | undefined => {
     fragment += character;
   }
   return fragment.length === 0 ? undefined : fragment;
+};
+
+const keyExampleForPattern = (pattern: string): string | undefined => {
+  const compiled = compileSchemaPattern(pattern);
+  if (compiled.status === "invalid") {
+    return undefined;
+  }
+  const bounded = boundedPatternExample({}, pattern);
+  const fragment = literalPatternFragment(pattern);
+  const candidates = [
+    bounded,
+    fragment === undefined ? undefined : `${fragment}key`,
+    fragment,
+    "key",
+    "meta-key",
+    "x",
+    "0",
+  ];
+  return candidates.find(
+    (candidate): candidate is string =>
+      candidate !== undefined && compiled.regex.test(candidate),
+  );
 };
 
 const numericKeywordAcrossAllOf = (
@@ -860,9 +941,15 @@ const exampleFor = (schema: JsonSchema): unknown => {
         result[name] = exampleFor(child);
       }
     }
-    const mapValue = mapValueSchema(schema);
-    if (mapValue !== undefined) {
-      result["key"] = exampleFor(mapValue);
+    const mapEntry = mapEntrySchemas(schema).at(0);
+    if (mapEntry !== undefined) {
+      const key =
+        mapEntry.keyPattern === undefined
+          ? "key"
+          : keyExampleForPattern(mapEntry.keyPattern);
+      if (key !== undefined) {
+        result[key] = exampleFor(mapEntry.valueSchema);
+      }
     }
     return result;
   }

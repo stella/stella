@@ -608,6 +608,31 @@ describe("--input contract help", () => {
     expect(completeExample(help)).toEqual({ metadata: { key: "xxxxx" } });
   });
 
+  test("documents and exemplifies dynamic keys beside named properties", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          properties: { token: { type: "string" } },
+          patternProperties: { "^meta-": { type: "string" } },
+          required: ["token"],
+        },
+      },
+      required: ["body"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(help?.fields).toContain("  body.token  string  required");
+    expect(help?.fields).toContain(
+      "  body.<key>  string; key matches ^meta-  required",
+    );
+    expect(completeExample(help)).toEqual({
+      body: { token: "xxxxx", "meta-key": "xxxxx" },
+    });
+  });
+
   test("shell-quotes apostrophes in generated examples", () => {
     expect(formatInputExample({ value: "client's" })).toBe(
       `--input '{"value":"client'\\''s"}'`,
