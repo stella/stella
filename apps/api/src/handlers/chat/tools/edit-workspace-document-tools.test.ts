@@ -646,10 +646,9 @@ describe("createEditWorkspaceDocumentTools", () => {
     }
 
     const block = await firstBlock(s3FileBuffer);
-    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
-    // type-aware lint; capture the rejection explicitly instead.
-    const rejection = await Promise.resolve(
-      execute(
+    let rejection: unknown;
+    try {
+      await execute(
         {
           baseVersionId: entityVersionId,
           version: 1,
@@ -663,11 +662,10 @@ describe("createEditWorkspaceDocumentTools", () => {
           ],
         },
         asTestRaw<Parameters<typeof execute>[1]>({}),
-      ),
-    ).then(
-      () => null,
-      (error: unknown) => error,
-    );
+      );
+    } catch (error: unknown) {
+      rejection = error;
+    }
     expect(rejection).toBeInstanceOf(Error);
     expect(rejection instanceof Error ? rejection.message : "").toContain(
       "Embedded executable content",
