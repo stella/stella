@@ -10,7 +10,10 @@ import {
   buildApplication,
   buildCommand,
   buildRouteMap,
+  help,
   run,
+  text_en,
+  version,
 } from "@stricli/core";
 import type { StricliProcess } from "@stricli/core";
 import { Result } from "better-result";
@@ -85,15 +88,41 @@ const buildApp = (tree: RouteNode) => {
     },
   });
 
-  return buildApplication(rootRoute, {
-    name: "stella",
-    // Renders (and accepts) multi-word flags as kebab-case, e.g. the
-    // `keychain` flag's auto-generated negation as `--no-keychain` rather
-    // than `--noKeychain` — matches the documented command surface and every
-    // other kebab-case CLI convention (gh, npm, docker).
-    scanner: { caseStyle: "allow-kebab-for-camel" },
-    versionInfo: { currentVersion: packageJson.version },
-  });
+  const helpFormatting = {
+    useAliasInUsageLine: false,
+    onlyRequiredInUsageLine: false,
+    caseStyle: "convert-camel-to-kebab",
+  } as const;
+
+  return buildApplication(
+    rootRoute,
+    {
+      name: "stella",
+      // Renders (and accepts) multi-word flags as kebab-case, e.g. the
+      // `keychain` flag's auto-generated negation as `--no-keychain` rather
+      // than `--noKeychain` — matches the documented command surface and every
+      // other kebab-case CLI convention (gh, npm, docker).
+      scanner: { caseStyle: "allow-kebab-for-camel" },
+    },
+    {
+      help: help({
+        brief: text_en.briefs.help,
+        defaultForRouteMap: true,
+        formatting: helpFormatting,
+      }),
+      helpAll: help({
+        brief: text_en.briefs.helpAll,
+        alias: "H",
+        hidden: true,
+        includeHidden: true,
+        formatting: helpFormatting,
+      }),
+      version: version({
+        brief: text_en.briefs.version,
+        info: { currentVersion: packageJson.version },
+      }),
+    },
+  );
 };
 
 const resolvePreamble = async (): Promise<{

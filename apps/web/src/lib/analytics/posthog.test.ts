@@ -97,7 +97,6 @@ describe("PostHog browser analytics adapter", () => {
     createPostHogAnalytics("phc_test", "https://posthog.test");
 
     expect(initOptions).toMatchObject({
-      advanced_disable_decide: true,
       advanced_disable_feature_flags: true,
       advanced_disable_flags: true,
       autocapture: false,
