@@ -762,6 +762,31 @@ describe("--input contract help", () => {
     });
   });
 
+  test("documents and exemplifies typeless dynamic maps through allOf", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          allOf: [
+            {
+              patternProperties: { "^meta-": { type: "string" } },
+            },
+          ],
+        },
+      },
+      required: ["body"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(help?.fields).toContain(
+      "body.<key>  string; key matches ^meta-  required",
+    );
+    expect(completeExample(help)).toEqual({
+      body: { "meta-key": "xxxxx" },
+    });
+  });
+
   test.each([
     [
       { additionalProperties: true },

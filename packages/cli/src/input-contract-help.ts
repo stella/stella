@@ -92,9 +92,15 @@ const alternativeGroupsAcrossAllOf = (
   ...allOf(schema).flatMap(alternativeGroupsAcrossAllOf),
 ];
 
+const hasDirectDynamicObjectKeys = (schema: JsonSchema): boolean =>
+  schema["additionalProperties"] === true ||
+  isRecord(schema["additionalProperties"]) ||
+  isRecord(schema["patternProperties"]);
+
 const describesObject = (schema: JsonSchema): boolean =>
   schemaTypes(schema).includes("object") ||
   Object.keys(propertiesOf(schema)).length > 0 ||
+  hasDirectDynamicObjectKeys(schema) ||
   allOf(schema).some(describesObject);
 
 const hasNamedPropertiesAcrossAllOf = (schema: JsonSchema): boolean =>
@@ -350,12 +356,13 @@ const renderSchema = ({
 
   const properties = propertiesOf(schema);
   const intersections = allOf(schema);
+  const mapEntries = mapEntrySchemas(schema);
   if (
     types.includes("object") ||
     Object.keys(properties).length > 0 ||
-    intersections.some(describesObject)
+    intersections.some(describesObject) ||
+    mapEntries.length > 0
   ) {
-    const mapEntries = mapEntrySchemas(schema);
     const freeMap =
       mapEntries.length > 0 && !hasNamedPropertiesAcrossAllOf(schema);
     if (freeMap) {
@@ -956,10 +963,7 @@ const exampleFor = (schema: JsonSchema): unknown => {
   ) {
     return defaultValue;
   }
-  if (
-    types.includes("object") ||
-    Object.keys(propertiesOf(schema)).length > 0
-  ) {
+  if (describesObject(schema)) {
     const result: Record<string, unknown> = {};
     for (const name of requiredOf(schema)) {
       const child = propertiesOf(schema)[name];
