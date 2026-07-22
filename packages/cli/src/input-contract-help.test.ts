@@ -75,6 +75,49 @@ describe("--input contract help", () => {
     expect(rendered).toContain("body.entityId  string  required");
   });
 
+  test("documents every branch of an array item union", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        events: {
+          type: "array",
+          items: {
+            anyOf: [
+              {
+                type: "object",
+                properties: {
+                  type: { type: "string", const: "created" },
+                  createdAt: { type: "string" },
+                },
+                required: ["type", "createdAt"],
+              },
+              {
+                type: "object",
+                properties: {
+                  type: { type: "string", const: "deleted" },
+                  reason: { type: "string" },
+                },
+                required: ["type", "reason"],
+              },
+            ],
+          },
+        },
+      },
+      required: ["events"],
+    };
+
+    const help = buildInputContractHelp({
+      schema,
+      inputOnly: ["events"],
+    });
+    const rendered = help?.fields.join("\n") ?? "";
+
+    expect(rendered).toContain('variant 1, type = "created"');
+    expect(rendered).toContain("events[].createdAt  string  required");
+    expect(rendered).toContain('variant 2, type = "deleted"');
+    expect(rendered).toContain("events[].reason  string  required");
+  });
+
   test("derives nested requiredness from the field's immediate parent", () => {
     const schema: JsonSchema = {
       type: "object",

@@ -174,7 +174,15 @@ const renderSchema = ({
         indent,
       }),
     );
-    if (
+    if (itemSchema !== undefined && anyOf(itemSchema).length > 0) {
+      renderSchema({
+        path: `${path}[]`,
+        schema: itemSchema,
+        required: true,
+        indent: indent + 1,
+        lines,
+      });
+    } else if (
       itemSchema !== undefined &&
       Object.keys(propertiesOf(itemSchema)).length > 0
     ) {

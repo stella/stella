@@ -125,6 +125,11 @@ const requiredSet = (schema: JsonSchema | undefined): ReadonlySet<string> => {
   return new Set(raw.filter((r): r is string => typeof r === "string"));
 };
 
+const hasDynamicObjectKeys = (schema: JsonSchema): boolean =>
+  schema["additionalProperties"] === true ||
+  isRecord(schema["additionalProperties"]) ||
+  isRecord(schema["patternProperties"]);
+
 /**
  * The input part carrying the `cursor`+`limit` pagination pair (query wins over
  * body when both somehow declare it), or `undefined` for a non-paginated
@@ -169,7 +174,7 @@ const candidatesForPart = ({
   if (
     schema !== undefined &&
     Object.keys(properties).length === 0 &&
-    (Array.isArray(schema["anyOf"]) || schema["additionalProperties"] === true)
+    (Array.isArray(schema["anyOf"]) || hasDynamicObjectKeys(schema))
   ) {
     inputOnly.push(part);
   }

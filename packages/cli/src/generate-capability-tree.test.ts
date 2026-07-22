@@ -77,6 +77,28 @@ describe("capabilityCommandPath", () => {
 });
 
 describe("deriveCapabilityLeaf: flags", () => {
+  test("property-less dynamic maps make the whole input part input-only", () => {
+    const dynamicSchemas = [
+      { type: "object", additionalProperties: { type: "string" } },
+      {
+        type: "object",
+        patternProperties: { "^meta-": { type: "string" } },
+      },
+    ];
+
+    for (const body of dynamicSchemas) {
+      const { spec } = deriveCapabilityLeaf(
+        entry({
+          id: "metadata.replace",
+          inputSchema: { body },
+        }),
+      );
+
+      expect(spec.flags).toHaveLength(0);
+      expect(spec.inputOnly).toEqual(["body"]);
+    }
+  });
+
   test("scalar body props become bare flags routed to input.body", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({
