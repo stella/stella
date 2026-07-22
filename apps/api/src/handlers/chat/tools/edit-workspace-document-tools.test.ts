@@ -505,7 +505,15 @@ describe("createEditWorkspaceDocumentTools", () => {
       "00000000-0000-0000-0000-000000000011",
     );
     expect(computeVersionDiffStatsMock).toHaveBeenCalledTimes(1);
-    expect(processExtractionMock).toHaveBeenCalledTimes(1);
+    expect(processExtractionMock).toHaveBeenCalledWith(entityId, {
+      filePropertyId: propertyId,
+    });
+    expect(recordedAuditEvents).toEqual([
+      [
+        expect.objectContaining({ workspaceId }),
+        expect.objectContaining({ workspaceId }),
+      ],
+    ]);
   });
 
   test("direct mode applies without tracked-changes markup", async () => {

@@ -1886,6 +1886,18 @@ describe("chat tool schemas", () => {
         expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
         expect(tools).not.toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
       });
+
+      test("validation accepts pending DOCX calls after the selector mode changes", () => {
+        for (const editApplyMode of ["auto", "manual"] as const) {
+          const tools = getChatTools({
+            ...mutualExclusionArgs,
+            editApplyMode,
+            includeAllDocxEditToolsForValidation: true,
+          });
+          expect(tools).toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+          expect(tools).toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+        }
+      });
     });
   });
 });

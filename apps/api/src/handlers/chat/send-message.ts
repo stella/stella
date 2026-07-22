@@ -455,6 +455,7 @@ const sendMessage = createSafeRootHandler(
         hasActiveDocxFileClient: true,
         editApplyMode,
         docxEditRepresentation,
+        includeAllDocxEditToolsForValidation: true,
         webSearchEnabled: validationThreadState.webSearchEnabled,
         webSearchProviders,
         externalTools: externalToolsForValidation,

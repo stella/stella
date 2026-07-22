@@ -419,6 +419,14 @@ type GetChatToolsProps = {
    * Ignored in `manual` mode.
    */
   docxEditRepresentation?: DocxEditRepresentation | undefined;
+  /**
+   * Validation-only widening for continuation messages. A pending DOCX tool
+   * call was issued under the mode selected on the previous request, so its
+   * call/result must remain schema-valid even if the user changed the composer
+   * mode before approving it. Live streaming callers must leave this false so
+   * the model still receives exactly one DOCX edit tool.
+   */
+  includeAllDocxEditToolsForValidation?: boolean | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -553,6 +561,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     workspaceStatusById,
     editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
     docxEditRepresentation = DEFAULT_DOCX_EDIT_REPRESENTATION,
+    includeAllDocxEditToolsForValidation = false,
   } = props;
 
   const orgTools = createOrgTools({
@@ -630,9 +639,22 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     workspaceStatusById,
   });
   const activeDocxEditTools =
-    registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual
+    registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual ||
+    (includeAllDocxEditToolsForValidation && hasActiveDocxEditClient)
       ? createActiveDocxEditTools()
       : {};
+  const automaticDocxEditAvailableForValidation =
+    includeAllDocxEditToolsForValidation &&
+    resolveRegisteredDocxEditMode({
+      activeFile,
+      editApplyMode: CHAT_EDIT_APPLY_MODE.auto,
+      hasActiveDocxEditClient,
+      memberRole,
+      recordAuditEventAvailable: recordAuditEvent !== undefined,
+      requestWorkspaceId,
+      toolWorkspaceIds,
+      workspaceStatusById,
+    }) === CHAT_EDIT_APPLY_MODE.auto;
   // Narrower than `apply-active-docx-edits` above: only the file
   // overlay mounts the auto-run watcher that resolves these via
   // `addToolResult` (see `hasActiveDocxFileClient` doc comment).
@@ -770,7 +792,8 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   //   - `recordAuditEvent` present, since `createEntityVersionFromBuffer`
   //     always writes an audit event.
   const editWorkspaceDocumentTools =
-    registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto &&
+    (registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto ||
+      automaticDocxEditAvailableForValidation) &&
     activeFile !== undefined &&
     activeFile.fileFieldId !== undefined &&
     requestWorkspaceId !== null &&

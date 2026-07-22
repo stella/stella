@@ -373,6 +373,7 @@ export const createEntityVersionFromBuffer = async ({
         action: AUDIT_ACTION.CREATE,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY_VERSION,
         resourceId: nextVersionId,
+        workspaceId,
         changes: {
           created: {
             old: null,
@@ -397,6 +398,7 @@ export const createEntityVersionFromBuffer = async ({
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
         resourceId: entityId,
+        workspaceId,
         changes: {
           currentVersionId: {
             old: freshCurrentVersionId,
@@ -441,7 +443,7 @@ export const createEntityVersionFromBuffer = async ({
   const versionNumber = writeResult.value.versionNumber;
 
   detached(
-    processExtraction(entityId),
+    processExtraction(entityId, { filePropertyId }),
     "edit-workspace-document.process-extraction",
   );
   detached(
