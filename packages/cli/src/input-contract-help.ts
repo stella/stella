@@ -288,6 +288,17 @@ const renderSchema = ({
       }
     }
     renderObjectChildren({ path, schema, indent: indent + 1, lines });
+    const mapEntries = mapEntrySchemas(schema);
+    if (mapEntries.length > 0) {
+      renderMapEntries({
+        path,
+        entries: mapEntries,
+        required,
+        description: descriptionOf(schema),
+        indent: indent + 1,
+        lines,
+      });
+    }
     return;
   }
 

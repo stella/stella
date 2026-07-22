@@ -710,6 +710,35 @@ describe("--input contract help", () => {
     );
   });
 
+  test.each(["anyOf", "oneOf"] as const)(
+    "documents shared dynamic keys beside %s variants",
+    (keyword) => {
+      const schema: JsonSchema = {
+        type: "object",
+        properties: {
+          body: {
+            type: "object",
+            [keyword]: [
+              {
+                type: "object",
+                properties: { kind: { const: "a", type: "string" } },
+                required: ["kind"],
+              },
+            ],
+            patternProperties: { "^meta-": { type: "string" } },
+          },
+        },
+        required: ["body"],
+      };
+
+      const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+      expect(help?.fields).toContain(
+        "  body.<key>  string; key matches ^meta-  required",
+      );
+    },
+  );
+
   test("shell-quotes apostrophes in generated examples", () => {
     expect(formatInputExample({ value: "client's" })).toBe(
       `--input '{"value":"client'\\''s"}'`,
