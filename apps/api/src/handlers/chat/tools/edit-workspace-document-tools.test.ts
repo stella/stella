@@ -317,6 +317,24 @@ describe("createEditWorkspaceDocumentTools", () => {
     }
   });
 
+  test("keeps omitted operation ids deterministic across repeated validation", async () => {
+    const input = {
+      version: 1 as const,
+      operations: [
+        {
+          type: "deleteBlock" as const,
+          blockId: "b-1",
+        },
+      ],
+    };
+
+    const first = await validateInput(input);
+    const second = await validateInput(input);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual({ value: input });
+  });
+
   test("returns a structured author_name_required outcome (no version written) when no author name is configured", async () => {
     const { tx } = buildTx({ preferredName: null, name: "   " });
     const { safeDb } = createScopedDbMock(tx);
@@ -342,7 +360,6 @@ describe("createEditWorkspaceDocumentTools", () => {
         version: 1,
         operations: [
           {
-            id: "op-1",
             type: "replaceInBlock",
             blockId: block.id,
             find: "quick",
@@ -464,7 +481,6 @@ describe("createEditWorkspaceDocumentTools", () => {
         version: 1,
         operations: [
           {
-            id: "op-1",
             type: "replaceInBlock",
             blockId: block.id,
             find: "quick",
@@ -480,7 +496,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     }
     expect(result).toMatchObject({
       representation: "tracked-changes",
-      applied: [{ id: "op-1" }],
+      applied: [{ id: expect.stringMatching(/^auto-/u) }],
       skipped: [],
     });
     expect(s3WriteMock).toHaveBeenCalledTimes(1);

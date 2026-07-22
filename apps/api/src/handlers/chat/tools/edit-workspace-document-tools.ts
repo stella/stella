@@ -255,9 +255,13 @@ const narrowOperation = ({
   return stripped;
 };
 
+type WithOptionalOperationId<T> = T extends { id: string }
+  ? Omit<T, "id"> & { id?: string }
+  : T;
+
 type ValidatedEditWorkspaceDocumentInput = {
   version: typeof FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION;
-  operations: FolioAIEditOperation[];
+  operations: WithOptionalOperationId<FolioAIEditOperation>[];
 };
 
 const validateEditWorkspaceDocumentInput = (
@@ -301,11 +305,7 @@ const validateEditWorkspaceDocumentInput = (
     if (strippedOperation === null) {
       continue;
     }
-    parseable.push(
-      strippedOperation["id"] === undefined
-        ? { ...strippedOperation, id: `auto-${Bun.randomUUIDv7()}` }
-        : strippedOperation,
-    );
+    parseable.push(strippedOperation);
   }
 
   if (issues.length > 0) {
@@ -314,9 +314,14 @@ const validateEditWorkspaceDocumentInput = (
 
   // No await: folio's batch schema is a synchronous valibot schema (see
   // `active-docx-edit-tool.ts`'s identical comment on this exact call).
+  const operationsForValidation = parseable.map((operation, index) =>
+    operation["id"] === undefined
+      ? { ...operation, id: `validation-${String(index)}` }
+      : operation,
+  );
   const folioResult = folioDocumentOperationBatchSchema["~standard"].validate({
     version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
-    operations: parseable,
+    operations: operationsForValidation,
   });
   if (folioResult.issues !== undefined) {
     return { issues: folioResult.issues };
@@ -326,11 +331,12 @@ const validateEditWorkspaceDocumentInput = (
     value: {
       version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
       // SAFETY: folio's strict batch parser just validated every
-      // operation's shape against the same contract the derived JSON
-      // schema advertises; `parseable` differs from it only by the
-      // generated placeholder ids, which are validation-only.
+      // operation's shape against the same contract the derived JSON schema
+      // advertises. Missing ids were supplied with deterministic placeholders
+      // only for that parser call; the returned shape deliberately preserves
+      // their absence so repeated arguments/input validation stays identical.
       // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see the SAFETY note above; the parser validated the exact shape
-      operations: parseable as FolioAIEditOperation[],
+      operations: parseable as WithOptionalOperationId<FolioAIEditOperation>[],
     },
   };
 };
@@ -507,6 +513,12 @@ export const createEditWorkspaceDocumentTools = ({
     inputSchema: inputToolSchema,
     outputSchema: toTanStackToolSchema(outputSchema),
   }).server(async ({ operations }) => {
+    const operationsWithIds: FolioAIEditOperation[] = operations.map(
+      (operation) => ({
+        ...operation,
+        id: operation.id ?? `auto-${Bun.randomUUIDv7()}`,
+      }),
+    );
     const authorName = await resolveDocxEditAuthorName({ safeDb, userId });
     const authorRequired =
       docxEditRepresentation === DOCX_EDIT_REPRESENTATION.trackedChanges ||
@@ -543,7 +555,7 @@ export const createEditWorkspaceDocumentTools = ({
 
     const applied = await applyFolioAIEditsToBuffer(
       loaded.value.buffer,
-      operations,
+      operationsWithIds,
       {
         author: authorName ?? "",
         mode: docxEditRepresentation,
