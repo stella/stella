@@ -99,6 +99,30 @@ describe("deriveCapabilityLeaf: flags", () => {
     }
   });
 
+  test("allOf-inherited dynamic maps make the whole input part input-only", () => {
+    const { spec } = deriveCapabilityLeaf(
+      entry({
+        id: "metadata.replace",
+        inputSchema: {
+          body: {
+            allOf: [
+              {
+                allOf: [
+                  {
+                    patternProperties: { "^meta-": { type: "string" } },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(spec.flags).toHaveLength(0);
+    expect(spec.inputOnly).toEqual(["body"]);
+  });
+
   test("property-less oneOf bodies make the whole input part input-only", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({

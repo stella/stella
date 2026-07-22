@@ -133,6 +133,20 @@ const hasDynamicObjectKeys = (schema: JsonSchema): boolean =>
 const hasSchemaAlternatives = (schema: JsonSchema): boolean =>
   Array.isArray(schema["anyOf"]) || Array.isArray(schema["oneOf"]);
 
+const requiresWholePartInput = (schema: JsonSchema): boolean => {
+  if (hasSchemaAlternatives(schema) || hasDynamicObjectKeys(schema)) {
+    return true;
+  }
+  const intersections = schema["allOf"];
+  return (
+    Array.isArray(intersections) &&
+    intersections.some(
+      (intersection) =>
+        isRecord(intersection) && requiresWholePartInput(intersection),
+    )
+  );
+};
+
 /**
  * The input part carrying the `cursor`+`limit` pagination pair (query wins over
  * body when both somehow declare it), or `undefined` for a non-paginated
@@ -175,8 +189,7 @@ const candidatesForPart = ({
 }): Candidate[] => {
   const properties = propertyMap(schema);
   const wholePartInputOnly =
-    schema !== undefined &&
-    (hasSchemaAlternatives(schema) || hasDynamicObjectKeys(schema));
+    schema !== undefined && requiresWholePartInput(schema);
   if (wholePartInputOnly) {
     inputOnly.push(part);
   }
