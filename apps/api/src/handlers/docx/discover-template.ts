@@ -8,6 +8,7 @@
  * array, object) and `structureErrors` for mismatched blocks.
  */
 
+import { panic } from "better-result";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
@@ -152,6 +153,49 @@ const qualifyRowScopedPath = (
   }
   const innermostRowPath = rowPaths.at(-1);
   return innermostRowPath === undefined ? path : `${innermostRowPath}.${path}`;
+};
+
+type RowScope = {
+  declaredPath: string;
+  scopedPath: string;
+};
+
+const rowScopePaths = (rowScopes: readonly RowScope[]): string[] =>
+  rowScopes.map(({ scopedPath }) => scopedPath);
+
+const qualifyRowScopedPlaceholder = (
+  path: string,
+  rowScopes: readonly RowScope[],
+): string => {
+  if (
+    rowScopes.some(
+      ({ scopedPath }) =>
+        path === scopedPath || path.startsWith(`${scopedPath}.`),
+    )
+  ) {
+    return path;
+  }
+  for (const { declaredPath, scopedPath } of rowScopes.toReversed()) {
+    if (path === declaredPath) {
+      return scopedPath;
+    }
+    const declaredPrefix = `${declaredPath}.`;
+    if (path.startsWith(declaredPrefix)) {
+      return `${scopedPath}.${path.slice(declaredPrefix.length)}`;
+    }
+  }
+  return path;
+};
+
+const requireRowScopes = (
+  arrayScopes: ReadonlyMap<number, readonly RowScope[]>,
+  paragraphIndex: number,
+): readonly RowScope[] => {
+  const scopes = arrayScopes.get(paragraphIndex);
+  if (scopes === undefined) {
+    panic(`Missing loop scope for paragraph ${paragraphIndex}`);
+  }
+  return scopes;
 };
 
 // ── Condition map building ─────────────────────────────
@@ -379,8 +423,8 @@ const analyzeContainer = (
   // The active loop path makes an unqualified condition available both as a
   // global input and as a row-local input, matching the fill evaluator's
   // global context overlaid with each row.
-  const arrayScopes = new Map<number, readonly string[]>();
-  const activeArrays: string[] = [];
+  const arrayScopes = new Map<number, readonly RowScope[]>();
+  const activeArrays: RowScope[] = [];
   const directiveByParagraph = new Map(
     directives.map((directive) => [directive.paragraphIndex, directive]),
   );
@@ -390,11 +434,22 @@ const analyzeContainer = (
       activeArrays.pop();
     }
     if (directive?.kind === "if" || directive?.kind === "elseif") {
-      registerConditionFields(fields, directive.expression, activeArrays);
+      registerConditionFields(
+        fields,
+        directive.expression,
+        rowScopePaths(activeArrays),
+      );
     }
     if (directive?.kind === "each") {
-      registerField(fields, directive.expression, "array");
-      activeArrays.push(directive.expression);
+      const scopedPath = qualifyRowScopedPath(
+        directive.expression,
+        rowScopePaths(activeArrays),
+      );
+      registerField(fields, scopedPath, "array");
+      activeArrays.push({
+        declaredPath: directive.expression,
+        scopedPath,
+      });
     }
     arrayScopes.set(i, [...activeArrays]);
   }
@@ -415,10 +470,18 @@ const analyzeContainer = (
   // 2. Analyze blocks for field types
   for (const block of blocks) {
     if (block.kind === "each") {
-      registerField(fields, block.arrayPath, "array");
+      const blockScope = requireRowScopes(
+        arrayScopes,
+        block.contentStart - 1,
+      ).at(-1);
+      if (blockScope === undefined) {
+        panic(`Missing loop scope for block ${block.arrayPath}`);
+      }
+      const arrayPath = blockScope.scopedPath;
+      registerField(fields, arrayPath, "array");
 
       // Scan content paragraphs for item field references
-      const entry = fields.get(block.arrayPath);
+      const entry = fields.get(arrayPath);
       for (let i = block.contentStart; i < block.contentEnd; i++) {
         const para = paragraphs[i];
         if (!para) {
@@ -480,7 +543,7 @@ const analyzeContainer = (
         if (group.kind === "each") {
           const scopedPath = qualifyRowScopedPath(
             group.arrayPath,
-            arrayScopes.get(i),
+            rowScopePaths(requireRowScopes(arrayScopes, i)),
           );
           registerField(fields, scopedPath, "array");
           inlineLoopScopes.push({
@@ -503,7 +566,11 @@ const analyzeContainer = (
 
         const priorConditions: string[] = [];
         for (const branch of group.branches) {
-          registerConditionFields(fields, branch.condition, arrayScopes.get(i));
+          registerConditionFields(
+            fields,
+            branch.condition,
+            rowScopePaths(requireRowScopes(arrayScopes, i)),
+          );
           const branchCondition =
             branch.condition === ""
               ? priorConditions.map(negateExpr).join(" and ")
@@ -540,10 +607,15 @@ const analyzeContainer = (
         ({ end, start }) => start <= match.index && match.index < end,
       );
       const declaredLoopPrefix = `${loopScope?.declaredPath ?? ""}.`;
-      const name =
+      const inlineScopedName =
         loopScope !== undefined && declaredName.startsWith(declaredLoopPrefix)
           ? `${loopScope.scopedPath}.${declaredName.slice(declaredLoopPrefix.length)}`
           : declaredName;
+      const scopedArrayPaths = requireRowScopes(arrayScopes, i);
+      const name = qualifyRowScopedPlaceholder(
+        inlineScopedName,
+        scopedArrayPaths,
+      );
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
 
       const inlineCondition = inlineBranchConditions.find(
@@ -573,9 +645,8 @@ const analyzeContainer = (
       // Register the full path as string
       registerField(fields, name, "string");
 
-      const scopedArrayPaths = arrayScopes.get(i);
-      if (scopedArrayPaths !== undefined) {
-        for (const arrayPath of scopedArrayPaths) {
+      if (scopedArrayPaths.length > 0) {
+        for (const { scopedPath: arrayPath } of scopedArrayPaths) {
           const prefix = `${arrayPath}.`;
           if (name.startsWith(prefix)) {
             fields.get(arrayPath)?.itemPaths.add(name.slice(prefix.length));

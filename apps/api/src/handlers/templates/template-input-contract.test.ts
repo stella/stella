@@ -138,6 +138,30 @@ describe("template input contract", () => {
     ).toEqual(["tags"]);
   });
 
+  test("raw loops only accept primitive rows when value is their sole field", () => {
+    const sources = collectRawTemplateInputSources({
+      fields: [
+        {
+          path: "tags",
+          kind: "array",
+          itemFields: [
+            { path: "value", kind: "string" },
+            { path: "label", kind: "string" },
+          ],
+        },
+      ],
+      placeholderPaths: ["tags.value", "tags.label"],
+    });
+    expect(sources.primitiveArrayPaths).toEqual([]);
+    const contract = collectTemplateInputKeys({ type: "raw", ...sources });
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: { tags: ["urgent"] },
+      }),
+    ).toEqual(["tags"]);
+  });
+
   test("raw dotted value loops preserve their nested primitive contract", () => {
     const sources = collectRawTemplateInputSources({
       fields: [

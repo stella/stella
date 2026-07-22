@@ -66,7 +66,8 @@ export const collectRawTemplateInputSources = ({
     }
     if (
       field.kind === "array" &&
-      itemFields?.some((itemField) => itemField.path === "value")
+      itemFields?.length === 1 &&
+      itemFields[0]?.path === "value"
     ) {
       primitiveArrayPaths.push(path);
     }
