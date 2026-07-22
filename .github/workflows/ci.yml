@@ -574,6 +574,16 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run typecheck -- "${args[@]}"
 
+      - name: Result consumption
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+        run: |
+          if [[ -z "$AFFECTED_FLAG" ]]; then
+            bun run check:result-consumption -- --all
+          else
+            bun run check:result-consumption -- --base "$TURBO_SCM_BASE"
+          fi
+
   # Typecheck-cost baseline guard. What silently rots is the compiler's
   # workload: an annotation-heavy or inference-exploding pattern in a hot
   # generic path (Eden surface, route trees, query options) lands as

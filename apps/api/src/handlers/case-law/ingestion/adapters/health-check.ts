@@ -159,7 +159,9 @@ export const checkAdapterHealth = async (
       };
     }
 
-    const page = result.unwrap();
+    const page = result.unwrap(
+      "Adapter page result was checked for a health-check error",
+    );
     const fields = ALL_CHECKED_FIELDS.map((f) => checkField(page.decisions, f));
 
     // Determine status

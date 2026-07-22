@@ -71,7 +71,9 @@ const updateAdapter = async (
       };
     }
 
-    const page = result.unwrap();
+    const page = result.unwrap(
+      "Adapter page result was checked for an ingestion error",
+    );
     const record: FixtureRecord = {
       adapter: adapterKey,
       recordedAt: new Date().toISOString(),

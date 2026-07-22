@@ -109,6 +109,7 @@ export const deleteEntitiesHandler = async function* ({
       organizationId,
       workspaceId,
     }),
+    "Entity file cleanup must succeed before deleting database records",
   );
 
   // Cascade: entities → entityVersions → fields →

@@ -80,7 +80,7 @@ export const createToolFunction = <
       phase: "input",
       schema: contract.input,
       value: rawInput,
-    }).unwrap();
+    }).unwrap("Tool input must satisfy its registered contract");
 
     signal.throwIfAborted();
 
@@ -98,8 +98,10 @@ export const createToolFunction = <
       contractName: contract.name,
       phase: "output",
       schema: contract.output,
-      value: handlerResult.unwrap(),
-    }).unwrap();
+      value: handlerResult.unwrap(
+        "Tool execution must succeed before output validation",
+      ),
+    }).unwrap("Tool output must satisfy its registered contract");
   },
   functionSchema: contract.schema,
   inputSchema: contract.input,
