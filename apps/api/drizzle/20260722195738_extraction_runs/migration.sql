@@ -29,7 +29,7 @@ ALTER TABLE "extraction_runs" ADD CONSTRAINT "extraction_runs_requested_by_user_
 CREATE INDEX "extraction_runs_workspace_created_idx" ON "extraction_runs" ("workspace_id", "created_at" DESC NULLS LAST, "id");--> statement-breakpoint
 CREATE INDEX "extraction_runs_workspace_active_idx" ON "extraction_runs" ("workspace_id", "updated_at") WHERE "status" IN ('planning', 'running', 'finalizing');--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "extraction_runs" TO stella;--> statement-breakpoint
-CREATE POLICY "workspace_select" ON "extraction_runs" AS PERMISSIVE FOR SELECT TO "stella" USING (CASE
+CREATE POLICY "extraction_runs_workspace_select" ON "extraction_runs" AS PERMISSIVE FOR SELECT TO "stella" USING ((CASE
   WHEN workspace_id = ANY(
     COALESCE(
       NULLIF(
@@ -46,8 +46,10 @@ CREATE POLICY "workspace_select" ON "extraction_runs" AS PERMISSIVE FOR SELECT T
     SELECT aw.authorized_workspace_id
     FROM public.stella_authorized_workspaces aw
   )
-END);--> statement-breakpoint
-CREATE POLICY "workspace_insert" ON "extraction_runs" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (CASE
+END) AND organization_id = (SELECT current_setting(
+  'app.organization_id', true
+)));--> statement-breakpoint
+CREATE POLICY "extraction_runs_workspace_insert" ON "extraction_runs" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK ((CASE
   WHEN workspace_id = ANY(
     COALESCE(
       NULLIF(
@@ -64,8 +66,10 @@ CREATE POLICY "workspace_insert" ON "extraction_runs" AS PERMISSIVE FOR INSERT T
     SELECT aw.authorized_workspace_id
     FROM public.stella_authorized_workspaces aw
   )
-END);--> statement-breakpoint
-CREATE POLICY "workspace_update" ON "extraction_runs" AS PERMISSIVE FOR UPDATE TO "stella" USING (CASE
+END) AND organization_id = (SELECT current_setting(
+  'app.organization_id', true
+)));--> statement-breakpoint
+CREATE POLICY "extraction_runs_workspace_update" ON "extraction_runs" AS PERMISSIVE FOR UPDATE TO "stella" USING ((CASE
   WHEN workspace_id = ANY(
     COALESCE(
       NULLIF(
@@ -82,8 +86,10 @@ CREATE POLICY "workspace_update" ON "extraction_runs" AS PERMISSIVE FOR UPDATE T
     SELECT aw.authorized_workspace_id
     FROM public.stella_authorized_workspaces aw
   )
-END);--> statement-breakpoint
-CREATE POLICY "workspace_delete" ON "extraction_runs" AS PERMISSIVE FOR DELETE TO "stella" USING (CASE
+END) AND organization_id = (SELECT current_setting(
+  'app.organization_id', true
+)));--> statement-breakpoint
+CREATE POLICY "extraction_runs_workspace_delete" ON "extraction_runs" AS PERMISSIVE FOR DELETE TO "stella" USING ((CASE
   WHEN workspace_id = ANY(
     COALESCE(
       NULLIF(
@@ -100,11 +106,6 @@ CREATE POLICY "workspace_delete" ON "extraction_runs" AS PERMISSIVE FOR DELETE T
     SELECT aw.authorized_workspace_id
     FROM public.stella_authorized_workspaces aw
   )
-END);--> statement-breakpoint
-CREATE POLICY "extraction_runs_organization_scope" ON "extraction_runs" AS RESTRICTIVE FOR ALL TO "stella" USING (organization_id =
-  (SELECT current_setting(
-    'app.organization_id', true
-  ))) WITH CHECK (organization_id =
-  (SELECT current_setting(
-    'app.organization_id', true
-  )));
+END) AND organization_id = (SELECT current_setting(
+  'app.organization_id', true
+)));

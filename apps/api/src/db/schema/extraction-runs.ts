@@ -2,14 +2,12 @@ import { sql } from "drizzle-orm";
 
 import {
   organization,
-  organizationCheck,
   p,
   pUuid,
   safeOrganizationId,
   safeWorkspaceId,
-  stella,
   user,
-  wsPolicies,
+  wsOrganizationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
 
@@ -99,17 +97,6 @@ export const extractionRuns = p.pgTable(
       "extraction_runs_completed_within_total_check",
       sql`${table.completed} <= ${table.total}`,
     ),
-    ...wsPolicies(),
-    // Workspace authorization is necessary but not sufficient for a table
-    // that also carries organization_id. Keep the org discriminator aligned
-    // with the transaction even if a root-only writer is later exposed through
-    // an RLS-scoped path.
-    p.pgPolicy("extraction_runs_organization_scope", {
-      as: "restrictive",
-      for: "all",
-      to: stella,
-      using: organizationCheck,
-      withCheck: organizationCheck,
-    }),
+    ...wsOrganizationPolicies("extraction_runs"),
   ],
 );

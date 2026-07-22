@@ -6,10 +6,12 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { extractionRuns, workspaces } from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -210,6 +212,58 @@ describe("extraction run store contract", () => {
       status: "planning",
       total: 0,
     });
+  });
+
+  test("requires both workspace and organization scope for app-role writes", async () => {
+    const policyResult = await testDb.execute<{
+      cmd: string;
+      policyName: string;
+      usingExpression: string | null;
+      withCheckExpression: string | null;
+    }>(sql`
+      SELECT
+        cmd,
+        policyname AS "policyName",
+        qual AS "usingExpression",
+        with_check AS "withCheckExpression"
+      FROM pg_catalog.pg_policies
+      WHERE tablename = 'extraction_runs'
+    `);
+    expect(policyResult.rows).toHaveLength(4);
+    for (const policy of policyResult.rows) {
+      const expression =
+        policy.cmd === "INSERT"
+          ? policy.withCheckExpression
+          : policy.usingExpression;
+      expect(expression).toContain("organization_id");
+      expect(expression).toContain("app.organization_id");
+      expect(expression).toContain("workspace_id");
+    }
+
+    const scopedDb = asTestRaw<ScopedDb>(
+      createScopedDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const runId = createSafeId<"extractionRun">();
+
+    const rejection: unknown = await scopedDb(async (tx) => {
+      await tx.insert(extractionRuns).values({
+        id: runId,
+        organizationId: otherOrganizationId,
+        workspaceId,
+        requestedBy: userId,
+        scope: "workspace",
+      });
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
+    const [inserted] = await testDb
+      .select({ id: extractionRuns.id })
+      .from(extractionRuns)
+      .where(eq(extractionRuns.id, runId));
+    expect(inserted).toBeUndefined();
   });
 
   test("skips only planning runs", async () => {
