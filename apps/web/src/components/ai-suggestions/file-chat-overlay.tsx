@@ -1237,6 +1237,19 @@ const FileChatOverlayInner = ({
   // value absent until a real blocked tool exists.
   const blockedApprovalTools = undefined;
 
+  const getEditApplyMode =
+    activeDocxEditModeState.type === "unavailable"
+      ? undefined
+      : () => getLatestActiveDocxEditSelection()?.editApplyMode ?? "manual";
+  const getDocxEditRepresentation =
+    activeDocxEditModeState.type === "unavailable"
+      ? undefined
+      : () => {
+          const selection = getLatestActiveDocxEditSelection();
+          return selection
+            ? docxEditRepresentationForSelection(selection)
+            : undefined;
+        };
   const chatThreadContext = {
     allowMissingThread: true,
     getContextMatterIds,
@@ -1250,18 +1263,9 @@ const FileChatOverlayInner = ({
             handleActiveDocxEditToolCall(input),
         }
       : {}),
-    ...(activeDocxEditModeState.type !== "unavailable"
-      ? {
-          getEditApplyMode: () =>
-            getLatestActiveDocxEditSelection()?.editApplyMode ?? "manual",
-          getDocxEditRepresentation: () => {
-            const selection = getLatestActiveDocxEditSelection();
-            return selection
-              ? docxEditRepresentationForSelection(selection)
-              : undefined;
-          },
-        }
-      : {}),
+    ...(getEditApplyMode === undefined
+      ? {}
+      : { getEditApplyMode, getDocxEditRepresentation }),
   };
   const { data } = useSuspenseQuery(
     chatThreadOptions({
@@ -1328,6 +1332,8 @@ const FileChatOverlayInner = ({
   } = useChatSession({
     chat,
     conversationId: threadRef.threadId,
+    getDocxEditRepresentation,
+    getEditApplyMode,
     getSendMode,
     initialOlderCursor: data.olderCursor,
     threadRef,

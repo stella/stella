@@ -45,6 +45,10 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import type {
+  ChatEditApplyMode,
+  DocxEditRepresentation,
+} from "@/lib/chat-edit-mode";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { internalToolErrorMessage, toAPIError } from "@/lib/errors/api";
@@ -54,6 +58,7 @@ import {
   createInitialSendQueueState,
   describeQueuedMessage,
   reduceSendQueue,
+  snapshotChatRequestOptions,
   type QueuedChatEntry,
   type SendQueueEvent,
   type SendQueueState,
@@ -79,6 +84,10 @@ type CreateDocumentSuccess = Extract<CreateDocumentOutput, { success: true }>;
 type UseChatSessionOptions = {
   chat: ChatRuntime;
   conversationId: string;
+  getDocxEditRepresentation?:
+    | (() => DocxEditRepresentation | undefined)
+    | undefined;
+  getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
   initialOlderCursor: string | null;
@@ -131,6 +140,8 @@ const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 export const useChatSession = ({
   chat,
   conversationId,
+  getDocxEditRepresentation,
+  getEditApplyMode,
   getSendMode,
   initialOlderCursor,
   onError,
@@ -307,21 +318,23 @@ export const useChatSession = ({
     return dispatchedEntry;
   }, []);
 
-  const withSendModeSnapshot = useCallback(
+  const withRequestSnapshots = useCallback(
     (options?: ChatSendMessageOptions): ChatSendMessageOptions | undefined => {
       const sendMode = getSendMode?.();
-      if (sendMode === undefined) {
+      const editApplyMode = getEditApplyMode?.();
+      const docxEditRepresentation =
+        editApplyMode === undefined ? undefined : getDocxEditRepresentation?.();
+      if (sendMode === undefined && editApplyMode === undefined) {
         return options;
       }
-      return {
-        ...options,
-        body: {
-          sendMode,
-          ...options?.body,
-        },
-      };
+      return snapshotChatRequestOptions({
+        docxEditRepresentation,
+        editApplyMode,
+        options,
+        sendMode,
+      });
     },
-    [getSendMode],
+    [getDocxEditRepresentation, getEditApplyMode, getSendMode],
   );
 
   const enqueueMessage = useCallback(
@@ -359,7 +372,7 @@ export const useChatSession = ({
         applySendQueueEvent({ type: "conversation-switched", conversationId });
       }
 
-      const requestOptions = withSendModeSnapshot(options);
+      const requestOptions = withRequestSnapshots(options);
       if (sendQueueRef.current.isGenerating) {
         enqueueMessage(message, requestOptions);
         return;
@@ -387,7 +400,7 @@ export const useChatSession = ({
       dispatchQueuedMessage,
       enqueueMessage,
       sendChatMessage,
-      withSendModeSnapshot,
+      withRequestSnapshots,
     ],
   );
 
@@ -575,10 +588,15 @@ export const useChatSession = ({
           return { ...message, parts: nextParts };
         });
       setMessages(truncated);
-      const replayOptions = withSendModeSnapshot({
-        body: {
-          truncateAfterMessageId: toSafeId<"chatMessage">(targetMessage.id),
+      const replayOptions = snapshotChatRequestOptions({
+        docxEditRepresentation: undefined,
+        editApplyMode: undefined,
+        options: {
+          body: {
+            truncateAfterMessageId: toSafeId<"chatMessage">(targetMessage.id),
+          },
         },
+        sendMode: getSendMode?.(),
       });
       await addToolResult(
         {
@@ -589,7 +607,7 @@ export const useChatSession = ({
         replayOptions,
       );
     },
-    [addToolResult, messages, setMessages, withSendModeSnapshot],
+    [addToolResult, getSendMode, messages, setMessages],
   );
 
   const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
@@ -830,8 +848,8 @@ export const useChatSession = ({
       return;
     }
     // Preserve the request options the message was queued with —
-    // notably `body.sendMode` (anonymized / raw) snapshotted by
-    // withSendModeSnapshot at queue time. The manual drain path
+    // notably `body.sendMode` and the DOCX edit preferences snapshotted by
+    // withRequestSnapshots at queue time. The manual drain path
     // already passes them; the automatic drain must too, otherwise
     // toggling the mode between queueing and draining sends the
     // queued turn with the wrong mode.

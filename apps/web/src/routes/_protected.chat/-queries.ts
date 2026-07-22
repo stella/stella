@@ -26,6 +26,10 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
+import {
+  CHAT_EDIT_APPLY_MODE,
+  DOCX_EDIT_REPRESENTATION,
+} from "@/lib/chat-edit-mode";
 import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
@@ -350,6 +354,8 @@ export type ChatUserMessageInput = MultimodalContent & {
 };
 export type ChatRouteHandoffMessage = ChatUserMessageInput;
 export type ChatContinuationRequestBody = {
+  docxEditRepresentation?: DocxEditRepresentation | undefined;
+  editApplyMode?: ChatEditApplyMode | undefined;
   sendMode?: ChatSendMode | undefined;
   toolScope?: ChatToolScope | undefined;
   truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
@@ -1017,7 +1023,12 @@ export const buildSendRequestBody = ({
   }
 
   const { editApplyMode, docxEditRepresentation } =
-    resolveChatRequestDocxEditPreferences({ context, key, messages });
+    resolveChatRequestDocxEditPreferences({
+      context,
+      key,
+      messages,
+      requestBody,
+    });
   if (editApplyMode !== undefined) {
     body.editApplyMode = editApplyMode;
   }
@@ -1148,7 +1159,8 @@ const resolveChatRequestDocxEditPreferences = ({
   context,
   key,
   messages,
-}: Pick<ResolveChatRequestSendModeProps, "context" | "key" | "messages">): Omit<
+  requestBody,
+}: ResolveChatRequestSendModeProps): Omit<
   ActiveTurnDocxEditPreferences,
   "userMessageId"
 > => {
@@ -1158,7 +1170,15 @@ const resolveChatRequestDocxEditPreferences = ({
   const activeTurn = activeTurnDocxEditPreferences.get(threadKey);
   const persistedPreferences = userMessage?.metadata?.docxEditPreferences;
   let preferences: Omit<ActiveTurnDocxEditPreferences, "userMessageId">;
-  if (userMessageId !== null && activeTurn?.userMessageId === userMessageId) {
+  if (requestBody?.editApplyMode !== undefined) {
+    preferences = {
+      editApplyMode: requestBody.editApplyMode,
+      docxEditRepresentation: requestBody.docxEditRepresentation,
+    };
+  } else if (
+    userMessageId !== null &&
+    activeTurn?.userMessageId === userMessageId
+  ) {
     preferences = activeTurn;
   } else if (persistedPreferences !== undefined) {
     preferences = {
@@ -1203,6 +1223,19 @@ const normalizeChatContinuationRequestBody = (
   }
 
   const body: ChatContinuationRequestBody = {};
+  if (
+    data["editApplyMode"] === CHAT_EDIT_APPLY_MODE.auto ||
+    data["editApplyMode"] === CHAT_EDIT_APPLY_MODE.manual
+  ) {
+    body.editApplyMode = data["editApplyMode"];
+  }
+  if (
+    data["docxEditRepresentation"] ===
+      DOCX_EDIT_REPRESENTATION.trackedChanges ||
+    data["docxEditRepresentation"] === DOCX_EDIT_REPRESENTATION.direct
+  ) {
+    body.docxEditRepresentation = data["docxEditRepresentation"];
+  }
   if (isChatSendMode(data["sendMode"])) {
     body.sendMode = data["sendMode"];
   }

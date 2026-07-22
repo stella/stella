@@ -590,6 +590,35 @@ describe("buildSendRequestBody", () => {
     });
   });
 
+  test("uses enqueue-time DOCX preferences instead of live selectors", () => {
+    const threadId = toChatThreadId("thread-A");
+    const body = buildSendRequestBody({
+      context: {
+        getDocxEditRepresentation: () => "direct",
+        getEditApplyMode: () => "auto",
+      },
+      key: { scope: "global", threadId },
+      messages: [createMessage("queued-message")],
+      requestBody: {
+        docxEditRepresentation: "tracked-changes",
+        editApplyMode: "auto",
+      },
+    });
+
+    expect(body).toMatchObject({
+      docxEditRepresentation: "tracked-changes",
+      editApplyMode: "auto",
+      message: {
+        metadata: {
+          docxEditPreferences: {
+            docxEditRepresentation: "tracked-changes",
+            editApplyMode: "auto",
+          },
+        },
+      },
+    });
+  });
+
   test("forwards the replay truncation target for tool-result continuations", () => {
     const threadId = toChatThreadId("thread-A");
     const truncateAfterMessageId = toSafeId<"chatMessage">(

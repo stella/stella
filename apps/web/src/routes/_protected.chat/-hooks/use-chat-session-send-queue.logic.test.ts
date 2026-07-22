@@ -5,12 +5,43 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   createInitialSendQueueState,
   reduceSendQueue,
+  snapshotChatRequestOptions,
   type QueuedChatEntry,
   type SendQueueState,
 } from "@/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic";
 import type { ChatUserMessageInput } from "@/routes/_protected.chat/-queries";
 
 const CONVERSATION_ID = "conversation-1";
+
+describe("snapshotChatRequestOptions", () => {
+  test("captures automatic DOCX preferences when a turn is enqueued", () => {
+    expect(
+      snapshotChatRequestOptions({
+        docxEditRepresentation: "tracked-changes",
+        editApplyMode: "auto",
+        options: undefined,
+        sendMode: "anonymized",
+      }),
+    ).toEqual({
+      body: {
+        docxEditRepresentation: "tracked-changes",
+        editApplyMode: "auto",
+        sendMode: "anonymized",
+      },
+    });
+  });
+
+  test("captures manual mode without inheriting a representation", () => {
+    expect(
+      snapshotChatRequestOptions({
+        docxEditRepresentation: undefined,
+        editApplyMode: "manual",
+        options: undefined,
+        sendMode: undefined,
+      }),
+    ).toEqual({ body: { editApplyMode: "manual" } });
+  });
+});
 
 const makeMessage = (id: string): ChatUserMessageInput => ({
   id: toSafeId<"chatMessage">(id),
