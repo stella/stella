@@ -223,6 +223,34 @@ describe("--input contract help", () => {
     expect(fields).toContain("tool.dependencies  array<string>  required");
   });
 
+  test("merges requiredness across parent and sibling allOf branches", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        tool: {
+          type: "object",
+          required: ["prompt"],
+          allOf: [
+            {
+              type: "object",
+              properties: {
+                prompt: { type: "string" },
+                dependencies: { type: "array", items: { type: "string" } },
+              },
+            },
+            { type: "object", required: ["dependencies"] },
+          ],
+        },
+      },
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["tool"] });
+    const fields = help?.fields.join("\n") ?? "";
+
+    expect(fields).toContain("tool.prompt  string  required");
+    expect(fields).toContain("tool.dependencies  array<string>  required");
+  });
+
   test("does not mislabel nested scalar allOf schemas as objects", () => {
     const schema: JsonSchema = {
       type: "object",

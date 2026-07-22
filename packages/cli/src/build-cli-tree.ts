@@ -215,7 +215,7 @@ const fullDescription = ({
   } else {
     lines.push(
       "",
-      "JSON example unavailable; compose --input from the fields above and validate with --dry-run.",
+      "JSON example unavailable; compose --input from the fields above.",
     );
   }
   return lines.join("\n");

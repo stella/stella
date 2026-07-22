@@ -29,6 +29,16 @@ const requiredOf = (schema: JsonSchema): ReadonlySet<string> => {
   );
 };
 
+const requiredAcrossAllOf = (schema: JsonSchema): ReadonlySet<string> => {
+  const required = new Set(requiredOf(schema));
+  for (const intersection of allOf(schema)) {
+    for (const name of requiredAcrossAllOf(intersection)) {
+      required.add(name);
+    }
+  }
+  return required;
+};
+
 const schemaTypes = (schema: JsonSchema): readonly string[] => {
   const type = schema["type"];
   if (Array.isArray(type)) {
@@ -312,13 +322,18 @@ const renderObjectChildren = ({
   schema,
   indent,
   lines,
+  inheritedRequired = new Set(),
 }: {
   path: string;
   schema: JsonSchema;
   indent: number;
   lines: string[];
+  inheritedRequired?: ReadonlySet<string>;
 }): void => {
-  const required = requiredOf(schema);
+  const required = new Set([
+    ...inheritedRequired,
+    ...requiredAcrossAllOf(schema),
+  ]);
   for (const [name, child] of Object.entries(propertiesOf(schema))) {
     renderSchema({
       path: `${path}.${name}`,
@@ -329,7 +344,13 @@ const renderObjectChildren = ({
     });
   }
   for (const intersection of allOf(schema)) {
-    renderObjectChildren({ path, schema: intersection, indent, lines });
+    renderObjectChildren({
+      path,
+      schema: intersection,
+      indent,
+      lines,
+      inheritedRequired: required,
+    });
   }
 };
 
