@@ -10,7 +10,7 @@ describe("resolveAuthSessionState", () => {
         isPending: true,
         session: { session: { activeOrganizationId: "org_1" } },
       }),
-    ).toBe("ready");
+    ).toEqual({ activeOrganizationId: "org_1", type: "ready" });
   });
 
   test("requires organization selection before rendering app routes", () => {
@@ -20,13 +20,13 @@ describe("resolveAuthSessionState", () => {
         isPending: false,
         session: { session: { activeOrganizationId: null } },
       }),
-    ).toBe("organizationRequired");
+    ).toEqual({ type: "organizationRequired" });
   });
 
   test("does not mistake a pending request for a signed-out session", () => {
     expect(
       resolveAuthSessionState({ error: null, isPending: true, session: null }),
-    ).toBe("loading");
+    ).toEqual({ type: "loading" });
   });
 
   test("fails closed when session resolution errors", () => {
@@ -36,12 +36,12 @@ describe("resolveAuthSessionState", () => {
         isPending: false,
         session: null,
       }),
-    ).toBe("unavailable");
+    ).toEqual({ type: "unavailable" });
   });
 
   test("renders sign-in only after a successful empty session response", () => {
     expect(
       resolveAuthSessionState({ error: null, isPending: false, session: null }),
-    ).toBe("signedOut");
+    ).toEqual({ type: "signedOut" });
   });
 });

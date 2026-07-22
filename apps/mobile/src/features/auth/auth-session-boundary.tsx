@@ -1,5 +1,6 @@
-import { createContext, use, useMemo } from "react";
+import { createContext, use, useEffect, useMemo, useRef } from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { ActivityIndicator } from "react-native";
 
@@ -18,6 +19,7 @@ type AuthSessionActions = {
 const AuthSessionActionsContext = createContext<AuthSessionActions | null>(
   null,
 );
+const ActiveOrganizationIdContext = createContext<string | null>(null);
 
 export const useAuthSessionActions = () => {
   const value = use(AuthSessionActionsContext);
@@ -29,7 +31,18 @@ export const useAuthSessionActions = () => {
   return value;
 };
 
+export const useActiveOrganizationId = () => {
+  const value = use(ActiveOrganizationIdContext);
+  if (value === null) {
+    throw new MobileAuthError({
+      message: "An active organization is required for this route.",
+    });
+  }
+  return value;
+};
+
 export const AuthSessionBoundary = () => {
+  const queryClient = useQueryClient();
   const session = authClient.useSession();
   const state = resolveAuthSessionState({
     error: session.error,
@@ -40,8 +53,19 @@ export const AuthSessionBoundary = () => {
     () => ({ refreshSession: session.refetch }),
     [session.refetch],
   );
+  const activeOrganizationId =
+    state.type === "ready" ? state.activeOrganizationId : null;
+  const previousActiveOrganizationId = useRef<string | null>(null);
 
-  if (state === "loading") {
+  useEffect(() => {
+    const previous = previousActiveOrganizationId.current;
+    if (previous !== null && previous !== activeOrganizationId) {
+      queryClient.clear();
+    }
+    previousActiveOrganizationId.current = activeOrganizationId;
+  }, [activeOrganizationId, queryClient]);
+
+  if (state.type === "loading") {
     return (
       <FormScreen description="Restoring your secure stella session…">
         <ActivityIndicator accessibilityLabel="Connecting" />
@@ -49,7 +73,7 @@ export const AuthSessionBoundary = () => {
     );
   }
 
-  if (state === "unavailable") {
+  if (state.type === "unavailable") {
     return (
       <FormScreen description="stella could not verify your session. Your signed-in state has not been changed.">
         <InlineMessage message="Check your connection and try again." />
@@ -65,26 +89,28 @@ export const AuthSessionBoundary = () => {
 
   return (
     <AuthSessionActionsContext value={actions}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Protected guard={state === "signedOut"}>
-          <Stack.Screen name="(auth)" />
-        </Stack.Protected>
-        <Stack.Protected guard={state === "organizationRequired"}>
-          <Stack.Screen
-            name="select-organization"
-            options={{
-              headerLargeTitle: false,
-              headerShadowVisible: false,
-              headerShown: true,
-              headerTransparent: true,
-              title: "Choose organization",
-            }}
-          />
-        </Stack.Protected>
-        <Stack.Protected guard={state === "ready"}>
-          <Stack.Screen name="(tabs)" />
-        </Stack.Protected>
-      </Stack>
+      <ActiveOrganizationIdContext value={activeOrganizationId}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Protected guard={state.type === "signedOut"}>
+            <Stack.Screen name="(auth)" />
+          </Stack.Protected>
+          <Stack.Protected guard={state.type === "organizationRequired"}>
+            <Stack.Screen
+              name="select-organization"
+              options={{
+                headerLargeTitle: false,
+                headerShadowVisible: false,
+                headerShown: true,
+                headerTransparent: true,
+                title: "Choose organization",
+              }}
+            />
+          </Stack.Protected>
+          <Stack.Protected guard={state.type === "ready"}>
+            <Stack.Screen name="(tabs)" />
+          </Stack.Protected>
+        </Stack>
+      </ActiveOrganizationIdContext>
     </AuthSessionActionsContext>
   );
 };

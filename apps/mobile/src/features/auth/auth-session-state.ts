@@ -1,9 +1,9 @@
 export type AuthSessionState =
-  | "loading"
-  | "unavailable"
-  | "signedOut"
-  | "organizationRequired"
-  | "ready";
+  | { type: "loading" }
+  | { type: "unavailable" }
+  | { type: "signedOut" }
+  | { type: "organizationRequired" }
+  | { activeOrganizationId: string; type: "ready" };
 
 type SessionResolutionInput = {
   error: unknown;
@@ -41,15 +41,17 @@ export const resolveAuthSessionState = ({
   session,
 }: SessionResolutionInput): AuthSessionState => {
   if (session !== null && session !== undefined) {
-    return readActiveOrganizationId(session) !== null
-      ? "ready"
-      : "organizationRequired";
+    const activeOrganizationId = readActiveOrganizationId(session);
+    if (activeOrganizationId === null) {
+      return { type: "organizationRequired" };
+    }
+    return { activeOrganizationId, type: "ready" };
   }
   if (isPending) {
-    return "loading";
+    return { type: "loading" };
   }
   if (error !== null && error !== undefined) {
-    return "unavailable";
+    return { type: "unavailable" };
   }
-  return "signedOut";
+  return { type: "signedOut" };
 };
