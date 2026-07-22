@@ -322,7 +322,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
       ]),
       ...discovered.placeholders.map((placeholder) => placeholder.name),
     ];
-    const declaredKeys =
+    const inputContract =
       manifest === null
         ? collectTemplateInputKeys({
             type: "raw",
@@ -347,7 +347,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
             livePaths,
           });
     const unusedKeys = findUnusedTemplateValueKeys({
-      declaredKeys,
+      contract: inputContract,
       values,
     });
     if (unusedKeys.length > 0) {

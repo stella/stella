@@ -1,6 +1,11 @@
 type FindUnusedTemplateValueKeysOptions = {
-  declaredKeys: Iterable<string>;
+  contract: TemplateInputContract;
   values: Record<string, unknown>;
+};
+
+export type TemplateInputContract = {
+  acceptedPaths: ReadonlySet<string>;
+  forbiddenPaths: ReadonlySet<string>;
 };
 
 type TemplateInputKeySources =
@@ -30,9 +35,12 @@ export const isFillableTemplateInputField = (
 
 export const collectTemplateInputKeys = (
   sources: TemplateInputKeySources,
-): ReadonlySet<string> => {
+): TemplateInputContract => {
   if (sources.type === "raw") {
-    return new Set(sources.livePaths);
+    return {
+      acceptedPaths: new Set(sources.livePaths),
+      forbiddenPaths: new Set(),
+    };
   }
 
   const fillableFieldPaths = new Set(sources.fillableFieldPaths);
@@ -47,20 +55,14 @@ export const collectTemplateInputKeys = (
     }
     acceptedPaths.add(livePath);
   }
-  return acceptedPaths;
+  return { acceptedPaths, forbiddenPaths: derivedOutputPaths };
 };
 
 const isAtOrBelowAny = (path: string, roots: ReadonlySet<string>): boolean =>
   roots.has(path) || isBelowAny(path, roots);
 
-const isBelowAny = (path: string, roots: ReadonlySet<string>): boolean => {
-  for (const root of roots) {
-    if (path.startsWith(`${root}.`)) {
-      return true;
-    }
-  }
-  return false;
-};
+const isBelowAny = (path: string, roots: ReadonlySet<string>): boolean =>
+  Array.from(roots).some((root) => path.startsWith(`${root}.`));
 
 /**
  * Compare submitted top-level or already-flattened keys with every value path
@@ -68,43 +70,48 @@ const isBelowAny = (path: string, roots: ReadonlySet<string>): boolean => {
  * must be rejected consistently for strings, scalars, arrays, and objects.
  */
 export const findUnusedTemplateValueKeys = ({
-  declaredKeys,
+  contract,
   values,
-}: FindUnusedTemplateValueKeysOptions): string[] => {
-  const declaredKeySet = new Set(declaredKeys);
-  return findUnusedPaths(values, "", declaredKeySet);
-};
+}: FindUnusedTemplateValueKeysOptions): string[] =>
+  findUnusedPaths(values, "", contract);
 
 const findUnusedPaths = (
   values: Record<string, unknown>,
   parentPath: string,
-  declaredKeys: ReadonlySet<string>,
+  contract: TemplateInputContract,
 ): string[] => {
   const unusedPaths: string[] = [];
 
   for (const [key, value] of Object.entries(values)) {
     const path = parentPath === "" ? key : `${parentPath}.${key}`;
-    const pathHasDeclaredDescendant = hasDeclaredDescendant(path, declaredKeys);
-    if (pathHasDeclaredDescendant && isRecord(value)) {
-      for (const unusedPath of findUnusedPaths(value, path, declaredKeys)) {
+    if (isAtOrBelowAny(path, contract.forbiddenPaths)) {
+      unusedPaths.push(path);
+      continue;
+    }
+
+    const pathHasContractDescendant =
+      hasDeclaredDescendant(path, contract.acceptedPaths) ||
+      hasDeclaredDescendant(path, contract.forbiddenPaths);
+    if (pathHasContractDescendant && isRecord(value)) {
+      for (const unusedPath of findUnusedPaths(value, path, contract)) {
         unusedPaths.push(unusedPath);
       }
       continue;
     }
 
-    if (pathHasDeclaredDescendant && Array.isArray(value)) {
+    if (pathHasContractDescendant && Array.isArray(value)) {
       for (const item of value) {
         if (!isRecord(item)) {
           continue;
         }
-        for (const unusedPath of findUnusedPaths(item, path, declaredKeys)) {
+        for (const unusedPath of findUnusedPaths(item, path, contract)) {
           unusedPaths.push(unusedPath);
         }
       }
       continue;
     }
 
-    if (declaredKeys.has(path)) {
+    if (contract.acceptedPaths.has(path)) {
       continue;
     }
 
