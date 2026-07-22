@@ -83,6 +83,7 @@ import {
 import {
   isCurrentWorkflowRequestState,
   parseRunningLockWorkspaceId,
+  selectExpiredStaleRunWorkspaceIds,
   selectOrphanWorkspaceIds,
   selectRecoverableOrphanWorkspaceIds,
   selectRunningLockReservation,
@@ -1118,13 +1119,6 @@ export const reconcileOrphanedWorkflows = async ({
     return;
   }
 
-  // Either pending cells or a durable active row older than the maximum lock
-  // lifetime is sufficient recovery evidence. The latter closes the process-
-  // death window before planning has produced cells or enqueued its first job.
-  const recoveryEvidenceWorkspaceIdSet = new Set([
-    ...pendingWorkspaceIds,
-    ...staleActiveWorkspaceIds,
-  ]);
   const initialRequestIds = await readWorkflowRequestIds(
     redis,
     orphanCandidates,
@@ -1144,6 +1138,19 @@ export const reconcileOrphanedWorkflows = async ({
   const [currentRequestIds, currentRunningValues] = await Promise.all([
     readWorkflowRequestIds(redis, orphanCandidates),
     readWorkflowRunningValues(redis, orphanCandidates),
+  ]);
+  // Pending cells are immediate recovery evidence. A stale durable row is
+  // evidence only once both Redis state keys have actually expired: flex runs
+  // can legitimately extend their lock beyond the row-age threshold before
+  // their first queue job exists.
+  const expiredStaleWorkspaceIds = selectExpiredStaleRunWorkspaceIds({
+    currentRequestIds,
+    currentRunningValues,
+    staleWorkspaceIds: staleActiveWorkspaceIds,
+  });
+  const recoveryEvidenceWorkspaceIdSet = new Set([
+    ...pendingWorkspaceIds,
+    ...expiredStaleWorkspaceIds,
   ]);
   const recoveryWorkspaceIds = new Set<string>();
   for (const workspaceId of orphanCandidates) {

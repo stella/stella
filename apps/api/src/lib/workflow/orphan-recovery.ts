@@ -25,6 +25,12 @@ type RecoverableOrphanSelectionInput = OrphanSelectionInput & {
   recoveryWorkspaceIds: ReadonlySet<string>;
 };
 
+type ExpiredStaleRunSelectionInput = {
+  currentRequestIds: ReadonlyMap<string, string | null>;
+  currentRunningValues: ReadonlyMap<string, string | null>;
+  staleWorkspaceIds: readonly string[];
+};
+
 type CurrentWorkflowRequestStateInput = {
   currentRequestId: string | null;
   legacyRunningLockValue: string;
@@ -110,6 +116,32 @@ export const selectRecoverableOrphanWorkspaceIds = ({
   }
 
   return recoverable;
+};
+
+/**
+ * A stale durable row is recovery evidence only after both Redis run-state
+ * keys have actually expired. A large workflow can legitimately extend its
+ * lock beyond the durable row's age before its first job is enqueued.
+ */
+export const selectExpiredStaleRunWorkspaceIds = ({
+  currentRequestIds,
+  currentRunningValues,
+  staleWorkspaceIds,
+}: ExpiredStaleRunSelectionInput): string[] => {
+  const expired: string[] = [];
+  const seen = new Set<string>();
+  for (const workspaceId of staleWorkspaceIds) {
+    if (seen.has(workspaceId)) {
+      continue;
+    }
+    seen.add(workspaceId);
+    const requestId = currentRequestIds.get(workspaceId) ?? null;
+    const runningValue = currentRunningValues.get(workspaceId) ?? null;
+    if (requestId === null && runningValue === null) {
+      expired.push(workspaceId);
+    }
+  }
+  return expired;
 };
 
 export const isCurrentWorkflowRequestState = ({
