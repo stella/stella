@@ -3,6 +3,7 @@ import type { Command } from "@stricli/core";
 import { Result } from "better-result";
 
 import type { Context } from "../context.js";
+import { formatCapabilityCommand } from "../generate-capability-tree.js";
 import { EXIT_CODES } from "../mcp-constants.js";
 import {
   mapClientErrorExit,
@@ -123,7 +124,7 @@ export const uploadCommand: Command<Context> = buildCommand<
     }
     renderNestedFailure({ context: this, failure: uploaded.error.failure });
     writers.stderr(
-      `hint: retry finalization with 'stella uploads update --workspace-id ${flags.workspace} --upload-id ${uploaded.error.uploadId}'\n`,
+      `hint: retry finalization with '${formatCapabilityCommand("uploads.update")} --workspace-id ${flags.workspace} --upload-id ${uploaded.error.uploadId}'\n`,
     );
   },
   parameters: {

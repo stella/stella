@@ -4,6 +4,7 @@ import { open } from "node:fs/promises";
 import path from "node:path";
 
 import { inferFileMimeType } from "./file-mime-type.js";
+import { formatCapabilityCommand } from "./generate-capability-tree.js";
 import type { CallToolResult, McpClientError } from "./mcp-client.js";
 import { callTool } from "./mcp-client.js";
 import { parsePayload } from "./run-leaf-command.js";
@@ -265,8 +266,7 @@ const resolveFilePropertyId = async ({
   if (filePropertyIds.length === 0) {
     return Result.err({
       type: "server-response",
-      message:
-        "No file property exists in this matter; pass --property-id after inspecting 'stella properties list'",
+      message: `No file property exists in this matter; pass --property-id after inspecting '${formatCapabilityCommand(UPLOAD_CAPABILITIES.listProperties)}'`,
     });
   }
   return Result.err({
@@ -322,7 +322,7 @@ const abortUpload = async ({
   );
   return aborted.status === "ok"
     ? undefined
-    : `Cleanup failed for reserved upload ${uploadId}; run 'stella uploads delete --workspace-id ${workspaceId} --upload-id ${uploadId} --yes'`;
+    : `Cleanup failed for reserved upload ${uploadId}; run '${formatCapabilityCommand(UPLOAD_CAPABILITIES.abort)} --workspace-id ${workspaceId} --upload-id ${uploadId} --yes'`;
 };
 
 /**

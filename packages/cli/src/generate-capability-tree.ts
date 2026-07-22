@@ -68,6 +68,15 @@ const PARTS: readonly CapabilityPart[] = ["params", "body", "query"];
 /** The single root beneath which all generated capability commands live. */
 export const CAPABILITY_NAMESPACE = "capability";
 
+export type CapabilityCommandPath = readonly [
+  typeof CAPABILITY_NAMESPACE,
+  string,
+  string,
+];
+
+export type FormattedCapabilityCommand =
+  `stella ${typeof CAPABILITY_NAMESPACE} ${string} ${string}`;
+
 /** Valid `ToolScope` strings, for mapping a catalog `stella:*` scope to a precheck. */
 const TOOL_SCOPES: ReadonlySet<string> = new Set<ToolScope>([
   "read",
@@ -102,7 +111,7 @@ const toolScopeOf = (scope: string): ToolScope | undefined => {
  * paths make prefix ids (for example `entities.read` and
  * `entities.read.count`) representable without a leaf/route collision.
  */
-export const capabilityCommandPath = (id: string): readonly string[] => {
+export const capabilityCommandPath = (id: string): CapabilityCommandPath => {
   const [rawDomain, ...rawAction] = id.split(".");
   if (
     rawDomain === undefined ||
@@ -119,6 +128,14 @@ export const capabilityCommandPath = (id: string): readonly string[] => {
     kebabCase(rawDomain),
     rawAction.map((segment) => kebabCase(segment)).join("-"),
   ];
+};
+
+/** Render the exact executable command prefix for one capability id. */
+export const formatCapabilityCommand = (
+  id: string,
+): FormattedCapabilityCommand => {
+  const [namespace, domain, action] = capabilityCommandPath(id);
+  return `stella ${namespace} ${domain} ${action}`;
 };
 
 const propertyMap = (

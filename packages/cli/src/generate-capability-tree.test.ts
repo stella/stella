@@ -5,6 +5,7 @@ import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   type CapabilityCatalogEntry,
   capabilityCommandPath,
+  formatCapabilityCommand,
   deriveCapabilityLeaf,
   insertCapabilities,
 } from "./generate-capability-tree.js";
@@ -58,6 +59,12 @@ const leafAt = (
 };
 
 describe("capabilityCommandPath", () => {
+  test("formats executable guidance from the same typed path", () => {
+    expect(formatCapabilityCommand("uploads.update")).toBe(
+      "stella capability uploads update",
+    );
+  });
+
   test("namespaces and kebab-cases every capability at a fixed depth", () => {
     expect(capabilityCommandPath("time-entries.create")).toEqual([
       "capability",

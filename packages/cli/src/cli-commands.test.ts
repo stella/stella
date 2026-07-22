@@ -290,6 +290,51 @@ describe("one-command document upload", () => {
     expect(result.stdout).toContain("computes its SHA-256 checksum");
     expect(server.requests).toHaveLength(0);
   });
+
+  test("finalize failures print the canonical namespaced retry command", async () => {
+    const uploadDir = await mkdtemp(path.join(tmpdir(), "stella-upload-"));
+    tempDirs.push(uploadDir);
+    const filePath = path.join(uploadDir, "agreement.txt");
+    await writeFile(filePath, "agreement body");
+    let putUrl = "";
+    const server = startMockServer(
+      (request, index) => {
+        const capability = request.params.arguments?.["capability"];
+        if (index === 0 && capability === "uploads.create") {
+          return {
+            toolPayload: {
+              uploadId: "upload-1",
+              url: putUrl,
+              headers: { "content-type": "text/plain" },
+            },
+          };
+        }
+        return { toolPayload: { message: "finalize failed" }, isError: true };
+      },
+      () => new Response(null, { status: 200 }),
+    );
+    putUrl = `${server.url}/presigned/upload-1`;
+
+    const result = await runCli({
+      args: [
+        "upload",
+        "--workspace",
+        "workspace-1",
+        "--file",
+        filePath,
+        "--property-id",
+        "property-file",
+      ],
+      url: server.url,
+      token: WRITE,
+    });
+    server.stop();
+
+    expect(result.stderr).toContain(
+      "stella capability uploads update --workspace-id workspace-1 --upload-id upload-1",
+    );
+    expect(result.stderr).not.toContain("stella uploads update");
+  });
 });
 
 describe("auth and scope gating (S4)", () => {
