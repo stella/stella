@@ -102,6 +102,11 @@ export const generatedToolAnnotations: Readonly<
     command: ["matter", "delete"],
     scope: "matters_write",
   },
+  list_contacts: {
+    command: ["contact", "list"],
+    scope: "read",
+    itemsKey: "items",
+  },
   save_contact: {
     command: ["contact", "save"],
     scope: "matters_write",

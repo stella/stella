@@ -370,6 +370,7 @@ const createSelectBuilder = (rows: unknown[]) => {
   // shape resolves identically; a bare array would make `.orderBy` undefined and
   // turn the connector load into a spurious McpGatewayLoadError.
   const terminal = Object.assign([...rows], {
+    groupBy: () => terminal,
     orderBy: () => terminal,
     limit: () => terminal,
   });
@@ -2310,6 +2311,46 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expectValidationMessage(result, "type is required to create a contact");
+  });
+
+  test("list_contacts returns internal directory IDs from the shared query", async () => {
+    const contact = {
+      id: "contact_1",
+      type: "organization",
+      displayName: "Acme Corp",
+      firstName: null,
+      lastName: null,
+      organizationName: "Acme Corp",
+      emails: [],
+      phones: [],
+      tags: [],
+      color: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      clientMatterCount: 1,
+    };
+    const result = await handleMcpToolCall({
+      args: { q: "Acme", limit: 10 },
+      context: createContext({ scopedDb: createScopedDb([contact]) }),
+      toolName: "list_contacts",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseToolPayload(result)).toMatchObject({
+      items: [{ id: "contact_1" }],
+    });
+  });
+
+  test("list_contacts rejects unknown input instead of stripping it", async () => {
+    const result = await handleMcpToolCall({
+      args: { registry: "ares" },
+      context: createContext(),
+      toolName: "list_contacts",
+    });
+
+    expectValidationMessage(
+      result,
+      "Invalid input: expected { q?: string, type?: 'person'|'organization', cursor?: string, limit?: integer }",
+    );
   });
 
   test("save_task rejects a create with no matter_id", async () => {

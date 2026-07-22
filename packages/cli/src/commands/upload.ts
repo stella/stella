@@ -5,9 +5,13 @@ import { Result } from "better-result";
 import type { Context } from "../context.js";
 import { formatCapabilityCommand } from "../generate-capability-tree.js";
 import { EXIT_CODES } from "../mcp-constants.js";
+import { buildOutputFlags, type OutputFlagValues } from "../output-flags.js";
+import { buildRenderPlan, renderResult } from "../output.js";
 import {
   mapClientErrorExit,
+  readOutputFormat,
   renderToolError,
+  reservedFlagUsageError,
   scopeGranted,
   setExit,
   writersFor,
@@ -23,7 +27,7 @@ const parseString = (input: string): string => input;
 const optionalStringFlag = (brief: string) =>
   ({ brief, kind: "parsed", optional: true, parse: parseString }) as const;
 
-type UploadFlags = {
+type UploadFlags = OutputFlagValues & {
   readonly file: string;
   readonly mimeType: string | undefined;
   readonly name: string | undefined;
@@ -74,6 +78,12 @@ export const uploadCommand: Command<Context> = buildCommand<
   },
   func: async function func(this: Context, flags) {
     const writers = writersFor(this);
+    const usageError = reservedFlagUsageError(flags);
+    if (usageError !== null) {
+      writers.stderr(`${usageError}\n`);
+      setExit(this, EXIT_CODES.validation);
+      return;
+    }
     if (this.serverUrl === undefined || this.token === undefined) {
       writers.stderr(
         "Not signed in. Run 'stella auth login' to authenticate.\n",
@@ -114,7 +124,18 @@ export const uploadCommand: Command<Context> = buildCommand<
       },
     });
     if (Result.isOk(uploaded)) {
-      writers.stdout(`${JSON.stringify(uploaded.value, null, 2)}\n`);
+      renderResult({
+        plan: buildRenderPlan({
+          payload: uploaded.value,
+          itemsKey: undefined,
+          windowedText: false,
+          singleReadActive: true,
+          columns: undefined,
+        }),
+        format: readOutputFormat(flags, this),
+        writers,
+        allActive: false,
+      });
       return;
     }
 
@@ -129,6 +150,7 @@ export const uploadCommand: Command<Context> = buildCommand<
   },
   parameters: {
     flags: {
+      ...buildOutputFlags(),
       file: {
         brief: "Local file path to upload",
         kind: "parsed",

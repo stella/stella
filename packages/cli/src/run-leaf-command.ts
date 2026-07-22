@@ -37,9 +37,11 @@ import {
   type OutputFormat,
   type Writers,
 } from "./output.js";
+import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
 import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
 
 export { flagKey } from "./flag-name.js";
+export { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
 
 /**
  * Whether a parsed flag value counts as caller-provided when overlaying flags
@@ -59,22 +61,6 @@ export const flagValueProvided = (
   }
   return !(flagSpec.repeatable && Array.isArray(value) && value.length === 0);
 };
-
-/** Reserved global flag keys present on generated commands (spec S1/S3). */
-export const RESERVED_FLAG_KEYS = {
-  input: "input",
-  output: "output",
-  json: "json",
-  table: "table",
-  cursor: "cursor",
-  limit: "limit",
-  all: "all",
-  yes: "yes",
-  /** Never prompt; fail closed where a prompt would be needed (spec 049 §3). */
-  noInput: "noInput",
-  /** Capability leaves only: validate server-side without executing (validateOnly). */
-  dryRun: "dryRun",
-} as const;
 
 type LeafFlags = Record<string, unknown>;
 

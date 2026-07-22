@@ -19,6 +19,7 @@ import {
   buildInputContractHelp,
   formatInputExample,
 } from "./input-contract-help.js";
+import { buildOutputFlags } from "./output-flags.js";
 import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
 import type {
   CapabilityLeafSpec,
@@ -118,7 +119,7 @@ const hasLimitProp = (spec: LeafCommandSpec): boolean => {
 };
 
 const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
-  const flags: Record<string, unknown> = {};
+  const flags: Record<string, unknown> = buildOutputFlags();
 
   for (const flagSpec of spec.flags) {
     flags[flagKey(flagSpec)] = buildFlag(flagSpec);
@@ -127,17 +128,6 @@ const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
   // Reserved global flags every command carries (spec S1/S3).
   flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
     "Full tool-args JSON ('<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
-  );
-  flags[RESERVED_FLAG_KEYS.output] = parsedStringFlag(
-    "Output format: json | table | jsonl",
-  );
-  flags[RESERVED_FLAG_KEYS.json] = booleanFlag(
-    "Output JSON (= --output json)",
-    false,
-  );
-  flags[RESERVED_FLAG_KEYS.table] = booleanFlag(
-    "Output a table (= --output table)",
-    false,
   );
   flags[RESERVED_FLAG_KEYS.noInput] = booleanFlag(
     "Never prompt; fail closed (exit 7) where a confirmation is required",
@@ -281,7 +271,7 @@ const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
 const buildCapabilityLeafFlags = (
   spec: CapabilityLeafSpec,
 ): Record<string, unknown> => {
-  const flags: Record<string, unknown> = {};
+  const flags: Record<string, unknown> = buildOutputFlags();
 
   for (const flagSpec of spec.flags) {
     flags[flagKey(flagSpec)] = buildFlag(flagSpec);
@@ -289,17 +279,6 @@ const buildCapabilityLeafFlags = (
 
   flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
     "Full capability input JSON ({ body?, params?, query? }: '<json>' | - stdin | @file); explicit value flags override matching paths in the JSON",
-  );
-  flags[RESERVED_FLAG_KEYS.output] = parsedStringFlag(
-    "Output format: json | table | jsonl",
-  );
-  flags[RESERVED_FLAG_KEYS.json] = booleanFlag(
-    "Output JSON (= --output json)",
-    false,
-  );
-  flags[RESERVED_FLAG_KEYS.table] = booleanFlag(
-    "Output a table (= --output table)",
-    false,
   );
   flags[RESERVED_FLAG_KEYS.noInput] = booleanFlag(
     "Never prompt; fail closed (exit 7) where a confirmation is required",
@@ -394,20 +373,6 @@ export const buildGeneratedRoutes = (
   return routes;
 };
 
-const outputOnlyFlags = (): Record<string, unknown> => ({
-  [RESERVED_FLAG_KEYS.output]: parsedStringFlag(
-    "Output format: json | table | jsonl",
-  ),
-  [RESERVED_FLAG_KEYS.json]: booleanFlag(
-    "Output JSON (= --output json)",
-    false,
-  ),
-  [RESERVED_FLAG_KEYS.table]: booleanFlag(
-    "Output a table (= --output table)",
-    false,
-  ),
-});
-
 const resourceLeafBrief = (spec: ResourceLeafSpec): string =>
   spec.kind === "list"
     ? "List the static reference resources exposed by the stella server"
@@ -416,7 +381,7 @@ const resourceLeafBrief = (spec: ResourceLeafSpec): string =>
 const buildResourceLeaf = (spec: ResourceLeafSpec): RoutingTarget => {
   const builderArgs = {
     docs: { brief: resourceLeafBrief(spec) },
-    parameters: { flags: outputOnlyFlags() },
+    parameters: { flags: buildOutputFlags() },
     func: async function func(
       this: Context,
       parsedFlags: Record<string, unknown>,

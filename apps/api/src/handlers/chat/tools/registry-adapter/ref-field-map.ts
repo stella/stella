@@ -175,6 +175,13 @@ export const READ_TOOL_REF_FIELD_MAP = {
       "nextCursor",
     ],
   },
+  list_contacts: {
+    chatProjectable: true,
+    inputRefs: [],
+    outputRefs: [{ kind: "contact", path: "items[].id" }],
+    // `nextCursor` is an opaque base64url pagination cursor.
+    passthroughIdPaths: ["nextCursor"],
+  },
   search_across_matters: {
     chatProjectable: true,
     inputRefs: [],

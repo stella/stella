@@ -1137,6 +1137,45 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
+    "name": "list_contacts",
+    "scope": "stella:read",
+    "access": "read",
+    "description": "List or search the organization's internal contact directory. Returns internal contact IDs accepted by read_contact, save_contact, and link_matter_contact. Use q to search display names and type to filter people or organizations.",
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "type": "string",
+          "description": "Search contact display names",
+          "maxLength": 512
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "person",
+            "organization"
+          ],
+          "description": "Contact kind"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from the previous page"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum contacts to return",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "save_contact",
     "scope": "stella:matters_write",
     "access": "write",
@@ -1230,7 +1269,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "lookup_business_registry",
     "scope": "stella:read",
     "access": "read",
-    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details.",
+    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
     "annotations": {
       "readOnlyHint": true,
       "openWorldHint": true
@@ -2753,7 +2792,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "lookup_business_registry",
     "scope": "stella:read_anonymized",
     "access": "read",
-    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details.",
+    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
     "annotations": {
       "readOnlyHint": true,
       "openWorldHint": true

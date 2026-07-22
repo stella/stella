@@ -58,15 +58,35 @@ const leafPaths = (node: RouteNode): string[] => {
   return out.sort();
 };
 
+const leafEntries = (
+  node: RouteNode,
+): { path: readonly string[]; spec: LeafCommandSpec }[] => {
+  const entries: { path: readonly string[]; spec: LeafCommandSpec }[] = [];
+  const walk = (current: RouteNode, path: readonly string[]): void => {
+    if (current.kind === "leaf") {
+      entries.push({ path, spec: current.spec });
+      return;
+    }
+    if (current.kind === "capability-leaf") {
+      return;
+    }
+    for (const [segment, child] of Object.entries(current.children)) {
+      walk(child, [...path, segment]);
+    }
+  };
+  walk(node, []);
+  return entries;
+};
+
 const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
   spec.flags.find((f) => f.flag === flag);
 
 const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
 
 describe("generateRouteMap: structure", () => {
-  test("produces 44 leaf commands and excludes the compat shims", () => {
+  test("produces 45 leaf commands and excludes the compat shims", () => {
     const paths = leafPaths(tree);
-    expect(paths).toHaveLength(44);
+    expect(paths).toHaveLength(45);
     expect(paths).not.toContain("search");
     expect(paths).not.toContain("fetch");
     // The excluded compat tools never surface anywhere in the tree.
@@ -112,8 +132,25 @@ describe("generateRouteMap: structure", () => {
     expect(findLeaf(tree, ["contact", "lookup-registry"])?.toolName).toBe(
       "lookup_business_registry",
     );
+    expect(findLeaf(tree, ["contact", "list"])?.toolName).toBe("list_contacts");
     // `read-document` (a mechanical split of the name) must not exist.
     expect(findLeaf(tree, ["read-document"])).toBeUndefined();
+  });
+
+  test("every curated detail reader has a discoverable list or search sibling", () => {
+    const entries = leafEntries(tree);
+    for (const reader of entries.filter(({ spec }) =>
+      spec.toolName.startsWith("read_"),
+    )) {
+      const domain = reader.path.at(0);
+      const hasDiscoverySibling = entries.some(
+        ({ path, spec }) =>
+          path.at(0) === domain &&
+          (spec.toolName.startsWith("list_") ||
+            spec.toolName.startsWith("search_")),
+      );
+      expect(hasDiscoverySibling).toBe(true);
+    }
   });
 });
 

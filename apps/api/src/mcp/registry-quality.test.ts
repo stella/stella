@@ -39,10 +39,11 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // default bumped 41 -> 44 for the three capability meta-tools (plan 049 phase 2:
 // list_capabilities, describe_capability, invoke_capability). All three are
 // excluded from the anonymized surface (two read-only meta-reads that expose a
-// dynamic tenant payload, one write), so the anonymized ceiling is unchanged. 45
-// remains the hard product ceiling; this sits one below it.
+// dynamic tenant payload, one write), so the anonymized ceiling is unchanged.
+// default bumped 44 -> 45 for internal contact-directory discovery; the tool
+// reuses the HTTP capability's query and remains excluded from anonymized mode.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 44,
+  default: 45,
   anonymized: 21,
 };
 
