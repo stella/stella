@@ -42,6 +42,19 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 const enumValues = (schema: JsonSchema): readonly unknown[] | undefined =>
   Array.isArray(schema["enum"]) ? schema["enum"] : undefined;
 
+const hasAnyKeyword = (
+  schema: JsonSchema,
+  keywords: readonly string[],
+): boolean => keywords.some((keyword) => Object.hasOwn(schema, keyword));
+
+const STRING_ASSERTION_KEYWORDS = [
+  "minLength",
+  "maxLength",
+  "pattern",
+] as const;
+const NUMBER_ASSERTION_KEYWORDS = ["minimum", "maximum"] as const;
+const ARRAY_ASSERTION_KEYWORDS = ["minItems", "maxItems", "items"] as const;
+
 const applicatorKeywords = ["allOf", "anyOf", "oneOf"] as const;
 
 const hasOwnPropertySurface = (schema: JsonSchema): boolean => {
@@ -466,6 +479,24 @@ const validateValue = (
 
   const types = schemaTypes(schema);
   if (types.length === 0) {
+    if (
+      typeof value === "string" &&
+      hasAnyKeyword(schema, STRING_ASSERTION_KEYWORDS)
+    ) {
+      return validateString(schema, value, path);
+    }
+    if (
+      typeof value === "number" &&
+      hasAnyKeyword(schema, NUMBER_ASSERTION_KEYWORDS)
+    ) {
+      return validateNumber(schema, value, path, false);
+    }
+    if (
+      Array.isArray(value) &&
+      hasAnyKeyword(schema, ARRAY_ASSERTION_KEYWORDS)
+    ) {
+      return validateArray(schema, value, path);
+    }
     if (
       isPlainObject(value) &&
       hasObjectConstraintsAcrossCompositions(schema)

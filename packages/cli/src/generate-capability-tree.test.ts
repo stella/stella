@@ -117,6 +117,33 @@ describe("deriveCapabilityLeaf: flags", () => {
     expect(spec.inputOnly).toEqual(["body"]);
   });
 
+  test("mixed alternative and dynamic-map bodies keep flags plus the input contract", () => {
+    const mixedSchemas = [
+      {
+        ...objectSchema({ token: { type: "string" } }, ["token"]),
+        anyOf: [
+          objectSchema({ kind: { type: "string", const: "a" } }, ["kind"]),
+        ],
+      },
+      {
+        ...objectSchema({ token: { type: "string" } }, ["token"]),
+        patternProperties: { "^meta-": { type: "string" } },
+      },
+    ];
+
+    for (const body of mixedSchemas) {
+      const { spec } = deriveCapabilityLeaf(
+        entry({
+          id: "events.create",
+          inputSchema: { body },
+        }),
+      );
+
+      expect(flagByCli(spec, "--token")).toBeDefined();
+      expect(spec.inputOnly).toEqual(["body"]);
+    }
+  });
+
   test("scalar body props become bare flags routed to input.body", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({

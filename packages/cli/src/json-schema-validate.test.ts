@@ -177,6 +177,45 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     ).toBe(false);
   });
 
+  test("applies typeless scalar and array assertions inside compositions", () => {
+    const cases = [
+      {
+        schema: { type: "string", allOf: [{ pattern: "^ab" }] },
+        valid: "abc",
+        invalid: "xyz",
+      },
+      {
+        schema: {
+          type: "number",
+          anyOf: [{ minimum: 10 }, { maximum: -10 }],
+        },
+        valid: 12,
+        invalid: 0,
+      },
+      {
+        schema: {
+          type: "array",
+          oneOf: [{ minItems: 2 }, { maxItems: 0 }],
+        },
+        valid: [1, 2],
+        invalid: [1],
+      },
+      {
+        schema: {
+          type: "array",
+          allOf: [{ items: { type: "string" } }],
+        },
+        valid: ["value"],
+        invalid: [1],
+      },
+    ] as const;
+
+    for (const { schema, valid, invalid } of cases) {
+      expect(validateAgainstSchema(schema, valid).valid).toBe(true);
+      expect(validateAgainstSchema(schema, invalid).valid).toBe(false);
+    }
+  });
+
   test("enforces typeless object constraints nested through allOf", () => {
     const schema = {
       allOf: [

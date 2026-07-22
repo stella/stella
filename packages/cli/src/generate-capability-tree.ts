@@ -174,11 +174,10 @@ const candidatesForPart = ({
   inputOnly: string[];
 }): Candidate[] => {
   const properties = propertyMap(schema);
-  if (
+  const wholePartInputOnly =
     schema !== undefined &&
-    Object.keys(properties).length === 0 &&
-    (hasSchemaAlternatives(schema) || hasDynamicObjectKeys(schema))
-  ) {
+    (hasSchemaAlternatives(schema) || hasDynamicObjectKeys(schema));
+  if (wholePartInputOnly) {
     inputOnly.push(part);
   }
   const required = requiredSet(schema);
@@ -189,7 +188,9 @@ const candidatesForPart = ({
     }
     const classification = classifyProp(prop, propSchema);
     if (classification.kind === "input-only") {
-      inputOnly.push(`${part}.${prop}`);
+      if (!wholePartInputOnly) {
+        inputOnly.push(`${part}.${prop}`);
+      }
       continue;
     }
     const specs =
