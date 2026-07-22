@@ -6,6 +6,8 @@
 // hand-rolled walker is simpler and lighter than a general-purpose library for
 // this closed shape set, and it structurally cannot run generated code.
 
+import { compileSchemaPattern } from "./schema-pattern.js";
+
 type JsonSchema = Record<string, unknown>;
 
 /** A validation outcome: valid, or the failing JSON path plus a message. */
@@ -49,8 +51,14 @@ const validateString = (
     return fail(path, `string longer than maxLength ${maxLength}`);
   }
   const pattern = schema["pattern"];
-  if (typeof pattern === "string" && !new RegExp(pattern, "u").test(value)) {
-    return fail(path, `string does not match pattern ${pattern}`);
+  if (typeof pattern === "string") {
+    const compiled = compileSchemaPattern(pattern);
+    if (compiled.status === "invalid") {
+      return fail(path, "schema contains an invalid string pattern");
+    }
+    if (!compiled.regex.test(value)) {
+      return fail(path, `string does not match pattern ${pattern}`);
+    }
   }
   return ok;
 };

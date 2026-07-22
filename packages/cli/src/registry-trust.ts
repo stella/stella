@@ -13,6 +13,7 @@ import { Result } from "better-result";
 import { createHash } from "node:crypto";
 
 import type { RegistryToolListing } from "./route-types.js";
+import { compileSchemaPattern } from "./schema-pattern.js";
 
 // --- Size / depth caps (spec S5.5 rule 3), named constants, not literals. ---
 /** Reject a whole fetched body larger than this (bytes). */
@@ -97,12 +98,35 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
     return `enum larger than ${MAX_ENUM}`;
   }
 
+  const pattern = schema["pattern"];
+  if (pattern !== undefined) {
+    if (typeof pattern !== "string") {
+      return "schema pattern must be a string";
+    }
+    if (compileSchemaPattern(pattern).status === "invalid") {
+      return "schema pattern is invalid";
+    }
+  }
+
   const properties = schema["properties"];
   if (isRecord(properties)) {
     if (Object.keys(properties).length > MAX_PROPS) {
       return `properties object larger than ${MAX_PROPS}`;
     }
     for (const child of Object.values(properties)) {
+      const violation = walkSchema(child, depth + 1);
+      if (violation !== undefined) {
+        return violation;
+      }
+    }
+  }
+
+  const patternProperties = schema["patternProperties"];
+  if (isRecord(patternProperties)) {
+    for (const [childPattern, child] of Object.entries(patternProperties)) {
+      if (compileSchemaPattern(childPattern).status === "invalid") {
+        return "patternProperties contains an invalid pattern";
+      }
       const violation = walkSchema(child, depth + 1);
       if (violation !== undefined) {
         return violation;

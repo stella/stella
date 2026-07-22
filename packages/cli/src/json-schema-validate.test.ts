@@ -82,6 +82,18 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     ).toBe(false);
   });
 
+  test("returns a validation issue for an invalid schema pattern", () => {
+    const schema = objectSchema({
+      value: { type: "string", pattern: "[" },
+    });
+
+    expect(validateAgainstSchema(schema, { value: "anything" })).toEqual({
+      valid: false,
+      path: "value",
+      message: "schema contains an invalid string pattern",
+    });
+  });
+
   test("validates arrays and their items with minItems", () => {
     const schema = objectSchema({
       jurisdictions: {

@@ -151,6 +151,19 @@ describe("--input contract help", () => {
       expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
     }
   });
+
+  test("falls back to a generic example for an invalid schema pattern", () => {
+    const help = buildInputContractHelp({
+      schema: {
+        type: "object",
+        properties: { value: { type: "string", pattern: "[" } },
+        required: ["value"],
+      },
+      inputOnly: ["value"],
+    });
+
+    expect(help?.example).toEqual({ value: "xxxxx" });
+  });
 });
 
 type GeneratedLeaf = Exclude<RouteNode, { kind: "route" }>;

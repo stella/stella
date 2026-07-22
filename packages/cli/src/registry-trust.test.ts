@@ -100,6 +100,27 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
     const tool = validTool({ annotations: { readOnlyHint: "yes" } });
     expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
   });
+
+  test("invalid schema regex patterns are rejected at the trust boundary", () => {
+    const invalidPatterns = [
+      { type: "string", pattern: "[" },
+      {
+        type: "object",
+        properties: {},
+        patternProperties: { "(?": { type: "string" } },
+      },
+    ];
+
+    for (const child of invalidPatterns) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: { value: child },
+        },
+      });
+      expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
+    }
+  });
 });
 
 describe("validateFetchedToolsList: rule 3 (size/depth caps)", () => {

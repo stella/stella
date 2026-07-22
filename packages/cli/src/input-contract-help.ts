@@ -1,4 +1,5 @@
 import type { JsonSchema } from "./route-types.js";
+import { compileSchemaPattern } from "./schema-pattern.js";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -343,7 +344,11 @@ const patternExample = (pattern: string): string | undefined => {
   }
 
   const example = tokens.join("");
-  return new RegExp(pattern, "u").test(example) ? example : undefined;
+  const compiled = compileSchemaPattern(pattern);
+  if (compiled.status === "invalid") {
+    return undefined;
+  }
+  return compiled.regex.test(example) ? example : undefined;
 };
 
 const stringExample = (schema: JsonSchema): string => {
