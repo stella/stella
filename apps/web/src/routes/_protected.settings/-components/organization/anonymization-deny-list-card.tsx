@@ -86,6 +86,7 @@ const LABEL_TRANSLATION_KEY = {
     "common.anonymizationLabels.nationalIdentificationNumber",
   "social security number": "common.anonymizationLabels.socialSecurityNumber",
   "registration number": "common.anonymizationLabels.registrationNumber",
+  "case number": "caseLaw.columns.caseNumber",
   "credit card number": "common.anonymizationLabels.creditCardNumber",
   "passport number": "common.anonymizationLabels.passportNumber",
   crypto: "common.anonymizationLabels.crypto",
