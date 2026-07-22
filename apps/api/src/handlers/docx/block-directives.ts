@@ -947,7 +947,11 @@ export const processBlockDirectives = (
         index: itemIdx,
         loopIdentity,
       });
-      rewriteNestedEachExpr(clonedRow, block.arrayPath, itemIdx);
+      rewriteNestedEachExpr(clonedRow, {
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
       const clonedContentParas = clonedParas.filter((_, i) => !isMarker(i));
       rewriteContentParagraphs(clonedContentParas, {
         tokenMask,
@@ -1045,7 +1049,11 @@ export const processBlockDirectives = (
           index: itemIdx,
           loopIdentity,
         });
-        rewriteNestedEachExpr(clone, block.arrayPath, itemIdx);
+        rewriteNestedEachExpr(clone, {
+          arrayPath: block.arrayPath,
+          index: itemIdx,
+          loopIdentity,
+        });
       }
       rewriteContentParagraphs(clonedParas, {
         tokenMask,
@@ -1330,8 +1338,7 @@ const rewriteEachPlaceholders = (
  */
 const rewriteNestedEachExpr = (
   root: slimdom.Element,
-  arrayPath: string,
-  index: number,
+  { arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
 ): void => {
   const re = new RegExp(
     `(\\{\\{\\s*#each\\s+)${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_-]+)(\\s*\\}\\})`,
@@ -1341,7 +1348,7 @@ const rewriteNestedEachExpr = (
     text.replace(
       re,
       (_match, pre: string, sub: string, post: string) =>
-        `${pre}${eachKey(arrayPath, index, sub)}${post}`,
+        `${pre}${eachKey(loopIdentity, index, sub)}${post}`,
     ),
   );
 };
