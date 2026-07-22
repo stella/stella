@@ -51,6 +51,14 @@ type AlternativeGroup = {
   variants: readonly JsonSchema[];
 };
 
+const MAX_COMPOSED_EXAMPLE_CANDIDATES = 64;
+
+type ExampleSearchResult =
+  | { status: "found"; example: unknown }
+  | { status: "not-found" };
+
+const exampleNotFound: ExampleSearchResult = { status: "not-found" };
+
 const alternativeGroupsOf = (schema: JsonSchema): AlternativeGroup[] => {
   const groups: AlternativeGroup[] = [];
   for (const keyword of ["anyOf", "oneOf"] as const) {
@@ -65,6 +73,44 @@ const alternativeGroupsOf = (schema: JsonSchema): AlternativeGroup[] => {
 const allOf = (schema: JsonSchema): readonly JsonSchema[] => {
   const variants = schema["allOf"];
   return Array.isArray(variants) ? variants.filter(isRecord) : [];
+};
+
+const findComposedExample = (
+  schema: JsonSchema,
+  base: JsonSchema,
+  groups: readonly AlternativeGroup[],
+): ExampleSearchResult => {
+  let candidatesRemaining = MAX_COMPOSED_EXAMPLE_CANDIDATES;
+  const selection: JsonSchema[] = [];
+
+  const search = (groupIndex: number): ExampleSearchResult => {
+    if (candidatesRemaining === 0) {
+      return exampleNotFound;
+    }
+    const group = groups[groupIndex];
+    if (group !== undefined) {
+      for (const variant of group.variants) {
+        selection.push(variant);
+        const result = search(groupIndex + 1);
+        selection.pop();
+        if (result.status === "found" || candidatesRemaining === 0) {
+          return result;
+        }
+      }
+      return exampleNotFound;
+    }
+
+    candidatesRemaining -= 1;
+    const candidate = exampleFor({
+      ...base,
+      allOf: [...allOf(base), ...selection],
+    });
+    return validateAgainstSchema(schema, candidate).valid
+      ? { status: "found", example: candidate }
+      : exampleNotFound;
+  };
+
+  return search(0);
 };
 
 const mapValueSchema = (schema: JsonSchema): JsonSchema | undefined => {
@@ -435,25 +481,10 @@ const exampleFor = (schema: JsonSchema): unknown => {
     });
   }
   if (alternativeGroups.length > 1) {
-    let combinations: JsonSchema[][] = [[]];
-    for (const group of alternativeGroups) {
-      const next: JsonSchema[][] = [];
-      for (const combination of combinations) {
-        for (const variant of group.variants) {
-          next.push([...combination, variant]);
-        }
-      }
-      combinations = next;
-    }
     const base = { ...schema, anyOf: undefined, oneOf: undefined };
-    for (const combination of combinations) {
-      const candidate = exampleFor({
-        ...base,
-        allOf: [...allOf(base), ...combination],
-      });
-      if (validateAgainstSchema(schema, candidate).valid) {
-        return candidate;
-      }
+    const result = findComposedExample(schema, base, alternativeGroups);
+    if (result.status === "found") {
+      return result.example;
     }
     return exampleFor(base);
   }

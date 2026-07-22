@@ -127,6 +127,36 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     ).toBe(false);
   });
 
+  test("preserves explicit object closure inside allOf branches", () => {
+    const closedBranch = {
+      allOf: [
+        {
+          ...objectSchema({ allowed: { type: "string" } }),
+          additionalProperties: false,
+        },
+      ],
+    };
+    expect(
+      validateAgainstSchema(closedBranch, {
+        allowed: "yes",
+        unexpected: true,
+      }).valid,
+    ).toBe(false);
+
+    const siblingProperties = {
+      allOf: [
+        objectSchema({ first: { type: "string" } }, ["first"]),
+        objectSchema({ second: { type: "string" } }, ["second"]),
+      ],
+    };
+    expect(
+      validateAgainstSchema(siblingProperties, {
+        first: "one",
+        second: "two",
+      }).valid,
+    ).toBe(true);
+  });
+
   test("requires exactly one matching oneOf branch", () => {
     const schema = objectSchema({
       value: {

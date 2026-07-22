@@ -229,9 +229,10 @@ const validateObject = (
       continue;
     }
     if (
-      additionalSchema !== true &&
-      !allowUnknownProperties &&
-      (additionalSchema === false || Object.keys(properties).length > 0)
+      additionalSchema === false ||
+      (additionalSchema !== true &&
+        !allowUnknownProperties &&
+        Object.keys(properties).length > 0)
     ) {
       return fail(childPath, "unknown property");
     }

@@ -127,6 +127,30 @@ describe("--input contract help", () => {
     expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
   });
 
+  test("bounds composed example search without materializing branch products", () => {
+    const variants = Array.from({ length: 1000 }, (_, index) => ({
+      type: "string",
+      const: `value-${index}`,
+    }));
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        value: {
+          anyOf: variants,
+          oneOf: variants,
+        },
+      },
+      required: ["value"],
+    };
+
+    const help = buildInputContractHelp({
+      schema,
+      inputOnly: ["value"],
+    });
+
+    expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
+  });
+
   test("documents every branch of an array item union", () => {
     const schema: JsonSchema = {
       type: "object",
