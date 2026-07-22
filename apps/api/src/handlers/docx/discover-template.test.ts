@@ -146,6 +146,19 @@ describe("discoverTemplate", () => {
     });
   });
 
+  test("inline primitive loop exposes its value item field", async () => {
+    const xml = WRAP(P("Tags: {{#each tags}}{{tags.value}}, {{/each}}"));
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields.find((field) => field.path === "tags")).toEqual({
+      path: "tags",
+      kind: "array",
+      count: 1,
+      itemFields: [{ path: "value", kind: "string", count: 1 }],
+    });
+  });
+
   test("condition-only paths join repeated row fields", async () => {
     const xml = WRAP(
       [

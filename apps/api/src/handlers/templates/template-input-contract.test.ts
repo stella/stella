@@ -4,7 +4,7 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
-  collectRawTemplateTerminalPaths,
+  collectRawTemplateInputSources,
   collectTemplateInputKeys,
   findUnusedTemplateValueKeys,
   isFillableTemplateInputField,
@@ -19,6 +19,7 @@ const contractFor = (
 ): TemplateInputContract => ({
   acceptedPaths: new Set(acceptedPaths),
   forbiddenPaths: new Set(),
+  primitiveArrayPaths: new Set(),
 });
 const DECLARED_CONTRACT = contractFor(DECLARED_KEYS);
 
@@ -35,20 +36,22 @@ describe("template input contract", () => {
   test("raw templates accept every live discovered path", () => {
     const contract = collectTemplateInputKeys({
       type: "raw",
+      primitiveArrayPaths: [],
       terminalPaths: ["client.name", "signature_date"],
     });
     expect(contract.acceptedPaths).toEqual(
       new Set(["client.name", "signature_date"]),
     );
     expect(contract.forbiddenPaths).toEqual(new Set());
+    expect(contract.primitiveArrayPaths).toEqual(new Set());
   });
 
   test("raw static loops accept an array root with no item fields", () => {
-    const terminalPaths = collectRawTemplateTerminalPaths({
+    const sources = collectRawTemplateInputSources({
       fields: [{ path: "rows", kind: "array", itemFields: [] }],
       placeholderPaths: [],
     });
-    const contract = collectTemplateInputKeys({ type: "raw", terminalPaths });
+    const contract = collectTemplateInputKeys({ type: "raw", ...sources });
     expect(
       findUnusedTemplateValueKeys({
         contract,
@@ -58,7 +61,7 @@ describe("template input contract", () => {
   });
 
   test("raw loops with item fields keep their array root recursion-only", () => {
-    const terminalPaths = collectRawTemplateTerminalPaths({
+    const sources = collectRawTemplateInputSources({
       fields: [
         {
           path: "rows",
@@ -68,8 +71,11 @@ describe("template input contract", () => {
       ],
       placeholderPaths: [],
     });
-    expect(terminalPaths).toEqual(["rows.name"]);
-    const contract = collectTemplateInputKeys({ type: "raw", terminalPaths });
+    expect(sources).toEqual({
+      primitiveArrayPaths: [],
+      terminalPaths: ["rows.name"],
+    });
+    const contract = collectTemplateInputKeys({ type: "raw", ...sources });
     expect(
       findUnusedTemplateValueKeys({
         contract,
@@ -78,11 +84,45 @@ describe("template input contract", () => {
     ).toEqual([]);
   });
 
+  test("raw value loops explicitly accept supported primitive rows", () => {
+    const sources = collectRawTemplateInputSources({
+      fields: [
+        {
+          path: "tags",
+          kind: "array",
+          itemFields: [{ path: "value", kind: "string" }],
+        },
+      ],
+      placeholderPaths: ["tags.value"],
+    });
+    expect(sources).toEqual({
+      primitiveArrayPaths: ["tags"],
+      terminalPaths: ["tags.value", "tags.value"],
+    });
+    const contract = collectTemplateInputKeys({ type: "raw", ...sources });
+
+    fc.assert(
+      fc.property(
+        fc.array(fc.oneof(fc.string(), fc.integer(), fc.boolean())),
+        (tags) => {
+          expect(
+            findUnusedTemplateValueKeys({ contract, values: { tags } }),
+          ).toEqual([]);
+        },
+      ),
+      propertyConfig(),
+    );
+    expect(
+      findUnusedTemplateValueKeys({ contract, values: { tags: [null] } }),
+    ).toEqual(["tags"]);
+  });
+
   test("manifest templates accept live descendants but exclude derived outputs", () => {
     const contract = collectTemplateInputKeys({
       type: "manifest",
       derivedOutputPaths: ["company.full", "rent_annual"],
       fillableFieldPaths: ["company", "rent"],
+      primitiveArrayPaths: [],
       livePaths: [
         "company",
         "company.full",
@@ -105,6 +145,7 @@ describe("template input contract", () => {
       type: "manifest",
       derivedOutputPaths: ["company.full"],
       fillableFieldPaths: ["company"],
+      primitiveArrayPaths: [],
       livePaths: ["company.full.address"],
     });
     expect(contract.acceptedPaths).toEqual(new Set(["company"]));
@@ -116,6 +157,7 @@ describe("template input contract", () => {
       type: "manifest",
       derivedOutputPaths: [],
       fillableFieldPaths: ["company"],
+      primitiveArrayPaths: [],
       livePaths: ["unlisted.value"],
     });
     expect(contract.acceptedPaths).toEqual(new Set(["company"]));
@@ -126,6 +168,7 @@ describe("template input contract", () => {
       type: "manifest",
       derivedOutputPaths: [],
       fillableFieldPaths: ["client.type", "rent"],
+      primitiveArrayPaths: [],
       livePaths: [],
     });
     expect(contract.acceptedPaths).toEqual(new Set(["client.type", "rent"]));
@@ -134,6 +177,7 @@ describe("template input contract", () => {
   test("raw and manifest input policies are discriminated", () => {
     const raw = collectTemplateInputKeys({
       type: "raw",
+      primitiveArrayPaths: [],
       terminalPaths: ["company.full"],
     });
     expect(raw.acceptedPaths).toEqual(new Set(["company.full"]));
@@ -141,6 +185,7 @@ describe("template input contract", () => {
       type: "manifest",
       derivedOutputPaths: ["company.full"],
       fillableFieldPaths: ["company"],
+      primitiveArrayPaths: [],
       livePaths: ["company.full"],
     });
     expect(manifest.acceptedPaths).toEqual(new Set(["company"]));
@@ -152,6 +197,7 @@ describe("template input contract", () => {
       type: "manifest",
       derivedOutputPaths: [],
       fillableFieldPaths: ["company"],
+      primitiveArrayPaths: [],
       livePaths: ["company.seat"],
     });
     expect(
@@ -171,6 +217,7 @@ describe("template input contract", () => {
   test("raw structural namespaces reject leaf values", () => {
     const contract = collectTemplateInputKeys({
       type: "raw",
+      primitiveArrayPaths: [],
       terminalPaths: ["company.name"],
     });
     expect(
@@ -192,6 +239,7 @@ describe("template input contract", () => {
       type: "manifest",
       derivedOutputPaths: ["company.seat"],
       fillableFieldPaths: ["company"],
+      primitiveArrayPaths: [],
       livePaths: ["company.seat"],
     });
     expect(
@@ -278,6 +326,7 @@ describe("template input contract", () => {
         contract: {
           acceptedPaths: new Set(["items"]),
           forbiddenPaths: new Set(["items.total"]),
+          primitiveArrayPaths: new Set(),
         },
         values: { items: ["invalid"] },
       }),

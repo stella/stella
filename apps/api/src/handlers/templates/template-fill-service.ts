@@ -48,7 +48,7 @@ import { getS3 } from "@/api/lib/s3";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 
 import {
-  collectRawTemplateTerminalPaths,
+  collectRawTemplateInputSources,
   collectTemplateInputKeys,
   findUnusedTemplateValueKeys,
   isFillableTemplateInputField,
@@ -312,7 +312,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   if (unusedValuePolicy === "reject") {
     const discovered = await discoverTemplate(loaded.buffer);
-    const terminalPaths = collectRawTemplateTerminalPaths({
+    const rawInputSources = collectRawTemplateInputSources({
       fields: discovered.fields,
       placeholderPaths: discovered.placeholders.map(
         (placeholder) => placeholder.name,
@@ -322,7 +322,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
       manifest === null
         ? collectTemplateInputKeys({
             type: "raw",
-            terminalPaths,
+            ...rawInputSources,
           })
         : collectTemplateInputKeys({
             type: "manifest",
@@ -340,7 +340,8 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
             fillableFieldPaths: manifest.fields
               .filter(isFillableTemplateInputField)
               .map((field) => field.path),
-            livePaths: terminalPaths,
+            livePaths: rawInputSources.terminalPaths,
+            primitiveArrayPaths: rawInputSources.primitiveArrayPaths,
           });
     const unusedKeys = findUnusedTemplateValueKeys({
       contract: inputContract,

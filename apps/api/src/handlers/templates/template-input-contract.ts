@@ -6,11 +6,13 @@ type FindUnusedTemplateValueKeysOptions = {
 export type TemplateInputContract = {
   acceptedPaths: ReadonlySet<string>;
   forbiddenPaths: ReadonlySet<string>;
+  primitiveArrayPaths: ReadonlySet<string>;
 };
 
 type TemplateInputKeySources =
   | {
       type: "raw";
+      primitiveArrayPaths: Iterable<string>;
       terminalPaths: Iterable<string>;
     }
   | {
@@ -18,6 +20,7 @@ type TemplateInputKeySources =
       derivedOutputPaths: Iterable<string>;
       fillableFieldPaths: Iterable<string>;
       livePaths: Iterable<string>;
+      primitiveArrayPaths: Iterable<string>;
     };
 
 type TemplateInputField = {
@@ -37,16 +40,28 @@ type CollectRawTemplateTerminalPathsOptions = {
   placeholderPaths: Iterable<string>;
 };
 
-export const collectRawTemplateTerminalPaths = ({
+type RawTemplateInputSources = {
+  primitiveArrayPaths: string[];
+  terminalPaths: string[];
+};
+
+export const collectRawTemplateInputSources = ({
   fields,
   placeholderPaths,
-}: CollectRawTemplateTerminalPathsOptions): string[] => {
+}: CollectRawTemplateTerminalPathsOptions): RawTemplateInputSources => {
+  const primitiveArrayPaths: string[] = [];
   const terminalPaths = Array.from(placeholderPaths);
 
   const visit = (field: RawDiscoveredField, parentPath: string): void => {
     const path = parentPath === "" ? field.path : `${parentPath}.${field.path}`;
     const itemFields = field.itemFields;
     const hasItemFields = itemFields !== undefined && itemFields.length > 0;
+    if (
+      field.kind === "array" &&
+      itemFields?.some((itemField) => itemField.path === "value")
+    ) {
+      primitiveArrayPaths.push(path);
+    }
     if (field.kind !== "object" && (field.kind !== "array" || !hasItemFields)) {
       terminalPaths.push(path);
     }
@@ -60,7 +75,7 @@ export const collectRawTemplateTerminalPaths = ({
   for (const field of fields) {
     visit(field, "");
   }
-  return terminalPaths;
+  return { primitiveArrayPaths, terminalPaths };
 };
 
 export const isFillableTemplateInputField = (
@@ -77,6 +92,7 @@ export const collectTemplateInputKeys = (
     return {
       acceptedPaths: new Set(sources.terminalPaths),
       forbiddenPaths: new Set(),
+      primitiveArrayPaths: new Set(sources.primitiveArrayPaths),
     };
   }
 
@@ -92,7 +108,18 @@ export const collectTemplateInputKeys = (
     }
     acceptedPaths.add(livePath);
   }
-  return { acceptedPaths, forbiddenPaths: derivedOutputPaths };
+  const primitiveArrayPaths = new Set(
+    Array.from(sources.primitiveArrayPaths).filter(
+      (path) =>
+        isAtOrBelowAny(path, fillableFieldPaths) &&
+        !isAtOrBelowAny(path, derivedOutputPaths),
+    ),
+  );
+  return {
+    acceptedPaths,
+    forbiddenPaths: derivedOutputPaths,
+    primitiveArrayPaths,
+  };
 };
 
 const isAtOrBelowAny = (path: string, roots: ReadonlySet<string>): boolean =>
@@ -140,7 +167,12 @@ const findUnusedPaths = (
       let hasInvalidItem = false;
       for (const item of value) {
         if (!isRecord(item)) {
-          hasInvalidItem = true;
+          if (
+            !contract.primitiveArrayPaths.has(path) ||
+            !isTemplateLoopPrimitive(item)
+          ) {
+            hasInvalidItem = true;
+          }
           continue;
         }
         for (const unusedPath of findUnusedPaths(item, path, contract)) {
@@ -178,3 +210,10 @@ const hasDeclaredDescendant = (
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isTemplateLoopPrimitive = (
+  value: unknown,
+): value is boolean | number | string =>
+  typeof value === "boolean" ||
+  typeof value === "number" ||
+  typeof value === "string";
