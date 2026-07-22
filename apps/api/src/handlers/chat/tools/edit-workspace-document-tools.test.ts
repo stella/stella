@@ -365,6 +365,75 @@ describe("createEditWorkspaceDocumentTools", () => {
     expect(s3WriteMock).not.toHaveBeenCalled();
   });
 
+  test("direct mode requires an author for every comment-producing operation", async () => {
+    const { tx } = buildTx({ preferredName: null, name: "   " });
+    const { safeDb } = createScopedDbMock(tx);
+    s3FileBuffer = await buildSourceDocx();
+    const tools = createEditWorkspaceDocumentTools({
+      safeDb,
+      organizationId,
+      userId,
+      workspaceId,
+      entityId,
+      fileFieldId,
+      recordAuditEvent: async () => undefined,
+      docxEditRepresentation: "direct",
+    });
+    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    if (!execute) {
+      throw new Error("edit_workspace_document must be server-executed");
+    }
+
+    const block = await firstBlock(s3FileBuffer);
+    const results = await Promise.all([
+      execute(
+        {
+          version: 1,
+          operations: [
+            {
+              id: "comment-range",
+              type: "commentOnRange",
+              range: {
+                type: "textRange",
+                story: "main",
+                blockId: block.id,
+                startOffset: 0,
+                endOffset: 3,
+                selectedTextHash: "h1a2b3",
+              },
+              comment: { text: "Range comment" },
+            },
+          ],
+        },
+        asTestRaw<Parameters<typeof execute>[1]>({}),
+      ),
+      execute(
+        {
+          version: 1,
+          operations: [
+            {
+              id: "edit-comment",
+              type: "replaceInBlock",
+              blockId: block.id,
+              find: "quick",
+              replace: "slow",
+              comment: { text: "Edit comment" },
+            },
+          ],
+        },
+        asTestRaw<Parameters<typeof execute>[1]>({}),
+      ),
+    ]);
+
+    for (const result of results) {
+      expect(result).toMatchObject({
+        success: false,
+        code: "author_name_required",
+      });
+    }
+    expect(s3WriteMock).not.toHaveBeenCalled();
+  });
+
   test("tracked-changes mode writes a new version with the configured author attributed on the revision", async () => {
     const { tx, insertedTables } = buildTx({
       preferredName: "Jana Nováková",

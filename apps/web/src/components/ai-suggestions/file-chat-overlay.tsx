@@ -1043,6 +1043,15 @@ const FileChatOverlayInner = ({
     hasDocxEditSurface,
     selection: getChatEditModeSelection(),
   });
+  const getLatestActiveDocxEditSelection = useLatestCallback(() => {
+    const state = resolveActiveDocxEditModeState({
+      activeFileEditable: activeFile?.editable,
+      docxEditable,
+      hasDocxEditSurface,
+      selection: getChatEditModeSelection(),
+    });
+    return state.type === "unavailable" ? null : state.selection;
+  });
   const canSelectEditMode = activeDocxEditModeState.type === "selectable";
   // Folio's PM view exists almost immediately after DocxBrowserEditor
   // mounts but there is a sub-100ms window where the ref is set but
@@ -1139,7 +1148,7 @@ const FileChatOverlayInner = ({
     const snapshot = docxEditorRef?.current?.createAIEditSnapshot() ?? null;
     lastSentDocxEditSnapshotRef.current = snapshot;
 
-    if (activeDocxEditModeState.type === "unavailable") {
+    if (getLatestActiveDocxEditSelection() === null) {
       return { ...activeFile, supportsDocxEdits: false };
     }
 
@@ -1244,11 +1253,13 @@ const FileChatOverlayInner = ({
     ...(activeDocxEditModeState.type !== "unavailable"
       ? {
           getEditApplyMode: () =>
-            activeDocxEditModeState.selection.editApplyMode,
-          getDocxEditRepresentation: () =>
-            docxEditRepresentationForSelection(
-              activeDocxEditModeState.selection,
-            ),
+            getLatestActiveDocxEditSelection()?.editApplyMode ?? "manual",
+          getDocxEditRepresentation: () => {
+            const selection = getLatestActiveDocxEditSelection();
+            return selection
+              ? docxEditRepresentationForSelection(selection)
+              : undefined;
+          },
         }
       : {}),
   };

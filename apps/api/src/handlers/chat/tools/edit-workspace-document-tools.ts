@@ -510,7 +510,7 @@ export const createEditWorkspaceDocumentTools = ({
     const authorName = await resolveDocxEditAuthorName({ safeDb, userId });
     const authorRequired =
       docxEditRepresentation === DOCX_EDIT_REPRESENTATION.trackedChanges ||
-      operations.some((operation) => operation.type === "commentOnBlock");
+      operations.some((operation) => "comment" in operation);
     if (!authorName && authorRequired) {
       // Structured, client-branchable outcome (not a thrown ChatToolError):
       // the chat client detects `code` and opens a "set your name" modal
