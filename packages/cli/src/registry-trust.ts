@@ -61,11 +61,44 @@ const isUnknownArray = (value: unknown): value is readonly unknown[] =>
 
 const SCHEMA_ARRAY_KEYWORDS = ["allOf", "anyOf", "oneOf"] as const;
 
+// This is intentionally an allowlist, not only a list of known-dangerous
+// keywords. The fetched registry is executable CLI configuration: a new JSON
+// Schema keyword must not become trusted until validation and help implement
+// the same semantics.
+const SUPPORTED_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
+  "additionalProperties",
+  "allOf",
+  "anyOf",
+  "const",
+  "default",
+  "description",
+  "enum",
+  "examples",
+  "flags",
+  "items",
+  "maxItems",
+  "maxLength",
+  "maximum",
+  "minItems",
+  "minLength",
+  "minimum",
+  "oneOf",
+  "pattern",
+  "patternProperties",
+  "properties",
+  "required",
+  "source",
+  "title",
+  "type",
+]);
+
 const UNSUPPORTED_SCHEMA_KEYWORDS = [
   "$defs",
   "$ref",
   "contains",
   "definitions",
+  "dependencies",
+  "dependentRequired",
   "dependentSchemas",
   "else",
   "if",
@@ -111,6 +144,12 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
 
   for (const keyword of UNSUPPORTED_SCHEMA_KEYWORDS) {
     if (schema[keyword] !== undefined) {
+      return `${keyword} schema constraints are unsupported`;
+    }
+  }
+
+  for (const keyword of Object.keys(schema)) {
+    if (!SUPPORTED_SCHEMA_KEYWORDS.has(keyword)) {
       return `${keyword} schema constraints are unsupported`;
     }
   }

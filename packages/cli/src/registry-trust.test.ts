@@ -29,7 +29,7 @@ describe("validateFetchedToolsList: rule 1 (interpreted, no eval)", () => {
       inputSchema: {
         type: "object",
         properties: {
-          x: { type: "string", format: "email", pattern: ".*" },
+          x: { type: "string", pattern: ".*" },
         },
       },
     });
@@ -171,8 +171,11 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
       ["$ref", "#/definitions/child"],
       ["contains", { const: "sentinel" }],
       ["definitions", { child: { type: "string" } }],
+      ["dependencies", { mode: ["value"] }],
+      ["dependentRequired", { mode: ["value"] }],
       ["dependentSchemas", { mode: { required: ["value"] } }],
       ["else", { required: ["fallback"] }],
+      ["format", "email"],
       ["if", { required: ["mode"] }],
       ["not", { const: "forbidden" }],
       ["propertyNames", { pattern: "^safe-" }],
@@ -194,6 +197,21 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
         violation: `tool list_matters: ${keyword} schema constraints are unsupported`,
       });
     }
+  });
+
+  test("unknown schema vocabulary fails closed by default", () => {
+    const tool = validTool({
+      inputSchema: {
+        type: "object",
+        properties: { value: { futureConstraint: true } },
+      },
+    });
+
+    expect(validateFetchedToolsList(body([tool]))).toEqual({
+      ok: false,
+      violation:
+        "tool list_matters: futureConstraint schema constraints are unsupported",
+    });
   });
 
   test("unsupported subschema shapes fail closed in every traversed container", () => {
