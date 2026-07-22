@@ -704,6 +704,75 @@ describe("help surfaces --input for inputOnly tools", () => {
   });
 });
 
+describe("template fill unused-value validation", () => {
+  test("surfaces the tool's strict unused-value error", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        error: {
+          code: "validation_error",
+          message: "Unused template value keys: typo",
+          issues: [
+            {
+              path: "values.typo",
+              message: "Value key does not match a template field",
+            },
+          ],
+          hint: "Correct the value keys or explicitly allow unused values.",
+        },
+      },
+      isError: true,
+    }));
+    const result = await runCli({
+      args: [
+        "template",
+        "fill",
+        "--template-id",
+        "template-1",
+        "--input",
+        '{"values":{"typo":"value"}}',
+      ],
+      url: server.url,
+      token: makeToken(["templates"]),
+    });
+    server.stop();
+
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("Unused template value keys: typo");
+    expect(server.requests).toHaveLength(1);
+  });
+
+  test("forwards the explicit unused-value override to the shared MCP tool", async () => {
+    const fillPayload = {
+      documentBase64: "ZmlsbGVk",
+      unusedValues: ["intentional"],
+    };
+    const server = startMockServer(() => ({ toolPayload: fillPayload }));
+    const result = await runCli({
+      args: [
+        "template",
+        "fill",
+        "--template-id",
+        "template-1",
+        "--input",
+        '{"values":{"intentional":"value"}}',
+        "--allow-unused-values",
+      ],
+      url: server.url,
+      token: makeToken(["templates"]),
+    });
+    server.stop();
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toEqual(fillPayload);
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      template_id: "template-1",
+      values: { intentional: "value" },
+      allow_unused_values: true,
+    });
+  });
+});
+
 describe("organization discriminator split (S2/Phase 4)", () => {
   test("add-member injects action and forwards the flag args", async () => {
     const server = startMockServer(() => ({ toolPayload: { ok: true } }));

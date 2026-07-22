@@ -1693,6 +1693,15 @@ export const generatedRouteMap: RouteNode = {
                 description: "Template id, as returned by list_templates",
                 required: true,
               },
+              {
+                flag: "--allow-unused-values",
+                prop: "allow_unused_values",
+                kind: "boolean",
+                repeatable: false,
+                description:
+                  "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
+                required: false,
+              },
             ],
             inputOnly: ["values"],
             paginated: false,
@@ -1710,6 +1719,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   description: "Map of field path to value.",
                   additionalProperties: true,
+                },
+                allow_unused_values: {
+                  type: "boolean",
+                  description:
+                    "Allow value keys that do not match template fields. Defaults to false so misspelled field paths fail loudly.",
                 },
               },
               required: ["template_id", "values"],

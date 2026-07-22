@@ -431,6 +431,68 @@ describe("header and footer placeholders", () => {
     const result = await fillTemplate(buf, { name: "Alice" });
     expect(result.unmatchedPlaceholders).toContain("company");
   });
+
+  test("inline directives render in headers and footers without body directives", async () => {
+    const body = WRAP(P("Body only"));
+    const header = HEADER_WRAP(
+      P("Header {{#if show_header}}for {{name}}{{/if}}"),
+    );
+    const footer = FOOTER_WRAP(
+      P("Tags: {{#each tags}}{{tags.value}}; {{/each}}"),
+    );
+    const buf = await makeDocxWithHeaderFooter(body, header, footer);
+
+    const discovered = await discoverTemplate(buf);
+    expect(discovered.fields.map((field) => field.path)).toEqual([
+      "name",
+      "show_header",
+      "tags",
+    ]);
+
+    const result = await fillTemplate(buf, {
+      name: "Alice",
+      show_header: true,
+      tags: ["urgent", "signed"],
+    });
+    const zip = await JSZip.loadAsync(result.buffer);
+    const headerXml = await zip.file("word/header1.xml")?.async("string");
+    const footerXml = await zip.file("word/footer1.xml")?.async("string");
+    expect(headerXml).toContain("Alice");
+    expect(footerXml).toContain("urgent");
+    expect(footerXml).toContain("signed");
+    expect(`${headerXml}${footerXml}`).not.toContain("{{#");
+    expect(result.structureErrors).toEqual([]);
+  });
+
+  test("loop-local numbering keys stay unique across document parts", async () => {
+    const body = WRAP(
+      [
+        P("{{#each body_items}}"),
+        P("Body {{@num:clause}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const header = HEADER_WRAP(P("Header"));
+    const footer = FOOTER_WRAP(
+      [
+        P("{{#each footer_items}}"),
+        P("Footer {{@num:clause}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const buf = await makeDocxWithHeaderFooter(body, header, footer);
+
+    const result = await fillTemplate(buf, {
+      body_items: [{}],
+      footer_items: [{}],
+    });
+    const zip = await JSZip.loadAsync(result.buffer);
+    const bodyXml = await zip.file("word/document.xml")?.async("string");
+    const footerXml = await zip.file("word/footer1.xml")?.async("string");
+
+    expect(bodyXml).toContain("Body 1");
+    expect(footerXml).toContain("Footer 2");
+  });
 });
 
 // ── Split-run placeholders ───────────────────────────────

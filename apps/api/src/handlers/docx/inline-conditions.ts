@@ -34,12 +34,11 @@
  * - A paragraph with a structure error is left untouched (its markers stay
  *   in the output) and only the first error per paragraph is reported.
  * - Conditions and array paths evaluate against the top-level template data
- *   plus the manifest's named conditions — the same context as a top-level
- *   block `{{#if}}`/`{{#each}}`. Inline directives do NOT see an enclosing
- *   block-loop iteration item: block loop expansion has already run when this
- *   pass executes.
- * - Like block directives, this pass covers word/document.xml only (not
- *   headers/footers), matching processBlockDirectives.
+ *   plus the manifest's named conditions. Paragraphs cloned by a block loop
+ *   retain that iteration's inherited row context, matching nested block
+ *   condition semantics.
+ * - The caller runs this pass for the body and every header/footer content
+ *   part, matching discovery and scalar value replacement coverage.
  *
  * Whole-paragraph directive lines are skipped here: they are the block
  * engine's domain, and orphaned ones were already reported by
@@ -66,8 +65,9 @@ import {
 
 import {
   collectNumKeysInText,
-  eachKey,
-  registerItemPatchValues,
+  createDirectiveProcessingContext,
+  type DirectiveProcessingContext,
+  registerLoopItemPatchValues,
   rewriteEachPlaceholdersInText,
   rewriteIterationTokensInText,
   scopeIterationNumberingInText,
@@ -119,9 +119,6 @@ type InlineParse =
   | { ok: false; message: string; directive: string };
 
 /** Narrow `unknown` to a non-array string-keyed record. */
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const EXCERPT_LENGTH = 60;
 
 /** Short paragraph excerpt so a structure error names the paragraph. */
@@ -280,12 +277,11 @@ export const processInlineConditions = (
   body: slimdom.Element,
   data: Record<string, unknown>,
   namedConditions?: NamedCondition[],
+  options: { processingContext?: DirectiveProcessingContext } = {},
 ): TemplateStructureError[] => {
   const errors: TemplateStructureError[] = [];
-
-  // Distinguishes sibling inline loops so their iteration-scoped numbering
-  // keys can never collide (mirrors the block expander's eachExpansionCount).
-  let eachExpansionCount = 0;
+  const processingContext =
+    options.processingContext ?? createDirectiveProcessingContext();
 
   for (const [index, paragraph] of body
     .getElementsByTagNameNS(W_NS, "p")
@@ -318,16 +314,22 @@ export const processInlineConditions = (
     // offsets valid. `if` groups are plain string cuts; `each` groups splice
     // cloned run sequences (preserving body run formatting) at the run level.
     const ordered = [...parsed.groups].toSorted((a, b) => b.start - a.start);
+    const paragraphData =
+      processingContext.inlineDataByParagraph.get(paragraph) ?? data;
     for (const group of ordered) {
       if (group.kind === "each") {
-        applyInlineEach(paragraph, group, data, eachExpansionCount);
-        eachExpansionCount += 1;
+        applyInlineEach(
+          paragraph,
+          group,
+          paragraphData,
+          processingContext.nextEachExpansionId(),
+        );
         continue;
       }
       const winning = group.branches.find(
         (branch) =>
           branch.condition === "" ||
-          evaluateCondition(branch.condition, data, namedConditions),
+          evaluateCondition(branch.condition, paragraphData, namedConditions),
       );
       const cuts: { start: number; end: number; value: string }[] = [];
       if (winning) {
@@ -391,19 +393,7 @@ const applyInlineEach = (
   const rewriteItem = (text: string, itemIdx: number): string => {
     const item = items[itemIdx];
     const itemValues: Record<string, RichPatchValue> = {};
-    if (isRecord(item)) {
-      registerItemPatchValues(itemValues, item, group.arrayPath, itemIdx, "");
-    } else if (
-      typeof item === "string" ||
-      typeof item === "number" ||
-      typeof item === "boolean"
-    ) {
-      // Primitive array: support the raw `{{__each_path_N}}` key (matching the
-      // block expander) and `{{path.value}}` so authors have a writable field.
-      const value = typeof item === "string" ? item : String(item);
-      itemValues[`__each_${group.arrayPath}_${itemIdx}`] = value;
-      itemValues[eachKey(group.arrayPath, itemIdx, "value")] = value;
-    }
+    registerLoopItemPatchValues(itemValues, item, group.arrayPath, itemIdx);
 
     let iteration = rewriteEachPlaceholdersInText(
       text,

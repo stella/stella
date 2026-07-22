@@ -16,6 +16,7 @@ import type { NamedCondition } from "@stll/template-conditions";
 
 import {
   collectValidNumIds,
+  createDirectiveProcessingContext,
   flattenTemplateData,
   HAS_BLOCK_DIRECTIVES_RE,
   processBlockDirectives,
@@ -30,11 +31,16 @@ import {
   mightContainNumberingMarkers,
   resolveRefsInDoc,
 } from "./numbering";
-import { HEADER_FOOTER_RE, W_NS } from "./ooxml";
+import {
+  MAIN_DOCUMENT_PART_PATH,
+  templateContentPartPaths,
+  W_NS,
+} from "./ooxml";
 import { patchXmlPart } from "./rich-patch";
 import { readManifestFromZip, stripManifest } from "./template-manifest";
 import type {
   FillTemplateResult,
+  ParagraphSource,
   RichPatchValue,
   TemplateData,
   TemplateDataValue,
@@ -53,9 +59,7 @@ const fillTemplateWithValues = async (
   values: PatchValues,
 ): Promise<Buffer> => {
   const zip = await JSZip.loadAsync(data);
-  const partNames = Object.keys(zip.files).filter(
-    (name) => name === "word/document.xml" || HEADER_FOOTER_RE.test(name),
-  );
+  const partNames = templateContentPartPaths(Object.keys(zip.files));
 
   // Each part is read, patched, and written back independently — `values` is
   // read-only and `patchXmlPart` carries no cross-part counter (unlike the
@@ -82,14 +86,33 @@ const fillTemplateWithValues = async (
 };
 
 /**
- * Pre-process block directives in a DOCX ZIP. Checks whether
- * block directives exist; if not, returns `null` (caller should
- * fall back to `flattenTemplateData`). Otherwise evaluates
- * conditionals and loops, serializes the modified XML back
- * into the ZIP, and returns the modified buffer plus expanded
- * patch values.
+ * Pre-process block and inline directives in every authored content part.
+ * Returns `null` when no part has directives so callers retain the flatten-only
+ * fast path. Discovery and rendering share templateContentPartPaths, making
+ * supported document-part coverage a single invariant.
  */
-const preProcessBlockDirectives = async (
+const templatePartSource = (path: string): ParagraphSource => {
+  if (path === MAIN_DOCUMENT_PART_PATH) {
+    return "body";
+  }
+  if (path.startsWith("word/header")) {
+    return "header";
+  }
+  return "footer";
+};
+
+const templatePartContainer = (
+  doc: slimdom.Document,
+  source: ParagraphSource,
+): slimdom.Element | undefined => {
+  if (source === "body") {
+    return doc.getElementsByTagNameNS(W_NS, "body").at(0);
+  }
+  const localName = source === "header" ? "hdr" : "ftr";
+  return doc.getElementsByTagNameNS(W_NS, localName).at(0);
+};
+
+const preProcessTemplateDirectives = async (
   zip: JSZip,
   templateData: TemplateData,
   namedConditions?: NamedCondition[],
@@ -99,79 +122,86 @@ const preProcessBlockDirectives = async (
   expandedValues: Record<string, RichPatchValue>;
   structureErrors: TemplateStructureError[];
 } | null> => {
-  const docEntry = zip.file("word/document.xml");
-  if (!docEntry) {
+  const parts = (
+    await Promise.all(
+      templateContentPartPaths(Object.keys(zip.files)).map(async (path) => {
+        const entry = zip.file(path);
+        if (!entry) {
+          return undefined;
+        }
+        return { path, xml: await entry.async("string") };
+      }),
+    )
+  ).filter((part): part is { path: string; xml: string } => part !== undefined);
+  if (!parts.some(({ xml }) => HAS_BLOCK_DIRECTIVES_RE.test(xml))) {
     return null;
   }
 
-  const xml = await docEntry.async("string");
-
-  // Fast-path: skip DOM parsing if no block directives
-  if (!HAS_BLOCK_DIRECTIVES_RE.test(xml)) {
-    return null;
-  }
-
-  const doc = slimdom.parseXmlDocument(xml);
-  const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
-
-  if (!body) {
-    return null;
-  }
-
-  const { patchValues, errors } = processBlockDirectives(
-    body,
-    templateData,
-    namedConditions,
-    conditionValues,
-  );
-
-  // Inline conditional spans resolve after the block pass (whole-paragraph
-  // directives and loop expansion are settled, so every surviving paragraph
-  // is final) and before this DOM serializes — which places them before
-  // numbering, placeholder discovery, and {{path}} substitution below. That
-  // ordering keeps the downstream passes clean: markers and @num keys inside
-  // a cut span are removed before they could be numbered, reported as
-  // unmatched, or filled. AI per-occurrence adaptation (adaptAiFields) runs
-  // even earlier, at the fill boundary on the raw template buffer: its
-  // context extraction and per-occurrence patching must see the same buffer
-  // so occurrence indices stay aligned, and a rendering patched into a
-  // branch that this pass later cuts is simply removed with the branch.
-  // Inline `{{#if}}` spans evaluate against the same raw-value overlay as the
-  // block pass (see CONDITION_RAW_VALUES). processInlineConditions uses `data`
-  // only for condition tests and inline-loop array resolution — never for
-  // scalar substitution — so overlaying the formatted date paths with their raw
-  // ISO values is safe and does not affect rendered text.
+  const expandedValues = flattenTemplateData(templateData);
+  const structureErrors: TemplateStructureError[] = [];
   const inlineData =
     conditionValues && Object.keys(conditionValues).length > 0
       ? { ...templateData, ...conditionValues }
       : templateData;
-  const inlineErrors = processInlineConditions(
-    body,
-    inlineData,
-    namedConditions,
-  );
+  const paragraphOffsets: Record<ParagraphSource, number> = {
+    body: 0,
+    footer: 0,
+    header: 0,
+  };
+  const numberingXml =
+    (await zip.file("word/numbering.xml")?.async("string")) ?? null;
+  const validNumIds = collectValidNumIds(numberingXml);
+  const processingContext = createDirectiveProcessingContext();
 
-  // Loop expansion clones list paragraphs verbatim; prune numbering
-  // references that do not resolve in word/numbering.xml so the
-  // output renders identically in every consumer (Word ignores a
-  // dangling numId, other processors may not).
-  if (body.getElementsByTagNameNS(W_NS, "numPr").length > 0) {
-    const numberingXml =
-      (await zip.file("word/numbering.xml")?.async("string")) ?? null;
-    pruneDanglingNumPr(body, collectValidNumIds(numberingXml));
+  for (const { path, xml } of parts) {
+    const doc = slimdom.parseXmlDocument(xml);
+    const source = templatePartSource(path);
+    const container = templatePartContainer(doc, source);
+    if (!container) {
+      continue;
+    }
+
+    const paragraphCount = container.getElementsByTagNameNS(W_NS, "p").length;
+    const paragraphOffset = paragraphOffsets[source];
+    paragraphOffsets[source] += paragraphCount;
+    if (!HAS_BLOCK_DIRECTIVES_RE.test(xml)) {
+      continue;
+    }
+
+    const { patchValues, errors } = processBlockDirectives(
+      container,
+      templateData,
+      { conditionValues, namedConditions, processingContext },
+    );
+    Object.assign(expandedValues, patchValues);
+    const inlineErrors = processInlineConditions(
+      container,
+      inlineData,
+      namedConditions,
+      { processingContext },
+    );
+    for (const error of [...errors, ...inlineErrors]) {
+      structureErrors.push({
+        ...error,
+        paragraphIndex: error.paragraphIndex + paragraphOffset,
+        source,
+      });
+    }
+
+    if (container.getElementsByTagNameNS(W_NS, "numPr").length > 0) {
+      pruneDanglingNumPr(container, validNumIds);
+    }
+    zip.file(path, slimdom.serializeToWellFormedString(doc));
   }
 
-  // Serialize modified DOM back into the ZIP
-  const serialized = slimdom.serializeToWellFormedString(doc);
-  zip.file("word/document.xml", serialized);
   const modifiedBuf = await zip.generateAsync({
     type: "nodebuffer",
   });
 
   return {
     buffer: Buffer.from(modifiedBuf),
-    expandedValues: patchValues,
-    structureErrors: [...errors, ...inlineErrors],
+    expandedValues,
+    structureErrors,
   };
 };
 
@@ -208,7 +238,7 @@ export const fillTemplate = async (
     const conditionValues = readConditionRawValues(values);
     // Checks for block directives internally; returns null
     // when none are found
-    const result = await preProcessBlockDirectives(
+    const result = await preProcessTemplateDirectives(
       zip,
       values,
       namedConditions,
@@ -229,8 +259,8 @@ export const fillTemplate = async (
   }
 
   // Resolve clause cross-references / numbering across the body and every
-  // header/footer part — the same parts fillTemplateWithValues and
-  // discoverPlaceholders cover (`word/document.xml` || HEADER_FOOTER_RE) — after
+  // header/footer part — the same shared template-content parts used by value
+  // replacement and placeholder discovery — after
   // conditional removal, so clauses dropped by a {{#if}} are not numbered and
   // references to them stay unresolved. Numbering shares one counter space and
   // `@ref` must resolve across parts, so this is two-phase over a parsed DOM
@@ -241,12 +271,9 @@ export const fillTemplate = async (
   // that Word split across runs be seen and rewritten, the same way the
   // placeholder pipeline handles split markers.
   const numberingZip = await JSZip.loadAsync(data);
-  const numberingParts = [
-    "word/document.xml",
-    ...Object.keys(numberingZip.files).filter((name) =>
-      HEADER_FOOTER_RE.test(name),
-    ),
-  ];
+  const numberingParts = templateContentPartPaths(
+    Object.keys(numberingZip.files),
+  );
   const numberingDocs = new Map<string, slimdom.Document>();
   const numbers = new Map<string, number>();
 

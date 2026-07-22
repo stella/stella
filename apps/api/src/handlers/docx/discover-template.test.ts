@@ -75,6 +75,44 @@ describe("discoverTemplate", () => {
     expect(field?.kind).toBe("string");
   });
 
+  test("inline-only condition infers its boolean driver", async () => {
+    const xml = WRAP(
+      P("Buyer{{#if has_spouse}} and their spouse{{/if}} hereby agrees."),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields.find((field) => field.path === "has_spouse")).toEqual({
+      path: "has_spouse",
+      kind: "boolean",
+      count: 1,
+    });
+  });
+
+  test("inline condition discovery shares the canonical operator grammar", async () => {
+    const xml = WRAP(P('{{#if roles contains "admin"}}Administrator{{/if}}'));
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields).toEqual([
+      { path: "roles", kind: "string", count: 1 },
+    ]);
+  });
+
+  test("inline parse errors are part of template discovery", async () => {
+    const xml = WRAP(P("Buyer {{#if has_spouse}} and spouse"));
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.structureErrors).toEqual([
+      expect.objectContaining({
+        directive: "{{#if has_spouse}}",
+        paragraphIndex: 0,
+        source: "body",
+      }),
+    ]);
+  });
+
   test("loop infers array field with item fields", async () => {
     const xml = WRAP(
       [
@@ -94,6 +132,188 @@ describe("discoverTemplate", () => {
     const itemPaths = field?.itemFields?.map((f) => f.path);
     expect(itemPaths).toContain("name");
     expect(itemPaths).toContain("address");
+  });
+
+  test("inline static loop infers its array input", async () => {
+    const xml = WRAP(P("Parties: {{#each parties}}party; {{/each}}"));
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields.find((field) => field.path === "parties")).toEqual({
+      path: "parties",
+      kind: "array",
+      count: 1,
+    });
+  });
+
+  test("inline primitive loop exposes its value item field", async () => {
+    const xml = WRAP(P("Tags: {{#each tags}}{{tags.value}}, {{/each}}"));
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields.find((field) => field.path === "tags")).toEqual({
+      path: "tags",
+      kind: "array",
+      count: 1,
+      itemFields: [{ path: "value", kind: "string", count: 1 }],
+    });
+  });
+
+  test("inline loops inside block rows inherit the enclosing row path", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("Items: {{#each items}}{{items.name}}, {{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(
+      result.fields.find((field) => field.path === "items"),
+    ).toBeUndefined();
+    expect(
+      result.fields.find((field) => field.path === "groups.items"),
+    ).toEqual({
+      path: "groups.items",
+      kind: "array",
+      count: 1,
+      itemFields: [{ path: "name", kind: "string", count: 1 }],
+    });
+    expect(result.placeholders).toContainEqual({
+      name: "groups.items.name",
+      count: 1,
+    });
+  });
+
+  test("nested block loop shorthand inherits the enclosing row path", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("{{groups.title}}"),
+        P("{{#each items}}"),
+        P("{{items.name}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(
+      result.fields.find((field) => field.path === "items"),
+    ).toBeUndefined();
+    expect(
+      result.fields.find((field) => field.path === "groups.items"),
+    ).toEqual({
+      path: "groups.items",
+      kind: "array",
+      count: 1,
+      itemFields: [{ path: "name", kind: "string", count: 1 }],
+    });
+    expect(result.placeholders).toContainEqual({
+      name: "groups.items.name",
+      count: 1,
+    });
+  });
+
+  test("condition-only paths join repeated row fields", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each sellers}}"),
+        P("{{sellers.name}}{{#if sellers.is_company}} Ltd{{/if}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const sellers = result.fields.find((field) => field.path === "sellers");
+    expect(sellers?.itemFields?.map((field) => field.path).toSorted()).toEqual([
+      "is_company",
+      "name",
+    ]);
+  });
+
+  test("block conditions nested in loops join repeated row fields", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each sellers}}"),
+        P("{{sellers.name}}"),
+        P("{{#if is_company}}"),
+        P("Company"),
+        P("{{/if}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const sellers = result.fields.find((field) => field.path === "sellers");
+    expect(sellers?.itemFields?.map((field) => field.path).toSorted()).toEqual([
+      "is_company",
+      "name",
+    ]);
+  });
+
+  test("preserves dotted primitive loop roots", async () => {
+    const xml = WRAP(
+      [P("{{#each deal.tags}}"), P("{{deal.tags.value}}"), P("{{/each}}")].join(
+        "",
+      ),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields.find((field) => field.path === "deal.tags")).toEqual({
+      path: "deal.tags",
+      kind: "array",
+      count: 2,
+      itemFields: [{ path: "value", kind: "string", count: 1 }],
+    });
+  });
+
+  test("preserves dotted condition-only inputs", async () => {
+    const xml = WRAP(
+      [P("{{#if client.has_spouse}}"), P("Spouse details"), P("{{/if}}")].join(
+        "",
+      ),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(
+      result.fields.find((field) => field.path === "client.has_spouse"),
+    ).toEqual({
+      path: "client.has_spouse",
+      kind: "boolean",
+      count: 1,
+    });
+  });
+
+  test("nested loops expose condition inputs at every inherited row scope", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("{{#each groups.items}}"),
+        P("{{#if group_enabled and groups.is_master}}"),
+        P("Item"),
+        P("{{/if}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const groups = result.fields.find((field) => field.path === "groups");
+    const items = result.fields.find((field) => field.path === "groups.items");
+    expect(groups?.itemFields?.map((field) => field.path).toSorted()).toEqual([
+      "group_enabled",
+      "is_master",
+    ]);
+    expect(items?.itemFields?.map((field) => field.path)).toEqual([
+      "group_enabled",
+    ]);
   });
 
   test("nested object path infers object field", async () => {
@@ -193,6 +413,35 @@ describe("discoverTemplate", () => {
     const ukField = result.fields.find((f) => f.path === "uk_number");
     expect(ukField).toBeDefined();
     expect(ukField?.visibleWhen).toBe("isUK");
+  });
+
+  test("fields inside inline branches get visibleWhen", async () => {
+    const xml = WRAP(
+      P("{{#if has_spouse}}{{spouse.name}}{{#else}}{{single_name}}{{/if}}"),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(
+      result.fields.find((field) => field.path === "spouse.name")?.visibleWhen,
+    ).toBe("has_spouse");
+    expect(
+      result.fields.find((field) => field.path === "single_name")?.visibleWhen,
+    ).toBe("!has_spouse");
+  });
+
+  test("inline visibility composes with its enclosing block", async () => {
+    const xml = WRAP(
+      [
+        P("{{#if is_person}}"),
+        P("{{#if has_spouse}}{{spouse.name}}{{/if}}"),
+        P("{{/if}}"),
+      ].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(
+      result.fields.find((field) => field.path === "spouse.name")?.visibleWhen,
+    ).toBe("is_person and has_spouse");
   });
 
   test("field outside #if has no visibleWhen", async () => {

@@ -310,6 +310,53 @@ describe("fillTemplate — block directives e2e", () => {
     expect(joined).not.toContain("{{#each");
   });
 
+  test("nested primitive loop shorthand renders each outer row's values", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        [
+          P("{{#each groups}}"),
+          P("{{#each subitems}}"),
+          P("{{subitems.value}}"),
+          P("{{/each}}"),
+          P("{{/each}}"),
+        ].join(""),
+      ),
+    );
+
+    const { buffer, unmatchedPlaceholders } = await fillTemplate(docx, {
+      groups: [{ subitems: ["first"] }, { subitems: ["second"] }],
+    });
+
+    expect(await extractTexts(buffer)).toEqual(["first", "second"]);
+    expect(unmatchedPlaceholders).toEqual([]);
+  });
+
+  test("three-level shorthand and qualified loops share scoped identities", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        [
+          P("{{#each groups}}"),
+          P("{{#each items}}"),
+          P("{{#each items.subitems}}"),
+          P("{{items.subitems.value}}"),
+          P("{{/each}}"),
+          P("{{/each}}"),
+          P("{{/each}}"),
+        ].join(""),
+      ),
+    );
+
+    const { buffer, unmatchedPlaceholders } = await fillTemplate(docx, {
+      groups: [
+        { items: [{ subitems: ["first"] }] },
+        { items: [{ subitems: ["second"] }] },
+      ],
+    });
+
+    expect(await extractTexts(buffer)).toEqual(["first", "second"]);
+    expect(unmatchedPlaceholders).toEqual([]);
+  });
+
   test("nested objects with dotted paths", async () => {
     const xml = WRAP(
       [

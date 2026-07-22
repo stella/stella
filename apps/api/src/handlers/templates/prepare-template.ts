@@ -16,11 +16,12 @@ import {
   type FieldSuggestion,
 } from "@/api/handlers/docx/apply-field-suggestions";
 import { extractText } from "@/api/handlers/docx/extract-text";
-import { HEADER_FOOTER_RE } from "@/api/handlers/docx/ooxml";
+import {
+  MAIN_DOCUMENT_PART_PATH,
+  templateContentPartPaths,
+} from "@/api/handlers/docx/ooxml";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { FieldMeta } from "@/api/handlers/docx/types";
-
-const DOCUMENT_PATH = "word/document.xml";
 
 export type SuggestFields = (
   documentText: string,
@@ -50,19 +51,15 @@ export const prepareTemplateFromDocument = async ({
   }
 
   const zip = await JSZip.loadAsync(buffer);
-  if (!zip.file(DOCUMENT_PATH)) {
+  if (!zip.file(MAIN_DOCUMENT_PART_PATH)) {
     return { buffer, fields: [], unapplied: suggestions };
   }
 
   // Rewrite the body and every header/footer part, matching the parts the rest
-  // of the pipeline covers (discoverPlaceholders / fillTemplateWithValues filter
-  // on `word/document.xml` || HEADER_FOOTER_RE). A literal that the model read
+  // of the pipeline covers through templateContentPartPaths. A literal the model read
   // from a letterhead or footer (extractText concatenates headers, body, and
   // footers into the prompt) is then rewritten where it actually lives.
-  const partNames = [
-    DOCUMENT_PATH,
-    ...Object.keys(zip.files).filter((name) => HEADER_FOOTER_RE.test(name)),
-  ];
+  const partNames = templateContentPartPaths(Object.keys(zip.files));
 
   // Merge results across parts: a field is added once per path, and a
   // suggestion is reported unapplied only when no part matched it. Running

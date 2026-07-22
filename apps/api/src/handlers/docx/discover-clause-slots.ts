@@ -12,7 +12,7 @@ import * as slimdom from "slimdom";
 
 import { clauseSlotPattern } from "@stll/template-conditions";
 
-import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
+import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
 
 // ── Types ────────────────────────────────────────────
 
@@ -74,25 +74,13 @@ export const discoverClauseSlots = async (
   const zip = await JSZip.loadAsync(docxBuffer);
   const slots = new Map<string, ClauseSlot>();
 
-  const docEntry = zip.file("word/document.xml");
-  if (!docEntry) {
-    return [];
-  }
-
-  const docXml = await docEntry.async("string");
-  scanParagraphs(slimdom.parseXmlDocument(docXml), slots);
-
-  const hfEntries = Object.keys(zip.files).filter((path) =>
-    HEADER_FOOTER_RE.test(path),
-  );
-
-  for (const path of hfEntries) {
+  for (const path of templateContentPartPaths(Object.keys(zip.files))) {
     const entry = zip.file(path);
     if (!entry) {
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- bounded memory while streaming docx parts; accumulates into shared slots map
+    // oxlint-disable-next-line no-await-in-loop -- bounded memory while streaming content parts; accumulates into shared slots map
     const xml = await entry.async("string");
     scanParagraphs(slimdom.parseXmlDocument(xml), slots);
   }

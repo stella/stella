@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import * as slimdom from "slimdom";
 
-import { collectExistingIds, createIdGenerator, W_NS } from "./ooxml";
+import {
+  collectExistingIds,
+  createIdGenerator,
+  templateContentPartPaths,
+  W_NS,
+} from "./ooxml";
 
 const WRAP = (body: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -47,6 +52,27 @@ describe("collectExistingIds", () => {
     const ids = collectExistingIds(doc);
 
     expect(ids.has(999_999)).toBe(true);
+  });
+});
+
+describe("templateContentPartPaths", () => {
+  test("defines one deterministic scope for every template pipeline phase", () => {
+    expect(
+      templateContentPartPaths([
+        "word/styles.xml",
+        "word/header2.xml",
+        "word/document.xml",
+        "word/footer1.xml",
+        "word/header1.xml",
+        "word/_rels/document.xml.rels",
+        "word/header.xml",
+      ]),
+    ).toEqual([
+      "word/document.xml",
+      "word/footer1.xml",
+      "word/header1.xml",
+      "word/header2.xml",
+    ]);
   });
 });
 

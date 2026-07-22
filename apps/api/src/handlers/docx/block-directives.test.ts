@@ -820,8 +820,7 @@ describe("processBlockDirectives — raw condition values overlay", () => {
     processBlockDirectives(
       body,
       { signing_date: "13. června 2028" },
-      undefined,
-      { signing_date: "2028-06-13" },
+      { conditionValues: { signing_date: "2028-06-13" } },
     );
 
     expect(bodyTexts(body)).toEqual(["After cutoff"]);
@@ -832,8 +831,7 @@ describe("processBlockDirectives — raw condition values overlay", () => {
     processBlockDirectives(
       body,
       { signing_date: "13. června 2020" },
-      undefined,
-      { signing_date: "2020-06-13" },
+      { conditionValues: { signing_date: "2020-06-13" } },
     );
 
     expect(bodyTexts(body)).toEqual(["Before cutoff"]);
@@ -877,7 +875,7 @@ describe("processBlockDirectives — raw condition values overlay", () => {
 
     // The same overlay drives condition evaluation against the formatted map.
     const body = parseBody(DATE_IF);
-    processBlockDirectives(body, values, undefined, overlay);
+    processBlockDirectives(body, values, { conditionValues: overlay });
     expect(bodyTexts(body)).toEqual(["After cutoff"]);
   });
 });
@@ -911,6 +909,75 @@ describe("processBlockDirectives — loops", () => {
     expect(patchValues["__each_sellers_1_name"]).toBe("Bob");
   });
 
+  test("primitive rows share the contract-supported value representation", () => {
+    const body = parseBody(
+      WRAP([P("{{#each tags}}"), P("{{tags.value}}"), P("{{/each}}")].join("")),
+    );
+    const { patchValues } = processBlockDirectives(body, {
+      tags: ["one", 2, true],
+    });
+
+    expect(bodyTexts(body)).toEqual([
+      "{{__each_tags_0_value}}",
+      "{{__each_tags_1_value}}",
+      "{{__each_tags_2_value}}",
+    ]);
+    expect(patchValues).toMatchObject({
+      __each_tags_0: "one",
+      __each_tags_0_value: "one",
+      __each_tags_1: "2",
+      __each_tags_1_value: "2",
+      __each_tags_2: "true",
+      __each_tags_2_value: "true",
+    });
+  });
+
+  test("primitive rows expose bare and qualified value conditions", () => {
+    const body = parseBody(
+      WRAP(
+        [
+          P("{{#each tags}}"),
+          P('{{#if value == "keep"}}'),
+          P("bare {{tags.value}}"),
+          P("{{/if}}"),
+          P('{{#if tags.value == "keep"}}'),
+          P("qualified {{tags.value}}"),
+          P("{{/if}}"),
+          P("{{/each}}"),
+        ].join(""),
+      ),
+    );
+    const { patchValues } = processBlockDirectives(body, {
+      tags: ["keep", "discard"],
+    });
+
+    expect(bodyTexts(body)).toEqual([
+      "bare {{__each_tags_0_value}}",
+      "qualified {{__each_tags_0_value}}",
+    ]);
+    expect(patchValues["__each_tags_0_value"]).toBe("keep");
+  });
+
+  test("dotted primitive rows expose their qualified value condition", () => {
+    const body = parseBody(
+      WRAP(
+        [
+          P("{{#each deal.tags}}"),
+          P('{{#if deal.tags.value == "keep"}}'),
+          P("{{deal.tags.value}}"),
+          P("{{/if}}"),
+          P("{{/each}}"),
+        ].join(""),
+      ),
+    );
+    const { patchValues } = processBlockDirectives(body, {
+      deal: { tags: ["keep", "discard"] },
+    });
+
+    expect(bodyTexts(body)).toEqual(["{{__each_deal.tags_0_value}}"]);
+    expect(patchValues["__each_deal.tags_0_value"]).toBe("keep");
+  });
+
   test("inner-loop condition compares a row's raw date, not the localized text", () => {
     const xml = WRAP(
       [
@@ -928,8 +995,12 @@ describe("processBlockDirectives — loops", () => {
     processBlockDirectives(
       body,
       { people: [{ dob: "13. června 2028" }, { dob: "1. ledna 2020" }] },
-      undefined,
-      { "people.0.dob": "2028-06-13", "people.1.dob": "2020-01-01" },
+      {
+        conditionValues: {
+          "people.0.dob": "2028-06-13",
+          "people.1.dob": "2020-01-01",
+        },
+      },
     );
 
     // Row 0 (2028-06-13 > 2028-01-01) keeps the line; row 1 (2020-01-01) drops
@@ -1229,6 +1300,34 @@ describe("processBlockDirectives — loop-scoped @num/@ref", () => {
     const numKeys = bodyTexts(body).flatMap(numKeysOf);
     expect(numKeys).toHaveLength(3);
     expect(new Set(numKeys).size).toBe(3);
+  });
+
+  test("primitive nested loop shorthand keeps patch values scoped per outer row", () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("{{#each subitems}}"),
+        P("{{subitems.value}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    const { patchValues } = processBlockDirectives(body, {
+      groups: [{ subitems: ["first"] }, { subitems: ["second"] }],
+    });
+
+    expect(Object.values(patchValues)).toEqual([
+      "first",
+      "first",
+      "second",
+      "second",
+    ]);
+    expect(new Set(Object.keys(patchValues)).size).toBe(4);
+    expect(bodyTexts(body)).toEqual([
+      "{{__each___each_groups_0_subitems_0_value}}",
+      "{{__each___each_groups_1_subitems_0_value}}",
+    ]);
   });
 });
 

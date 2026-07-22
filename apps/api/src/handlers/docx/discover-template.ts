@@ -8,14 +8,23 @@
  * array, object) and `structureErrors` for mismatched blocks.
  */
 
+import { panic } from "better-result";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
+
+import { parseCondition, type ConditionNode } from "@stll/template-conditions";
 
 import { compareCodepoint } from "@/api/lib/collation";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { PLACEHOLDER_RE } from "./discover-placeholders";
-import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
+import { parseInlineConditions } from "./inline-conditions";
+import {
+  MAIN_DOCUMENT_PART_PATH,
+  paragraphText,
+  templateContentPartPaths,
+  W_NS,
+} from "./ooxml";
 import type {
   DiscoveredField,
   DiscoveredPlaceholder,
@@ -24,25 +33,15 @@ import type {
   TemplateStructureError,
 } from "./types";
 
-// ── Condition expression analysis ────────────────────────
-
-/**
- * Extract variable paths referenced in a condition expression.
- * Strips string literals, operators, and keywords.
- */
-const CONDITION_TOKEN_RE =
-  /"(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|(?<ident>[\p{L}\p{N}_.]+)/gu;
-
-const NUMERIC_LITERAL_RE = /^[\d_]+$/u;
-
-const COMPARISON_OPS = new Set(["==", "!=", ">=", "<=", ">", "<"]);
-
 // ── Field inference ──────────────────────────────────────
 
-type FieldAccumulator = Map<
-  string,
-  { kind: TemplateFieldKind; count: number; itemPaths: Set<string> }
->;
+type FieldInfo = {
+  kind: TemplateFieldKind;
+  count: number;
+  itemPaths: Set<string>;
+};
+
+type FieldAccumulator = Map<string, FieldInfo>;
 
 /**
  * Register a field path with an inferred kind. If the field
@@ -80,6 +79,125 @@ const kindPriority = (kind: TemplateFieldKind): number => {
   }
 };
 
+const registerConditionFields = (
+  fields: FieldAccumulator,
+  condition: string,
+  rowPaths: readonly string[] = [],
+): void => {
+  const root = parseCondition(condition);
+  if (!root) {
+    return;
+  }
+
+  const registerPath = (path: string, kind: "boolean" | "string"): void => {
+    registerField(fields, path, kind);
+
+    const isQualifiedRowPath = rowPaths.some(
+      (rowPath) => path === rowPath || path.startsWith(`${rowPath}.`),
+    );
+    if (isQualifiedRowPath) {
+      for (const rowPath of rowPaths) {
+        const rowPrefix = `${rowPath}.`;
+        if (path.startsWith(rowPrefix)) {
+          fields.get(rowPath)?.itemPaths.add(path.slice(rowPrefix.length));
+        }
+      }
+      return;
+    }
+
+    for (const rowPath of rowPaths) {
+      registerField(fields, `${rowPath}.${path}`, kind);
+      fields.get(rowPath)?.itemPaths.add(path);
+    }
+  };
+
+  const visit = (node: ConditionNode): void => {
+    if (node.type === "group") {
+      for (const child of node.children) {
+        visit(child);
+      }
+      return;
+    }
+
+    if (node.type === "compare") {
+      if (node.left.type === "path") {
+        registerPath(node.left.path, "string");
+      }
+      if (node.right.type === "path") {
+        registerPath(node.right.path, "string");
+      }
+      return;
+    }
+
+    if (node.operand.type === "path") {
+      registerPath(
+        node.operand.path,
+        node.op === "is_truthy" ? "boolean" : "string",
+      );
+    }
+  };
+
+  visit(root);
+};
+
+const qualifyRowScopedPath = (
+  path: string,
+  rowPaths: readonly string[] = [],
+): string => {
+  if (
+    rowPaths.some(
+      (rowPath) => path === rowPath || path.startsWith(`${rowPath}.`),
+    )
+  ) {
+    return path;
+  }
+  const innermostRowPath = rowPaths.at(-1);
+  return innermostRowPath === undefined ? path : `${innermostRowPath}.${path}`;
+};
+
+type RowScope = {
+  declaredPath: string;
+  scopedPath: string;
+};
+
+const rowScopePaths = (rowScopes: readonly RowScope[]): string[] =>
+  rowScopes.map(({ scopedPath }) => scopedPath);
+
+const qualifyRowScopedPlaceholder = (
+  path: string,
+  rowScopes: readonly RowScope[],
+): string => {
+  if (
+    rowScopes.some(
+      ({ scopedPath }) =>
+        path === scopedPath || path.startsWith(`${scopedPath}.`),
+    )
+  ) {
+    return path;
+  }
+  for (const { declaredPath, scopedPath } of rowScopes.toReversed()) {
+    if (path === declaredPath) {
+      return scopedPath;
+    }
+    const declaredPrefix = `${declaredPath}.`;
+    if (path.startsWith(declaredPrefix)) {
+      return `${scopedPath}.${path.slice(declaredPrefix.length)}`;
+    }
+  }
+  return path;
+};
+
+const requireRowScopes = (
+  arrayScopes: ReadonlyMap<number, readonly RowScope[]>,
+  paragraphIndex: number,
+): readonly RowScope[] => {
+  const scopes = arrayScopes.get(paragraphIndex);
+  if (scopes === undefined) {
+    panic(`Missing loop scope for paragraph ${paragraphIndex}`);
+  }
+  return scopes;
+};
+
 // ── Condition map building ─────────────────────────────
 
 /**
@@ -103,6 +221,44 @@ const negateExpr = (expr: string): string => {
     return `!(${trimmed})`;
   }
   return `!${trimmed}`;
+};
+
+const wrapConjunctionPart = (expr: string): string =>
+  expr.includes(" or ") ? `(${expr})` : expr;
+
+const combineConditions = (
+  outer: string | undefined,
+  inner: string | undefined,
+): string | undefined => {
+  if (outer === undefined) {
+    return inner;
+  }
+  if (inner === undefined) {
+    return outer;
+  }
+  return `${wrapConjunctionPart(outer)} and ${wrapConjunctionPart(inner)}`;
+};
+
+const recordFieldCondition = (
+  fieldConditions: Map<string, string | null>,
+  name: string,
+  condition: string | undefined,
+): void => {
+  const existing = fieldConditions.get(name);
+  if (existing === null) {
+    return;
+  }
+  if (condition === undefined) {
+    fieldConditions.set(name, null);
+    return;
+  }
+  if (existing === undefined) {
+    fieldConditions.set(name, condition);
+    return;
+  }
+  if (existing !== condition) {
+    fieldConditions.set(name, null);
+  }
 };
 
 /**
@@ -262,6 +418,42 @@ const analyzeContainer = (
   const { blocks, errors: parseErrors } = parseBlockTree(directives);
   errors.push(...parseErrors);
 
+  // Retain the full directive stream instead of relying on the flattened
+  // block result: nested blocks are intentionally consumed by parseBlockTree.
+  // The active loop path makes an unqualified condition available both as a
+  // global input and as a row-local input, matching the fill evaluator's
+  // global context overlaid with each row.
+  const arrayScopes = new Map<number, readonly RowScope[]>();
+  const activeArrays: RowScope[] = [];
+  const directiveByParagraph = new Map(
+    directives.map((directive) => [directive.paragraphIndex, directive]),
+  );
+  for (let i = 0; i < paragraphs.length; i++) {
+    const directive = directiveByParagraph.get(i);
+    if (directive?.kind === "endeach") {
+      activeArrays.pop();
+    }
+    if (directive?.kind === "if" || directive?.kind === "elseif") {
+      registerConditionFields(
+        fields,
+        directive.expression,
+        rowScopePaths(activeArrays),
+      );
+    }
+    if (directive?.kind === "each") {
+      const scopedPath = qualifyRowScopedPath(
+        directive.expression,
+        rowScopePaths(activeArrays),
+      );
+      registerField(fields, scopedPath, "array");
+      activeArrays.push({
+        declaredPath: directive.expression,
+        scopedPath,
+      });
+    }
+    arrayScopes.set(i, [...activeArrays]);
+  }
+
   // Track which paragraph indices are directives (skip for
   // placeholder scanning)
   const directiveIndices = new Set<number>();
@@ -278,10 +470,18 @@ const analyzeContainer = (
   // 2. Analyze blocks for field types
   for (const block of blocks) {
     if (block.kind === "each") {
-      registerField(fields, block.arrayPath, "array");
+      const blockScope = requireRowScopes(
+        arrayScopes,
+        block.contentStart - 1,
+      ).at(-1);
+      if (blockScope === undefined) {
+        panic(`Missing loop scope for block ${block.arrayPath}`);
+      }
+      const arrayPath = blockScope.scopedPath;
+      registerField(fields, arrayPath, "array");
 
       // Scan content paragraphs for item field references
-      const entry = fields.get(block.arrayPath);
+      const entry = fields.get(arrayPath);
       for (let i = block.contentStart; i < block.contentEnd; i++) {
         const para = paragraphs[i];
         if (!para) {
@@ -304,50 +504,6 @@ const analyzeContainer = (
           }
         }
       }
-    } else {
-      // if block — extract condition variables as booleans
-      // (or string if used in a comparison)
-      for (const branch of block.branches) {
-        if (branch.condition === "") {
-          continue; // else
-        }
-
-        // Group tokens by and/or to check comparisons per
-        // sub-expression. Uses the tokenizer (not string split)
-        // so `and`/`or` inside string literals are ignored.
-        type SubExpr = { paths: string[]; hasComparison: boolean };
-        const subExprs: SubExpr[] = [];
-        let current: SubExpr = { paths: [], hasComparison: false };
-        subExprs.push(current);
-
-        for (const m of branch.condition.matchAll(CONDITION_TOKEN_RE)) {
-          const raw = m[0];
-          if (!raw) {
-            continue;
-          }
-          const ident = m.groups?.["ident"];
-
-          if (raw === "and" || raw === "or") {
-            current = { paths: [], hasComparison: false };
-            subExprs.push(current);
-          } else if (COMPARISON_OPS.has(raw)) {
-            current.hasComparison = true;
-          } else if (
-            ident &&
-            ident !== "true" &&
-            ident !== "false" &&
-            !NUMERIC_LITERAL_RE.test(ident)
-          ) {
-            current.paths.push(ident);
-          }
-        }
-
-        for (const { paths, hasComparison } of subExprs) {
-          for (const path of paths) {
-            registerField(fields, path, hasComparison ? "string" : "boolean");
-          }
-        }
-      }
     }
   }
 
@@ -363,36 +519,113 @@ const analyzeContainer = (
     }
     const text = paragraphText(para);
     const paraCondition = conditionMap.get(i);
+    const inlineBranchConditions: {
+      condition: string | undefined;
+      end: number;
+      start: number;
+    }[] = [];
+    const inlineLoopScopes: {
+      declaredPath: string;
+      end: number;
+      scopedPath: string;
+      start: number;
+    }[] = [];
+
+    const inline = parseInlineConditions(text);
+    if (!inline.ok) {
+      errors.push({
+        message: inline.message,
+        paragraphIndex: i,
+        directive: inline.directive,
+      });
+    } else {
+      for (const group of inline.groups) {
+        if (group.kind === "each") {
+          const scopedPath = qualifyRowScopedPath(
+            group.arrayPath,
+            rowScopePaths(requireRowScopes(arrayScopes, i)),
+          );
+          registerField(fields, scopedPath, "array");
+          inlineLoopScopes.push({
+            declaredPath: group.arrayPath,
+            end: group.contentEnd,
+            scopedPath,
+            start: group.contentStart,
+          });
+          const entry = fields.get(scopedPath);
+          const content = text.slice(group.contentStart, group.contentEnd);
+          const prefix = `${group.arrayPath}.`;
+          for (const match of content.matchAll(PLACEHOLDER_RE)) {
+            const name = match.groups?.["name"];
+            if (name?.startsWith(prefix)) {
+              entry?.itemPaths.add(name.slice(prefix.length));
+            }
+          }
+          continue;
+        }
+
+        const priorConditions: string[] = [];
+        for (const branch of group.branches) {
+          registerConditionFields(
+            fields,
+            branch.condition,
+            rowScopePaths(requireRowScopes(arrayScopes, i)),
+          );
+          const branchCondition =
+            branch.condition === ""
+              ? priorConditions.map(negateExpr).join(" and ")
+              : [
+                  ...priorConditions.map(negateExpr),
+                  wrapConjunctionPart(branch.condition),
+                ].join(" and ");
+          inlineBranchConditions.push({
+            condition: combineConditions(
+              paraCondition,
+              branchCondition || undefined,
+            ),
+            end: branch.contentEnd,
+            start: branch.contentStart,
+          });
+          if (branch.condition !== "") {
+            priorConditions.push(branch.condition);
+          }
+        }
+      }
+    }
 
     for (const match of text.matchAll(PLACEHOLDER_RE)) {
-      const name = match.groups?.["name"];
-      if (!name) {
+      const declaredName = match.groups?.["name"];
+      if (!declaredName) {
         continue;
       }
       // @-prefixed markers (@clause:, @num:, @ref:) are resolved at fill time,
       // not user-entered fields — keep them out of the discovered schema.
-      if (name.startsWith("@")) {
+      if (declaredName.startsWith("@")) {
         continue;
       }
+      const loopScope = inlineLoopScopes.find(
+        ({ end, start }) => start <= match.index && match.index < end,
+      );
+      const declaredLoopPrefix = `${loopScope?.declaredPath ?? ""}.`;
+      const inlineScopedName =
+        loopScope !== undefined && declaredName.startsWith(declaredLoopPrefix)
+          ? `${loopScope.scopedPath}.${declaredName.slice(declaredLoopPrefix.length)}`
+          : declaredName;
+      const scopedArrayPaths = requireRowScopes(arrayScopes, i);
+      const name = qualifyRowScopedPlaceholder(
+        inlineScopedName,
+        scopedArrayPaths,
+      );
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
 
-      // Track field condition visibility
-      const existing = fieldConditions.get(name);
-      if (existing === null) {
-        // Already seen outside a conditional; stays
-        // always visible
-      } else if (paraCondition === undefined) {
-        // This occurrence is outside any conditional
-        // → field is always visible
-        fieldConditions.set(name, null);
-      } else if (existing === undefined) {
-        // First occurrence, inside a conditional
-        fieldConditions.set(name, paraCondition);
-      } else if (existing !== paraCondition) {
-        // Seen in a different conditional branch;
-        // mark as always visible
-        fieldConditions.set(name, null);
-      }
+      const inlineCondition = inlineBranchConditions.find(
+        ({ end, start }) => start <= match.index && match.index < end,
+      )?.condition;
+      recordFieldCondition(
+        fieldConditions,
+        name,
+        inlineCondition ?? paraCondition,
+      );
 
       // Infer field kind from path structure
       if (name.includes(".")) {
@@ -411,6 +644,15 @@ const analyzeContainer = (
       }
       // Register the full path as string
       registerField(fields, name, "string");
+
+      if (scopedArrayPaths.length > 0) {
+        for (const { scopedPath: arrayPath } of scopedArrayPaths) {
+          const prefix = `${arrayPath}.`;
+          if (name.startsWith(prefix)) {
+            fields.get(arrayPath)?.itemPaths.add(name.slice(prefix.length));
+          }
+        }
+      }
     }
   }
 
@@ -491,9 +733,9 @@ const analyzeHeadersAndFooters = async (
 
   // Sort entries alphabetically to match the order used by
   // extractText (which assigns globally sequential indices).
-  const entries = Object.keys(zip.files)
-    .filter((path) => HEADER_FOOTER_RE.test(path))
-    .toSorted();
+  const entries = templateContentPartPaths(Object.keys(zip.files)).filter(
+    (path) => path !== MAIN_DOCUMENT_PART_PATH,
+  );
 
   // Track running paragraph counts per source so error indices
   // are relative to the combined section, not individual files.
@@ -554,7 +796,7 @@ export const discoverTemplate = async (
     structureErrors: [],
   };
 
-  const docEntry = zip.file("word/document.xml");
+  const docEntry = zip.file(MAIN_DOCUMENT_PART_PATH);
   if (!docEntry) {
     return emptyResult;
   }
@@ -589,10 +831,17 @@ export const discoverTemplate = async (
 
   // Build DiscoveredField[]
   const discoveredFields: DiscoveredField[] = [];
+  const arrayPaths = [...fields]
+    .filter(([, info]) => info.kind === "array")
+    .map(([path]) => path);
   for (const [path, info] of fields) {
-    // Skip dotted subfields; they'll be nested under their
-    // parent array or object
-    if (path.includes(".")) {
+    // Repeated-row descendants are represented relative to their array root.
+    // Other dotted fields remain first-class: condition-only paths have no
+    // placeholder entry, and filtering them here would erase valid inputs.
+    const isRepeatedRowDescendant = arrayPaths.some((arrayPath) =>
+      path.startsWith(`${arrayPath}.`),
+    );
+    if (info.kind !== "array" && isRepeatedRowDescendant) {
       continue;
     }
 
