@@ -53,7 +53,10 @@ import {
   findUnusedTemplateValueKeys,
   isFillableTemplateInputField,
 } from "./template-input-contract";
-
+import {
+  applyOmittedOptionalPlaceholderDefaults,
+  isTemplateFieldRequired,
+} from "./template-optional-defaults";
 // Data a template is filled with: open-ended field-path → value map (paths come
 // from the template's manifest/markers, not a fixed entity), patched in place
 // with resolved clause slots and AI-drafted fields before fill.
@@ -157,7 +160,7 @@ export const describeStoredTemplate = async ({
           path: field.path,
           label: field.label ?? null,
           inputType: field.inputType ?? "text",
-          required: field.required ?? false,
+          required: isTemplateFieldRequired(field),
           hint: field.hint ?? null,
           options: field.options ?? null,
           formats:
@@ -309,9 +312,13 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   const loaded = source;
   const { templateId } = source;
   const manifest = await readManifest(loaded.buffer);
+  let strictInputPlaceholders: string[] | null = null;
 
   if (unusedValuePolicy === "reject") {
     const discovered = await discoverTemplate(loaded.buffer);
+    strictInputPlaceholders = discovered.placeholders.map(
+      (placeholder) => placeholder.name,
+    );
     const rawInputSources = collectRawTemplateInputSources({
       fields: discovered.fields,
       placeholderPaths: discovered.placeholders.map(
@@ -464,6 +471,16 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     adaptedPaths = adapted.adaptedPaths;
   }
 
+  const optionalDefaults =
+    manifest === null || strictInputPlaceholders === null
+      ? { defaultedPaths: [], values: record }
+      : applyOmittedOptionalPlaceholderDefaults({
+          fields: manifest.fields,
+          placeholderPaths: strictInputPlaceholders,
+          values: record,
+        });
+  record = optionalDefaults.values;
+
   if (!isTemplateData(record)) {
     return {
       error:
@@ -487,7 +504,9 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     // Adapted stubs no longer match a marker (each occurrence was already
     // substituted), so they are not "unused" in any user-meaningful sense.
     unusedValues: result.unusedValues.filter(
-      (name) => !adaptedPaths.includes(name),
+      (name) =>
+        !adaptedPaths.includes(name) &&
+        !optionalDefaults.defaultedPaths.includes(name),
     ),
     structureErrors: result.structureErrors,
   };

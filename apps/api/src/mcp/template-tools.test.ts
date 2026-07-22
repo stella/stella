@@ -554,6 +554,39 @@ describe("MCP template tools", () => {
     );
   });
 
+  test("fill_template returns every missing path while bounding its summary", async () => {
+    const unmatchedPlaceholders = Array.from(
+      { length: 12 },
+      (_, index) => `field_${index}`,
+    );
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: Buffer.from("partial"),
+      text: "Partial lease",
+      unmatchedPlaceholders,
+      unusedValues: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: {} },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(validationEnvelope(result)).toEqual(
+      expect.objectContaining({
+        message:
+          "Template fill incomplete; unmatched placeholders: field_0, field_1, field_2, field_3, field_4, field_5, field_6, field_7, field_8, field_9 (2 more omitted)",
+        issues: unmatchedPlaceholders.map((placeholder) => ({
+          path: `values.${placeholder}`,
+          message: "Template placeholder was not filled",
+        })),
+        hint: expect.stringContaining("CLI: template list --template-id ID"),
+      }),
+    );
+  });
+
   test("fill_template returns partial output only after an explicit completion policy", async () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
