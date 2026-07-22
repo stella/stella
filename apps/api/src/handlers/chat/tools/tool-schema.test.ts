@@ -1755,6 +1755,7 @@ describe("chat tool schemas", () => {
   describe("edit_workspace_document authorization", () => {
     const activeFile = {
       entityId: toSafeId<"entity">("77777777-7777-4777-8777-777777777777"),
+      fileFieldId: toSafeId<"field">("88888888-8888-4888-8888-888888888888"),
       supportsDocxEdits: true,
     } as const;
 
@@ -1827,6 +1828,20 @@ describe("chat tool schemas", () => {
       const tools = getChatTools({
         ...baseArgs,
         activeFile: { entityId: activeFile.entityId },
+        memberRole: "owner",
+        editApplyMode: "auto",
+        workspaceStatusById: new Map([[workspaceId, "active"]]),
+      });
+      expect(tools).not.toHaveProperty(EDIT_WORKSPACE_DOCUMENT_TOOL_NAME);
+    });
+
+    test("does not register edit_workspace_document without the exact active file field", () => {
+      const tools = getChatTools({
+        ...baseArgs,
+        activeFile: {
+          entityId: activeFile.entityId,
+          supportsDocxEdits: true,
+        },
         memberRole: "owner",
         editApplyMode: "auto",
         workspaceStatusById: new Map([[workspaceId, "active"]]),

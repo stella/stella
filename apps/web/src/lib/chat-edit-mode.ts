@@ -99,3 +99,43 @@ export const docxEditRepresentationForSelection = (
   selection.editApplyMode === CHAT_EDIT_APPLY_MODE.auto
     ? selection.docxEditRepresentation
     : undefined;
+
+export type ActiveDocxEditModeState =
+  | { type: "unavailable" }
+  | { type: "manual"; selection: { editApplyMode: "manual" } }
+  | { type: "selectable"; selection: ChatEditModeSelection };
+
+type ResolveActiveDocxEditModeStateOptions = {
+  activeFileEditable: boolean | undefined;
+  docxEditable: boolean | undefined;
+  hasDocxEditSurface: boolean;
+  selection: ChatEditModeSelection;
+};
+
+/**
+ * Keep server-side auto edits away from a live browser/desktop edit session:
+ * auto targets the persisted current version while an unlocked editor may
+ * contain newer unsaved bytes. Historical/non-editable files expose no edit
+ * tool; unlocked current files use manual review; a locked current file lets
+ * the user choose auto or manual.
+ */
+export const resolveActiveDocxEditModeState = ({
+  activeFileEditable,
+  docxEditable,
+  hasDocxEditSurface,
+  selection,
+}: ResolveActiveDocxEditModeStateOptions): ActiveDocxEditModeState => {
+  if (!hasDocxEditSurface || activeFileEditable !== true) {
+    return { type: "unavailable" };
+  }
+  if (docxEditable === true) {
+    return {
+      type: "manual",
+      selection: { editApplyMode: CHAT_EDIT_APPLY_MODE.manual },
+    };
+  }
+  if (docxEditable === false) {
+    return { type: "selectable", selection };
+  }
+  return { type: "unavailable" };
+};

@@ -169,6 +169,56 @@ export const areSubagentToolsRegistered = ({
 }: SubagentToolsRegisteredProps): boolean =>
   (delegationDepth ?? 0) < SUBAGENT_DELEGATION_DEPTH_CAP;
 
+type ResolveRegisteredDocxEditModeOptions = {
+  activeFile: GetChatToolsProps["activeFile"];
+  editApplyMode: ChatEditApplyMode;
+  hasActiveDocxEditClient: boolean;
+  memberRole: keyof typeof roles;
+  recordAuditEventAvailable: boolean;
+  requestWorkspaceId: SafeId<"workspace"> | null;
+  toolWorkspaceIds: AuthorizedToolWorkspaceIds;
+  workspaceStatusById:
+    | ReadonlyMap<string, AccessibleWorkspace["status"]>
+    | undefined;
+};
+
+/**
+ * Single source of truth for which mutually exclusive DOCX edit tool is
+ * registered on a turn. Prompt construction calls the same predicate, so it
+ * cannot direct the model to a tool that authorization or active-file state
+ * removed from the tool map.
+ */
+export const resolveRegisteredDocxEditMode = ({
+  activeFile,
+  editApplyMode,
+  hasActiveDocxEditClient,
+  memberRole,
+  recordAuditEventAvailable,
+  requestWorkspaceId,
+  toolWorkspaceIds,
+  workspaceStatusById,
+}: ResolveRegisteredDocxEditModeOptions): ChatEditApplyMode | null => {
+  if (editApplyMode === CHAT_EDIT_APPLY_MODE.manual) {
+    return hasActiveDocxEditClient ? CHAT_EDIT_APPLY_MODE.manual : null;
+  }
+
+  if (
+    activeFile?.supportsDocxEdits !== true ||
+    activeFile.fileFieldId === undefined ||
+    requestWorkspaceId === null ||
+    !recordAuditEventAvailable ||
+    !toolWorkspaceIds.includes(requestWorkspaceId) ||
+    workspaceStatusById?.get(requestWorkspaceId) !== "active"
+  ) {
+    return null;
+  }
+
+  const canEditWorkspaceDocument = roles[memberRole].authorize({
+    entity: ["update"],
+  }).success;
+  return canEditWorkspaceDocument ? CHAT_EDIT_APPLY_MODE.auto : null;
+};
+
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ChatCodeModeToolMap;
@@ -569,8 +619,18 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // tool to stay OFF: the two review modes are mutually exclusive tool
   // surfaces (see `editApplyMode`'s doc comment), never both registered
   // for the same turn.
+  const registeredDocxEditMode = resolveRegisteredDocxEditMode({
+    activeFile,
+    editApplyMode,
+    hasActiveDocxEditClient,
+    memberRole,
+    recordAuditEventAvailable: recordAuditEvent !== undefined,
+    requestWorkspaceId,
+    toolWorkspaceIds,
+    workspaceStatusById,
+  });
   const activeDocxEditTools =
-    hasActiveDocxEditClient && editApplyMode !== CHAT_EDIT_APPLY_MODE.auto
+    registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual
       ? createActiveDocxEditTools()
       : {};
   // Narrower than `apply-active-docx-edits` above: only the file
@@ -709,24 +769,19 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   //     archived matter stays read-only through this tool too.
   //   - `recordAuditEvent` present, since `createEntityVersionFromBuffer`
   //     always writes an audit event.
-  const canEditWorkspaceDocument = roles[memberRole].authorize({
-    entity: ["update"],
-  }).success;
   const editWorkspaceDocumentTools =
-    editApplyMode === CHAT_EDIT_APPLY_MODE.auto &&
-    activeFile?.entityId !== undefined &&
-    activeFile.supportsDocxEdits === true &&
+    registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto &&
+    activeFile !== undefined &&
+    activeFile.fileFieldId !== undefined &&
     requestWorkspaceId !== null &&
-    recordAuditEvent !== undefined &&
-    toolWorkspaceIds.includes(requestWorkspaceId) &&
-    canEditWorkspaceDocument &&
-    workspaceStatusById?.get(requestWorkspaceId) === "active"
+    recordAuditEvent !== undefined
       ? createEditWorkspaceDocumentTools({
           safeDb,
           organizationId,
           userId,
           workspaceId: requestWorkspaceId,
           entityId: activeFile.entityId,
+          fileFieldId: activeFile.fileFieldId,
           recordAuditEvent,
           docxEditRepresentation,
         })

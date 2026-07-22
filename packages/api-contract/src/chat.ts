@@ -54,6 +54,8 @@ export type ChatSendRequest = {
   };
   contextMatterIds?: SafeId<"workspace">[];
   devModelId?: string;
+  docxEditRepresentation?: "tracked-changes" | "direct";
+  editApplyMode?: "manual" | "auto";
   message: {
     id: SafeId<"chatMessage">;
     metadata?: unknown;

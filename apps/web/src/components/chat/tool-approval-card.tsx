@@ -44,12 +44,7 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
-import {
-  chatEditModeSelectionForOptionId,
-  docxEditRepresentationForSelection,
-  DOCX_EDIT_REPRESENTATION,
-} from "@/lib/chat-edit-mode";
-import { useChatEditModeStore } from "@/lib/chat-edit-mode-store";
+import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import type { WorkspaceProperty } from "@/lib/types";
@@ -342,23 +337,16 @@ const REPRESENTATION_LABEL_KEY = {
 /**
  * Approval preview for `edit_workspace_document` (the `auto` DOCX-edit
  * tool): the target document (from the file overlay's active file) and a
- * readable "N edits · track changes" line, so the user knows what an
- * immediate, no-review apply is about to do before approving it -- rather
- * than the raw operation-batch JSON. The representation shown here is read
- * from the same composer preference (`chat-edit-mode-store.ts`) the turn
- * itself was sent with, since the tool's own input carries no representation
- * field (it's a session setting, not a model argument -- see the backend's
- * `edit-workspace-document-tools.ts` module doc comment).
+ * readable operation count. The representation is intentionally omitted
+ * before approval because it is session metadata, not tool input; reading the
+ * mutable current composer preference could mislabel a pending or historical
+ * call. Completed cards render the actual representation from tool output.
  */
 const EditWorkspaceDocumentSummary = ({
   input,
   activeFileName,
 }: EditWorkspaceDocumentSummaryProps) => {
   const t = useTranslations("chat.tool");
-  const editModeOptionId = useChatEditModeStore((state) => state.optionId);
-  const representation = docxEditRepresentationForSelection(
-    chatEditModeSelectionForOptionId(editModeOptionId),
-  );
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
@@ -371,7 +359,6 @@ const EditWorkspaceDocumentSummary = ({
         {t("editWorkspaceDocumentSummary", {
           count: input.operations.length,
         })}
-        {representation && ` · ${t(REPRESENTATION_LABEL_KEY[representation])}`}
       </div>
     </div>
   );
@@ -410,14 +397,17 @@ const EditWorkspaceDocumentResult = ({
             })
           : t("editWorkspaceDocumentApplied", {
               applied: outcome.appliedCount,
-            })}
+            })}{" "}
+        · {t(REPRESENTATION_LABEL_KEY[outcome.representation])}
       </div>
     );
   }
 
   return (
     <div className="border-border/50 flex flex-col items-start gap-2 border-t px-3 py-2 text-xs">
-      <p className="text-muted-foreground">{outcome.message}</p>
+      <p className="text-muted-foreground">
+        {t("editWorkspaceDocumentAuthorNameDialogDescription")}
+      </p>
       <Button
         onClick={() => setNameDialogOpen(true)}
         size="xs"
@@ -480,9 +470,18 @@ export const ToolApprovalCard = ({
 
   const isApprovalRequested = part.state === "approval-requested";
   const isApprovalResponded = part.state === "approval-responded";
-  const isApproved = part.state === "complete" && part.output !== undefined;
+  const isStructuredEditFailure =
+    part.name === "edit_workspace_document" &&
+    part.state === "complete" &&
+    part.output !== undefined &&
+    !part.output.success;
+  const isApproved =
+    part.state === "complete" &&
+    part.output !== undefined &&
+    !isStructuredEditFailure;
   const isDenied =
-    part.state === "approval-responded" && part.approval.approved === false;
+    isStructuredEditFailure ||
+    (part.state === "approval-responded" && part.approval.approved === false);
   const isProcessing =
     isApprovalResponded || (responded && isApprovalRequested);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;

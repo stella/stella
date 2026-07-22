@@ -19,13 +19,15 @@ import { and, eq } from "drizzle-orm";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   cellMetadata,
+  desktopEditSessions,
   entities,
   entityVersions,
   fields,
+  folioCollabSessions,
   workspaces,
 } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
+import { lockDocxEditTarget } from "@/api/handlers/entities/desktop-edit-session-utils";
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
@@ -38,15 +40,19 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { detached } from "@/api/lib/detached";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { isFolioCollabSessionExpired } from "@/api/lib/folio-collab-sessions";
+import { LIMITS } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -58,6 +64,7 @@ type CreateEntityVersionFromBufferOptions = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
+  expectedCurrentVersionId: SafeId<"entityVersion">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   /** The already-transformed DOCX bytes to write as the new version. */
@@ -66,7 +73,6 @@ type CreateEntityVersionFromBufferOptions = {
   fileName: string;
   /** The file property to replace; every other field is cloned as-is. */
   filePropertyId: SafeId<"property">;
-  currentFields: { content: FieldContent; propertyId: SafeId<"property"> }[];
 };
 
 export type CreateEntityVersionFromBufferSuccess = {
@@ -78,7 +84,10 @@ export type CreateEntityVersionFromBufferSuccess = {
 type CreateEntityVersionFromBufferFailureReason =
   | "entityNotFound"
   | "entityReadOnly"
-  | "currentVersionNotFound";
+  | "editSessionOpen"
+  | "currentVersionChanged"
+  | "currentVersionNotFound"
+  | "workspaceNotActive";
 
 const FAILURE_REASON_MESSAGES: Record<
   CreateEntityVersionFromBufferFailureReason,
@@ -86,7 +95,12 @@ const FAILURE_REASON_MESSAGES: Record<
 > = {
   entityNotFound: "Document not found",
   entityReadOnly: "Document is read-only",
+  editSessionOpen:
+    "The document has an active edit session; use manual review or close the session before automatic edits",
+  currentVersionChanged:
+    "The document changed while edits were being applied; retry against the current version",
   currentVersionNotFound: "Current document version not found",
+  workspaceNotActive: "The document's matter is archived or unavailable",
 };
 
 export class CreateEntityVersionFromBufferError extends TaggedError(
@@ -94,6 +108,13 @@ export class CreateEntityVersionFromBufferError extends TaggedError(
 )<{
   message: string;
   reason: CreateEntityVersionFromBufferFailureReason;
+}>() {}
+
+class EntityVersionBufferCleanupError extends TaggedError(
+  "EntityVersionBufferCleanupError",
+)<{
+  message: string;
+  cause: unknown;
 }>() {}
 
 type WriteTxResult =
@@ -117,12 +138,12 @@ export const createEntityVersionFromBuffer = async ({
   organizationId,
   workspaceId,
   entityId,
+  expectedCurrentVersionId,
   userId,
   recordAuditEvent,
   buffer,
   fileName,
   filePropertyId,
-  currentFields,
 }: CreateEntityVersionFromBufferOptions): Promise<
   Result<
     CreateEntityVersionFromBufferSuccess,
@@ -144,6 +165,53 @@ export const createEntityVersionFromBuffer = async ({
   await getS3().write(s3Key, bytes);
 
   const writeResult = await safeDb(async (tx): Promise<WriteTxResult> => {
+    await lockDocxEditTarget({
+      entityId,
+      propertyId: filePropertyId,
+      tx,
+      workspaceId,
+    });
+
+    const now = new Date();
+    const liveDesktopSessions = await tx
+      .select({ id: desktopEditSessions.id })
+      .from(desktopEditSessions)
+      .where(
+        and(
+          eq(desktopEditSessions.entityId, entityId),
+          eq(desktopEditSessions.propertyId, filePropertyId),
+          eq(desktopEditSessions.workspaceId, workspaceId),
+          ...liveDesktopEditSessionPredicates(now),
+        ),
+      )
+      .limit(1);
+    if (liveDesktopSessions.at(0)) {
+      return { status: "editSessionOpen" };
+    }
+
+    const openCollabSessions = await tx
+      .select({
+        createdAt: folioCollabSessions.createdAt,
+        id: folioCollabSessions.id,
+      })
+      .from(folioCollabSessions)
+      .where(
+        and(
+          eq(folioCollabSessions.entityId, entityId),
+          eq(folioCollabSessions.propertyId, filePropertyId),
+          eq(folioCollabSessions.status, "open"),
+          eq(folioCollabSessions.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+    const openCollabSession = openCollabSessions.at(0);
+    if (
+      openCollabSession &&
+      !isFolioCollabSessionExpired(openCollabSession.createdAt, now)
+    ) {
+      return { status: "editSessionOpen" };
+    }
+
     const entityRows = await tx
       .select({
         currentVersionId: entities.currentVersionId,
@@ -164,11 +232,25 @@ export const createEntityVersionFromBuffer = async ({
     if (lockedEntity.readOnly) {
       return { status: "entityReadOnly" };
     }
+    if (lockedEntity.currentVersionId !== expectedCurrentVersionId) {
+      return { status: "currentVersionChanged" };
+    }
 
-    const freshCurrentVersionId = lockedEntity.currentVersionId;
+    const freshCurrentVersionId = expectedCurrentVersionId;
     const freshCurrentVersion = await tx.query.entityVersions.findFirst({
-      where: { id: { eq: freshCurrentVersionId } },
+      where: {
+        id: { eq: freshCurrentVersionId },
+        entityId: { eq: entityId },
+        workspaceId: { eq: workspaceId },
+        deletedAt: { isNull: true },
+      },
       columns: { id: true },
+      with: {
+        fields: {
+          columns: { content: true, propertyId: true },
+          limit: LIMITS.propertiesCount,
+        },
+      },
     });
     if (!freshCurrentVersion) {
       return { status: "currentVersionNotFound" };
@@ -176,8 +258,11 @@ export const createEntityVersionFromBuffer = async ({
 
     const workspace = await tx.query.workspaces.findFirst({
       where: { id: { eq: workspaceId } },
-      columns: { reference: true },
+      columns: { reference: true, status: true },
     });
+    if (workspace?.status !== "active") {
+      return { status: "workspaceNotActive" };
+    }
 
     // MAX over all versions (incl. tombstoned) under the entity lock, not
     // currentVersion + 1 -- see nextEntityVersionNumber's own doc comment.
@@ -188,7 +273,7 @@ export const createEntityVersionFromBuffer = async ({
     const nextVersionStamp = buildVersionStamp({
       docSequence: lockedEntity.docSequence,
       versionNumber: nextVersionNumber,
-      workspaceReference: workspace?.reference ?? null,
+      workspaceReference: workspace.reference,
     });
 
     await tx.insert(entityVersions).values({
@@ -203,7 +288,7 @@ export const createEntityVersionFromBuffer = async ({
 
     await tx.insert(fields).values(
       cloneFieldsForRevision({
-        currentFields,
+        currentFields: freshCurrentVersion.fields,
         entityVersionId: nextVersionId,
         propertyId: filePropertyId,
         replacementFieldId: fileFieldId,
@@ -324,13 +409,27 @@ export const createEntityVersionFromBuffer = async ({
     return { status: "ok", versionNumber: nextVersionNumber };
   });
 
+  const cleanupUploadedObject = async (): Promise<void> => {
+    const cleanupResult = await Result.tryPromise({
+      try: async () => await getS3().delete(s3Key),
+      catch: (cause) =>
+        new EntityVersionBufferCleanupError({
+          message: "Failed to clean up rejected document-version bytes",
+          cause,
+        }),
+    });
+    if (Result.isError(cleanupResult)) {
+      captureError(cleanupResult.error, { entityId, workspaceId });
+    }
+  };
+
   if (Result.isError(writeResult)) {
-    detached(getS3().delete(s3Key), "edit-workspace-document.s3-cleanup");
+    await cleanupUploadedObject();
     return Result.err(writeResult.error);
   }
   if (writeResult.value.status !== "ok") {
     const reason = writeResult.value.status;
-    detached(getS3().delete(s3Key), "edit-workspace-document.s3-cleanup");
+    await cleanupUploadedObject();
     return Result.err(
       new CreateEntityVersionFromBufferError({
         message: FAILURE_REASON_MESSAGES[reason],

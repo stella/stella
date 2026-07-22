@@ -99,11 +99,16 @@ export const AuthorNameRequiredDialog = ({
               maxLength={PREFERRED_NAME_MAX_LENGTH}
               onChange={(event) => setPreferredName(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && trimmedName.length > 0) {
+                if (
+                  event.key === "Enter" &&
+                  trimmedName.length > 0 &&
+                  !isPending
+                ) {
                   mutate();
                 }
               }}
               placeholder={t("settings.account.preferredNamePlaceholder")}
+              disabled={isPending}
               value={preferredName}
             />
           </Field>
@@ -113,7 +118,7 @@ export const AuthorNameRequiredDialog = ({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={trimmedName.length === 0}
+            disabled={trimmedName.length === 0 || isPending}
             loading={isPending}
             onClick={() => mutate()}
           >

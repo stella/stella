@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { FolioDocxReviewer } from "@stll/folio-core/server";
 
 import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -10,6 +11,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 const s3WriteMock = mock(async (_key: string, _bytes: Uint8Array) => {});
 const s3DeleteMock = mock(async () => {});
 let s3FileBuffer: ArrayBuffer = new ArrayBuffer(0);
+const s3ReadKeys: string[] = [];
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
@@ -20,7 +22,10 @@ void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({
     write: s3WriteMock,
     delete: s3DeleteMock,
-    file: () => ({ arrayBuffer: async () => s3FileBuffer }),
+    file: (key: string) => {
+      s3ReadKeys.push(key);
+      return { arrayBuffer: async () => s3FileBuffer };
+    },
   }),
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
@@ -47,8 +52,18 @@ const workspaceId = toSafeId<"workspace">(
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000003");
 const entityId = toSafeId<"entity">("00000000-0000-0000-0000-000000000004");
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000005");
+const fileFieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000007");
+const otherFileFieldId = toSafeId<"field">(
+  "00000000-0000-0000-0000-000000000008",
+);
+const otherPropertyId = toSafeId<"property">(
+  "00000000-0000-0000-0000-000000000009",
+);
 const entityVersionId = toSafeId<"entityVersion">(
   "00000000-0000-0000-0000-000000000006",
+);
+const newerEntityVersionId = toSafeId<"entityVersion">(
+  "00000000-0000-0000-0000-000000000010",
 );
 
 const ORIGINAL_TEXT = "The quick brown fox jumps over the lazy dog.";
@@ -87,12 +102,16 @@ const writtenBufferFromS3Mock = (): ArrayBuffer => {
 };
 
 type BuildTxOptions = {
+  lockedCurrentVersionId?: SafeId<"entityVersion">;
+  openDesktopEditSession?: boolean;
   preferredName?: string | null;
   name?: string;
   readOnly?: boolean;
 };
 
 const buildTx = ({
+  lockedCurrentVersionId = entityVersionId,
+  openDesktopEditSession = false,
   preferredName = null,
   name = "Fallback Name",
   readOnly = false,
@@ -104,7 +123,11 @@ const buildTx = ({
       where: () => ({
         limit: () => ({
           for: async () => [
-            { currentVersionId: entityVersionId, docSequence: null, readOnly },
+            {
+              currentVersionId: lockedCurrentVersionId,
+              docSequence: null,
+              readOnly,
+            },
           ],
         }),
       }),
@@ -124,6 +147,14 @@ const buildTx = ({
       where: async () => [{ max: 1 }],
     }),
   };
+  const editSessionSelect = {
+    from: () => ({
+      where: () => ({
+        limit: async () =>
+          openDesktopEditSession ? [{ id: "open-edit-session" }] : [],
+      }),
+    }),
+  };
 
   const tx = {
     query: {
@@ -141,9 +172,29 @@ const buildTx = ({
           id: entityVersionId,
           fields: [
             {
+              id: otherFileFieldId,
               content: {
                 type: "file",
-                id: "source-file-id",
+                id: "00000000-0000-0000-0000-000000000011",
+                fileName: "other.docx",
+                mimeType:
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                sizeBytes: 100,
+                encrypted: false,
+                sha256Hex: "feedface",
+                version: 1,
+                pdfFileId: null,
+                pdfDerivative: { status: "not-required" },
+                thumbnailFileId: null,
+                thumbnailDerivative: { status: "not-required" },
+              },
+              propertyId: otherPropertyId,
+            },
+            {
+              id: fileFieldId,
+              content: {
+                type: "file",
+                id: "00000000-0000-0000-0000-000000000012",
                 fileName: "document.docx",
                 mimeType:
                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -162,7 +213,7 @@ const buildTx = ({
         }),
       },
       workspaces: {
-        findFirst: async () => ({ reference: null }),
+        findFirst: async () => ({ reference: null, status: "active" }),
       },
     },
     select: (fields: Record<string, unknown>) => {
@@ -172,8 +223,12 @@ const buildTx = ({
       if ("max" in fields) {
         return maxVersionNumberSelect;
       }
-      return entitiesSelect;
+      if ("currentVersionId" in fields) {
+        return entitiesSelect;
+      }
+      return editSessionSelect;
     },
+    execute: async () => undefined,
     insert: (table: unknown) => ({
       values: (values: unknown) => {
         insertedTables.push({ table, values });
@@ -186,6 +241,25 @@ const buildTx = ({
   return { tx, insertedTables };
 };
 
+const validateInput = async (input: unknown) => {
+  const { tx } = buildTx();
+  const { safeDb } = createScopedDbMock(tx);
+  const tool = createEditWorkspaceDocumentTools({
+    safeDb,
+    organizationId,
+    userId,
+    workspaceId,
+    entityId,
+    fileFieldId,
+    recordAuditEvent: async () => undefined,
+    docxEditRepresentation: "tracked-changes",
+  })[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME];
+  if (!tool.inputSchema) {
+    throw new TypeError("Expected edit workspace document input schema");
+  }
+  return await tool.inputSchema["~standard"].validate(input);
+};
+
 describe("createEditWorkspaceDocumentTools", () => {
   beforeEach(() => {
     s3WriteMock.mockClear();
@@ -195,6 +269,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     enqueuePdfDerivativeOrMarkFailedMock.mockClear();
     computeVersionDiffStatsMock.mockClear();
     broadcastMock.mockClear();
+    s3ReadKeys.length = 0;
   });
 
   test("registers a single server-executed edit_workspace_document tool", () => {
@@ -206,6 +281,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       userId,
       workspaceId,
       entityId,
+      fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
     });
@@ -214,6 +290,31 @@ describe("createEditWorkspaceDocumentTools", () => {
     const tool = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME];
     expect(tool.needsApproval).toBeUndefined();
     expect(tool.execute).toBeDefined();
+  });
+
+  test("rejects unsupported operation keys instead of dropping their semantics", async () => {
+    const keys = ["precondition", "mode", "position", "typoKey"];
+    const results = await Promise.all(
+      keys.map(async (key) => ({
+        key,
+        result: await validateInput({
+          version: 1,
+          operations: [
+            {
+              type: "deleteBlock",
+              blockId: "b-1",
+              [key]: key === "precondition" ? { blockTextHash: "fake" } : true,
+            },
+          ],
+        }),
+      })),
+    );
+    for (const { key, result } of results) {
+      expect(result.issues).toBeDefined();
+      expect(result.issues?.some((issue) => issue.path?.at(-1) === key)).toBe(
+        true,
+      );
+    }
   });
 
   test("returns a structured author_name_required outcome (no version written) when no author name is configured", async () => {
@@ -226,6 +327,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       userId,
       workspaceId,
       entityId,
+      fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
     });
@@ -276,6 +378,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       userId,
       workspaceId,
       entityId,
+      fileFieldId,
       recordAuditEvent: async (_tx, event) => {
         recordedAuditEvents.push(event);
       },
@@ -328,12 +431,18 @@ describe("createEditWorkspaceDocumentTools", () => {
     }
 
     expect(insertedTables.length).toBeGreaterThan(0);
+    expect(s3ReadKeys.at(0)).toContain("00000000-0000-0000-0000-000000000012");
+    expect(s3ReadKeys.at(0)).not.toContain(
+      "00000000-0000-0000-0000-000000000011",
+    );
     expect(computeVersionDiffStatsMock).toHaveBeenCalledTimes(1);
     expect(processExtractionMock).toHaveBeenCalledTimes(1);
   });
 
   test("direct mode applies without tracked-changes markup", async () => {
-    const { tx } = buildTx({ preferredName: "Jana Nováková" });
+    // Direct text rewrites create no authored revision, so a missing account
+    // name must not block them with the tracked-changes name dialog.
+    const { tx } = buildTx({ preferredName: null, name: "   " });
     const { safeDb } = createScopedDbMock(tx);
     s3FileBuffer = await buildSourceDocx();
     const tools = createEditWorkspaceDocumentTools({
@@ -342,6 +451,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       userId,
       workspaceId,
       entityId,
+      fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "direct",
     });
@@ -391,6 +501,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       userId,
       workspaceId,
       entityId,
+      fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
     });
@@ -428,5 +539,113 @@ describe("createEditWorkspaceDocumentTools", () => {
       /missingFind/u,
     );
     expect(s3WriteMock).not.toHaveBeenCalled();
+  });
+
+  test("rejects automatic write-back while a live edit session exists", async () => {
+    const { tx, insertedTables } = buildTx({
+      openDesktopEditSession: true,
+      preferredName: "Jana Nováková",
+    });
+    const { safeDb } = createScopedDbMock(tx);
+    s3FileBuffer = await buildSourceDocx();
+    const tools = createEditWorkspaceDocumentTools({
+      safeDb,
+      organizationId,
+      userId,
+      workspaceId,
+      entityId,
+      fileFieldId,
+      recordAuditEvent: async () => undefined,
+      docxEditRepresentation: "tracked-changes",
+    });
+    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    if (!execute) {
+      throw new Error("edit_workspace_document must be server-executed");
+    }
+    const block = await firstBlock(s3FileBuffer);
+
+    const rejection = await Promise.resolve(
+      execute(
+        {
+          version: 1,
+          operations: [
+            {
+              id: "op-1",
+              type: "replaceInBlock",
+              blockId: block.id,
+              find: "quick",
+              replace: "slow",
+            },
+          ],
+        },
+        asTestRaw<Parameters<typeof execute>[1]>({}),
+      ),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error ? rejection.message : "").toMatch(
+      /active edit session/iu,
+    );
+    expect(insertedTables).toEqual([]);
+    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects a stale write when the current version changes during apply", async () => {
+    const { tx, insertedTables } = buildTx({
+      lockedCurrentVersionId: newerEntityVersionId,
+      preferredName: "Jana Nováková",
+    });
+    const { safeDb } = createScopedDbMock(tx);
+    s3FileBuffer = await buildSourceDocx();
+    const recordedAuditEvents: unknown[] = [];
+    const tools = createEditWorkspaceDocumentTools({
+      safeDb,
+      organizationId,
+      userId,
+      workspaceId,
+      entityId,
+      fileFieldId,
+      recordAuditEvent: async (_tx, event) => {
+        recordedAuditEvents.push(event);
+      },
+      docxEditRepresentation: "tracked-changes",
+    });
+    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    if (!execute) {
+      throw new Error("edit_workspace_document must be server-executed");
+    }
+    const block = await firstBlock(s3FileBuffer);
+
+    const rejection = await Promise.resolve(
+      execute(
+        {
+          version: 1,
+          operations: [
+            {
+              id: "op-1",
+              type: "replaceInBlock",
+              blockId: block.id,
+              find: "quick",
+              replace: "slow",
+            },
+          ],
+        },
+        asTestRaw<Parameters<typeof execute>[1]>({}),
+      ),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error ? rejection.message : "").toMatch(
+      /changed while edits were being applied/iu,
+    );
+    expect(insertedTables).toEqual([]);
+    expect(recordedAuditEvents).toEqual([]);
+    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -40,9 +40,15 @@ describe("describeEditWorkspaceDocumentOutcome", () => {
       describeEditWorkspaceDocumentOutcome({
         success: true,
         applied: [{ id: "a" }, { id: "b" }],
+        representation: "tracked-changes",
         skipped: [{ id: "c" }],
       }),
-    ).toEqual({ kind: "applied", appliedCount: 2, skippedCount: 1 });
+    ).toEqual({
+      kind: "applied",
+      appliedCount: 2,
+      representation: "tracked-changes",
+      skippedCount: 1,
+    });
   });
 
   test("triggers the author-name-required modal for that exact code", () => {

@@ -7,6 +7,7 @@ import {
   docxEditRepresentationForSelection,
   DOCX_EDIT_REPRESENTATION,
   isChatEditModeOptionId,
+  resolveActiveDocxEditModeState,
 } from "@/lib/chat-edit-mode";
 
 describe("chatEditModeSelectionForOptionId", () => {
@@ -54,5 +55,47 @@ describe("isChatEditModeOptionId", () => {
     expect(isChatEditModeOptionId("suggested")).toBe(false);
     expect(isChatEditModeOptionId(undefined)).toBe(false);
     expect(isChatEditModeOptionId(null)).toBe(false);
+  });
+});
+
+describe("resolveActiveDocxEditModeState", () => {
+  const autoSelection = chatEditModeSelectionForOptionId(
+    CHAT_EDIT_MODE_OPTION_ID.autoTrackedChanges,
+  );
+
+  test("keeps the selected auto mode for a locked current document", () => {
+    expect(
+      resolveActiveDocxEditModeState({
+        activeFileEditable: true,
+        docxEditable: false,
+        hasDocxEditSurface: true,
+        selection: autoSelection,
+      }),
+    ).toEqual({ type: "selectable", selection: autoSelection });
+  });
+
+  test("forces manual review while the live editor can contain unsaved bytes", () => {
+    expect(
+      resolveActiveDocxEditModeState({
+        activeFileEditable: true,
+        docxEditable: true,
+        hasDocxEditSurface: true,
+        selection: autoSelection,
+      }),
+    ).toEqual({
+      type: "manual",
+      selection: { editApplyMode: CHAT_EDIT_APPLY_MODE.manual },
+    });
+  });
+
+  test("disables editing for historical and non-editable documents", () => {
+    expect(
+      resolveActiveDocxEditModeState({
+        activeFileEditable: false,
+        docxEditable: false,
+        hasDocxEditSurface: true,
+        selection: autoSelection,
+      }),
+    ).toEqual({ type: "unavailable" });
   });
 });

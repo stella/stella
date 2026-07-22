@@ -12,13 +12,11 @@
 import { Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
-import { findExtractionFileField } from "@/api/lib/search/types";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 type LoadEntityVersionDocxBufferOptions = {
@@ -26,6 +24,7 @@ type LoadEntityVersionDocxBufferOptions = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   entityId: SafeId<"entity">;
+  fileFieldId: SafeId<"field">;
 };
 
 export type EntityVersionDocxBufferSource = {
@@ -36,8 +35,6 @@ export type EntityVersionDocxBufferSource = {
   fileName: string;
   /** The property id of the DOCX file field, for `cloneFieldsForRevision`. */
   filePropertyId: SafeId<"property">;
-  /** Every field of the current version, for `cloneFieldsForRevision`. */
-  currentFields: { content: FieldContent; propertyId: SafeId<"property"> }[];
 };
 
 /**
@@ -50,10 +47,10 @@ export type EntityVersionDocxBufferSource = {
  * editor, not an arbitrary historical version -- and returns the undecoded
  * bytes folio needs to parse and re-serialize the package.
  *
- * The file field is picked via `findExtractionFileField` (not a
- * DOCX-mime scan) so an AI edit always targets the SAME field the
- * extraction pipeline reads and indexes -- see that function's own
- * ordering contract, replicated here (`orderBy: { id: "asc" }`).
+ * The file field is selected by the server-validated active field id from
+ * the file-chat context. An entity can contain several file properties, so
+ * choosing the extraction field (or the first DOCX) could edit a different
+ * file than the one the user has open.
  *
  * This is a plain `Promise`-returning function (not the `async function*`
  * generator style `loadEntityVersionDiffSources` / `loadEntityVersionDocxText`
@@ -69,6 +66,7 @@ export const loadEntityVersionDocxBuffer = async ({
   workspaceId,
   organizationId,
   entityId,
+  fileFieldId,
 }: LoadEntityVersionDocxBufferOptions): Promise<
   Result<EntityVersionDocxBufferSource, HandlerError>
 > => {
@@ -111,11 +109,9 @@ export const loadEntityVersionDocxBuffer = async ({
       columns: { id: true },
       with: {
         // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via
-        // the unique (propertyId, entityVersionId) index. Ordered by id (a
-        // Bun.randomUUIDv7() primary key) to match findExtractionFileField's
-        // ordering contract.
+        // the unique (propertyId, entityVersionId) index.
         fields: {
-          columns: { content: true, propertyId: true },
+          columns: { content: true, id: true, propertyId: true },
           orderBy: { id: "asc" },
           limit: LIMITS.propertiesCount,
         },
@@ -140,27 +136,23 @@ export const loadEntityVersionDocxBuffer = async ({
     );
   }
 
-  const fileField = findExtractionFileField(version.value.fields);
-  if (!fileField || fileField.mimeType !== DOCX_MIME_TYPE) {
+  const fileField = version.value.fields.find(
+    (field) => field.id === fileFieldId,
+  );
+  if (
+    !fileField ||
+    fileField.content.type !== "file" ||
+    fileField.content.mimeType !== DOCX_MIME_TYPE ||
+    fileField.content.encrypted
+  ) {
     return Result.err(
       new HandlerError({
         status: 400,
-        message: "The active document is not a DOCX file",
+        message: "The active file field is not an editable DOCX file",
       }),
     );
   }
-  const fileFieldRow = version.value.fields.find(
-    (f) => f.content.type === "file" && f.content.id === fileField.id,
-  );
-  if (!fileFieldRow) {
-    // Unreachable: `fileField` was itself read out of `version.value.fields`.
-    return Result.err(
-      new HandlerError({
-        status: 500,
-        message: "Failed to resolve the active document's file field",
-      }),
-    );
-  }
+  const fileContent = fileField.content;
 
   const bufferResult = await Result.tryPromise({
     try: async () =>
@@ -169,7 +161,7 @@ export const loadEntityVersionDocxBuffer = async ({
           createFileKey({
             organizationId,
             workspaceId,
-            fileId: fileField.id,
+            fileId: fileContent.id,
             mimeType: DOCX_MIME_TYPE,
           }),
         )
@@ -190,8 +182,7 @@ export const loadEntityVersionDocxBuffer = async ({
     workspaceId,
     entityVersionId: currentVersionId,
     buffer: bufferResult.value,
-    fileName: fileField.fileName,
-    filePropertyId: fileFieldRow.propertyId,
-    currentFields: version.value.fields,
+    fileName: fileContent.fileName,
+    filePropertyId: fileField.propertyId,
   });
 };

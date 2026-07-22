@@ -43,11 +43,21 @@ export const EDIT_WORKSPACE_DOCUMENT_AUTHOR_NAME_REQUIRED_CODE =
   "author_name_required";
 
 export type EditWorkspaceDocumentOutcome =
-  | { kind: "applied"; appliedCount: number; skippedCount: number }
+  | {
+      kind: "applied";
+      appliedCount: number;
+      representation: "direct" | "tracked-changes";
+      skippedCount: number;
+    }
   | { kind: "author-name-required"; message: string };
 
 type EditWorkspaceDocumentOutputLike =
-  | { success: true; applied: readonly unknown[]; skipped: readonly unknown[] }
+  | {
+      success: true;
+      applied: readonly unknown[];
+      representation: "direct" | "tracked-changes";
+      skipped: readonly unknown[];
+    }
   | { success: false; code: string; message: string };
 
 /**
@@ -66,6 +76,7 @@ export const describeEditWorkspaceDocumentOutcome = (
     return {
       kind: "applied",
       appliedCount: output.applied.length,
+      representation: output.representation,
       skippedCount: output.skipped.length,
     };
   }

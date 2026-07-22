@@ -240,9 +240,17 @@ const narrowOperation = ({
 
   const stripped: JsonObject = {};
   for (const key of Object.keys(operation)) {
-    if (variant.propertyKeys.has(key)) {
-      stripped[key] = operation[key];
+    if (!variant.propertyKeys.has(key)) {
+      issues.push(
+        validationIssue(
+          `Unexpected property \`${key}\` for operation type ` +
+            `\`${variant.operationType}\`.`,
+          ["operations", index, key],
+        ),
+      );
+      continue;
     }
+    stripped[key] = operation[key];
   }
   return stripped;
 };
@@ -451,6 +459,7 @@ type CreateEditWorkspaceDocumentToolsProps = {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
+  fileFieldId: SafeId<"field">;
   recordAuditEvent: AuditRecorder;
   docxEditRepresentation: DocxEditRepresentation;
 };
@@ -478,6 +487,7 @@ export const createEditWorkspaceDocumentTools = ({
   userId,
   workspaceId,
   entityId,
+  fileFieldId,
   recordAuditEvent,
   docxEditRepresentation,
 }: CreateEditWorkspaceDocumentToolsProps) => ({
@@ -498,7 +508,10 @@ export const createEditWorkspaceDocumentTools = ({
     outputSchema: toTanStackToolSchema(outputSchema),
   }).server(async ({ operations }) => {
     const authorName = await resolveDocxEditAuthorName({ safeDb, userId });
-    if (!authorName) {
+    const authorRequired =
+      docxEditRepresentation === DOCX_EDIT_REPRESENTATION.trackedChanges ||
+      operations.some((operation) => operation.type === "commentOnBlock");
+    if (!authorName && authorRequired) {
       // Structured, client-branchable outcome (not a thrown ChatToolError):
       // the chat client detects `code` and opens a "set your name" modal
       // inline, then retries this same call -- see the schema doc comment.
@@ -508,8 +521,8 @@ export const createEditWorkspaceDocumentTools = ({
         code: EDIT_WORKSPACE_DOCUMENT_AUTHOR_NAME_REQUIRED_CODE,
         message:
           "Set a preferred name in your account settings before using " +
-          "automatic document edits: tracked changes must be attributed " +
-          "to you, never to a placeholder author.",
+          "automatic document edits: tracked changes and comments must be " +
+          "attributed to you, never to a placeholder author.",
         retryable: true as const,
       };
     }
@@ -519,6 +532,7 @@ export const createEditWorkspaceDocumentTools = ({
       organizationId,
       workspaceId,
       entityId,
+      fileFieldId,
     });
     if (Result.isError(loaded)) {
       throw new ChatToolError({
@@ -531,7 +545,7 @@ export const createEditWorkspaceDocumentTools = ({
       loaded.value.buffer,
       operations,
       {
-        author: authorName,
+        author: authorName ?? "",
         mode: docxEditRepresentation,
       },
     );
@@ -557,12 +571,12 @@ export const createEditWorkspaceDocumentTools = ({
       organizationId,
       workspaceId,
       entityId,
+      expectedCurrentVersionId: loaded.value.entityVersionId,
       userId,
       recordAuditEvent,
       buffer: applied.buffer,
       fileName: loaded.value.fileName,
       filePropertyId: loaded.value.filePropertyId,
-      currentFields: loaded.value.currentFields,
     });
     if (Result.isError(written)) {
       throw new ChatToolError({

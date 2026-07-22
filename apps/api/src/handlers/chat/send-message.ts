@@ -95,6 +95,7 @@ import {
   areTemplateAuthoringToolsRegistered,
   areWebResearchToolsRegistered,
   getChatTools,
+  resolveRegisteredDocxEditMode,
 } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
@@ -778,6 +779,21 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
+      const toolWorkspaceIds = resolveToolWorkspaceIds({
+        pinnedIds: effectiveContextMatterIds,
+        accessibleWorkspaceIds,
+      });
+      const registeredDocxEditMode = resolveRegisteredDocxEditMode({
+        activeFile: body.activeFile,
+        editApplyMode,
+        hasActiveDocxEditClient:
+          hasActiveDocxFileClient || body.activeTemplate !== undefined,
+        memberRole: memberRole.role,
+        recordAuditEventAvailable: true,
+        requestWorkspaceId: workspaceId,
+        toolWorkspaceIds,
+        workspaceStatusById,
+      });
       const chatContextResult = await prepareChatContext({
         activeDecision: body.activeDecision,
         activeExternal: body.activeExternal,
@@ -795,6 +811,7 @@ const sendMessage = createSafeRootHandler(
         // below, so the prompt only steers the model to tools that are
         // actually handed to it.
         toolAvailability: {
+          docxEditMode: registeredDocxEditMode,
           templateAuthoring: areTemplateAuthoringToolsRegistered(
             memberRole.role,
           ),
@@ -951,10 +968,7 @@ const sendMessage = createSafeRootHandler(
         thirdPartyBoundary,
         excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
         userId: user.id,
-        toolWorkspaceIds: resolveToolWorkspaceIds({
-          pinnedIds: effectiveContextMatterIds,
-          accessibleWorkspaceIds,
-        }),
+        toolWorkspaceIds,
         activeFile: body.activeFile,
         hasActiveDocxEditClient:
           hasActiveDocxFileClient || body.activeTemplate !== undefined,
