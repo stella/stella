@@ -327,7 +327,7 @@ const hasTooltip = (node: unknown): boolean => {
         return true;
       }
     }
-    current = current.parent;
+    current = isAstNode(current.parent) ? current.parent : null;
   }
   return false;
 };

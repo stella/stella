@@ -45,8 +45,10 @@ import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-cat
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
 import type { RouteNode } from "../../../packages/cli/src/route-types";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
+import type { McpToolDefinition } from "../src/mcp/tool-types";
 import {
   type CapabilityDispatchRecord,
+  type AccessResolution,
   capInputSchema,
   CANONICAL_ACTION_VERBS,
   CAPABILITY_ID_SEGMENT_PATTERN,
@@ -815,17 +817,19 @@ const buildCatalog = async (): Promise<BuildResult> => {
   // Covering-tool scopes for the under-claim check. Imported dynamically after
   // discovery so `setup-env` has already seeded the API env defaults the module
   // graph validates at load (same ordering as the coverage guard).
-  const { DEFAULT_MCP_TOOL_DEFINITIONS } =
+  const { DEFAULT_MCP_TOOL_DEFINITIONS: narrowToolDefinitions } =
     await import("../src/mcp/static-tool-definitions");
+  const toolDefinitions: readonly McpToolDefinition[] = narrowToolDefinitions;
   const toolScopeByName = new Map<string, string>(
-    DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool.scope]),
+    toolDefinitions.map((tool) => [tool.name, tool.scope]),
   );
   // Covering-tool feature flags: a tool/covered entry inherits its covering
   // tool's deployment gate mechanically (see DOMAIN_FEATURE for the rest).
   const toolFeatureByName = new Map<string, string>(
-    DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((tool) =>
-      tool.feature === undefined ? [] : [[tool.name, tool.feature] as const],
-    ),
+    narrowToolDefinitions.flatMap((tool) => {
+      const feature = Reflect.get(tool, "feature");
+      return typeof feature === "string" ? [[tool.name, feature] as const] : [];
+    }),
   );
   // DOMAIN_FEATURE values are plain strings (the McpToolFeatureFlag key-of-env
   // type collapses outside the app tsconfig), so validate every flag against
@@ -962,7 +966,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
     // cache-filling write). When declared it is authoritative; inference only
     // proposes, and the affirmation guard below refuses to ship an unaffirmed
     // read (which would resolve to a `stella:read`-reachable scope).
-    const declaredAccess = endpoint.config["access"];
+    const declaredAccessValue = endpoint.config["access"];
+    const declaredAccess =
+      declaredAccessValue === "read" || declaredAccessValue === "write"
+        ? declaredAccessValue
+        : undefined;
+    if (declaredAccessValue !== undefined && declaredAccess === undefined) {
+      errors.push(
+        `capability "${id}" declares invalid access ${JSON.stringify(declaredAccessValue)}; expected "read" or "write"`,
+      );
+    }
     const inferredAccess = resolveAccess({
       id,
       verbs,
@@ -970,7 +983,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       overrides: {},
       destructiveNameOptOuts: DESTRUCTIVE_NAME_OPT_OUTS,
     });
-    const accessResolution =
+    const accessResolution: AccessResolution =
       declaredAccess === undefined
         ? inferredAccess
         : {
@@ -1335,11 +1348,12 @@ const computeCliCommandPaths = async (
     return { cliCommandPathById, errors };
   }
 
-  const { DEFAULT_MCP_TOOL_DEFINITIONS } =
+  const { DEFAULT_MCP_TOOL_DEFINITIONS: narrowToolDefinitions } =
     await import("../src/mcp/static-tool-definitions");
   const { DEFAULT_MCP_CLI_ANNOTATIONS } =
     await import("../src/mcp/static-cli-metadata");
-  const listings = DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => {
+  const toolDefinitions: readonly McpToolDefinition[] = narrowToolDefinitions;
+  const listings = toolDefinitions.map((tool) => {
     const listing: {
       name: string;
       description: string;
@@ -1350,8 +1364,14 @@ const computeCliCommandPaths = async (
       description: tool.description,
       inputSchema: tool.inputSchema,
     };
-    if (tool.annotations !== undefined) {
-      listing.annotations = tool.annotations;
+    if (tool.annotations?.readOnlyHint !== undefined) {
+      listing.annotations = { readOnlyHint: tool.annotations.readOnlyHint };
+    }
+    if (tool.annotations?.destructiveHint !== undefined) {
+      listing.annotations = {
+        ...listing.annotations,
+        destructiveHint: tool.annotations.destructiveHint,
+      };
     }
     return listing;
   });

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 type Statement = {
   line: number;
@@ -64,12 +64,12 @@ const parseAcknowledgementCategory = (
 
 const MIN_ACKNOWLEDGEMENT_REASON_LENGTH = 12;
 const DEFAULT_MIGRATIONS_DIR = "apps/api/drizzle";
-const ALTER_TABLE_PATTERN = /\bALTER\s+TABLE\b/i;
+const ALTER_TABLE_PATTERN = /\bALTER\s+TABLE\b/iu;
 const ALTER_COLUMN_TYPE_PATTERN =
-  /\bALTER\s+(?:COLUMN\s+)?\S+\s+(?:SET\s+DATA\s+)?TYPE\b/i;
-const DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN = /\bDO(?:\s+LANGUAGE\s+\S+)?\s*$/i;
+  /\bALTER\s+(?:COLUMN\s+)?\S+\s+(?:SET\s+DATA\s+)?TYPE\b/iu;
+const DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN = /\bDO(?:\s+LANGUAGE\s+\S+)?\s*$/iu;
 const ROUTINE_DOLLAR_QUOTE_PREFIX_PATTERN =
-  /\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b[\s\S]*\b(?:AS|IS)\s*$/i;
+  /\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b[\s\S]*\b(?:AS|IS)\s*$/iu;
 
 const IDENTIFIER_CHARACTER_PATTERN = /[A-Za-z0-9_]/u;
 const IDENTIFIER_WORD_PATTERN = /^[A-Za-z0-9_]+/u;
@@ -213,26 +213,26 @@ const GUARDED_RULES: GuardedRule[] = [
     description: "drops a database object",
     category: "destructive-change",
     pattern:
-      /\bDROP\s+(?:DATABASE|EXTENSION|FUNCTION|INDEX|MATERIALIZED\s+VIEW|POLICY|SCHEMA|SEQUENCE|TABLE|TRIGGER|TYPE|VIEW)\b/i,
+      /\bDROP\s+(?:DATABASE|EXTENSION|FUNCTION|INDEX|MATERIALIZED\s+VIEW|POLICY|SCHEMA|SEQUENCE|TABLE|TRIGGER|TYPE|VIEW)\b/iu,
   },
   {
     id: "drop-column",
     description: "drops a table column",
     category: "destructive-change",
     pattern:
-      /\bALTER\s+TABLE\b[\s\S]*\bDROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(?!(?:CONSTRAINT|DEFAULT|NOT\s+NULL)\b)\S+/i,
+      /\bALTER\s+TABLE\b[\s\S]*\bDROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(?!(?:CONSTRAINT|DEFAULT|NOT\s+NULL)\b)\S+/iu,
   },
   {
     id: "drop-constraint",
     description: "drops a table constraint",
     category: "destructive-change",
-    pattern: /\bALTER\s+TABLE\b[\s\S]*\bDROP\s+CONSTRAINT\b/i,
+    pattern: /\bALTER\s+TABLE\b[\s\S]*\bDROP\s+CONSTRAINT\b/iu,
   },
   {
     id: "rename-table-or-column",
     description: "renames a table or column",
     category: "destructive-change",
-    pattern: /\bALTER\s+TABLE\b[\s\S]*\bRENAME\b/i,
+    pattern: /\bALTER\s+TABLE\b[\s\S]*\bRENAME\b/iu,
   },
   {
     id: "alter-column-type",
@@ -246,19 +246,19 @@ const GUARDED_RULES: GuardedRule[] = [
     id: "truncate-table",
     description: "truncates table data",
     category: "destructive-change",
-    pattern: /\bTRUNCATE\b/i,
+    pattern: /\bTRUNCATE\b/iu,
   },
   {
     id: "delete-data",
     description: "deletes table data",
     category: "destructive-change",
-    pattern: /\bDELETE\s+FROM\b/i,
+    pattern: /\bDELETE\s+FROM\b/iu,
   },
   {
     id: "disable-row-level-security",
     description: "disables row-level security",
     category: "destructive-change",
-    pattern: /\bALTER\s+TABLE\b[\s\S]*\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i,
+    pattern: /\bALTER\s+TABLE\b[\s\S]*\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/iu,
   },
   {
     id: "unbounded-update",
@@ -278,7 +278,7 @@ const INVARIANT_RULES: InvariantRule[] = [
   {
     id: "on-conflict-column-target",
     description: "uses a column-target ON CONFLICT clause",
-    pattern: /\bON\s+CONFLICT\s*\([^)]*\)/i,
+    pattern: /\bON\s+CONFLICT\s*\([^)]*\)/iu,
     guidance:
       "Use ON CONFLICT ON CONSTRAINT for a named table constraint, or use WHERE NOT EXISTS when the arbiter is a partial unique index.",
   },
@@ -345,13 +345,13 @@ const isWhitespaceOnly = (value: string): boolean => value.trim().length === 0;
 
 const appendMasked = (value: string): string => (value === "\n" ? "\n" : " ");
 
-const maskText = (value: string): string => value.replace(/[^\n]/g, " ");
+const maskText = (value: string): string => value.replace(/[^\n]/gu, " ");
 
 const countNewlines = (value: string): number =>
-  value.match(/\n/g)?.length ?? 0;
+  value.match(/\n/gu)?.length ?? 0;
 
 const isIdentifierCharacter = (value: string): boolean =>
-  /[A-Za-z0-9_$]/.test(value);
+  /[A-Za-z0-9_$]/u.test(value);
 
 const hasEscapeStringPrefix = (source: string, quoteIndex: number): boolean => {
   const prefix = source[quoteIndex - 1] ?? "";
@@ -363,7 +363,7 @@ const hasEscapeStringPrefix = (source: string, quoteIndex: number): boolean => {
 };
 
 const readDollarQuoteTag = (source: string, index: number): string | null => {
-  const match = /^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/.exec(source.slice(index));
+  const match = /^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/u.exec(source.slice(index));
 
   return match?.[0] ?? null;
 };
@@ -622,7 +622,7 @@ const parseStatements = (source: string): Statement[] => {
           statements.push({
             line: bodyStartLine + statement.line - 1,
             text: statement.text,
-            deferred: bodyIsDeferred || statement.deferred,
+            ...(bodyIsDeferred || statement.deferred ? { deferred: true } : {}),
           });
         }
       }
@@ -638,7 +638,7 @@ const parseStatements = (source: string): Statement[] => {
       continue;
     }
 
-    if (isWhitespaceOnly(current) && !/\s/.test(char)) {
+    if (isWhitespaceOnly(current) && !/\s/u.test(char)) {
       currentLine = line;
     }
 
@@ -662,15 +662,15 @@ const collectMigrationFiles = (directory: string): string[] => {
   const files: string[] = [];
 
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    const path = join(directory, entry.name);
+    const filePath = path.join(directory, entry.name);
 
     if (entry.isDirectory()) {
-      files.push(...collectMigrationFiles(path));
+      files.push(...collectMigrationFiles(filePath));
       continue;
     }
 
     if (entry.isFile() && entry.name.endsWith(".sql")) {
-      files.push(path);
+      files.push(filePath);
     }
   }
 

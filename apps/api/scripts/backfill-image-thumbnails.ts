@@ -28,6 +28,7 @@ import {
   THUMBNAIL_MIME_TYPE,
 } from "@/api/handlers/files/image-derivative";
 import { createUserFileKey } from "@/api/handlers/files/utils";
+import type { SafeId } from "@/api/lib/branded-types";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { getS3 } from "@/api/lib/s3";
 import {
@@ -71,8 +72,10 @@ const backfillEntityFields = async (): Promise<number> => {
   let enqueued = 0;
 
   for (;;) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: next page cursor depends on this batch
-    const batch = await rootDb.execute<EntityFieldRow>(sql`
+    // Sequential keyset pagination: the next page cursor depends on this batch.
+    const batch: Iterable<EntityFieldRow> =
+      // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: next page cursor depends on this batch
+      await rootDb.execute<EntityFieldRow>(sql`
       SELECT
         f.id AS field_id,
         f.content->>'mimeType' AS mime_type,
@@ -93,9 +96,9 @@ const backfillEntityFields = async (): Promise<number> => {
         ${cursor ? sql`AND f.id > ${cursor}` : sql``}
       ORDER BY f.id ASC
       LIMIT ${BATCH_SIZE}
-    `);
+      `);
 
-    const rows = [...batch];
+    const rows: EntityFieldRow[] = [...batch];
     if (rows.length === 0) {
       break;
     }
@@ -118,7 +121,7 @@ const backfillEntityFields = async (): Promise<number> => {
       enqueued += 1;
     }
 
-    const lastRow = rows.at(-1);
+    const lastRow: EntityFieldRow | undefined = rows.at(-1);
     if (!lastRow) {
       break;
     }
@@ -130,7 +133,7 @@ const backfillEntityFields = async (): Promise<number> => {
 };
 
 const backfillChatFiles = async (): Promise<number> => {
-  let cursor: string | null = null;
+  let cursor: SafeId<"userFile"> | null = null;
   let generated = 0;
 
   for (;;) {
@@ -179,7 +182,7 @@ const backfillChatFiles = async (): Promise<number> => {
       const thumbnailKey = createUserFileKey({
         fileId: thumbnailFileId,
         mimeType: THUMBNAIL_MIME_TYPE,
-        userId: row.userId,
+        userId: brandPersistedUserId(row.userId),
       });
       // oxlint-disable-next-line no-await-in-loop -- writes one thumbnail per row before patching the row; sequential keeps S3 write and DB update paired
       await getS3().write(thumbnailKey, thumbnail.value.webp);

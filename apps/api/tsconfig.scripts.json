@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./.cache/tsbuildinfo.scripts.json"
+  },
+  "include": ["src", "scripts", "drizzle.config.ts", "../../types"]
+}

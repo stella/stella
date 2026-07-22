@@ -317,7 +317,13 @@ const crawlPrefixConstantEntries = (
   if (declaration === null) {
     return [];
   }
-  return [...declaration[1].matchAll(QUOTED_STRING)].map((match) => match[1]);
+  const body = declaration[1];
+  if (body === undefined) {
+    return [];
+  }
+  return [...body.matchAll(QUOTED_STRING)].flatMap((match) =>
+    match[1] === undefined ? [] : [match[1]],
+  );
 };
 
 const isDirectory = (candidate: string): boolean =>
@@ -607,12 +613,16 @@ const checkMixed = (appDir: string, app: string): Violation[] => {
   // cannot bypass the single crawl-prefix allowlist.
   const constantSet = new Set(prefixes);
   for (const match of libSource.matchAll(ALLOW_PATH_LITERAL)) {
-    const prefix = allowPathToPrefix(match[1]);
+    const allowPath = match[1];
+    if (allowPath === undefined) {
+      continue;
+    }
+    const prefix = allowPathToPrefix(allowPath);
     if (!constantSet.has(prefix)) {
       violations.push({
         app,
         code: "mixed-allow-not-in-constant",
-        message: `${MIXED_ROBOTS_LIB} allows \`${match[1]}\`, whose prefix \`${prefix}\` is not in ${MIXED_CRAWL_PREFIX_CONST}.`,
+        message: `${MIXED_ROBOTS_LIB} allows \`${allowPath}\`, whose prefix \`${prefix}\` is not in ${MIXED_CRAWL_PREFIX_CONST}.`,
         fix: `add ${prefix} to ${MIXED_CRAWL_PREFIX_CONST} or remove the Allow line.`,
       });
     }
@@ -719,7 +729,7 @@ const checkAll = (appsRoot: string): CheckResult => {
 // --- Modes ------------------------------------------------------------------
 
 const summarize = (reports: readonly AppReport[]): string => {
-  const counts: Record<string, number> = {
+  const counts: Record<CrawlPosture | "invalid", number> = {
     public: 0,
     private: 0,
     mixed: 0,

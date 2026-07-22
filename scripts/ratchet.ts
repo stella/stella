@@ -24,6 +24,7 @@
 // CI-only wiring lives in .github/workflows/ci.yml and scripts/verify.sh
 // alongside the other ratchet guards.
 
+import { panic } from "better-result";
 import {
   mkdirSync,
   mkdtempSync,
@@ -921,6 +922,9 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
 type MetricSnapshot = { count: number; files: Record<string, number> };
 type Baseline = Record<string, MetricSnapshot>;
 
+const requireSnapshot = (baseline: Baseline, id: string): MetricSnapshot =>
+  baseline[id] ?? panic(`ratchet metric ${id} is missing from the snapshot`);
+
 const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
   const seen = new Set<string>();
   const perFile: Record<string, number> = {};
@@ -945,7 +949,8 @@ const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
 
   const files: Record<string, number> = {};
   for (const rel of Object.keys(perFile).sort()) {
-    files[rel] = perFile[rel];
+    files[rel] =
+      perFile[rel] ?? panic(`ratchet count for ${rel} disappeared during scan`);
   }
   return { count, files };
 };
@@ -1032,7 +1037,7 @@ const runReport = (): number => {
   const showDetails = process.argv.includes("--details");
   console.log("ratchet: current metric counts (vs baseline)\n");
   for (const metric of RATCHET_METRICS) {
-    const c = current[metric.id];
+    const c = requireSnapshot(current, metric.id);
     const b = baseline[metric.id]?.count ?? 0;
     const delta = c.count - b;
     const sign = formatDelta(delta);
@@ -1054,7 +1059,7 @@ const runWrite = (): number => {
   writeBaseline(snapshot);
   console.log(`Wrote ratchet baseline to ${BASELINE_REL}:`);
   for (const metric of RATCHET_METRICS) {
-    const snap = snapshot[metric.id];
+    const snap = requireSnapshot(snapshot, metric.id);
     console.log(
       `  ${metric.id.padEnd(30)} ${String(snap.count).padStart(5)} across ${Object.keys(snap.files).length} file(s)`,
     );
@@ -1071,7 +1076,11 @@ const runCheck = (): number => {
 
   for (const metric of RATCHET_METRICS) {
     const base = baseline[metric.id] ?? { count: 0, files: {} };
-    const diff = diffMetric(metric.id, current[metric.id], base);
+    const diff = diffMetric(
+      metric.id,
+      requireSnapshot(current, metric.id),
+      base,
+    );
     if (diff.status === "regressed") {
       regressions.push(diff);
     }
@@ -1502,7 +1511,7 @@ const runSelfTest = (): number => {
 
     const snapshot = scanAll(root);
 
-    const asMetric = snapshot["as-casts"];
+    const asMetric = requireSnapshot(snapshot, "as-casts");
     if (asMetric.count !== EXPECTED_AS_CASTS) {
       failures.push(
         `as-casts counted ${asMetric.count}, expected ${EXPECTED_AS_CASTS}`,
@@ -1515,43 +1524,54 @@ const runSelfTest = (): number => {
       failures.push("as-casts did not exclude a .gen.ts file");
     }
 
-    const nullishMetric = snapshot["nullish-array-fallback"];
+    const nullishMetric = requireSnapshot(snapshot, "nullish-array-fallback");
     if (nullishMetric.count !== EXPECTED_NULLISH) {
       failures.push(
         `nullish-array-fallback counted ${nullishMetric.count}, expected ${EXPECTED_NULLISH}`,
       );
     }
 
-    const barrelMetric = snapshot["barrel-index-files"];
+    const barrelMetric = requireSnapshot(snapshot, "barrel-index-files");
     if (barrelMetric.count !== 2) {
       failures.push(
         `barrel-index-files counted ${barrelMetric.count}, expected 2`,
       );
     }
 
-    const directErrorMetric = snapshot["direct-error-message-display"];
+    const directErrorMetric = requireSnapshot(
+      snapshot,
+      "direct-error-message-display",
+    );
     if (directErrorMetric.count !== EXPECTED_DIRECT_ERROR) {
       failures.push(
         `direct-error-message-display counted ${directErrorMetric.count}, expected ${EXPECTED_DIRECT_ERROR}`,
       );
     }
 
-    const moduleCollectionsMetric =
-      snapshot["module-level-mutable-collections"];
+    const moduleCollectionsMetric = requireSnapshot(
+      snapshot,
+      "module-level-mutable-collections",
+    );
     if (moduleCollectionsMetric.count !== EXPECTED_MODULE_COLLECTIONS) {
       failures.push(
         `module-level-mutable-collections counted ${moduleCollectionsMetric.count}, expected ${EXPECTED_MODULE_COLLECTIONS}`,
       );
     }
 
-    const suppressionMetric = snapshot["raw-use-effect-suppressions"];
+    const suppressionMetric = requireSnapshot(
+      snapshot,
+      "raw-use-effect-suppressions",
+    );
     if (suppressionMetric.count !== EXPECTED_SUPPRESSIONS) {
       failures.push(
         `raw-use-effect-suppressions counted ${suppressionMetric.count}, expected ${EXPECTED_SUPPRESSIONS}`,
       );
     }
 
-    const lintSuppressionMetric = snapshot["lint-suppression-directives"];
+    const lintSuppressionMetric = requireSnapshot(
+      snapshot,
+      "lint-suppression-directives",
+    );
     if (lintSuppressionMetric.count !== EXPECTED_LINT_SUPPRESSIONS_TOTAL) {
       failures.push(
         `lint-suppression-directives counted ${lintSuppressionMetric.count}, expected ${EXPECTED_LINT_SUPPRESSIONS_TOTAL}`,
@@ -1566,21 +1586,30 @@ const runSelfTest = (): number => {
       );
     }
 
-    const tsSuppressionMetric = snapshot["ts-suppression-directives"];
+    const tsSuppressionMetric = requireSnapshot(
+      snapshot,
+      "ts-suppression-directives",
+    );
     if (tsSuppressionMetric.count !== EXPECTED_TS_SUPPRESSIONS) {
       failures.push(
         `ts-suppression-directives counted ${tsSuppressionMetric.count}, expected ${EXPECTED_TS_SUPPRESSIONS}`,
       );
     }
 
-    const detachedPromiseMetric = snapshot["detached-promise-review-sites"];
+    const detachedPromiseMetric = requireSnapshot(
+      snapshot,
+      "detached-promise-review-sites",
+    );
     if (detachedPromiseMetric.count !== EXPECTED_DETACHED_PROMISES) {
       failures.push(
         `detached-promise-review-sites counted ${detachedPromiseMetric.count}, expected ${EXPECTED_DETACHED_PROMISES}`,
       );
     }
 
-    const truncatedCapabilityMetric = snapshot["capability-schemas-truncated"];
+    const truncatedCapabilityMetric = requireSnapshot(
+      snapshot,
+      "capability-schemas-truncated",
+    );
     if (
       truncatedCapabilityMetric.count !== EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS
     ) {
@@ -1589,15 +1618,20 @@ const runSelfTest = (): number => {
       );
     }
 
-    const fileTransportMetric =
-      snapshot["capability-file-transport-suppressed"];
+    const fileTransportMetric = requireSnapshot(
+      snapshot,
+      "capability-file-transport-suppressed",
+    );
     if (fileTransportMetric.count !== EXPECTED_FILE_TRANSPORT_SUPPRESSED) {
       failures.push(
         `capability-file-transport-suppressed counted ${fileTransportMetric.count}, expected ${EXPECTED_FILE_TRANSPORT_SUPPRESSED}`,
       );
     }
 
-    const readWriteScopeMetric = snapshot["read-capabilities-with-write-scope"];
+    const readWriteScopeMetric = requireSnapshot(
+      snapshot,
+      "read-capabilities-with-write-scope",
+    );
     if (
       readWriteScopeMetric.count !== EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE
     ) {
@@ -1606,8 +1640,10 @@ const runSelfTest = (): number => {
       );
     }
 
-    const missingDescriptionMetric =
-      snapshot["capabilities-without-description"];
+    const missingDescriptionMetric = requireSnapshot(
+      snapshot,
+      "capabilities-without-description",
+    );
     if (
       missingDescriptionMetric.count !==
       EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION
@@ -1617,14 +1653,20 @@ const runSelfTest = (): number => {
       );
     }
 
-    const crossHandlerMetric = snapshot["cross-handler-imports"];
+    const crossHandlerMetric = requireSnapshot(
+      snapshot,
+      "cross-handler-imports",
+    );
     if (crossHandlerMetric.count !== EXPECTED_CROSS_HANDLER) {
       failures.push(
         `cross-handler-imports counted ${crossHandlerMetric.count}, expected ${EXPECTED_CROSS_HANDLER}`,
       );
     }
 
-    const crossRouteMetric = snapshot["cross-route-private-imports"];
+    const crossRouteMetric = requireSnapshot(
+      snapshot,
+      "cross-route-private-imports",
+    );
     const expectedCrossRouteTotal =
       EXPECTED_CROSS_ROUTE_BETA +
       EXPECTED_CROSS_ROUTE_NESTED +
@@ -1645,7 +1687,10 @@ const runSelfTest = (): number => {
       );
     }
 
-    const crossFeatureMetric = snapshot["cross-feature-imports"];
+    const crossFeatureMetric = requireSnapshot(
+      snapshot,
+      "cross-feature-imports",
+    );
     if (crossFeatureMetric.count !== EXPECTED_CROSS_FEATURE) {
       failures.push(
         `cross-feature-imports counted ${crossFeatureMetric.count}, expected ${EXPECTED_CROSS_FEATURE}`,

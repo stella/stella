@@ -135,7 +135,11 @@ export default {
       create(context) {
         const genericHelperAliases = new Map();
         const pendingComponentNames = new Set();
-        const pendingQueryHookCalls = [];
+        const pendingQueryHookCalls: {
+          component: string;
+          hook: string;
+          node: unknown;
+        }[] = [];
         const queryHookAliases = new Set();
         const routeQueryHelperNamespaces = new Set();
         const tanstackQueryNamespaces = new Set();

@@ -191,7 +191,8 @@ const isEdenApiCallee = (callee) => {
   if (unwrapped?.type !== "MemberExpression" || unwrapped.computed !== false) {
     return false;
   }
-  if (!HTTP_VERBS.has(getPropertyName(unwrapped.property))) {
+  const propertyName = getPropertyName(unwrapped.property);
+  if (propertyName === null || !HTTP_VERBS.has(propertyName)) {
     return false;
   }
   return rootIdentifier(unwrapped.object)?.name === "api";

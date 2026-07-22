@@ -303,7 +303,11 @@ const resolveProject = async ({
   environment: string;
 }): Promise<ResolvedProject> => {
   if (auth.type === "project") {
-    return resolveProjectToken({ auth, environment, projectId });
+    return resolveProjectToken({
+      auth,
+      environment,
+      ...(projectId === undefined ? {} : { projectId }),
+    });
   }
 
   if (!projectId) {
@@ -636,7 +640,7 @@ const main = async () => {
   const projectId = project ?? process.env["RAILWAY_TEMPLATE_PROJECT_ID"];
   const resolvedProject = await resolveProject({
     auth,
-    projectId,
+    ...(projectId === undefined ? {} : { projectId }),
     environment:
       environment ??
       process.env["RAILWAY_TEMPLATE_ENVIRONMENT"] ??

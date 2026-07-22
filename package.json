@@ -17,6 +17,7 @@
     "dev:web": "bun packages/scripts/src/dev-runner.ts dev:web",
     "typegen": "turbo run typegen",
     "typecheck": "turbo run typecheck",
+    "typecheck:repo": "bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.scripts.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.tooling.json && bun packages/scripts/src/tsc-native.ts --noEmit -p tsconfig.oxlint-plugins.json",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
     "security:audit": "bun scripts/dependency-audit.ts --check",
     "security:audit:report": "bun scripts/dependency-audit.ts",

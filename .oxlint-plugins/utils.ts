@@ -4,9 +4,9 @@
 // `unknown` so rule files can call them without per-call type ceremony or
 // shared type-import boilerplate.
 
-type AstNode = { type: string } & Record<string, unknown>;
+export type AstNode = { type: string } & Record<string, unknown>;
 
-const isAstNode = (node: unknown): node is AstNode =>
+export const isAstNode = (node: unknown): node is AstNode =>
   typeof node === "object" &&
   node !== null &&
   "type" in node &&
@@ -91,9 +91,9 @@ export const getCalleeName = (callee: unknown): string | null => {
 
 // Peel TS-only wrapping nodes so a shape check sees the underlying
 // expression. Returns the original node when no wrapping is present.
-export const unwrapExpression = (node: unknown): unknown => {
+export const unwrapExpression = (node: unknown): AstNode | null => {
   if (!isAstNode(node)) {
-    return node;
+    return null;
   }
   if (
     node.type === "TSAsExpression" ||

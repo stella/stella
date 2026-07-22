@@ -1,0 +1,10 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "paths": {
+      "@/api/*": ["./apps/api/src/*"]
+    },
+    "types": ["bun"]
+  },
+  "include": ["scripts/**/*.ts"]
+}

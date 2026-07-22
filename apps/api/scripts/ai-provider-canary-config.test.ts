@@ -60,13 +60,13 @@ describe("AI provider weekly rotation", () => {
         weeklyCanaryRotation({ provider, rotationIndex }),
       );
 
-      expect(rotations.map(({ modelId }) => modelId)).toEqual(models);
+      expect(rotations.map(({ modelId }) => modelId)).toEqual([...models]);
       expect(
         weeklyCanaryRotation({
           provider,
           rotationIndex: models.length,
         }).modelId,
-      ).toBe(models.at(0));
+      ).toBe(models[0]);
 
       for (const { modelId, modelRoles } of rotations) {
         expect(modelRoles.length).toBeGreaterThan(0);
@@ -91,7 +91,7 @@ describe("AI provider weekly rotation", () => {
         provider: "openai",
         rotationIndex: WEEKLY_TOOL_SHAPES.length,
       }).toolShape,
-    ).toBe(WEEKLY_TOOL_SHAPES.at(0));
+    ).toBe(WEEKLY_TOOL_SHAPES[0]);
   });
 
   test("rejects invalid rotation indexes", () => {

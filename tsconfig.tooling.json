@@ -1,0 +1,12 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "types": ["bun"]
+  },
+  "include": [
+    ".claude/mcp/**/*.ts",
+    "apps/web/scripts/**/*.ts",
+    "packages/*/scripts/**/*.ts"
+  ]
+}

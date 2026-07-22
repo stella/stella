@@ -1185,7 +1185,7 @@ export default {
         }
         const promptBoundaryTypeNames = new Set(PROMPT_BOUNDARY_TYPES);
         const namedTypeAnnotations = new Map();
-        const assertionNodes = [];
+        const assertionNodes: unknown[] = [];
 
         function check(node) {
           if (

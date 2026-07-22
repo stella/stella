@@ -53,7 +53,8 @@ const isAllowedCompositionSpread = (node) => {
     return false;
   }
   if (unwrapped.type === "MemberExpression") {
-    return rootIdentifier(unwrapped.object)?.name.endsWith("Keys") === true;
+    const root = rootIdentifier(unwrapped.object);
+    return isIdentifier(root) && root.name.endsWith("Keys");
   }
   if (unwrapped.type === "CallExpression") {
     return isAllowedCompositionSpread(unwrapped.callee);
@@ -74,6 +75,9 @@ const isExplicitObjectSpreadValue = (node) => {
     return false;
   }
   if (unwrapped.type === "ObjectExpression") {
+    if (!Array.isArray(unwrapped.properties)) {
+      return false;
+    }
     return unwrapped.properties.every((property) => {
       if (property?.type === "SpreadElement") {
         return isExplicitObjectSpreadValue(property.argument);
@@ -254,7 +258,10 @@ export default {
             return;
           }
           if (value.type === "ArrayExpression") {
-            for (const element of value.elements) {
+            const elements = Array.isArray(value.elements)
+              ? value.elements
+              : [];
+            for (const element of elements) {
               if (isLeakySpread(element)) {
                 context.report({
                   node: element,
@@ -269,7 +276,10 @@ export default {
           if (value.type !== "ObjectExpression") {
             return;
           }
-          for (const property of value.properties) {
+          const properties = Array.isArray(value.properties)
+            ? value.properties
+            : [];
+          for (const property of properties) {
             if (isLeakyObjectSpread(property)) {
               context.report({
                 node: property,
