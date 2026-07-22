@@ -50,6 +50,7 @@ import { buildBindingContext } from "@/api/lib/template-binding/build-binding-co
 import {
   collectTemplateInputKeys,
   findUnusedTemplateValueKeys,
+  isFillableTemplateInputField,
 } from "./template-input-contract";
 
 // Data a template is filled with: open-ended field-path → value map (paths come
@@ -150,12 +151,7 @@ export const describeStoredTemplate = async ({
     return {
       name: loaded.name,
       fields: manifest.fields
-        .filter(
-          (field) =>
-            field.formula === undefined &&
-            field.condition === undefined &&
-            field.conditionAst === undefined,
-        )
+        .filter(isFillableTemplateInputField)
         .map((field) => ({
           path: field.path,
           label: field.label ?? null,
@@ -315,22 +311,29 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   if (unusedValuePolicy === "reject") {
     const discovered = await discoverTemplate(loaded.buffer);
+    const declaredKeys =
+      manifest === null
+        ? collectTemplateInputKeys({
+            discoveredFieldPaths: discovered.fields.flatMap((field) => [
+              field.path,
+              ...(field.itemFields === undefined
+                ? []
+                : field.itemFields.map(
+                    (itemField) => `${field.path}.${itemField.path}`,
+                  )),
+            ]),
+            manifestFieldPaths: [],
+            placeholderPaths: discovered.placeholders.map(
+              (placeholder) => placeholder.name,
+            ),
+          })
+        : new Set(
+            manifest.fields
+              .filter(isFillableTemplateInputField)
+              .map((field) => field.path),
+          );
     const unusedKeys = findUnusedTemplateValueKeys({
-      declaredKeys: collectTemplateInputKeys({
-        discoveredFieldPaths: discovered.fields.flatMap((field) => [
-          field.path,
-          ...(field.itemFields === undefined
-            ? []
-            : field.itemFields.map(
-                (itemField) => `${field.path}.${itemField.path}`,
-              )),
-        ]),
-        manifestFieldPaths:
-          manifest === null ? [] : manifest.fields.map((field) => field.path),
-        placeholderPaths: discovered.placeholders.map(
-          (placeholder) => placeholder.name,
-        ),
-      }),
+      declaredKeys,
       values,
     });
     if (unusedKeys.length > 0) {

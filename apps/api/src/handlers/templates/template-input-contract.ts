@@ -9,6 +9,19 @@ type CollectTemplateInputKeysOptions = {
   placeholderPaths: Iterable<string>;
 };
 
+type TemplateInputField = {
+  condition?: unknown;
+  conditionAst?: unknown;
+  formula?: unknown;
+};
+
+export const isFillableTemplateInputField = (
+  field: TemplateInputField,
+): boolean =>
+  field.formula === undefined &&
+  field.condition === undefined &&
+  field.conditionAst === undefined;
+
 export const collectTemplateInputKeys = ({
   discoveredFieldPaths,
   manifestFieldPaths,

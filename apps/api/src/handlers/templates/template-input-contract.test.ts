@@ -6,6 +6,7 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   collectTemplateInputKeys,
   findUnusedTemplateValueKeys,
+  isFillableTemplateInputField,
 } from "./template-input-contract";
 
 // Discovery emits structural object roots as fields alongside terminal
@@ -13,6 +14,15 @@ import {
 const DECLARED_KEYS = ["name", "company", "company.name"] as const;
 
 describe("template input contract", () => {
+  test("uses one fillable-field predicate for listing and strict input", () => {
+    expect(isFillableTemplateInputField({})).toBe(true);
+    expect(isFillableTemplateInputField({ formula: "rent * 12" })).toBe(false);
+    expect(isFillableTemplateInputField({ condition: "client.type" })).toBe(
+      false,
+    );
+    expect(isFillableTemplateInputField({ conditionAst: {} })).toBe(false);
+  });
+
   test("combines discovery, placeholders, and manifest-only fields", () => {
     expect(
       collectTemplateInputKeys({
