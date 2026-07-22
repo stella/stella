@@ -124,7 +124,7 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
   });
 
   test("schema constraints cannot hide inside applicator branches", () => {
-    const applicators = ["anyOf", "allOf", "oneOf", "prefixItems"];
+    const applicators = ["anyOf", "allOf", "oneOf"];
     for (const keyword of applicators) {
       const tool = validTool({
         inputSchema: {
@@ -138,6 +138,33 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
     }
   });
 
+  test("unsupported tuple array schemas fail closed", () => {
+    const unsupportedTuples = [
+      {
+        schema: { prefixItems: [{ type: "string" }, { type: "integer" }] },
+        violation: "prefixItems tuple schemas are unsupported",
+      },
+      {
+        schema: { items: [{ type: "string" }, { type: "integer" }] },
+        violation: "array-valued items tuple schemas are unsupported",
+      },
+    ];
+
+    for (const { schema, violation } of unsupportedTuples) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: { value: { type: "array", ...schema } },
+        },
+      });
+
+      expect(validateFetchedToolsList(body([tool]))).toEqual({
+        ok: false,
+        violation: `tool list_matters: ${violation}`,
+      });
+    }
+  });
+
   test("unsupported subschema shapes fail closed in every traversed container", () => {
     const invalidChildren = [
       { anyOf: [true] },
@@ -147,7 +174,7 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
       { patternProperties: { ".*": "not-a-schema" } },
       { patternProperties: [] },
       { additionalProperties: "not-a-schema" },
-      { items: [null] },
+      { items: null },
       { $defs: { child: false } },
     ];
 

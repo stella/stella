@@ -59,12 +59,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>
   Array.isArray(value);
 
-const SCHEMA_ARRAY_KEYWORDS = [
-  "allOf",
-  "anyOf",
-  "oneOf",
-  "prefixItems",
-] as const;
+const SCHEMA_ARRAY_KEYWORDS = ["allOf", "anyOf", "oneOf"] as const;
 
 const SCHEMA_SINGLE_KEYWORDS = [
   "contains",
@@ -110,6 +105,10 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
   }
   if (!isRecord(schema)) {
     return undefined;
+  }
+
+  if (schema["prefixItems"] !== undefined) {
+    return "prefixItems tuple schemas are unsupported";
   }
 
   const ref = schema["$ref"];
@@ -239,17 +238,9 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
 
   const items = schema["items"];
   if (Array.isArray(items)) {
-    for (const item of items) {
-      if (!isRecord(item)) {
-        return "items contains an invalid schema";
-      }
-      const violation = walkSchema(item, depth + 1);
-      if (violation !== undefined) {
-        return violation;
-      }
-    }
+    return "array-valued items tuple schemas are unsupported";
   } else if (items !== undefined && !isRecord(items)) {
-    return "items must be a schema or schema array";
+    return "items must be a schema";
   } else if (isRecord(items)) {
     const violation = walkSchema(items, depth + 1);
     if (violation !== undefined) {
