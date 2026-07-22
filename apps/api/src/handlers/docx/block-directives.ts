@@ -116,23 +116,39 @@ const isStringRecord = (v: unknown): v is Record<string, string> =>
  * an inner-loop `{{#if dob > "2028-01-01"}}` compares the original ISO date
  * rather than the localized display text the date step wrote into the row for
  * substitution. Raw values are stashed by field path under
- * `<arrayPath>.<index>.<subPath>` (see {@link CONDITION_RAW_VALUES}); each match
- * sets the bare item-relative sub-path, which the loop body's condition resolves
- * the same way it resolves the row's other fields.
+ * `<valuePath>.<index>.<subPath>` (see {@link CONDITION_RAW_VALUES}); each match
+ * publishes both the bare item-relative path and every qualified loop alias.
+ * Condition evaluation therefore sees the raw value regardless of whether the
+ * author used shorthand, the declared nested path, or a rewritten loop path.
  */
-const applyRowRawOverlay = (
-  itemContext: Record<string, unknown>,
-  rawValues: Record<string, string> | undefined,
-  arrayPath: string,
-  index: number,
-): void => {
+type ApplyRowRawOverlayOptions = {
+  aliasPaths: readonly string[];
+  index: number;
+  itemContext: Record<string, unknown>;
+  rawValues: Record<string, string> | undefined;
+  valuePath: string;
+};
+
+const applyRowRawOverlay = ({
+  aliasPaths,
+  index,
+  itemContext,
+  rawValues,
+  valuePath,
+}: ApplyRowRawOverlayOptions): void => {
   if (!rawValues) {
     return;
   }
-  const prefix = `${arrayPath}.${index}.`;
+  const prefix = `${valuePath}.${index}.`;
+  const uniqueAliasPaths = new Set(aliasPaths);
   for (const [key, raw] of Object.entries(rawValues)) {
-    if (key.startsWith(prefix)) {
-      itemContext[key.slice(prefix.length)] = raw;
+    if (!key.startsWith(prefix)) {
+      continue;
+    }
+    const relativePath = key.slice(prefix.length);
+    itemContext[relativePath] = raw;
+    for (const aliasPath of uniqueAliasPaths) {
+      itemContext[`${aliasPath}.${relativePath}`] = raw;
     }
   }
 };
@@ -904,12 +920,13 @@ export const processBlockDirectives = (
         nestedLoopScopes,
         scope,
       });
-      applyRowRawOverlay(
+      applyRowRawOverlay({
+        aliasPaths: [arrayPath, scope.declaredPath],
+        index: itemIdx,
         itemContext,
-        conditionValues,
-        scope.valuePath,
-        itemIdx,
-      );
+        rawValues: conditionValues,
+        valuePath: scope.valuePath,
+      });
     } else if (
       typeof item === "string" ||
       typeof item === "number" ||
