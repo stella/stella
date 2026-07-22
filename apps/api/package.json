@@ -62,7 +62,7 @@
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/fetch": "workspace:*",
-    "@stll/folio-agents": "^0.7.0",
+    "@stll/folio-agents": "^0.8.2",
     "@stll/folio-core": "^0.15.0",
     "@stll/infosoud": "workspace:*",
     "@stll/legal-ast": "workspace:*",
