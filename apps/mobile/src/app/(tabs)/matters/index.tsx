@@ -14,7 +14,6 @@ export default function MattersScreen() {
       description="Find a matter and get the essential context quickly."
       emptyDescription="Your recent matters and matching search results will appear here."
       emptyTitle={query ? "No matching matters" : "No recent matters"}
-      title="Matters"
     >
       <TextInput
         accessibilityLabel="Search matters"
@@ -40,6 +39,7 @@ export default function MattersScreen() {
 
 const styles = StyleSheet.create({
   search: {
+    borderCurve: "continuous",
     borderRadius: 14,
     borderWidth: 1,
     fontSize: 16,

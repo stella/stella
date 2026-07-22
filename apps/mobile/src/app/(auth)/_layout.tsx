@@ -1,0 +1,23 @@
+import { Stack } from "expo-router/stack";
+
+export const unstable_settings = { anchor: "sign-in" };
+
+export default function AuthLayout() {
+  return (
+    <Stack
+      screenOptions={{
+        headerBackButtonDisplayMode: "minimal",
+        headerLargeTitle: false,
+        headerShadowVisible: false,
+        headerTransparent: true,
+      }}
+    >
+      <Stack.Screen name="sign-in" options={{ title: "Sign in to stella" }} />
+      <Stack.Screen name="otp" options={{ title: "Verify email" }} />
+      <Stack.Screen
+        name="two-factor"
+        options={{ title: "Two-factor authentication" }}
+      />
+    </Stack>
+  );
+}

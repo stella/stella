@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useAppColors } from "@/theme";
 
@@ -10,7 +9,6 @@ type EmptyStateScreenProps = {
   description: string;
   emptyDescription: string;
   emptyTitle: string;
-  title: string;
 };
 
 export const EmptyStateScreen = ({
@@ -18,40 +16,35 @@ export const EmptyStateScreen = ({
   description,
   emptyDescription,
   emptyTitle,
-  title,
 }: EmptyStateScreenProps) => {
   const colors = useAppColors();
 
   return (
-    <SafeAreaView
-      edges={["top"]}
+    <ScrollView
+      contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
       style={[styles.screen, { backgroundColor: colors.background }]}
     >
-      <ScrollView contentContainerStyle={styles.content} style={styles.screen}>
-        <View style={styles.heading}>
-          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-          <Text style={[styles.description, { color: colors.muted }]}>
-            {description}
-          </Text>
-        </View>
+      <Text style={[styles.description, { color: colors.muted }]}>
+        {description}
+      </Text>
 
-        {children}
+      {children}
 
-        <View
-          style={[
-            styles.emptyState,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            {emptyTitle}
-          </Text>
-          <Text style={[styles.emptyDescription, { color: colors.muted }]}>
-            {emptyDescription}
-          </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <View
+        style={[
+          styles.emptyState,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>
+          {emptyTitle}
+        </Text>
+        <Text style={[styles.emptyDescription, { color: colors.muted }]}>
+          {emptyDescription}
+        </Text>
+      </View>
+    </ScrollView>
   );
 };
 
@@ -74,6 +67,7 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: "center",
+    borderCurve: "continuous",
     borderRadius: 20,
     borderWidth: 1,
     flex: 1,
@@ -86,15 +80,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 8,
   },
-  heading: {
-    gap: 8,
-  },
   screen: {
     flex: 1,
-  },
-  title: {
-    fontSize: 34,
-    fontWeight: "700",
-    letterSpacing: -1,
   },
 });

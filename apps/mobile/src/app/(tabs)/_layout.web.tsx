@@ -1,0 +1,26 @@
+import { Tabs } from "expo-router/js-tabs";
+
+import { useAppColors } from "@/theme";
+
+export default function WebTabLayout() {
+  const colors = useAppColors();
+
+  return (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        sceneStyle: { backgroundColor: colors.background },
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.muted,
+        tabBarStyle: {
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
+        },
+      }}
+    >
+      <Tabs.Screen name="(chats)" options={{ title: "Chats" }} />
+      <Tabs.Screen name="tasks" options={{ title: "Tasks" }} />
+      <Tabs.Screen name="matters" options={{ title: "Matters" }} />
+    </Tabs>
+  );
+}

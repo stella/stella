@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { NativeTabs } from "expo-router/unstable-native-tabs";
 
 import { useAppColors } from "@/theme";
 
@@ -6,21 +6,34 @@ export default function TabLayout() {
   const colors = useAppColors();
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        sceneStyle: { backgroundColor: colors.background },
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: {
-          backgroundColor: colors.card,
-          borderTopColor: colors.border,
-        },
-      }}
-    >
-      <Tabs.Screen name="index" options={{ title: "Chats" }} />
-      <Tabs.Screen name="tasks" options={{ title: "Tasks" }} />
-      <Tabs.Screen name="matters" options={{ title: "Matters" }} />
-    </Tabs>
+    <NativeTabs minimizeBehavior="onScrollDown" tintColor={colors.accent}>
+      <NativeTabs.Trigger name="(chats)">
+        <NativeTabs.Trigger.Icon
+          md="chat"
+          sf={{
+            default: "bubble.left.and.bubble.right",
+            selected: "bubble.left.and.bubble.right.fill",
+          }}
+        />
+        <NativeTabs.Trigger.Label>Chats</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="tasks">
+        <NativeTabs.Trigger.Icon
+          md="check_circle"
+          sf={{
+            default: "checkmark.circle",
+            selected: "checkmark.circle.fill",
+          }}
+        />
+        <NativeTabs.Trigger.Label>Tasks</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="matters">
+        <NativeTabs.Trigger.Icon
+          md="folder"
+          sf={{ default: "folder", selected: "folder.fill" }}
+        />
+        <NativeTabs.Trigger.Label>Matters</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }

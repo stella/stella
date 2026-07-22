@@ -6,7 +6,6 @@ export default function ChatsScreen() {
       description="Keep ongoing work close and continue from any device."
       emptyDescription="New conversations and recent threads will appear here."
       emptyTitle="No conversations yet"
-      title="Chats"
     />
   );
 }
