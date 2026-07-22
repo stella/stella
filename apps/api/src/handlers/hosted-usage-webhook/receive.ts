@@ -269,6 +269,9 @@ const dispatchEvent = async (
       });
     case "allocation.created":
       return await handleHostedAllocation({ tx, payload: event.data, eventId });
+    default: {
+      event satisfies never;
+      return { kind: "ignored", reason: "unhandled event type" };
+    }
   }
-  return { kind: "ignored", reason: "unhandled event type" };
 };

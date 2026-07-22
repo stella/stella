@@ -3,6 +3,8 @@
   "display": "stella base",
   "compilerOptions": {
     "allowJs": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
     "checkJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

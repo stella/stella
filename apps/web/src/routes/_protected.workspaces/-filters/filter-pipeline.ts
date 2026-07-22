@@ -99,9 +99,11 @@ const resolveDateRange = (
         : Number.POSITIVE_INFINITY;
       return { fromMs, toMs };
     }
+    default: {
+      filter.preset satisfies never;
+      return null;
+    }
   }
-  filter.preset satisfies never;
-  return null;
 };
 
 const passesDateFilter = (
@@ -138,9 +140,11 @@ const passesLeadFilter = (
       return workspace.leadUserId === null;
     case "user":
       return workspace.leadUserId === filter.userId;
+    default: {
+      filter satisfies never;
+      return false;
+    }
   }
-  filter satisfies never;
-  return false;
 };
 
 export const isMattersFiltersActive = (filters: MattersFilters): boolean =>
