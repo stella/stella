@@ -317,6 +317,7 @@ type GetChatToolsProps = {
   activeFile?:
     | {
         entityId: SafeId<"entity">;
+        currentVersionId?: SafeId<"entityVersion"> | undefined;
         fileFieldId?: SafeId<"field"> | undefined;
         supportsDocxEdits?: boolean | undefined;
       }
@@ -795,6 +796,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     (registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto ||
       automaticDocxEditAvailableForValidation) &&
     activeFile !== undefined &&
+    activeFile.currentVersionId !== undefined &&
     activeFile.fileFieldId !== undefined &&
     requestWorkspaceId !== null &&
     recordAuditEvent !== undefined
@@ -804,6 +806,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           userId,
           workspaceId: requestWorkspaceId,
           entityId: activeFile.entityId,
+          expectedCurrentVersionId: activeFile.currentVersionId,
           fileFieldId: activeFile.fileFieldId,
           recordAuditEvent,
           docxEditRepresentation,

@@ -127,9 +127,18 @@ const OPERATION_VARIANTS_BY_TYPE = new Map(
   ]),
 );
 
-const inputJsonSchema: JsonObject = {
+const buildInputJsonSchema = (
+  expectedCurrentVersionId: SafeId<"entityVersion">,
+): JsonObject => ({
   type: "object",
   properties: {
+    baseVersionId: {
+      type: "string",
+      enum: [expectedCurrentVersionId],
+      description:
+        "Current document version shown in this tool schema. Copy this " +
+        "value exactly; approval is rejected if the document changes.",
+    },
     version: {
       type: "integer",
       description: "Document-operation contract version. Always 1.",
@@ -145,16 +154,12 @@ const inputJsonSchema: JsonObject = {
       description: "Operations to apply to the active DOCX.",
     },
   },
-  required: ["operations"],
+  required: ["baseVersionId", "operations"],
   additionalProperties: false,
-};
-
-const providerSafeInputJsonSchema = projectToProviderSafeJsonSchema(
-  inputJsonSchema,
-  { nullUnionStrategy: "json-schema" },
-).schema;
+});
 
 const ENVELOPE_PROPERTY_KEYS: ReadonlySet<string> = new Set([
+  "baseVersionId",
   "version",
   "operations",
 ]);
@@ -166,15 +171,18 @@ const validationIssue = (
   path?: readonly PropertyKey[],
 ): ValidationIssue => ({ message, path });
 
-const collectEnvelopeIssues = (input: JsonObject): ValidationIssue[] => {
+const collectEnvelopeIssues = (
+  input: JsonObject,
+  expectedCurrentVersionId: SafeId<"entityVersion">,
+): ValidationIssue[] => {
   const issues: ValidationIssue[] = [];
 
   for (const key of Object.keys(input)) {
     if (!ENVELOPE_PROPERTY_KEYS.has(key)) {
       issues.push(
         validationIssue(
-          `Unexpected property \`${key}\`: only \`version\` and ` +
-            "`operations` are accepted. The apply representation " +
+          `Unexpected property \`${key}\`: only \`baseVersionId\`, ` +
+            "`version`, and `operations` are accepted. The apply representation " +
             "(tracked changes vs. direct) is controlled by the chat " +
             "session's setting, not by the operation batch, so `mode`, " +
             "`atomic`, and `dryRun` cannot be set here.",
@@ -182,6 +190,16 @@ const collectEnvelopeIssues = (input: JsonObject): ValidationIssue[] => {
         ),
       );
     }
+  }
+
+  if (input["baseVersionId"] !== expectedCurrentVersionId) {
+    issues.push(
+      validationIssue(
+        "The document changed after these edits were proposed; regenerate " +
+          "the edit against the current version.",
+        ["baseVersionId"],
+      ),
+    );
   }
 
   const version = input["version"];
@@ -260,12 +278,14 @@ type WithOptionalOperationId<T> = T extends { id: string }
   : T;
 
 type ValidatedEditWorkspaceDocumentInput = {
+  baseVersionId: SafeId<"entityVersion">;
   version: typeof FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION;
   operations: WithOptionalOperationId<FolioAIEditOperation>[];
 };
 
 const validateEditWorkspaceDocumentInput = (
   input: unknown,
+  expectedCurrentVersionId: SafeId<"entityVersion">,
 ): StandardSchemaV1.Result<ValidatedEditWorkspaceDocumentInput> => {
   if (!isJsonObject(input)) {
     return {
@@ -275,7 +295,7 @@ const validateEditWorkspaceDocumentInput = (
     };
   }
 
-  const issues = collectEnvelopeIssues(input);
+  const issues = collectEnvelopeIssues(input, expectedCurrentVersionId);
 
   const operations = input["operations"];
   if (!Array.isArray(operations)) {
@@ -329,6 +349,7 @@ const validateEditWorkspaceDocumentInput = (
 
   return {
     value: {
+      baseVersionId: expectedCurrentVersionId,
       version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
       // SAFETY: folio's strict batch parser just validated every
       // operation's shape against the same contract the derived JSON schema
@@ -357,16 +378,25 @@ type EditWorkspaceDocumentInputToolSchema = StandardJSONSchemaV1<
     ValidatedEditWorkspaceDocumentInput
   >;
 
-const inputToolSchema: EditWorkspaceDocumentInputToolSchema = {
-  "~standard": {
-    version: 1,
-    vendor: "stella",
-    validate: validateEditWorkspaceDocumentInput,
-    jsonSchema: {
-      input: () => providerSafeInputJsonSchema,
-      output: () => providerSafeInputJsonSchema,
+const createInputToolSchema = (
+  expectedCurrentVersionId: SafeId<"entityVersion">,
+): EditWorkspaceDocumentInputToolSchema => {
+  const providerSafeInputJsonSchema = projectToProviderSafeJsonSchema(
+    buildInputJsonSchema(expectedCurrentVersionId),
+    { nullUnionStrategy: "json-schema" },
+  ).schema;
+  return {
+    "~standard": {
+      version: 1,
+      vendor: "stella",
+      validate: (input) =>
+        validateEditWorkspaceDocumentInput(input, expectedCurrentVersionId),
+      jsonSchema: {
+        input: () => providerSafeInputJsonSchema,
+        output: () => providerSafeInputJsonSchema,
+      },
     },
-  },
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -468,6 +498,7 @@ type CreateEditWorkspaceDocumentToolsProps = {
   fileFieldId: SafeId<"field">;
   recordAuditEvent: AuditRecorder;
   docxEditRepresentation: DocxEditRepresentation;
+  expectedCurrentVersionId: SafeId<"entityVersion">;
 };
 
 /**
@@ -496,6 +527,7 @@ export const createEditWorkspaceDocumentTools = ({
   fileFieldId,
   recordAuditEvent,
   docxEditRepresentation,
+  expectedCurrentVersionId,
 }: CreateEditWorkspaceDocumentToolsProps) => ({
   [EDIT_WORKSPACE_DOCUMENT_TOOL_NAME]: toolDefinition({
     name: EDIT_WORKSPACE_DOCUMENT_TOOL_NAME,
@@ -503,16 +535,17 @@ export const createEditWorkspaceDocumentTools = ({
       "Apply edits directly to the DOCX currently open in the document " +
       "editor and save a new version -- no user review step. Use this " +
       "instead of `apply-active-docx-edits` when automatic apply mode is " +
-      "active. Send a versioned operation batch: " +
-      '`{"version": 1, "operations": [...]}`. The redline representation ' +
+      "active. Send the exact `baseVersionId` exposed by the schema with " +
+      'a versioned batch: `{"baseVersionId": "...", "version": 1, ' +
+      '"operations": [...]}`. The redline representation ' +
       "(tracked changes vs. direct) is fixed for this chat session and " +
       "cannot be chosen per call. Write document prose, not markdown: no " +
       "`#` headings, list dashes, or backticks. For a bold heading set " +
       "`styleId` (e.g. ClauseHeading1). Inserted block `text` may use " +
       "`**bold**` / `***bold italic***` for inline emphasis.",
-    inputSchema: inputToolSchema,
+    inputSchema: createInputToolSchema(expectedCurrentVersionId),
     outputSchema: toTanStackToolSchema(outputSchema),
-  }).server(async ({ operations }) => {
+  }).server(async ({ baseVersionId, operations }) => {
     const operationsWithIds: FolioAIEditOperation[] = operations.map(
       (operation) => ({
         ...operation,
@@ -552,6 +585,13 @@ export const createEditWorkspaceDocumentTools = ({
         cause: loaded.error,
       });
     }
+    if (loaded.value.entityVersionId !== baseVersionId) {
+      throw new ChatToolError({
+        message:
+          "The document changed after these edits were proposed; regenerate " +
+          "the edit against the current version.",
+      });
+    }
 
     const applied = await applyFolioAIEditsToBuffer(
       loaded.value.buffer,
@@ -583,7 +623,7 @@ export const createEditWorkspaceDocumentTools = ({
       organizationId,
       workspaceId,
       entityId,
-      expectedCurrentVersionId: loaded.value.entityVersionId,
+      expectedCurrentVersionId: baseVersionId,
       userId,
       recordAuditEvent,
       buffer: applied.buffer,

@@ -102,6 +102,7 @@ const writtenBufferFromS3Mock = (): ArrayBuffer => {
 };
 
 type BuildTxOptions = {
+  loadedCurrentVersionId?: SafeId<"entityVersion">;
   lockedCurrentVersionId?: SafeId<"entityVersion">;
   openDesktopEditSession?: boolean;
   preferredName?: string | null;
@@ -110,6 +111,7 @@ type BuildTxOptions = {
 };
 
 const buildTx = ({
+  loadedCurrentVersionId = entityVersionId,
   lockedCurrentVersionId = entityVersionId,
   openDesktopEditSession = false,
   preferredName = null,
@@ -163,13 +165,13 @@ const buildTx = ({
       },
       entities: {
         findFirst: async () => ({
-          currentVersionId: entityVersionId,
+          currentVersionId: loadedCurrentVersionId,
           readOnly,
         }),
       },
       entityVersions: {
         findFirst: async () => ({
-          id: entityVersionId,
+          id: loadedCurrentVersionId,
           fields: [
             {
               id: otherFileFieldId,
@@ -253,6 +255,7 @@ const validateInput = async (input: unknown) => {
     fileFieldId,
     recordAuditEvent: async () => undefined,
     docxEditRepresentation: "tracked-changes",
+    expectedCurrentVersionId: entityVersionId,
   })[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME];
   if (!tool.inputSchema) {
     throw new TypeError("Expected edit workspace document input schema");
@@ -284,6 +287,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
     });
 
     expect(Object.keys(tools)).toEqual([EDIT_WORKSPACE_DOCUMENT_TOOL_NAME]);
@@ -298,6 +302,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       keys.map(async (key) => ({
         key,
         result: await validateInput({
+          baseVersionId: entityVersionId,
           version: 1,
           operations: [
             {
@@ -319,6 +324,7 @@ describe("createEditWorkspaceDocumentTools", () => {
 
   test("keeps omitted operation ids deterministic across repeated validation", async () => {
     const input = {
+      baseVersionId: entityVersionId,
       version: 1 as const,
       operations: [
         {
@@ -335,6 +341,18 @@ describe("createEditWorkspaceDocumentTools", () => {
     expect(first).toEqual({ value: input });
   });
 
+  test("rejects a tool call bound to a stale document version", async () => {
+    const result = await validateInput({
+      baseVersionId: newerEntityVersionId,
+      version: 1,
+      operations: [{ type: "deleteBlock", blockId: "b-1" }],
+    });
+
+    expect(result.issues).toEqual([
+      expect.objectContaining({ path: ["baseVersionId"] }),
+    ]);
+  });
+
   test("returns a structured author_name_required outcome (no version written) when no author name is configured", async () => {
     const { tx } = buildTx({ preferredName: null, name: "   " });
     const { safeDb } = createScopedDbMock(tx);
@@ -348,6 +366,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
     });
     const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
@@ -357,6 +376,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const block = await firstBlock(s3FileBuffer);
     const result = await execute(
       {
+        baseVersionId: entityVersionId,
         version: 1,
         operations: [
           {
@@ -395,6 +415,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "direct",
+      expectedCurrentVersionId: entityVersionId,
     });
     const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
@@ -405,6 +426,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const results = await Promise.all([
       execute(
         {
+          baseVersionId: entityVersionId,
           version: 1,
           operations: [
             {
@@ -426,6 +448,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       ),
       execute(
         {
+          baseVersionId: entityVersionId,
           version: 1,
           operations: [
             {
@@ -469,6 +492,7 @@ describe("createEditWorkspaceDocumentTools", () => {
         recordedAuditEvents.push(event);
       },
       docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
     });
     const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
@@ -478,6 +502,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const block = await firstBlock(s3FileBuffer);
     const result = await execute(
       {
+        baseVersionId: entityVersionId,
         version: 1,
         operations: [
           {
@@ -547,6 +572,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "direct",
+      expectedCurrentVersionId: entityVersionId,
     });
     const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
@@ -556,6 +582,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const block = await firstBlock(s3FileBuffer);
     const result = await execute(
       {
+        baseVersionId: entityVersionId,
         version: 1,
         operations: [
           {
@@ -597,6 +624,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
     });
     const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
@@ -607,6 +635,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const rejection = await Promise.resolve(
       execute(
         {
+          baseVersionId: entityVersionId,
           version: 1,
           operations: [
             {
@@ -650,6 +679,7 @@ describe("createEditWorkspaceDocumentTools", () => {
       fileFieldId,
       recordAuditEvent: async () => undefined,
       docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
     });
     const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
@@ -660,6 +690,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const rejection = await Promise.resolve(
       execute(
         {
+          baseVersionId: entityVersionId,
           version: 1,
           operations: [
             {
@@ -705,6 +736,7 @@ describe("createEditWorkspaceDocumentTools", () => {
         recordedAuditEvents.push(event);
       },
       docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
     });
     const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
     if (!execute) {
@@ -715,6 +747,7 @@ describe("createEditWorkspaceDocumentTools", () => {
     const rejection = await Promise.resolve(
       execute(
         {
+          baseVersionId: entityVersionId,
           version: 1,
           operations: [
             {
@@ -740,5 +773,55 @@ describe("createEditWorkspaceDocumentTools", () => {
     expect(insertedTables).toEqual([]);
     expect(recordedAuditEvents).toEqual([]);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects an approved edit when the document changed after proposal", async () => {
+    const { tx } = buildTx({
+      loadedCurrentVersionId: newerEntityVersionId,
+      preferredName: "Jana Nováková",
+    });
+    const { safeDb } = createScopedDbMock(tx);
+    s3FileBuffer = await buildSourceDocx();
+    const tools = createEditWorkspaceDocumentTools({
+      safeDb,
+      organizationId,
+      userId,
+      workspaceId,
+      entityId,
+      fileFieldId,
+      recordAuditEvent: async () => undefined,
+      docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
+    });
+    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    if (!execute) {
+      throw new Error("edit_workspace_document must be server-executed");
+    }
+
+    const rejection = await Promise.resolve(
+      execute(
+        {
+          baseVersionId: entityVersionId,
+          version: 1,
+          operations: [
+            {
+              id: "op-1",
+              type: "deleteBlock",
+              blockId: "b-1",
+            },
+          ],
+        },
+        asTestRaw<Parameters<typeof execute>[1]>({}),
+      ),
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error ? rejection.message : "").toMatch(
+      /document changed/iu,
+    );
+    expect(s3WriteMock).not.toHaveBeenCalled();
   });
 });
