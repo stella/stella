@@ -108,6 +108,16 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
     }
   }
 
+  if (schema["type"] === "RegExp") {
+    const source = schema["source"];
+    if (
+      typeof source !== "string" ||
+      compileSchemaPattern(source).status === "invalid"
+    ) {
+      return "RegExp schema source is invalid";
+    }
+  }
+
   const properties = schema["properties"];
   if (isRecord(properties)) {
     if (Object.keys(properties).length > MAX_PROPS) {

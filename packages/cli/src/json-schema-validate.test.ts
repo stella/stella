@@ -62,6 +62,71 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     expect(validateAgainstSchema(schema, { type: "robot" }).valid).toBe(false);
   });
 
+  test("validates discriminated anyOf branches and const values", () => {
+    const schema = objectSchema({
+      body: {
+        anyOf: [
+          {
+            type: "object",
+            properties: {
+              purpose: { type: "string", const: "entity_create" },
+              propertyId: { type: "string" },
+            },
+            required: ["purpose", "propertyId"],
+          },
+          {
+            type: "object",
+            properties: {
+              purpose: { type: "string", const: "entity_version" },
+              entityId: { type: "string" },
+            },
+            required: ["purpose", "entityId"],
+          },
+        ],
+      },
+    });
+
+    expect(
+      validateAgainstSchema(schema, {
+        body: { purpose: "entity_create", propertyId: "p1" },
+      }).valid,
+    ).toBe(true);
+    expect(
+      validateAgainstSchema(schema, {
+        body: { purpose: "entity_create" },
+      }).valid,
+    ).toBe(false);
+    expect(
+      validateAgainstSchema(schema, {
+        body: { purpose: "unknown", propertyId: "p1" },
+      }).valid,
+    ).toBe(false);
+  });
+
+  test("requires every allOf branch and compares structured const values", () => {
+    const schema = {
+      allOf: [
+        objectSchema({ version: { type: "number", const: 1 } }, ["version"]),
+        objectSchema({
+          config: { const: { enabled: true, labels: ["a", "b"] } },
+        }),
+      ],
+    };
+
+    expect(
+      validateAgainstSchema(schema, {
+        version: 1,
+        config: { labels: ["a", "b"], enabled: true },
+      }).valid,
+    ).toBe(true);
+    expect(
+      validateAgainstSchema(schema, {
+        version: 2,
+        config: { labels: ["a", "b"], enabled: true },
+      }).valid,
+    ).toBe(false);
+  });
+
   test("enforces string length and pattern constraints", () => {
     const schema = objectSchema({
       lawId: {
@@ -108,6 +173,19 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
       path: "value",
       message: "schema contains an invalid string pattern",
     });
+  });
+
+  test("validates serialized RegExp schemas with the shared safe engine", () => {
+    const schema = objectSchema({
+      checksum: { type: "RegExp", source: "^[0-9a-f]{64}$", flags: "u" },
+    });
+
+    expect(
+      validateAgainstSchema(schema, { checksum: "0".repeat(64) }).valid,
+    ).toBe(true);
+    expect(validateAgainstSchema(schema, { checksum: "nope" }).valid).toBe(
+      false,
+    );
   });
 
   test("validates arrays and their items with minItems", () => {

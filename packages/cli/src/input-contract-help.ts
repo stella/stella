@@ -53,6 +53,11 @@ const anyOf = (schema: JsonSchema): readonly JsonSchema[] => {
   return variants.filter(isRecord);
 };
 
+const allOf = (schema: JsonSchema): readonly JsonSchema[] => {
+  const variants = schema["allOf"];
+  return Array.isArray(variants) ? variants.filter(isRecord) : [];
+};
+
 const mapValueSchema = (schema: JsonSchema): JsonSchema | undefined => {
   const additional = schema["additionalProperties"];
   if (additional === true) {
@@ -400,7 +405,19 @@ const exampleFor = (schema: JsonSchema): unknown => {
   const variants = anyOf(schema);
   if (variants.length > 0) {
     const variant = variants.at(0) ?? {};
-    return exampleFor({ ...schema, ...variant, anyOf: undefined });
+    return exampleFor({ ...schema, anyOf: undefined, ...variant });
+  }
+  const intersections = allOf(schema);
+  if (intersections.length > 0) {
+    const result = exampleFor({ ...schema, allOf: undefined });
+    const objectResult = isRecord(result) ? result : {};
+    for (const intersection of intersections) {
+      const example = exampleFor(intersection);
+      if (isRecord(example)) {
+        Object.assign(objectResult, example);
+      }
+    }
+    return objectResult;
   }
   const types = schemaTypes(schema);
   const defaultValue = schema["default"];

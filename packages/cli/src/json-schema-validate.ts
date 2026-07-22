@@ -37,6 +37,55 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 const enumValues = (schema: JsonSchema): readonly unknown[] | undefined =>
   Array.isArray(schema["enum"]) ? schema["enum"] : undefined;
 
+const jsonValuesEqual = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) {
+    return true;
+  }
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return (
+      left.length === right.length &&
+      left.every((value, index) => jsonValuesEqual(value, right[index]))
+    );
+  }
+  if (!isPlainObject(left) || !isPlainObject(right)) {
+    return false;
+  }
+  const leftKeys = Object.keys(left);
+  if (leftKeys.length !== Object.keys(right).length) {
+    return false;
+  }
+  return leftKeys.every(
+    (key) =>
+      Object.hasOwn(right, key) && jsonValuesEqual(left[key], right[key]),
+  );
+};
+
+const validateSchemaList = (
+  keyword: "allOf" | "anyOf",
+  branches: readonly unknown[],
+  value: unknown,
+  path: string,
+): ValidationResult => {
+  if (keyword === "allOf") {
+    for (const branch of branches) {
+      if (!isPlainObject(branch)) {
+        return fail(path, "allOf contains a non-object schema");
+      }
+      const result = validateValue(branch, value, path, true);
+      if (!result.valid) {
+        return result;
+      }
+    }
+    return ok;
+  }
+  for (const branch of branches) {
+    if (isPlainObject(branch) && validateValue(branch, value, path).valid) {
+      return ok;
+    }
+  }
+  return fail(path, "value does not match any allowed schema");
+};
+
 const validateString = (
   schema: JsonSchema,
   value: string,
@@ -62,6 +111,24 @@ const validateString = (
     }
   }
   return ok;
+};
+
+const validateRegExpString = (
+  schema: JsonSchema,
+  value: string,
+  path: string,
+): ValidationResult => {
+  const source = schema["source"];
+  if (typeof source !== "string") {
+    return fail(path, "RegExp schema is missing its source");
+  }
+  const compiled = compileSchemaPattern(source);
+  if (compiled.status === "invalid") {
+    return fail(path, "RegExp schema contains an invalid source");
+  }
+  return compiled.regex.test(value)
+    ? ok
+    : fail(path, `string does not match pattern ${source}`);
 };
 
 const validateNumber = (
@@ -113,12 +180,11 @@ const validateObject = (
   schema: JsonSchema,
   value: Record<string, unknown>,
   path: string,
+  allowUnknownProperties: boolean,
 ): ValidationResult => {
   const properties = isPlainObject(schema["properties"])
     ? schema["properties"]
     : {};
-  const allowsAdditional = schema["additionalProperties"] === true;
-
   const required = Array.isArray(schema["required"]) ? schema["required"] : [];
   for (const key of required) {
     if (typeof key === "string" && value[key] === undefined) {
@@ -139,7 +205,19 @@ const validateObject = (
       }
       continue;
     }
-    if (!allowsAdditional && Object.keys(properties).length > 0) {
+    const additionalSchema = schema["additionalProperties"];
+    if (isPlainObject(additionalSchema)) {
+      const result = validateValue(additionalSchema, child, childPath);
+      if (!result.valid) {
+        return result;
+      }
+      continue;
+    }
+    if (
+      additionalSchema !== true &&
+      !allowUnknownProperties &&
+      (additionalSchema === false || Object.keys(properties).length > 0)
+    ) {
       return fail(childPath, "unknown property");
     }
   }
@@ -150,7 +228,31 @@ const validateValue = (
   schema: JsonSchema,
   value: unknown,
   path: string,
+  allowUnknownProperties = false,
 ): ValidationResult => {
+  if (
+    Object.hasOwn(schema, "const") &&
+    !jsonValuesEqual(schema["const"], value)
+  ) {
+    return fail(path, `value must equal ${JSON.stringify(schema["const"])}`);
+  }
+
+  const allOf = schema["allOf"];
+  if (Array.isArray(allOf)) {
+    const result = validateSchemaList("allOf", allOf, value, path);
+    if (!result.valid) {
+      return result;
+    }
+  }
+
+  const anyOf = schema["anyOf"];
+  if (Array.isArray(anyOf)) {
+    const result = validateSchemaList("anyOf", anyOf, value, path);
+    if (!result.valid) {
+      return result;
+    }
+  }
+
   const values = enumValues(schema);
   if (values && !values.includes(value)) {
     return fail(path, `value is not one of ${JSON.stringify(values)}`);
@@ -159,7 +261,7 @@ const validateValue = (
   const types = schemaTypes(schema);
   if (types.length === 0) {
     // A schema with no `type` (e.g. set_field_value.content.value) accepts any
-    // JSON value; only its enum (checked above) constrains it.
+    // JSON value; applicators, const, and enum above may still constrain it.
     return ok;
   }
 
@@ -171,6 +273,9 @@ const validateValue = (
 
   if (types.includes("string") && typeof value === "string") {
     return validateString(schema, value, path);
+  }
+  if (types.includes("RegExp") && typeof value === "string") {
+    return validateRegExpString(schema, value, path);
   }
   if (types.includes("integer") && typeof value === "number") {
     return validateNumber(schema, value, path, true);
@@ -185,7 +290,7 @@ const validateValue = (
     return validateArray(schema, value, path);
   }
   if (types.includes("object") && isPlainObject(value)) {
-    return validateObject(schema, value, path);
+    return validateObject(schema, value, path, allowUnknownProperties);
   }
 
   return fail(path, `expected ${types.join("|")}`);

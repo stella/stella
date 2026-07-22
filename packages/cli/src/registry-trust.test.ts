@@ -109,6 +109,7 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
         properties: {},
         patternProperties: { "(?": { type: "string" } },
       },
+      { type: "RegExp", source: "[" },
     ];
 
     for (const child of invalidPatterns) {
