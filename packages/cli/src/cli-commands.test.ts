@@ -290,6 +290,51 @@ describe("one-command document upload", () => {
     expect(result.stdout).toContain("computes its SHA-256 checksum");
     expect(server.requests).toHaveLength(0);
   });
+
+  test("finalize failures print the canonical namespaced retry command", async () => {
+    const uploadDir = await mkdtemp(path.join(tmpdir(), "stella-upload-"));
+    tempDirs.push(uploadDir);
+    const filePath = path.join(uploadDir, "agreement.txt");
+    await writeFile(filePath, "agreement body");
+    let putUrl = "";
+    const server = startMockServer(
+      (request, index) => {
+        const capability = request.params.arguments?.["capability"];
+        if (index === 0 && capability === "uploads.create") {
+          return {
+            toolPayload: {
+              uploadId: "upload-1",
+              url: putUrl,
+              headers: { "content-type": "text/plain" },
+            },
+          };
+        }
+        return { toolPayload: { message: "finalize failed" }, isError: true };
+      },
+      () => new Response(null, { status: 200 }),
+    );
+    putUrl = `${server.url}/presigned/upload-1`;
+
+    const result = await runCli({
+      args: [
+        "upload",
+        "--workspace",
+        "workspace-1",
+        "--file",
+        filePath,
+        "--property-id",
+        "property-file",
+      ],
+      url: server.url,
+      token: WRITE,
+    });
+    server.stop();
+
+    expect(result.stderr).toContain(
+      "stella capability uploads update --workspace-id workspace-1 --upload-id upload-1",
+    );
+    expect(result.stderr).not.toContain("stella uploads update");
+  });
 });
 
 describe("auth and scope gating (S4)", () => {
@@ -348,7 +393,7 @@ describe("generated capability flags", () => {
   test("a descriptive long flag can target a terse query property", async () => {
     const server = startMockServer(() => ({ toolPayload: { items: [] } }));
     const result = await runCli({
-      args: ["contacts", "search", "--query", "agreement"],
+      args: ["capability", "contacts", "search", "--query", "agreement"],
       url: server.url,
       token: READ,
     });
@@ -774,7 +819,7 @@ describe("help surfaces --input for inputOnly tools", () => {
   test("uploads create --help renders every union branch from the schema", async () => {
     const server = startMockServer(() => ({ toolPayload: {} }));
     const result = await runCli({
-      args: ["uploads", "create", "--help"],
+      args: ["capability", "uploads", "create", "--help"],
       url: server.url,
       token: WRITE,
     });

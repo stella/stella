@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
+import { CAPABILITY_NAMESPACE } from "./generate-capability-tree.js";
 import { generateCliSkill, SKILL_NAME } from "./generate-skill.js";
 import type { RegistryToolListing } from "./route-types.js";
 
@@ -41,6 +42,8 @@ describe("generateCliSkill (TanStack Intent)", () => {
     expect(skill).toContain("237");
     expect(skill).toContain("stella capability list");
     expect(skill).toContain("stella capability describe");
+    expect(skill).toContain(`stella ${CAPABILITY_NAMESPACE} <domain> <action>`);
+    expect(skill).not.toContain("a colliding capability drops under");
     expect(skill).toContain("--dry-run");
   });
 

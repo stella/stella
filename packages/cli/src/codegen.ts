@@ -221,13 +221,8 @@ const { tree: routeMap, stats: capabilityStats } = buildCliRouteTree({
   entries: catalogEntries,
 });
 process.stderr.write(
-  `Capability tree: ${capabilityStats.generated} leaves generated, ${capabilityStats.suppressed} suppressed (file input/output), ${capabilityStats.collisionFallbacks.length} collision fallback(s), ${capabilityStats.flagCollisions.length} flag collision(s)\n`,
+  `Capability tree: ${capabilityStats.generated} namespaced leaves generated, ${capabilityStats.suppressed} suppressed (file input/output), ${capabilityStats.flagCollisions.length} flag collision(s)\n`,
 );
-if (capabilityStats.collisionFallbacks.length > 0) {
-  process.stderr.write(
-    `  collision fallbacks -> capability <domain> <action>: ${capabilityStats.collisionFallbacks.join(", ")}\n`,
-  );
-}
 if (capabilityStats.flagCollisions.length > 0) {
   process.stderr.write(
     `  flag collisions (part-prefixed): ${capabilityStats.flagCollisions

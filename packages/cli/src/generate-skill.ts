@@ -8,6 +8,7 @@
 
 import { panic } from "better-result";
 
+import { CAPABILITY_NAMESPACE } from "./generate-capability-tree.js";
 import { generateRouteMap } from "./generate-route-map.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type {
@@ -150,8 +151,8 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string =>
     `Beyond the curated commands above, the CLI generates ${summary.commandCount}`,
     "capability commands from the server's capability catalog: every safe handler",
     "that is not a curated tool, reached through the generic `invoke_capability`",
-    "path. They follow the same `stella <domain> <action>` shape (a colliding",
-    "capability drops under `stella capability <domain> <action>` instead).",
+    `path. Every generated command lives at \`stella ${CAPABILITY_NAMESPACE} <domain> <action>\`;`,
+    "multi-segment capability actions are flattened with hyphens into `<action>`.",
     "",
     "- **Discover**: `stella capability list [--domain <d>] [--access read|write]`",
     "  enumerates them (paginated); `stella capability describe <id>` prints one",
@@ -204,9 +205,10 @@ export const generateCliSkill = (
     "# stella CLI",
     "",
     "`@stll/cli` is the command-line client for stella, an open-source legal",
-    "workspace. Its command surface (`stella <domain> <action>`) is generated from",
-    "the stella MCP tool registry, so it mirrors exactly the tools a stella server",
-    "exposes. Every command works for humans, scripts, and agents alike.",
+    "workspace. Curated tools use `stella <domain> <action>`; generated capability",
+    `commands use \`stella ${CAPABILITY_NAMESPACE} <domain> <action>\`. Both surfaces are`,
+    "generated from the stella MCP tool registry, so they mirror exactly the tools",
+    "a stella server exposes. Every command works for humans, scripts, and agents alike.",
     "",
     "## Install",
     "",

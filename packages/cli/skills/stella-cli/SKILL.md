@@ -16,9 +16,10 @@ metadata:
 # stella CLI
 
 `@stll/cli` is the command-line client for stella, an open-source legal
-workspace. Its command surface (`stella <domain> <action>`) is generated from
-the stella MCP tool registry, so it mirrors exactly the tools a stella server
-exposes. Every command works for humans, scripts, and agents alike.
+workspace. Curated tools use `stella <domain> <action>`; generated capability
+commands use `stella capability <domain> <action>`. Both surfaces are
+generated from the stella MCP tool registry, so they mirror exactly the tools
+a stella server exposes. Every command works for humans, scripts, and agents alike.
 
 ## Install
 
@@ -92,8 +93,8 @@ code (no envelope) still maps to 5; anything else falls to 4.
 Beyond the curated commands above, the CLI generates 262
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
-path. They follow the same `stella <domain> <action>` shape (a colliding
-capability drops under `stella capability <domain> <action>` instead).
+path. Every generated command lives at `stella capability <domain> <action>`;
+multi-segment capability actions are flattened with hyphens into `<action>`.
 
 - **Discover**: `stella capability list [--domain <d>] [--access read|write]`
   enumerates them (paginated); `stella capability describe <id>` prints one

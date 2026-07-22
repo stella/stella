@@ -193,6 +193,23 @@ describe("document upload state machine", () => {
     expect(capabilities).toEqual(["properties.list"]);
   });
 
+  test("missing file properties point to the canonical capability command", async () => {
+    const dependencies = createDependencies({
+      invoke: async () => ({ status: "ok", payload: [] }),
+    });
+
+    const result = await uploadDocument({ dependencies, input: uploadInput });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toEqual(
+        expect.objectContaining({
+          message: expect.stringContaining("stella capability properties list"),
+        }),
+      );
+    }
+  });
+
   test("a failed PUT always aborts the reservation and never finalizes", async () => {
     const calls: InvocationCall[] = [];
     const dependencies = createDependencies({
@@ -225,6 +242,34 @@ describe("document upload state machine", () => {
     expect(
       calls.some(({ capability }) => capability === "uploads.update"),
     ).toBe(false);
+  });
+
+  test("failed cleanup points to the canonical capability command", async () => {
+    const dependencies = createDependencies({
+      invoke: async (capability) =>
+        capability === "uploads.create"
+          ? { status: "ok", payload: reservation }
+          : {
+              status: "tool-error",
+              result: { isError: true, content: [] },
+            },
+      put: async () => Result.err("PUT rejected"),
+    });
+
+    const result = await uploadDocument({
+      dependencies,
+      input: { ...uploadInput, propertyId: "file-property" },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result) && result.error.type === "put") {
+      expect(result.error.cleanupWarning).toContain(
+        "stella capability uploads delete",
+      );
+      expect(result.error.cleanupWarning).not.toContain(
+        "stella uploads delete",
+      );
+    }
   });
 
   test("a malformed reservation with a known id is abandoned", async () => {
