@@ -1301,6 +1301,34 @@ describe("processBlockDirectives — loop-scoped @num/@ref", () => {
     expect(numKeys).toHaveLength(3);
     expect(new Set(numKeys).size).toBe(3);
   });
+
+  test("primitive nested loop shorthand keeps patch values scoped per outer row", () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("{{#each subitems}}"),
+        P("{{subitems.value}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    const { patchValues } = processBlockDirectives(body, {
+      groups: [{ subitems: ["first"] }, { subitems: ["second"] }],
+    });
+
+    expect(Object.values(patchValues)).toEqual([
+      "first",
+      "first",
+      "second",
+      "second",
+    ]);
+    expect(new Set(Object.keys(patchValues)).size).toBe(4);
+    expect(bodyTexts(body)).toEqual([
+      "{{__each___each_groups_0_subitems_0_value}}",
+      "{{__each___each_groups_1_subitems_0_value}}",
+    ]);
+  });
 });
 
 // ── Word list-numbering integrity ────────────────────────

@@ -790,13 +790,28 @@ export const processBlockDirectives = (
   // Build a loop iteration's evaluation context: `contextData` overlaid with
   // the item's own fields, the item under its array name (so `{{#each
   // arrayPath.sub}}` resolves), and the row's raw (pre-format) date overlay.
-  const buildItemContext = (
-    contextData: Record<string, unknown>,
-    item: unknown,
-    arrayPath: string,
-    itemIdx: number,
-  ): Record<string, unknown> => {
+  const loopIdentityByContext = new WeakMap<
+    Record<string, unknown>,
+    ReadonlyMap<string, string>
+  >();
+
+  type BuildItemContextOptions = {
+    arrayPath: string;
+    contextData: Record<string, unknown>;
+    item: unknown;
+    itemIdx: number;
+    loopIdentity: string;
+  };
+
+  const buildItemContext = ({
+    arrayPath,
+    contextData,
+    item,
+    itemIdx,
+    loopIdentity,
+  }: BuildItemContextOptions): Record<string, unknown> => {
     const itemContext: Record<string, unknown> = { ...contextData };
+    const nestedLoopIdentities = new Map<string, string>();
     if (isRecord(item)) {
       Object.assign(itemContext, item);
       itemContext[arrayPath] = item;
@@ -805,7 +820,9 @@ export const processBlockDirectives = (
       // the inner loop resolves them in the recursion.
       for (const [field, value] of Object.entries(item)) {
         if (Array.isArray(value)) {
-          itemContext[eachKey(arrayPath, itemIdx, field)] = value;
+          const nestedLoopIdentity = eachKey(loopIdentity, itemIdx, field);
+          itemContext[nestedLoopIdentity] = value;
+          nestedLoopIdentities.set(field, nestedLoopIdentity);
         }
       }
       applyRowRawOverlay(itemContext, conditionValues, arrayPath, itemIdx);
@@ -817,6 +834,9 @@ export const processBlockDirectives = (
       itemContext["value"] = item;
       itemContext[arrayPath] = { value: item };
       itemContext[`${arrayPath}.value`] = item;
+    }
+    if (nestedLoopIdentities.size > 0) {
+      loopIdentityByContext.set(itemContext, nestedLoopIdentities);
     }
     return itemContext;
   };
@@ -868,15 +888,27 @@ export const processBlockDirectives = (
 
   // Row-repeat: the opener/closer confined to one `w:tr`. Clone the row per
   // item, strip the marker paragraphs, and rewrite per item.
-  const expandRow = (
-    row: slimdom.Element,
-    openerP: slimdom.Element,
-    closerP: slimdom.Element,
-    block: EachBlock,
-    items: readonly unknown[],
-    contextData: Record<string, unknown>,
-    doc: slimdom.Document,
-  ): void => {
+  type ExpandRowOptions = {
+    block: EachBlock;
+    closerP: slimdom.Element;
+    contextData: Record<string, unknown>;
+    doc: slimdom.Document;
+    items: readonly unknown[];
+    loopIdentity: string;
+    openerP: slimdom.Element;
+    row: slimdom.Element;
+  };
+
+  const expandRow = ({
+    block,
+    closerP,
+    contextData,
+    doc,
+    items,
+    loopIdentity,
+    openerP,
+    row,
+  }: ExpandRowOptions): void => {
     const tbl = row.parentNode;
     if (!tbl || !isElement(tbl)) {
       return;
@@ -910,7 +942,11 @@ export const processBlockDirectives = (
         stripRowMarkerParagraph(closerClone, doc);
       }
 
-      rewriteEachPlaceholders(clonedRow, block.arrayPath, itemIdx);
+      rewriteEachPlaceholders(clonedRow, {
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
       rewriteNestedEachExpr(clonedRow, block.arrayPath, itemIdx);
       const clonedContentParas = clonedParas.filter((_, i) => !isMarker(i));
       rewriteContentParagraphs(clonedContentParas, {
@@ -920,14 +956,15 @@ export const processBlockDirectives = (
         itemIdx,
         itemCount: items.length,
       });
-      registerLoopItemPatchValues(patchValues, item, block.arrayPath, itemIdx);
+      registerLoopItemPatchValues(patchValues, item, loopIdentity, itemIdx);
 
-      const itemContext = buildItemContext(
+      const itemContext = buildItemContext({
+        arrayPath: block.arrayPath,
         contextData,
         item,
-        block.arrayPath,
         itemIdx,
-      );
+        loopIdentity,
+      });
       for (const paragraph of clonedContentParas) {
         processingContext.inlineDataByParagraph.set(paragraph, itemContext);
       }
@@ -964,14 +1001,17 @@ export const processBlockDirectives = (
 
   // Block repeat: opener/closer are block-level siblings. Clone every block
   // child (w:p AND w:tbl) between them as a unit per item.
-  const expandBlock = (
-    openerP: slimdom.Element,
-    closerP: slimdom.Element,
-    block: EachBlock,
-    items: readonly unknown[],
-    contextData: Record<string, unknown>,
-    doc: slimdom.Document,
-  ): void => {
+  type ExpandBlockOptions = Omit<ExpandRowOptions, "row">;
+
+  const expandBlock = ({
+    block,
+    closerP,
+    contextData,
+    doc,
+    items,
+    loopIdentity,
+    openerP,
+  }: ExpandBlockOptions): void => {
     const parent = openerP.parentNode;
     if (!parent || !isElement(parent)) {
       return;
@@ -1000,7 +1040,11 @@ export const processBlockDirectives = (
       const clonedParas = paragraphsInUnits(clones);
 
       for (const clone of clones) {
-        rewriteEachPlaceholders(clone, block.arrayPath, itemIdx);
+        rewriteEachPlaceholders(clone, {
+          arrayPath: block.arrayPath,
+          index: itemIdx,
+          loopIdentity,
+        });
         rewriteNestedEachExpr(clone, block.arrayPath, itemIdx);
       }
       rewriteContentParagraphs(clonedParas, {
@@ -1010,14 +1054,15 @@ export const processBlockDirectives = (
         itemIdx,
         itemCount: items.length,
       });
-      registerLoopItemPatchValues(patchValues, item, block.arrayPath, itemIdx);
+      registerLoopItemPatchValues(patchValues, item, loopIdentity, itemIdx);
 
-      const itemContext = buildItemContext(
+      const itemContext = buildItemContext({
+        arrayPath: block.arrayPath,
         contextData,
         item,
-        block.arrayPath,
         itemIdx,
-      );
+        loopIdentity,
+      });
       for (const paragraph of clonedParas) {
         processingContext.inlineDataByParagraph.set(paragraph, itemContext);
       }
@@ -1072,6 +1117,9 @@ export const processBlockDirectives = (
   ): void => {
     const arrayData = resolvePath(block.arrayPath, contextData);
     const items = isUnknownArray(arrayData) ? arrayData : [];
+    const loopIdentity =
+      loopIdentityByContext.get(contextData)?.get(block.arrayPath) ??
+      block.arrayPath;
 
     const doc = bodyEl.ownerDocument;
     if (!doc) {
@@ -1092,7 +1140,16 @@ export const processBlockDirectives = (
 
     // Row-repeat: both markers confined to the same table row.
     if (openerRow && openerRow === closerRow) {
-      expandRow(openerRow, openerP, closerP, block, items, contextData, doc);
+      expandRow({
+        block,
+        closerP,
+        contextData,
+        doc,
+        items,
+        loopIdentity,
+        openerP,
+        row: openerRow,
+      });
       return;
     }
 
@@ -1104,7 +1161,15 @@ export const processBlockDirectives = (
       return;
     }
 
-    expandBlock(openerP, closerP, block, items, contextData, doc);
+    expandBlock({
+      block,
+      closerP,
+      contextData,
+      doc,
+      items,
+      loopIdentity,
+      openerP,
+    });
   };
 
   process(body, conditionData);
@@ -1215,6 +1280,22 @@ export const rewriteEachPlaceholdersInText = (
   text: string,
   arrayPath: string,
   index: number,
+): string =>
+  rewriteEachPlaceholdersWithIdentity(text, {
+    arrayPath,
+    index,
+    loopIdentity: arrayPath,
+  });
+
+type RewriteEachPlaceholdersOptions = {
+  arrayPath: string;
+  index: number;
+  loopIdentity: string;
+};
+
+const rewriteEachPlaceholdersWithIdentity = (
+  text: string,
+  { arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
 ): string => {
   const re = new RegExp(
     `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_-]+)\\}\\}`,
@@ -1222,7 +1303,7 @@ export const rewriteEachPlaceholdersInText = (
   );
   return text.replace(
     re,
-    (_match, field: string) => `{{${eachKey(arrayPath, index, field)}}}`,
+    (_match, field: string) => `{{${eachKey(loopIdentity, index, field)}}}`,
   );
 };
 
@@ -1232,11 +1313,10 @@ export const rewriteEachPlaceholdersInText = (
  */
 const rewriteEachPlaceholders = (
   root: slimdom.Element,
-  arrayPath: string,
-  index: number,
+  options: RewriteEachPlaceholdersOptions,
 ): void => {
   rewriteTextNodes(root, (text) =>
-    rewriteEachPlaceholdersInText(text, arrayPath, index),
+    rewriteEachPlaceholdersWithIdentity(text, options),
   );
 };
 
