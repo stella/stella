@@ -165,6 +165,37 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
     }
   });
 
+  test("unimplemented structural schema keywords fail closed", () => {
+    const unsupportedKeywords = [
+      ["$defs", { child: { type: "string" } }],
+      ["$ref", "#/definitions/child"],
+      ["contains", { const: "sentinel" }],
+      ["definitions", { child: { type: "string" } }],
+      ["dependentSchemas", { mode: { required: ["value"] } }],
+      ["else", { required: ["fallback"] }],
+      ["if", { required: ["mode"] }],
+      ["not", { const: "forbidden" }],
+      ["propertyNames", { pattern: "^safe-" }],
+      ["then", { required: ["value"] }],
+      ["unevaluatedItems", { type: "string" }],
+      ["unevaluatedProperties", false],
+    ] as const;
+
+    for (const [keyword, constraint] of unsupportedKeywords) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: { value: { [keyword]: constraint } },
+        },
+      });
+
+      expect(validateFetchedToolsList(body([tool]))).toEqual({
+        ok: false,
+        violation: `tool list_matters: ${keyword} schema constraints are unsupported`,
+      });
+    }
+  });
+
   test("unsupported subschema shapes fail closed in every traversed container", () => {
     const invalidChildren = [
       { anyOf: [true] },
@@ -291,14 +322,14 @@ describe("validateFetchedToolsList: rule 4 (no executable content)", () => {
     expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
   });
 
-  test("a local #/ $ref is accepted", () => {
+  test("a local #/ $ref is rejected until the interpreter resolves it", () => {
     const tool = validTool({
       inputSchema: {
         type: "object",
         properties: { x: { $ref: "#/definitions/y" } },
       },
     });
-    expect(validateFetchedToolsList(body([tool])).ok).toBe(true);
+    expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
   });
 });
 

@@ -26,7 +26,7 @@ export const MAX_TOOLS = 200;
 // The deepest baked-in schema is `save_template` (depth 7); the largest enum is
 // `set_practice_jurisdictions` (250). Both were raised from their spec S5.5
 // starting values (depth 6, enum 200) once the real registry exceeded them.
-/** Reject an `inputSchema` nested deeper than this (also catches `$ref` cycles). */
+/** Reject an `inputSchema` nested deeper than this. */
 export const MAX_SCHEMA_DEPTH = 8;
 /** Reject a single tool whose serialized `inputSchema` exceeds this (bytes). */
 export const MAX_TOOL_SCHEMA_BYTES: number = 64 * 1024; // 64 KiB
@@ -61,8 +61,12 @@ const isUnknownArray = (value: unknown): value is readonly unknown[] =>
 
 const SCHEMA_ARRAY_KEYWORDS = ["allOf", "anyOf", "oneOf"] as const;
 
-const SCHEMA_SINGLE_KEYWORDS = [
+const UNSUPPORTED_SCHEMA_KEYWORDS = [
+  "$defs",
+  "$ref",
   "contains",
+  "definitions",
+  "dependentSchemas",
   "else",
   "if",
   "not",
@@ -70,12 +74,6 @@ const SCHEMA_SINGLE_KEYWORDS = [
   "then",
   "unevaluatedItems",
   "unevaluatedProperties",
-] as const;
-
-const SCHEMA_MAP_KEYWORDS = [
-  "$defs",
-  "definitions",
-  "dependentSchemas",
 ] as const;
 
 /** Pull the `tools` array from a tools/list body (bare, `{tools}`, or envelope). */
@@ -95,8 +93,8 @@ const extractTools = (parsed: unknown): readonly unknown[] | undefined => {
 
 /**
  * Walk one `inputSchema` subtree enforcing the depth/enum/props caps and the
- * no-remote-`$ref` rule. Interpreted recursion with an explicit depth counter;
- * the depth cap bounds resolution and catches any `$ref` cycle (rule 4).
+ * supported schema-vocabulary rule. Interpreted recursion with an explicit
+ * depth counter bounds registry-controlled work.
  * Returns a violation string, or `undefined` when the subtree is within bounds.
  */
 const walkSchema = (schema: unknown, depth: number): string | undefined => {
@@ -111,9 +109,10 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
     return "prefixItems tuple schemas are unsupported";
   }
 
-  const ref = schema["$ref"];
-  if (ref !== undefined && (typeof ref !== "string" || !ref.startsWith("#/"))) {
-    return "only local #/... $ref is allowed";
+  for (const keyword of UNSUPPORTED_SCHEMA_KEYWORDS) {
+    if (schema[keyword] !== undefined) {
+      return `${keyword} schema constraints are unsupported`;
+    }
   }
 
   const enumValues = schema["enum"];
@@ -159,39 +158,6 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
         return `${keyword} contains an invalid schema`;
       }
       const violation = walkSchema(branch, depth + 1);
-      if (violation !== undefined) {
-        return violation;
-      }
-    }
-  }
-
-  for (const keyword of SCHEMA_SINGLE_KEYWORDS) {
-    const child = schema[keyword];
-    if (child === undefined) {
-      continue;
-    }
-    if (!isRecord(child)) {
-      return `${keyword} must be a schema`;
-    }
-    const violation = walkSchema(child, depth + 1);
-    if (violation !== undefined) {
-      return violation;
-    }
-  }
-
-  for (const keyword of SCHEMA_MAP_KEYWORDS) {
-    const children = schema[keyword];
-    if (children === undefined) {
-      continue;
-    }
-    if (!isRecord(children)) {
-      return `${keyword} must be an object`;
-    }
-    for (const child of Object.values(children)) {
-      if (!isRecord(child)) {
-        return `${keyword} contains an invalid schema`;
-      }
-      const violation = walkSchema(child, depth + 1);
       if (violation !== undefined) {
         return violation;
       }
