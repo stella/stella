@@ -1,7 +1,7 @@
 // Startup decides whether to keep the per-origin registry cache current before
 // dispatching (spec 051 S5.3). The `tools/list` round-trip only earns its cost
 // when the invoked command actually consumes the server-derived command tree.
-// The hand-wired top-level routes (`auth`, `compatibility`, `tools`) and the
+// The hand-wired top-level routes (`auth`, `compatibility`, `tools`, `upload`) and the
 // global `--help`/`--version` flags run entirely from local state, so they must
 // never pay a network call; only the generated domain commands and the
 // `reference` resource commands read the registry and warrant a refresh.
@@ -15,6 +15,7 @@ export const LOCAL_COMMAND_ROUTES: ReadonlySet<string> = new Set([
   "auth",
   "compatibility",
   "tools",
+  "upload",
 ]);
 
 /**

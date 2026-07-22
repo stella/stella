@@ -8,6 +8,9 @@ describe("commandNeedsRegistry", () => {
     expect(commandNeedsRegistry(["auth", "whoami"])).toBe(false);
     expect(commandNeedsRegistry(["tools", "list"])).toBe(false);
     expect(commandNeedsRegistry(["compatibility", "check"])).toBe(false);
+    expect(commandNeedsRegistry(["upload", "--file", "contract.txt"])).toBe(
+      false,
+    );
   });
 
   test("the root invocation and global flags stay local", () => {
