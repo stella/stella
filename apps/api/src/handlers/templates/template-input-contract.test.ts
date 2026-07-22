@@ -70,7 +70,7 @@ describe("template input contract", () => {
           }),
         ).toEqual(["unknown"]);
       }),
-      propertyConfig,
+      propertyConfig(),
     );
   });
 });
