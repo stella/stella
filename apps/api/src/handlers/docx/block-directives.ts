@@ -813,21 +813,6 @@ export const processBlockDirectives = (
     return itemContext;
   };
 
-  // Register a loop item's values for later substitution (recursively for
-  // nested objects so deep paths like address.city resolve).
-  const registerItem = (
-    item: unknown,
-    arrayPath: string,
-    itemIdx: number,
-  ): void => {
-    if (isRecord(item)) {
-      registerItemPatchValues(patchValues, item, arrayPath, itemIdx, "");
-    } else if (typeof item === "string") {
-      // Simple array of strings: {{arrayPath.value}} or raw {{__each_arrayPath_N}}
-      patchValues[`__each_${arrayPath}_${itemIdx}`] = item;
-    }
-  };
-
   // Resolve `{{@index}}`/`{{@count}}` (innermost-loop only, via `tokenMask`)
   // and loop-scoped `{{@num:Key}}`/`{{@ref:Key}}` on a copy's content
   // paragraphs. Placeholder rewriting is done separately over whole units.
@@ -927,7 +912,7 @@ export const processBlockDirectives = (
         itemIdx,
         itemCount: items.length,
       });
-      registerItem(item, block.arrayPath, itemIdx);
+      registerLoopItemPatchValues(patchValues, item, block.arrayPath, itemIdx);
 
       const itemContext = buildItemContext(
         contextData,
@@ -1017,7 +1002,7 @@ export const processBlockDirectives = (
         itemIdx,
         itemCount: items.length,
       });
-      registerItem(item, block.arrayPath, itemIdx);
+      registerLoopItemPatchValues(patchValues, item, block.arrayPath, itemIdx);
 
       const itemContext = buildItemContext(
         contextData,
@@ -1127,6 +1112,30 @@ export const eachKey = (
   index: number,
   field: string,
 ): string => `__each_${arrayPath}_${index}_${field}`;
+
+/** Register every loop-item shape supported by the template input contract. */
+export const registerLoopItemPatchValues = (
+  patchValues: Record<string, RichPatchValue>,
+  item: unknown,
+  arrayPath: string,
+  itemIdx: number,
+): void => {
+  if (isRecord(item)) {
+    registerItemPatchValues(patchValues, item, arrayPath, itemIdx, "");
+    return;
+  }
+  if (
+    typeof item !== "string" &&
+    typeof item !== "number" &&
+    typeof item !== "boolean"
+  ) {
+    return;
+  }
+
+  const value = String(item);
+  patchValues[`__each_${arrayPath}_${itemIdx}`] = value;
+  patchValues[eachKey(arrayPath, itemIdx, "value")] = value;
+};
 
 /**
  * Recursively register patch values for an array item,

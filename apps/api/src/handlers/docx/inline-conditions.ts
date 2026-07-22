@@ -67,8 +67,7 @@ import {
   collectNumKeysInText,
   createDirectiveProcessingContext,
   type DirectiveProcessingContext,
-  eachKey,
-  registerItemPatchValues,
+  registerLoopItemPatchValues,
   rewriteEachPlaceholdersInText,
   rewriteIterationTokensInText,
   scopeIterationNumberingInText,
@@ -120,9 +119,6 @@ type InlineParse =
   | { ok: false; message: string; directive: string };
 
 /** Narrow `unknown` to a non-array string-keyed record. */
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const EXCERPT_LENGTH = 60;
 
 /** Short paragraph excerpt so a structure error names the paragraph. */
@@ -397,19 +393,7 @@ const applyInlineEach = (
   const rewriteItem = (text: string, itemIdx: number): string => {
     const item = items[itemIdx];
     const itemValues: Record<string, RichPatchValue> = {};
-    if (isRecord(item)) {
-      registerItemPatchValues(itemValues, item, group.arrayPath, itemIdx, "");
-    } else if (
-      typeof item === "string" ||
-      typeof item === "number" ||
-      typeof item === "boolean"
-    ) {
-      // Primitive array: support the raw `{{__each_path_N}}` key (matching the
-      // block expander) and `{{path.value}}` so authors have a writable field.
-      const value = typeof item === "string" ? item : String(item);
-      itemValues[`__each_${group.arrayPath}_${itemIdx}`] = value;
-      itemValues[eachKey(group.arrayPath, itemIdx, "value")] = value;
-    }
+    registerLoopItemPatchValues(itemValues, item, group.arrayPath, itemIdx);
 
     let iteration = rewriteEachPlaceholdersInText(
       text,

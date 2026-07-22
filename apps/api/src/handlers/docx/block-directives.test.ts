@@ -909,6 +909,29 @@ describe("processBlockDirectives — loops", () => {
     expect(patchValues["__each_sellers_1_name"]).toBe("Bob");
   });
 
+  test("primitive rows share the contract-supported value representation", () => {
+    const body = parseBody(
+      WRAP([P("{{#each tags}}"), P("{{tags.value}}"), P("{{/each}}")].join("")),
+    );
+    const { patchValues } = processBlockDirectives(body, {
+      tags: ["one", 2, true],
+    });
+
+    expect(bodyTexts(body)).toEqual([
+      "{{__each_tags_0_value}}",
+      "{{__each_tags_1_value}}",
+      "{{__each_tags_2_value}}",
+    ]);
+    expect(patchValues).toMatchObject({
+      __each_tags_0: "one",
+      __each_tags_0_value: "one",
+      __each_tags_1: "2",
+      __each_tags_1_value: "2",
+      __each_tags_2: "true",
+      __each_tags_2_value: "true",
+    });
+  });
+
   test("inner-loop condition compares a row's raw date, not the localized text", () => {
     const xml = WRAP(
       [
