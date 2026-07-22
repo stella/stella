@@ -17,7 +17,9 @@ import { caseLawDecisions, entities, workspaces } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { formatDecisionForPrompt } from "@/api/handlers/case-law/analysis/prompts/base";
 import { parseDocumentAst } from "@/api/handlers/case-law/document-ast";
+import { CHAT_EDIT_APPLY_MODE } from "@/api/handlers/chat/chat-schema";
 import type {
+  ChatEditApplyMode,
   IncomingActiveDecision,
   IncomingActiveExternal,
   IncomingActiveFile,
@@ -83,6 +85,8 @@ const buildPromptMentionExample = ({
  * drift.
  */
 export type ChatToolAvailability = {
+  /** The one DOCX edit tool registered for this turn, or null when none is. */
+  docxEditMode: ChatEditApplyMode | null;
   /**
    * `suggest_template_fields` is registered for this turn: the
    * caller's role has the `template: ["create"]` grant (see
@@ -106,6 +110,7 @@ export type ChatToolAvailability = {
 };
 
 const DEFAULT_CHAT_TOOL_AVAILABILITY = {
+  docxEditMode: CHAT_EDIT_APPLY_MODE.manual,
   templateAuthoring: true,
   webResearch: true,
   folioAgentDocTools: true,
@@ -787,16 +792,23 @@ const buildActiveFilePrompt = ({
     workspaceId,
   });
   const matterRef = refRegistry.toMatterRef(workspaceId);
+  const canEditActiveDocx =
+    activeFile.supportsDocxEdits === true &&
+    toolAvailability.docxEditMode !== null;
 
   return [
     `ACTIVE FILE: The user is viewing "${safeName}" (entity ref ${entityRef}) in the inspector sidebar.`,
     `DEFAULT SCOPE: While an active file is set, treat it as the sole subject of any open-ended question ("what's going on", "summarize this", "what does it say", "explain", and similar). Read its contents by calling \`execute_typescript\` with \`external_read_content_across_matters({ entity_id: "${entityRef}" })\`, and answer ONLY from that file.`,
     `LONG-DOCUMENT LOOKUPS: \`external_read_content_across_matters\` returns the document as Markdown (headings, tables, and lists preserved) for DOCX files, or plain text otherwise, one truncated window at a time starting from the beginning. If the answer is not in the first window, call it again with \`cursor\` set to the previous response's \`nextCursor\` to keep reading further into the document — page through until you find it or \`nextCursor\` comes back null.`,
     "DIRECT FILE FALLBACK: If the latest user message includes the active file as a direct attachment, inspect that attachment directly before answering. Do not claim the file has no extracted text when a direct attachment is available for this turn.",
-    activeFile.supportsDocxEdits
-      ? "`create-document` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. If live DOCX editing is available below, use `apply-active-docx-edits`; otherwise explain that the document must be opened for editing first. Never create a substitute document."
+    canEditActiveDocx
+      ? `\`create-document\` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. Use \`${
+          toolAvailability.docxEditMode === CHAT_EDIT_APPLY_MODE.auto
+            ? "edit_workspace_document"
+            : "apply-active-docx-edits"
+        }\` for the open file. Never create a substitute document.`
       : "`create-document` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. Never create a substitute document.",
-    activeFile.supportsDocxEdits
+    canEditActiveDocx
       ? buildActiveDocxEditPrompt(activeFile, toolAvailability)
       : "",
     `Do NOT call matter-wide retrieval (\`external_list_documents\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
@@ -936,6 +948,35 @@ const buildActiveDocxEditPrompt = (
   }
 
   const { blocks, truncationNotice } = buildEditableBlocksPromptParts(snapshot);
+
+  if (toolAvailability.docxEditMode === CHAT_EDIT_APPLY_MODE.auto) {
+    return [
+      "ACTIVE DOCX EDITING: The open document is available for direct in-place editing through a server-executed tool that saves a new document version.",
+      'TOOL CALL IS MANDATORY when the user asks — in any language — to change, edit, replace, rewrite, fix, correct, review, redline, proofread, revise, or otherwise modify this document, or confirms an earlier proposal ("yes do it", "go ahead"). You MUST call `edit_workspace_document` before claiming any work.',
+      "FORBIDDEN: Do not claim an edit was made, saved, applied, or is ready unless `edit_workspace_document` returned success in this turn. A pending approval is not a completed edit. If every operation is skipped or the tool fails, say so plainly.",
+      "TOOL CAPABILITY: `edit_workspace_document` edits paragraph, heading, and list-item text; can insert/delete blocks, comments, page breaks, clause headings, and signature tables; and can apply supported range formatting. The configured representation (tracked changes or direct rewrite) is fixed by the user's chat setting, not chosen in tool input.",
+      'FIELD CODES: A block whose text shows odd gaps — e.g. "Section .", "Schedule No. .", "Page of", "Date: ." — has a Word field code the user must edit in Word. The rendered value is not literal block text, so skip it and explain that the field should be refreshed in Word with Ctrl+A then F9.',
+      "Do not call `execute_typescript` (or its `external_*` read functions) or `create-document` to satisfy an active DOCX edit request; `edit_workspace_document` is the editing tool for the open document.",
+      "CASCADING CHANGES: Before editing, scan for every place that refers to or depends on the changed value and include those dependent fixes in the same call. If the correct cascade is genuinely ambiguous, call `ask-user` once with the specific question before producing operations.",
+      "Use the block ids below for operations. Prefer `replaceInBlock` with an exact `find` string for localized edits; use `replaceBlock` for a whole paragraph/list item, `deleteBlock` to remove one, and `insertAfterBlock` / `insertBeforeBlock` for new paragraphs.",
+      'STRUCTURAL INSERTS: Use `pageBreakBefore: true` for a page break, `styleId: "ClauseHeading1"` (or ClauseHeading2/ClauseHeading3) for numbered headings, and `insertSignatureTable` for signature blocks. Do not emit directive markers such as `@pagebreak`, `@clause`, `@signatures`, `@title`, or `[[placeholders]]` as text.',
+      'Tool input MUST include `baseVersionId`, copied exactly from the current version id exposed by the tool schema. Example operation object (inside `operations`): {"type":"replaceInBlock","blockId":"1A2B3C4D","find":"Acme Inc.","replace":"Example Ltd."}. Operations must be objects, not strings. Use `blockId`, not `id`; copy block ids verbatim from the list below.',
+      "After the tool returns, reply with one short sentence in the user's language covering what was applied and any skips. Do not enumerate block ids or before/after pairs because the new document version already contains the result.",
+      "CITATIONS IN PLAIN ANSWERS: When you summarise, quote, or refer to specific content from the open document outside an edit tool call, wrap the supporting phrase in a Markdown link whose href is `#folio:<blockId>`. Use short meaningful anchor text, copy ids verbatim, cite only a few relevant blocks, and never invent ids.",
+      truncationNotice,
+      toolAvailability.folioAgentDocTools
+        ? "LIVE DOCUMENT LOOKUPS: The block list below is current as of this turn only. Use `read_document` or `find_text` only when the list is truncated or you need to confirm a verbatim match; for ordinary edits the list is sufficient."
+        : null,
+      toolAvailability.folioAgentDocTools
+        ? "COMMENTS & TRACKED CHANGES: Use `read_comments` and `read_changes` when asked about review state. Use the dedicated comment tools for commentary and review actions; use `edit_workspace_document` for document text."
+        : null,
+      ["Editable DOCX blocks:", "```json", JSON.stringify(blocks), "```"].join(
+        "\n",
+      ),
+    ]
+      .filter((line): line is string => line !== null)
+      .join("\n");
+  }
 
   return [
     "ACTIVE DOCX EDITING: The open document is available for in-place editing. Whether or not the editor is currently unlocked is irrelevant to your decision to call the tool — the user's accept click in the review panel handles unlocking.",

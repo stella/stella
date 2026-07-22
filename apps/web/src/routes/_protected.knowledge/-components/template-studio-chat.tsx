@@ -74,6 +74,7 @@ import {
   getChatSendMode,
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
+import { CHAT_EDIT_APPLY_MODE } from "@/lib/chat-edit-mode";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
@@ -601,11 +602,22 @@ const TemplateStudioChatInner = ({
   // No `handleActiveDocxEditToolCall` in the context: the transport
   // never invokes it (the approve path below client-executes the tool),
   // and `getActiveTemplate` already keys the cache as "active-template".
+  //
+  // `getEditApplyMode` is pinned to a literal "manual" -- never the
+  // user's composer-wide edit-mode preference -- because Template Studio
+  // has no entity-backed active file for `edit_workspace_document` (the
+  // `auto` tool) to write a version against; `getChatTools` only keeps
+  // `apply-active-docx-edits` (the manual, client-executed tool this
+  // surface's suggestion stepper depends on) registered when
+  // `editApplyMode !== "auto"`. There is no edit-mode selector rendered on
+  // this surface (see `ChatComposerDock` below, no `endExtras`), so this
+  // is the only place that value is ever decided here.
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
     getSendMode,
     getActiveTemplate: () => getActiveTemplate(),
+    getEditApplyMode: () => CHAT_EDIT_APPLY_MODE.manual,
   };
   const { data } = useSuspenseQuery(
     chatThreadOptions({

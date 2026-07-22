@@ -183,7 +183,8 @@ describe("isApprovalPart", () => {
 });
 
 describe("tool approval grants", () => {
-  test("keeps organization management approvals per call", () => {
+  test("keeps sensitive write approvals per call", () => {
+    expect(isApprovalOnceChatToolName("edit_workspace_document")).toBe(true);
     expect(isApprovalOnceChatToolName("manage_organization")).toBe(true);
     expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
   });

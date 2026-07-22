@@ -17,12 +17,12 @@ export const parseEntityKind = (value: unknown): EntityKind => {
 
 /**
  * The file the extraction pipeline reads text from for an entity's current
- * version: the first field (in field order) whose content is a file. Shared
- * by `processExtraction` (which writes `extractedContent`) and any reader
- * that must resolve to the SAME source file `extractedContent` was produced
- * from -- e.g. a live-conversion path must never pick a different field's
- * file than the one the cached plaintext (and search hits referencing it)
- * came from.
+ * version. By default this is the first field (in field order) whose content
+ * is a file. A caller that just replaced a known file property may pin that
+ * property so extraction cannot silently select a sibling file instead.
+ * Shared by `processExtraction` (which writes `extractedContent`) and any
+ * reader that must resolve to the SAME default source file `extractedContent`
+ * was produced from.
  *
  * CONTRACT: `fields` must arrive pre-sorted into a stable, deterministic
  * order -- this function does not sort. The `fields` table has no
@@ -33,10 +33,17 @@ export const parseEntityKind = (value: unknown): EntityKind => {
  * could observe different "first" fields for the same version.
  */
 export const findExtractionFileField = (
-  fields: readonly { content: FieldContent }[],
+  fields: readonly {
+    content: FieldContent;
+    propertyId?: SafeId<"property"> | undefined;
+  }[],
+  filePropertyId?: SafeId<"property">,
 ): Extract<FieldContent, { type: "file" }> | null => {
   for (const field of fields) {
-    if (field.content.type === "file") {
+    if (
+      field.content.type === "file" &&
+      (filePropertyId === undefined || field.propertyId === filePropertyId)
+    ) {
       return field.content;
     }
   }

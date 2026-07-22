@@ -26,6 +26,14 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
+import {
+  CHAT_EDIT_APPLY_MODE,
+  DOCX_EDIT_REPRESENTATION,
+} from "@/lib/chat-edit-mode";
+import type {
+  ChatEditApplyMode,
+  DocxEditRepresentation,
+} from "@/lib/chat-edit-mode";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
@@ -138,6 +146,24 @@ export type ChatThreadOptionsContext = {
    * next send carries the latest set.
    */
   getContextMatterIds?: (() => string[]) | undefined;
+  /**
+   * Which DOCX-edit review mode this turn uses ("manual" or "auto");
+   * omitted means the backend's own default (`DEFAULT_CHAT_EDIT_APPLY_MODE`).
+   * The file overlay reads this from the composer's edit-mode selector
+   * (`chat-edit-mode-store.ts`); Template Studio pins a literal `"manual"`
+   * instead, since it has no entity-backed active file for the `auto`
+   * tool (`edit_workspace_document`) to target.
+   */
+  getEditApplyMode?: (() => ChatEditApplyMode) | undefined;
+  /**
+   * Redline representation for the `auto` review mode only
+   * ("tracked-changes" or "direct"); `undefined` when the current
+   * selection is "manual" (the representation is chosen per-suggestion
+   * at accept time on that path, not up front).
+   */
+  getDocxEditRepresentation?:
+    | (() => DocxEditRepresentation | undefined)
+    | undefined;
   getSendMode?: (() => ChatSendMode) | undefined;
   getUserContext?: (() => ChatUserContext) | undefined;
   handleActiveDocxEditToolCall?:
@@ -328,6 +354,8 @@ export type ChatUserMessageInput = MultimodalContent & {
 };
 export type ChatRouteHandoffMessage = ChatUserMessageInput;
 export type ChatContinuationRequestBody = {
+  docxEditRepresentation?: DocxEditRepresentation | undefined;
+  editApplyMode?: ChatEditApplyMode | undefined;
   sendMode?: ChatSendMode | undefined;
   toolScope?: ChatToolScope | undefined;
   truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
@@ -994,6 +1022,36 @@ export const buildSendRequestBody = ({
     );
   }
 
+  const { editApplyMode, docxEditRepresentation } =
+    resolveChatRequestDocxEditPreferences({
+      context,
+      key,
+      messages,
+      requestBody,
+    });
+  if (editApplyMode !== undefined) {
+    body.editApplyMode = editApplyMode;
+  }
+
+  if (docxEditRepresentation !== undefined) {
+    body.docxEditRepresentation = docxEditRepresentation;
+  }
+
+  if (
+    message.role === "user" &&
+    (editApplyMode !== undefined || docxEditRepresentation !== undefined)
+  ) {
+    body.message.metadata = {
+      ...message.metadata,
+      docxEditPreferences: {
+        ...(editApplyMode === undefined ? {} : { editApplyMode }),
+        ...(docxEditRepresentation === undefined
+          ? {}
+          : { docxEditRepresentation }),
+      },
+    };
+  }
+
   if (import.meta.env.DEV) {
     const devModelId = useDevStore.getState().chatModelId;
     if (devModelId) {
@@ -1086,6 +1144,77 @@ const activeTurnSendModes = new LifecycleRegistry<
   { sendMode: ChatSendMode; userMessageId: string }
 >();
 
+type ActiveTurnDocxEditPreferences = {
+  docxEditRepresentation: DocxEditRepresentation | undefined;
+  editApplyMode: ChatEditApplyMode | undefined;
+  userMessageId: string;
+};
+
+const activeTurnDocxEditPreferences = new LifecycleRegistry<
+  string,
+  ActiveTurnDocxEditPreferences
+>();
+
+const resolveChatRequestDocxEditPreferences = ({
+  context,
+  key,
+  messages,
+  requestBody,
+}: ResolveChatRequestSendModeProps): Omit<
+  ActiveTurnDocxEditPreferences,
+  "userMessageId"
+> => {
+  const threadKey = getChatThreadKey(key);
+  const userMessage = getLatestUserMessage(messages);
+  const userMessageId = userMessage?.id ?? null;
+  const activeTurn = activeTurnDocxEditPreferences.get(threadKey);
+  const persistedPreferences = userMessage?.metadata?.docxEditPreferences;
+  let preferences: Omit<ActiveTurnDocxEditPreferences, "userMessageId">;
+  if (requestBody?.editApplyMode !== undefined) {
+    preferences = {
+      editApplyMode: requestBody.editApplyMode,
+      docxEditRepresentation: requestBody.docxEditRepresentation,
+    };
+  } else if (
+    userMessageId !== null &&
+    activeTurn?.userMessageId === userMessageId
+  ) {
+    preferences = activeTurn;
+  } else if (persistedPreferences !== undefined) {
+    preferences = {
+      editApplyMode: persistedPreferences.editApplyMode,
+      docxEditRepresentation: persistedPreferences.docxEditRepresentation,
+    };
+  } else {
+    preferences = {
+      editApplyMode: context?.getEditApplyMode?.(),
+      docxEditRepresentation: context?.getDocxEditRepresentation?.(),
+    };
+  }
+
+  if (userMessageId !== null) {
+    activeTurnDocxEditPreferences.set(threadKey, {
+      ...preferences,
+      userMessageId,
+    });
+  }
+
+  return preferences;
+};
+
+const getLatestUserMessage = (
+  messages: readonly PersistedChatMessage[],
+): PersistedChatMessage | undefined => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages.at(index);
+    if (message?.role === "user") {
+      return message;
+    }
+  }
+
+  return undefined;
+};
+
 const normalizeChatContinuationRequestBody = (
   data: unknown,
 ): ChatContinuationRequestBody | undefined => {
@@ -1094,6 +1223,19 @@ const normalizeChatContinuationRequestBody = (
   }
 
   const body: ChatContinuationRequestBody = {};
+  if (
+    data["editApplyMode"] === CHAT_EDIT_APPLY_MODE.auto ||
+    data["editApplyMode"] === CHAT_EDIT_APPLY_MODE.manual
+  ) {
+    body.editApplyMode = data["editApplyMode"];
+  }
+  if (
+    data["docxEditRepresentation"] ===
+      DOCX_EDIT_REPRESENTATION.trackedChanges ||
+    data["docxEditRepresentation"] === DOCX_EDIT_REPRESENTATION.direct
+  ) {
+    body.docxEditRepresentation = data["docxEditRepresentation"];
+  }
   if (isChatSendMode(data["sendMode"])) {
     body.sendMode = data["sendMode"];
   }
@@ -1118,6 +1260,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * tests so each one starts hermetically.
  */
 export const __resetChatRequestStateForTests = (): void => {
+  activeTurnDocxEditPreferences.clear();
   activeTurnSendModes.clear();
   chatRuntimeRegistry.clear();
 };
@@ -1336,6 +1479,8 @@ const CHAT_CONTEXT_CAPABILITY_KEYS = [
   "getActiveSkill",
   "getActiveTemplate",
   "getContextMatterIds",
+  "getDocxEditRepresentation",
+  "getEditApplyMode",
   "getSendMode",
   "getUserContext",
   "handleActiveDocxEditToolCall",

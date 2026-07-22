@@ -333,7 +333,7 @@
     "files": {}
   },
   "cross-handler-imports": {
-    "count": 253,
+    "count": 252,
     "files": {
       "apps/api/src/handlers/catalogue/bundled-skill-resources.ts": 1,
       "apps/api/src/handlers/catalogue/install-skill.ts": 1,
@@ -349,12 +349,13 @@
       "apps/api/src/handlers/chat/resolve-file-thread.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
       "apps/api/src/handlers/chat/skills.ts": 1,
+      "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/infosoud-tools.ts": 2,
       "apps/api/src/handlers/chat/tools/skill-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/template-tools.ts": 4,
       "apps/api/src/handlers/chat/tools/version-compare-tools.ts": 1,
       "apps/api/src/handlers/chat/types.ts": 1,
-      "apps/api/src/handlers/chat/upload-files.ts": 4,
+      "apps/api/src/handlers/chat/upload-files.ts": 3,
       "apps/api/src/handlers/clauses/clause-to-patch.ts": 1,
       "apps/api/src/handlers/clauses/template-slot-preview.ts": 2,
       "apps/api/src/handlers/clauses/types.ts": 1,
@@ -382,7 +383,7 @@
       "apps/api/src/handlers/entities/version-utils.ts": 1,
       "apps/api/src/handlers/fields/mark-column-flag.ts": 1,
       "apps/api/src/handlers/folio-collab/checkpoint.ts": 1,
-      "apps/api/src/handlers/folio-collab/finalize.ts": 7,
+      "apps/api/src/handlers/folio-collab/finalize.ts": 6,
       "apps/api/src/handlers/legislation/corpus-index.ts": 1,
       "apps/api/src/handlers/legislation/get.ts": 2,
       "apps/api/src/handlers/legislation/ingestion.ts": 4,

@@ -1,10 +1,44 @@
 import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
+import type { ChatSendMode } from "@stll/anonymize-chat";
+
+import type {
+  ChatEditApplyMode,
+  DocxEditRepresentation,
+} from "@/lib/chat-edit-mode";
 import type {
   ChatSendMessageOptions,
   ChatUserMessageInput,
 } from "@/routes/_protected.chat/-queries";
+
+export const snapshotChatRequestOptions = ({
+  docxEditRepresentation,
+  editApplyMode,
+  options,
+  sendMode,
+}: {
+  docxEditRepresentation: DocxEditRepresentation | undefined;
+  editApplyMode: ChatEditApplyMode | undefined;
+  options: ChatSendMessageOptions | undefined;
+  sendMode: ChatSendMode | undefined;
+}): ChatSendMessageOptions | undefined => {
+  if (sendMode === undefined && editApplyMode === undefined) {
+    return options;
+  }
+
+  return {
+    ...options,
+    body: {
+      ...(sendMode === undefined ? {} : { sendMode }),
+      ...(editApplyMode === undefined ? {} : { editApplyMode }),
+      ...(docxEditRepresentation === undefined
+        ? {}
+        : { docxEditRepresentation }),
+      ...options?.body,
+    },
+  };
+};
 
 /**
  * A user message composed while a response was still streaming.

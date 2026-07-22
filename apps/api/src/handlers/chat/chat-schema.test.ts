@@ -225,6 +225,33 @@ describe("validateMessage", () => {
     expect(result.value.message.metadata).toEqual(metadata);
   });
 
+  test("preserves DOCX edit preferences on user messages", async () => {
+    const metadata = {
+      docxEditPreferences: {
+        docxEditRepresentation: "direct",
+        editApplyMode: "auto",
+      },
+    } satisfies ChatMessageMetadata;
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_docx_edit_preferences"),
+        role: "user",
+        metadata,
+        parts: [{ type: "text", content: "Edit this document" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_docx_edit_preferences"),
+      tools: noTools,
+      userId: userId("user_docx_edit_preferences"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.metadata).toEqual(metadata);
+  });
+
   test("rejects old text parts at the live boundary", async () => {
     const result = await validateMessage({
       message: {

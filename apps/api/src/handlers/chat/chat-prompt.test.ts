@@ -36,6 +36,7 @@ import type { ChatMessage } from "./types";
 
 const WORKSPACE_ID = toSafeId<"workspace">("ws_prompt_test");
 const FULL_TOOL_AVAILABILITY = {
+  docxEditMode: "manual",
   templateAuthoring: true,
   webResearch: true,
   folioAgentDocTools: true,
@@ -413,6 +414,58 @@ describe("chat prompt builders", () => {
     expect(prompt).not.toContain("find_text");
   });
 
+  test("aligns active DOCX guidance with the registered automatic edit tool", () => {
+    const prompt = appendActiveFilePromptIfEntityExists({
+      activeFile: {
+        docxEditSnapshot: {
+          blocks: [{ id: "b-1", kind: "paragraph", text: "Some clause" }],
+        },
+        entityId: toSafeId<"entity">("entity_docx"),
+        fileName: "Contract.docx",
+        supportsDocxEdits: true,
+      },
+      entityExists: true,
+      prompt: "Base prompt",
+      refRegistry: createChatRefRegistry(),
+      toolAvailability: {
+        ...FULL_TOOL_AVAILABILITY,
+        docxEditMode: "auto",
+      },
+      workspaceId: WORKSPACE_ID,
+    });
+
+    expect(prompt).toContain("edit_workspace_document");
+    expect(prompt).toContain("saves a new document version");
+    expect(prompt).toContain("baseVersionId");
+    expect(prompt).not.toContain("apply-active-docx-edits");
+    expect(prompt).not.toContain("ready to review in the panel");
+  });
+
+  test("names no DOCX edit tool when registration removed the capability", () => {
+    const prompt = appendActiveFilePromptIfEntityExists({
+      activeFile: {
+        docxEditSnapshot: {
+          blocks: [{ id: "b-1", kind: "paragraph", text: "Some clause" }],
+        },
+        entityId: toSafeId<"entity">("entity_docx"),
+        fileName: "Contract.docx",
+        supportsDocxEdits: true,
+      },
+      entityExists: true,
+      prompt: "Base prompt",
+      refRegistry: createChatRefRegistry(),
+      toolAvailability: {
+        ...FULL_TOOL_AVAILABILITY,
+        docxEditMode: null,
+      },
+      workspaceId: WORKSPACE_ID,
+    });
+
+    expect(prompt).not.toContain("edit_workspace_document");
+    expect(prompt).not.toContain("apply-active-docx-edits");
+    expect(prompt).not.toContain("ACTIVE DOCX EDITING");
+  });
+
   test("active-template prompt stays read-only until a snapshot exists", () => {
     const prompt = buildActiveTemplatePrompt(
       {
@@ -473,6 +526,7 @@ describe("chat prompt builders", () => {
         },
       },
       {
+        docxEditMode: "manual",
         templateAuthoring: false,
         webResearch: true,
         folioAgentDocTools: true,
@@ -594,24 +648,28 @@ describe("system prompt tool-reference guard", () => {
 
   const AVAILABILITY_MATRIX: readonly ChatToolAvailability[] = [
     {
+      docxEditMode: "manual",
       templateAuthoring: true,
       webResearch: true,
       folioAgentDocTools: true,
       subagents: false,
     },
     {
+      docxEditMode: "manual",
       templateAuthoring: true,
       webResearch: false,
       folioAgentDocTools: true,
       subagents: false,
     },
     {
+      docxEditMode: "manual",
       templateAuthoring: false,
       webResearch: true,
       folioAgentDocTools: true,
       subagents: false,
     },
     {
+      docxEditMode: "manual",
       templateAuthoring: false,
       webResearch: false,
       folioAgentDocTools: true,
@@ -653,6 +711,7 @@ describe("system prompt tool-reference guard", () => {
       expect(prompt).toContain(`\`${FETCH_URL_TOOL_NAME}\``);
     }
     for (const prompt of buildAssembledPrompts({
+      docxEditMode: "manual",
       templateAuthoring: true,
       webResearch: false,
       folioAgentDocTools: true,
@@ -675,6 +734,7 @@ describe("system prompt tool-reference guard", () => {
       ),
     ).toBe(true);
     for (const prompt of buildAssembledPrompts({
+      docxEditMode: "manual",
       templateAuthoring: false,
       webResearch: true,
       folioAgentDocTools: true,

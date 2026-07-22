@@ -60,6 +60,9 @@ const pickExtractionSource = (
  */
 export const processExtraction = async (
   entityId: SafeId<"entity">,
+  options?: {
+    filePropertyId?: SafeId<"property"> | undefined;
+  },
 ): Promise<void> => {
   const entity = await rootDb.query.entities.findFirst({
     where: { id: { eq: entityId } },
@@ -85,7 +88,7 @@ export const processExtraction = async (
           // field" selection, which must resolve to the SAME field
           // wherever it runs (see findExtractionFileField).
           fields: {
-            columns: { content: true },
+            columns: { content: true, propertyId: true },
             orderBy: { id: "asc" },
             limit: LIMITS.propertiesCount,
           },
@@ -102,7 +105,10 @@ export const processExtraction = async (
   const version =
     entity.currentVersion ?? panic("Entity has no currentVersion");
 
-  const fileField = findExtractionFileField(version.fields);
+  const fileField = findExtractionFileField(
+    version.fields,
+    options?.filePropertyId,
+  );
   const canExtract = fileField && !fileField.encrypted;
 
   if (canExtract) {

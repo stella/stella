@@ -13,7 +13,6 @@ import {
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { closeSessionConnections } from "@/api/handlers/entities/desktop-edit-session-events";
 import { findDocxFieldForProperty } from "@/api/handlers/entities/desktop-edit-session-utils";
-import { validateDocxBuffer } from "@/api/handlers/entities/validate-docx-buffer";
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
@@ -40,6 +39,7 @@ import {
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";

@@ -15,6 +15,7 @@ import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
   getChatToolTitleKey,
@@ -32,7 +33,10 @@ import type {
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
 import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-card";
-import { hasAutomaticApproval } from "@/components/chat/tool-approval-card.logic";
+import {
+  describeEditWorkspaceDocumentOutcome,
+  hasAutomaticApproval,
+} from "@/components/chat/tool-approval-card.logic";
 import {
   buildRegistryWriteSummaryRows,
   formatReadableInputValue,
@@ -40,6 +44,9 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
+import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
+import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
+import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import type { WorkspaceProperty } from "@/lib/types";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
@@ -54,6 +61,10 @@ type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
 type CreateWorkspaceDocumentInput =
   ChatUITools["create_workspace_document"]["input"];
+type EditWorkspaceDocumentInput =
+  ChatUITools["edit_workspace_document"]["input"];
+type EditWorkspaceDocumentOutput =
+  ChatUITools["edit_workspace_document"]["output"];
 
 const getApprovalId = (part: ApprovalToolPart): string | null => {
   switch (part.state) {
@@ -310,9 +321,126 @@ const CreateWorkspaceDocumentSummary = ({
   );
 };
 
+// -- Edit workspace document (auto DOCX edit) summary --
+
+type EditWorkspaceDocumentSummaryProps = {
+  input: EditWorkspaceDocumentInput;
+  activeFileName?: string | undefined;
+};
+
+type ChatToolTranslationKey = Parameters<
+  ReturnType<typeof useTranslations<"chat.tool">>
+>[0];
+
+const REPRESENTATION_LABEL_KEY = {
+  [DOCX_EDIT_REPRESENTATION.trackedChanges]:
+    "editWorkspaceDocumentRepresentationTrackedChanges",
+  [DOCX_EDIT_REPRESENTATION.direct]:
+    "editWorkspaceDocumentRepresentationDirect",
+} as const satisfies Record<DocxEditRepresentation, ChatToolTranslationKey>;
+
+/**
+ * Approval preview for `edit_workspace_document` (the `auto` DOCX-edit
+ * tool): the target document (from the file overlay's active file) and a
+ * readable operation count. The representation is intentionally omitted
+ * before approval because it is session metadata, not tool input; reading the
+ * mutable current composer preference could mislabel a pending or historical
+ * call. Completed cards render the actual representation from tool output.
+ */
+const EditWorkspaceDocumentSummary = ({
+  input,
+  activeFileName,
+}: EditWorkspaceDocumentSummaryProps) => {
+  const t = useTranslations("chat.tool");
+
+  return (
+    <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
+      {activeFileName && (
+        <div className="text-foreground-strong-muted truncate font-medium">
+          {activeFileName}
+        </div>
+      )}
+      <div className="text-muted-foreground">
+        {t("editWorkspaceDocumentSummary", {
+          count: input.operations.length,
+        })}
+      </div>
+    </div>
+  );
+};
+
+type EditWorkspaceDocumentResultProps = {
+  output: EditWorkspaceDocumentOutput;
+};
+
+/**
+ * Completed-call result for `edit_workspace_document`: a concise
+ * "Applied N edits (M skipped)" line on success, or -- when the tool
+ * returned the structured `author_name_required` outcome instead of
+ * writing anything -- a message plus a button that opens
+ * `AuthorNameRequiredDialog` and retries the turn once a name is saved.
+ */
+const EditWorkspaceDocumentResult = ({
+  output,
+}: EditWorkspaceDocumentResultProps) => {
+  const t = useTranslations("chat.tool");
+  const { handleRetryAfterAuthorNameSet } = useChatApproval();
+  const [nameDialogOpen, setNameDialogOpen] = useState(false);
+
+  const outcome = describeEditWorkspaceDocumentOutcome(output);
+  if (outcome === null) {
+    return null;
+  }
+
+  if (outcome.kind === "applied") {
+    return (
+      <div className="border-border/50 text-muted-foreground border-t px-3 py-2 text-xs">
+        {outcome.skippedCount > 0
+          ? t("editWorkspaceDocumentAppliedWithSkipped", {
+              applied: outcome.appliedCount,
+              skipped: outcome.skippedCount,
+            })
+          : t("editWorkspaceDocumentApplied", {
+              applied: outcome.appliedCount,
+            })}{" "}
+        · {t(REPRESENTATION_LABEL_KEY[outcome.representation])}
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-border/50 flex flex-col items-start gap-2 border-t px-3 py-2 text-xs">
+      <p className="text-muted-foreground">
+        {t("editWorkspaceDocumentAuthorNameDialogDescription")}
+      </p>
+      <Button
+        onClick={() => setNameDialogOpen(true)}
+        size="xs"
+        variant="outline"
+      >
+        {t("editWorkspaceDocumentSetNameAction")}
+      </Button>
+      <AuthorNameRequiredDialog
+        onNameSaved={() => {
+          setNameDialogOpen(false);
+          detached(
+            Promise.resolve(handleRetryAfterAuthorNameSet?.()),
+            "EditWorkspaceDocumentResult",
+          );
+        }}
+        onOpenChange={setNameDialogOpen}
+        open={nameDialogOpen}
+      />
+    </div>
+  );
+};
+
 // -- Main card --
 
 type ToolApprovalCardProps = {
+  /** Threaded through for `edit_workspace_document`'s summary; see
+   *  `ChatThreadMessagesProps.activeFileName`. */
+  activeFileName?: string | undefined;
   part: ApprovalToolPart;
   workspaceId?: string | undefined;
 };
@@ -326,6 +454,7 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
 };
 
 export const ToolApprovalCard = ({
+  activeFileName,
   part,
   workspaceId,
 }: ToolApprovalCardProps) => {
@@ -346,9 +475,18 @@ export const ToolApprovalCard = ({
 
   const isApprovalRequested = part.state === "approval-requested";
   const isApprovalResponded = part.state === "approval-responded";
-  const isApproved = part.state === "complete" && part.output !== undefined;
+  const isStructuredEditFailure =
+    part.name === "edit_workspace_document" &&
+    part.state === "complete" &&
+    part.output !== undefined &&
+    !part.output.success;
+  const isApproved =
+    part.state === "complete" &&
+    part.output !== undefined &&
+    !isStructuredEditFailure;
   const isDenied =
-    part.state === "approval-responded" && part.approval.approved === false;
+    isStructuredEditFailure ||
+    (part.state === "approval-responded" && part.approval.approved === false);
   const isProcessing =
     isApprovalResponded || (responded && isApprovalRequested);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
@@ -529,6 +667,19 @@ export const ToolApprovalCard = ({
         part.state !== "input-streaming" &&
         part.input !== undefined && (
           <CreateWorkspaceDocumentSummary input={part.input} />
+        )}
+      {part.name === "edit_workspace_document" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <EditWorkspaceDocumentSummary
+            activeFileName={activeFileName}
+            input={part.input}
+          />
+        )}
+      {part.name === "edit_workspace_document" &&
+        part.state === "complete" &&
+        part.output !== undefined && (
+          <EditWorkspaceDocumentResult output={part.output} />
         )}
       {part.name === "spawn_subagents" &&
         part.state !== "input-streaming" &&

@@ -32,6 +32,8 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
+  DEFAULT_CHAT_EDIT_APPLY_MODE,
+  DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
   sendMessageBodySchema,
   validateMessage,
@@ -93,6 +95,7 @@ import {
   areTemplateAuthoringToolsRegistered,
   areWebResearchToolsRegistered,
   getChatTools,
+  resolveRegisteredDocxEditMode,
 } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
@@ -309,6 +312,43 @@ const sendMessage = createSafeRootHandler(
     // Computed once and reused for tool registration (validation +
     // streaming) and for the matching prompt guidance below.
     const hasActiveDocxFileClient = body.activeFile?.supportsDocxEdits === true;
+    // Per-turn DOCX-edit review-mode setting: which of the two mutually
+    // exclusive tools (`apply-active-docx-edits` manual /
+    // `edit_workspace_document` auto) `getChatTools` registers, and (for
+    // auto) which redline representation it applies with. Resolved once
+    // and reused for both the validation and streaming tool sets below,
+    // matching every other per-turn setting on this path.
+    const editApplyMode = body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE;
+    const docxEditRepresentation =
+      body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
+    const activeFileEntity =
+      body.activeFile?.supportsDocxEdits === true && workspaceId !== null
+        ? yield* Result.await(
+            safeDb((tx) =>
+              tx.query.entities.findFirst({
+                where: {
+                  id: { eq: body.activeFile?.entityId },
+                  workspaceId: { eq: workspaceId },
+                },
+                columns: { currentVersionId: true },
+              }),
+            ),
+          )
+        : undefined;
+    // Server-authoritative version binding for approval-gated automatic DOCX
+    // edits. The model must echo this id in the tool input; a later approval
+    // request rebuilds the schema from the then-current version, so an old
+    // pending call fails validation instead of applying to a newer document.
+    const activeFileForTools =
+      body.activeFile === undefined
+        ? undefined
+        : {
+            ...body.activeFile,
+            ...(activeFileEntity?.currentVersionId === null ||
+            activeFileEntity?.currentVersionId === undefined
+              ? {}
+              : { currentVersionId: activeFileEntity.currentVersionId }),
+          };
     const validationThreadState = yield* Result.await(
       readThreadValidationState({
         organizationId: session.activeOrganizationId,
@@ -438,9 +478,12 @@ const sendMessage = createSafeRootHandler(
           pinnedIds: [],
           accessibleWorkspaceIds,
         }),
-        activeFile: body.activeFile,
+        activeFile: activeFileForTools,
         hasActiveDocxEditClient: true,
         hasActiveDocxFileClient: true,
+        editApplyMode,
+        docxEditRepresentation,
+        includeAllDocxEditToolsForValidation: true,
         webSearchEnabled: validationThreadState.webSearchEnabled,
         webSearchProviders,
         externalTools: externalToolsForValidation,
@@ -765,6 +808,21 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
+      const toolWorkspaceIds = resolveToolWorkspaceIds({
+        pinnedIds: effectiveContextMatterIds,
+        accessibleWorkspaceIds,
+      });
+      const registeredDocxEditMode = resolveRegisteredDocxEditMode({
+        activeFile: activeFileForTools,
+        editApplyMode,
+        hasActiveDocxEditClient:
+          hasActiveDocxFileClient || body.activeTemplate !== undefined,
+        memberRole: memberRole.role,
+        recordAuditEventAvailable: true,
+        requestWorkspaceId: workspaceId,
+        toolWorkspaceIds,
+        workspaceStatusById,
+      });
       const chatContextResult = await prepareChatContext({
         activeDecision: body.activeDecision,
         activeExternal: body.activeExternal,
@@ -782,6 +840,7 @@ const sendMessage = createSafeRootHandler(
         // below, so the prompt only steers the model to tools that are
         // actually handed to it.
         toolAvailability: {
+          docxEditMode: registeredDocxEditMode,
           templateAuthoring: areTemplateAuthoringToolsRegistered(
             memberRole.role,
           ),
@@ -938,14 +997,13 @@ const sendMessage = createSafeRootHandler(
         thirdPartyBoundary,
         excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
         userId: user.id,
-        toolWorkspaceIds: resolveToolWorkspaceIds({
-          pinnedIds: effectiveContextMatterIds,
-          accessibleWorkspaceIds,
-        }),
-        activeFile: body.activeFile,
+        toolWorkspaceIds,
+        activeFile: activeFileForTools,
         hasActiveDocxEditClient:
           hasActiveDocxFileClient || body.activeTemplate !== undefined,
         hasActiveDocxFileClient,
+        editApplyMode,
+        docxEditRepresentation,
         webSearchEnabled: thread.data.webSearchEnabled,
         webSearchProviders,
         externalTools: externalMcpTools.tools,

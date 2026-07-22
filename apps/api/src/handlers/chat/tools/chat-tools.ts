@@ -2,6 +2,13 @@ import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import {
+  CHAT_EDIT_APPLY_MODE,
+  DEFAULT_CHAT_EDIT_APPLY_MODE,
+  DEFAULT_DOCX_EDIT_REPRESENTATION,
+  type ChatEditApplyMode,
+  type DocxEditRepresentation,
+} from "@/api/handlers/chat/chat-schema";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/skills";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -32,6 +39,10 @@ import {
   CREATE_WORKSPACE_DOCUMENT_TOOL_NAME,
   createCreateWorkspaceDocumentTools,
 } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import {
+  createEditWorkspaceDocumentTools,
+  EDIT_WORKSPACE_DOCUMENT_TOOL_NAME,
+} from "@/api/handlers/chat/tools/edit-workspace-document-tools";
 import {
   buildChatCodeModeTools,
   type ChatCodeModeToolMap,
@@ -158,6 +169,56 @@ export const areSubagentToolsRegistered = ({
 }: SubagentToolsRegisteredProps): boolean =>
   (delegationDepth ?? 0) < SUBAGENT_DELEGATION_DEPTH_CAP;
 
+type ResolveRegisteredDocxEditModeOptions = {
+  activeFile: GetChatToolsProps["activeFile"];
+  editApplyMode: ChatEditApplyMode;
+  hasActiveDocxEditClient: boolean;
+  memberRole: keyof typeof roles;
+  recordAuditEventAvailable: boolean;
+  requestWorkspaceId: SafeId<"workspace"> | null;
+  toolWorkspaceIds: AuthorizedToolWorkspaceIds;
+  workspaceStatusById:
+    | ReadonlyMap<string, AccessibleWorkspace["status"]>
+    | undefined;
+};
+
+/**
+ * Single source of truth for which mutually exclusive DOCX edit tool is
+ * registered on a turn. Prompt construction calls the same predicate, so it
+ * cannot direct the model to a tool that authorization or active-file state
+ * removed from the tool map.
+ */
+export const resolveRegisteredDocxEditMode = ({
+  activeFile,
+  editApplyMode,
+  hasActiveDocxEditClient,
+  memberRole,
+  recordAuditEventAvailable,
+  requestWorkspaceId,
+  toolWorkspaceIds,
+  workspaceStatusById,
+}: ResolveRegisteredDocxEditModeOptions): ChatEditApplyMode | null => {
+  if (editApplyMode === CHAT_EDIT_APPLY_MODE.manual) {
+    return hasActiveDocxEditClient ? CHAT_EDIT_APPLY_MODE.manual : null;
+  }
+
+  if (
+    activeFile?.supportsDocxEdits !== true ||
+    activeFile.fileFieldId === undefined ||
+    requestWorkspaceId === null ||
+    !recordAuditEventAvailable ||
+    !toolWorkspaceIds.includes(requestWorkspaceId) ||
+    workspaceStatusById?.get(requestWorkspaceId) !== "active"
+  ) {
+    return null;
+  }
+
+  const canEditWorkspaceDocument = roles[memberRole].authorize({
+    entity: ["update"],
+  }).success;
+  return canEditWorkspaceDocument ? CHAT_EDIT_APPLY_MODE.auto : null;
+};
+
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ChatCodeModeToolMap;
@@ -170,6 +231,9 @@ type FolioAgentDocTools = ReturnType<typeof createFolioAgentDocTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
 type CreateWorkspaceDocumentTools = ReturnType<
   typeof createCreateWorkspaceDocumentTools
+>;
+type EditWorkspaceDocumentTools = ReturnType<
+  typeof createEditWorkspaceDocumentTools
 >;
 type WebSearchTools = ReturnType<typeof createWebSearchTools>;
 type ChatHistoryTools = ReturnType<typeof createChatHistoryTools>;
@@ -198,6 +262,7 @@ type BuiltInChatTools = OrgTools &
   FolioAgentDocTools &
   CreateDocumentTools &
   CreateWorkspaceDocumentTools &
+  EditWorkspaceDocumentTools &
   WebSearchTools &
   ChatHistoryTools &
   TemplateTools &
@@ -252,6 +317,7 @@ type GetChatToolsProps = {
   activeFile?:
     | {
         entityId: SafeId<"entity">;
+        currentVersionId?: SafeId<"entityVersion"> | undefined;
         fileFieldId?: SafeId<"field"> | undefined;
         supportsDocxEdits?: boolean | undefined;
       }
@@ -335,6 +401,33 @@ type GetChatToolsProps = {
    * `SUBAGENT_DELEGATION_DEPTH_CAP`.
    */
   delegationDepth?: number | undefined;
+  /**
+   * Which DOCX-edit review mode this turn uses; defaults to
+   * `DEFAULT_CHAT_EDIT_APPLY_MODE` ("auto": AI edits auto-apply as
+   * tracked changes by default). Gates `apply-active-docx-edits` and
+   * `edit_workspace_document` into a mutually exclusive pair -- exactly
+   * one of the two is ever registered for a given turn, never both.
+   * Neither registers when `edit_workspace_document`'s own preconditions
+   * (an entity-backed active DOCX file, `entity:update`, active matter)
+   * fail to hold in "auto" mode -- e.g. Template Studio, which has no
+   * entity-backed `activeFile`, must explicitly pass "manual" to keep
+   * its DOCX-edit tool.
+   */
+  editApplyMode?: ChatEditApplyMode | undefined;
+  /**
+   * Redline representation `edit_workspace_document` (the `auto` mode)
+   * applies operations with; defaults to `DEFAULT_DOCX_EDIT_REPRESENTATION`.
+   * Ignored in `manual` mode.
+   */
+  docxEditRepresentation?: DocxEditRepresentation | undefined;
+  /**
+   * Validation-only widening for continuation messages. A pending DOCX tool
+   * call was issued under the mode selected on the previous request, so its
+   * call/result must remain schema-valid even if the user changed the composer
+   * mode before approving it. Live streaming callers must leave this false so
+   * the model still receives exactly one DOCX edit tool.
+   */
+  includeAllDocxEditToolsForValidation?: boolean | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -366,6 +459,11 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // mutation, gated on per-call approval like every other write.
   [CREATE_WORKSPACE_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
   describe_template: CHAT_TOOL_POLICY_KIND.internal,
+  // Headless (auto) DOCX edit: writes a new entity version with no per-
+  // suggestion human review step (unlike apply-active-docx-edits, which
+  // only queues suggestions), so it needs per-call approval like every
+  // other write.
+  [EDIT_WORKSPACE_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
   // Code-mode tool discovery: read-only, gated by the same authorization that
   // let the request reach chat at all; runs immediately without per-call
   // approval, alongside the sandbox runner it feeds.
@@ -462,6 +560,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     activeSkillContext,
     recordAuditEvent,
     workspaceStatusById,
+    editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
+    docxEditRepresentation = DEFAULT_DOCX_EDIT_REPRESENTATION,
+    includeAllDocxEditToolsForValidation = false,
   } = props;
 
   const orgTools = createOrgTools({
@@ -524,9 +625,37 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     webResearchAvailable && webSearchProvider !== null
       ? createWebSearchTools({ webSearchProvider, urlFetcher })
       : {};
-  const activeDocxEditTools = hasActiveDocxEditClient
-    ? createActiveDocxEditTools()
-    : {};
+  // `editApplyMode === "auto"` also requires the client-executed manual
+  // tool to stay OFF: the two review modes are mutually exclusive tool
+  // surfaces (see `editApplyMode`'s doc comment), never both registered
+  // for the same turn.
+  const registeredDocxEditMode = resolveRegisteredDocxEditMode({
+    activeFile,
+    editApplyMode,
+    hasActiveDocxEditClient,
+    memberRole,
+    recordAuditEventAvailable: recordAuditEvent !== undefined,
+    requestWorkspaceId,
+    toolWorkspaceIds,
+    workspaceStatusById,
+  });
+  const activeDocxEditTools =
+    registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.manual ||
+    (includeAllDocxEditToolsForValidation && hasActiveDocxEditClient)
+      ? createActiveDocxEditTools()
+      : {};
+  const automaticDocxEditAvailableForValidation =
+    includeAllDocxEditToolsForValidation &&
+    resolveRegisteredDocxEditMode({
+      activeFile,
+      editApplyMode: CHAT_EDIT_APPLY_MODE.auto,
+      hasActiveDocxEditClient,
+      memberRole,
+      recordAuditEventAvailable: recordAuditEvent !== undefined,
+      requestWorkspaceId,
+      toolWorkspaceIds,
+      workspaceStatusById,
+    }) === CHAT_EDIT_APPLY_MODE.auto;
   // Narrower than `apply-active-docx-edits` above: only the file
   // overlay mounts the auto-run watcher that resolves these via
   // `addToolResult` (see `hasActiveDocxFileClient` doc comment).
@@ -640,6 +769,50 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         })
       : {};
 
+  // edit_workspace_document is the headless (`auto`) counterpart to
+  // `apply-active-docx-edits`: it writes a new entity version directly
+  // instead of queuing suggestions into the browser review panel, so it
+  // needs its own explicit authorization mirror rather than inheriting one
+  // from the manual tool (which has none of its own -- it never writes).
+  // Registered ONLY when every one of these holds:
+  //   - `editApplyMode === "auto"`: the session opted into headless apply
+  //     (see `editApplyMode`'s doc comment on `GetChatToolsProps`); this is
+  //     what makes the tool mutually exclusive with the manual one above.
+  //   - An editable active DOCX file is present
+  //     (`activeFile.supportsDocxEdits === true`), the same precondition
+  //     `apply-active-docx-edits` and `compare_versions` use.
+  //   - `entity: ["update"]` permission -- this tool overwrites the active
+  //     document's content, the same grant `docx-suggestions/create.ts`,
+  //     `resolve.ts`, and `upload-version.ts` require for DOCX edits.
+  //     `create_workspace_document` above checks `entity: ["create"]`
+  //     instead because it creates a new document; this tool edits an
+  //     existing one, so it checks the "update" action, not "create".
+  //   - Active (non-archived) matter status, from the same
+  //     `workspaceStatusById` map `create_workspace_document` reads, so an
+  //     archived matter stays read-only through this tool too.
+  //   - `recordAuditEvent` present, since `createEntityVersionFromBuffer`
+  //     always writes an audit event.
+  const editWorkspaceDocumentTools =
+    (registeredDocxEditMode === CHAT_EDIT_APPLY_MODE.auto ||
+      automaticDocxEditAvailableForValidation) &&
+    activeFile !== undefined &&
+    activeFile.currentVersionId !== undefined &&
+    activeFile.fileFieldId !== undefined &&
+    requestWorkspaceId !== null &&
+    recordAuditEvent !== undefined
+      ? createEditWorkspaceDocumentTools({
+          safeDb,
+          organizationId,
+          userId,
+          workspaceId: requestWorkspaceId,
+          entityId: activeFile.entityId,
+          expectedCurrentVersionId: activeFile.currentVersionId,
+          fileFieldId: activeFile.fileFieldId,
+          recordAuditEvent,
+          docxEditRepresentation,
+        })
+      : {};
+
   // Registry write projections: per-call mutation tools (save/delete/etc.),
   // each behind approval. Gated on a non-empty workspace set exactly like the
   // hand-written workspace mutation tool (`createWorkspaceTools`), so
@@ -724,6 +897,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...historyTools,
       ...createDocumentTools,
       ...createWorkspaceDocumentTools,
+      ...editWorkspaceDocumentTools,
       ...activeDocxEditTools,
       ...folioAgentDocTools,
       ...versionCompareTools,

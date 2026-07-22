@@ -90,6 +90,7 @@ const getMessages = createSafeRootHandler(
     }): ThreadContextUsage => {
       const { promptTokens, toolTokens } = estimateChatContextPromptTokens({
         toolAvailability: {
+          docxEditMode: null,
           templateAuthoring: false,
           webResearch,
           folioAgentDocTools: false,

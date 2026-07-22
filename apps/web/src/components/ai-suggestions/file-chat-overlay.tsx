@@ -55,6 +55,7 @@ import { useChatEditor } from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
+import { ChatEditModeSelector } from "@/components/chat/chat-edit-mode-selector";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
@@ -85,6 +86,14 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
+import {
+  docxEditRepresentationForSelection,
+  resolveActiveDocxEditModeState,
+} from "@/lib/chat-edit-mode";
+import {
+  getChatEditModeSelection,
+  useChatEditModeStore,
+} from "@/lib/chat-edit-mode-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -1024,6 +1033,26 @@ const FileChatOverlayInner = ({
   }, [docxComments]);
   const hasDocxEditSurface =
     activeFile !== undefined && docxEditorRef !== undefined;
+  const editModeOptionId = useChatEditModeStore((state) => state.optionId);
+  const setEditModeOptionId = useChatEditModeStore(
+    (state) => state.setOptionId,
+  );
+  const activeDocxEditModeState = resolveActiveDocxEditModeState({
+    activeFileEditable: activeFile?.editable,
+    docxEditable,
+    hasDocxEditSurface,
+    selection: getChatEditModeSelection(),
+  });
+  const getLatestActiveDocxEditSelection = useLatestCallback(() => {
+    const state = resolveActiveDocxEditModeState({
+      activeFileEditable: activeFile?.editable,
+      docxEditable,
+      hasDocxEditSurface,
+      selection: getChatEditModeSelection(),
+    });
+    return state.type === "unavailable" ? null : state.selection;
+  });
+  const canSelectEditMode = activeDocxEditModeState.type === "selectable";
   // Folio's PM view exists almost immediately after DocxBrowserEditor
   // mounts but there is a sub-100ms window where the ref is set but
   // `createAIEditSnapshot()` still returns null. Sending a message in
@@ -1119,8 +1148,8 @@ const FileChatOverlayInner = ({
     const snapshot = docxEditorRef?.current?.createAIEditSnapshot() ?? null;
     lastSentDocxEditSnapshotRef.current = snapshot;
 
-    if (!hasDocxEditSurface) {
-      return activeFile;
+    if (getLatestActiveDocxEditSelection() === null) {
+      return { ...activeFile, supportsDocxEdits: false };
     }
 
     if (!snapshot) {
@@ -1208,6 +1237,19 @@ const FileChatOverlayInner = ({
   // value absent until a real blocked tool exists.
   const blockedApprovalTools = undefined;
 
+  const getEditApplyMode =
+    activeDocxEditModeState.type === "unavailable"
+      ? undefined
+      : () => getLatestActiveDocxEditSelection()?.editApplyMode ?? "manual";
+  const getDocxEditRepresentation =
+    activeDocxEditModeState.type === "unavailable"
+      ? undefined
+      : () => {
+          const selection = getLatestActiveDocxEditSelection();
+          return selection
+            ? docxEditRepresentationForSelection(selection)
+            : undefined;
+        };
   const chatThreadContext = {
     allowMissingThread: true,
     getContextMatterIds,
@@ -1221,6 +1263,9 @@ const FileChatOverlayInner = ({
             handleActiveDocxEditToolCall(input),
         }
       : {}),
+    ...(getEditApplyMode === undefined
+      ? {}
+      : { getEditApplyMode, getDocxEditRepresentation }),
   };
   const { data } = useSuspenseQuery(
     chatThreadOptions({
@@ -1287,6 +1332,8 @@ const FileChatOverlayInner = ({
   } = useChatSession({
     chat,
     conversationId: threadRef.threadId,
+    getDocxEditRepresentation,
+    getEditApplyMode,
     getSendMode,
     initialOlderCursor: data.olderCursor,
     threadRef,
@@ -1833,6 +1880,7 @@ const FileChatOverlayInner = ({
           handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
           handleApprove: handleApproveWithDocxUnlock,
           handleDeny,
+          handleRetryAfterAuthorNameSet: resendLatestMessage,
           blockedApprovalTools,
         }}
       >
@@ -1842,6 +1890,7 @@ const FileChatOverlayInner = ({
             scrollRef={threadScrollRef}
           >
             <ChatThreadMessages
+              activeFileName={activeFile?.fileName}
               approvalPendingMessageId={approvalPendingMessageId}
               error={error}
               hasOlderMessages={olderCursor !== null}
@@ -1967,6 +2016,14 @@ const FileChatOverlayInner = ({
                   <ChatMatterPicker
                     matterIds={contextMatterIds}
                     onChange={setContextMatterIds}
+                  />
+                ) : undefined
+              }
+              endExtras={
+                canSelectEditMode ? (
+                  <ChatEditModeSelector
+                    onChange={setEditModeOptionId}
+                    optionId={editModeOptionId}
                   />
                 ) : undefined
               }

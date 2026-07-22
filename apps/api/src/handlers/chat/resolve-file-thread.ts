@@ -212,6 +212,7 @@ const loadResolvedThreadMessagePage = async ({
   const hasContext = windowedMessages.length > 0 || checkpoint !== null;
   const { promptTokens, toolTokens } = estimateChatContextPromptTokens({
     toolAvailability: {
+      docxEditMode: null,
       templateAuthoring: false,
       webResearch: webSearchAvailable && webSearchEnabled,
       folioAgentDocTools: false,

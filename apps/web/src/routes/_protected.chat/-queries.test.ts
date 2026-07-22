@@ -489,6 +489,136 @@ describe("buildSendRequestBody", () => {
     });
   });
 
+  test("preserves DOCX edit preferences across approval continuations", () => {
+    const threadId = toChatThreadId("thread-A");
+    const key = { scope: "global", threadId } as const;
+    let editApplyMode: "auto" | "manual" = "auto";
+    let docxEditRepresentation: "tracked-changes" | "direct" | undefined =
+      "tracked-changes";
+    const context = {
+      getDocxEditRepresentation: () => docxEditRepresentation,
+      getEditApplyMode: () => editApplyMode,
+    };
+
+    expect(
+      buildSendRequestBody({
+        context,
+        key,
+        messages: [createMessage("message-A")],
+      }),
+    ).toMatchObject({
+      docxEditRepresentation: "tracked-changes",
+      editApplyMode: "auto",
+    });
+
+    editApplyMode = "manual";
+    docxEditRepresentation = undefined;
+    expect(
+      buildSendRequestBody({
+        context,
+        key,
+        messages: [
+          createMessage("message-A"),
+          {
+            id: "assistant-A",
+            role: "assistant",
+            parts: [],
+          },
+        ],
+      }),
+    ).toMatchObject({
+      docxEditRepresentation: "tracked-changes",
+      editApplyMode: "auto",
+    });
+
+    editApplyMode = "auto";
+    docxEditRepresentation = "direct";
+    expect(
+      buildSendRequestBody({
+        context,
+        key,
+        messages: [createMessage("message-A"), createMessage("message-B")],
+      }),
+    ).toMatchObject({
+      docxEditRepresentation: "direct",
+      editApplyMode: "auto",
+    });
+  });
+
+  test("restores DOCX edit preferences after a reload during approval", () => {
+    const threadId = toChatThreadId("thread-A");
+    const key = { scope: "global", threadId } as const;
+    const initial = buildSendRequestBody({
+      context: {
+        getDocxEditRepresentation: () => "direct",
+        getEditApplyMode: () => "auto",
+      },
+      key,
+      messages: [createMessage("message-A")],
+    });
+    expect(initial.message.metadata).toMatchObject({
+      docxEditPreferences: {
+        docxEditRepresentation: "direct",
+        editApplyMode: "auto",
+      },
+    });
+
+    __resetChatRequestStateForTests();
+    expect(
+      buildSendRequestBody({
+        context: {
+          getDocxEditRepresentation: () => "tracked-changes",
+          getEditApplyMode: () => "manual",
+        },
+        key,
+        messages: [
+          {
+            ...createMessage("message-A"),
+            metadata: {
+              docxEditPreferences: {
+                docxEditRepresentation: "direct",
+                editApplyMode: "auto",
+              },
+            },
+          },
+          { id: "assistant-A", role: "assistant", parts: [] },
+        ],
+      }),
+    ).toMatchObject({
+      docxEditRepresentation: "direct",
+      editApplyMode: "auto",
+    });
+  });
+
+  test("uses enqueue-time DOCX preferences instead of live selectors", () => {
+    const threadId = toChatThreadId("thread-A");
+    const body = buildSendRequestBody({
+      context: {
+        getDocxEditRepresentation: () => "direct",
+        getEditApplyMode: () => "auto",
+      },
+      key: { scope: "global", threadId },
+      messages: [createMessage("queued-message")],
+      requestBody: {
+        docxEditRepresentation: "tracked-changes",
+        editApplyMode: "auto",
+      },
+    });
+
+    expect(body).toMatchObject({
+      docxEditRepresentation: "tracked-changes",
+      editApplyMode: "auto",
+      message: {
+        metadata: {
+          docxEditPreferences: {
+            docxEditRepresentation: "tracked-changes",
+            editApplyMode: "auto",
+          },
+        },
+      },
+    });
+  });
+
   test("forwards the replay truncation target for tool-result continuations", () => {
     const threadId = toChatThreadId("thread-A");
     const truncateAfterMessageId = toSafeId<"chatMessage">(
