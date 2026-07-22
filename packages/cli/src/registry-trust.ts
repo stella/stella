@@ -59,6 +59,30 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>
   Array.isArray(value);
 
+const SCHEMA_ARRAY_KEYWORDS = [
+  "allOf",
+  "anyOf",
+  "oneOf",
+  "prefixItems",
+] as const;
+
+const SCHEMA_SINGLE_KEYWORDS = [
+  "contains",
+  "else",
+  "if",
+  "not",
+  "propertyNames",
+  "then",
+  "unevaluatedItems",
+  "unevaluatedProperties",
+] as const;
+
+const SCHEMA_MAP_KEYWORDS = [
+  "$defs",
+  "definitions",
+  "dependentSchemas",
+] as const;
+
 /** Pull the `tools` array from a tools/list body (bare, `{tools}`, or envelope). */
 const extractTools = (parsed: unknown): readonly unknown[] | undefined => {
   if (isUnknownArray(parsed)) {
@@ -110,11 +134,68 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
 
   if (schema["type"] === "RegExp") {
     const source = schema["source"];
+    const flags = schema["flags"];
     if (
       typeof source !== "string" ||
-      compileSchemaPattern(source).status === "invalid"
+      (flags !== undefined && typeof flags !== "string") ||
+      compileSchemaPattern(
+        source,
+        typeof flags === "string" ? flags : undefined,
+      ).status === "invalid"
     ) {
-      return "RegExp schema source is invalid";
+      return "RegExp schema source or flags are invalid";
+    }
+  }
+
+  for (const keyword of SCHEMA_ARRAY_KEYWORDS) {
+    const branches = schema[keyword];
+    if (branches === undefined) {
+      continue;
+    }
+    if (!isUnknownArray(branches)) {
+      return `${keyword} must be an array`;
+    }
+    for (const branch of branches) {
+      if (typeof branch !== "boolean" && !isRecord(branch)) {
+        return `${keyword} contains an invalid schema`;
+      }
+      const violation = walkSchema(branch, depth + 1);
+      if (violation !== undefined) {
+        return violation;
+      }
+    }
+  }
+
+  for (const keyword of SCHEMA_SINGLE_KEYWORDS) {
+    const child = schema[keyword];
+    if (child === undefined) {
+      continue;
+    }
+    if (typeof child !== "boolean" && !isRecord(child)) {
+      return `${keyword} must be a schema`;
+    }
+    const violation = walkSchema(child, depth + 1);
+    if (violation !== undefined) {
+      return violation;
+    }
+  }
+
+  for (const keyword of SCHEMA_MAP_KEYWORDS) {
+    const children = schema[keyword];
+    if (children === undefined) {
+      continue;
+    }
+    if (!isRecord(children)) {
+      return `${keyword} must be an object`;
+    }
+    for (const child of Object.values(children)) {
+      if (typeof child !== "boolean" && !isRecord(child)) {
+        return `${keyword} contains an invalid schema`;
+      }
+      const violation = walkSchema(child, depth + 1);
+      if (violation !== undefined) {
+        return violation;
+      }
     }
   }
 

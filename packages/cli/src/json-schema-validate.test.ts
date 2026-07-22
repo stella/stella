@@ -177,15 +177,22 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
 
   test("validates serialized RegExp schemas with the shared safe engine", () => {
     const schema = objectSchema({
-      checksum: { type: "RegExp", source: "^[0-9a-f]{64}$", flags: "u" },
+      checksum: { type: "RegExp", source: "^[0-9a-f]{64}$", flags: "iu" },
     });
 
     expect(
-      validateAgainstSchema(schema, { checksum: "0".repeat(64) }).valid,
+      validateAgainstSchema(schema, { checksum: "A".repeat(64) }).valid,
     ).toBe(true);
     expect(validateAgainstSchema(schema, { checksum: "nope" }).valid).toBe(
       false,
     );
+
+    const invalidFlags = objectSchema({
+      checksum: { type: "RegExp", source: ".*", flags: "x" },
+    });
+    expect(
+      validateAgainstSchema(invalidFlags, { checksum: "anything" }).valid,
+    ).toBe(false);
   });
 
   test("validates arrays and their items with minItems", () => {

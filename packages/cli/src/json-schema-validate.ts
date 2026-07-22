@@ -122,7 +122,11 @@ const validateRegExpString = (
   if (typeof source !== "string") {
     return fail(path, "RegExp schema is missing its source");
   }
-  const compiled = compileSchemaPattern(source);
+  const flags = schema["flags"];
+  if (flags !== undefined && typeof flags !== "string") {
+    return fail(path, "RegExp schema flags must be a string");
+  }
+  const compiled = compileSchemaPattern(source, flags);
   if (compiled.status === "invalid") {
     return fail(path, "RegExp schema contains an invalid source");
   }

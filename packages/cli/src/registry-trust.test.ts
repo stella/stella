@@ -122,6 +122,43 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
       expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
     }
   });
+
+  test("schema constraints cannot hide inside applicator branches", () => {
+    const applicators = ["anyOf", "allOf", "oneOf", "prefixItems"];
+    for (const keyword of applicators) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: {
+            value: { [keyword]: [{ type: "string", pattern: "[" }] },
+          },
+        },
+      });
+      expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
+    }
+  });
+
+  test("serialized RegExp flags are validated with their source", () => {
+    const valid = validTool({
+      inputSchema: {
+        type: "object",
+        properties: {
+          value: { type: "RegExp", source: "^[a-f]+$", flags: "iu" },
+        },
+      },
+    });
+    const invalid = validTool({
+      inputSchema: {
+        type: "object",
+        properties: {
+          value: { type: "RegExp", source: "^[a-f]+$", flags: "x" },
+        },
+      },
+    });
+
+    expect(validateFetchedToolsList(body([valid])).ok).toBe(true);
+    expect(validateFetchedToolsList(body([invalid])).ok).toBe(false);
+  });
 });
 
 describe("validateFetchedToolsList: rule 3 (size/depth caps)", () => {

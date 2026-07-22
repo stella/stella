@@ -17,4 +17,19 @@ describe("compileSchemaPattern", () => {
   test("returns an invalid result for unsupported syntax", () => {
     expect(compileSchemaPattern("[")).toEqual({ status: "invalid" });
   });
+
+  test("preserves serialized flags and always enables Unicode mode", () => {
+    const compiled = compileSchemaPattern("^[a-f]+$", "i");
+
+    expect(compiled.status).toBe("valid");
+    if (compiled.status === "valid") {
+      expect(compiled.regex.flags).toContain("i");
+      expect(compiled.regex.flags).toContain("u");
+      expect(compiled.regex.test("ABCDEF")).toBe(true);
+    }
+  });
+
+  test("rejects unsupported serialized flags", () => {
+    expect(compileSchemaPattern("value", "x")).toEqual({ status: "invalid" });
+  });
 });
