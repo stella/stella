@@ -324,7 +324,8 @@ const renderSchema = ({
     );
     if (
       itemSchema !== undefined &&
-      alternativeGroupsOf(itemSchema).length > 0
+      (alternativeGroupsAcrossAllOf(itemSchema).length > 0 ||
+        mapEntrySchemas(itemSchema).length > 0)
     ) {
       renderSchema({
         path: `${path}[]`,
@@ -335,7 +336,7 @@ const renderSchema = ({
       });
     } else if (
       itemSchema !== undefined &&
-      Object.keys(propertiesOf(itemSchema)).length > 0
+      hasNamedPropertiesAcrossAllOf(itemSchema)
     ) {
       renderObjectChildren({
         path: `${path}[]`,

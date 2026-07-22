@@ -598,6 +598,74 @@ describe("--input contract help", () => {
     expect(rendered).toContain("events[].reason  string  required");
   });
 
+  test("documents array item variants inherited through allOf", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        events: {
+          type: "array",
+          items: {
+            type: "object",
+            allOf: [
+              {
+                anyOf: [
+                  {
+                    properties: { type: { const: "created" } },
+                    required: ["type"],
+                  },
+                  {
+                    properties: { type: { const: "deleted" } },
+                    required: ["type"],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+      required: ["events"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["events"] });
+
+    expect(
+      help?.fields.some((line) =>
+        line.includes('events[].type  "created"  required'),
+      ),
+    ).toBe(true);
+    expect(
+      help?.fields.some((line) =>
+        line.includes('events[].type  "deleted"  required'),
+      ),
+    ).toBe(true);
+  });
+
+  test("documents array item maps inherited through allOf", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        events: {
+          type: "array",
+          items: {
+            type: "object",
+            allOf: [
+              {
+                patternProperties: { "^meta-": { type: "string" } },
+              },
+            ],
+          },
+        },
+      },
+      required: ["events"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["events"] });
+
+    expect(help?.fields).toContain(
+      "  events[].<key>  string; key matches ^meta-  required",
+    );
+  });
+
   test("derives nested requiredness from the field's immediate parent", () => {
     const schema: JsonSchema = {
       type: "object",
