@@ -215,6 +215,49 @@ describe("discoverTemplate", () => {
     });
   });
 
+  test("preserves dotted condition-only inputs", async () => {
+    const xml = WRAP(
+      [P("{{#if client.has_spouse}}"), P("Spouse details"), P("{{/if}}")].join(
+        "",
+      ),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(
+      result.fields.find((field) => field.path === "client.has_spouse"),
+    ).toEqual({
+      path: "client.has_spouse",
+      kind: "boolean",
+      count: 1,
+    });
+  });
+
+  test("nested loops expose condition inputs at every inherited row scope", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("{{#each groups.items}}"),
+        P("{{#if group_enabled}}"),
+        P("Item"),
+        P("{{/if}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const groups = result.fields.find((field) => field.path === "groups");
+    const items = result.fields.find((field) => field.path === "groups.items");
+    expect(groups?.itemFields?.map((field) => field.path)).toContain(
+      "group_enabled",
+    );
+    expect(items?.itemFields?.map((field) => field.path)).toContain(
+      "group_enabled",
+    );
+  });
+
   test("nested object path infers object field", async () => {
     const xml = WRAP(
       [

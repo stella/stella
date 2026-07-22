@@ -139,6 +139,63 @@ describe("template input contract", () => {
     ).toEqual([]);
   });
 
+  test("raw dotted condition fields accept nested values and reject siblings", () => {
+    const sources = collectRawTemplateInputSources({
+      fields: [{ path: "client.has_spouse", kind: "boolean" }],
+      placeholderPaths: [],
+    });
+    const contract = collectTemplateInputKeys({ type: "raw", ...sources });
+
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: { client: { has_spouse: true } },
+      }),
+    ).toEqual([]);
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: { client: { has_spouse: true, typo: true } },
+      }),
+    ).toEqual(["client.typo"]);
+  });
+
+  test("nested loop contracts accept inherited outer-row condition fields", () => {
+    const sources = collectRawTemplateInputSources({
+      fields: [
+        {
+          path: "groups",
+          kind: "array",
+          itemFields: [{ path: "group_enabled", kind: "boolean" }],
+        },
+        {
+          path: "groups.items",
+          kind: "array",
+          itemFields: [{ path: "group_enabled", kind: "boolean" }],
+        },
+      ],
+      placeholderPaths: [],
+    });
+    const contract = collectTemplateInputKeys({ type: "raw", ...sources });
+
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: {
+          groups: [{ group_enabled: true, items: [{}, {}] }],
+        },
+      }),
+    ).toEqual([]);
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: {
+          groups: [{ group_enabled: true, typo: true, items: [{}] }],
+        },
+      }),
+    ).toEqual(["groups.typo"]);
+  });
+
   test("manifest templates accept live descendants but exclude derived outputs", () => {
     const contract = collectTemplateInputKeys({
       type: "manifest",

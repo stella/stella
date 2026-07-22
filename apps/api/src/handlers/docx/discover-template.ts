@@ -76,7 +76,7 @@ const kindPriority = (kind: TemplateFieldKind): number => {
 const registerConditionFields = (
   fields: FieldAccumulator,
   condition: string,
-  rowPath?: string | undefined,
+  rowPaths: readonly string[] = [],
 ): void => {
   const root = parseCondition(condition);
   if (!root) {
@@ -85,15 +85,24 @@ const registerConditionFields = (
 
   const registerPath = (path: string, kind: "boolean" | "string"): void => {
     registerField(fields, path, kind);
-    if (rowPath === undefined) {
+
+    const isQualifiedRowPath = rowPaths.some(
+      (rowPath) => path === rowPath || path.startsWith(`${rowPath}.`),
+    );
+    if (isQualifiedRowPath) {
+      for (const rowPath of rowPaths) {
+        const rowPrefix = `${rowPath}.`;
+        if (path.startsWith(rowPrefix)) {
+          fields.get(rowPath)?.itemPaths.add(path.slice(rowPrefix.length));
+        }
+      }
       return;
     }
-    const rowPrefix = `${rowPath}.`;
-    const rowFieldPath = path.startsWith(rowPrefix)
-      ? path
-      : `${rowPrefix}${path}`;
-    registerField(fields, rowFieldPath, kind);
-    fields.get(rowPath)?.itemPaths.add(rowFieldPath.slice(rowPrefix.length));
+
+    for (const rowPath of rowPaths) {
+      registerField(fields, `${rowPath}.${path}`, kind);
+      fields.get(rowPath)?.itemPaths.add(path);
+    }
   };
 
   const visit = (node: ConditionNode): void => {
@@ -323,11 +332,7 @@ const analyzeContainer = (
       activeArrays.pop();
     }
     if (directive?.kind === "if" || directive?.kind === "elseif") {
-      registerConditionFields(
-        fields,
-        directive.expression,
-        activeArrays.at(-1),
-      );
+      registerConditionFields(fields, directive.expression, activeArrays);
     }
     if (directive?.kind === "each") {
       registerField(fields, directive.expression, "array");
@@ -418,11 +423,7 @@ const analyzeContainer = (
         }
 
         for (const branch of group.branches) {
-          registerConditionFields(
-            fields,
-            branch.condition,
-            arrayScopes.get(i)?.at(-1),
-          );
+          registerConditionFields(fields, branch.condition, arrayScopes.get(i));
         }
       }
     }
@@ -662,12 +663,17 @@ export const discoverTemplate = async (
 
   // Build DiscoveredField[]
   const discoveredFields: DiscoveredField[] = [];
+  const arrayPaths = [...fields]
+    .filter(([, info]) => info.kind === "array")
+    .map(([path]) => path);
   for (const [path, info] of fields) {
-    // Dotted scalar fields are represented by their structural object root
-    // and by the placeholder list. Array roots remain first-class fields even
-    // when dotted: dropping them would erase the primitive-row contract for a
-    // valid loop such as `deal.tags`.
-    if (path.includes(".") && info.kind !== "array") {
+    // Repeated-row descendants are represented relative to their array root.
+    // Other dotted fields remain first-class: condition-only paths have no
+    // placeholder entry, and filtering them here would erase valid inputs.
+    const isRepeatedRowDescendant = arrayPaths.some((arrayPath) =>
+      path.startsWith(`${arrayPath}.`),
+    );
+    if (info.kind !== "array" && isRepeatedRowDescendant) {
       continue;
     }
 
