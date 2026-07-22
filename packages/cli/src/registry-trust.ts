@@ -13,6 +13,7 @@ import { Result } from "better-result";
 import { createHash } from "node:crypto";
 
 import type { RegistryToolListing } from "./route-types.js";
+import { compileSchemaPattern } from "./schema-pattern.js";
 
 // --- Size / depth caps (spec S5.5 rule 3), named constants, not literals. ---
 /** Reject a whole fetched body larger than this (bytes). */
@@ -25,7 +26,7 @@ export const MAX_TOOLS = 200;
 // The deepest baked-in schema is `save_template` (depth 7); the largest enum is
 // `set_practice_jurisdictions` (250). Both were raised from their spec S5.5
 // starting values (depth 6, enum 200) once the real registry exceeded them.
-/** Reject an `inputSchema` nested deeper than this (also catches `$ref` cycles). */
+/** Reject an `inputSchema` nested deeper than this. */
 export const MAX_SCHEMA_DEPTH = 8;
 /** Reject a single tool whose serialized `inputSchema` exceeds this (bytes). */
 export const MAX_TOOL_SCHEMA_BYTES: number = 64 * 1024; // 64 KiB
@@ -58,6 +59,56 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>
   Array.isArray(value);
 
+const SCHEMA_ARRAY_KEYWORDS = ["allOf", "anyOf", "oneOf"] as const;
+
+// This is intentionally an allowlist, not only a list of known-dangerous
+// keywords. The fetched registry is executable CLI configuration: a new JSON
+// Schema keyword must not become trusted until validation and help implement
+// the same semantics.
+const SUPPORTED_SCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
+  "additionalProperties",
+  "allOf",
+  "anyOf",
+  "const",
+  "default",
+  "description",
+  "enum",
+  "examples",
+  "flags",
+  "items",
+  "maxItems",
+  "maxLength",
+  "maximum",
+  "minItems",
+  "minLength",
+  "minimum",
+  "oneOf",
+  "pattern",
+  "patternProperties",
+  "properties",
+  "required",
+  "source",
+  "title",
+  "type",
+]);
+
+const UNSUPPORTED_SCHEMA_KEYWORDS = [
+  "$defs",
+  "$ref",
+  "contains",
+  "definitions",
+  "dependencies",
+  "dependentRequired",
+  "dependentSchemas",
+  "else",
+  "if",
+  "not",
+  "propertyNames",
+  "then",
+  "unevaluatedItems",
+  "unevaluatedProperties",
+] as const;
+
 /** Pull the `tools` array from a tools/list body (bare, `{tools}`, or envelope). */
 const extractTools = (parsed: unknown): readonly unknown[] | undefined => {
   if (isUnknownArray(parsed)) {
@@ -75,8 +126,8 @@ const extractTools = (parsed: unknown): readonly unknown[] | undefined => {
 
 /**
  * Walk one `inputSchema` subtree enforcing the depth/enum/props caps and the
- * no-remote-`$ref` rule. Interpreted recursion with an explicit depth counter;
- * the depth cap bounds resolution and catches any `$ref` cycle (rule 4).
+ * supported schema-vocabulary rule. Interpreted recursion with an explicit
+ * depth counter bounds registry-controlled work.
  * Returns a violation string, or `undefined` when the subtree is within bounds.
  */
 const walkSchema = (schema: unknown, depth: number): string | undefined => {
@@ -87,9 +138,20 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
     return undefined;
   }
 
-  const ref = schema["$ref"];
-  if (ref !== undefined && (typeof ref !== "string" || !ref.startsWith("#/"))) {
-    return "only local #/... $ref is allowed";
+  if (schema["prefixItems"] !== undefined) {
+    return "prefixItems tuple schemas are unsupported";
+  }
+
+  for (const keyword of UNSUPPORTED_SCHEMA_KEYWORDS) {
+    if (schema[keyword] !== undefined) {
+      return `${keyword} schema constraints are unsupported`;
+    }
+  }
+
+  for (const keyword of Object.keys(schema)) {
+    if (!SUPPORTED_SCHEMA_KEYWORDS.has(keyword)) {
+      return `${keyword} schema constraints are unsupported`;
+    }
   }
 
   const enumValues = schema["enum"];
@@ -97,12 +159,81 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
     return `enum larger than ${MAX_ENUM}`;
   }
 
+  const pattern = schema["pattern"];
+  if (pattern !== undefined) {
+    if (typeof pattern !== "string") {
+      return "schema pattern must be a string";
+    }
+    if (compileSchemaPattern(pattern).status === "invalid") {
+      return "schema pattern is invalid";
+    }
+  }
+
+  if (schema["type"] === "RegExp") {
+    const source = schema["source"];
+    const flags = schema["flags"];
+    if (
+      typeof source !== "string" ||
+      (flags !== undefined && typeof flags !== "string") ||
+      compileSchemaPattern(
+        source,
+        typeof flags === "string" ? flags : undefined,
+      ).status === "invalid"
+    ) {
+      return "RegExp schema source or flags are invalid";
+    }
+  }
+
+  for (const keyword of SCHEMA_ARRAY_KEYWORDS) {
+    const branches = schema[keyword];
+    if (branches === undefined) {
+      continue;
+    }
+    if (!isUnknownArray(branches)) {
+      return `${keyword} must be an array`;
+    }
+    for (const branch of branches) {
+      if (!isRecord(branch)) {
+        return `${keyword} contains an invalid schema`;
+      }
+      const violation = walkSchema(branch, depth + 1);
+      if (violation !== undefined) {
+        return violation;
+      }
+    }
+  }
+
   const properties = schema["properties"];
+  if (properties !== undefined && !isRecord(properties)) {
+    return "properties must be an object";
+  }
   if (isRecord(properties)) {
     if (Object.keys(properties).length > MAX_PROPS) {
       return `properties object larger than ${MAX_PROPS}`;
     }
     for (const child of Object.values(properties)) {
+      if (!isRecord(child)) {
+        return "properties contains an invalid schema";
+      }
+      const violation = walkSchema(child, depth + 1);
+      if (violation !== undefined) {
+        return violation;
+      }
+    }
+  }
+
+  const patternProperties = schema["patternProperties"];
+  if (patternProperties !== undefined && !isRecord(patternProperties)) {
+    return "patternProperties must be an object";
+  }
+  if (isRecord(patternProperties)) {
+    for (const [childPattern, child] of Object.entries(patternProperties)) {
+      if (compileSchemaPattern(childPattern).status === "invalid") {
+        return "patternProperties contains an invalid pattern";
+      }
+      if (!isRecord(child)) {
+        return "patternProperties contains an invalid schema";
+      }
       const violation = walkSchema(child, depth + 1);
       if (violation !== undefined) {
         return violation;
@@ -112,12 +243,9 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
 
   const items = schema["items"];
   if (Array.isArray(items)) {
-    for (const item of items) {
-      const violation = walkSchema(item, depth + 1);
-      if (violation !== undefined) {
-        return violation;
-      }
-    }
+    return "array-valued items tuple schemas are unsupported";
+  } else if (items !== undefined && !isRecord(items)) {
+    return "items must be a schema";
   } else if (isRecord(items)) {
     const violation = walkSchema(items, depth + 1);
     if (violation !== undefined) {
@@ -126,6 +254,13 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
   }
 
   const additional = schema["additionalProperties"];
+  if (
+    additional !== undefined &&
+    typeof additional !== "boolean" &&
+    !isRecord(additional)
+  ) {
+    return "additionalProperties must be a boolean or schema";
+  }
   if (isRecord(additional)) {
     return walkSchema(additional, depth + 1);
   }

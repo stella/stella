@@ -29,7 +29,7 @@ describe("validateFetchedToolsList: rule 1 (interpreted, no eval)", () => {
       inputSchema: {
         type: "object",
         properties: {
-          x: { type: "string", format: "email", pattern: ".*" },
+          x: { type: "string", pattern: ".*" },
         },
       },
     });
@@ -99,6 +99,165 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
   test("a non-boolean annotation hint is rejected", () => {
     const tool = validTool({ annotations: { readOnlyHint: "yes" } });
     expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
+  });
+
+  test("invalid schema regex patterns are rejected at the trust boundary", () => {
+    const invalidPatterns = [
+      { type: "string", pattern: "[" },
+      {
+        type: "object",
+        properties: {},
+        patternProperties: { "(?": { type: "string" } },
+      },
+      { type: "RegExp", source: "[" },
+    ];
+
+    for (const child of invalidPatterns) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: { value: child },
+        },
+      });
+      expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
+    }
+  });
+
+  test("schema constraints cannot hide inside applicator branches", () => {
+    const applicators = ["anyOf", "allOf", "oneOf"];
+    for (const keyword of applicators) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: {
+            value: { [keyword]: [{ type: "string", pattern: "[" }] },
+          },
+        },
+      });
+      expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
+    }
+  });
+
+  test("unsupported tuple array schemas fail closed", () => {
+    const unsupportedTuples = [
+      {
+        schema: { prefixItems: [{ type: "string" }, { type: "integer" }] },
+        violation: "prefixItems tuple schemas are unsupported",
+      },
+      {
+        schema: { items: [{ type: "string" }, { type: "integer" }] },
+        violation: "array-valued items tuple schemas are unsupported",
+      },
+    ];
+
+    for (const { schema, violation } of unsupportedTuples) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: { value: { type: "array", ...schema } },
+        },
+      });
+
+      expect(validateFetchedToolsList(body([tool]))).toEqual({
+        ok: false,
+        violation: `tool list_matters: ${violation}`,
+      });
+    }
+  });
+
+  test("unimplemented structural schema keywords fail closed", () => {
+    const unsupportedKeywords = [
+      ["$defs", { child: { type: "string" } }],
+      ["$ref", "#/definitions/child"],
+      ["contains", { const: "sentinel" }],
+      ["definitions", { child: { type: "string" } }],
+      ["dependencies", { mode: ["value"] }],
+      ["dependentRequired", { mode: ["value"] }],
+      ["dependentSchemas", { mode: { required: ["value"] } }],
+      ["else", { required: ["fallback"] }],
+      ["format", "email"],
+      ["if", { required: ["mode"] }],
+      ["not", { const: "forbidden" }],
+      ["propertyNames", { pattern: "^safe-" }],
+      ["then", { required: ["value"] }],
+      ["unevaluatedItems", { type: "string" }],
+      ["unevaluatedProperties", false],
+    ] as const;
+
+    for (const [keyword, constraint] of unsupportedKeywords) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: { value: { [keyword]: constraint } },
+        },
+      });
+
+      expect(validateFetchedToolsList(body([tool]))).toEqual({
+        ok: false,
+        violation: `tool list_matters: ${keyword} schema constraints are unsupported`,
+      });
+    }
+  });
+
+  test("unknown schema vocabulary fails closed by default", () => {
+    const tool = validTool({
+      inputSchema: {
+        type: "object",
+        properties: { value: { futureConstraint: true } },
+      },
+    });
+
+    expect(validateFetchedToolsList(body([tool]))).toEqual({
+      ok: false,
+      violation:
+        "tool list_matters: futureConstraint schema constraints are unsupported",
+    });
+  });
+
+  test("unsupported subschema shapes fail closed in every traversed container", () => {
+    const invalidChildren = [
+      { anyOf: [true] },
+      { allOf: ["not-a-schema"] },
+      { properties: { child: 42 } },
+      { properties: [] },
+      { patternProperties: { ".*": "not-a-schema" } },
+      { patternProperties: [] },
+      { additionalProperties: "not-a-schema" },
+      { items: null },
+      { $defs: { child: false } },
+    ];
+
+    for (const child of invalidChildren) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: { value: child },
+        },
+      });
+      expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
+    }
+  });
+
+  test("serialized RegExp flags are validated with their source", () => {
+    const valid = validTool({
+      inputSchema: {
+        type: "object",
+        properties: {
+          value: { type: "RegExp", source: "^[a-f]+$", flags: "iu" },
+        },
+      },
+    });
+    const invalid = validTool({
+      inputSchema: {
+        type: "object",
+        properties: {
+          value: { type: "RegExp", source: "^[a-f]+$", flags: "x" },
+        },
+      },
+    });
+
+    expect(validateFetchedToolsList(body([valid])).ok).toBe(true);
+    expect(validateFetchedToolsList(body([invalid])).ok).toBe(false);
   });
 });
 
@@ -181,14 +340,14 @@ describe("validateFetchedToolsList: rule 4 (no executable content)", () => {
     expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
   });
 
-  test("a local #/ $ref is accepted", () => {
+  test("a local #/ $ref is rejected until the interpreter resolves it", () => {
     const tool = validTool({
       inputSchema: {
         type: "object",
         properties: { x: { $ref: "#/definitions/y" } },
       },
     });
-    expect(validateFetchedToolsList(body([tool])).ok).toBe(true);
+    expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
   });
 });
 

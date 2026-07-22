@@ -298,6 +298,22 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     const spec = capSpec({
       capabilityId: "uploads.create",
       flags: [stringFlag("--workspace", "params", "workspaceId", true)],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          body: {
+            type: "object",
+            additionalProperties: false,
+            properties: { purpose: { type: "string" } },
+          },
+          params: {
+            type: "object",
+            additionalProperties: false,
+            properties: { workspaceId: { type: "string" } },
+          },
+        },
+      },
     });
     const tty = makeTtyContext({
       serverUrl: server.url,
@@ -328,6 +344,17 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     const spec = capSpec({
       capabilityId: "uploads.create",
       flags: [stringFlag("--workspace", "params", "workspaceId", true)],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          params: {
+            type: "object",
+            additionalProperties: false,
+            properties: { workspaceId: { type: "string" } },
+          },
+        },
+      },
     });
     const tty = makeTtyContext({
       serverUrl: server.url,

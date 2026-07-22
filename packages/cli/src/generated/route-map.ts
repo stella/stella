@@ -58608,7 +58608,7 @@ export const generatedRouteMap: RouteNode = {
                 partPath: "workspaceId",
               },
             ],
-            inputOnly: [],
+            inputOnly: ["body"],
             paginated: false,
             destructive: false,
             scope: "matters_write",

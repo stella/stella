@@ -77,6 +77,97 @@ describe("capabilityCommandPath", () => {
 });
 
 describe("deriveCapabilityLeaf: flags", () => {
+  test("property-less dynamic maps make the whole input part input-only", () => {
+    const dynamicSchemas = [
+      { type: "object", additionalProperties: { type: "string" } },
+      {
+        type: "object",
+        patternProperties: { "^meta-": { type: "string" } },
+      },
+    ];
+
+    for (const body of dynamicSchemas) {
+      const { spec } = deriveCapabilityLeaf(
+        entry({
+          id: "metadata.replace",
+          inputSchema: { body },
+        }),
+      );
+
+      expect(spec.flags).toHaveLength(0);
+      expect(spec.inputOnly).toEqual(["body"]);
+    }
+  });
+
+  test("allOf-inherited dynamic maps make the whole input part input-only", () => {
+    const { spec } = deriveCapabilityLeaf(
+      entry({
+        id: "metadata.replace",
+        inputSchema: {
+          body: {
+            allOf: [
+              {
+                allOf: [
+                  {
+                    patternProperties: { "^meta-": { type: "string" } },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(spec.flags).toHaveLength(0);
+    expect(spec.inputOnly).toEqual(["body"]);
+  });
+
+  test("property-less oneOf bodies make the whole input part input-only", () => {
+    const { spec } = deriveCapabilityLeaf(
+      entry({
+        id: "events.create",
+        inputSchema: {
+          body: {
+            oneOf: [
+              objectSchema({ type: { type: "string", const: "created" } }),
+              objectSchema({ type: { type: "string", const: "deleted" } }),
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(spec.inputOnly).toEqual(["body"]);
+  });
+
+  test("mixed alternative and dynamic-map bodies keep flags plus the input contract", () => {
+    const mixedSchemas = [
+      {
+        ...objectSchema({ token: { type: "string" } }, ["token"]),
+        anyOf: [
+          objectSchema({ kind: { type: "string", const: "a" } }, ["kind"]),
+        ],
+      },
+      {
+        ...objectSchema({ token: { type: "string" } }, ["token"]),
+        patternProperties: { "^meta-": { type: "string" } },
+      },
+    ];
+
+    for (const body of mixedSchemas) {
+      const { spec } = deriveCapabilityLeaf(
+        entry({
+          id: "events.create",
+          inputSchema: { body },
+        }),
+      );
+
+      expect(flagByCli(spec, "--token")).toBeDefined();
+      expect(spec.inputOnly).toEqual(["body"]);
+    }
+  });
+
   test("scalar body props become bare flags routed to input.body", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({

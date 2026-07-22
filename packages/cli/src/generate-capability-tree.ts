@@ -125,6 +125,28 @@ const requiredSet = (schema: JsonSchema | undefined): ReadonlySet<string> => {
   return new Set(raw.filter((r): r is string => typeof r === "string"));
 };
 
+const hasDynamicObjectKeys = (schema: JsonSchema): boolean =>
+  schema["additionalProperties"] === true ||
+  isRecord(schema["additionalProperties"]) ||
+  isRecord(schema["patternProperties"]);
+
+const hasSchemaAlternatives = (schema: JsonSchema): boolean =>
+  Array.isArray(schema["anyOf"]) || Array.isArray(schema["oneOf"]);
+
+const requiresWholePartInput = (schema: JsonSchema): boolean => {
+  if (hasSchemaAlternatives(schema) || hasDynamicObjectKeys(schema)) {
+    return true;
+  }
+  const intersections = schema["allOf"];
+  return (
+    Array.isArray(intersections) &&
+    intersections.some(
+      (intersection) =>
+        isRecord(intersection) && requiresWholePartInput(intersection),
+    )
+  );
+};
+
 /**
  * The input part carrying the `cursor`+`limit` pagination pair (query wins over
  * body when both somehow declare it), or `undefined` for a non-paginated
@@ -166,6 +188,11 @@ const candidatesForPart = ({
   inputOnly: string[];
 }): Candidate[] => {
   const properties = propertyMap(schema);
+  const wholePartInputOnly =
+    schema !== undefined && requiresWholePartInput(schema);
+  if (wholePartInputOnly) {
+    inputOnly.push(part);
+  }
   const required = requiredSet(schema);
   const candidates: Candidate[] = [];
   for (const [prop, propSchema] of Object.entries(properties)) {
@@ -174,7 +201,9 @@ const candidatesForPart = ({
     }
     const classification = classifyProp(prop, propSchema);
     if (classification.kind === "input-only") {
-      inputOnly.push(`${part}.${prop}`);
+      if (!wholePartInputOnly) {
+        inputOnly.push(`${part}.${prop}`);
+      }
       continue;
     }
     const specs =
