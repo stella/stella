@@ -3,11 +3,17 @@ type FindUnusedTemplateValueKeysOptions = {
   values: Record<string, unknown>;
 };
 
-type CollectTemplateInputKeysOptions = {
-  discoveredFieldPaths: Iterable<string>;
-  manifestFieldPaths: Iterable<string>;
-  placeholderPaths: Iterable<string>;
-};
+type TemplateInputKeySources =
+  | {
+      type: "raw";
+      livePaths: Iterable<string>;
+    }
+  | {
+      type: "manifest";
+      derivedOutputPaths: Iterable<string>;
+      fillableFieldPaths: Iterable<string>;
+      livePaths: Iterable<string>;
+    };
 
 type TemplateInputField = {
   condition?: unknown;
@@ -22,16 +28,39 @@ export const isFillableTemplateInputField = (
   field.condition === undefined &&
   field.conditionAst === undefined;
 
-export const collectTemplateInputKeys = ({
-  discoveredFieldPaths,
-  manifestFieldPaths,
-  placeholderPaths,
-}: CollectTemplateInputKeysOptions): ReadonlySet<string> =>
-  new Set([
-    ...discoveredFieldPaths,
-    ...manifestFieldPaths,
-    ...placeholderPaths,
-  ]);
+export const collectTemplateInputKeys = (
+  sources: TemplateInputKeySources,
+): ReadonlySet<string> => {
+  if (sources.type === "raw") {
+    return new Set(sources.livePaths);
+  }
+
+  const fillableFieldPaths = new Set(sources.fillableFieldPaths);
+  const derivedOutputPaths = new Set(sources.derivedOutputPaths);
+  const acceptedPaths = new Set(fillableFieldPaths);
+  for (const livePath of sources.livePaths) {
+    if (
+      isAtOrBelowAny(livePath, derivedOutputPaths) ||
+      !isBelowAny(livePath, fillableFieldPaths)
+    ) {
+      continue;
+    }
+    acceptedPaths.add(livePath);
+  }
+  return acceptedPaths;
+};
+
+const isAtOrBelowAny = (path: string, roots: ReadonlySet<string>): boolean =>
+  roots.has(path) || isBelowAny(path, roots);
+
+const isBelowAny = (path: string, roots: ReadonlySet<string>): boolean => {
+  for (const root of roots) {
+    if (path.startsWith(`${root}.`)) {
+      return true;
+    }
+  }
+  return false;
+};
 
 /**
  * Compare submitted top-level or already-flattened keys with every value path

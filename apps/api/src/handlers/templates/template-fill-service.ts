@@ -311,27 +311,41 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   if (unusedValuePolicy === "reject") {
     const discovered = await discoverTemplate(loaded.buffer);
+    const livePaths = [
+      ...discovered.fields.flatMap((field) => [
+        field.path,
+        ...(field.itemFields === undefined
+          ? []
+          : field.itemFields.map(
+              (itemField) => `${field.path}.${itemField.path}`,
+            )),
+      ]),
+      ...discovered.placeholders.map((placeholder) => placeholder.name),
+    ];
     const declaredKeys =
       manifest === null
         ? collectTemplateInputKeys({
-            discoveredFieldPaths: discovered.fields.flatMap((field) => [
-              field.path,
-              ...(field.itemFields === undefined
-                ? []
-                : field.itemFields.map(
-                    (itemField) => `${field.path}.${itemField.path}`,
-                  )),
-            ]),
-            manifestFieldPaths: [],
-            placeholderPaths: discovered.placeholders.map(
-              (placeholder) => placeholder.name,
-            ),
+            type: "raw",
+            livePaths,
           })
-        : new Set(
-            manifest.fields
+        : collectTemplateInputKeys({
+            type: "manifest",
+            derivedOutputPaths: manifest.fields.flatMap((field) => {
+              const paths = isFillableTemplateInputField(field)
+                ? []
+                : [field.path];
+              if (field.lookup !== undefined) {
+                for (const format of field.lookup.formats) {
+                  paths.push(`${field.path}.${format.key}`);
+                }
+              }
+              return paths;
+            }),
+            fillableFieldPaths: manifest.fields
               .filter(isFillableTemplateInputField)
               .map((field) => field.path),
-          );
+            livePaths,
+          });
     const unusedKeys = findUnusedTemplateValueKeys({
       declaredKeys,
       values,

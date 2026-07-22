@@ -23,22 +23,102 @@ describe("template input contract", () => {
     expect(isFillableTemplateInputField({ conditionAst: {} })).toBe(false);
   });
 
-  test("combines discovery, placeholders, and manifest-only fields", () => {
+  test("raw templates accept every live discovered path", () => {
     expect(
       collectTemplateInputKeys({
-        discoveredFieldPaths: ["client.name"],
-        manifestFieldPaths: ["client.type", "rent", "rent_annual"],
-        placeholderPaths: ["signature_date"],
+        type: "raw",
+        livePaths: ["client.name", "signature_date"],
       }),
-    ).toEqual(
-      new Set([
-        "client.name",
-        "client.type",
-        "rent",
-        "rent_annual",
-        "signature_date",
-      ]),
-    );
+    ).toEqual(new Set(["client.name", "signature_date"]));
+  });
+
+  test("manifest templates accept live descendants but exclude derived outputs", () => {
+    expect(
+      collectTemplateInputKeys({
+        type: "manifest",
+        derivedOutputPaths: ["company.full", "rent_annual"],
+        fillableFieldPaths: ["company", "rent"],
+        livePaths: [
+          "company",
+          "company.full",
+          "company.seat",
+          "rent",
+          "rent_annual",
+          "unlisted",
+        ],
+      }),
+    ).toEqual(new Set(["company", "company.seat", "rent"]));
+  });
+
+  test("manifest derived subtrees cannot leak through deeper live markers", () => {
+    expect(
+      collectTemplateInputKeys({
+        type: "manifest",
+        derivedOutputPaths: ["company.full"],
+        fillableFieldPaths: ["company"],
+        livePaths: ["company.full.address"],
+      }),
+    ).toEqual(new Set(["company"]));
+  });
+
+  test("manifest paths cannot be accepted outside a fillable root", () => {
+    expect(
+      collectTemplateInputKeys({
+        type: "manifest",
+        derivedOutputPaths: [],
+        fillableFieldPaths: ["company"],
+        livePaths: ["unlisted.value"],
+      }),
+    ).toEqual(new Set(["company"]));
+  });
+
+  test("manifest-only fillable fields remain accepted", () => {
+    expect(
+      collectTemplateInputKeys({
+        type: "manifest",
+        derivedOutputPaths: [],
+        fillableFieldPaths: ["client.type", "rent"],
+        livePaths: [],
+      }),
+    ).toEqual(new Set(["client.type", "rent"]));
+  });
+
+  test("raw and manifest input policies are discriminated", () => {
+    expect(
+      collectTemplateInputKeys({
+        type: "raw",
+        livePaths: ["company.full"],
+      }),
+    ).toEqual(new Set(["company.full"]));
+    expect(
+      collectTemplateInputKeys({
+        type: "manifest",
+        derivedOutputPaths: ["company.full"],
+        fillableFieldPaths: ["company"],
+        livePaths: ["company.full"],
+      }),
+    ).toEqual(new Set(["company"]));
+  });
+
+  test("manifest nested live paths support flattened input", () => {
+    const declaredKeys = collectTemplateInputKeys({
+      type: "manifest",
+      derivedOutputPaths: [],
+      fillableFieldPaths: ["company"],
+      livePaths: ["company.seat"],
+    });
+    expect(
+      findUnusedTemplateValueKeys({
+        declaredKeys,
+        values: { "company.seat": "Prague" },
+      }),
+    ).toEqual([]);
+    expect(
+      findUnusedTemplateValueKeys({
+        declaredKeys,
+        values: { company: { namme: "typo" } },
+      }),
+    ).toEqual(["company.namme"]);
   });
 
   test("accepts top-level and flattened declared paths", () => {
