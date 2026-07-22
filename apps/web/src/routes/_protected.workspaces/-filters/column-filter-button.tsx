@@ -59,8 +59,8 @@ export const ColumnFilterButton = ({
       case "createdAt":
         return filters.createdAt !== undefined;
       default: {
-        const exhaustive: never = columnId;
-        return exhaustive;
+        columnId satisfies never;
+        return false;
       }
     }
   })();

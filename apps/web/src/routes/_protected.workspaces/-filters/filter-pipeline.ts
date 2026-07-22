@@ -100,8 +100,8 @@ const resolveDateRange = (
       return { fromMs, toMs };
     }
     default: {
-      const exhaustive: never = filter.preset;
-      return exhaustive;
+      filter.preset satisfies never;
+      return null;
     }
   }
 };
@@ -141,8 +141,8 @@ const passesLeadFilter = (
     case "user":
       return workspace.leadUserId === filter.userId;
     default: {
-      const exhaustive: never = filter;
-      return exhaustive;
+      filter satisfies never;
+      return false;
     }
   }
 };

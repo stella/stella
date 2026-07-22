@@ -536,8 +536,8 @@ const parseCursorValue = (
       return isValidTimestampCursorValue(value) ? value : null;
     }
     default: {
-      const exhaustive: never = key.type;
-      return exhaustive;
+      key.type satisfies never;
+      return null;
     }
   }
 };

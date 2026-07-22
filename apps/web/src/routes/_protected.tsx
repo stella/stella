@@ -606,8 +606,8 @@ const getInspectorTabWorkspaceId = (
     case "view":
       return undefined;
     default: {
-      const exhaustive: never = tab;
-      return exhaustive;
+      tab satisfies never;
+      return undefined;
     }
   }
 };
