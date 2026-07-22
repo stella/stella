@@ -1098,6 +1098,45 @@
   },
   {
     "cli": {
+      "command": ["contact", "list"],
+      "scope": "read",
+      "itemsKey": "items"
+    },
+    "name": "list_contacts",
+    "description": "List or search the organization's internal contact directory. Returns internal contact IDs accepted by read_contact, save_contact, and link_matter_contact. Use q to search display names and type to filter people or organizations.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "q": {
+          "type": "string",
+          "description": "Search contact display names",
+          "maxLength": 512
+        },
+        "type": {
+          "type": "string",
+          "enum": ["person", "organization"],
+          "description": "Contact kind"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from the previous page"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum contacts to return",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
       "command": ["contact", "save"],
       "scope": "matters_write"
     },
@@ -1179,7 +1218,7 @@
       "scope": "read"
     },
     "name": "lookup_business_registry",
-    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details.",
+    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details. Result IDs belong to the external registry, not stella's contact directory; create a contact with save_contact before using read_contact.",
     "inputSchema": {
       "type": "object",
       "properties": {

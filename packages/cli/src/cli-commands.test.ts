@@ -240,7 +240,14 @@ describe("one-command document upload", () => {
     putUrl = `${server.url}/presigned/upload-1`;
 
     const result = await runCli({
-      args: ["upload", "--workspace", "workspace-1", "--file", filePath],
+      args: [
+        "upload",
+        "--workspace",
+        "workspace-1",
+        "--file",
+        filePath,
+        "--json",
+      ],
       url: server.url,
       token: WRITE,
     });
@@ -287,6 +294,7 @@ describe("one-command document upload", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--file");
     expect(result.stdout).toContain("--workspace");
+    expect(result.stdout).toContain("--json");
     expect(result.stdout).toContain("computes its SHA-256 checksum");
     expect(server.requests).toHaveLength(0);
   });
@@ -334,6 +342,39 @@ describe("one-command document upload", () => {
       "stella capability uploads update --workspace-id workspace-1 --upload-id upload-1",
     );
     expect(result.stderr).not.toContain("stella uploads update");
+  });
+});
+
+describe("contact discovery", () => {
+  test("lists internal contact ids through the curated MCP tool", async () => {
+    const server = startMockServer((request) => {
+      expect(request.params.name).toBe("list_contacts");
+      expect(request.params.arguments).toEqual({ limit: 1, q: "Acme" });
+      return {
+        toolPayload: {
+          items: [
+            {
+              id: "contact-1",
+              displayName: "Acme Corp",
+              type: "organization",
+            },
+          ],
+          limit: 1,
+          nextCursor: null,
+        },
+      };
+    });
+
+    const result = await runCli({
+      args: ["contact", "list", "--query", "Acme", "--limit", "1", "--json"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout).items.at(0)?.id).toBe("contact-1");
+    expect(result.stderr).toBe("");
   });
 });
 

@@ -28,6 +28,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "matters_write",
     },
 
+    list_contacts: {
+      command: ["contact", "list"],
+      scope: "read",
+      itemsKey: "items",
+    },
     save_contact: { command: ["contact", "save"], scope: "matters_write" },
     delete_contact: {
       command: ["contact", "delete"],

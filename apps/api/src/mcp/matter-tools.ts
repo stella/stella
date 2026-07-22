@@ -8,6 +8,7 @@ import { entities } from "@/api/db/schema";
 import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries-lookup";
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
+import { listContactsPage } from "@/api/handlers/contacts/list-query";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
 import {
   entityListCursorCondition,
@@ -78,6 +79,7 @@ import {
 type MatterToolName =
   | "save_matter"
   | "delete_matter"
+  | "list_contacts"
   | "save_contact"
   | "delete_contact"
   | "lookup_business_registry"
@@ -271,6 +273,34 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   },
   {
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    description:
+      "List or search the organization's internal contact directory. Returns " +
+      "internal contact IDs accepted by read_contact, save_contact, and " +
+      "link_matter_contact. Use q to search display names and type to filter " +
+      "people or organizations.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        q: stringProp("Search contact display names", { maxLength: 512 }),
+        type: enumProp("Contact kind", CONTACT_TYPES),
+        cursor: stringProp("Opaque cursor from the previous page"),
+        limit: intProp("Maximum contacts to return", {
+          min: 1,
+          max: LIMITS.contactsPageSizeMax,
+        }),
+      },
+      additionalProperties: false,
+    },
+    access: "read",
+    anonymized: {
+      exposure: "excluded",
+      reason: "dynamic_tenant_payload",
+    },
+    name: "list_contacts",
+    scope: "stella:read",
+  },
+  {
     description:
       "Create or update a contact (a person or organization in the address " +
       "book, shared across the whole organization). Omit contact_id to create " +
@@ -335,7 +365,9 @@ export const MATTER_TOOL_DEFINITIONS = [
       "or VIES). Pass a canonical identifier (company/registration number, " +
       "VAT number) for an exact match, or a company name to search where the " +
       "register supports it. Returns registered names, addresses, and " +
-      "registry-specific details.",
+      "registry-specific details. Result IDs belong to the external registry, " +
+      "not stella's contact directory; create a contact with save_contact " +
+      "before using read_contact.",
     inputSchema: {
       type: "object",
       properties: {
@@ -735,6 +767,56 @@ const handleDeleteMatterTool: McpToolHandler = async ({ args, context }) => {
     return internalFailureResult(deleted.error);
   }
   return textResult({ deleted: true });
+};
+
+// --- list_contacts ------------------------------------------------------
+
+const listContactsArgsSchema = v.strictObject({
+  q: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  type: v.optional(v.picklist(CONTACT_TYPES)),
+  cursor: v.optional(v.string()),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(LIMITS.contactsPageSizeMax),
+    ),
+  ),
+});
+
+const handleListContactsTool: McpToolHandler = async ({ args, context }) => {
+  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = v.safeParse(listContactsArgsSchema, args);
+  if (!parsed.success) {
+    return validationErrorResult({
+      issues: parsed.issues,
+      message:
+        "Invalid input: expected { q?: string, type?: 'person'|'organization', cursor?: string, limit?: integer }",
+    });
+  }
+
+  const listed = await listContactsPage({
+    safeDb: context.safeDb,
+    organizationId: context.organizationId,
+    query: {
+      ...(parsed.output.q === undefined ? {} : { q: parsed.output.q }),
+      ...(parsed.output.type === undefined ? {} : { type: parsed.output.type }),
+      ...(parsed.output.cursor === undefined
+        ? {}
+        : { cursor: parsed.output.cursor }),
+      ...(parsed.output.limit === undefined
+        ? {}
+        : { limit: parsed.output.limit }),
+    },
+  });
+  if (Result.isError(listed)) {
+    return internalFailureResult(listed.error);
+  }
+  return textResult(listed.value);
 };
 
 // --- save_contact -------------------------------------------------------
@@ -1867,6 +1949,7 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
 export const MATTER_TOOL_HANDLERS = {
   save_matter: handleSaveMatterTool,
   delete_matter: handleDeleteMatterTool,
+  list_contacts: handleListContactsTool,
   save_contact: handleSaveContactTool,
   delete_contact: handleDeleteContactTool,
   lookup_business_registry: handleLookupBusinessRegistryTool,

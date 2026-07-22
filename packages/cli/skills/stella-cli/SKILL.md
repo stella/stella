@@ -139,6 +139,7 @@ requires (request it at `stella auth login --scopes`).
 | clause       | `stella clause list`                    | read            | paginated                             |
 | clause       | `stella clause save`                    | knowledge_write |                                       |
 | contact      | `stella contact delete`                 | matters_write   | destructive (needs `--yes` off a TTY) |
+| contact      | `stella contact list`                   | read            | paginated                             |
 | contact      | `stella contact lookup-registry`        | read            |                                       |
 | contact      | `stella contact read`                   | read            |                                       |
 | contact      | `stella contact save`                   | matters_write   |                                       |

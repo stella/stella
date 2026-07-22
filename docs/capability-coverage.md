@@ -87,7 +87,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `contacts.create`                     | write              | stella:matters_write | —       | curated tool `save_contact`                          |
 | `contacts.delete`                     | write, destructive | stella:matters_write | —       | curated tool `delete_contact`                        |
 | `contacts.get`                        | read               | stella:read          | —       | curated tool `read_contact`                          |
-| `contacts.list`                       | read               | stella:read          | —       | generic invoke → `stella capability contacts list`   |
+| `contacts.list`                       | read               | stella:read          | —       | curated tool `list_contacts`                         |
 | `contacts.search`                     | read               | stella:read          | —       | generic invoke → `stella capability contacts search` |
 | `contacts.update`                     | write              | stella:matters_write | —       | covered by `save_contact`                            |
 

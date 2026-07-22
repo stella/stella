@@ -37,6 +37,7 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   fetch: COMPAT_TOOL_HANDLERS.fetch,
   search: COMPAT_TOOL_HANDLERS.search,
   list_matters: STELLA_TOOL_HANDLERS.list_matters,
+  list_contacts: MATTER_TOOL_HANDLERS.list_contacts,
   read_case_law_decision: STELLA_TOOL_HANDLERS.read_case_law_decision,
   read_contact: STELLA_TOOL_HANDLERS.read_contact,
   read_content_across_matters: STELLA_TOOL_HANDLERS.read_content_across_matters,
