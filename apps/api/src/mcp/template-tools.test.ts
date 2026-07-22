@@ -479,14 +479,14 @@ describe("MCP template tools", () => {
     ]);
   });
 
-  test("fill_template returns rendered text plus the DOCX as base64", async () => {
+  test("fill_template returns a complete rendered document plus the DOCX as base64", async () => {
     const docxBytes = Buffer.from("PK filled docx bytes");
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       templateName: "Lease",
       fileName: "lease.docx",
       buffer: docxBytes,
       text: "Lease between ACME and Tenant.",
-      unmatchedPlaceholders: ["landlord.signature"],
+      unmatchedPlaceholders: [],
       unusedValues: [],
     });
 
@@ -506,10 +506,11 @@ describe("MCP template tools", () => {
     expect(parseToolPayload(result)).toEqual({
       templateName: "Lease",
       fileName: "lease.docx",
+      completionStatus: "complete",
       text: "Lease between ACME and Tenant.",
       truncated: false,
       docxBase64: docxBytes.toString("base64"),
-      unmatchedPlaceholders: ["landlord.signature"],
+      unmatchedPlaceholders: [],
       unusedValues: [],
     });
     // The execution is recorded (fill row + audit) so agent fills are audited.
@@ -518,8 +519,66 @@ describe("MCP template tools", () => {
         templateId: "t1",
         organizationId: toSafeId<"organization">("org_1"),
         format: "docx",
-        unmatchedCount: 1,
+        unmatchedCount: 0,
         unusedCount: 0,
+      }),
+    );
+  });
+
+  test("fill_template rejects unmatched placeholders by default", async () => {
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: Buffer.from("partial"),
+      text: "Lease between ACME and {{landlord.signature}}.",
+      unmatchedPlaceholders: ["landlord.signature"],
+      unusedValues: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)).toEqual(
+      expect.objectContaining({
+        code: "validation_error",
+        message:
+          "Template fill incomplete; unmatched placeholders: landlord.signature",
+      }),
+    );
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({ unmatchedCount: 1 }),
+    );
+  });
+
+  test("fill_template returns partial output only after an explicit completion policy", async () => {
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      templateName: "Lease",
+      fileName: "lease.docx",
+      buffer: Buffer.from("partial"),
+      text: "Lease between ACME and {{landlord.signature}}.",
+      unmatchedPlaceholders: ["landlord.signature"],
+      unusedValues: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {
+        template_id: "t1",
+        values: { "tenant.name": "ACME" },
+        completion_mode: "allow_partial",
+      },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(parseToolPayload(result)).toEqual(
+      expect.objectContaining({
+        completionStatus: "partial",
+        unmatchedPlaceholders: ["landlord.signature"],
       }),
     );
   });

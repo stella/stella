@@ -852,6 +852,9 @@ describe("help surfaces --input for inputOnly tools", () => {
     server.stop();
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("values.<key>  any JSON value  required");
+    expect(result.stdout).toContain("--completion-mode");
+    expect(result.stdout).toContain("require_complete");
+    expect(result.stdout).toContain("allow_partial");
     expect(result.stdout).toContain(
       `--input '{"template_id":"xxxxx","values":{"key":"value"}}'`,
     );
@@ -901,7 +904,7 @@ describe("help surfaces --input for inputOnly tools", () => {
   });
 });
 
-describe("template fill unused-value validation", () => {
+describe("template fill strictness policies", () => {
   test("surfaces the tool's strict unused-value error", async () => {
     const server = startMockServer(() => ({
       toolPayload: {
@@ -966,6 +969,37 @@ describe("template fill unused-value validation", () => {
       template_id: "template-1",
       values: { intentional: "value" },
       allow_unused_values: true,
+    });
+  });
+
+  test("forwards the explicit partial-completion policy to the shared MCP tool", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        completionStatus: "partial",
+        unmatchedPlaceholders: ["signature"],
+      },
+    }));
+    const result = await runCli({
+      args: [
+        "template",
+        "fill",
+        "--template-id",
+        "template-1",
+        "--input",
+        '{"values":{"name":"ACME"}}',
+        "--completion-mode",
+        "allow_partial",
+      ],
+      url: server.url,
+      token: makeToken(["templates"]),
+    });
+    server.stop();
+
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      template_id: "template-1",
+      values: { name: "ACME" },
+      completion_mode: "allow_partial",
     });
   });
 });
