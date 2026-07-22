@@ -22,7 +22,7 @@ import { placeholderPattern, resolvePath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
 
-import { HEADER_FOOTER_RE } from "./ooxml";
+import { templateContentPartPaths } from "./ooxml";
 import { partParagraphTexts, patchXmlPartPerOccurrence } from "./rich-patch";
 import type { FieldMeta } from "./types";
 
@@ -91,11 +91,7 @@ export const adaptAiFields = async ({
   const zip = await JSZip.loadAsync(buffer);
   // Sorted for a deterministic occurrence order; the patch pass below walks
   // the same list, so occurrence indices always line up with extraction.
-  const partNames = Object.keys(zip.files)
-    .filter(
-      (name) => name === "word/document.xml" || HEADER_FOOTER_RE.test(name),
-    )
-    .sort();
+  const partNames = templateContentPartPaths(Object.keys(zip.files));
   // Each part is read independently; `Promise.all(map(...))` preserves the
   // sorted `partNames` order in the result regardless of completion order, so
   // the patch pass below still sees `parts` in the same order extraction used.

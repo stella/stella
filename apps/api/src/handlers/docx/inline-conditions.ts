@@ -38,8 +38,8 @@
  *   block `{{#if}}`/`{{#each}}`. Inline directives do NOT see an enclosing
  *   block-loop iteration item: block loop expansion has already run when this
  *   pass executes.
- * - Like block directives, this pass covers word/document.xml only (not
- *   headers/footers), matching processBlockDirectives.
+ * - The caller runs this pass for the body and every header/footer content
+ *   part, matching discovery and scalar value replacement coverage.
  *
  * Whole-paragraph directive lines are skipped here: they are the block
  * engine's domain, and orphaned ones were already reported by

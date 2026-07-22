@@ -18,7 +18,12 @@ import { compareCodepoint } from "@/api/lib/collation";
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { PLACEHOLDER_RE } from "./discover-placeholders";
 import { parseInlineConditions } from "./inline-conditions";
-import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
+import {
+  MAIN_DOCUMENT_PART_PATH,
+  paragraphText,
+  templateContentPartPaths,
+  W_NS,
+} from "./ooxml";
 import type {
   DiscoveredField,
   DiscoveredPlaceholder,
@@ -565,9 +570,9 @@ const analyzeHeadersAndFooters = async (
 
   // Sort entries alphabetically to match the order used by
   // extractText (which assigns globally sequential indices).
-  const entries = Object.keys(zip.files)
-    .filter((path) => HEADER_FOOTER_RE.test(path))
-    .toSorted();
+  const entries = templateContentPartPaths(Object.keys(zip.files)).filter(
+    (path) => path !== MAIN_DOCUMENT_PART_PATH,
+  );
 
   // Track running paragraph counts per source so error indices
   // are relative to the combined section, not individual files.
@@ -628,7 +633,7 @@ export const discoverTemplate = async (
     structureErrors: [],
   };
 
-  const docEntry = zip.file("word/document.xml");
+  const docEntry = zip.file(MAIN_DOCUMENT_PART_PATH);
   if (!docEntry) {
     return emptyResult;
   }

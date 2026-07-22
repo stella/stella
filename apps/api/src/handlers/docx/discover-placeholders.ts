@@ -14,7 +14,7 @@ import { placeholderPattern } from "@stll/template-conditions";
 
 import { compareCodepoint } from "@/api/lib/collation";
 
-import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
+import { paragraphText, templateContentPartPaths, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";
 
 // Canonical pattern from @stll/template-conditions (markers.ts) — the single
@@ -59,27 +59,13 @@ export const discoverPlaceholders = async (
   const zip = await JSZip.loadAsync(docxBuffer);
   const counts = new Map<string, number>();
 
-  // Scan document body
-  const docEntry = zip.file("word/document.xml");
-  if (!docEntry) {
-    return [];
-  }
-
-  const docXml = await docEntry.async("string");
-  scanParagraphs(slimdom.parseXmlDocument(docXml), counts);
-
-  // Scan headers and footers
-  const hfEntries = Object.keys(zip.files).filter((path) =>
-    HEADER_FOOTER_RE.test(path),
-  );
-
-  for (const path of hfEntries) {
+  for (const path of templateContentPartPaths(Object.keys(zip.files))) {
     const entry = zip.file(path);
     if (!entry) {
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- bounded memory while streaming docx parts; accumulates into shared counts map
+    // oxlint-disable-next-line no-await-in-loop -- bounded memory while streaming content parts; accumulates into shared counts map
     const xml = await entry.async("string");
     scanParagraphs(slimdom.parseXmlDocument(xml), counts);
   }

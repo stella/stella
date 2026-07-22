@@ -74,7 +74,21 @@ const INT32_MAX = 2_147_483_647;
  * values starting from 1, avoiding collisions with existing IDs.
  */
 /** Regex matching header and footer XML entry paths. */
-export const HEADER_FOOTER_RE = /^word\/(?:header|footer)\d+\.xml$/u;
+const HEADER_FOOTER_RE = /^word\/(?:header|footer)\d+\.xml$/u;
+
+export const MAIN_DOCUMENT_PART_PATH = "word/document.xml";
+
+/** Every WordprocessingML part whose authored template content is visible. */
+export const isTemplateContentPartPath = (path: string): boolean =>
+  path === MAIN_DOCUMENT_PART_PATH || HEADER_FOOTER_RE.test(path);
+
+/**
+ * Deterministic shared traversal scope for discovery, directive processing,
+ * value replacement, and AI adaptation. Keeping the scope in one function
+ * prevents one pipeline phase from silently supporting fewer document parts.
+ */
+export const templateContentPartPaths = (paths: Iterable<string>): string[] =>
+  [...paths].filter(isTemplateContentPartPath).toSorted();
 
 // ── Text helpers ─────────────────────────────────────────
 
