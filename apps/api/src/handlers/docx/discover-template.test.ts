@@ -238,7 +238,7 @@ describe("discoverTemplate", () => {
       [
         P("{{#each groups}}"),
         P("{{#each groups.items}}"),
-        P("{{#if group_enabled}}"),
+        P("{{#if group_enabled and groups.is_master}}"),
         P("Item"),
         P("{{/if}}"),
         P("{{/each}}"),
@@ -250,12 +250,13 @@ describe("discoverTemplate", () => {
 
     const groups = result.fields.find((field) => field.path === "groups");
     const items = result.fields.find((field) => field.path === "groups.items");
-    expect(groups?.itemFields?.map((field) => field.path)).toContain(
+    expect(groups?.itemFields?.map((field) => field.path).toSorted()).toEqual([
       "group_enabled",
-    );
-    expect(items?.itemFields?.map((field) => field.path)).toContain(
+      "is_master",
+    ]);
+    expect(items?.itemFields?.map((field) => field.path)).toEqual([
       "group_enabled",
-    );
+    ]);
   });
 
   test("nested object path infers object field", async () => {

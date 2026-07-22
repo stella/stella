@@ -1078,6 +1078,11 @@ export const mergeManifestWithDiscovery = (
     if (f.lookup !== undefined) {
       return true;
     }
+    // Arrays are value-bearing loop inputs, not structural namespace roots.
+    // A nested array path must not make its parent loop disappear.
+    if (f.kind === "array") {
+      return true;
+    }
     return !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`));
   });
 };

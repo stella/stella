@@ -739,6 +739,37 @@ describe("mergeManifestWithDiscovery", () => {
     ]);
   });
 
+  test("keeps parent arrays when nested loop paths share their prefix", () => {
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        {
+          path: "contracts",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "name", kind: "string", count: 1 }],
+        },
+        {
+          path: "contracts.fields",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "value", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(null, discovery);
+
+    expect(resolved.map((field) => field.path).toSorted()).toEqual([
+      "contracts",
+      "contracts.fields",
+    ]);
+    expect(
+      resolved.find((field) => field.path === "contracts")?.itemFields,
+    ).toEqual([{ path: "name", kind: "string", count: 1 }]);
+  });
+
   test("keeps a lookup field as a leaf despite dotted format markers under it", () => {
     // {{company}} + {{company.full}} make discovery promote `company` to an
     // object and register `company.full` as a string. The lookup field is a
