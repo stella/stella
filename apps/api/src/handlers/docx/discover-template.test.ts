@@ -177,6 +177,44 @@ describe("discoverTemplate", () => {
     ]);
   });
 
+  test("block conditions nested in loops join repeated row fields", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each sellers}}"),
+        P("{{sellers.name}}"),
+        P("{{#if is_company}}"),
+        P("Company"),
+        P("{{/if}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const sellers = result.fields.find((field) => field.path === "sellers");
+    expect(sellers?.itemFields?.map((field) => field.path).toSorted()).toEqual([
+      "is_company",
+      "name",
+    ]);
+  });
+
+  test("preserves dotted primitive loop roots", async () => {
+    const xml = WRAP(
+      [P("{{#each deal.tags}}"), P("{{deal.tags.value}}"), P("{{/each}}")].join(
+        "",
+      ),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields.find((field) => field.path === "deal.tags")).toEqual({
+      path: "deal.tags",
+      kind: "array",
+      count: 2,
+      itemFields: [{ path: "value", kind: "string", count: 1 }],
+    });
+  });
+
   test("nested object path infers object field", async () => {
     const xml = WRAP(
       [

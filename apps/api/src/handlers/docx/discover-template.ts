@@ -29,10 +29,13 @@ import type {
 
 // ── Field inference ──────────────────────────────────────
 
-type FieldAccumulator = Map<
-  string,
-  { kind: TemplateFieldKind; count: number; itemPaths: Set<string> }
->;
+type FieldInfo = {
+  kind: TemplateFieldKind;
+  count: number;
+  itemPaths: Set<string>;
+};
+
+type FieldAccumulator = Map<string, FieldInfo>;
 
 /**
  * Register a field path with an inferred kind. If the field
@@ -73,11 +76,25 @@ const kindPriority = (kind: TemplateFieldKind): number => {
 const registerConditionFields = (
   fields: FieldAccumulator,
   condition: string,
+  rowPath?: string | undefined,
 ): void => {
   const root = parseCondition(condition);
   if (!root) {
     return;
   }
+
+  const registerPath = (path: string, kind: "boolean" | "string"): void => {
+    registerField(fields, path, kind);
+    if (rowPath === undefined) {
+      return;
+    }
+    const rowPrefix = `${rowPath}.`;
+    const rowFieldPath = path.startsWith(rowPrefix)
+      ? path
+      : `${rowPrefix}${path}`;
+    registerField(fields, rowFieldPath, kind);
+    fields.get(rowPath)?.itemPaths.add(rowFieldPath.slice(rowPrefix.length));
+  };
 
   const visit = (node: ConditionNode): void => {
     if (node.type === "group") {
@@ -89,17 +106,16 @@ const registerConditionFields = (
 
     if (node.type === "compare") {
       if (node.left.type === "path") {
-        registerField(fields, node.left.path, "string");
+        registerPath(node.left.path, "string");
       }
       if (node.right.type === "path") {
-        registerField(fields, node.right.path, "string");
+        registerPath(node.right.path, "string");
       }
       return;
     }
 
     if (node.operand.type === "path") {
-      registerField(
-        fields,
+      registerPath(
         node.operand.path,
         node.op === "is_truthy" ? "boolean" : "string",
       );
@@ -107,23 +123,6 @@ const registerConditionFields = (
   };
 
   visit(root);
-};
-
-const attachNestedArrayFields = (fields: FieldAccumulator): void => {
-  for (const path of fields.keys()) {
-    const separatorIndex = path.indexOf(".");
-    if (separatorIndex === -1) {
-      continue;
-    }
-
-    const rootPath = path.slice(0, separatorIndex);
-    const root = fields.get(rootPath);
-    if (root?.kind !== "array") {
-      continue;
-    }
-
-    root.itemPaths.add(path.slice(separatorIndex + 1));
-  }
 };
 
 // ── Condition map building ─────────────────────────────
@@ -308,6 +307,35 @@ const analyzeContainer = (
   const { blocks, errors: parseErrors } = parseBlockTree(directives);
   errors.push(...parseErrors);
 
+  // Retain the full directive stream instead of relying on the flattened
+  // block result: nested blocks are intentionally consumed by parseBlockTree.
+  // The active loop path makes an unqualified condition available both as a
+  // global input and as a row-local input, matching the fill evaluator's
+  // global context overlaid with each row.
+  const arrayScopes = new Map<number, readonly string[]>();
+  const activeArrays: string[] = [];
+  const directiveByParagraph = new Map(
+    directives.map((directive) => [directive.paragraphIndex, directive]),
+  );
+  for (let i = 0; i < paragraphs.length; i++) {
+    const directive = directiveByParagraph.get(i);
+    if (directive?.kind === "endeach") {
+      activeArrays.pop();
+    }
+    if (directive?.kind === "if" || directive?.kind === "elseif") {
+      registerConditionFields(
+        fields,
+        directive.expression,
+        activeArrays.at(-1),
+      );
+    }
+    if (directive?.kind === "each") {
+      registerField(fields, directive.expression, "array");
+      activeArrays.push(directive.expression);
+    }
+    arrayScopes.set(i, [...activeArrays]);
+  }
+
   // Track which paragraph indices are directives (skip for
   // placeholder scanning)
   const directiveIndices = new Set<number>();
@@ -350,12 +378,6 @@ const analyzeContainer = (
           }
         }
       }
-    } else {
-      // if block — extract condition variables as booleans
-      // (or string if used in a comparison)
-      for (const branch of block.branches) {
-        registerConditionFields(fields, branch.condition);
-      }
     }
   }
 
@@ -396,7 +418,11 @@ const analyzeContainer = (
         }
 
         for (const branch of group.branches) {
-          registerConditionFields(fields, branch.condition);
+          registerConditionFields(
+            fields,
+            branch.condition,
+            arrayScopes.get(i)?.at(-1),
+          );
         }
       }
     }
@@ -448,14 +474,18 @@ const analyzeContainer = (
       }
       // Register the full path as string
       registerField(fields, name, "string");
+
+      const scopedArrayPaths = arrayScopes.get(i);
+      if (scopedArrayPaths !== undefined) {
+        for (const arrayPath of scopedArrayPaths) {
+          const prefix = `${arrayPath}.`;
+          if (name.startsWith(prefix)) {
+            fields.get(arrayPath)?.itemPaths.add(name.slice(prefix.length));
+          }
+        }
+      }
     }
   }
-
-  // A dotted field used only by a condition still belongs to a repeated
-  // row's input contract. Normalize every discovered descendant into its
-  // array root after all block, inline, and placeholder scans have run, so
-  // discovery order cannot change the contract.
-  attachNestedArrayFields(fields);
 
   return { fields, errors, placeholderCounts, fieldConditions };
 };
@@ -633,9 +663,11 @@ export const discoverTemplate = async (
   // Build DiscoveredField[]
   const discoveredFields: DiscoveredField[] = [];
   for (const [path, info] of fields) {
-    // Skip dotted subfields; they'll be nested under their
-    // parent array or object
-    if (path.includes(".")) {
+    // Dotted scalar fields are represented by their structural object root
+    // and by the placeholder list. Array roots remain first-class fields even
+    // when dotted: dropping them would erase the primitive-row contract for a
+    // valid loop such as `deal.tags`.
+    if (path.includes(".") && info.kind !== "array") {
       continue;
     }
 

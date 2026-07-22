@@ -117,6 +117,28 @@ describe("template input contract", () => {
     ).toEqual(["tags"]);
   });
 
+  test("raw dotted value loops preserve their nested primitive contract", () => {
+    const sources = collectRawTemplateInputSources({
+      fields: [
+        {
+          path: "deal.tags",
+          kind: "array",
+          itemFields: [{ path: "value", kind: "string" }],
+        },
+      ],
+      placeholderPaths: ["deal.tags.value"],
+    });
+    expect(sources.primitiveArrayPaths).toEqual(["deal.tags"]);
+
+    const contract = collectTemplateInputKeys({ type: "raw", ...sources });
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: { deal: { tags: ["urgent"] } },
+      }),
+    ).toEqual([]);
+  });
+
   test("manifest templates accept live descendants but exclude derived outputs", () => {
     const contract = collectTemplateInputKeys({
       type: "manifest",
