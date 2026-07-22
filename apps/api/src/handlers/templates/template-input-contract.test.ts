@@ -208,6 +208,27 @@ describe("template input contract", () => {
     ).toEqual(["sellers.namme"]);
   });
 
+  test("rejects primitive rows in an accepted-descendant namespace", () => {
+    expect(
+      findUnusedTemplateValueKeys({
+        contract: contractFor(["items.name"]),
+        values: { items: ["invalid"] },
+      }),
+    ).toEqual(["items"]);
+  });
+
+  test("rejects primitive rows in a forbidden-descendant namespace", () => {
+    expect(
+      findUnusedTemplateValueKeys({
+        contract: {
+          acceptedPaths: new Set(["items"]),
+          forbiddenPaths: new Set(["items.total"]),
+        },
+        values: { items: ["invalid"] },
+      }),
+    ).toEqual(["items"]);
+  });
+
   test("INVARIANT: value shape cannot change whether an unknown key is rejected", () => {
     fc.assert(
       fc.property(fc.jsonValue(), (value) => {
