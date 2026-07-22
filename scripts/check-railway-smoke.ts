@@ -60,7 +60,11 @@ const checkApiHealth = async (apiUrl: string, expectedCommit?: string) => {
   if (value["status"] !== "ok") {
     throw new RailwaySmokeError("API /health did not return status=ok");
   }
-  expectCommit({ value, expectedCommit, source: "API /health" });
+  expectCommit({
+    value,
+    ...(expectedCommit === undefined ? {} : { expectedCommit }),
+    source: "API /health",
+  });
 };
 
 const checkWebHealth = async (webUrl: string) => {
@@ -99,6 +103,7 @@ const throwError = (error: Error): never => {
 
 const runProbe = async (name: string, probe: () => Promise<void>) => {
   let lastError: Error | undefined;
+  // eslint-disable-next-line no-unreachable-loop -- the catch path explicitly continues after a failed probe; successful probes return.
   for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt += 1) {
     try {
       // eslint-disable-next-line no-await-in-loop -- retry probes must observe the result before deciding whether to wait and try again.
@@ -116,6 +121,7 @@ const runProbe = async (name: string, probe: () => Promise<void>) => {
       console.log(`${name}: waiting (${attempt}/${PROBE_ATTEMPTS})`);
       // eslint-disable-next-line no-await-in-loop -- retries are intentionally sequential to give the deployment time to become healthy.
       await sleep(PROBE_DELAY_MS);
+      continue;
     }
   }
 

@@ -1,7 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-// eslint-disable-next-line no-restricted-imports -- MCP SDK tool schemas use zod.
-import { z } from "zod";
+import { z } from "zod/v3";
 
 import {
   fetchAllowedUrl,
@@ -78,9 +77,27 @@ type DocChunk = {
   score: number;
 };
 
-server.tool(
+type ToolResult = {
+  content: { type: "text"; text: string }[];
+  isError?: boolean;
+};
+
+type RegisterInputTool = <InputSchema extends z.ZodTypeAny>(
+  name: string,
+  config: { description: string; inputSchema: InputSchema },
+  callback: (input: z.infer<InputSchema>) => ToolResult | Promise<ToolResult>,
+) => unknown;
+
+// The SDK's Zod 3/4 compatibility overload exceeds TypeScript's instantiation
+// depth in a clean install. Keep schema inference and handlers checked on this
+// side of a narrow boundary while preserving registerTool's runtime behavior.
+const registerInputTool = server.registerTool.bind(
+  server,
+) as unknown as RegisterInputTool;
+
+server.registerTool(
   "list_doc_sources",
-  "List available library documentation sources",
+  { description: "List available library documentation sources" },
   () => ({
     content: Object.entries(SOURCES).map(([name, url]) => ({
       type: "text" as const,
@@ -556,10 +573,12 @@ const splitIntoChunks = (pageText: string) => {
   return [{ heading: DEFAULT_HEADING, text: fallbackText }];
 };
 
-server.tool(
+registerInputTool(
   "fetch_docs",
-  "Fetch a llms.txt index or a specific doc page URL",
-  { url: z.string().url() },
+  {
+    description: "Fetch a llms.txt index or a specific doc page URL",
+    inputSchema: z.object({ url: z.string().url() }),
+  },
   async ({ url }) => {
     try {
       return {
@@ -582,13 +601,16 @@ server.tool(
   },
 );
 
-server.tool(
+registerInputTool(
   "search_docs",
-  "Search configured doc indexes and return only the top matching pages",
   {
-    query: z.string().min(2),
-    sources: z.array(z.string()).optional(),
-    maxResults: z.number().int().min(1).max(MAX_RESULTS_LIMIT).optional(),
+    description:
+      "Search configured doc indexes and return only the top matching pages",
+    inputSchema: z.object({
+      query: z.string().min(2),
+      sources: z.array(z.string()).optional(),
+      maxResults: z.number().int().min(1).max(MAX_RESULTS_LIMIT).optional(),
+    }),
   },
   async ({ query, sources, maxResults }) => {
     try {
@@ -706,13 +728,16 @@ server.tool(
   },
 );
 
-server.tool(
+registerInputTool(
   "fetch_doc_chunks",
-  "Fetch only the most relevant chunks from a doc page for a given query",
   {
-    url: z.string().url(),
-    query: z.string().min(2),
-    maxChunks: z.number().int().min(1).max(MAX_CHUNKS_LIMIT).optional(),
+    description:
+      "Fetch only the most relevant chunks from a doc page for a given query",
+    inputSchema: z.object({
+      url: z.string().url(),
+      query: z.string().min(2),
+      maxChunks: z.number().int().min(1).max(MAX_CHUNKS_LIMIT).optional(),
+    }),
   },
   async ({ url, query, maxChunks }) => {
     try {

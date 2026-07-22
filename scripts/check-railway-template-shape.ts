@@ -273,7 +273,7 @@ const publicRailwayCopy = [
   ["Railway docs", railwayDoc],
   ["template README", templateReadme],
   ["README", readText("README.md")],
-];
+] satisfies readonly (readonly [label: string, text: string])[];
 // A referral code inside a deploy URL is standard marketplace practice; the
 // guard targets prose that discusses monetization, so URLs are stripped
 // before matching.

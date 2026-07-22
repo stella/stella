@@ -94,10 +94,9 @@ const isKnownValidatedContextParam = (functionNode) => {
     return true;
   }
 
-  if (
-    parent.type === "Property" &&
-    CONTEXT_TYPED_PROPERTY_NAMES.has(getIdentifierName(parent.key))
-  ) {
+  const propertyName =
+    parent.type === "Property" ? getIdentifierName(parent.key) : null;
+  if (propertyName !== null && CONTEXT_TYPED_PROPERTY_NAMES.has(propertyName)) {
     return true;
   }
 

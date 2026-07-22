@@ -36,20 +36,18 @@
 // via `oxlint.config.ts` `excludeFiles`, since it is the one place raw
 // `JSON.parse` on a persisted string is intentional.
 
+import { panic } from "better-result";
+
 import { isIdentifier, unwrapExpression } from "./utils.ts";
 
 const STORAGE_IDENTIFIERS = new Set(["localStorage", "sessionStorage"]);
 
 // Peel a TSNonNullExpression on top of the shared TS-wrapper unwrapper, so
 // `localStorage.getItem("k")!` is still recognized.
-const peel = (node: unknown): unknown => {
+const peel = (node: unknown): ReturnType<typeof unwrapExpression> => {
   const unwrapped = unwrapExpression(node);
-  if (
-    typeof unwrapped === "object" &&
-    unwrapped !== null &&
-    (unwrapped as { type?: unknown }).type === "TSNonNullExpression"
-  ) {
-    return peel((unwrapped as { expression: unknown }).expression);
+  if (unwrapped?.type === "TSNonNullExpression") {
+    return peel(unwrapped.expression);
   }
   return unwrapped;
 };
@@ -64,46 +62,35 @@ const mentionsStorageIdentifier = (node: unknown): boolean => {
   if (isIdentifier(current)) {
     return STORAGE_IDENTIFIERS.has(current.name);
   }
-  if (
-    typeof current !== "object" ||
-    current === null ||
-    (current as { type?: unknown }).type !== "MemberExpression"
-  ) {
+  if (current?.type !== "MemberExpression") {
     return false;
   }
-  const member = current as { computed?: unknown; property: unknown };
   if (
-    member.computed === false &&
-    isIdentifier(member.property) &&
-    STORAGE_IDENTIFIERS.has(member.property.name)
+    current.computed === false &&
+    isIdentifier(current.property) &&
+    STORAGE_IDENTIFIERS.has(current.property.name)
   ) {
     return true;
   }
-  return mentionsStorageIdentifier((current as { object: unknown }).object);
+  return mentionsStorageIdentifier(current.object);
 };
 
 // True for `<expr>.getItem(...)` where `<expr>`'s chain mentions
 // localStorage/sessionStorage.
 const isStorageGetItemCall = (node: unknown): boolean => {
   const current = peel(node);
+  if (current?.type !== "CallExpression") {
+    return false;
+  }
+  const callee = peel(current.callee);
   if (
-    typeof current !== "object" ||
-    current === null ||
-    (current as { type?: unknown }).type !== "CallExpression"
+    callee?.type !== "MemberExpression" ||
+    callee.computed !== false ||
+    !isIdentifier(callee.property, "getItem")
   ) {
     return false;
   }
-  const callee = (current as { callee: unknown }).callee;
-  if (
-    typeof callee !== "object" ||
-    callee === null ||
-    (callee as { type?: unknown }).type !== "MemberExpression" ||
-    (callee as { computed?: unknown }).computed !== false ||
-    !isIdentifier((callee as { property: unknown }).property, "getItem")
-  ) {
-    return false;
-  }
-  return mentionsStorageIdentifier((callee as { object: unknown }).object);
+  return mentionsStorageIdentifier(callee.object);
 };
 
 const isJsonParseCallee = (callee: unknown): boolean =>
@@ -141,14 +128,15 @@ export default {
         const storageVarStack: Scope[] = [createScope()];
 
         const currentScope = (): Scope =>
-          storageVarStack.at(-1) ?? storageVarStack[0]!;
+          storageVarStack.at(-1) ??
+          panic("storage scope stack must never be empty");
 
         const collectBoundNames = (pattern, names: Set<string>) => {
           const current = peel(pattern);
           if (!current || typeof current !== "object") {
             return;
           }
-          if (current.type === "Identifier") {
+          if (isIdentifier(current)) {
             names.add(current.name);
             return;
           }
@@ -161,15 +149,27 @@ export default {
             return;
           }
           if (current.type === "ArrayPattern") {
-            for (const element of current.elements) {
+            const elements = Array.isArray(current.elements)
+              ? current.elements
+              : [];
+            for (const element of elements) {
               collectBoundNames(element, names);
             }
             return;
           }
           if (current.type === "ObjectPattern") {
-            for (const property of current.properties) {
+            const properties = Array.isArray(current.properties)
+              ? current.properties
+              : [];
+            for (const property of properties) {
+              const currentProperty = peel(property);
+              if (!currentProperty) {
+                continue;
+              }
               collectBoundNames(
-                property.type === "Property" ? property.value : property,
+                currentProperty.type === "Property"
+                  ? currentProperty.value
+                  : currentProperty,
                 names,
               );
             }
@@ -223,12 +223,8 @@ export default {
             // Look through a `?? "..."` / `|| "..."` fallback: the storage
             // read is the left operand (`JSON.parse(raw ?? "null")`).
             let candidate = peel(arg);
-            while (
-              typeof candidate === "object" &&
-              candidate !== null &&
-              (candidate as { type?: unknown }).type === "LogicalExpression"
-            ) {
-              candidate = peel((candidate as { left: unknown }).left);
+            while (candidate?.type === "LogicalExpression") {
+              candidate = peel(candidate.left);
             }
             let trackedVariable = false;
             if (isIdentifier(candidate)) {

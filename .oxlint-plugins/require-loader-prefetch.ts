@@ -60,7 +60,7 @@
 // in prose comments inside `-components`/`-hooks`/`-queries` files.
 
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
 
 import {
   getPropertyName,
@@ -148,7 +148,7 @@ const resolveColocatedImportBase = (filename, source) => {
     return null;
   }
   const aliasRoot = normalizedFilename.slice(0, routesIndex);
-  return join(aliasRoot, source.slice("@/".length));
+  return path.join(aliasRoot, source.slice("@/".length));
 };
 
 // Bounded, one-hop read: try the two extensions a colocated TS/TSX import can
@@ -156,7 +156,7 @@ const resolveColocatedImportBase = (filename, source) => {
 const readColocatedFile = (basePath) => {
   for (const extension of [".tsx", ".ts"]) {
     try {
-      return readFileSync(`${basePath}${extension}`, "utf8");
+      return readFileSync(`${basePath}${extension}`, "utf-8");
     } catch {
       // Try the next extension; if neither exists this is a shape the
       // simplified alias resolution can't handle (e.g. a directory index) —
@@ -228,10 +228,10 @@ export default {
       },
       create(context) {
         let isRouteFile = false;
-        let routeOptions = null;
-        const suspenseCalls = [];
+        let routeOptions: { properties: unknown } | null = null;
+        const suspenseCalls: { factory: string; node: unknown }[] = [];
         const referencedInLoader = new Set();
-        const colocatedImports = [];
+        const colocatedImports: { node: unknown; source: string }[] = [];
 
         return {
           CallExpression(node) {
@@ -280,7 +280,10 @@ export default {
               return;
             }
 
-            const hasLoader = routeOptions.properties.some(
+            const properties = Array.isArray(routeOptions.properties)
+              ? routeOptions.properties
+              : [];
+            const hasLoader = properties.some(
               (prop) =>
                 prop.type === "Property" &&
                 getPropertyName(prop.key) === LOADER_KEY,

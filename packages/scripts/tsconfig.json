@@ -8,6 +8,6 @@
       "@stll/ai-catalog": ["../ai-catalog/src/index.ts"]
     }
   },
-  "include": ["."],
+  "include": [".", "../../scripts/typecheck-coverage.ts"],
   "exclude": ["node_modules"]
 }

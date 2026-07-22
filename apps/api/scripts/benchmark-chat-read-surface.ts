@@ -44,6 +44,11 @@ type BenchTrace = {
   tools: ToolTrace[];
 };
 
+type SimulatedCall = {
+  function: string;
+  result: SimulatedReadResult;
+};
+
 type SimulatedReadResult =
   | {
       items: unknown[];
@@ -51,10 +56,7 @@ type SimulatedReadResult =
       nextOffset?: number | null;
     }
   | {
-      calls: {
-        function: string;
-        result: SimulatedReadResult;
-      }[];
+      calls: SimulatedCall[];
     }
   | {
       error: string;
@@ -258,9 +260,9 @@ const parseSurface = (value: string | undefined): Surface | "all" => {
 const parseArgs = (): Args => {
   const args = process.argv.slice(2);
   const parsed: Args = {
-    json: process.env.AI_BENCH_JSON === "true",
-    repeats: parsePositiveInteger(process.env.AI_BENCH_REPEATS, 1),
-    surface: parseSurface(process.env.AI_BENCH_SURFACE),
+    json: process.env["AI_BENCH_JSON"] === "true",
+    repeats: parsePositiveInteger(process.env["AI_BENCH_REPEATS"], 1),
+    surface: parseSurface(process.env["AI_BENCH_SURFACE"]),
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -301,7 +303,7 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     return null;
   }
 
-  const overrideModel = process.env.AI_BENCH_MODEL;
+  const overrideModel = process.env["AI_BENCH_MODEL"];
   if (overrideModel) {
     const info = getTanStackTextModelInfoForRole("fast", null, {
       organizationId: null,
@@ -337,15 +339,15 @@ const addTrace = ({
   name,
   trace,
 }: {
-  code?: string;
-  error?: string;
+  code?: string | undefined;
+  error?: string | undefined;
   input: unknown;
   name: string;
   trace: BenchTrace;
 }) => {
   trace.tools.push({
-    code,
-    error,
+    ...(code === undefined ? {} : { code }),
+    ...(error === undefined ? {} : { error }),
     input,
     name,
   });
@@ -507,7 +509,7 @@ const simulateSandbox = ({
     };
   }
 
-  const calls = [];
+  const calls: SimulatedCall[] = [];
   for (const name of functionNames) {
     const validationError = validateSimulatedCall({
       code,
@@ -533,15 +535,16 @@ const simulateSandbox = ({
     });
   }
 
+  const singleCall = calls.at(0);
+  const value =
+    calls.length === 1 && singleCall !== undefined
+      ? singleCall.result
+      : { calls };
+
   return {
     durationMs: 1,
     hostCalls: calls.length,
-    value:
-      calls.length === 1
-        ? calls[0]?.result
-        : {
-            calls,
-          },
+    value,
   };
 };
 

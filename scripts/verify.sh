@@ -107,10 +107,16 @@ run_typecheck() {
   # its own CI job (typecheck-baseline); its failures point at type-cost growth, not
   # type errors, so a green verify still matches a green typecheck.
   if [[ -n "$affected_flag" ]]; then
-    bun run typecheck -- --concurrency=1 "$affected_flag"
+    bun run typecheck -- --concurrency=1 "$affected_flag" || return 1
   else
-    bun run typecheck -- --concurrency=1
+    bun run typecheck -- --concurrency=1 || return 1
   fi
+  bun run typecheck:repo
+}
+
+run_typecheck_coverage() {
+  bun scripts/typecheck-coverage.ts --self-test || return 1
+  bun scripts/typecheck-coverage.ts
 }
 
 run_ratchet_guard() {
@@ -201,6 +207,7 @@ run_step "Release changelog guard" bash scripts/check-release-changelog.sh --bas
 run_step "Lint" run_lint
 run_step "Format" run_format
 run_step "Rust format" run_rust_format
+run_step "Typecheck coverage" run_typecheck_coverage
 run_step "Typecheck" run_typecheck
 if [[ -n "$affected_flag" ]]; then
   run_step "Result consumption" bun run check:result-consumption -- --base "$base_ref"

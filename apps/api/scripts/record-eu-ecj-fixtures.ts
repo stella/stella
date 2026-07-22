@@ -253,7 +253,7 @@ const recordParserFixtures = async (): Promise<void> => {
       // oxlint-disable-next-line no-await-in-loop -- one write per recorded variant
       await Bun.write(
         new URL(`${stem}.fmx.xml.gz`, PARSER_FIXTURES_DIR),
-        Bun.gzipSync(formex),
+        Bun.gzipSync(new Uint8Array(formex)),
       );
       log(`  ${stem}: XHTML + Formex`);
     }

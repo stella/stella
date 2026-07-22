@@ -1,5 +1,7 @@
 import {
+  type AstNode,
   getPropertyName,
+  isAstNode,
   isIdentifier,
   isStringLiteral,
   unwrapExpression,
@@ -16,9 +18,10 @@ const DISPLAY_FIELD_TYPES = new Set([
 
 const BIDI_TEXT_COMPONENTS = new Set(["BidiText", "UserText"]);
 
-const isMemberLike = (node) =>
-  node?.type === "MemberExpression" ||
-  node?.type === "OptionalMemberExpression";
+const isMemberLike = (node: unknown): node is AstNode =>
+  isAstNode(node) &&
+  (node.type === "MemberExpression" ||
+    node.type === "OptionalMemberExpression");
 
 const jsxElementName = (name) => {
   if (name?.type === "JSXIdentifier") {

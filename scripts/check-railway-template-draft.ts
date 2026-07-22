@@ -95,7 +95,9 @@ const readManifestBuckets = (value: unknown): string[] => {
     return [];
   }
   if (!isRecord(value)) {
-    throw new RailwayTemplateDraftError(`${MANIFEST_PATH} buckets must be an object`);
+    throw new RailwayTemplateDraftError(
+      `${MANIFEST_PATH} buckets must be an object`,
+    );
   }
   return Object.keys(value);
 };
@@ -115,6 +117,10 @@ const readManifest = (): TemplateManifest => {
         `${MANIFEST_PATH} service ${serviceName} must be an object`,
       );
     }
+    const build = readServiceBuild(
+      service["build"],
+      `services.${serviceName}.build`,
+    );
     services[serviceName] = {
       requiredUserInputs: readStringRecord(
         service["requiredUserInputs"] ?? {},
@@ -124,10 +130,7 @@ const readManifest = (): TemplateManifest => {
         service["variables"] ?? {},
         `services.${serviceName}.variables`,
       ),
-      build: readServiceBuild(
-        service["build"],
-        `services.${serviceName}.build`,
-      ),
+      ...(build === undefined ? {} : { build }),
     };
   }
 

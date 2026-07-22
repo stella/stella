@@ -553,6 +553,14 @@ jobs:
           cd ../web
           cp .env.example .env
 
+      - name: Typecheck coverage
+        # Loaders can execute a TypeScript file that belongs to no project in
+        # the turbo typecheck graph. Compare every repository source with the
+        # compiler's own --listFilesOnly output so none bypass typechecking.
+        run: |
+          bun scripts/typecheck-coverage.ts --self-test
+          bun scripts/typecheck-coverage.ts
+
       - name: Compute affected flag
         id: affected
         env:
@@ -573,6 +581,7 @@ jobs:
           args=()
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run typecheck -- "${args[@]}"
+          bun run typecheck:repo
 
       - name: Result consumption
         env:

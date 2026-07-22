@@ -977,15 +977,15 @@ type ImportedLocal = { importPath: string; exportName: string | undefined };
 const parseHandlerImports = (source: string): Map<string, ImportedLocal> => {
   const map = new Map<string, ImportedLocal>();
   for (const match of source.matchAll(ROUTE_IMPORT_STATEMENT)) {
-    const clause = match.groups?.clause?.trim() ?? "";
-    const importPath = match.groups?.path ?? "";
+    const clause = match.groups?.["clause"]?.trim() ?? "";
+    const importPath = match.groups?.["path"] ?? "";
     if (!clause.startsWith("{")) {
-      const defaultName = IDENTIFIER_HEAD.exec(clause)?.groups?.name;
+      const defaultName = IDENTIFIER_HEAD.exec(clause)?.groups?.["name"];
       if (defaultName !== undefined) {
         map.set(defaultName, { importPath, exportName: undefined });
       }
     }
-    const namedBody = NAMED_IMPORT_BLOCK.exec(clause)?.groups?.body;
+    const namedBody = NAMED_IMPORT_BLOCK.exec(clause)?.groups?.["body"];
     if (namedBody !== undefined) {
       for (const part of namedBody.split(",")) {
         const trimmed = part.trim();
@@ -993,11 +993,14 @@ const parseHandlerImports = (source: string): Map<string, ImportedLocal> => {
           continue;
         }
         const aliased = ALIASED_IMPORT.exec(trimmed)?.groups;
-        if (aliased?.orig !== undefined && aliased.alias !== undefined) {
-          map.set(aliased.alias, { importPath, exportName: aliased.orig });
+        if (aliased?.["orig"] !== undefined && aliased["alias"] !== undefined) {
+          map.set(aliased["alias"], {
+            importPath,
+            exportName: aliased["orig"],
+          });
           continue;
         }
-        const plain = PLAIN_IDENTIFIER.exec(trimmed)?.groups?.name;
+        const plain = PLAIN_IDENTIFIER.exec(trimmed)?.groups?.["name"];
         if (plain !== undefined) {
           map.set(plain, { importPath, exportName: plain });
         }
@@ -1039,7 +1042,7 @@ const hookGuardedIdsInFile = ({
       continue;
     }
     for (const mount of block.matchAll(ROUTE_HANDLER_MOUNT_PATTERN)) {
-      const local = mount.groups?.local;
+      const local = mount.groups?.["local"];
       const imported = local === undefined ? undefined : imports.get(local);
       const id =
         imported === undefined ? undefined : importToCapabilityId(imported);

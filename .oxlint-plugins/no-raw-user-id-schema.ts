@@ -73,7 +73,7 @@ export default {
       },
       create(context) {
         let hasValidateOrgUserId = false;
-        const ownerFieldNodes = [];
+        const ownerFieldNodes: { name: string; node: unknown }[] = [];
 
         const checkProperty = (node) => {
           const name = getPropertyName(node.key);

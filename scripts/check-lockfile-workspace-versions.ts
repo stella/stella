@@ -44,8 +44,8 @@ const globParent = (glob: string): string => {
 };
 
 const rootPkg = await readJson(path.join(ROOT, "package.json"));
-const workspaceGlobs = Array.isArray(rootPkg.workspaces)
-  ? rootPkg.workspaces.filter(
+const workspaceGlobs = Array.isArray(rootPkg["workspaces"])
+  ? rootPkg["workspaces"].filter(
       (glob): glob is string => typeof glob === "string",
     )
   : panic("root package.json is missing a `workspaces` array");
@@ -79,17 +79,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const parsedLock: unknown = JSON.parse(lockText.replace(/,(\s*[}\]])/gu, "$1"));
-if (!isRecord(parsedLock) || !isRecord(parsedLock.workspaces)) {
+if (!isRecord(parsedLock) || !isRecord(parsedLock["workspaces"])) {
   panic("bun.lock did not parse into the expected { workspaces: {...} } shape");
 }
 const { workspaces: lockWorkspaces } = parsedLock;
 
 const versionForWorkspace = (workspaceDir: string): string | null => {
   const entry = lockWorkspaces[workspaceDir];
-  if (!isRecord(entry) || typeof entry.version !== "string") {
+  if (!isRecord(entry) || typeof entry["version"] !== "string") {
     return null;
   }
-  return entry.version;
+  return entry["version"];
 };
 
 const mismatchForWorkspace = async (

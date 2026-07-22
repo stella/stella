@@ -1,0 +1,17 @@
+{
+  "extends": "@stll/typescript-config/base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    // Oxlint's JS-plugin runtime does not publish types for rule contexts or
+    // its dynamic ESTree nodes. Helpers still narrow external nodes from
+    // unknown; these two options preserve the runtime's callback/object API.
+    "noImplicitAny": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "strict": true,
+    "strictNullChecks": true,
+    "types": ["bun"],
+    "useUnknownInCatchVariables": true
+  },
+  "include": [".oxlint-plugins/**/*.ts", "oxlint.config.ts"],
+  "exclude": [".oxlint-plugins/__fixtures__"]
+}
