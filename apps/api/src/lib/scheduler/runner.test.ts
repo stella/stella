@@ -15,7 +15,7 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import {
-  acquireDueJobs,
+  acquireNextDueJob,
   finishRunFailure,
   finishRunSkipped,
   finishRunSuccess,
@@ -137,31 +137,124 @@ const abortSignalWhenRunInserted = (
     },
   });
 
-describe("acquireDueJobs claim exclusivity", () => {
+describe("acquireNextDueJob claim exclusivity", () => {
   test("two interleaved passes never claim the same job", async () => {
     await seedJob();
 
-    const first = await acquireDueJobs({
+    const first = await acquireNextDueJob({
       db,
       leaseMs: LEASE_MS,
-      limit: 10,
       runnerId: "runner-a",
     });
-    const second = await acquireDueJobs({
+    const second = await acquireNextDueJob({
       db,
       leaseMs: LEASE_MS,
-      limit: 10,
       runnerId: "runner-b",
     });
 
-    expect(first.map((job) => job.id)).toEqual(["test.job"]);
-    expect(second).toEqual([]);
+    expect(first?.id).toBe("test.job");
+    expect(second).toBeNull();
 
     const job = await readJob("test.job");
     // lockedBy carries the per-acquisition lease token (runnerId prefix plus a
     // unique suffix), not the bare runnerId.
     expect(job.lockedBy).toMatch(/^runner-a#/u);
-    expect(first.at(0)?.lockedBy).toBe(job.lockedBy);
+    expect(first?.lockedBy).toBe(job.lockedBy);
+  });
+});
+
+describe("bounded scheduler sweeps", () => {
+  test("claims each job immediately before execution", async () => {
+    await seedJob({ id: "a.job", task: "test.observe" });
+    await seedJob({ id: "b.job", task: "test.observe" });
+
+    let secondJobWasUnlocked = false;
+    const registry = registryOf("test.observe", async ({ job }) => {
+      if (job.id !== "a.job") {
+        return;
+      }
+      secondJobWasUnlocked = (await readJob("b.job")).lockedBy === null;
+    });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry,
+      runnerId: "runner-a",
+    });
+
+    expect(result).toMatchObject({ acquired: 2, succeeded: 2 });
+    expect(secondJobWasUnlocked).toBe(true);
+  });
+
+  test("stops at the job limit and reports that work may remain", async () => {
+    await seedJob({ id: "a.job" });
+    await seedJob({ id: "b.job" });
+    await seedJob({ id: "c.job" });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      limit: 2,
+      registry: noopRegistry,
+      runnerId: "runner-a",
+    });
+
+    expect(result).toEqual({
+      acquired: 2,
+      deadlineReached: false,
+      failed: 0,
+      remainingMayExist: true,
+      skipped: 0,
+      succeeded: 2,
+    });
+    expect((await readJob("c.job")).lockedBy).toBeNull();
+  });
+
+  test("stops claiming at the sweep deadline", async () => {
+    await seedJob({ id: "a.job", task: "test.advance-clock" });
+    await seedJob({ id: "b.job", task: "test.advance-clock" });
+
+    let currentTime = 0;
+    const registry = registryOf("test.advance-clock", () => {
+      currentTime = 100;
+    });
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      maxSweepDurationMs: 50,
+      now: () => currentTime,
+      registry,
+      runnerId: "runner-a",
+    });
+
+    expect(result).toEqual({
+      acquired: 1,
+      deadlineReached: true,
+      failed: 0,
+      remainingMayExist: true,
+      skipped: 0,
+      succeeded: 1,
+    });
+    expect((await readJob("b.job")).lockedBy).toBeNull();
+  });
+
+  test("reports a fully drained sweep", async () => {
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry: noopRegistry,
+      runnerId: "runner-a",
+    });
+
+    expect(result).toEqual({
+      acquired: 0,
+      deadlineReached: false,
+      failed: 0,
+      remainingMayExist: false,
+      skipped: 0,
+      succeeded: 0,
+    });
   });
 });
 

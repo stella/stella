@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { rootDb } from "@/api/db/root";
@@ -23,6 +23,7 @@ import type {
 const DEFAULT_POLL_INTERVAL_MS = 60_000;
 const DEFAULT_LEASE_MS = 30 * 60_000;
 const DEFAULT_JOB_LIMIT = 10;
+const DEFAULT_SWEEP_DURATION_MS = 55_000;
 const MIN_LEASE_MS = 3 * DEFAULT_POLL_INTERVAL_MS;
 
 // Hard upper bound on how long a single task may run. The lease heartbeat
@@ -45,6 +46,8 @@ type RunSchedulerOnceOptions = {
   limit?: number;
   leaseMs?: number;
   maxRuntimeMs?: number;
+  maxSweepDurationMs?: number;
+  now?: () => number;
   registry?: SchedulerTaskRegistry;
   signal?: AbortSignal;
 };
@@ -52,6 +55,8 @@ type RunSchedulerOnceOptions = {
 type RunSchedulerOnceResult = {
   acquired: number;
   failed: number;
+  deadlineReached: boolean;
+  remainingMayExist: boolean;
   skipped: number;
   succeeded: number;
 };
@@ -71,83 +76,80 @@ export const runSchedulerOnce = async ({
   leaseMs = DEFAULT_LEASE_MS,
   limit = DEFAULT_JOB_LIMIT,
   maxRuntimeMs = DEFAULT_MAX_RUNTIME_MS,
+  maxSweepDurationMs = DEFAULT_SWEEP_DURATION_MS,
+  now = Date.now,
   registry = createSchedulerTaskRegistry(),
   runnerId = defaultRunnerId(),
   signal,
 }: RunSchedulerOnceOptions = {}): Promise<RunSchedulerOnceResult> => {
+  if (!Number.isInteger(limit) || limit < 1) {
+    return panic("Scheduler job limit must be a positive integer");
+  }
+
   if (!Number.isInteger(maxRuntimeMs) || maxRuntimeMs < 1) {
     return panic("Scheduler job runtime ceiling must be a positive integer");
   }
 
-  const jobs = await acquireDueJobs({ db, leaseMs, limit, runnerId });
+  if (!Number.isInteger(maxSweepDurationMs) || maxSweepDurationMs < 1) {
+    return panic("Scheduler sweep duration must be a positive integer");
+  }
+
+  const deadline = now() + maxSweepDurationMs;
   const result: RunSchedulerOnceResult = {
-    acquired: jobs.length,
+    acquired: 0,
+    deadlineReached: false,
     failed: 0,
+    remainingMayExist: false,
     skipped: 0,
     succeeded: 0,
   };
-  if (jobs.length === 0) {
-    return result;
+
+  while (result.acquired < limit) {
+    if (signal?.aborted) {
+      result.remainingMayExist = true;
+      break;
+    }
+
+    if (now() >= deadline) {
+      result.deadlineReached = true;
+      result.remainingMayExist = true;
+      break;
+    }
+
+    // Claim immediately before execution. A pass never leases work it cannot
+    // start yet, so another scheduler replica remains free to process it.
+    // oxlint-disable-next-line no-await-in-loop -- sequential claim-and-run is the scheduler's fairness boundary
+    const job = await acquireNextDueJob({ db, leaseMs, runnerId });
+    if (!job) {
+      break;
+    }
+    result.acquired += 1;
+
+    // oxlint-disable-next-line no-await-in-loop -- scheduler jobs intentionally run one at a time per replica
+    const status = await runJob({
+      db,
+      job,
+      leaseMs,
+      maxRuntimeMs,
+      registry,
+      runnerId,
+      signal,
+    });
+    if (status === "success") {
+      result.succeeded += 1;
+      continue;
+    }
+
+    if (status === "skipped") {
+      result.skipped += 1;
+      continue;
+    }
+
+    result.failed += 1;
   }
 
-  const unstartedTokens = new Set(jobs.map(leaseTokenOf));
-  const unstartedHeartbeat = startUnstartedJobsHeartbeat({
-    db,
-    leaseMs,
-    leaseTokens: unstartedTokens,
-    runnerId,
-    signal,
-  });
-
-  try {
-    for (const [index, job] of jobs.entries()) {
-      if (signal?.aborted) {
-        const unstartedJobs = jobs.slice(index);
-        // oxlint-disable-next-line no-await-in-loop -- runs once before the break on abort; jobs are drained sequentially
-        await releaseUnstartedJobs({
-          db,
-          jobs: unstartedJobs,
-        });
-        result.skipped += unstartedJobs.length;
-        break;
-      }
-
-      // oxlint-disable-next-line no-await-in-loop -- jobs run sequentially; lease renewal must precede this job's run
-      const leasedJob = await renewJobLeaseBeforeStart({
-        db,
-        job,
-        leaseMs,
-      });
-      unstartedTokens.delete(leaseTokenOf(job));
-      if (!leasedJob) {
-        result.skipped += 1;
-        continue;
-      }
-
-      // oxlint-disable-next-line no-await-in-loop -- scheduler runs leased jobs one at a time, in order, honouring the abort signal
-      const status = await runJob({
-        db,
-        job: leasedJob,
-        leaseMs,
-        maxRuntimeMs,
-        registry,
-        runnerId,
-        signal,
-      });
-      if (status === "success") {
-        result.succeeded += 1;
-        continue;
-      }
-
-      if (status === "skipped") {
-        result.skipped += 1;
-        continue;
-      }
-
-      result.failed += 1;
-    }
-  } finally {
-    unstartedHeartbeat.stop();
+  if (result.acquired >= limit) {
+    result.remainingMayExist = true;
   }
 
   return result;
@@ -237,41 +239,37 @@ export const startSchedulerLoop = ({
   };
 };
 
-type AcquireDueJobsOptions = {
+type AcquireNextDueJobOptions = {
   db: SchedulerDb;
   runnerId: string;
-  limit: number;
   leaseMs: number;
 };
 
-export const acquireDueJobs = async ({
+export const acquireNextDueJob = async ({
   db,
   leaseMs,
-  limit,
   runnerId,
-}: AcquireDueJobsOptions): Promise<SchedulerJob[]> => {
-  if (!Number.isInteger(limit) || limit < 1) {
-    return panic("Scheduler job limit must be a positive integer");
-  }
-
+}: AcquireNextDueJobOptions): Promise<SchedulerJob | null> => {
   if (!Number.isInteger(leaseMs) || leaseMs < MIN_LEASE_MS) {
     return panic("Scheduler lease must be at least three poll intervals");
   }
 
   const now = new Date();
   const leaseExpiresAt = new Date(now.getTime() + leaseMs);
-  const candidates = await db
-    .select()
-    .from(schedulerJobs)
-    .where(dueJobPredicate(now))
-    .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
-    .limit(limit);
-  const acquired: SchedulerJob[] = [];
+  return await db.transaction(async (tx) => {
+    const [candidate] = await tx
+      .select()
+      .from(schedulerJobs)
+      .where(dueJobPredicate(now))
+      .orderBy(asc(schedulerJobs.nextRunAt), asc(schedulerJobs.id))
+      .limit(1)
+      .for("update", { skipLocked: true });
+    if (!candidate) {
+      return null;
+    }
 
-  for (const candidate of candidates) {
     const leaseToken = acquireLeaseToken(runnerId);
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential conditional locking preserves due-order acquisition
-    const [job] = await db
+    const [job] = await tx
       .update(schedulerJobs)
       .set({
         lockedAt: now,
@@ -281,116 +279,8 @@ export const acquireDueJobs = async ({
       .where(and(eq(schedulerJobs.id, candidate.id), dueJobPredicate(now)))
       .returning();
 
-    if (job) {
-      acquired.push(job);
-    }
-  }
-
-  return acquired;
-};
-
-type ReleaseUnstartedJobsOptions = {
-  db: SchedulerDb;
-  jobs: SchedulerJob[];
-};
-
-const releaseUnstartedJobs = async ({
-  db,
-  jobs,
-}: ReleaseUnstartedJobsOptions): Promise<void> => {
-  if (jobs.length === 0) {
-    return;
-  }
-
-  // Lease tokens are globally unique, so matching the acquired token set targets
-  // exactly the rows this pass still holds.
-  await db
-    .update(schedulerJobs)
-    .set({
-      lockedAt: null,
-      lockedBy: null,
-      lockedUntil: null,
-    })
-    .where(inArray(schedulerJobs.lockedBy, jobs.map(leaseTokenOf)));
-};
-
-type RenewJobLeaseBeforeStartOptions = {
-  db: SchedulerDb;
-  job: SchedulerJob;
-  leaseMs: number;
-};
-
-const renewJobLeaseBeforeStart = async ({
-  db,
-  job,
-  leaseMs,
-}: RenewJobLeaseBeforeStartOptions): Promise<SchedulerJob | null> => {
-  const leaseToken = leaseTokenOf(job);
-  const now = new Date();
-  const [leasedJob] = await db
-    .update(schedulerJobs)
-    .set({
-      lockedAt: now,
-      lockedUntil: new Date(now.getTime() + leaseMs),
-    })
-    .where(
-      and(eq(schedulerJobs.id, job.id), eq(schedulerJobs.lockedBy, leaseToken)),
-    )
-    .returning();
-
-  return leasedJob ?? null;
-};
-
-type StartUnstartedJobsHeartbeatOptions = {
-  db: SchedulerDb;
-  leaseMs: number;
-  leaseTokens: Set<string>;
-  runnerId: string;
-  signal: AbortSignal | undefined;
-};
-
-const startUnstartedJobsHeartbeat = ({
-  db,
-  leaseMs,
-  leaseTokens,
-  runnerId,
-  signal,
-}: StartUnstartedJobsHeartbeatOptions): LeaseHeartbeat => {
-  const intervalMs = Math.max(
-    DEFAULT_POLL_INTERVAL_MS,
-    Math.floor(leaseMs / 3),
-  );
-
-  const renew = async () => {
-    if (signal?.aborted || leaseTokens.size === 0) {
-      return;
-    }
-
-    await db
-      .update(schedulerJobs)
-      .set({
-        lockedUntil: new Date(Date.now() + leaseMs),
-      })
-      .where(inArray(schedulerJobs.lockedBy, [...leaseTokens]));
-  };
-
-  const timer = setInterval(() => {
-    detached(
-      renew().catch((error: unknown) => {
-        logger.warn("scheduler.unstarted_lease_heartbeat_failed", {
-          "scheduler.runner_id": runnerId,
-          "error.type": errorTag(error),
-        });
-      }),
-      "startUnstartedJobsHeartbeat",
-    );
-  }, intervalMs);
-
-  return {
-    stop: () => {
-      clearInterval(timer);
-    },
-  };
+    return job ?? null;
+  });
 };
 
 const dueJobPredicate = (now: Date) =>
