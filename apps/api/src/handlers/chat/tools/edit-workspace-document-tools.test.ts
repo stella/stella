@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { FolioDocxReviewer } from "@stll/folio-core/server";
 
+import { fileChatThreads } from "@/api/db/schema";
 import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -119,6 +120,7 @@ const buildTx = ({
   readOnly = false,
 }: BuildTxOptions = {}) => {
   const insertedTables: unknown[] = [];
+  const updatedTables: { table: unknown; values: unknown }[] = [];
 
   const entitiesSelect = {
     from: () => ({
@@ -237,10 +239,16 @@ const buildTx = ({
         return undefined;
       },
     }),
-    update: () => ({ set: () => ({ where: async () => {} }) }),
+    update: (table: unknown) => ({
+      set: (values: unknown) => ({
+        where: async () => {
+          updatedTables.push({ table, values });
+        },
+      }),
+    }),
   };
 
-  return { tx, insertedTables };
+  return { tx, insertedTables, updatedTables };
 };
 
 const validateInput = async (input: unknown) => {
@@ -475,7 +483,7 @@ describe("createEditWorkspaceDocumentTools", () => {
   });
 
   test("tracked-changes mode writes a new version with the configured author attributed on the revision", async () => {
-    const { tx, insertedTables } = buildTx({
+    const { tx, insertedTables, updatedTables } = buildTx({
       preferredName: "Jana Nováková",
     });
     const { safeDb } = createScopedDbMock(tx);
@@ -520,9 +528,16 @@ describe("createEditWorkspaceDocumentTools", () => {
       throw new Error(`Expected success, got: ${result.message}`);
     }
     expect(result).toMatchObject({
+      fieldId: expect.any(String),
       representation: "tracked-changes",
+      replacedFieldId: fileFieldId,
       applied: [{ id: expect.stringMatching(/^auto-/u) }],
       skipped: [],
+    });
+    expect(result.fieldId).not.toBe(fileFieldId);
+    expect(updatedTables).toContainEqual({
+      table: fileChatThreads,
+      values: { fieldId: result.fieldId },
     });
     expect(s3WriteMock).toHaveBeenCalledTimes(1);
     expect(recordedAuditEvents).toHaveLength(1);

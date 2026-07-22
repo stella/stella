@@ -22,6 +22,7 @@ import {
   desktopEditSessions,
   entities,
   entityVersions,
+  fileChatThreads,
   fields,
   folioCollabSessions,
   workspaces,
@@ -73,6 +74,8 @@ type CreateEntityVersionFromBufferOptions = {
   fileName: string;
   /** The file property to replace; every other field is cloned as-is. */
   filePropertyId: SafeId<"property">;
+  /** The current file field whose chat mapping must follow the replacement. */
+  replacedFileFieldId: SafeId<"field">;
 };
 
 export type CreateEntityVersionFromBufferSuccess = {
@@ -144,6 +147,7 @@ export const createEntityVersionFromBuffer = async ({
   buffer,
   fileName,
   filePropertyId,
+  replacedFileFieldId,
 }: CreateEntityVersionFromBufferOptions): Promise<
   Result<
     CreateEntityVersionFromBufferSuccess,
@@ -361,6 +365,23 @@ export const createEntityVersionFromBuffer = async ({
       })
       .where(
         and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
+      );
+
+    // File-chat identity follows the logical document across version writes.
+    // A version replacement mints a new field id; keeping the mapping on the
+    // replaced id would make the refreshed viewer resolve a brand-new empty
+    // thread. Move every user's mapping for this exact file field atomically
+    // with the version write so the existing conversation follows the new id.
+    await tx
+      .update(fileChatThreads)
+      .set({ fieldId: fileFieldId })
+      .where(
+        and(
+          eq(fileChatThreads.organizationId, organizationId),
+          eq(fileChatThreads.workspaceId, workspaceId),
+          eq(fileChatThreads.entityId, entityId),
+          eq(fileChatThreads.fieldId, replacedFileFieldId),
+        ),
       );
 
     await tx

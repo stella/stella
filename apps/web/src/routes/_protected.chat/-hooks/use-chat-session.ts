@@ -610,6 +610,52 @@ export const useChatSession = ({
   }, [workspacesNavigation]);
 
   const queryClient = useQueryClient();
+  const handledDocxReplacementToolCallIdsRef = useRef(new Set<string>());
+
+  // Server-side automatic DOCX edits replace the entity's file field. Follow
+  // that replacement immediately in the inspector and refresh entity-backed
+  // routes; otherwise an open tab keeps addressing the stale field until a
+  // later navigation. The backend moves the file-chat mapping in the same
+  // transaction, so resolving the new field id preserves this conversation.
+  useExternalSyncEffect(() => {
+    let shouldInvalidateEntities = false;
+
+    for (const message of messages) {
+      if (message.role !== "assistant") {
+        continue;
+      }
+      for (const part of message.parts) {
+        if (
+          part.type !== "tool-call" ||
+          part.name !== "edit_workspace_document" ||
+          part.state !== "complete" ||
+          part.output === undefined ||
+          !part.output.success ||
+          typeof part.output.replacedFieldId !== "string" ||
+          typeof part.output.fieldId !== "string" ||
+          handledDocxReplacementToolCallIdsRef.current.has(part.id)
+        ) {
+          continue;
+        }
+
+        handledDocxReplacementToolCallIdsRef.current.add(part.id);
+        useInspectorStore
+          .getState()
+          .replaceFileFieldId(part.output.replacedFieldId, part.output.fieldId);
+        shouldInvalidateEntities = true;
+      }
+    }
+
+    if (shouldInvalidateEntities && workspaceId !== undefined) {
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        }),
+        "useChatSession.editWorkspaceDocumentReplacement",
+      );
+    }
+  }, [messages, queryClient, workspaceId]);
+
   const handleCreateDocumentResolve = useCallback(
     async (
       toolCallId: string,

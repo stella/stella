@@ -460,6 +460,17 @@ const editWorkspaceDocumentSuccessSchema = v.strictObject({
     ),
   ),
   versionNumber: v.number(),
+  fieldId: v.pipe(
+    v.string(),
+    v.description("Field id of the newly written document version."),
+  ),
+  replacedFieldId: v.pipe(
+    v.string(),
+    v.description(
+      "Field id this version replaced. The client uses this to keep the " +
+        "open document tab and file-chat thread attached to the new version.",
+    ),
+  ),
   representation: v.picklist(Object.values(DOCX_EDIT_REPRESENTATION)),
   applied: v.pipe(
     v.array(appliedOperationSchema),
@@ -629,6 +640,7 @@ export const createEditWorkspaceDocumentTools = ({
       buffer: applied.buffer,
       fileName: loaded.value.fileName,
       filePropertyId: loaded.value.filePropertyId,
+      replacedFileFieldId: fileFieldId,
     });
     if (Result.isError(written)) {
       throw new ChatToolError({
@@ -641,6 +653,8 @@ export const createEditWorkspaceDocumentTools = ({
       success: true as const,
       versionId: written.value.entityVersionId,
       versionNumber: written.value.versionNumber,
+      fieldId: written.value.fieldId,
+      replacedFieldId: fileFieldId,
       representation: docxEditRepresentation,
       // Mapped into plain, mutable objects: folio's own
       // `FolioAIEditAppliedOperation`/`FolioAIEditSkippedOperation` types
