@@ -255,6 +255,7 @@ export const isPublicOfficialChatToolName = (
 /** Prefix marking a destructive (irreversible delete) registry write tool. */
 const DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX = "delete_";
 const APPROVAL_ONCE_CHAT_TOOL_NAMES = {
+  edit_workspace_document: true,
   manage_organization: true,
 } as const satisfies Partial<Record<ApprovalToolName, true>>;
 
