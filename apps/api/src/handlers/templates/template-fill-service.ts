@@ -37,7 +37,6 @@ import {
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import type {
-  DiscoveredField,
   FieldDateFormat,
   FieldPart,
   InputType,
@@ -49,6 +48,7 @@ import { getS3 } from "@/api/lib/s3";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 
 import {
+  collectRawTemplateTerminalPaths,
   collectTemplateInputKeys,
   findUnusedTemplateValueKeys,
   isFillableTemplateInputField,
@@ -60,29 +60,6 @@ import {
 type FillValues = Record<string, unknown>;
 
 type UnusedValuePolicy = "allow" | "reject";
-
-const collectDiscoveredTerminalPaths = (
-  fields: readonly DiscoveredField[],
-): string[] => {
-  const terminalPaths: string[] = [];
-
-  const visit = (field: DiscoveredField, parentPath: string): void => {
-    const path = parentPath === "" ? field.path : `${parentPath}.${field.path}`;
-    if (field.kind !== "object" && field.kind !== "array") {
-      terminalPaths.push(path);
-    }
-    if (field.itemFields !== undefined) {
-      for (const itemField of field.itemFields) {
-        visit(itemField, path);
-      }
-    }
-  };
-
-  for (const field of fields) {
-    visit(field, "");
-  }
-  return terminalPaths;
-};
 
 type TemplateInputRejection = {
   type: "unused-values";
@@ -335,10 +312,12 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   if (unusedValuePolicy === "reject") {
     const discovered = await discoverTemplate(loaded.buffer);
-    const terminalPaths = [
-      ...collectDiscoveredTerminalPaths(discovered.fields),
-      ...discovered.placeholders.map((placeholder) => placeholder.name),
-    ];
+    const terminalPaths = collectRawTemplateTerminalPaths({
+      fields: discovered.fields,
+      placeholderPaths: discovered.placeholders.map(
+        (placeholder) => placeholder.name,
+      ),
+    });
     const inputContract =
       manifest === null
         ? collectTemplateInputKeys({

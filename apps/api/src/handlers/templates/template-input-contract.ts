@@ -26,6 +26,43 @@ type TemplateInputField = {
   formula?: unknown;
 };
 
+type RawDiscoveredField = {
+  itemFields?: readonly RawDiscoveredField[];
+  kind: "array" | "boolean" | "object" | "string";
+  path: string;
+};
+
+type CollectRawTemplateTerminalPathsOptions = {
+  fields: readonly RawDiscoveredField[];
+  placeholderPaths: Iterable<string>;
+};
+
+export const collectRawTemplateTerminalPaths = ({
+  fields,
+  placeholderPaths,
+}: CollectRawTemplateTerminalPathsOptions): string[] => {
+  const terminalPaths = Array.from(placeholderPaths);
+
+  const visit = (field: RawDiscoveredField, parentPath: string): void => {
+    const path = parentPath === "" ? field.path : `${parentPath}.${field.path}`;
+    const itemFields = field.itemFields;
+    const hasItemFields = itemFields !== undefined && itemFields.length > 0;
+    if (field.kind !== "object" && (field.kind !== "array" || !hasItemFields)) {
+      terminalPaths.push(path);
+    }
+    if (itemFields !== undefined) {
+      for (const itemField of itemFields) {
+        visit(itemField, path);
+      }
+    }
+  };
+
+  for (const field of fields) {
+    visit(field, "");
+  }
+  return terminalPaths;
+};
+
 export const isFillableTemplateInputField = (
   field: TemplateInputField,
 ): boolean =>

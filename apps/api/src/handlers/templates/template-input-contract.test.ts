@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  collectRawTemplateTerminalPaths,
   collectTemplateInputKeys,
   findUnusedTemplateValueKeys,
   isFillableTemplateInputField,
@@ -40,6 +41,41 @@ describe("template input contract", () => {
       new Set(["client.name", "signature_date"]),
     );
     expect(contract.forbiddenPaths).toEqual(new Set());
+  });
+
+  test("raw static loops accept an array root with no item fields", () => {
+    const terminalPaths = collectRawTemplateTerminalPaths({
+      fields: [{ path: "rows", kind: "array", itemFields: [] }],
+      placeholderPaths: [],
+    });
+    const contract = collectTemplateInputKeys({ type: "raw", terminalPaths });
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: { rows: [{}, {}] },
+      }),
+    ).toEqual([]);
+  });
+
+  test("raw loops with item fields keep their array root recursion-only", () => {
+    const terminalPaths = collectRawTemplateTerminalPaths({
+      fields: [
+        {
+          path: "rows",
+          kind: "array",
+          itemFields: [{ path: "name", kind: "string" }],
+        },
+      ],
+      placeholderPaths: [],
+    });
+    expect(terminalPaths).toEqual(["rows.name"]);
+    const contract = collectTemplateInputKeys({ type: "raw", terminalPaths });
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: { rows: [{ name: "Ada" }] },
+      }),
+    ).toEqual([]);
   });
 
   test("manifest templates accept live descendants but exclude derived outputs", () => {
