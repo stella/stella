@@ -159,6 +159,33 @@ describe("discoverTemplate", () => {
     });
   });
 
+  test("inline loops inside block rows inherit the enclosing row path", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("Items: {{#each items}}{{items.name}}, {{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(
+      result.fields.find((field) => field.path === "items"),
+    ).toBeUndefined();
+    expect(
+      result.fields.find((field) => field.path === "groups.items"),
+    ).toEqual({
+      path: "groups.items",
+      kind: "array",
+      count: 1,
+      itemFields: [{ path: "name", kind: "string", count: 1 }],
+    });
+    expect(result.placeholders).toContainEqual({
+      name: "groups.items.name",
+      count: 1,
+    });
+  });
+
   test("condition-only paths join repeated row fields", async () => {
     const xml = WRAP(
       [

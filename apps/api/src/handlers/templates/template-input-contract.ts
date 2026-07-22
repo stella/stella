@@ -172,7 +172,7 @@ const findUnusedPaths = (
       continue;
     }
 
-    if (parentPath === "" && isBelowAny(path, contract.arrayPaths)) {
+    if (isFlattenedArrayDescendant(path, parentPath, contract.arrayPaths)) {
       unusedPaths.push(path);
       continue;
     }
@@ -235,6 +235,24 @@ const hasDeclaredDescendant = (
   const descendantPrefix = `${path}.`;
   for (const declaredKey of declaredKeys) {
     if (declaredKey.startsWith(descendantPrefix)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const isFlattenedArrayDescendant = (
+  path: string,
+  parentPath: string,
+  arrayPaths: ReadonlySet<string>,
+): boolean => {
+  const nestedArrayPrefix = parentPath === "" ? "" : `${parentPath}.`;
+  for (const arrayPath of arrayPaths) {
+    if (
+      arrayPath !== parentPath &&
+      arrayPath.startsWith(nestedArrayPrefix) &&
+      path.startsWith(`${arrayPath}.`)
+    ) {
       return true;
     }
   }

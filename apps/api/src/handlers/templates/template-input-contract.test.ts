@@ -479,6 +479,25 @@ describe("template input contract", () => {
     );
   });
 
+  test("INVARIANT: nested loop descendants cannot flatten inside an outer row", () => {
+    fc.assert(
+      fc.property(fc.jsonValue(), (value) => {
+        expect(
+          findUnusedTemplateValueKeys({
+            contract: {
+              acceptedPaths: new Set(["groups.items.name"]),
+              arrayPaths: new Set(["groups", "groups.items"]),
+              forbiddenPaths: new Set(),
+              primitiveArrayPaths: new Set(),
+            },
+            values: { groups: [{ "items.name": value }] },
+          }),
+        ).toEqual(["groups.items.name"]);
+      }),
+      propertyConfig(),
+    );
+  });
+
   test("INVARIANT: value shape cannot change whether an unknown key is rejected", () => {
     fc.assert(
       fc.property(fc.jsonValue(), (value) => {

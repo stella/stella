@@ -139,6 +139,21 @@ const registerConditionFields = (
   visit(root);
 };
 
+const qualifyRowScopedPath = (
+  path: string,
+  rowPaths: readonly string[] = [],
+): string => {
+  if (
+    rowPaths.some(
+      (rowPath) => path === rowPath || path.startsWith(`${rowPath}.`),
+    )
+  ) {
+    return path;
+  }
+  const innermostRowPath = rowPaths.at(-1);
+  return innermostRowPath === undefined ? path : `${innermostRowPath}.${path}`;
+};
+
 // ── Condition map building ─────────────────────────────
 
 /**
@@ -446,6 +461,12 @@ const analyzeContainer = (
       end: number;
       start: number;
     }[] = [];
+    const inlineLoopScopes: {
+      declaredPath: string;
+      end: number;
+      scopedPath: string;
+      start: number;
+    }[] = [];
 
     const inline = parseInlineConditions(text);
     if (!inline.ok) {
@@ -457,8 +478,18 @@ const analyzeContainer = (
     } else {
       for (const group of inline.groups) {
         if (group.kind === "each") {
-          registerField(fields, group.arrayPath, "array");
-          const entry = fields.get(group.arrayPath);
+          const scopedPath = qualifyRowScopedPath(
+            group.arrayPath,
+            arrayScopes.get(i),
+          );
+          registerField(fields, scopedPath, "array");
+          inlineLoopScopes.push({
+            declaredPath: group.arrayPath,
+            end: group.contentEnd,
+            scopedPath,
+            start: group.contentStart,
+          });
+          const entry = fields.get(scopedPath);
           const content = text.slice(group.contentStart, group.contentEnd);
           const prefix = `${group.arrayPath}.`;
           for (const match of content.matchAll(PLACEHOLDER_RE)) {
@@ -496,15 +527,23 @@ const analyzeContainer = (
     }
 
     for (const match of text.matchAll(PLACEHOLDER_RE)) {
-      const name = match.groups?.["name"];
-      if (!name) {
+      const declaredName = match.groups?.["name"];
+      if (!declaredName) {
         continue;
       }
       // @-prefixed markers (@clause:, @num:, @ref:) are resolved at fill time,
       // not user-entered fields — keep them out of the discovered schema.
-      if (name.startsWith("@")) {
+      if (declaredName.startsWith("@")) {
         continue;
       }
+      const loopScope = inlineLoopScopes.find(
+        ({ end, start }) => start <= match.index && match.index < end,
+      );
+      const declaredLoopPrefix = `${loopScope?.declaredPath ?? ""}.`;
+      const name =
+        loopScope !== undefined && declaredName.startsWith(declaredLoopPrefix)
+          ? `${loopScope.scopedPath}.${declaredName.slice(declaredLoopPrefix.length)}`
+          : declaredName;
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
 
       const inlineCondition = inlineBranchConditions.find(

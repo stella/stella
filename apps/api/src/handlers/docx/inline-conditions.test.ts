@@ -625,6 +625,28 @@ describe("fillTemplate with inline conditions", () => {
     expect(await documentText(result.buffer)).toBe("Acme Ltd.Alice.");
   });
 
+  test("inline loops inside block rows use each row's nested array", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        P("{{#each groups}}") +
+          P("Items: {{#each items}}{{items.name}}, {{/each}}") +
+          P("{{/each}}"),
+      ),
+    );
+
+    const result = await fillTemplate(docx, {
+      groups: [
+        { items: [{ name: "Alpha" }] },
+        { items: [{ name: "Beta" }, { name: "Gamma" }] },
+      ],
+    });
+
+    expect(result.structureErrors).toEqual([]);
+    expect(await documentText(result.buffer)).toBe(
+      "Items: Alpha, Items: Beta, Gamma, ",
+    );
+  });
+
   test("surfaces inline structure errors through fillTemplate", async () => {
     const docx = await makeDocx(
       WRAP(P("Broken{{#if oops}} span without closer.")),
