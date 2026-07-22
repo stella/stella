@@ -436,6 +436,7 @@ describe("chat prompt builders", () => {
 
     expect(prompt).toContain("edit_workspace_document");
     expect(prompt).toContain("saves a new document version");
+    expect(prompt).toContain("baseVersionId");
     expect(prompt).not.toContain("apply-active-docx-edits");
     expect(prompt).not.toContain("ready to review in the panel");
   });
