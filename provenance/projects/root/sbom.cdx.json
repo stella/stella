@@ -212,6 +212,12 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/mobile/src/app/(tabs)/matters.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/empty-state-screen.tsx#1"
+          },
+          {
             "location": "apps/playground/src/App.tsx#1"
           },
           {
@@ -393,6 +399,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#9"
@@ -2709,10 +2718,6 @@
         },
         {
           "name": "SrcFile",
-          "value": "node_modules/@babel/helper-module-transforms/node_modules/@babel/core/package.json"
-        },
-        {
-          "name": "SrcFile",
           "value": "node_modules/@astrojs/react/node_modules/@vitejs/plugin-react/node_modules/@babel/core/package.json"
         }
       ],
@@ -2728,78 +2733,6 @@
         }
       ],
       "bom-ref": "pkg:npm/@babel/core@7.29.7",
-      "description": "Babel compiler core.",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@babel/plugin-transform-react-jsx-self/node_modules/@babel/core/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@babel/plugin-transform-react-jsx-self/node_modules/@babel/core/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "scripts/rc-bailouts.ts#22"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://babel.dev/docs/en/next/babel-core"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/babel/babel.git"
-        }
-      ],
-      "group": "@babel",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "core",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@tanstack/start-plugin-core/node_modules/@babel/core/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@tanstack/router-plugin/node_modules/@babel/core/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@babel/plugin-transform-react-jsx-source/node_modules/@babel/core/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@babel/plugin-transform-react-jsx-self/node_modules/@babel/core/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40babel/core@7.29.7",
-      "scope": "required",
-      "type": "library",
-      "version": "7.29.7"
-    },
-    {
-      "authors": [
-        {
-          "name": "The Babel Team (https://babel.dev/team)"
-        }
-      ],
-      "bom-ref": "pkg:npm/@babel/core@8.0.1",
       "description": "Babel compiler core.",
       "evidence": {
         "identity": [
@@ -2846,6 +2779,66 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@babel/core/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40babel/core@7.29.7",
+      "scope": "required",
+      "type": "library",
+      "version": "7.29.7"
+    },
+    {
+      "authors": [
+        {
+          "name": "The Babel Team (https://babel.dev/team)"
+        }
+      ],
+      "bom-ref": "pkg:npm/@babel/core@8.0.1",
+      "description": "Babel compiler core.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/web/node_modules/@babel/core/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/web/node_modules/@babel/core/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "scripts/rc-bailouts.ts#22"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://babel.dev/docs/en/next/babel-core"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/babel/babel.git"
+        }
+      ],
+      "group": "@babel",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "core",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "apps/web/node_modules/@babel/core/package.json"
         }
       ],
       "purl": "pkg:npm/%40babel/core@8.0.1",
@@ -3064,6 +3057,12 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/mobile/src/app/(tabs)/matters.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/empty-state-screen.tsx#1"
+          },
+          {
             "location": "apps/playground/src/App.tsx#1"
           },
           {
@@ -3245,6 +3244,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#9"
@@ -4560,7 +4562,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/lib/api.ts#1"
+            "location": "packages/api-client/src/index.ts#1"
+          },
+          {
+            "location": "packages/api-client/src/index.ts#2"
           }
         ]
       },
@@ -5626,6 +5631,12 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/mobile/src/app/(tabs)/matters.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/empty-state-screen.tsx#1"
+          },
+          {
             "location": "apps/playground/src/App.tsx#1"
           },
           {
@@ -5807,6 +5818,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#9"
@@ -7207,6 +7221,101 @@
           "name": "sinclairzx81"
         }
       ],
+      "bom-ref": "pkg:npm/@sinclair/typebox@0.27.12",
+      "description": "JSONSchema Type Builder with Static Type Resolution for TypeScript",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@jest/schemas/node_modules/@sinclair/typebox/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@jest/schemas/node_modules/@sinclair/typebox/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/scripts/exact-mirror-guard.ts#34"
+          },
+          {
+            "location": "apps/api/src/lib/conditions/contract.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/conditions/contract.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/custom-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/custom-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/permissive-route-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/permissive-route-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/views-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/capability-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/create-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/preview.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/permissive-route-schema.ts#3"
+          },
+          {
+            "location": "apps/api/src/mcp/capability-tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/mcp/capability-tools.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/sinclairzx81/sinclair-typebox"
+        }
+      ],
+      "group": "@sinclair",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "typebox",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@jest/schemas/node_modules/@sinclair/typebox/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40sinclair/typebox@0.27.12",
+      "scope": "required",
+      "type": "library",
+      "version": "0.27.12"
+    },
+    {
+      "authors": [
+        {
+          "name": "sinclairzx81"
+        }
+      ],
       "bom-ref": "pkg:npm/@sinclair/typebox@0.34.52",
       "description": "Json Schema Type Builder with Static Type Resolution for TypeScript",
       "evidence": {
@@ -7260,6 +7369,9 @@
           },
           {
             "location": "apps/api/src/lib/permissive-route-schema.ts#3"
+          },
+          {
+            "location": "apps/api/src/mcp/capability-tools.ts#4"
           },
           {
             "location": "apps/api/src/mcp/capability-tools.ts#3"
@@ -8645,6 +8757,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/chat-code-mode.ts#5"
@@ -12265,6 +12380,12 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/mobile/src/app/(tabs)/matters.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/empty-state-screen.tsx#1"
+          },
+          {
             "location": "apps/playground/src/App.tsx#1"
           },
           {
@@ -12446,6 +12567,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#9"
@@ -13694,6 +13818,56 @@
       "version": "1.7.1"
     },
     {
+      "bom-ref": "pkg:npm/@volar/typescript@2.4.28",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@volar/typescript/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@volar/typescript/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/scripts/src/result-consumption.ts#4"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/volarjs/volar.js.git"
+        }
+      ],
+      "group": "@volar",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "typescript",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@volar/typescript/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40volar/typescript@2.4.28",
+      "scope": "required",
+      "type": "library",
+      "version": "2.4.28"
+    },
+    {
       "authors": [
         {
           "name": "withastro"
@@ -14004,6 +14178,9 @@
             "location": "apps/api/src/db-url.ts#1"
           },
           {
+            "location": "apps/api/src/dev/register-mock-ai.ts#10"
+          },
+          {
             "location": "apps/api/src/env-base.ts#11"
           },
           {
@@ -14236,6 +14413,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-tool-types.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/chat-code-mode.ts#12"
@@ -15663,7 +15843,7 @@
             "location": "apps/api/src/mcp/capability-context.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/capability-tools.ts#4"
+            "location": "apps/api/src/mcp/capability-tools.ts#5"
           },
           {
             "location": "apps/api/src/mcp/cli-support-band.ts#1"
@@ -15697,6 +15877,9 @@
           },
           {
             "location": "apps/api/src/mcp/research-admin-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/stella-tools.ts#2"
           },
           {
             "location": "apps/api/src/mcp/template-tools.ts#1"
@@ -15924,6 +16107,9 @@
             "location": "packages/scripts/src/model-catalog-capabilities-gen.ts#1"
           },
           {
+            "location": "packages/scripts/src/result-consumption.ts#1"
+          },
+          {
             "location": "packages/skills/scripts/generate-blueprints-manifest.ts#1"
           },
           {
@@ -15937,6 +16123,9 @@
           },
           {
             "location": "packages/template-conditions/src/markers.ts#19"
+          },
+          {
+            "location": "scripts/check-lockfile-workspace-versions.ts#27"
           },
           {
             "location": "scripts/prepare-publish.ts#17"
@@ -16225,6 +16414,12 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts#46"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts#17"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#38"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#13"
@@ -16777,6 +16972,12 @@
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts#27"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts#18"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#39"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#14"
           },
           {
@@ -16884,6 +17085,12 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts#27"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex.ts#18"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts#39"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts#14"
@@ -18232,7 +18439,7 @@
             "location": "apps/api/src/mcp/matter-tools.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/stella-tools.ts#2"
+            "location": "apps/api/src/mcp/stella-tools.ts#3"
           },
           {
             "location": "apps/api/src/mcp/template-tools.ts#2"
@@ -19650,7 +19857,7 @@
             "location": "apps/api/src/mcp/matter-tools.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/stella-tools.ts#2"
+            "location": "apps/api/src/mcp/stella-tools.ts#3"
           },
           {
             "location": "apps/api/src/mcp/template-tools.ts#2"
@@ -20047,9 +20254,6 @@
           },
           {
             "location": "apps/api/src/handlers/chat/routes.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/send-message.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/update-thread-model.ts#3"
@@ -21165,13 +21369,16 @@
             "location": "apps/api/src/lib/views-schema.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/capability-tools.ts#5"
+            "location": "apps/api/src/mcp/capability-tools.ts#6"
           },
           {
             "location": "apps/api/src/server.ts#2"
           },
           {
             "location": "apps/api/src/server.ts#3"
+          },
+          {
+            "location": "packages/api-client/src/index.ts#3"
           }
         ]
       },
@@ -21208,6 +21415,195 @@
       ],
       "type": "framework",
       "version": "1.4.29"
+    },
+    {
+      "bom-ref": "pkg:npm/expect-type@1.4.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/expect-type/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/expect-type/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/contracts/chat-send-request.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/mmkal/expect-type#readme"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/mmkal/expect-type.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "expect-type",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/expect-type/package.json"
+        }
+      ],
+      "purl": "pkg:npm/expect-type@1.4.0",
+      "scope": "required",
+      "tags": [
+        "test"
+      ],
+      "type": "library",
+      "version": "1.4.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "650 Industries"
+        },
+        {
+          "name": " Inc."
+        }
+      ],
+      "bom-ref": "pkg:npm/expo-router@57.0.6",
+      "description": "Expo Router is a file-based router for React Native and web applications.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/expo-router/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/expo-router/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/mobile/src/app/(tabs)/_layout.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/app/_layout.tsx#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://docs.expo.dev/routing/introduction/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/expo/expo.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "expo-router",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/expo-router/package.json"
+        }
+      ],
+      "purl": "pkg:npm/expo-router@57.0.6",
+      "scope": "required",
+      "tags": [
+        "web"
+      ],
+      "type": "library",
+      "version": "57.0.6"
+    },
+    {
+      "authors": [
+        {
+          "name": "650 Industries"
+        },
+        {
+          "name": " Inc."
+        }
+      ],
+      "bom-ref": "pkg:npm/expo-status-bar@57.0.1",
+      "description": "Provides the same interface as the React Native StatusBar API, but with slightly different defaults to work great in Expo environments.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/expo-status-bar/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/expo-status-bar/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/mobile/src/app/_layout.tsx#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://docs.expo.dev/versions/latest/sdk/status-bar/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/expo/expo.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "expo-status-bar",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/expo-status-bar/package.json"
+        }
+      ],
+      "purl": "pkg:npm/expo-status-bar@57.0.1",
+      "scope": "required",
+      "type": "library",
+      "version": "57.0.1"
     },
     {
       "authors": [
@@ -21571,6 +21967,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/scripts/record-eu-ecj-fixtures.ts#28"
+          },
+          {
             "location": "apps/api/scripts/seed-templates.ts#20"
           },
           {
@@ -21756,7 +22155,10 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#11"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#12"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#3"
           },
           {
             "location": "apps/web/src/components/chat/web-search-sources.tsx#1"
@@ -22395,7 +22797,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/index.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#22"
+            "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#19"
           },
           {
             "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#16"
@@ -22727,7 +23129,7 @@
             "location": "apps/web/src/lib/analytics/posthog.ts#3"
           },
           {
-            "location": "apps/web/src/lib/api.ts#2"
+            "location": "apps/web/src/lib/api.ts#1"
           }
         ]
       },
@@ -22818,6 +23220,54 @@
       "scope": "required",
       "type": "library",
       "version": "5.41.0"
+    },
+    {
+      "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
+      "description": "Renders highlighted Prism output using React",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/prism-react-renderer/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/prism-react-renderer/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#5"
+          }
+        ]
+      },
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "prism-react-renderer",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/prism-react-renderer/package.json"
+        }
+      ],
+      "purl": "pkg:npm/prism-react-renderer@2.4.1",
+      "scope": "required",
+      "type": "library",
+      "version": "2.4.1"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -23399,6 +23849,139 @@
       "version": "19.2.7"
     },
     {
+      "authors": [
+        {
+          "name": "Janic Duplessis <janicduplessis@gmail.com>"
+        }
+      ],
+      "bom-ref": "pkg:npm/react-native-safe-area-context@5.7.0",
+      "description": "A flexible way to handle safe area, also works on Android and web.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/react-native-safe-area-context/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/react-native-safe-area-context/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/mobile/src/app/_layout.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/components/empty-state-screen.tsx#4"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/AppAndFlow/react-native-safe-area-context#readme"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/AppAndFlow/react-native-safe-area-context.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "react-native-safe-area-context",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/react-native-safe-area-context/package.json"
+        }
+      ],
+      "purl": "pkg:npm/react-native-safe-area-context@5.7.0",
+      "scope": "required",
+      "tags": [
+        "framework",
+        "native",
+        "web"
+      ],
+      "type": "framework",
+      "version": "5.7.0"
+    },
+    {
+      "bom-ref": "pkg:npm/react-native@0.86.0",
+      "description": "A framework for building native apps using React",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/react-native/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/react-native/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/mobile/src/theme.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/app/(tabs)/matters.tsx#3"
+          },
+          {
+            "location": "apps/mobile/src/components/empty-state-screen.tsx#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://reactnative.dev/"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/facebook/react-native.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "react-native",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/react-native/package.json"
+        }
+      ],
+      "purl": "pkg:npm/react-native@0.86.0",
+      "scope": "required",
+      "tags": [
+        "framework",
+        "native"
+      ],
+      "type": "framework",
+      "version": "0.86.0"
+    },
+    {
       "bom-ref": "pkg:npm/react@19.2.7",
       "description": "React is a JavaScript library for building user interfaces.",
       "evidence": {
@@ -23604,6 +24187,12 @@
             "location": "apps/desktop/src/mainview/main.tsx#1"
           },
           {
+            "location": "apps/mobile/src/app/(tabs)/matters.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/empty-state-screen.tsx#1"
+          },
+          {
             "location": "apps/playground/src/App.tsx#1"
           },
           {
@@ -23785,6 +24374,9 @@
           },
           {
             "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#9"
@@ -24933,9 +25525,6 @@
             "location": "apps/api/src/handlers/docx/discover-template.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/docx/extract-text.ts#3"
-          },
-          {
             "location": "apps/api/src/handlers/docx/inline-conditions.ts#55"
           },
           {
@@ -25170,6 +25759,126 @@
       "scope": "required",
       "type": "library",
       "version": "3.6.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "Microsoft Corp."
+        }
+      ],
+      "bom-ref": "pkg:npm/typescript@6.0.3",
+      "description": "TypeScript is a language for application scale JavaScript development",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/typescript/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/typescript/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/scripts/src/result-consumption.ts#4"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://www.typescriptlang.org/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/TypeScript.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "typescript",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/typescript/package.json"
+        }
+      ],
+      "purl": "pkg:npm/typescript@6.0.3",
+      "scope": "required",
+      "type": "library",
+      "version": "6.0.3"
+    },
+    {
+      "authors": [
+        {
+          "name": "Microsoft Corp."
+        }
+      ],
+      "bom-ref": "pkg:npm/typescript@7.0.2",
+      "description": "TypeScript is a language for application scale JavaScript development",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@typescript/native/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@typescript/native/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/scripts/src/result-consumption.ts#4"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://www.typescriptlang.org/"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/microsoft/TypeScript.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "typescript",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@typescript/native/package.json"
+        }
+      ],
+      "purl": "pkg:npm/typescript@7.0.2",
+      "scope": "required",
+      "type": "library",
+      "version": "7.0.2"
     },
     {
       "authors": [
@@ -25621,7 +26330,10 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#12"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#13"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-code-block.tsx#6"
           },
           {
             "location": "apps/web/src/components/chat/web-search-sources.tsx#2"
@@ -26650,6 +27362,72 @@
       "version": "14.0.1"
     },
     {
+      "bom-ref": "pkg:npm/uuid@7.0.3",
+      "description": "RFC4122 (v1, v4, and v5) UUIDs",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/xcode/node_modules/uuid/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/xcode/node_modules/uuid/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/components/inspector/inspector-store.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#24"
+          },
+          {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#23"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#24"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/uuidjs/uuid.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "uuid",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/xcode/node_modules/uuid/package.json"
+        }
+      ],
+      "purl": "pkg:npm/uuid@7.0.3",
+      "scope": "required",
+      "type": "library",
+      "version": "7.0.3"
+    },
+    {
       "authors": [
         {
           "name": "Fabian Hiller"
@@ -26726,6 +27504,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#3"
@@ -26902,7 +27683,7 @@
             "location": "apps/api/src/mcp/research-admin-tools.ts#2"
           },
           {
-            "location": "apps/api/src/mcp/stella-tools.ts#3"
+            "location": "apps/api/src/mcp/stella-tools.ts#4"
           },
           {
             "location": "apps/api/src/mcp/template-tools.ts#3"
@@ -26975,6 +27756,9 @@
           },
           {
             "location": "packages/anonymize-chat/src/index.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/chat.ts#1"
           },
           {
             "location": "packages/catalogue/scripts/validate.ts#13"
