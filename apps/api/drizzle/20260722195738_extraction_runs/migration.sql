@@ -27,7 +27,7 @@ ALTER TABLE "extraction_runs" ADD CONSTRAINT "extraction_runs_organization_id_or
 ALTER TABLE "extraction_runs" ADD CONSTRAINT "extraction_runs_workspace_id_workspaces_id_fkey" FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "extraction_runs" ADD CONSTRAINT "extraction_runs_requested_by_user_id_fkey" FOREIGN KEY ("requested_by") REFERENCES "user"("id") ON DELETE SET NULL;--> statement-breakpoint
 CREATE INDEX "extraction_runs_workspace_created_idx" ON "extraction_runs" ("workspace_id", "created_at" DESC NULLS LAST, "id");--> statement-breakpoint
-CREATE INDEX "extraction_runs_workspace_active_idx" ON "extraction_runs" ("workspace_id", "updated_at") WHERE "status" IN ('planning', 'running', 'finalizing');--> statement-breakpoint
+CREATE INDEX "extraction_runs_active_updated_idx" ON "extraction_runs" ("updated_at", "workspace_id") WHERE "status" IN ('planning', 'running', 'finalizing');--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "extraction_runs" TO stella;--> statement-breakpoint
 CREATE POLICY "extraction_runs_workspace_select" ON "extraction_runs" AS PERMISSIVE FOR SELECT TO "stella" USING ((CASE
   WHEN workspace_id = ANY(

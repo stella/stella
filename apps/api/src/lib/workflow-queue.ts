@@ -1068,8 +1068,9 @@ const recoverOrphanedWorkflow = async ({
 
 type ReconcileOrphanedWorkflowsOptions = {
   // Boot passes `true` to also sweep the DB for `pending` cells whose
-  // lock already lapsed via TTL; periodic ticks pass `false` and rely on
-  // the cheap lock scan alone.
+  // lock already lapsed via TTL. Every tick still performs the bounded,
+  // indexed stale-run scan because a captured terminal ledger-write failure
+  // can leave no Redis or pending-cell recovery signal.
   scanPendingCells: boolean;
 };
 
@@ -1086,12 +1087,11 @@ export const reconcileOrphanedWorkflows = async ({
   const pendingWorkspaceIds = scanPendingCells
     ? await selectWorkspacesWithPendingCells()
     : await selectWorkspacesWithPendingCells(lockedWorkspaceIds);
-  const staleActiveWorkspaceIds = scanPendingCells
-    ? await extractionRunStore.listStaleActiveWorkspaceIds({
-        before: new Date(Date.now() - RUNNING_LOCK_TTL_SEC * 1000),
-        limit: STALE_ACTIVE_RUN_SCAN_LIMIT,
-      })
-    : [];
+  const staleActiveWorkspaceIds =
+    await extractionRunStore.listStaleActiveWorkspaceIds({
+      before: new Date(Date.now() - RUNNING_LOCK_TTL_SEC * 1000),
+      limit: STALE_ACTIVE_RUN_SCAN_LIMIT,
+    });
 
   const candidateWorkspaceIds = [
     ...lockedWorkspaceIds,

@@ -71,8 +71,8 @@ export const extractionRuns = p.pgTable(
       .index("extraction_runs_workspace_created_idx")
       .on(table.workspaceId, table.createdAt.desc(), table.id),
     p
-      .index("extraction_runs_workspace_active_idx")
-      .on(table.workspaceId, table.updatedAt)
+      .index("extraction_runs_active_updated_idx")
+      .on(table.updatedAt, table.workspaceId)
       .where(sql`${table.status} IN ('planning', 'running', 'finalizing')`),
     p.check(
       "extraction_runs_execution_version_positive_check",
