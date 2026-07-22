@@ -76,6 +76,8 @@ type CreateEntityVersionFromBufferOptions = {
   filePropertyId: SafeId<"property">;
   /** The current file field whose chat mapping must follow the replacement. */
   replacedFileFieldId: SafeId<"field">;
+  /** Warning-level findings from the security scan of the transformed bytes. */
+  scanWarnings?: string[] | undefined;
 };
 
 export type CreateEntityVersionFromBufferSuccess = {
@@ -148,6 +150,7 @@ export const createEntityVersionFromBuffer = async ({
   fileName,
   filePropertyId,
   replacedFileFieldId,
+  scanWarnings,
 }: CreateEntityVersionFromBufferOptions): Promise<
   Result<
     CreateEntityVersionFromBufferSuccess,
@@ -315,6 +318,7 @@ export const createEntityVersionFromBuffer = async ({
             encrypted: false,
             mimeType: DOCX_MIME_TYPE,
           }),
+          ...(scanWarnings !== undefined && { scanWarnings }),
         }),
         workspaceId,
       }),

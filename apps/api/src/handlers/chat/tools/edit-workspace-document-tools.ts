@@ -32,7 +32,9 @@ import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-docx-buffer";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const EDIT_WORKSPACE_DOCUMENT_TOOL_NAME = "edit_workspace_document";
 
@@ -283,6 +285,19 @@ type ValidatedEditWorkspaceDocumentInput = {
   operations: WithOptionalOperationId<FolioAIEditOperation>[];
 };
 
+const restoreOmittedOperationIds = (
+  validated: FolioAIEditOperation[],
+  original: JsonObject[],
+): WithOptionalOperationId<FolioAIEditOperation>[] =>
+  validated.map((operation, index) => {
+    if (original.at(index)?.["id"] !== undefined) {
+      return operation;
+    }
+
+    const { id: _validationId, ...withoutValidationId } = operation;
+    return withoutValidationId;
+  });
+
 const validateEditWorkspaceDocumentInput = (
   input: unknown,
   expectedCurrentVersionId: SafeId<"entityVersion">,
@@ -347,17 +362,19 @@ const validateEditWorkspaceDocumentInput = (
     return { issues: folioResult.issues };
   }
 
+  const validatedOperations = restoreOmittedOperationIds(
+    folioResult.value.operations,
+    parseable,
+  );
+
   return {
     value: {
       baseVersionId: expectedCurrentVersionId,
       version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
-      // SAFETY: folio's strict batch parser just validated every
-      // operation's shape against the same contract the derived JSON schema
-      // advertises. Missing ids were supplied with deterministic placeholders
-      // only for that parser call; the returned shape deliberately preserves
-      // their absence so repeated arguments/input validation stays identical.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see the SAFETY note above; the parser validated the exact shape
-      operations: parseable as WithOptionalOperationId<FolioAIEditOperation>[],
+      // Missing ids were supplied with deterministic placeholders only for
+      // folio validation, then removed again before returning the validated
+      // input so execution remains the one place that mints durable ids.
+      operations: validatedOperations,
     },
   };
 };
@@ -629,6 +646,27 @@ export const createEditWorkspaceDocumentTools = ({
       });
     }
 
+    const scanResult = await scanFile({
+      buffer: new Uint8Array(applied.buffer),
+      declaredMimeType: DOCX_MIME_TYPE,
+      fileName: loaded.value.fileName,
+    });
+    if (Result.isError(scanResult)) {
+      throw new ChatToolError({
+        message: "The edited document security scan failed",
+        cause: scanResult.error,
+      });
+    }
+    if (scanResult.value.verdict === "reject") {
+      const reasons = scanResult.value.findings.flatMap((finding) =>
+        finding.severity === "reject" ? [finding.message] : [],
+      );
+      throw new ChatToolError({
+        message: `The edited document was rejected: ${reasons.join("; ")}`,
+      });
+    }
+    const scanWarnings = getScanWarnings(scanResult.value) ?? undefined;
+
     const written = await createEntityVersionFromBuffer({
       safeDb,
       organizationId,
@@ -641,6 +679,7 @@ export const createEditWorkspaceDocumentTools = ({
       fileName: loaded.value.fileName,
       filePropertyId: loaded.value.filePropertyId,
       replacedFileFieldId: fileFieldId,
+      scanWarnings,
     });
     if (Result.isError(written)) {
       throw new ChatToolError({

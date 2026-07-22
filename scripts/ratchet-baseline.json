@@ -1,9 +1,8 @@
 {
   "as-casts": {
-    "count": 5,
+    "count": 4,
     "files": {
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
-      "apps/api/src/handlers/chat/tools/edit-workspace-document-tools.ts": 1,
       "apps/api/src/lib/auth.ts": 1,
       "apps/web/src/app-providers.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions.ts": 1
@@ -42,7 +41,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 599,
+    "count": 598,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -86,7 +85,6 @@
       "apps/api/src/handlers/chat/stream-chat.ts": 2,
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
       "apps/api/src/handlers/chat/tools/boe-tools.ts": 1,
-      "apps/api/src/handlers/chat/tools/edit-workspace-document-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/execute/chat-code-mode.ts": 1,
       "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 4,
       "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 6,

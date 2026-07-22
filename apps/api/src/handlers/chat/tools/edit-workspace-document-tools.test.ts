@@ -1,11 +1,13 @@
+import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { FolioDocxReviewer } from "@stll/folio-core/server";
 
-import { fileChatThreads } from "@/api/db/schema";
+import { fields, fileChatThreads } from "@/api/db/schema";
 import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace-document-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ScanResult } from "@/api/lib/file-scan/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -18,6 +20,8 @@ const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const computeVersionDiffStatsMock = mock(async () => {});
 const broadcastMock = mock(() => {});
+let fileScanResult: ScanResult = { verdict: "pass", findings: [] };
+const scanFileMock = mock(async () => Result.ok(fileScanResult));
 
 void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({
@@ -40,6 +44,15 @@ void mock.module("@/api/handlers/entities/compute-version-diff", () => ({
   computeVersionDiffStats: computeVersionDiffStatsMock,
 }));
 void mock.module("@/api/lib/sse", () => ({ broadcast: broadcastMock }));
+void mock.module("@/api/lib/file-scan/scan", () => ({
+  getScanWarnings: (scanResult: ScanResult) =>
+    scanResult.verdict === "warn"
+      ? scanResult.findings.flatMap((finding) =>
+          finding.severity === "warn" ? [finding.message] : [],
+        )
+      : null,
+  scanFile: scanFileMock,
+}));
 
 const { EDIT_WORKSPACE_DOCUMENT_TOOL_NAME, createEditWorkspaceDocumentTools } =
   await import("./edit-workspace-document-tools");
@@ -220,14 +233,14 @@ const buildTx = ({
         findFirst: async () => ({ reference: null, status: "active" }),
       },
     },
-    select: (fields: Record<string, unknown>) => {
-      if ("metadata" in fields) {
+    select: (selectedFields: Record<string, unknown>) => {
+      if ("metadata" in selectedFields) {
         return cellMetadataSelect;
       }
-      if ("max" in fields) {
+      if ("max" in selectedFields) {
         return maxVersionNumberSelect;
       }
-      if ("currentVersionId" in fields) {
+      if ("currentVersionId" in selectedFields) {
         return entitiesSelect;
       }
       return editSessionSelect;
@@ -280,6 +293,8 @@ describe("createEditWorkspaceDocumentTools", () => {
     enqueuePdfDerivativeOrMarkFailedMock.mockClear();
     computeVersionDiffStatsMock.mockClear();
     broadcastMock.mockClear();
+    scanFileMock.mockClear();
+    fileScanResult = { verdict: "pass", findings: [] };
     s3ReadKeys.length = 0;
   });
 
@@ -483,6 +498,16 @@ describe("createEditWorkspaceDocumentTools", () => {
   });
 
   test("tracked-changes mode writes a new version with the configured author attributed on the revision", async () => {
+    fileScanResult = {
+      verdict: "warn",
+      findings: [
+        {
+          message: "External relationship preserved",
+          rule: "external-relationship",
+          severity: "warn",
+        },
+      ],
+    };
     const { tx, insertedTables, updatedTables } = buildTx({
       preferredName: "Jana Nováková",
     });
@@ -539,6 +564,24 @@ describe("createEditWorkspaceDocumentTools", () => {
       table: fileChatThreads,
       values: { fieldId: result.fieldId },
     });
+    const fieldsInsert = insertedTables.find(
+      (entry) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        "table" in entry &&
+        entry.table === fields,
+    );
+    expect(fieldsInsert).toMatchObject({
+      values: expect.arrayContaining([
+        expect.objectContaining({
+          content: expect.objectContaining({
+            scanWarnings: ["External relationship preserved"],
+          }),
+          propertyId,
+        }),
+      ]),
+    });
+    expect(scanFileMock).toHaveBeenCalledTimes(1);
     expect(s3WriteMock).toHaveBeenCalledTimes(1);
     expect(recordedAuditEvents).toHaveLength(1);
 
@@ -570,6 +613,58 @@ describe("createEditWorkspaceDocumentTools", () => {
         expect.objectContaining({ workspaceId }),
       ],
     ]);
+  });
+
+  test("rejects edited bytes that fail the security scan", async () => {
+    fileScanResult = {
+      verdict: "reject",
+      findings: [
+        {
+          message: "Embedded executable content",
+          rule: "embedded-executable",
+          severity: "reject",
+        },
+      ],
+    };
+    const { tx, insertedTables } = buildTx({ preferredName: "Jana Nováková" });
+    const { safeDb } = createScopedDbMock(tx);
+    s3FileBuffer = await buildSourceDocx();
+    const tools = createEditWorkspaceDocumentTools({
+      safeDb,
+      organizationId,
+      userId,
+      workspaceId,
+      entityId,
+      fileFieldId,
+      recordAuditEvent: async () => undefined,
+      docxEditRepresentation: "tracked-changes",
+      expectedCurrentVersionId: entityVersionId,
+    });
+    const execute = tools[EDIT_WORKSPACE_DOCUMENT_TOOL_NAME].execute;
+    if (!execute) {
+      throw new Error("edit_workspace_document must be server-executed");
+    }
+
+    const block = await firstBlock(s3FileBuffer);
+    await expect(
+      execute(
+        {
+          baseVersionId: entityVersionId,
+          version: 1,
+          operations: [
+            {
+              type: "replaceInBlock",
+              blockId: block.id,
+              find: "quick",
+              replace: "slow",
+            },
+          ],
+        },
+        asTestRaw<Parameters<typeof execute>[1]>({}),
+      ),
+    ).rejects.toThrow("Embedded executable content");
+    expect(insertedTables).toEqual([]);
+    expect(s3WriteMock).not.toHaveBeenCalled();
   });
 
   test("direct mode applies without tracked-changes markup", async () => {
