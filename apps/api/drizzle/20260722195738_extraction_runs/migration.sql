@@ -11,7 +11,7 @@ CREATE TABLE "extraction_runs" (
 	"total" integer DEFAULT 0 NOT NULL,
 	"completed" integer DEFAULT 0 NOT NULL,
 	"error_code" varchar(128),
-	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"started_at" timestamp with time zone,
 	"finished_at" timestamp with time zone,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,

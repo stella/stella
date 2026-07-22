@@ -124,11 +124,14 @@ describe("extraction run store contract", () => {
       total: 0,
       workspaceId,
     });
+    expect(run.startedAt).toBeNull();
   });
 
   test("syncs absolute progress monotonically and bounds it to the target", async () => {
     const key = await createRun();
     await store.start({ ...key, total: 5 });
+
+    expect((await readRun(key.id)).startedAt).not.toBeNull();
 
     await store.syncProgress({ ...key, completed: 3, total: 5 });
     await store.syncProgress({ ...key, completed: 1, total: 5 });
@@ -174,6 +177,16 @@ describe("extraction run store contract", () => {
       status: "running",
       total: 2,
     });
+  });
+
+  test("recovers a missed start write from the first absolute progress snapshot", async () => {
+    const key = await createRun();
+
+    await store.syncProgress({ ...key, completed: 1, total: 3 });
+
+    const run = await readRun(key.id);
+    expect(run).toMatchObject({ completed: 1, status: "running", total: 3 });
+    expect(run.startedAt).not.toBeNull();
   });
 
   test("keeps terminal states immutable under late delivery", async () => {
@@ -301,5 +314,26 @@ describe("extraction run store contract", () => {
     expect(await readRun(otherWorkspace.id)).toMatchObject({
       status: "planning",
     });
+  });
+
+  test("finds stale active workspaces for recovery without returning terminal runs", async () => {
+    const stale = await createRun();
+    const recent = await createRun();
+    const terminal = await createRun();
+    await store.start({ ...terminal, total: 1 });
+    await store.complete(terminal);
+
+    await testDb
+      .update(extractionRuns)
+      .set({ updatedAt: new Date("2026-01-01T00:00:00.000Z") })
+      .where(eq(extractionRuns.id, stale.id));
+
+    const workspaceIds = await store.listStaleActiveWorkspaceIds({
+      before: new Date("2026-01-02T00:00:00.000Z"),
+      limit: 10,
+    });
+
+    expect(workspaceIds).toEqual([workspaceId]);
+    expect(await readRun(recent.id)).toMatchObject({ status: "planning" });
   });
 });

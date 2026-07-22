@@ -36,7 +36,7 @@ import {
   errorSystemFields,
   errorTag,
 } from "@/api/lib/errors/utils";
-import { extractionRunStore } from "@/api/lib/extraction-runs/store";
+import { extractionRunStore } from "@/api/lib/extraction-runs/root-store";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -476,7 +476,6 @@ export const startWorkflow = async ({
   const redis = getRedis();
   const requestId = createSafeId<"extractionRun">();
   const runKey = { id: requestId, organizationId, workspaceId };
-  let runCreated = false;
 
   // Check if already running (atomic check-and-set). The TTL is the
   // safety net for an uncleanly-killed worker; tuned tight enough that
@@ -499,17 +498,22 @@ export const startWorkflow = async ({
     RUNNING_LOCK_TTL_SEC,
   );
 
-  try {
-    await extractionRunStore.create({
+  const createdRunKey = await extractionRunStore
+    .create({
       ...runKey,
       requestedBy: userId,
       scope: extractionRunScope({
         entityIds: inputEntityIds,
         propertyIds: inputPropertyIds,
       }),
+    })
+    .then(() => runKey)
+    .catch((error: unknown) => {
+      captureError(error, { workspaceId });
+      return undefined;
     });
-    runCreated = true;
 
+  try {
     const executionPlanData = await getExecutionPlanData(workspaceId, scopedDb);
 
     // Property-status freshness is an optimization for full-workspace
@@ -543,7 +547,11 @@ export const startWorkflow = async ({
     );
 
     if (!hasWork) {
-      await extractionRunStore.skip(runKey);
+      if (createdRunKey) {
+        await extractionRunStore
+          .skip(createdRunKey)
+          .catch((error: unknown) => captureError(error, { workspaceId }));
+      }
       await clearWorkflowRunState(redis, workspaceId);
       return { status: "skipped" };
     }
@@ -593,7 +601,11 @@ export const startWorkflow = async ({
     const targetCount = targetEntityIds.length;
 
     if (targetCount === 0) {
-      await extractionRunStore.skip(runKey);
+      if (createdRunKey) {
+        await extractionRunStore
+          .skip(createdRunKey)
+          .catch((error: unknown) => captureError(error, { workspaceId }));
+      }
       await clearWorkflowRunState(redis, workspaceId);
       return { status: "skipped" };
     }
@@ -666,7 +678,11 @@ export const startWorkflow = async ({
       );
     }
 
-    await extractionRunStore.start({ ...runKey, total: targetCount });
+    if (createdRunKey) {
+      await extractionRunStore
+        .start({ ...createdRunKey, total: targetCount })
+        .catch((error: unknown) => captureError(error, { workspaceId }));
+    }
 
     // Broadcast running status
     broadcastWorkflowStatus(workspaceId, true);
@@ -710,9 +726,9 @@ export const startWorkflow = async ({
 
     return { status: "started" };
   } catch (error: unknown) {
-    if (runCreated) {
+    if (createdRunKey) {
       await extractionRunStore
-        .fail({ ...runKey, errorCode: errorTag(error) })
+        .fail({ ...createdRunKey, errorCode: errorTag(error) })
         .catch((runError: unknown) => captureError(runError, { workspaceId }));
     }
     await clearWorkflowRunState(redis, workspaceId);
@@ -738,6 +754,7 @@ export const startWorkflow = async ({
 // heals whatever the previous one left behind.
 
 const RECONCILE_INTERVAL_MS = 60 * 1000;
+const STALE_ACTIVE_RUN_SCAN_LIMIT = 1000;
 // Settle window before acting. A workflow that has just taken its
 // `running` lock but not yet enqueued its first entity batch would look
 // orphaned for a moment; we re-confirm against a fresh job snapshot after
@@ -1069,8 +1086,18 @@ export const reconcileOrphanedWorkflows = async ({
   const pendingWorkspaceIds = scanPendingCells
     ? await selectWorkspacesWithPendingCells()
     : await selectWorkspacesWithPendingCells(lockedWorkspaceIds);
+  const staleActiveWorkspaceIds = scanPendingCells
+    ? await extractionRunStore.listStaleActiveWorkspaceIds({
+        before: new Date(Date.now() - RUNNING_LOCK_TTL_SEC * 1000),
+        limit: STALE_ACTIVE_RUN_SCAN_LIMIT,
+      })
+    : [];
 
-  const candidateWorkspaceIds = [...lockedWorkspaceIds, ...pendingWorkspaceIds];
+  const candidateWorkspaceIds = [
+    ...lockedWorkspaceIds,
+    ...pendingWorkspaceIds,
+    ...staleActiveWorkspaceIds,
+  ];
   if (candidateWorkspaceIds.length === 0) {
     return;
   }
@@ -1091,7 +1118,13 @@ export const reconcileOrphanedWorkflows = async ({
     return;
   }
 
-  const pendingWorkspaceIdSet = new Set(pendingWorkspaceIds);
+  // Either pending cells or a durable active row older than the maximum lock
+  // lifetime is sufficient recovery evidence. The latter closes the process-
+  // death window before planning has produced cells or enqueued its first job.
+  const recoveryEvidenceWorkspaceIdSet = new Set([
+    ...pendingWorkspaceIds,
+    ...staleActiveWorkspaceIds,
+  ]);
   const initialRequestIds = await readWorkflowRequestIds(
     redis,
     orphanCandidates,
@@ -1123,7 +1156,7 @@ export const reconcileOrphanedWorkflows = async ({
     currentRequestIds,
     initialRequestIds,
     liveWorkspaceIds: confirmed.workspaceIds,
-    pendingWorkspaceIds: pendingWorkspaceIdSet,
+    pendingWorkspaceIds: recoveryEvidenceWorkspaceIdSet,
     recoveryWorkspaceIds,
   });
 
@@ -1218,6 +1251,19 @@ const handleWorkflowJobFailed = (
           });
         },
       );
+      await extractionRunStore
+        .fail({
+          id: brandPersistedExtractionRunId(data.requestId),
+          organizationId: branded.organizationId,
+          workspaceId: branded.workspaceId,
+          errorCode: errorTag(error),
+        })
+        .catch((runError: unknown) =>
+          captureError(runError, {
+            workspaceId: data.workspaceId,
+            entityId: data.entityId,
+          }),
+        );
       await onEntityCompleted({
         workspaceId: branded.workspaceId,
         organizationId: branded.organizationId,

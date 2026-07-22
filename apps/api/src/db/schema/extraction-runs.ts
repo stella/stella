@@ -57,10 +57,7 @@ export const extractionRuns = p.pgTable(
     total: p.integer().notNull().default(0),
     completed: p.integer().notNull().default(0),
     errorCode: p.varchar("error_code", { length: 128 }),
-    startedAt: p
-      .timestamp("started_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    startedAt: p.timestamp("started_at", { withTimezone: true }),
     finishedAt: p.timestamp("finished_at", { withTimezone: true }),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p

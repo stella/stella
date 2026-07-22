@@ -1,10 +1,11 @@
 import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
+import type { rootDb } from "@/api/db/root";
 import { extractionRuns } from "@/api/db/schema";
 import type { ExtractionRunScope } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 const ACTIVE_EXTRACTION_RUN_STATUSES = [
   "planning",
@@ -41,6 +42,11 @@ type FinishExtractionRunOptions = ExtractionRunKey & {
 type FailActiveExtractionRunsOptions = {
   errorCode: string;
   workspaceId: SafeId<"workspace">;
+};
+
+type ListStaleActiveWorkspaceIdsOptions = {
+  before: Date;
+  limit: number;
 };
 
 const runKeyPredicate = ({
@@ -96,7 +102,7 @@ export const createExtractionRunStore = (db: ExtractionRunDb) => ({
     const validatedTotal = requireNonnegativeInteger(total, "total");
     await db
       .update(extractionRuns)
-      .set({ status: "running", total: validatedTotal })
+      .set({ startedAt: new Date(), status: "running", total: validatedTotal })
       .where(
         and(
           runKeyPredicate({ id, organizationId, workspaceId }),
@@ -122,17 +128,24 @@ export const createExtractionRunStore = (db: ExtractionRunDb) => ({
       .update(extractionRuns)
       .set({
         completed: sql`GREATEST(${extractionRuns.completed}, ${boundedCompleted})`,
+        startedAt: sql`COALESCE(${extractionRuns.startedAt}, NOW())`,
         status: sql`CASE
-          WHEN GREATEST(${extractionRuns.completed}, ${boundedCompleted}) >= ${extractionRuns.total}
+          WHEN GREATEST(${extractionRuns.completed}, ${boundedCompleted}) >= ${validatedTotal}
           THEN 'finalizing'
-          ELSE ${extractionRuns.status}
+          ELSE 'running'
         END`,
+        total: validatedTotal,
       })
       .where(
         and(
           runKeyPredicate({ id, organizationId, workspaceId }),
-          eq(extractionRuns.total, validatedTotal),
-          inArray(extractionRuns.status, ["running", "finalizing"]),
+          or(
+            eq(extractionRuns.status, "planning"),
+            and(
+              eq(extractionRuns.total, validatedTotal),
+              inArray(extractionRuns.status, ["running", "finalizing"]),
+            ),
+          ),
         ),
       );
   },
@@ -153,7 +166,7 @@ export const createExtractionRunStore = (db: ExtractionRunDb) => ({
       .where(
         and(
           runKeyPredicate({ id, organizationId, workspaceId }),
-          inArray(extractionRuns.status, ACTIVE_EXTRACTION_RUN_STATUSES),
+          inArray(extractionRuns.status, ["running", "finalizing"]),
         ),
       );
   },
@@ -213,6 +226,25 @@ export const createExtractionRunStore = (db: ExtractionRunDb) => ({
         ),
       );
   },
-});
 
-export const extractionRunStore = createExtractionRunStore(rootDb);
+  listStaleActiveWorkspaceIds: async ({
+    before,
+    limit,
+  }: ListStaleActiveWorkspaceIdsOptions): Promise<SafeId<"workspace">[]> => {
+    const validatedLimit = requireNonnegativeInteger(limit, "limit");
+    if (validatedLimit === 0) {
+      return [];
+    }
+    const rows = await db
+      .selectDistinct({ workspaceId: extractionRuns.workspaceId })
+      .from(extractionRuns)
+      .where(
+        and(
+          inArray(extractionRuns.status, ACTIVE_EXTRACTION_RUN_STATUSES),
+          lte(extractionRuns.updatedAt, before),
+        ),
+      )
+      .limit(validatedLimit);
+    return rows.map((row) => brandPersistedWorkspaceId(row.workspaceId));
+  },
+});
