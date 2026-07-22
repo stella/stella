@@ -44,6 +44,7 @@ import {
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
+import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
 import { DOCX_EDIT_REPRESENTATION } from "@/lib/chat-edit-mode";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -327,12 +328,16 @@ type EditWorkspaceDocumentSummaryProps = {
   activeFileName?: string | undefined;
 };
 
+type ChatToolTranslationKey = Parameters<
+  ReturnType<typeof useTranslations<"chat.tool">>
+>[0];
+
 const REPRESENTATION_LABEL_KEY = {
   [DOCX_EDIT_REPRESENTATION.trackedChanges]:
     "editWorkspaceDocumentRepresentationTrackedChanges",
   [DOCX_EDIT_REPRESENTATION.direct]:
     "editWorkspaceDocumentRepresentationDirect",
-} as const;
+} as const satisfies Record<DocxEditRepresentation, ChatToolTranslationKey>;
 
 /**
  * Approval preview for `edit_workspace_document` (the `auto` DOCX-edit

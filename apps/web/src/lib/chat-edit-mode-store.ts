@@ -23,6 +23,20 @@ type ChatEditModeStore = {
 
 const DEFAULT_OPTION_ID = DEFAULT_CHAT_EDIT_MODE_OPTION_ID;
 
+const readPersistedOptionId = (
+  persisted: unknown,
+): ChatEditModeOptionId | null => {
+  if (typeof persisted !== "object" || persisted === null) {
+    return null;
+  }
+
+  if ("optionId" in persisted && isChatEditModeOptionId(persisted.optionId)) {
+    return persisted.optionId;
+  }
+
+  return null;
+};
+
 export const useChatEditModeStore = create<ChatEditModeStore>()(
   persist(
     (set) => ({
@@ -47,17 +61,3 @@ export const useChatEditModeStore = create<ChatEditModeStore>()(
  *  `getChatSendMode` in `chat-anonymized-store.ts`. */
 export const getChatEditModeSelection = () =>
   chatEditModeSelectionForOptionId(useChatEditModeStore.getState().optionId);
-
-const readPersistedOptionId = (
-  persisted: unknown,
-): ChatEditModeOptionId | null => {
-  if (typeof persisted !== "object" || persisted === null) {
-    return null;
-  }
-
-  if ("optionId" in persisted && isChatEditModeOptionId(persisted.optionId)) {
-    return persisted.optionId;
-  }
-
-  return null;
-};
