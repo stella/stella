@@ -1,46 +1,32 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 
 import { propertyConfig } from "@stll/property-testing";
 
 import { findUnusedTemplateValueKeys } from "./template-input-contract";
 
-const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-
-const makeTemplate = async (): Promise<Buffer> => {
-  const zip = new JSZip();
-  zip.file(
-    "word/document.xml",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-      `<w:document xmlns:w="${W_NS}"><w:body>` +
-      `<w:p><w:r><w:t>{{name}}</w:t></w:r></w:p>` +
-      `<w:p><w:r><w:t>{{company.name}}</w:t></w:r></w:p>` +
-      `</w:body></w:document>`,
-  );
-  return await zip.generateAsync({ type: "nodebuffer" });
-};
+const DECLARED_KEYS = ["name", "company.name"] as const;
 
 describe("template input contract", () => {
-  test("accepts top-level and flattened declared paths", async () => {
+  test("accepts top-level and flattened declared paths", () => {
     expect(
-      await findUnusedTemplateValueKeys({
-        buffer: await makeTemplate(),
+      findUnusedTemplateValueKeys({
+        declaredKeys: DECLARED_KEYS,
         values: { name: "Ada", company: { name: "Stella" } },
       }),
     ).toEqual([]);
     expect(
-      await findUnusedTemplateValueKeys({
-        buffer: await makeTemplate(),
+      findUnusedTemplateValueKeys({
+        declaredKeys: DECLARED_KEYS,
         values: { "company.name": "Stella" },
       }),
     ).toEqual([]);
   });
 
-  test("rejects extra keys independently of every supported value type", async () => {
+  test("rejects extra keys independently of every supported value type", () => {
     expect(
-      await findUnusedTemplateValueKeys({
-        buffer: await makeTemplate(),
+      findUnusedTemplateValueKeys({
+        declaredKeys: DECLARED_KEYS,
         values: {
           name: "Ada",
           typoString: "value",
@@ -59,13 +45,21 @@ describe("template input contract", () => {
     ]);
   });
 
-  test("INVARIANT: value shape cannot change whether an unknown key is rejected", async () => {
-    const buffer = await makeTemplate();
-    await fc.assert(
-      fc.asyncProperty(fc.jsonValue(), async (value) => {
+  test("rejects unknown leaves inside declared namespaces", () => {
+    expect(
+      findUnusedTemplateValueKeys({
+        declaredKeys: DECLARED_KEYS,
+        values: { company: { name: "Stella", namme: "typo" } },
+      }),
+    ).toEqual(["company.namme"]);
+  });
+
+  test("INVARIANT: value shape cannot change whether an unknown key is rejected", () => {
+    fc.assert(
+      fc.property(fc.jsonValue(), (value) => {
         expect(
-          await findUnusedTemplateValueKeys({
-            buffer,
+          findUnusedTemplateValueKeys({
+            declaredKeys: DECLARED_KEYS,
             values: { unknown: value },
           }),
         ).toEqual(["unknown"]);

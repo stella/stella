@@ -310,8 +310,12 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   const { templateId } = source;
 
   if (unusedValuePolicy === "reject") {
-    const unusedKeys = await findUnusedTemplateValueKeys({
-      buffer: loaded.buffer,
+    const discovered = await discoverTemplate(loaded.buffer);
+    const unusedKeys = findUnusedTemplateValueKeys({
+      declaredKeys: [
+        ...discovered.fields.map((field) => field.path),
+        ...discovered.placeholders.map((placeholder) => placeholder.name),
+      ],
       values,
     });
     if (unusedKeys.length > 0) {

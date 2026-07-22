@@ -1,7 +1,5 @@
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-
 type FindUnusedTemplateValueKeysOptions = {
-  buffer: Buffer;
+  declaredKeys: Iterable<string>;
   values: Record<string, unknown>;
 };
 
@@ -10,14 +8,52 @@ type FindUnusedTemplateValueKeysOptions = {
  * declared by the template. Value types are deliberately irrelevant: a typo
  * must be rejected consistently for strings, scalars, arrays, and objects.
  */
-export const findUnusedTemplateValueKeys = async ({
-  buffer,
+export const findUnusedTemplateValueKeys = ({
+  declaredKeys,
   values,
-}: FindUnusedTemplateValueKeysOptions): Promise<string[]> => {
-  const discovered = await discoverTemplate(buffer);
-  const declaredKeys = new Set([
-    ...discovered.fields.map((field) => field.path),
-    ...discovered.placeholders.map((placeholder) => placeholder.name),
-  ]);
-  return Object.keys(values).filter((key) => !declaredKeys.has(key));
+}: FindUnusedTemplateValueKeysOptions): string[] => {
+  const declaredKeySet = new Set(declaredKeys);
+  return findUnusedPaths(values, "", declaredKeySet);
 };
+
+const findUnusedPaths = (
+  values: Record<string, unknown>,
+  parentPath: string,
+  declaredKeys: ReadonlySet<string>,
+): string[] => {
+  const unusedPaths: string[] = [];
+
+  for (const [key, value] of Object.entries(values)) {
+    const path = parentPath === "" ? key : `${parentPath}.${key}`;
+    if (declaredKeys.has(path)) {
+      continue;
+    }
+
+    if (hasDeclaredDescendant(path, declaredKeys) && isRecord(value)) {
+      for (const unusedPath of findUnusedPaths(value, path, declaredKeys)) {
+        unusedPaths.push(unusedPath);
+      }
+      continue;
+    }
+
+    unusedPaths.push(path);
+  }
+
+  return unusedPaths;
+};
+
+const hasDeclaredDescendant = (
+  path: string,
+  declaredKeys: ReadonlySet<string>,
+): boolean => {
+  const descendantPrefix = `${path}.`;
+  for (const declaredKey of declaredKeys) {
+    if (declaredKey.startsWith(descendantPrefix)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
