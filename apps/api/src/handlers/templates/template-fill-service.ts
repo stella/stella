@@ -317,7 +317,14 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     const discovered = await discoverTemplate(loaded.buffer);
     const unusedKeys = findUnusedTemplateValueKeys({
       declaredKeys: collectTemplateInputKeys({
-        discoveredFieldPaths: discovered.fields.map((field) => field.path),
+        discoveredFieldPaths: discovered.fields.flatMap((field) => [
+          field.path,
+          ...(field.itemFields === undefined
+            ? []
+            : field.itemFields.map(
+                (itemField) => `${field.path}.${itemField.path}`,
+              )),
+        ]),
         manifestFieldPaths:
           manifest === null ? [] : manifest.fields.map((field) => field.path),
         placeholderPaths: discovered.placeholders.map(

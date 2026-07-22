@@ -17,11 +17,17 @@ describe("template input contract", () => {
     expect(
       collectTemplateInputKeys({
         discoveredFieldPaths: ["client.name"],
-        manifestFieldPaths: ["rent", "rent_annual"],
+        manifestFieldPaths: ["client.type", "rent", "rent_annual"],
         placeholderPaths: ["signature_date"],
       }),
     ).toEqual(
-      new Set(["client.name", "rent", "rent_annual", "signature_date"]),
+      new Set([
+        "client.name",
+        "client.type",
+        "rent",
+        "rent_annual",
+        "signature_date",
+      ]),
     );
   });
 
