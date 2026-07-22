@@ -164,6 +164,44 @@ const negateExpr = (expr: string): string => {
   return `!${trimmed}`;
 };
 
+const wrapConjunctionPart = (expr: string): string =>
+  expr.includes(" or ") ? `(${expr})` : expr;
+
+const combineConditions = (
+  outer: string | undefined,
+  inner: string | undefined,
+): string | undefined => {
+  if (outer === undefined) {
+    return inner;
+  }
+  if (inner === undefined) {
+    return outer;
+  }
+  return `${wrapConjunctionPart(outer)} and ${wrapConjunctionPart(inner)}`;
+};
+
+const recordFieldCondition = (
+  fieldConditions: Map<string, string | null>,
+  name: string,
+  condition: string | undefined,
+): void => {
+  const existing = fieldConditions.get(name);
+  if (existing === null) {
+    return;
+  }
+  if (condition === undefined) {
+    fieldConditions.set(name, null);
+    return;
+  }
+  if (existing === undefined) {
+    fieldConditions.set(name, condition);
+    return;
+  }
+  if (existing !== condition) {
+    fieldConditions.set(name, null);
+  }
+};
+
 /**
  * Build a paragraph-index-to-condition map by walking
  * the flat directive list with a stack. Handles
@@ -403,6 +441,11 @@ const analyzeContainer = (
     }
     const text = paragraphText(para);
     const paraCondition = conditionMap.get(i);
+    const inlineBranchConditions: {
+      condition: string | undefined;
+      end: number;
+      start: number;
+    }[] = [];
 
     const inline = parseInlineConditions(text);
     if (!inline.ok) {
@@ -427,8 +470,27 @@ const analyzeContainer = (
           continue;
         }
 
+        const priorConditions: string[] = [];
         for (const branch of group.branches) {
           registerConditionFields(fields, branch.condition, arrayScopes.get(i));
+          const branchCondition =
+            branch.condition === ""
+              ? priorConditions.map(negateExpr).join(" and ")
+              : [
+                  ...priorConditions.map(negateExpr),
+                  wrapConjunctionPart(branch.condition),
+                ].join(" and ");
+          inlineBranchConditions.push({
+            condition: combineConditions(
+              paraCondition,
+              branchCondition || undefined,
+            ),
+            end: branch.contentEnd,
+            start: branch.contentStart,
+          });
+          if (branch.condition !== "") {
+            priorConditions.push(branch.condition);
+          }
         }
       }
     }
@@ -445,23 +507,14 @@ const analyzeContainer = (
       }
       placeholderCounts.set(name, (placeholderCounts.get(name) ?? 0) + 1);
 
-      // Track field condition visibility
-      const existing = fieldConditions.get(name);
-      if (existing === null) {
-        // Already seen outside a conditional; stays
-        // always visible
-      } else if (paraCondition === undefined) {
-        // This occurrence is outside any conditional
-        // → field is always visible
-        fieldConditions.set(name, null);
-      } else if (existing === undefined) {
-        // First occurrence, inside a conditional
-        fieldConditions.set(name, paraCondition);
-      } else if (existing !== paraCondition) {
-        // Seen in a different conditional branch;
-        // mark as always visible
-        fieldConditions.set(name, null);
-      }
+      const inlineCondition = inlineBranchConditions.find(
+        ({ end, start }) => start <= match.index && match.index < end,
+      )?.condition;
+      recordFieldCondition(
+        fieldConditions,
+        name,
+        inlineCondition ?? paraCondition,
+      );
 
       // Infer field kind from path structure
       if (name.includes(".")) {

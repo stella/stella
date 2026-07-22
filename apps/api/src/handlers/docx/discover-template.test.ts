@@ -358,6 +358,35 @@ describe("discoverTemplate", () => {
     expect(ukField?.visibleWhen).toBe("isUK");
   });
 
+  test("fields inside inline branches get visibleWhen", async () => {
+    const xml = WRAP(
+      P("{{#if has_spouse}}{{spouse.name}}{{#else}}{{single_name}}{{/if}}"),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(
+      result.fields.find((field) => field.path === "spouse.name")?.visibleWhen,
+    ).toBe("has_spouse");
+    expect(
+      result.fields.find((field) => field.path === "single_name")?.visibleWhen,
+    ).toBe("!has_spouse");
+  });
+
+  test("inline visibility composes with its enclosing block", async () => {
+    const xml = WRAP(
+      [
+        P("{{#if is_person}}"),
+        P("{{#if has_spouse}}{{spouse.name}}{{/if}}"),
+        P("{{/if}}"),
+      ].join(""),
+    );
+    const result = await discoverTemplate(await makeDocx(xml));
+
+    expect(
+      result.fields.find((field) => field.path === "spouse.name")?.visibleWhen,
+    ).toBe("is_person and has_spouse");
+  });
+
   test("field outside #if has no visibleWhen", async () => {
     const xml = WRAP(
       [P("{{name}}"), P("{{#if isUK}}"), P("{{uk_number}}"), P("{{/if}}")].join(

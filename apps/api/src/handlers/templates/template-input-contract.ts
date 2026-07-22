@@ -5,17 +5,20 @@ type FindUnusedTemplateValueKeysOptions = {
 
 export type TemplateInputContract = {
   acceptedPaths: ReadonlySet<string>;
+  arrayPaths: ReadonlySet<string>;
   forbiddenPaths: ReadonlySet<string>;
   primitiveArrayPaths: ReadonlySet<string>;
 };
 
 type TemplateInputKeySources =
   | {
+      arrayPaths: Iterable<string>;
       type: "raw";
       primitiveArrayPaths: Iterable<string>;
       terminalPaths: Iterable<string>;
     }
   | {
+      arrayPaths: Iterable<string>;
       type: "manifest";
       derivedOutputPaths: Iterable<string>;
       fillableFieldPaths: Iterable<string>;
@@ -41,6 +44,7 @@ type CollectRawTemplateTerminalPathsOptions = {
 };
 
 type RawTemplateInputSources = {
+  arrayPaths: string[];
   primitiveArrayPaths: string[];
   terminalPaths: string[];
 };
@@ -49,6 +53,7 @@ export const collectRawTemplateInputSources = ({
   fields,
   placeholderPaths,
 }: CollectRawTemplateTerminalPathsOptions): RawTemplateInputSources => {
+  const arrayPaths: string[] = [];
   const primitiveArrayPaths: string[] = [];
   const terminalPaths = Array.from(placeholderPaths);
 
@@ -56,6 +61,9 @@ export const collectRawTemplateInputSources = ({
     const path = parentPath === "" ? field.path : `${parentPath}.${field.path}`;
     const itemFields = field.itemFields;
     const hasItemFields = itemFields !== undefined && itemFields.length > 0;
+    if (field.kind === "array") {
+      arrayPaths.push(path);
+    }
     if (
       field.kind === "array" &&
       itemFields?.some((itemField) => itemField.path === "value")
@@ -75,7 +83,7 @@ export const collectRawTemplateInputSources = ({
   for (const field of fields) {
     visit(field, "");
   }
-  return { primitiveArrayPaths, terminalPaths };
+  return { arrayPaths, primitiveArrayPaths, terminalPaths };
 };
 
 export const isFillableTemplateInputField = (
@@ -91,6 +99,7 @@ export const collectTemplateInputKeys = (
   if (sources.type === "raw") {
     return {
       acceptedPaths: new Set(sources.terminalPaths),
+      arrayPaths: new Set(sources.arrayPaths),
       forbiddenPaths: new Set(),
       primitiveArrayPaths: new Set(sources.primitiveArrayPaths),
     };
@@ -111,12 +120,22 @@ export const collectTemplateInputKeys = (
   const primitiveArrayPaths = new Set(
     Array.from(sources.primitiveArrayPaths).filter(
       (path) =>
-        isAtOrBelowAny(path, fillableFieldPaths) &&
+        (acceptedPaths.has(path) ||
+          hasDeclaredDescendant(path, acceptedPaths)) &&
+        !isAtOrBelowAny(path, derivedOutputPaths),
+    ),
+  );
+  const arrayPaths = new Set(
+    Array.from(sources.arrayPaths).filter(
+      (path) =>
+        (acceptedPaths.has(path) ||
+          hasDeclaredDescendant(path, acceptedPaths)) &&
         !isAtOrBelowAny(path, derivedOutputPaths),
     ),
   );
   return {
     acceptedPaths,
+    arrayPaths,
     forbiddenPaths: derivedOutputPaths,
     primitiveArrayPaths,
   };
@@ -149,6 +168,16 @@ const findUnusedPaths = (
   for (const [key, value] of Object.entries(values)) {
     const path = parentPath === "" ? key : `${parentPath}.${key}`;
     if (isAtOrBelowAny(path, contract.forbiddenPaths)) {
+      unusedPaths.push(path);
+      continue;
+    }
+
+    if (parentPath === "" && isBelowAny(path, contract.arrayPaths)) {
+      unusedPaths.push(path);
+      continue;
+    }
+
+    if (contract.arrayPaths.has(path) && !Array.isArray(value)) {
       unusedPaths.push(path);
       continue;
     }

@@ -958,6 +958,26 @@ describe("processBlockDirectives — loops", () => {
     expect(patchValues["__each_tags_0_value"]).toBe("keep");
   });
 
+  test("dotted primitive rows expose their qualified value condition", () => {
+    const body = parseBody(
+      WRAP(
+        [
+          P("{{#each deal.tags}}"),
+          P('{{#if deal.tags.value == "keep"}}'),
+          P("{{deal.tags.value}}"),
+          P("{{/if}}"),
+          P("{{/each}}"),
+        ].join(""),
+      ),
+    );
+    const { patchValues } = processBlockDirectives(body, {
+      deal: { tags: ["keep", "discard"] },
+    });
+
+    expect(bodyTexts(body)).toEqual(["{{__each_deal.tags_0_value}}"]);
+    expect(patchValues["__each_deal.tags_0_value"]).toBe("keep");
+  });
+
   test("inner-loop condition compares a row's raw date, not the localized text", () => {
     const xml = WRAP(
       [

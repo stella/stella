@@ -18,6 +18,7 @@ const contractFor = (
   acceptedPaths: Iterable<string>,
 ): TemplateInputContract => ({
   acceptedPaths: new Set(acceptedPaths),
+  arrayPaths: new Set(),
   forbiddenPaths: new Set(),
   primitiveArrayPaths: new Set(),
 });
@@ -36,6 +37,7 @@ describe("template input contract", () => {
   test("raw templates accept every live discovered path", () => {
     const contract = collectTemplateInputKeys({
       type: "raw",
+      arrayPaths: [],
       primitiveArrayPaths: [],
       terminalPaths: ["client.name", "signature_date"],
     });
@@ -72,6 +74,7 @@ describe("template input contract", () => {
       placeholderPaths: [],
     });
     expect(sources).toEqual({
+      arrayPaths: ["rows"],
       primitiveArrayPaths: [],
       terminalPaths: ["rows.name"],
     });
@@ -82,6 +85,23 @@ describe("template input contract", () => {
         values: { rows: [{ name: "Ada" }] },
       }),
     ).toEqual([]);
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: { "rows.name": "Ada" },
+      }),
+    ).toEqual(["rows.name"]);
+    fc.assert(
+      fc.property(
+        fc.jsonValue().filter((value) => !Array.isArray(value)),
+        (rows) => {
+          expect(
+            findUnusedTemplateValueKeys({ contract, values: { rows } }),
+          ).toEqual(["rows"]);
+        },
+      ),
+      propertyConfig(),
+    );
   });
 
   test("raw value loops explicitly accept supported primitive rows", () => {
@@ -96,6 +116,7 @@ describe("template input contract", () => {
       placeholderPaths: ["tags.value"],
     });
     expect(sources).toEqual({
+      arrayPaths: ["tags"],
       primitiveArrayPaths: ["tags"],
       terminalPaths: ["tags.value", "tags.value"],
     });
@@ -129,6 +150,7 @@ describe("template input contract", () => {
       placeholderPaths: ["deal.tags.value"],
     });
     expect(sources.primitiveArrayPaths).toEqual(["deal.tags"]);
+    expect(sources.arrayPaths).toEqual(["deal.tags"]);
 
     const contract = collectTemplateInputKeys({ type: "raw", ...sources });
     expect(
@@ -199,6 +221,7 @@ describe("template input contract", () => {
   test("manifest templates accept live descendants but exclude derived outputs", () => {
     const contract = collectTemplateInputKeys({
       type: "manifest",
+      arrayPaths: [],
       derivedOutputPaths: ["company.full", "rent_annual"],
       fillableFieldPaths: ["company", "rent"],
       primitiveArrayPaths: [],
@@ -222,6 +245,7 @@ describe("template input contract", () => {
   test("manifest derived subtrees cannot leak through deeper live markers", () => {
     const contract = collectTemplateInputKeys({
       type: "manifest",
+      arrayPaths: [],
       derivedOutputPaths: ["company.full"],
       fillableFieldPaths: ["company"],
       primitiveArrayPaths: [],
@@ -234,6 +258,7 @@ describe("template input contract", () => {
   test("manifest paths cannot be accepted outside a fillable root", () => {
     const contract = collectTemplateInputKeys({
       type: "manifest",
+      arrayPaths: [],
       derivedOutputPaths: [],
       fillableFieldPaths: ["company"],
       primitiveArrayPaths: [],
@@ -245,6 +270,7 @@ describe("template input contract", () => {
   test("manifest-only fillable fields remain accepted", () => {
     const contract = collectTemplateInputKeys({
       type: "manifest",
+      arrayPaths: [],
       derivedOutputPaths: [],
       fillableFieldPaths: ["client.type", "rent"],
       primitiveArrayPaths: [],
@@ -256,12 +282,14 @@ describe("template input contract", () => {
   test("raw and manifest input policies are discriminated", () => {
     const raw = collectTemplateInputKeys({
       type: "raw",
+      arrayPaths: [],
       primitiveArrayPaths: [],
       terminalPaths: ["company.full"],
     });
     expect(raw.acceptedPaths).toEqual(new Set(["company.full"]));
     const manifest = collectTemplateInputKeys({
       type: "manifest",
+      arrayPaths: [],
       derivedOutputPaths: ["company.full"],
       fillableFieldPaths: ["company"],
       primitiveArrayPaths: [],
@@ -274,6 +302,7 @@ describe("template input contract", () => {
   test("manifest nested live paths support flattened input", () => {
     const contract = collectTemplateInputKeys({
       type: "manifest",
+      arrayPaths: [],
       derivedOutputPaths: [],
       fillableFieldPaths: ["company"],
       primitiveArrayPaths: [],
@@ -296,6 +325,7 @@ describe("template input contract", () => {
   test("raw structural namespaces reject leaf values", () => {
     const contract = collectTemplateInputKeys({
       type: "raw",
+      arrayPaths: [],
       primitiveArrayPaths: [],
       terminalPaths: ["company.name"],
     });
@@ -316,6 +346,7 @@ describe("template input contract", () => {
   test("forbidden derived paths win through nested and flattened input", () => {
     const contract = collectTemplateInputKeys({
       type: "manifest",
+      arrayPaths: [],
       derivedOutputPaths: ["company.seat"],
       fillableFieldPaths: ["company"],
       primitiveArrayPaths: [],
@@ -404,12 +435,37 @@ describe("template input contract", () => {
       findUnusedTemplateValueKeys({
         contract: {
           acceptedPaths: new Set(["items"]),
+          arrayPaths: new Set(["items"]),
           forbiddenPaths: new Set(["items.total"]),
           primitiveArrayPaths: new Set(),
         },
         values: { items: ["invalid"] },
       }),
     ).toEqual(["items"]);
+  });
+
+  test("INVARIANT: loop descendants require their array container", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom("name", "address.city", "value"),
+        fc.jsonValue(),
+        (field, value) => {
+          const path = `items.${field}`;
+          expect(
+            findUnusedTemplateValueKeys({
+              contract: {
+                acceptedPaths: new Set([path]),
+                arrayPaths: new Set(["items"]),
+                forbiddenPaths: new Set(),
+                primitiveArrayPaths: new Set(),
+              },
+              values: { [path]: value },
+            }),
+          ).toEqual([path]);
+        },
+      ),
+      propertyConfig(),
+    );
   });
 
   test("INVARIANT: value shape cannot change whether an unknown key is rejected", () => {

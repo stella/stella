@@ -341,6 +341,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
               .filter(isFillableTemplateInputField)
               .map((field) => field.path),
             livePaths: rawInputSources.terminalPaths,
+            arrayPaths: rawInputSources.arrayPaths,
             primitiveArrayPaths: rawInputSources.primitiveArrayPaths,
           });
     const unusedKeys = findUnusedTemplateValueKeys({

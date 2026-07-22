@@ -816,6 +816,7 @@ export const processBlockDirectives = (
     ) {
       itemContext["value"] = item;
       itemContext[arrayPath] = { value: item };
+      itemContext[`${arrayPath}.value`] = item;
     }
     return itemContext;
   };
