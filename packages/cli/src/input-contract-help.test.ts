@@ -8,6 +8,16 @@ import {
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import type { JsonSchema, RouteNode } from "./route-types.js";
 
+const completeExample = (
+  help: ReturnType<typeof buildInputContractHelp>,
+): Record<string, unknown> => {
+  expect(help?.example.status).toBe("complete");
+  if (help?.example.status !== "complete") {
+    throw new Error("Expected a complete input example");
+  }
+  return help.example.value;
+};
+
 describe("--input contract help", () => {
   test("renders free maps with a deterministic valid example", () => {
     const schema: JsonSchema = {
@@ -32,11 +42,13 @@ describe("--input contract help", () => {
     expect(help?.fields).toEqual([
       "values.<key>  any JSON value  required — Map of field path to value.",
     ]);
-    expect(help?.example).toEqual({
+    expect(completeExample(help)).toEqual({
       template_id: "xxxxx",
       values: { key: "value" },
     });
-    expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
+    expect(validateAgainstSchema(schema, completeExample(help)).valid).toBe(
+      true,
+    );
   });
 
   test("documents every branch of a discriminated upload body", () => {
@@ -95,7 +107,9 @@ describe("--input contract help", () => {
     });
 
     expect(help?.fields.join("\n")).toContain("one of 2 variants");
-    expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
+    expect(validateAgainstSchema(schema, completeExample(help)).valid).toBe(
+      true,
+    );
   });
 
   test("renders and satisfies simultaneous anyOf and oneOf constraints", () => {
@@ -124,7 +138,9 @@ describe("--input contract help", () => {
 
     expect(fields).toContain("anyOf: one of 2 variants");
     expect(fields).toContain("oneOf: one of 2 variants");
-    expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
+    expect(validateAgainstSchema(schema, completeExample(help)).valid).toBe(
+      true,
+    );
   });
 
   test("bounds composed example search without materializing branch products", () => {
@@ -148,7 +164,79 @@ describe("--input contract help", () => {
       inputOnly: ["value"],
     });
 
-    expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
+    expect(validateAgainstSchema(schema, completeExample(help)).valid).toBe(
+      true,
+    );
+  });
+
+  test("marks capped composed examples unavailable instead of claiming completeness", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        value: {
+          anyOf: [{ type: "string", const: "match" }],
+          oneOf: [
+            ...Array.from({ length: 64 }, (_, index) => ({
+              type: "string",
+              const: `other-${index}`,
+            })),
+            { type: "string", const: "match" },
+          ],
+        },
+      },
+      required: ["value"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["value"] });
+
+    expect(help?.example).toEqual({ status: "unavailable" });
+  });
+
+  test("renders required object fields declared only through allOf", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        tool: {
+          type: "object",
+          allOf: [
+            {
+              type: "object",
+              properties: {
+                prompt: { type: "string" },
+                dependencies: {
+                  type: "array",
+                  items: { type: "string" },
+                },
+              },
+              required: ["prompt", "dependencies"],
+            },
+          ],
+        },
+      },
+      required: ["tool"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["tool"] });
+    const fields = help?.fields.join("\n") ?? "";
+
+    expect(fields).toContain("tool.prompt  string  required");
+    expect(fields).toContain("tool.dependencies  array<string>  required");
+  });
+
+  test("does not mislabel nested scalar allOf schemas as objects", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        value: {
+          allOf: [{ allOf: [{ type: "string" }] }],
+        },
+      },
+      required: ["value"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["value"] });
+
+    expect(help?.fields).toEqual(["value  string  required"]);
   });
 
   test("documents every branch of an array item union", () => {
@@ -236,7 +324,7 @@ describe("--input contract help", () => {
     });
 
     expect(help?.fields).toEqual(["metadata.<key>  string  required"]);
-    expect(help?.example).toEqual({ metadata: { key: "xxxxx" } });
+    expect(completeExample(help)).toEqual({ metadata: { key: "xxxxx" } });
   });
 
   test("shell-quotes apostrophes in generated examples", () => {
@@ -267,11 +355,13 @@ describe("--input contract help", () => {
         inputOnly: ["value"],
       });
 
-      expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
+      expect(validateAgainstSchema(schema, completeExample(help)).valid).toBe(
+        true,
+      );
     }
   });
 
-  test("falls back to a generic example for an invalid schema pattern", () => {
+  test("does not advertise a complete example for an invalid schema pattern", () => {
     const help = buildInputContractHelp({
       schema: {
         type: "object",
@@ -281,7 +371,7 @@ describe("--input contract help", () => {
       inputOnly: ["value"],
     });
 
-    expect(help?.example).toEqual({ value: "xxxxx" });
+    expect(help?.example).toEqual({ status: "unavailable" });
   });
 });
 
@@ -307,7 +397,8 @@ describe("generated --input help invariants", () => {
         }
         if (help !== undefined) {
           expect(
-            validateAgainstSchema(node.spec.inputSchema, help.example).valid,
+            validateAgainstSchema(node.spec.inputSchema, completeExample(help))
+              .valid,
           ).toBe(true);
         }
         continue;
@@ -327,7 +418,7 @@ describe("generated --input help invariants", () => {
       }
       const validation = validateAgainstSchema(
         node.spec.inputSchema,
-        help?.example,
+        completeExample(help),
       );
       if (!validation.valid) {
         throw new Error(

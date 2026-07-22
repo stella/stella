@@ -75,6 +75,11 @@ const allOf = (schema: JsonSchema): readonly JsonSchema[] => {
   return Array.isArray(variants) ? variants.filter(isRecord) : [];
 };
 
+const describesObject = (schema: JsonSchema): boolean =>
+  schemaTypes(schema).includes("object") ||
+  Object.keys(propertiesOf(schema)).length > 0 ||
+  allOf(schema).some(describesObject);
+
 const findComposedExample = (
   schema: JsonSchema,
   base: JsonSchema,
@@ -148,6 +153,16 @@ const scalarTypeLabel = (schema: JsonSchema): string => {
   const types = schemaTypes(schema);
   if (types.length > 0) {
     return types.join(" | ");
+  }
+  const intersectionTypes = [
+    ...new Set(
+      allOf(schema)
+        .map(scalarTypeLabel)
+        .filter((label) => label !== "any JSON value"),
+    ),
+  ];
+  if (intersectionTypes.length > 0) {
+    return intersectionTypes.join(" & ");
   }
   return "any JSON value";
 };
@@ -257,7 +272,12 @@ const renderSchema = ({
   }
 
   const properties = propertiesOf(schema);
-  if (types.includes("object") || Object.keys(properties).length > 0) {
+  const intersections = allOf(schema);
+  if (
+    types.includes("object") ||
+    Object.keys(properties).length > 0 ||
+    intersections.some(describesObject)
+  ) {
     const mapValue = mapValueSchema(schema);
     const freeMap =
       mapValue !== undefined && Object.keys(properties).length === 0;
@@ -307,6 +327,9 @@ const renderObjectChildren = ({
       indent,
       lines,
     });
+  }
+  for (const intersection of allOf(schema)) {
+    renderObjectChildren({ path, schema: intersection, indent, lines });
   }
 };
 
@@ -588,9 +611,13 @@ const setExamplePath = (
   }
 };
 
+type InputContractExample =
+  | { status: "complete"; value: Record<string, unknown> }
+  | { status: "unavailable" };
+
 export type InputContractHelp = {
   fields: readonly string[];
-  example: Record<string, unknown>;
+  example: InputContractExample;
 };
 
 /** Quote a generated JSON example as one POSIX-shell argument. */
@@ -636,5 +663,10 @@ export const buildInputContractHelp = ({
   for (const path of [...inputOnly, ...requiredPaths]) {
     setExamplePath(schema, example, path);
   }
-  return { fields, example };
+  return {
+    fields,
+    example: validateAgainstSchema(schema, example).valid
+      ? { status: "complete", value: example }
+      : { status: "unavailable" },
+  };
 };

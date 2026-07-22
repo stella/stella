@@ -200,15 +200,25 @@ const fullDescription = ({
   if (contract === undefined || contract.fields.length === 0) {
     return undefined;
   }
-  return [
+  const lines = [
     brief,
     "",
     "--input JSON fields (explicit value flags override matching JSON paths):",
     ...contract.fields.map((line) => `  ${line}`),
-    "",
-    "Complete JSON example:",
-    `  ${formatInputExample(contract.example)}`,
-  ].join("\n");
+  ];
+  if (contract.example.status === "complete") {
+    lines.push(
+      "",
+      "Complete JSON example:",
+      `  ${formatInputExample(contract.example.value)}`,
+    );
+  } else {
+    lines.push(
+      "",
+      "JSON example unavailable; compose --input from the fields above and validate with --dry-run.",
+    );
+  }
+  return lines.join("\n");
 };
 
 const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
