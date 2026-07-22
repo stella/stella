@@ -1,3 +1,4 @@
+import { validateAgainstSchema } from "./json-schema-validate.js";
 import type { JsonSchema } from "./route-types.js";
 import { compileSchemaPattern } from "./schema-pattern.js";
 
@@ -45,14 +46,20 @@ const descriptionOf = (schema: JsonSchema): string | undefined => {
   return normalized.length === 0 ? undefined : normalized;
 };
 
-const alternativesOf = (schema: JsonSchema): readonly JsonSchema[] => {
+type AlternativeGroup = {
+  keyword: "anyOf" | "oneOf";
+  variants: readonly JsonSchema[];
+};
+
+const alternativeGroupsOf = (schema: JsonSchema): AlternativeGroup[] => {
+  const groups: AlternativeGroup[] = [];
   for (const keyword of ["anyOf", "oneOf"] as const) {
     const variants = schema[keyword];
     if (Array.isArray(variants)) {
-      return variants.filter(isRecord);
+      groups.push({ keyword, variants: variants.filter(isRecord) });
     }
   }
-  return [];
+  return groups;
 };
 
 const allOf = (schema: JsonSchema): readonly JsonSchema[] => {
@@ -138,27 +145,29 @@ const renderSchema = ({
   indent: number;
   lines: string[];
 }): void => {
-  const variants = alternativesOf(schema);
-  if (variants.length > 0) {
-    lines.push(
-      lineFor({
-        path,
-        type: `one of ${variants.length} variants`,
-        required,
-        description: descriptionOf(schema),
-        indent,
-      }),
-    );
-    for (const [index, variant] of variants.entries()) {
-      const label = variantLabel(variant, index);
-      lines.push(`${"  ".repeat(indent + 1)}${label}:`);
-      renderSchema({
-        path,
-        schema: variant,
-        required,
-        indent: indent + 2,
-        lines,
-      });
+  const alternativeGroups = alternativeGroupsOf(schema);
+  if (alternativeGroups.length > 0) {
+    for (const { keyword, variants } of alternativeGroups) {
+      lines.push(
+        lineFor({
+          path,
+          type: `${keyword}: one of ${variants.length} variants`,
+          required,
+          description: descriptionOf(schema),
+          indent,
+        }),
+      );
+      for (const [index, variant] of variants.entries()) {
+        const label = variantLabel(variant, index);
+        lines.push(`${"  ".repeat(indent + 1)}${label}:`);
+        renderSchema({
+          path,
+          schema: variant,
+          required,
+          indent: indent + 2,
+          lines,
+        });
+      }
     }
     return;
   }
@@ -176,7 +185,10 @@ const renderSchema = ({
         indent,
       }),
     );
-    if (itemSchema !== undefined && alternativesOf(itemSchema).length > 0) {
+    if (
+      itemSchema !== undefined &&
+      alternativeGroupsOf(itemSchema).length > 0
+    ) {
       renderSchema({
         path: `${path}[]`,
         schema: itemSchema,
@@ -412,19 +424,49 @@ const exampleFor = (schema: JsonSchema): unknown => {
   if (Array.isArray(enumValues) && enumValues.length > 0) {
     return enumValues.at(0);
   }
-  const variants = alternativesOf(schema);
-  if (variants.length > 0) {
-    const variant = variants.at(0) ?? {};
+  const alternativeGroups = alternativeGroupsOf(schema);
+  if (alternativeGroups.length === 1) {
+    const group = alternativeGroups.at(0);
+    const variant = group?.variants.at(0) ?? {};
     return exampleFor({
       ...schema,
-      anyOf: undefined,
-      oneOf: undefined,
+      [group?.keyword ?? "anyOf"]: undefined,
       ...variant,
     });
   }
+  if (alternativeGroups.length > 1) {
+    let combinations: JsonSchema[][] = [[]];
+    for (const group of alternativeGroups) {
+      const next: JsonSchema[][] = [];
+      for (const combination of combinations) {
+        for (const variant of group.variants) {
+          next.push([...combination, variant]);
+        }
+      }
+      combinations = next;
+    }
+    const base = { ...schema, anyOf: undefined, oneOf: undefined };
+    for (const combination of combinations) {
+      const candidate = exampleFor({
+        ...base,
+        allOf: [...allOf(base), ...combination],
+      });
+      if (validateAgainstSchema(schema, candidate).valid) {
+        return candidate;
+      }
+    }
+    return exampleFor(base);
+  }
   const intersections = allOf(schema);
   if (intersections.length > 0) {
-    const result = exampleFor({ ...schema, allOf: undefined });
+    const baseSchema = { ...schema, allOf: undefined };
+    const result = exampleFor(baseSchema);
+    for (const intersection of intersections) {
+      const candidate = exampleFor(intersection);
+      if (validateAgainstSchema(schema, candidate).valid) {
+        return candidate;
+      }
+    }
     const objectResult = isRecord(result) ? result : {};
     for (const intersection of intersections) {
       const example = exampleFor(intersection);

@@ -143,7 +143,10 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
       { anyOf: [true] },
       { allOf: ["not-a-schema"] },
       { properties: { child: 42 } },
+      { properties: [] },
       { patternProperties: { ".*": "not-a-schema" } },
+      { patternProperties: [] },
+      { additionalProperties: "not-a-schema" },
       { items: [null] },
       { $defs: { child: false } },
     ];

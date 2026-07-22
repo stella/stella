@@ -98,6 +98,35 @@ describe("--input contract help", () => {
     expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
   });
 
+  test("renders and satisfies simultaneous anyOf and oneOf constraints", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        value: {
+          anyOf: [
+            { type: "string", pattern: "^a" },
+            { type: "string", pattern: "^b" },
+          ],
+          oneOf: [
+            { type: "string", const: "apple" },
+            { type: "string", const: "banana" },
+          ],
+        },
+      },
+      required: ["value"],
+    };
+
+    const help = buildInputContractHelp({
+      schema,
+      inputOnly: ["value"],
+    });
+    const fields = help?.fields.join("\n") ?? "";
+
+    expect(fields).toContain("anyOf: one of 2 variants");
+    expect(fields).toContain("oneOf: one of 2 variants");
+    expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
+  });
+
   test("documents every branch of an array item union", () => {
     const schema: JsonSchema = {
       type: "object",

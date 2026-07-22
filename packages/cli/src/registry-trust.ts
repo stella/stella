@@ -200,6 +200,9 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
   }
 
   const properties = schema["properties"];
+  if (properties !== undefined && !isRecord(properties)) {
+    return "properties must be an object";
+  }
   if (isRecord(properties)) {
     if (Object.keys(properties).length > MAX_PROPS) {
       return `properties object larger than ${MAX_PROPS}`;
@@ -216,6 +219,9 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
   }
 
   const patternProperties = schema["patternProperties"];
+  if (patternProperties !== undefined && !isRecord(patternProperties)) {
+    return "patternProperties must be an object";
+  }
   if (isRecord(patternProperties)) {
     for (const [childPattern, child] of Object.entries(patternProperties)) {
       if (compileSchemaPattern(childPattern).status === "invalid") {
@@ -252,6 +258,13 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
   }
 
   const additional = schema["additionalProperties"];
+  if (
+    additional !== undefined &&
+    typeof additional !== "boolean" &&
+    !isRecord(additional)
+  ) {
+    return "additionalProperties must be a boolean or schema";
+  }
   if (isRecord(additional)) {
     return walkSchema(additional, depth + 1);
   }
