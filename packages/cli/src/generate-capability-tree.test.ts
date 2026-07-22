@@ -99,6 +99,24 @@ describe("deriveCapabilityLeaf: flags", () => {
     }
   });
 
+  test("property-less oneOf bodies make the whole input part input-only", () => {
+    const { spec } = deriveCapabilityLeaf(
+      entry({
+        id: "events.create",
+        inputSchema: {
+          body: {
+            oneOf: [
+              objectSchema({ type: { type: "string", const: "created" } }),
+              objectSchema({ type: { type: "string", const: "deleted" } }),
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(spec.inputOnly).toEqual(["body"]);
+  });
+
   test("scalar body props become bare flags routed to input.body", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({

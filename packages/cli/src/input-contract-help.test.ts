@@ -75,6 +75,29 @@ describe("--input contract help", () => {
     expect(rendered).toContain("body.entityId  string  required");
   });
 
+  test("documents oneOf branches with a schema-valid example", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        value: {
+          oneOf: [
+            { type: "string", const: "first" },
+            { type: "string", const: "second" },
+          ],
+        },
+      },
+      required: ["value"],
+    };
+
+    const help = buildInputContractHelp({
+      schema,
+      inputOnly: ["value"],
+    });
+
+    expect(help?.fields.join("\n")).toContain("one of 2 variants");
+    expect(validateAgainstSchema(schema, help?.example).valid).toBe(true);
+  });
+
   test("documents every branch of an array item union", () => {
     const schema: JsonSchema = {
       type: "object",

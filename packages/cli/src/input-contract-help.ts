@@ -45,12 +45,14 @@ const descriptionOf = (schema: JsonSchema): string | undefined => {
   return normalized.length === 0 ? undefined : normalized;
 };
 
-const anyOf = (schema: JsonSchema): readonly JsonSchema[] => {
-  const variants = schema["anyOf"];
-  if (!Array.isArray(variants)) {
-    return [];
+const alternativesOf = (schema: JsonSchema): readonly JsonSchema[] => {
+  for (const keyword of ["anyOf", "oneOf"] as const) {
+    const variants = schema[keyword];
+    if (Array.isArray(variants)) {
+      return variants.filter(isRecord);
+    }
   }
-  return variants.filter(isRecord);
+  return [];
 };
 
 const allOf = (schema: JsonSchema): readonly JsonSchema[] => {
@@ -136,7 +138,7 @@ const renderSchema = ({
   indent: number;
   lines: string[];
 }): void => {
-  const variants = anyOf(schema);
+  const variants = alternativesOf(schema);
   if (variants.length > 0) {
     lines.push(
       lineFor({
@@ -174,7 +176,7 @@ const renderSchema = ({
         indent,
       }),
     );
-    if (itemSchema !== undefined && anyOf(itemSchema).length > 0) {
+    if (itemSchema !== undefined && alternativesOf(itemSchema).length > 0) {
       renderSchema({
         path: `${path}[]`,
         schema: itemSchema,
@@ -410,10 +412,15 @@ const exampleFor = (schema: JsonSchema): unknown => {
   if (Array.isArray(enumValues) && enumValues.length > 0) {
     return enumValues.at(0);
   }
-  const variants = anyOf(schema);
+  const variants = alternativesOf(schema);
   if (variants.length > 0) {
     const variant = variants.at(0) ?? {};
-    return exampleFor({ ...schema, anyOf: undefined, ...variant });
+    return exampleFor({
+      ...schema,
+      anyOf: undefined,
+      oneOf: undefined,
+      ...variant,
+    });
   }
   const intersections = allOf(schema);
   if (intersections.length > 0) {

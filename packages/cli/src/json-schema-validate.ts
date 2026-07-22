@@ -61,7 +61,7 @@ const jsonValuesEqual = (left: unknown, right: unknown): boolean => {
 };
 
 const validateSchemaList = (
-  keyword: "allOf" | "anyOf",
+  keyword: "allOf" | "anyOf" | "oneOf",
   branches: readonly unknown[],
   value: unknown,
   path: string,
@@ -77,6 +77,17 @@ const validateSchemaList = (
       }
     }
     return ok;
+  }
+  if (keyword === "oneOf") {
+    let matches = 0;
+    for (const branch of branches) {
+      if (isPlainObject(branch) && validateValue(branch, value, path).valid) {
+        matches += 1;
+      }
+    }
+    return matches === 1
+      ? ok
+      : fail(path, `value must match exactly one schema (matched ${matches})`);
   }
   for (const branch of branches) {
     if (isPlainObject(branch) && validateValue(branch, value, path).valid) {
@@ -252,6 +263,14 @@ const validateValue = (
   const anyOf = schema["anyOf"];
   if (Array.isArray(anyOf)) {
     const result = validateSchemaList("anyOf", anyOf, value, path);
+    if (!result.valid) {
+      return result;
+    }
+  }
+
+  const oneOf = schema["oneOf"];
+  if (Array.isArray(oneOf)) {
+    const result = validateSchemaList("oneOf", oneOf, value, path);
     if (!result.valid) {
       return result;
     }

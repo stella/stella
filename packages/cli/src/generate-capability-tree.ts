@@ -130,6 +130,9 @@ const hasDynamicObjectKeys = (schema: JsonSchema): boolean =>
   isRecord(schema["additionalProperties"]) ||
   isRecord(schema["patternProperties"]);
 
+const hasSchemaAlternatives = (schema: JsonSchema): boolean =>
+  Array.isArray(schema["anyOf"]) || Array.isArray(schema["oneOf"]);
+
 /**
  * The input part carrying the `cursor`+`limit` pagination pair (query wins over
  * body when both somehow declare it), or `undefined` for a non-paginated
@@ -174,7 +177,7 @@ const candidatesForPart = ({
   if (
     schema !== undefined &&
     Object.keys(properties).length === 0 &&
-    (Array.isArray(schema["anyOf"]) || hasDynamicObjectKeys(schema))
+    (hasSchemaAlternatives(schema) || hasDynamicObjectKeys(schema))
   ) {
     inputOnly.push(part);
   }

@@ -127,6 +127,29 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     ).toBe(false);
   });
 
+  test("requires exactly one matching oneOf branch", () => {
+    const schema = objectSchema({
+      value: {
+        oneOf: [
+          { type: "string", pattern: "^a" },
+          { type: "string", pattern: "z$" },
+        ],
+      },
+    });
+
+    expect(validateAgainstSchema(schema, { value: "apple" }).valid).toBe(true);
+    expect(validateAgainstSchema(schema, { value: "middle" })).toEqual({
+      valid: false,
+      path: "value",
+      message: "value must match exactly one schema (matched 0)",
+    });
+    expect(validateAgainstSchema(schema, { value: "az" })).toEqual({
+      valid: false,
+      path: "value",
+      message: "value must match exactly one schema (matched 2)",
+    });
+  });
+
   test("enforces string length and pattern constraints", () => {
     const schema = objectSchema({
       lawId: {
