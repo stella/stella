@@ -42,12 +42,13 @@ const validateString = (
   value: string,
   path: string,
 ): ValidationResult => {
+  const codePointLength = Array.from(value).length;
   const minLength = schema["minLength"];
-  if (typeof minLength === "number" && value.length < minLength) {
+  if (typeof minLength === "number" && codePointLength < minLength) {
     return fail(path, `string shorter than minLength ${minLength}`);
   }
   const maxLength = schema["maxLength"];
-  if (typeof maxLength === "number" && value.length > maxLength) {
+  if (typeof maxLength === "number" && codePointLength > maxLength) {
     return fail(path, `string longer than maxLength ${maxLength}`);
   }
   const pattern = schema["pattern"];

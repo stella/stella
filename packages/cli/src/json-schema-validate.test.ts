@@ -66,20 +66,36 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     const schema = objectSchema({
       lawId: {
         type: "string",
-        minLength: 12,
+        minLength: 13,
         maxLength: 32,
         pattern: "^BOE-[A-Z]-\\d{4}-\\d+$",
       },
     });
 
-    expect(validateAgainstSchema(schema, { lawId: "BOE-A-2026-1" }).valid).toBe(
-      true,
-    );
-    expect(validateAgainstSchema(schema, { lawId: "xxxxx" }).valid).toBe(false);
     expect(
-      validateAgainstSchema(schema, { lawId: `BOE-A-2026-${"1".repeat(30)}` })
-        .valid,
+      validateAgainstSchema(schema, { lawId: "BOE-A-2026-12" }).valid,
+    ).toBe(true);
+    expect(validateAgainstSchema(schema, { lawId: "BOE-A-2026-1" }).valid).toBe(
+      false,
+    );
+    expect(
+      validateAgainstSchema(schema, { lawId: "xxxxxxxxxxxxx" }).valid,
     ).toBe(false);
+    expect(
+      validateAgainstSchema(schema, {
+        lawId: `BOE-A-2026-${"1".repeat(30)}`,
+      }).valid,
+    ).toBe(false);
+  });
+
+  test("counts minLength and maxLength in Unicode code points", () => {
+    const schema = objectSchema({
+      value: { type: "string", minLength: 2, maxLength: 2 },
+    });
+
+    expect(validateAgainstSchema(schema, { value: "😀a" }).valid).toBe(true);
+    expect(validateAgainstSchema(schema, { value: "😀" }).valid).toBe(false);
+    expect(validateAgainstSchema(schema, { value: "😀ab" }).valid).toBe(false);
   });
 
   test("returns a validation issue for an invalid schema pattern", () => {
