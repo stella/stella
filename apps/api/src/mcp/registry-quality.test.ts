@@ -361,7 +361,9 @@ const collectUndescribedProperties = (
   collectUndescribedProperties(schema["items"], `${path}[]`, issues);
 };
 
-const getInputProperties = (tool: McpToolDefinition): Record<string, unknown> =>
+const getInputProperties = (
+  tool: McpToolDefinition,
+): Record<string, unknown> =>
   isRecord(tool.inputSchema.properties) ? tool.inputSchema.properties : {};
 
 /**

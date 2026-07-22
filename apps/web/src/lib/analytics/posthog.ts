@@ -121,7 +121,6 @@ export const createPostHogAnalytics = (
     opt_out_capturing_by_default: import.meta.env.DEV && !localDebugEnabled,
     api_host: host,
     defaults: "2025-05-24",
-    advanced_disable_decide: true,
     advanced_disable_feature_flags: true,
     advanced_disable_flags: true,
     autocapture: false,

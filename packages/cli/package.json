@@ -48,7 +48,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stricli/core": "^1.2.9",
+    "@stricli/core": "^1.3.0",
     "better-result": "catalog:",
     "re2-wasm": "^1.0.2",
     "valibot": "catalog:"

@@ -79,6 +79,11 @@ const ENTITY_COLORS: Record<string, EntityColor> = {
     border: [0.13, 0.78, 0.85],
     text: [0.06, 0.41, 0.45],
   },
+  "case number": {
+    fill: [0.65, 0.93, 0.97],
+    border: [0.13, 0.78, 0.85],
+    text: [0.06, 0.41, 0.45],
+  },
   "credit card number": {
     fill: [1, 0.79, 0.82],
     border: [0.98, 0.44, 0.52],
