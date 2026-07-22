@@ -463,6 +463,36 @@ describe("header and footer placeholders", () => {
     expect(`${headerXml}${footerXml}`).not.toContain("{{#");
     expect(result.structureErrors).toEqual([]);
   });
+
+  test("loop-local numbering keys stay unique across document parts", async () => {
+    const body = WRAP(
+      [
+        P("{{#each body_items}}"),
+        P("Body {{@num:clause}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const header = HEADER_WRAP(P("Header"));
+    const footer = FOOTER_WRAP(
+      [
+        P("{{#each footer_items}}"),
+        P("Footer {{@num:clause}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const buf = await makeDocxWithHeaderFooter(body, header, footer);
+
+    const result = await fillTemplate(buf, {
+      body_items: [{}],
+      footer_items: [{}],
+    });
+    const zip = await JSZip.loadAsync(result.buffer);
+    const bodyXml = await zip.file("word/document.xml")?.async("string");
+    const footerXml = await zip.file("word/footer1.xml")?.async("string");
+
+    expect(bodyXml).toContain("Body 1");
+    expect(footerXml).toContain("Footer 2");
+  });
 });
 
 // ── Split-run placeholders ───────────────────────────────

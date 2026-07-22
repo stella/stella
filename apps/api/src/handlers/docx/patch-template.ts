@@ -16,6 +16,7 @@ import type { NamedCondition } from "@stll/template-conditions";
 
 import {
   collectValidNumIds,
+  createDirectiveProcessingContext,
   flattenTemplateData,
   HAS_BLOCK_DIRECTIVES_RE,
   processBlockDirectives,
@@ -150,6 +151,7 @@ const preProcessTemplateDirectives = async (
   const numberingXml =
     (await zip.file("word/numbering.xml")?.async("string")) ?? null;
   const validNumIds = collectValidNumIds(numberingXml);
+  const processingContext = createDirectiveProcessingContext();
 
   for (const { path, xml } of parts) {
     const doc = slimdom.parseXmlDocument(xml);
@@ -169,14 +171,14 @@ const preProcessTemplateDirectives = async (
     const { patchValues, errors } = processBlockDirectives(
       container,
       templateData,
-      namedConditions,
-      conditionValues,
+      { conditionValues, namedConditions, processingContext },
     );
     Object.assign(expandedValues, patchValues);
     const inlineErrors = processInlineConditions(
       container,
       inlineData,
       namedConditions,
+      { processingContext },
     );
     for (const error of [...errors, ...inlineErrors]) {
       structureErrors.push({

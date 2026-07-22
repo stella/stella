@@ -605,6 +605,26 @@ describe("fillTemplate with inline conditions", () => {
     );
   });
 
+  test("inline conditions inside block loops retain each row context", async () => {
+    const docx = await makeDocx(
+      WRAP(
+        P("{{#each sellers}}") +
+          P("{{sellers.name}}{{#if sellers.is_company}} Ltd{{/if}}.") +
+          P("{{/each}}"),
+      ),
+    );
+
+    const result = await fillTemplate(docx, {
+      sellers: [
+        { name: "Acme", is_company: true },
+        { name: "Alice", is_company: false },
+      ],
+    });
+
+    expect(result.structureErrors).toEqual([]);
+    expect(await documentText(result.buffer)).toBe("Acme Ltd.Alice.");
+  });
+
   test("surfaces inline structure errors through fillTemplate", async () => {
     const docx = await makeDocx(
       WRAP(P("Broken{{#if oops}} span without closer.")),

@@ -34,10 +34,9 @@
  * - A paragraph with a structure error is left untouched (its markers stay
  *   in the output) and only the first error per paragraph is reported.
  * - Conditions and array paths evaluate against the top-level template data
- *   plus the manifest's named conditions — the same context as a top-level
- *   block `{{#if}}`/`{{#each}}`. Inline directives do NOT see an enclosing
- *   block-loop iteration item: block loop expansion has already run when this
- *   pass executes.
+ *   plus the manifest's named conditions. Paragraphs cloned by a block loop
+ *   retain that iteration's inherited row context, matching nested block
+ *   condition semantics.
  * - The caller runs this pass for the body and every header/footer content
  *   part, matching discovery and scalar value replacement coverage.
  *
@@ -66,6 +65,8 @@ import {
 
 import {
   collectNumKeysInText,
+  createDirectiveProcessingContext,
+  type DirectiveProcessingContext,
   eachKey,
   registerItemPatchValues,
   rewriteEachPlaceholdersInText,
@@ -280,12 +281,11 @@ export const processInlineConditions = (
   body: slimdom.Element,
   data: Record<string, unknown>,
   namedConditions?: NamedCondition[],
+  options: { processingContext?: DirectiveProcessingContext } = {},
 ): TemplateStructureError[] => {
   const errors: TemplateStructureError[] = [];
-
-  // Distinguishes sibling inline loops so their iteration-scoped numbering
-  // keys can never collide (mirrors the block expander's eachExpansionCount).
-  let eachExpansionCount = 0;
+  const processingContext =
+    options.processingContext ?? createDirectiveProcessingContext();
 
   for (const [index, paragraph] of body
     .getElementsByTagNameNS(W_NS, "p")
@@ -318,16 +318,22 @@ export const processInlineConditions = (
     // offsets valid. `if` groups are plain string cuts; `each` groups splice
     // cloned run sequences (preserving body run formatting) at the run level.
     const ordered = [...parsed.groups].toSorted((a, b) => b.start - a.start);
+    const paragraphData =
+      processingContext.inlineDataByParagraph.get(paragraph) ?? data;
     for (const group of ordered) {
       if (group.kind === "each") {
-        applyInlineEach(paragraph, group, data, eachExpansionCount);
-        eachExpansionCount += 1;
+        applyInlineEach(
+          paragraph,
+          group,
+          paragraphData,
+          processingContext.nextEachExpansionId(),
+        );
         continue;
       }
       const winning = group.branches.find(
         (branch) =>
           branch.condition === "" ||
-          evaluateCondition(branch.condition, data, namedConditions),
+          evaluateCondition(branch.condition, paragraphData, namedConditions),
       );
       const cuts: { start: number; end: number; value: string }[] = [];
       if (winning) {

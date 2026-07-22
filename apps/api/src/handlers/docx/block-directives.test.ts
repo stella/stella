@@ -820,8 +820,7 @@ describe("processBlockDirectives — raw condition values overlay", () => {
     processBlockDirectives(
       body,
       { signing_date: "13. června 2028" },
-      undefined,
-      { signing_date: "2028-06-13" },
+      { conditionValues: { signing_date: "2028-06-13" } },
     );
 
     expect(bodyTexts(body)).toEqual(["After cutoff"]);
@@ -832,8 +831,7 @@ describe("processBlockDirectives — raw condition values overlay", () => {
     processBlockDirectives(
       body,
       { signing_date: "13. června 2020" },
-      undefined,
-      { signing_date: "2020-06-13" },
+      { conditionValues: { signing_date: "2020-06-13" } },
     );
 
     expect(bodyTexts(body)).toEqual(["Before cutoff"]);
@@ -877,7 +875,7 @@ describe("processBlockDirectives — raw condition values overlay", () => {
 
     // The same overlay drives condition evaluation against the formatted map.
     const body = parseBody(DATE_IF);
-    processBlockDirectives(body, values, undefined, overlay);
+    processBlockDirectives(body, values, { conditionValues: overlay });
     expect(bodyTexts(body)).toEqual(["After cutoff"]);
   });
 });
@@ -928,8 +926,12 @@ describe("processBlockDirectives — loops", () => {
     processBlockDirectives(
       body,
       { people: [{ dob: "13. června 2028" }, { dob: "1. ledna 2020" }] },
-      undefined,
-      { "people.0.dob": "2028-06-13", "people.1.dob": "2020-01-01" },
+      {
+        conditionValues: {
+          "people.0.dob": "2028-06-13",
+          "people.1.dob": "2020-01-01",
+        },
+      },
     );
 
     // Row 0 (2028-06-13 > 2028-01-01) keeps the line; row 1 (2020-01-01) drops

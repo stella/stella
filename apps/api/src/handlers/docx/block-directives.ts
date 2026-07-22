@@ -595,6 +595,24 @@ type ProcessResult = {
   errors: TemplateStructureError[];
 };
 
+export type DirectiveProcessingContext = {
+  inlineDataByParagraph: Map<slimdom.Element, Record<string, unknown>>;
+  nextEachExpansionId: () => number;
+};
+
+export const createDirectiveProcessingContext =
+  (): DirectiveProcessingContext => {
+    let eachExpansionId = 0;
+    return {
+      inlineDataByParagraph: new Map(),
+      nextEachExpansionId: () => {
+        const current = eachExpansionId;
+        eachExpansionId += 1;
+        return current;
+      },
+    };
+  };
+
 /**
  * Process block directives in a DOCX body element.
  *
@@ -604,18 +622,23 @@ type ProcessResult = {
  * Returns flattened patch values for loop-expanded
  * placeholders and any structural errors.
  */
+type ProcessBlockDirectivesOptions = {
+  conditionValues?: Record<string, string> | undefined;
+  namedConditions?: NamedCondition[] | undefined;
+  processingContext?: DirectiveProcessingContext;
+};
+
 export const processBlockDirectives = (
   body: slimdom.Element,
   data: TemplateData,
-  namedConditions?: NamedCondition[],
-  conditionValues?: Record<string, string>,
+  {
+    conditionValues,
+    namedConditions,
+    processingContext = createDirectiveProcessingContext(),
+  }: ProcessBlockDirectivesOptions = {},
 ): ProcessResult => {
   const patchValues: Record<string, RichPatchValue> = {};
   const allErrors: TemplateStructureError[] = [];
-
-  // Distinguishes sibling loops (possibly over the same array) so
-  // their iteration-scoped numbering keys can never collide.
-  let eachExpansionCount = 0;
 
   // Flatten top-level nested objects for value substitution.
   Object.assign(patchValues, flattenTemplateData(data));
@@ -875,8 +898,7 @@ export const processBlockDirectives = (
 
     const tokenMask = directEachBodyMask(contentParas);
     const localNumKeys = collectNumKeys(contentParas);
-    const expansionId = eachExpansionCount;
-    eachExpansionCount += 1;
+    const expansionId = processingContext.nextEachExpansionId();
 
     const finalRows: slimdom.Element[] = [];
     for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
@@ -907,16 +929,20 @@ export const processBlockDirectives = (
       });
       registerItem(item, block.arrayPath, itemIdx);
 
+      const itemContext = buildItemContext(
+        contextData,
+        item,
+        block.arrayPath,
+        itemIdx,
+      );
+      for (const paragraph of clonedContentParas) {
+        processingContext.inlineDataByParagraph.set(paragraph, itemContext);
+      }
+
       const hasNested = clonedContentParas.some((p) =>
         DIRECTIVE_RE.test(paragraphText(p)),
       );
       if (hasNested) {
-        const itemContext = buildItemContext(
-          contextData,
-          item,
-          block.arrayPath,
-          itemIdx,
-        );
         const tempBody = doc.createElementNS(W_NS, "w:body");
         const tempTbl = doc.createElementNS(W_NS, "w:tbl");
         tempBody.append(tempTbl);
@@ -972,8 +998,7 @@ export const processBlockDirectives = (
     const contentParas = paragraphsInUnits(contentUnits);
     const tokenMask = directEachBodyMask(contentParas);
     const localNumKeys = collectNumKeys(contentParas);
-    const expansionId = eachExpansionCount;
-    eachExpansionCount += 1;
+    const expansionId = processingContext.nextEachExpansionId();
 
     const finalUnits: slimdom.Element[] = [];
     for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
@@ -994,16 +1019,20 @@ export const processBlockDirectives = (
       });
       registerItem(item, block.arrayPath, itemIdx);
 
+      const itemContext = buildItemContext(
+        contextData,
+        item,
+        block.arrayPath,
+        itemIdx,
+      );
+      for (const paragraph of clonedParas) {
+        processingContext.inlineDataByParagraph.set(paragraph, itemContext);
+      }
+
       const hasNested = clonedParas.some((p) =>
         DIRECTIVE_RE.test(paragraphText(p)),
       );
       if (hasNested) {
-        const itemContext = buildItemContext(
-          contextData,
-          item,
-          block.arrayPath,
-          itemIdx,
-        );
         const tempBody = doc.createElementNS(W_NS, "w:body");
         for (const clone of clones) {
           tempBody.append(clone);
