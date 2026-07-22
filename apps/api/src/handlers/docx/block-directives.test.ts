@@ -932,6 +932,32 @@ describe("processBlockDirectives — loops", () => {
     });
   });
 
+  test("primitive rows expose bare and qualified value conditions", () => {
+    const body = parseBody(
+      WRAP(
+        [
+          P("{{#each tags}}"),
+          P('{{#if value == "keep"}}'),
+          P("bare {{tags.value}}"),
+          P("{{/if}}"),
+          P('{{#if tags.value == "keep"}}'),
+          P("qualified {{tags.value}}"),
+          P("{{/if}}"),
+          P("{{/each}}"),
+        ].join(""),
+      ),
+    );
+    const { patchValues } = processBlockDirectives(body, {
+      tags: ["keep", "discard"],
+    });
+
+    expect(bodyTexts(body)).toEqual([
+      "bare {{__each_tags_0_value}}",
+      "qualified {{__each_tags_0_value}}",
+    ]);
+    expect(patchValues["__each_tags_0_value"]).toBe("keep");
+  });
+
   test("inner-loop condition compares a row's raw date, not the localized text", () => {
     const xml = WRAP(
       [

@@ -809,6 +809,13 @@ export const processBlockDirectives = (
         }
       }
       applyRowRawOverlay(itemContext, conditionValues, arrayPath, itemIdx);
+    } else if (
+      typeof item === "string" ||
+      typeof item === "number" ||
+      typeof item === "boolean"
+    ) {
+      itemContext["value"] = item;
+      itemContext[arrayPath] = { value: item };
     }
     return itemContext;
   };
