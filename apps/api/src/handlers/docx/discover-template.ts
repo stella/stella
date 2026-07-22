@@ -126,6 +126,23 @@ const registerConditionFields = (
   }
 };
 
+const attachNestedArrayFields = (fields: FieldAccumulator): void => {
+  for (const path of fields.keys()) {
+    const separatorIndex = path.indexOf(".");
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const rootPath = path.slice(0, separatorIndex);
+    const root = fields.get(rootPath);
+    if (root?.kind !== "array") {
+      continue;
+    }
+
+    root.itemPaths.add(path.slice(separatorIndex + 1));
+  }
+};
+
 // ── Condition map building ─────────────────────────────
 
 /**
@@ -444,6 +461,12 @@ const analyzeContainer = (
       registerField(fields, name, "string");
     }
   }
+
+  // A dotted field used only by a condition still belongs to a repeated
+  // row's input contract. Normalize every discovered descendant into its
+  // array root after all block, inline, and placeholder scans have run, so
+  // discovery order cannot change the contract.
+  attachNestedArrayFields(fields);
 
   return { fields, errors, placeholderCounts, fieldConditions };
 };

@@ -122,6 +122,24 @@ describe("discoverTemplate", () => {
     });
   });
 
+  test("condition-only paths join repeated row fields", async () => {
+    const xml = WRAP(
+      [
+        P("{{#each sellers}}"),
+        P("{{sellers.name}}{{#if sellers.is_company}} Ltd{{/if}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    const sellers = result.fields.find((field) => field.path === "sellers");
+    expect(sellers?.itemFields?.map((field) => field.path).toSorted()).toEqual([
+      "is_company",
+      "name",
+    ]);
+  });
+
   test("nested object path infers object field", async () => {
     const xml = WRAP(
       [
