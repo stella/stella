@@ -42,59 +42,93 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 const enumValues = (schema: JsonSchema): readonly unknown[] | undefined =>
   Array.isArray(schema["enum"]) ? schema["enum"] : undefined;
 
-const propertyDeclaredAcrossAllOf = (
+const applicatorKeywords = ["allOf", "anyOf", "oneOf"] as const;
+
+const hasPropertiesAcrossCompositions = (schema: JsonSchema): boolean => {
+  const properties = schema["properties"];
+  if (isPlainObject(properties) && Object.keys(properties).length > 0) {
+    return true;
+  }
+  return applicatorKeywords.some((keyword) => {
+    const branches = schema[keyword];
+    return (
+      Array.isArray(branches) &&
+      branches.some(
+        (branch) =>
+          isPlainObject(branch) && hasPropertiesAcrossCompositions(branch),
+      )
+    );
+  });
+};
+
+const propertyDeclaredAcrossMatchingCompositions = (
   schema: JsonSchema,
   property: string,
+  value: Record<string, unknown>,
+  path: string,
 ): boolean => {
   const properties = schema["properties"];
   if (isPlainObject(properties) && Object.hasOwn(properties, property)) {
     return true;
   }
   const intersections = schema["allOf"];
-  return (
+  if (
     Array.isArray(intersections) &&
     intersections.some(
       (intersection) =>
         isPlainObject(intersection) &&
-        propertyDeclaredAcrossAllOf(intersection, property),
+        propertyDeclaredAcrossMatchingCompositions(
+          intersection,
+          property,
+          value,
+          path,
+        ),
     )
-  );
-};
-
-const hasPropertiesAcrossAllOf = (schema: JsonSchema): boolean => {
-  const properties = schema["properties"];
-  if (isPlainObject(properties) && Object.keys(properties).length > 0) {
+  ) {
     return true;
   }
-  const intersections = schema["allOf"];
-  return (
-    Array.isArray(intersections) &&
-    intersections.some(
-      (intersection) =>
-        isPlainObject(intersection) && hasPropertiesAcrossAllOf(intersection),
-    )
-  );
+  return (["anyOf", "oneOf"] as const).some((keyword) => {
+    const branches = schema[keyword];
+    return (
+      Array.isArray(branches) &&
+      branches.some(
+        (branch) =>
+          isPlainObject(branch) &&
+          validateValue(branch, value, path, true).valid &&
+          propertyDeclaredAcrossMatchingCompositions(
+            branch,
+            property,
+            value,
+            path,
+          ),
+      )
+    );
+  });
 };
 
-const hasObjectConstraintsAcrossAllOf = (schema: JsonSchema): boolean => {
+const hasObjectConstraintsAcrossCompositions = (
+  schema: JsonSchema,
+): boolean => {
   const required = schema["required"];
   if (
-    hasPropertiesAcrossAllOf(schema) ||
+    hasPropertiesAcrossCompositions(schema) ||
     Object.hasOwn(schema, "patternProperties") ||
     (Array.isArray(required) && required.length > 0) ||
     Object.hasOwn(schema, "additionalProperties")
   ) {
     return true;
   }
-  const intersections = schema["allOf"];
-  return (
-    Array.isArray(intersections) &&
-    intersections.some(
-      (intersection) =>
-        isPlainObject(intersection) &&
-        hasObjectConstraintsAcrossAllOf(intersection),
-    )
-  );
+  return applicatorKeywords.some((keyword) => {
+    const branches = schema[keyword];
+    return (
+      Array.isArray(branches) &&
+      branches.some(
+        (branch) =>
+          isPlainObject(branch) &&
+          hasObjectConstraintsAcrossCompositions(branch),
+      )
+    );
+  });
 };
 
 const jsonValuesEqual = (left: unknown, right: unknown): boolean => {
@@ -141,7 +175,10 @@ const validateSchemaList = (
   if (keyword === "oneOf") {
     let matches = 0;
     for (const branch of branches) {
-      if (isPlainObject(branch) && validateValue(branch, value, path).valid) {
+      if (
+        isPlainObject(branch) &&
+        validateValue(branch, value, path, true).valid
+      ) {
         matches += 1;
       }
     }
@@ -150,7 +187,10 @@ const validateSchemaList = (
       : fail(path, `value must match exactly one schema (matched ${matches})`);
   }
   for (const branch of branches) {
-    if (isPlainObject(branch) && validateValue(branch, value, path).valid) {
+    if (
+      isPlainObject(branch) &&
+      validateValue(branch, value, path, true).valid
+    ) {
       return ok;
     }
   }
@@ -331,9 +371,9 @@ const validateObject = (
     }
     if (
       additionalSchema !== false &&
-      propertyDeclaredAcrossAllOf(schema, key)
+      propertyDeclaredAcrossMatchingCompositions(schema, key, value, path)
     ) {
-      // The matching allOf branch already validated this value. The CLI's
+      // A matching composition branch already validated this value. The CLI's
       // implicit default-closed policy composes declared properties, while an
       // explicit additionalProperties:false remains strictly branch-local.
       continue;
@@ -342,7 +382,7 @@ const validateObject = (
       additionalSchema === false ||
       (additionalSchema !== true &&
         !allowUnknownProperties &&
-        hasPropertiesAcrossAllOf(schema))
+        hasPropertiesAcrossCompositions(schema))
     ) {
       return fail(childPath, "unknown property");
     }
@@ -394,7 +434,10 @@ const validateValue = (
 
   const types = schemaTypes(schema);
   if (types.length === 0) {
-    if (isPlainObject(value) && hasObjectConstraintsAcrossAllOf(schema)) {
+    if (
+      isPlainObject(value) &&
+      hasObjectConstraintsAcrossCompositions(schema)
+    ) {
       return validateObject(schema, value, path, allowUnknownProperties);
     }
     // A schema with no `type` (e.g. set_field_value.content.value) accepts any

@@ -103,6 +103,56 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     ).toBe(false);
   });
 
+  test("composes shared object fields with matching alternative branches", () => {
+    for (const keyword of ["anyOf", "oneOf"] as const) {
+      const schema = {
+        type: "object",
+        properties: { token: { type: "string" } },
+        required: ["token"],
+        [keyword]: [
+          objectSchema(
+            {
+              kind: { type: "string", const: "a" },
+              aValue: { type: "number" },
+            },
+            ["kind", "aValue"],
+          ),
+          objectSchema(
+            {
+              kind: { type: "string", const: "b" },
+              bValue: { type: "boolean" },
+            },
+            ["kind", "bValue"],
+          ),
+        ],
+      };
+
+      expect(
+        validateAgainstSchema(schema, {
+          token: "shared",
+          kind: "a",
+          aValue: 1,
+        }).valid,
+      ).toBe(true);
+      expect(
+        validateAgainstSchema(schema, {
+          token: "shared",
+          kind: "a",
+          aValue: 1,
+          bValue: true,
+        }).valid,
+      ).toBe(false);
+      expect(
+        validateAgainstSchema(schema, {
+          token: "shared",
+          kind: "a",
+          aValue: 1,
+          unexpected: true,
+        }).valid,
+      ).toBe(false);
+    }
+  });
+
   test("requires every allOf branch and compares structured const values", () => {
     const schema = {
       allOf: [
