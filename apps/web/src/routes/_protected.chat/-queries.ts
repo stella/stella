@@ -1016,12 +1016,12 @@ export const buildSendRequestBody = ({
     );
   }
 
-  const editApplyMode = context?.getEditApplyMode?.();
+  const { editApplyMode, docxEditRepresentation } =
+    resolveChatRequestDocxEditPreferences({ context, key, messages });
   if (editApplyMode !== undefined) {
     body.editApplyMode = editApplyMode;
   }
 
-  const docxEditRepresentation = context?.getDocxEditRepresentation?.();
   if (docxEditRepresentation !== undefined) {
     body.docxEditRepresentation = docxEditRepresentation;
   }
@@ -1118,6 +1118,46 @@ const activeTurnSendModes = new LifecycleRegistry<
   { sendMode: ChatSendMode; userMessageId: string }
 >();
 
+type ActiveTurnDocxEditPreferences = {
+  docxEditRepresentation: DocxEditRepresentation | undefined;
+  editApplyMode: ChatEditApplyMode | undefined;
+  userMessageId: string;
+};
+
+const activeTurnDocxEditPreferences = new LifecycleRegistry<
+  string,
+  ActiveTurnDocxEditPreferences
+>();
+
+const resolveChatRequestDocxEditPreferences = ({
+  context,
+  key,
+  messages,
+}: Pick<ResolveChatRequestSendModeProps, "context" | "key" | "messages">): Omit<
+  ActiveTurnDocxEditPreferences,
+  "userMessageId"
+> => {
+  const threadKey = getChatThreadKey(key);
+  const userMessageId = getLatestUserMessageId(messages);
+  const activeTurn = activeTurnDocxEditPreferences.get(threadKey);
+  const preferences =
+    userMessageId !== null && activeTurn?.userMessageId === userMessageId
+      ? activeTurn
+      : {
+          editApplyMode: context?.getEditApplyMode?.(),
+          docxEditRepresentation: context?.getDocxEditRepresentation?.(),
+        };
+
+  if (userMessageId !== null) {
+    activeTurnDocxEditPreferences.set(threadKey, {
+      ...preferences,
+      userMessageId,
+    });
+  }
+
+  return preferences;
+};
+
 const normalizeChatContinuationRequestBody = (
   data: unknown,
 ): ChatContinuationRequestBody | undefined => {
@@ -1150,6 +1190,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * tests so each one starts hermetically.
  */
 export const __resetChatRequestStateForTests = (): void => {
+  activeTurnDocxEditPreferences.clear();
   activeTurnSendModes.clear();
   chatRuntimeRegistry.clear();
 };
