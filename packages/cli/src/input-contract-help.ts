@@ -240,6 +240,7 @@ const renderSchema = ({
         });
       }
     }
+    renderObjectChildren({ path, schema, indent: indent + 1, lines });
     return;
   }
 
@@ -374,7 +375,7 @@ const pathRequired = (schema: JsonSchema, path: string): boolean => {
   let parent = schema;
   for (const [index, segment] of segments.entries()) {
     if (index === segments.length - 1) {
-      return requiredOf(parent).has(segment);
+      return requiredAcrossAllOf(parent).has(segment);
     }
     const child = propertiesOf(parent)[segment];
     if (child === undefined) {
@@ -468,6 +469,201 @@ const patternExample = (pattern: string): string | undefined => {
   return compiled.regex.test(example) ? example : undefined;
 };
 
+const boundedPatternExample = (
+  schema: JsonSchema,
+  pattern: string,
+): string | undefined => {
+  const example = patternExample(pattern);
+  if (example === undefined) {
+    return undefined;
+  }
+  const points = Array.from(example);
+  const minLength =
+    typeof schema["minLength"] === "number" ? schema["minLength"] : 0;
+  const maxLength =
+    typeof schema["maxLength"] === "number"
+      ? schema["maxLength"]
+      : Number.POSITIVE_INFINITY;
+  const candidates = [example];
+  const last = points.at(-1);
+  if (points.length < minLength && last !== undefined) {
+    candidates.push(
+      [
+        ...points,
+        ...Array.from({ length: minLength - points.length }, () => last),
+      ].join(""),
+    );
+    candidates.push(
+      Array.from(
+        { length: minLength },
+        (_, index) => points[index % points.length],
+      ).join(""),
+    );
+  }
+  if (points.length > maxLength) {
+    candidates.push(points.slice(0, maxLength).join(""));
+  }
+  const compiled = compileSchemaPattern(pattern);
+  if (compiled.status === "invalid") {
+    return undefined;
+  }
+  return candidates.find((candidate) => {
+    const length = Array.from(candidate).length;
+    return (
+      length >= minLength &&
+      length <= maxLength &&
+      compiled.regex.test(candidate)
+    );
+  });
+};
+
+const patternsAcrossAllOf = (schema: JsonSchema): string[] => {
+  const patterns: string[] = [];
+  const pattern = schema["pattern"];
+  if (typeof pattern === "string") {
+    patterns.push(pattern);
+  }
+  for (const intersection of allOf(schema)) {
+    patterns.push(...patternsAcrossAllOf(intersection));
+  }
+  return patterns;
+};
+
+const literalPatternFragment = (pattern: string): string | undefined => {
+  const body = pattern.replace(/^\^/u, "").replace(/\$$/u, "");
+  let fragment = "";
+  for (let index = 0; index < body.length; index += 1) {
+    const character = body[index];
+    if (character === undefined) {
+      return undefined;
+    }
+    if (character === "\\") {
+      const escaped = body[index + 1];
+      if (escaped === undefined || "dDsSwWbB".includes(escaped)) {
+        return undefined;
+      }
+      fragment += escaped;
+      index += 1;
+      continue;
+    }
+    if ("[](){}.*+?|".includes(character)) {
+      return undefined;
+    }
+    fragment += character;
+  }
+  return fragment.length === 0 ? undefined : fragment;
+};
+
+const numericKeywordAcrossAllOf = (
+  schema: JsonSchema,
+  keyword: "minLength" | "maxLength",
+  select: "lower" | "upper",
+): number | undefined => {
+  const values: number[] = [];
+  const direct = schema[keyword];
+  if (typeof direct === "number") {
+    values.push(direct);
+  }
+  for (const intersection of allOf(schema)) {
+    const nested = numericKeywordAcrossAllOf(intersection, keyword, select);
+    if (nested !== undefined) {
+      values.push(nested);
+    }
+  }
+  if (values.length === 0) {
+    return undefined;
+  }
+  return select === "lower" ? Math.max(...values) : Math.min(...values);
+};
+
+const mostSpecificAnchor = (
+  fragments: readonly string[],
+  side: "prefix" | "suffix",
+): string | undefined => {
+  const longest = fragments.toSorted(
+    (left, right) => right.length - left.length,
+  )[0];
+  if (longest === undefined) {
+    return "";
+  }
+  const compatible = fragments.every((fragment) =>
+    side === "prefix"
+      ? longest.startsWith(fragment)
+      : longest.endsWith(fragment),
+  );
+  return compatible ? longest : undefined;
+};
+
+const patternIntersectionExample = (schema: JsonSchema): string | undefined => {
+  const patterns = [...new Set(patternsAcrossAllOf(schema))];
+  if (patterns.length < 2) {
+    return undefined;
+  }
+  const compiled = patterns.map((pattern) => compileSchemaPattern(pattern));
+  if (compiled.some((entry) => entry.status === "invalid")) {
+    return undefined;
+  }
+  const fragments = patterns.map(literalPatternFragment);
+  if (fragments.some((fragment) => fragment === undefined)) {
+    return undefined;
+  }
+  const prefixes: string[] = [];
+  const middles: string[] = [];
+  const suffixes: string[] = [];
+  for (const [index, pattern] of patterns.entries()) {
+    const fragment = fragments[index];
+    if (fragment === undefined) {
+      return undefined;
+    }
+    if (pattern.startsWith("^")) {
+      prefixes.push(fragment);
+    } else if (pattern.endsWith("$")) {
+      suffixes.push(fragment);
+    } else {
+      middles.push(fragment);
+    }
+  }
+  const prefix = mostSpecificAnchor(prefixes, "prefix");
+  const suffix = mostSpecificAnchor(suffixes, "suffix");
+  if (prefix === undefined || suffix === undefined) {
+    return undefined;
+  }
+  let anchored = `${prefix}${suffix}`;
+  if (prefix.endsWith(suffix)) {
+    anchored = prefix;
+  } else if (suffix.startsWith(prefix)) {
+    anchored = suffix;
+  }
+  const candidates = [
+    `${prefix}${middles.join("")}${suffix}`,
+    `${anchored}${middles.join("")}`,
+    fragments.join(""),
+    fragments.toReversed().join(""),
+  ];
+  const minLength = numericKeywordAcrossAllOf(schema, "minLength", "lower");
+  const maxLength = numericKeywordAcrossAllOf(schema, "maxLength", "upper");
+  const baseLength = Array.from(candidates[0] ?? "").length;
+  if (minLength !== undefined && baseLength < minLength) {
+    const fillerSource = prefix || middles.at(-1) || suffix;
+    const filler = Array.from(fillerSource).at(-1);
+    if (filler !== undefined) {
+      candidates.unshift(
+        `${prefix}${middles.join("")}${filler.repeat(minLength - baseLength)}${suffix}`,
+      );
+    }
+  }
+  return candidates.find((candidate) => {
+    const length = Array.from(candidate).length;
+    return (
+      (minLength === undefined || length >= minLength) &&
+      (maxLength === undefined || length <= maxLength) &&
+      compiled.every(
+        (entry) => entry.status === "valid" && entry.regex.test(candidate),
+      )
+    );
+  });
+};
+
 const stringExample = (schema: JsonSchema): string => {
   const format = schema["format"];
   if (format === "date") {
@@ -485,7 +681,7 @@ const stringExample = (schema: JsonSchema): string => {
     return "00000000-0000-4000-8000-000000000000";
   }
   if (typeof pattern === "string") {
-    const example = patternExample(pattern);
+    const example = boundedPatternExample(schema, pattern);
     if (example !== undefined) {
       return example;
     }
@@ -505,6 +701,88 @@ const stringExample = (schema: JsonSchema): string => {
   return "x".repeat(length);
 };
 
+const stricterLowerBound = (
+  left: unknown,
+  right: unknown,
+): number | undefined => {
+  const bounds = [left, right].filter(
+    (value): value is number => typeof value === "number",
+  );
+  return bounds.length === 0 ? undefined : Math.max(...bounds);
+};
+
+const stricterUpperBound = (
+  left: unknown,
+  right: unknown,
+): number | undefined => {
+  const bounds = [left, right].filter(
+    (value): value is number => typeof value === "number",
+  );
+  return bounds.length === 0 ? undefined : Math.min(...bounds);
+};
+
+const combineSchemasForExample = (
+  parent: JsonSchema,
+  branch: JsonSchema,
+): JsonSchema => {
+  const combined: JsonSchema = { ...parent, ...branch };
+  for (const keyword of ["minimum", "minLength", "minItems"] as const) {
+    const bound = stricterLowerBound(parent[keyword], branch[keyword]);
+    if (bound !== undefined) {
+      combined[keyword] = bound;
+    }
+  }
+  for (const keyword of ["maximum", "maxLength", "maxItems"] as const) {
+    const bound = stricterUpperBound(parent[keyword], branch[keyword]);
+    if (bound !== undefined) {
+      combined[keyword] = bound;
+    }
+  }
+
+  const parentProperties = propertiesOf(parent);
+  const properties = { ...parentProperties };
+  for (const [name, branchProperty] of Object.entries(propertiesOf(branch))) {
+    const parentProperty = parentProperties[name];
+    properties[name] =
+      parentProperty === undefined
+        ? branchProperty
+        : combineSchemasForExample(parentProperty, branchProperty);
+  }
+  if (Object.keys(properties).length > 0) {
+    combined["properties"] = properties;
+  }
+  const required = new Set([...requiredOf(parent), ...requiredOf(branch)]);
+  if (required.size > 0) {
+    combined["required"] = [...required];
+  }
+  const intersections = [...allOf(parent), ...allOf(branch)];
+  const parentPattern = parent["pattern"];
+  const branchPattern = branch["pattern"];
+  if (
+    typeof parentPattern === "string" &&
+    typeof branchPattern === "string" &&
+    parentPattern !== branchPattern
+  ) {
+    combined["pattern"] = undefined;
+    intersections.push({ pattern: parentPattern }, { pattern: branchPattern });
+  }
+  if (intersections.length > 0) {
+    combined["allOf"] = intersections;
+  }
+  return combined;
+};
+
+const collapseAllOfForExample = (schema: JsonSchema): JsonSchema => {
+  let combined: JsonSchema = { ...schema, allOf: undefined };
+  for (const intersection of allOf(schema)) {
+    combined = combineSchemasForExample(
+      combined,
+      collapseAllOfForExample(intersection),
+    );
+  }
+  return combined;
+};
+
 const exampleFor = (schema: JsonSchema): unknown => {
   const constant = schema["const"];
   if (constant !== undefined) {
@@ -515,16 +793,7 @@ const exampleFor = (schema: JsonSchema): unknown => {
     return enumValues.at(0);
   }
   const alternativeGroups = alternativeGroupsOf(schema);
-  if (alternativeGroups.length === 1) {
-    const group = alternativeGroups.at(0);
-    const variant = group?.variants.at(0) ?? {};
-    return exampleFor({
-      ...schema,
-      [group?.keyword ?? "anyOf"]: undefined,
-      ...variant,
-    });
-  }
-  if (alternativeGroups.length > 1) {
+  if (alternativeGroups.length > 0) {
     const base = { ...schema, anyOf: undefined, oneOf: undefined };
     const result = findComposedExample(schema, base, alternativeGroups);
     if (result.status === "found") {
@@ -534,10 +803,26 @@ const exampleFor = (schema: JsonSchema): unknown => {
   }
   const intersections = allOf(schema);
   if (intersections.length > 0) {
+    const patternCandidate = patternIntersectionExample(schema);
+    if (
+      patternCandidate !== undefined &&
+      validateAgainstSchema(schema, patternCandidate).valid
+    ) {
+      return patternCandidate;
+    }
+    const collapsed = collapseAllOfForExample(schema);
+    if (allOf(collapsed).length === 0) {
+      const composedCandidate = exampleFor(collapsed);
+      if (validateAgainstSchema(schema, composedCandidate).valid) {
+        return composedCandidate;
+      }
+    }
     const baseSchema = { ...schema, allOf: undefined };
     const result = exampleFor(baseSchema);
     for (const intersection of intersections) {
-      const candidate = exampleFor(intersection);
+      const candidate = exampleFor(
+        combineSchemasForExample(baseSchema, intersection),
+      );
       if (validateAgainstSchema(schema, candidate).valid) {
         return candidate;
       }

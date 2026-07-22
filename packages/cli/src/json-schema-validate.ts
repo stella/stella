@@ -7,8 +7,13 @@
 // this closed shape set, and it structurally cannot run generated code.
 
 import { compileSchemaPattern } from "./schema-pattern.js";
+import type { CompiledSchemaPattern } from "./schema-pattern.js";
 
 type JsonSchema = Record<string, unknown>;
+type ValidCompiledSchemaPattern = Extract<
+  CompiledSchemaPattern,
+  { status: "valid" }
+>;
 
 /** A validation outcome: valid, or the failing JSON path plus a message. */
 export type ValidationResult =
@@ -36,6 +41,61 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 
 const enumValues = (schema: JsonSchema): readonly unknown[] | undefined =>
   Array.isArray(schema["enum"]) ? schema["enum"] : undefined;
+
+const propertyDeclaredAcrossAllOf = (
+  schema: JsonSchema,
+  property: string,
+): boolean => {
+  const properties = schema["properties"];
+  if (isPlainObject(properties) && Object.hasOwn(properties, property)) {
+    return true;
+  }
+  const intersections = schema["allOf"];
+  return (
+    Array.isArray(intersections) &&
+    intersections.some(
+      (intersection) =>
+        isPlainObject(intersection) &&
+        propertyDeclaredAcrossAllOf(intersection, property),
+    )
+  );
+};
+
+const hasPropertiesAcrossAllOf = (schema: JsonSchema): boolean => {
+  const properties = schema["properties"];
+  if (isPlainObject(properties) && Object.keys(properties).length > 0) {
+    return true;
+  }
+  const intersections = schema["allOf"];
+  return (
+    Array.isArray(intersections) &&
+    intersections.some(
+      (intersection) =>
+        isPlainObject(intersection) && hasPropertiesAcrossAllOf(intersection),
+    )
+  );
+};
+
+const hasObjectConstraintsAcrossAllOf = (schema: JsonSchema): boolean => {
+  const required = schema["required"];
+  if (
+    hasPropertiesAcrossAllOf(schema) ||
+    Object.hasOwn(schema, "patternProperties") ||
+    (Array.isArray(required) && required.length > 0) ||
+    Object.hasOwn(schema, "additionalProperties")
+  ) {
+    return true;
+  }
+  const intersections = schema["allOf"];
+  return (
+    Array.isArray(intersections) &&
+    intersections.some(
+      (intersection) =>
+        isPlainObject(intersection) &&
+        hasObjectConstraintsAcrossAllOf(intersection),
+    )
+  );
+};
 
 const jsonValuesEqual = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) {
@@ -200,6 +260,33 @@ const validateObject = (
   const properties = isPlainObject(schema["properties"])
     ? schema["properties"]
     : {};
+  const rawPatternProperties = schema["patternProperties"];
+  if (
+    rawPatternProperties !== undefined &&
+    !isPlainObject(rawPatternProperties)
+  ) {
+    return fail(path, "patternProperties must be an object");
+  }
+  const patternProperties = isPlainObject(rawPatternProperties)
+    ? rawPatternProperties
+    : {};
+  const compiledPatternProperties: {
+    pattern: ValidCompiledSchemaPattern;
+    schema: JsonSchema;
+  }[] = [];
+  for (const [pattern, patternSchema] of Object.entries(patternProperties)) {
+    if (!isPlainObject(patternSchema)) {
+      return fail(path, "patternProperties contains a non-object schema");
+    }
+    const compiled = compileSchemaPattern(pattern);
+    if (compiled.status === "invalid") {
+      return fail(path, "schema contains an invalid property pattern");
+    }
+    compiledPatternProperties.push({
+      pattern: compiled,
+      schema: patternSchema,
+    });
+  }
   const required = Array.isArray(schema["required"]) ? schema["required"] : [];
   for (const key of required) {
     if (typeof key === "string" && value[key] === undefined) {
@@ -213,11 +300,25 @@ const validateObject = (
   for (const [key, child] of Object.entries(value)) {
     const childSchema = properties[key];
     const childPath = path === "" ? key : `${path}.${key}`;
+    let declared = false;
     if (isPlainObject(childSchema)) {
       const result = validateValue(childSchema, child, childPath);
       if (!result.valid) {
         return result;
       }
+      declared = true;
+    }
+    for (const patternProperty of compiledPatternProperties) {
+      if (!patternProperty.pattern.regex.test(key)) {
+        continue;
+      }
+      const result = validateValue(patternProperty.schema, child, childPath);
+      if (!result.valid) {
+        return result;
+      }
+      declared = true;
+    }
+    if (declared) {
       continue;
     }
     const additionalSchema = schema["additionalProperties"];
@@ -229,10 +330,19 @@ const validateObject = (
       continue;
     }
     if (
+      additionalSchema !== false &&
+      propertyDeclaredAcrossAllOf(schema, key)
+    ) {
+      // The matching allOf branch already validated this value. The CLI's
+      // implicit default-closed policy composes declared properties, while an
+      // explicit additionalProperties:false remains strictly branch-local.
+      continue;
+    }
+    if (
       additionalSchema === false ||
       (additionalSchema !== true &&
         !allowUnknownProperties &&
-        Object.keys(properties).length > 0)
+        hasPropertiesAcrossAllOf(schema))
     ) {
       return fail(childPath, "unknown property");
     }
@@ -284,6 +394,9 @@ const validateValue = (
 
   const types = schemaTypes(schema);
   if (types.length === 0) {
+    if (isPlainObject(value) && hasObjectConstraintsAcrossAllOf(schema)) {
+      return validateObject(schema, value, path, allowUnknownProperties);
+    }
     // A schema with no `type` (e.g. set_field_value.content.value) accepts any
     // JSON value; applicators, const, and enum above may still constrain it.
     return ok;

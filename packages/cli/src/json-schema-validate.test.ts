@@ -127,6 +127,25 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     ).toBe(false);
   });
 
+  test("enforces typeless object constraints nested through allOf", () => {
+    const schema = {
+      allOf: [
+        {
+          allOf: [{ required: ["dependencies"] }],
+        },
+      ],
+    };
+
+    expect(validateAgainstSchema(schema, {}).valid).toBe(false);
+    expect(
+      validateAgainstSchema(schema, { dependencies: ["matter"] }).valid,
+    ).toBe(true);
+    // Object-only keywords do not turn a typeless schema into an object type.
+    expect(validateAgainstSchema(schema, "unconstrained scalar").valid).toBe(
+      true,
+    );
+  });
+
   test("preserves explicit object closure inside allOf branches", () => {
     const closedBranch = {
       allOf: [
@@ -155,6 +174,47 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
         second: "two",
       }).valid,
     ).toBe(true);
+  });
+
+  test("implicitly closed objects accept allOf-declared properties only", () => {
+    const composed = {
+      ...objectSchema({ base: { type: "string" } }, ["base"]),
+      allOf: [objectSchema({ composed: { type: "number" } }, ["composed"])],
+    };
+
+    expect(
+      validateAgainstSchema(composed, { base: "value", composed: 1 }).valid,
+    ).toBe(true);
+    expect(
+      validateAgainstSchema(composed, { base: "value", unexpected: 1 }).valid,
+    ).toBe(false);
+
+    expect(
+      validateAgainstSchema(
+        { ...composed, additionalProperties: false },
+        { base: "value", composed: 1 },
+      ).valid,
+    ).toBe(false);
+  });
+
+  test("allOf-only objects close over the union of branch properties", () => {
+    const composed = {
+      allOf: [
+        objectSchema({ first: { type: "string" } }, ["first"]),
+        objectSchema({ second: { type: "number" } }, ["second"]),
+      ],
+    };
+
+    expect(
+      validateAgainstSchema(composed, { first: "value", second: 1 }).valid,
+    ).toBe(true);
+    expect(
+      validateAgainstSchema(composed, {
+        first: "value",
+        second: 1,
+        unexpected: true,
+      }).valid,
+    ).toBe(false);
   });
 
   test("requires exactly one matching oneOf branch", () => {
@@ -285,6 +345,70 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     expect(
       validateAgainstSchema(schema, { values: { anything: 1, x: "y" } }).valid,
     ).toBe(true);
+  });
+
+  test("validates matching pattern properties before additional properties", () => {
+    const schema = {
+      type: "object",
+      patternProperties: {
+        "^x-": { type: "string" },
+      },
+      additionalProperties: false,
+    };
+
+    expect(validateAgainstSchema(schema, { "x-name": "valid" }).valid).toBe(
+      true,
+    );
+    expect(validateAgainstSchema(schema, { "x-name": 42 }).valid).toBe(false);
+    expect(validateAgainstSchema(schema, { other: "value" }).valid).toBe(false);
+
+    const composed = {
+      type: "object",
+      properties: {
+        "x-name": { type: "string", minLength: 5 },
+      },
+      patternProperties: {
+        "^x-": { type: "string" },
+        name$: { type: "string", pattern: "^valid$" },
+      },
+      additionalProperties: false,
+    };
+    expect(validateAgainstSchema(composed, { "x-name": "valid" }).valid).toBe(
+      true,
+    );
+    expect(validateAgainstSchema(composed, { "x-name": "wrong" }).valid).toBe(
+      false,
+    );
+  });
+
+  test("rejects malformed pattern properties even for an empty object", () => {
+    expect(
+      validateAgainstSchema(
+        {
+          type: "object",
+          patternProperties: { "[": { type: "string" } },
+        },
+        {},
+      ).valid,
+    ).toBe(false);
+    expect(
+      validateAgainstSchema(
+        {
+          type: "object",
+          patternProperties: { "^x-": "not-a-schema" },
+        },
+        {},
+      ).valid,
+    ).toBe(false);
+    expect(
+      validateAgainstSchema(
+        {
+          type: "object",
+          patternProperties: "not-an-object",
+        },
+        {},
+      ).valid,
+    ).toBe(false);
   });
 
   test("rejects an unknown property against a closed object", () => {

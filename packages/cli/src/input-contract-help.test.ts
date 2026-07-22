@@ -251,6 +251,259 @@ describe("--input contract help", () => {
     expect(fields).toContain("tool.dependencies  array<string>  required");
   });
 
+  test("marks an input-only root required through nested allOf", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          additionalProperties: true,
+        },
+      },
+      allOf: [{ allOf: [{ required: ["body"] }] }],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(help?.fields).toEqual(["body.<key>  any JSON value  required"]);
+  });
+
+  test("renders shared allOf fields alongside alternative variants", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          anyOf: [
+            {
+              type: "object",
+              properties: { kind: { const: "first" } },
+              required: ["kind"],
+            },
+            {
+              type: "object",
+              properties: { kind: { const: "second" } },
+              required: ["kind"],
+            },
+          ],
+          allOf: [
+            {
+              properties: { token: { type: "string" } },
+            },
+            { required: ["token"] },
+          ],
+        },
+      },
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+    const fields = help?.fields.join("\n") ?? "";
+
+    expect(fields).toContain('body.kind  "first"  required');
+    expect(fields).toContain('body.kind  "second"  required');
+    expect(fields).toContain("body.token  string  required");
+  });
+
+  test("renders direct sibling fields alongside alternative variants", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          properties: { token: { type: "string" } },
+          required: ["token"],
+          anyOf: [
+            {
+              properties: { kind: { const: "first" } },
+              required: ["kind"],
+            },
+            {
+              properties: { kind: { const: "second" } },
+              required: ["kind"],
+            },
+          ],
+        },
+      },
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+    const fields = help?.fields.join("\n") ?? "";
+
+    expect(fields).toContain('body.kind  "first"  required');
+    expect(fields).toContain('body.kind  "second"  required');
+    expect(fields).toContain("body.token  string  required");
+  });
+
+  test("searches every branch of a single alternative group for a valid example", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        value: {
+          anyOf: [{ const: "wrong" }, { const: "right" }],
+          allOf: [{ const: "right" }],
+        },
+      },
+      required: ["value"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["value"] });
+
+    expect(completeExample(help)).toEqual({ value: "right" });
+  });
+
+  test("carries parent numeric bounds into an Elysia integer branch", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        size: {
+          anyOf: [{ type: "string", format: "integer" }, { type: "number" }],
+          minimum: 1,
+        },
+      },
+      required: ["size"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["size"] });
+
+    expect(completeExample(help)).toEqual({ size: "1" });
+  });
+
+  test("recursively composes constraints on overlapping object properties", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          properties: {
+            code: { type: "string", minLength: 5 },
+          },
+          required: ["code"],
+          anyOf: [
+            {
+              properties: {
+                code: { type: "string", pattern: "^a+$" },
+              },
+            },
+          ],
+        },
+      },
+      required: ["body"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(completeExample(help)).toEqual({ body: { code: "aaaaa" } });
+  });
+
+  test("preserves parent and branch allOf constraints on nested properties", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          properties: {
+            code: {
+              allOf: [{ type: "string", minLength: 5 }],
+            },
+          },
+          required: ["code"],
+          anyOf: [
+            {
+              properties: {
+                code: {
+                  allOf: [{ type: "string", pattern: "^a+$" }],
+                },
+              },
+            },
+          ],
+        },
+      },
+      required: ["body"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(completeExample(help)).toEqual({ body: { code: "aaaaa" } });
+  });
+
+  test("preserves intersecting direct patterns on nested properties", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          properties: {
+            code: { type: "string", pattern: "^a", minLength: 5 },
+          },
+          required: ["code"],
+          anyOf: [
+            {
+              properties: {
+                code: { type: "string", pattern: "z$" },
+              },
+            },
+          ],
+        },
+      },
+      required: ["body"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(completeExample(help)).toEqual({ body: { code: "aaaaz" } });
+  });
+
+  test("marks an impossible bounded pattern intersection unavailable", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          properties: {
+            code: { type: "string", pattern: "^a$", maxLength: 1 },
+          },
+          required: ["code"],
+          anyOf: [
+            {
+              properties: {
+                code: { type: "string", pattern: "^b$" },
+              },
+            },
+          ],
+        },
+      },
+      required: ["body"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(help?.example).toEqual({ status: "unavailable" });
+  });
+
+  test("normalizes compatible prefix and suffix intersections by specificity", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        prefix: {
+          type: "string",
+          allOf: [{ pattern: "^a" }, { pattern: "^ab" }],
+        },
+        suffix: {
+          type: "string",
+          allOf: [{ pattern: "a$" }, { pattern: "ba$" }],
+        },
+      },
+      required: ["prefix", "suffix"],
+    };
+
+    const help = buildInputContractHelp({
+      schema,
+      inputOnly: ["prefix", "suffix"],
+    });
+
+    expect(completeExample(help)).toEqual({ prefix: "ab", suffix: "ba" });
+  });
+
   test("does not mislabel nested scalar allOf schemas as objects", () => {
     const schema: JsonSchema = {
       type: "object",
