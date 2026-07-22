@@ -633,6 +633,32 @@ describe("--input contract help", () => {
     });
   });
 
+  test("documents dynamic keys inherited through allOf", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          allOf: [
+            {
+              patternProperties: { "^meta-": { type: "string" } },
+            },
+          ],
+        },
+      },
+      required: ["body"],
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+
+    expect(help?.fields).toContain(
+      "body.<key>  string; key matches ^meta-  required",
+    );
+    expect(completeExample(help)).toEqual({
+      body: { "meta-key": "xxxxx" },
+    });
+  });
+
   test("shell-quotes apostrophes in generated examples", () => {
     expect(formatInputExample({ value: "client's" })).toBe(
       `--input '{"value":"client'\\''s"}'`,

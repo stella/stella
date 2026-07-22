@@ -149,6 +149,9 @@ const mapEntrySchemas = (schema: JsonSchema): MapEntrySchema[] => {
   } else if (isRecord(additional)) {
     entries.push({ valueSchema: additional });
   }
+  for (const intersection of allOf(schema)) {
+    entries.push(...mapEntrySchemas(intersection));
+  }
   return entries;
 };
 
