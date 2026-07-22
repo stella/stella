@@ -23,6 +23,7 @@ import {
 import { discoverTemplate } from "./discover-template";
 import { paragraphText, W_NS } from "./ooxml";
 import { fillTemplate } from "./patch-template";
+import type { TemplateDataValue } from "./types";
 
 setDefaultTimeout(30_000);
 
@@ -211,6 +212,127 @@ describe("property: nested objects in #each items resolve", () => {
         },
       ),
       propertyConfig({ numRuns: 30 }),
+    );
+  });
+});
+
+describe("property: declared nested loop paths stay condition aliases", () => {
+  test("conditions resolve the current row at every generated nesting depth", () => {
+    const nestedPath = fc.array(identifier, { minLength: 2, maxLength: 4 });
+    const conditionRows = fc
+      .array(fc.boolean(), { minLength: 1, maxLength: 6 })
+      .filter((values) => values.includes(true));
+
+    fc.assert(
+      fc.property(
+        nestedPath,
+        identifier,
+        conditionRows,
+        (segments, conditionField, enabledValues) => {
+          const paths = segments.map((_, index) =>
+            segments.slice(0, index + 1).join("."),
+          );
+          const deepestPath = paths.at(-1);
+          const rootPath = segments.at(0);
+          if (!deepestPath || !rootPath) {
+            throw new Error(
+              "Nested paths always contain at least two segments",
+            );
+          }
+
+          const templateParts = paths.map((path) => P(`{{#each ${path}}}`));
+          templateParts.push(
+            P(`{{#if ${deepestPath}.${conditionField}}}`),
+            P("visible"),
+            P("{{/if}}"),
+          );
+          templateParts.push(...paths.toReversed().map(() => P("{{/each}}")));
+
+          let rows: TemplateDataValue[] = enabledValues.map((enabled) => ({
+            [conditionField]: enabled,
+          }));
+          for (let index = segments.length - 1; index > 0; index--) {
+            const segment = segments[index];
+            if (!segment) {
+              throw new Error("Generated path segments are never missing");
+            }
+            rows = [{ [segment]: rows }];
+          }
+
+          const body = parseBody(WRAP(templateParts.join("")));
+          processBlockDirectives(body, { [rootPath]: rows });
+
+          const rendered = body
+            .getElementsByTagNameNS(W_NS, "p")
+            .map(paragraphText);
+          expect(rendered).toEqual(
+            enabledValues.filter(Boolean).map(() => "visible"),
+          );
+        },
+      ),
+      propertyConfig({ numRuns: 50 }),
+    );
+  });
+
+  test("declared aliases preserve raw date values at every nesting depth", () => {
+    const nestedPath = fc.array(identifier, { minLength: 2, maxLength: 4 });
+    const years = fc
+      .array(fc.integer({ min: 2020, max: 2035 }), {
+        minLength: 1,
+        maxLength: 6,
+      })
+      .filter((values) => values.some((year) => year > 2028));
+
+    fc.assert(
+      fc.property(nestedPath, identifier, years, (segments, field, values) => {
+        const paths = segments.map((_, index) =>
+          segments.slice(0, index + 1).join("."),
+        );
+        const deepestPath = paths.at(-1);
+        const rootPath = segments.at(0);
+        if (!deepestPath || !rootPath) {
+          throw new Error("Nested paths always contain at least two segments");
+        }
+
+        const templateParts = paths.map((path) => P(`{{#each ${path}}}`));
+        templateParts.push(
+          P(`{{#if ${deepestPath}.${field} > "2028-01-01"}}`),
+          P("after"),
+          P("{{/if}}"),
+        );
+        templateParts.push(...paths.toReversed().map(() => P("{{/each}}")));
+
+        let rows: TemplateDataValue[] = values.map(() => ({
+          [field]: "1. ledna 2030",
+        }));
+        for (let index = segments.length - 1; index > 0; index--) {
+          const segment = segments[index];
+          if (!segment) {
+            throw new Error("Generated path segments are never missing");
+          }
+          rows = [{ [segment]: rows }];
+        }
+
+        const indexedDeepestPath = segments
+          .map((segment, index) => (index === 0 ? segment : `0.${segment}`))
+          .join(".");
+        const conditionValues: Record<string, string> = {};
+        for (const [index, year] of values.entries()) {
+          conditionValues[`${indexedDeepestPath}.${index}.${field}`] =
+            `${year}-01-01`;
+        }
+
+        const body = parseBody(WRAP(templateParts.join("")));
+        processBlockDirectives(body, { [rootPath]: rows }, { conditionValues });
+
+        const rendered = body
+          .getElementsByTagNameNS(W_NS, "p")
+          .map(paragraphText);
+        expect(rendered).toEqual(
+          values.filter((year) => year > 2028).map(() => "after"),
+        );
+      }),
+      propertyConfig({ numRuns: 50 }),
     );
   });
 });

@@ -116,23 +116,39 @@ const isStringRecord = (v: unknown): v is Record<string, string> =>
  * an inner-loop `{{#if dob > "2028-01-01"}}` compares the original ISO date
  * rather than the localized display text the date step wrote into the row for
  * substitution. Raw values are stashed by field path under
- * `<arrayPath>.<index>.<subPath>` (see {@link CONDITION_RAW_VALUES}); each match
- * sets the bare item-relative sub-path, which the loop body's condition resolves
- * the same way it resolves the row's other fields.
+ * `<valuePath>.<index>.<subPath>` (see {@link CONDITION_RAW_VALUES}); each match
+ * publishes both the bare item-relative path and every qualified loop alias.
+ * Condition evaluation therefore sees the raw value regardless of whether the
+ * author used shorthand, the declared nested path, or a rewritten loop path.
  */
-const applyRowRawOverlay = (
-  itemContext: Record<string, unknown>,
-  rawValues: Record<string, string> | undefined,
-  arrayPath: string,
-  index: number,
-): void => {
+type ApplyRowRawOverlayOptions = {
+  aliasPaths: readonly string[];
+  index: number;
+  itemContext: Record<string, unknown>;
+  rawValues: Record<string, string> | undefined;
+  valuePath: string;
+};
+
+const applyRowRawOverlay = ({
+  aliasPaths,
+  index,
+  itemContext,
+  rawValues,
+  valuePath,
+}: ApplyRowRawOverlayOptions): void => {
   if (!rawValues) {
     return;
   }
-  const prefix = `${arrayPath}.${index}.`;
+  const prefix = `${valuePath}.${index}.`;
+  const uniqueAliasPaths = new Set(aliasPaths);
   for (const [key, raw] of Object.entries(rawValues)) {
-    if (key.startsWith(prefix)) {
-      itemContext[key.slice(prefix.length)] = raw;
+    if (!key.startsWith(prefix)) {
+      continue;
+    }
+    const relativePath = key.slice(prefix.length);
+    itemContext[relativePath] = raw;
+    for (const aliasPath of uniqueAliasPaths) {
+      itemContext[`${aliasPath}.${relativePath}`] = raw;
     }
   }
 };
@@ -790,9 +806,15 @@ export const processBlockDirectives = (
   // Build a loop iteration's evaluation context: `contextData` overlaid with
   // the item's own fields, the item under its array name (so `{{#each
   // arrayPath.sub}}` resolves), and the row's raw (pre-format) date overlay.
-  const loopIdentityByContext = new WeakMap<
+  type LoopScope = {
+    declaredPath: string;
+    identity: string;
+    valuePath: string;
+  };
+
+  const loopScopeByContext = new WeakMap<
     Record<string, unknown>,
-    ReadonlyMap<string, string>
+    ReadonlyMap<string, LoopScope>
   >();
 
   type BuildItemContextOptions = {
@@ -800,7 +822,72 @@ export const processBlockDirectives = (
     contextData: Record<string, unknown>;
     item: unknown;
     itemIdx: number;
-    loopIdentity: string;
+    scope: LoopScope;
+  };
+
+  type RegisterContextAliasesOptions = {
+    context: Record<string, unknown>;
+    path: string;
+    value: unknown;
+  };
+
+  const registerContextAliases = ({
+    context,
+    path,
+    value,
+  }: RegisterContextAliasesOptions): void => {
+    context[path] = value;
+    if (Array.isArray(value) || !isRecord(value) || isRichPatchValue(value)) {
+      return;
+    }
+    for (const [field, nestedValue] of Object.entries(value)) {
+      registerContextAliases({
+        context,
+        path: `${path}.${field}`,
+        value: nestedValue,
+      });
+    }
+  };
+
+  type RegisterNestedLoopScopesOptions = {
+    item: Record<string, unknown>;
+    itemContext: Record<string, unknown>;
+    itemIdx: number;
+    nestedLoopScopes: Map<string, LoopScope>;
+    scope: LoopScope;
+  };
+
+  const registerNestedLoopScopes = ({
+    item,
+    itemContext,
+    itemIdx,
+    nestedLoopScopes,
+    scope,
+  }: RegisterNestedLoopScopesOptions): void => {
+    const visit = (value: unknown, relativePath: string): void => {
+      if (Array.isArray(value)) {
+        const nestedScope = {
+          declaredPath: `${scope.declaredPath}.${relativePath}`,
+          identity: eachKey(scope.identity, itemIdx, relativePath),
+          valuePath: `${scope.valuePath}.${itemIdx}.${relativePath}`,
+        } satisfies LoopScope;
+        itemContext[nestedScope.identity] = value;
+        nestedLoopScopes.set(relativePath, nestedScope);
+        nestedLoopScopes.set(nestedScope.declaredPath, nestedScope);
+        nestedLoopScopes.set(nestedScope.identity, nestedScope);
+        return;
+      }
+      if (!isRecord(value) || isRichPatchValue(value)) {
+        return;
+      }
+      for (const [field, nestedValue] of Object.entries(value)) {
+        visit(nestedValue, `${relativePath}.${field}`);
+      }
+    };
+
+    for (const [field, value] of Object.entries(item)) {
+      visit(value, field);
+    }
   };
 
   const buildItemContext = ({
@@ -808,24 +895,38 @@ export const processBlockDirectives = (
     contextData,
     item,
     itemIdx,
-    loopIdentity,
+    scope,
   }: BuildItemContextOptions): Record<string, unknown> => {
     const itemContext: Record<string, unknown> = { ...contextData };
-    const nestedLoopIdentities = new Map<string, string>();
+    const nestedLoopScopes = new Map<string, LoopScope>();
     if (isRecord(item)) {
       Object.assign(itemContext, item);
       itemContext[arrayPath] = item;
+      registerContextAliases({
+        context: itemContext,
+        path: scope.declaredPath,
+        value: item,
+      });
       // A nested `{{#each arrayPath.sub}}` was rewritten to its per-item key
       // (see rewriteNestedEachExpr); expose the item's arrays under that key so
-      // the inner loop resolves them in the recursion.
-      for (const [field, value] of Object.entries(item)) {
-        if (Array.isArray(value)) {
-          const nestedLoopIdentity = eachKey(loopIdentity, itemIdx, field);
-          itemContext[nestedLoopIdentity] = value;
-          nestedLoopIdentities.set(field, nestedLoopIdentity);
-        }
-      }
-      applyRowRawOverlay(itemContext, conditionValues, arrayPath, itemIdx);
+      // the inner loop resolves them in the recursion. Each scope keeps its
+      // generated identity separate from the author-declared path and the
+      // indexed input path: rewriting one representation can never erase the
+      // other two.
+      registerNestedLoopScopes({
+        item,
+        itemContext,
+        itemIdx,
+        nestedLoopScopes,
+        scope,
+      });
+      applyRowRawOverlay({
+        aliasPaths: [arrayPath, scope.declaredPath],
+        index: itemIdx,
+        itemContext,
+        rawValues: conditionValues,
+        valuePath: scope.valuePath,
+      });
     } else if (
       typeof item === "string" ||
       typeof item === "number" ||
@@ -834,9 +935,11 @@ export const processBlockDirectives = (
       itemContext["value"] = item;
       itemContext[arrayPath] = { value: item };
       itemContext[`${arrayPath}.value`] = item;
+      itemContext[scope.declaredPath] = { value: item };
+      itemContext[`${scope.declaredPath}.value`] = item;
     }
-    if (nestedLoopIdentities.size > 0) {
-      loopIdentityByContext.set(itemContext, nestedLoopIdentities);
+    if (nestedLoopScopes.size > 0) {
+      loopScopeByContext.set(itemContext, nestedLoopScopes);
     }
     return itemContext;
   };
@@ -897,6 +1000,7 @@ export const processBlockDirectives = (
     loopIdentity: string;
     openerP: slimdom.Element;
     row: slimdom.Element;
+    scope: LoopScope;
   };
 
   const expandRow = ({
@@ -908,6 +1012,7 @@ export const processBlockDirectives = (
     loopIdentity,
     openerP,
     row,
+    scope,
   }: ExpandRowOptions): void => {
     const tbl = row.parentNode;
     if (!tbl || !isElement(tbl)) {
@@ -967,7 +1072,7 @@ export const processBlockDirectives = (
         contextData,
         item,
         itemIdx,
-        loopIdentity,
+        scope,
       });
       for (const paragraph of clonedContentParas) {
         processingContext.inlineDataByParagraph.set(paragraph, itemContext);
@@ -1015,6 +1120,7 @@ export const processBlockDirectives = (
     items,
     loopIdentity,
     openerP,
+    scope,
   }: ExpandBlockOptions): void => {
     const parent = openerP.parentNode;
     if (!parent || !isElement(parent)) {
@@ -1069,7 +1175,7 @@ export const processBlockDirectives = (
         contextData,
         item,
         itemIdx,
-        loopIdentity,
+        scope,
       });
       for (const paragraph of clonedParas) {
         processingContext.inlineDataByParagraph.set(paragraph, itemContext);
@@ -1125,9 +1231,12 @@ export const processBlockDirectives = (
   ): void => {
     const arrayData = resolvePath(block.arrayPath, contextData);
     const items = isUnknownArray(arrayData) ? arrayData : [];
-    const loopIdentity =
-      loopIdentityByContext.get(contextData)?.get(block.arrayPath) ??
-      block.arrayPath;
+    const scope = loopScopeByContext.get(contextData)?.get(block.arrayPath) ?? {
+      declaredPath: block.arrayPath,
+      identity: block.arrayPath,
+      valuePath: block.arrayPath,
+    };
+    const loopIdentity = scope.identity;
 
     const doc = bodyEl.ownerDocument;
     if (!doc) {
@@ -1157,6 +1266,7 @@ export const processBlockDirectives = (
         loopIdentity,
         openerP,
         row: openerRow,
+        scope,
       });
       return;
     }
@@ -1177,6 +1287,7 @@ export const processBlockDirectives = (
       items,
       loopIdentity,
       openerP,
+      scope,
     });
   };
 
