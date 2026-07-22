@@ -8,6 +8,7 @@ import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ScanResult } from "@/api/lib/file-scan/types";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -56,6 +57,8 @@ void mock.module("@/api/lib/file-scan/scan", () => ({
 
 const { EDIT_WORKSPACE_DOCUMENT_TOOL_NAME, createEditWorkspaceDocumentTools } =
   await import("./edit-workspace-document-tools");
+const { createEntityVersionFromBuffer } =
+  await import("@/api/lib/entity-versions/create-entity-version-from-buffer");
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -296,6 +299,32 @@ describe("createEditWorkspaceDocumentTools", () => {
     scanFileMock.mockClear();
     fileScanResult = { verdict: "pass", findings: [] };
     s3ReadKeys.length = 0;
+  });
+
+  test("rejects an oversized edited DOCX before writing bytes", async () => {
+    const { tx, insertedTables } = buildTx();
+    const { safeDb } = createScopedDbMock(tx);
+
+    const result = await createEntityVersionFromBuffer({
+      safeDb,
+      organizationId,
+      workspaceId,
+      entityId,
+      expectedCurrentVersionId: entityVersionId,
+      userId,
+      recordAuditEvent: async () => undefined,
+      buffer: new ArrayBuffer(FILE_SIZE_LIMIT_BYTES.document + 1),
+      fileName: "oversized.docx",
+      filePropertyId: propertyId,
+      replacedFileFieldId: fileFieldId,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ reason: "documentTooLarge" });
+    }
+    expect(s3WriteMock).not.toHaveBeenCalled();
+    expect(insertedTables).toEqual([]);
   });
 
   test("registers a single server-executed edit_workspace_document tool", () => {

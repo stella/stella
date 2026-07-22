@@ -53,7 +53,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { isFolioCollabSessionExpired } from "@/api/lib/folio-collab-sessions";
-import { LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -87,6 +87,7 @@ export type CreateEntityVersionFromBufferSuccess = {
 };
 
 type CreateEntityVersionFromBufferFailureReason =
+  | "documentTooLarge"
   | "entityNotFound"
   | "entityReadOnly"
   | "editSessionOpen"
@@ -98,6 +99,7 @@ const FAILURE_REASON_MESSAGES: Record<
   CreateEntityVersionFromBufferFailureReason,
   string
 > = {
+  documentTooLarge: `Edited document exceeds the ${FILE_SIZE_LIMIT_BYTES.document}-byte size limit`,
   entityNotFound: "Document not found",
   entityReadOnly: "Document is read-only",
   editSessionOpen:
@@ -157,6 +159,16 @@ export const createEntityVersionFromBuffer = async ({
     CreateEntityVersionFromBufferError | SafeDbError
   >
 > => {
+  if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
+    const reason = "documentTooLarge";
+    return Result.err(
+      new CreateEntityVersionFromBufferError({
+        message: FAILURE_REASON_MESSAGES[reason],
+        reason,
+      }),
+    );
+  }
+
   const bytes = new Uint8Array(buffer);
   const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
   const fileId = allocateFileObject();
