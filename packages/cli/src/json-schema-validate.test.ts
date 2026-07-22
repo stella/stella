@@ -429,6 +429,61 @@ describe("validateAgainstSchema (interpreted, no codegen)", () => {
     expect(validateAgainstSchema(composed, { "x-name": "wrong" }).valid).toBe(
       false,
     );
+
+    const implicitlyClosed = {
+      type: "object",
+      patternProperties: { "^x-": { type: "string" } },
+    };
+    expect(
+      validateAgainstSchema(implicitlyClosed, { "x-name": "valid" }).valid,
+    ).toBe(true);
+    expect(
+      validateAgainstSchema(implicitlyClosed, { other: "value" }).valid,
+    ).toBe(false);
+  });
+
+  test("composes matching branch pattern and additional-property schemas", () => {
+    const schema = {
+      type: "object",
+      properties: { token: { type: "boolean" } },
+      required: ["token"],
+      anyOf: [
+        {
+          type: "object",
+          properties: { kind: { type: "string", const: "pattern" } },
+          patternProperties: { "^x-": { type: "number" } },
+          required: ["kind"],
+        },
+        {
+          type: "object",
+          properties: { kind: { type: "string", const: "map" } },
+          additionalProperties: { type: "boolean" },
+          required: ["kind"],
+        },
+      ],
+    };
+
+    expect(
+      validateAgainstSchema(schema, {
+        token: true,
+        kind: "pattern",
+        "x-score": 1,
+      }).valid,
+    ).toBe(true);
+    expect(
+      validateAgainstSchema(schema, {
+        token: true,
+        kind: "map",
+        enabled: true,
+      }).valid,
+    ).toBe(true);
+    expect(
+      validateAgainstSchema(schema, {
+        token: true,
+        kind: "pattern",
+        enabled: true,
+      }).valid,
+    ).toBe(false);
   });
 
   test("rejects malformed pattern properties even for an empty object", () => {

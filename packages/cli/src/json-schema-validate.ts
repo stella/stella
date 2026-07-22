@@ -44,9 +44,21 @@ const enumValues = (schema: JsonSchema): readonly unknown[] | undefined =>
 
 const applicatorKeywords = ["allOf", "anyOf", "oneOf"] as const;
 
-const hasPropertiesAcrossCompositions = (schema: JsonSchema): boolean => {
+const hasOwnPropertySurface = (schema: JsonSchema): boolean => {
   const properties = schema["properties"];
-  if (isPlainObject(properties) && Object.keys(properties).length > 0) {
+  const patternProperties = schema["patternProperties"];
+  const additionalProperties = schema["additionalProperties"];
+  return (
+    (isPlainObject(properties) && Object.keys(properties).length > 0) ||
+    (isPlainObject(patternProperties) &&
+      Object.keys(patternProperties).length > 0) ||
+    additionalProperties === true ||
+    isPlainObject(additionalProperties)
+  );
+};
+
+const hasPropertiesAcrossCompositions = (schema: JsonSchema): boolean => {
+  if (hasOwnPropertySurface(schema)) {
     return true;
   }
   return applicatorKeywords.some((keyword) => {
@@ -61,14 +73,34 @@ const hasPropertiesAcrossCompositions = (schema: JsonSchema): boolean => {
   });
 };
 
+const propertyAcceptedByOwnObjectKeywords = (
+  schema: JsonSchema,
+  property: string,
+): boolean => {
+  const properties = schema["properties"];
+  if (isPlainObject(properties) && Object.hasOwn(properties, property)) {
+    return true;
+  }
+  const patternProperties = schema["patternProperties"];
+  if (isPlainObject(patternProperties)) {
+    for (const pattern of Object.keys(patternProperties)) {
+      const compiled = compileSchemaPattern(pattern);
+      if (compiled.status === "valid" && compiled.regex.test(property)) {
+        return true;
+      }
+    }
+  }
+  const additionalProperties = schema["additionalProperties"];
+  return additionalProperties === true || isPlainObject(additionalProperties);
+};
+
 const propertyDeclaredAcrossMatchingCompositions = (
   schema: JsonSchema,
   property: string,
   value: Record<string, unknown>,
   path: string,
 ): boolean => {
-  const properties = schema["properties"];
-  if (isPlainObject(properties) && Object.hasOwn(properties, property)) {
+  if (propertyAcceptedByOwnObjectKeywords(schema, property)) {
     return true;
   }
   const intersections = schema["allOf"];
