@@ -85,6 +85,13 @@ const allOf = (schema: JsonSchema): readonly JsonSchema[] => {
   return Array.isArray(variants) ? variants.filter(isRecord) : [];
 };
 
+const alternativeGroupsAcrossAllOf = (
+  schema: JsonSchema,
+): AlternativeGroup[] => [
+  ...alternativeGroupsOf(schema),
+  ...allOf(schema).flatMap(alternativeGroupsAcrossAllOf),
+];
+
 const describesObject = (schema: JsonSchema): boolean =>
   schemaTypes(schema).includes("object") ||
   Object.keys(propertiesOf(schema)).length > 0 ||
@@ -263,7 +270,7 @@ const renderSchema = ({
   indent: number;
   lines: string[];
 }): void => {
-  const alternativeGroups = alternativeGroupsOf(schema);
+  const alternativeGroups = alternativeGroupsAcrossAllOf(schema);
   if (alternativeGroups.length > 0) {
     for (const { keyword, variants } of alternativeGroups) {
       lines.push(

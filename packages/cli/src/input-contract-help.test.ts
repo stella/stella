@@ -304,6 +304,41 @@ describe("--input contract help", () => {
     expect(fields).toContain("body.token  string  required");
   });
 
+  test("renders alternative variants inherited through nested allOf", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        body: {
+          type: "object",
+          allOf: [
+            {
+              allOf: [
+                {
+                  anyOf: [
+                    {
+                      properties: { kind: { const: "first" } },
+                      required: ["kind"],
+                    },
+                    {
+                      properties: { kind: { const: "second" } },
+                      required: ["kind"],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const help = buildInputContractHelp({ schema, inputOnly: ["body"] });
+    const fields = help?.fields.join("\n") ?? "";
+
+    expect(fields).toContain('body.kind  "first"  required');
+    expect(fields).toContain('body.kind  "second"  required');
+  });
+
   test("renders direct sibling fields alongside alternative variants", () => {
     const schema: JsonSchema = {
       type: "object",
