@@ -451,12 +451,12 @@
     },
     "deleteThread": "Smazat konverzaci",
     "editMode": {
-      "autoDirect": "Auto · rewrite",
-      "autoDirectDescription": "AI edits apply immediately, rewriting the document directly (no tracked changes).",
-      "autoTrackedChanges": "Auto · track changes",
-      "autoTrackedChangesDescription": "AI edits apply immediately as tracked changes attributed to you.",
-      "manual": "Manual review",
-      "manualDescription": "AI edits are queued for you to review and apply one by one."
+      "autoDirect": "Automaticky · přepsat",
+      "autoDirectDescription": "Úpravy od AI se použijí ihned přímým přepsáním dokumentu (bez sledování změn).",
+      "autoTrackedChanges": "Automaticky · sledovat změny",
+      "autoTrackedChangesDescription": "Úpravy od AI se ihned použijí jako sledované změny připsané vám.",
+      "manual": "Ruční kontrola",
+      "manualDescription": "Úpravy od AI se zařadí do fronty, abyste je mohli jednotlivě zkontrolovat a použít."
     },
     "editableFilePlaceholder": "Chatovat nebo upravit {fileName}",
     "editableFilePlaceholderAction": "Chatovat nebo upravit",

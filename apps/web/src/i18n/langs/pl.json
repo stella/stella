@@ -451,12 +451,12 @@
     },
     "deleteThread": "Usuń rozmowę",
     "editMode": {
-      "autoDirect": "Auto · rewrite",
-      "autoDirectDescription": "AI edits apply immediately, rewriting the document directly (no tracked changes).",
-      "autoTrackedChanges": "Auto · track changes",
-      "autoTrackedChangesDescription": "AI edits apply immediately as tracked changes attributed to you.",
-      "manual": "Manual review",
-      "manualDescription": "AI edits are queued for you to review and apply one by one."
+      "autoDirect": "Automatycznie · przepisz",
+      "autoDirectDescription": "Zmiany AI są stosowane natychmiast przez bezpośrednie przepisanie dokumentu (bez śledzenia zmian).",
+      "autoTrackedChanges": "Automatycznie · śledź zmiany",
+      "autoTrackedChangesDescription": "Zmiany AI są natychmiast stosowane jako śledzone zmiany przypisane do Ciebie.",
+      "manual": "Ręczna weryfikacja",
+      "manualDescription": "Zmiany AI są odkładane do kolejki, aby można je było kolejno sprawdzić i zastosować."
     },
     "editableFilePlaceholder": "Czat o {fileName} lub edycja",
     "editableFilePlaceholderAction": "Czat lub edycja",

@@ -451,12 +451,12 @@
     },
     "deleteThread": "Beszélgetés törlése",
     "editMode": {
-      "autoDirect": "Auto · rewrite",
-      "autoDirectDescription": "AI edits apply immediately, rewriting the document directly (no tracked changes).",
-      "autoTrackedChanges": "Auto · track changes",
-      "autoTrackedChangesDescription": "AI edits apply immediately as tracked changes attributed to you.",
-      "manual": "Manual review",
-      "manualDescription": "AI edits are queued for you to review and apply one by one."
+      "autoDirect": "Automatikus · átírás",
+      "autoDirectDescription": "Az AI módosításai azonnal, a dokumentum közvetlen átírásával lépnek életbe (változáskövetés nélkül).",
+      "autoTrackedChanges": "Automatikus · változások követése",
+      "autoTrackedChangesDescription": "Az AI módosításai azonnal, önnek tulajdonított követett változásokként lépnek életbe.",
+      "manual": "Kézi ellenőrzés",
+      "manualDescription": "Az AI módosításai várólistára kerülnek, hogy egyenként ellenőrizhesse és alkalmazhassa őket."
     },
     "editableFilePlaceholder": "Csevegés vagy szerkesztés: {fileName}",
     "editableFilePlaceholderAction": "Csevegés vagy szerkesztés",

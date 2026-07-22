@@ -451,12 +451,12 @@
     },
     "deleteThread": "حذف المحادثة",
     "editMode": {
-      "autoDirect": "Auto · rewrite",
-      "autoDirectDescription": "AI edits apply immediately, rewriting the document directly (no tracked changes).",
-      "autoTrackedChanges": "Auto · track changes",
-      "autoTrackedChangesDescription": "AI edits apply immediately as tracked changes attributed to you.",
-      "manual": "Manual review",
-      "manualDescription": "AI edits are queued for you to review and apply one by one."
+      "autoDirect": "تلقائي · إعادة كتابة",
+      "autoDirectDescription": "تُطبَّق تعديلات الذكاء الاصطناعي فورًا بإعادة كتابة المستند مباشرةً (من دون تعقّب التغييرات).",
+      "autoTrackedChanges": "تلقائي · تعقّب التغييرات",
+      "autoTrackedChangesDescription": "تُطبَّق تعديلات الذكاء الاصطناعي فورًا كتغييرات متعقّبة منسوبة إليك.",
+      "manual": "مراجعة يدوية",
+      "manualDescription": "تُدرج تعديلات الذكاء الاصطناعي في قائمة انتظار لتراجعها وتطبّقها واحدًا تلو الآخر."
     },
     "editableFilePlaceholder": "تحدّث عن {fileName} أو حرّره",
     "editableFilePlaceholderAction": "تحدّث عنه أو حرّره",

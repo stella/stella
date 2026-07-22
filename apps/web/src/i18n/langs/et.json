@@ -451,12 +451,12 @@
     },
     "deleteThread": "Kustuta vestlus",
     "editMode": {
-      "autoDirect": "Auto · rewrite",
-      "autoDirectDescription": "AI edits apply immediately, rewriting the document directly (no tracked changes).",
-      "autoTrackedChanges": "Auto · track changes",
-      "autoTrackedChangesDescription": "AI edits apply immediately as tracked changes attributed to you.",
-      "manual": "Manual review",
-      "manualDescription": "AI edits are queued for you to review and apply one by one."
+      "autoDirect": "Automaatne · kirjuta ümber",
+      "autoDirectDescription": "Tehisintellekti muudatused rakendatakse kohe ja dokument kirjutatakse otse ümber (muudatusi ei jälgita).",
+      "autoTrackedChanges": "Automaatne · jälgi muudatusi",
+      "autoTrackedChangesDescription": "Tehisintellekti muudatused rakendatakse kohe ja märgitakse sinu tehtud jälgitavate muudatustena.",
+      "manual": "Käsitsi ülevaatamine",
+      "manualDescription": "Tehisintellekti muudatused pannakse ootele, et saaksid need ükshaaval üle vaadata ja rakendada."
     },
     "editableFilePlaceholder": "Vestle või muuda: {fileName}",
     "editableFilePlaceholderAction": "Vestle või muuda",

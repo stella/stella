@@ -451,12 +451,12 @@
     },
     "deleteThread": "Ištrinti pokalbį",
     "editMode": {
-      "autoDirect": "Auto · rewrite",
-      "autoDirectDescription": "AI edits apply immediately, rewriting the document directly (no tracked changes).",
-      "autoTrackedChanges": "Auto · track changes",
-      "autoTrackedChangesDescription": "AI edits apply immediately as tracked changes attributed to you.",
-      "manual": "Manual review",
-      "manualDescription": "AI edits are queued for you to review and apply one by one."
+      "autoDirect": "Automatiškai · perrašyti",
+      "autoDirectDescription": "DI pakeitimai pritaikomi iš karto tiesiogiai perrašant dokumentą (be pakeitimų sekimo).",
+      "autoTrackedChanges": "Automatiškai · sekti pakeitimus",
+      "autoTrackedChangesDescription": "DI pakeitimai iš karto pritaikomi kaip jums priskirti sekami pakeitimai.",
+      "manual": "Rankinė peržiūra",
+      "manualDescription": "DI pakeitimai pateikiami jums, kad galėtumėte juos po vieną peržiūrėti ir pritaikyti."
     },
     "editableFilePlaceholder": "Kalbėtis apie {fileName} arba redaguoti",
     "editableFilePlaceholderAction": "Kalbėtis arba redaguoti",
