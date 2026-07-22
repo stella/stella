@@ -37,6 +37,7 @@ import {
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import type {
+  DiscoveredField,
   FieldDateFormat,
   FieldPart,
   InputType,
@@ -59,6 +60,29 @@ import {
 type FillValues = Record<string, unknown>;
 
 type UnusedValuePolicy = "allow" | "reject";
+
+const collectDiscoveredTerminalPaths = (
+  fields: readonly DiscoveredField[],
+): string[] => {
+  const terminalPaths: string[] = [];
+
+  const visit = (field: DiscoveredField, parentPath: string): void => {
+    const path = parentPath === "" ? field.path : `${parentPath}.${field.path}`;
+    if (field.kind !== "object" && field.kind !== "array") {
+      terminalPaths.push(path);
+    }
+    if (field.itemFields !== undefined) {
+      for (const itemField of field.itemFields) {
+        visit(itemField, path);
+      }
+    }
+  };
+
+  for (const field of fields) {
+    visit(field, "");
+  }
+  return terminalPaths;
+};
 
 type TemplateInputRejection = {
   type: "unused-values";
@@ -311,22 +335,15 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   if (unusedValuePolicy === "reject") {
     const discovered = await discoverTemplate(loaded.buffer);
-    const livePaths = [
-      ...discovered.fields.flatMap((field) => [
-        field.path,
-        ...(field.itemFields === undefined
-          ? []
-          : field.itemFields.map(
-              (itemField) => `${field.path}.${itemField.path}`,
-            )),
-      ]),
+    const terminalPaths = [
+      ...collectDiscoveredTerminalPaths(discovered.fields),
       ...discovered.placeholders.map((placeholder) => placeholder.name),
     ];
     const inputContract =
       manifest === null
         ? collectTemplateInputKeys({
             type: "raw",
-            livePaths,
+            terminalPaths,
           })
         : collectTemplateInputKeys({
             type: "manifest",
@@ -344,7 +361,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
             fillableFieldPaths: manifest.fields
               .filter(isFillableTemplateInputField)
               .map((field) => field.path),
-            livePaths,
+            livePaths: terminalPaths,
           });
     const unusedKeys = findUnusedTemplateValueKeys({
       contract: inputContract,

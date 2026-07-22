@@ -11,7 +11,7 @@ export type TemplateInputContract = {
 type TemplateInputKeySources =
   | {
       type: "raw";
-      livePaths: Iterable<string>;
+      terminalPaths: Iterable<string>;
     }
   | {
       type: "manifest";
@@ -38,7 +38,7 @@ export const collectTemplateInputKeys = (
 ): TemplateInputContract => {
   if (sources.type === "raw") {
     return {
-      acceptedPaths: new Set(sources.livePaths),
+      acceptedPaths: new Set(sources.terminalPaths),
       forbiddenPaths: new Set(),
     };
   }

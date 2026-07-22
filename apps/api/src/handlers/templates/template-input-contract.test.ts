@@ -34,7 +34,7 @@ describe("template input contract", () => {
   test("raw templates accept every live discovered path", () => {
     const contract = collectTemplateInputKeys({
       type: "raw",
-      livePaths: ["client.name", "signature_date"],
+      terminalPaths: ["client.name", "signature_date"],
     });
     expect(contract.acceptedPaths).toEqual(
       new Set(["client.name", "signature_date"]),
@@ -98,7 +98,7 @@ describe("template input contract", () => {
   test("raw and manifest input policies are discriminated", () => {
     const raw = collectTemplateInputKeys({
       type: "raw",
-      livePaths: ["company.full"],
+      terminalPaths: ["company.full"],
     });
     expect(raw.acceptedPaths).toEqual(new Set(["company.full"]));
     const manifest = collectTemplateInputKeys({
@@ -130,6 +130,25 @@ describe("template input contract", () => {
         values: { company: { namme: "typo" } },
       }),
     ).toEqual(["company.namme"]);
+  });
+
+  test("raw structural namespaces reject leaf values", () => {
+    const contract = collectTemplateInputKeys({
+      type: "raw",
+      terminalPaths: ["company.name"],
+    });
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: { company: "Acme" },
+      }),
+    ).toEqual(["company"]);
+    expect(
+      findUnusedTemplateValueKeys({
+        contract,
+        values: { company: { name: "Acme" } },
+      }),
+    ).toEqual([]);
   });
 
   test("forbidden derived paths win through nested and flattened input", () => {
