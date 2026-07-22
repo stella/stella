@@ -156,7 +156,7 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
       return `${keyword} must be an array`;
     }
     for (const branch of branches) {
-      if (typeof branch !== "boolean" && !isRecord(branch)) {
+      if (!isRecord(branch)) {
         return `${keyword} contains an invalid schema`;
       }
       const violation = walkSchema(branch, depth + 1);
@@ -171,7 +171,7 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
     if (child === undefined) {
       continue;
     }
-    if (typeof child !== "boolean" && !isRecord(child)) {
+    if (!isRecord(child)) {
       return `${keyword} must be a schema`;
     }
     const violation = walkSchema(child, depth + 1);
@@ -189,7 +189,7 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
       return `${keyword} must be an object`;
     }
     for (const child of Object.values(children)) {
-      if (typeof child !== "boolean" && !isRecord(child)) {
+      if (!isRecord(child)) {
         return `${keyword} contains an invalid schema`;
       }
       const violation = walkSchema(child, depth + 1);
@@ -205,6 +205,9 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
       return `properties object larger than ${MAX_PROPS}`;
     }
     for (const child of Object.values(properties)) {
+      if (!isRecord(child)) {
+        return "properties contains an invalid schema";
+      }
       const violation = walkSchema(child, depth + 1);
       if (violation !== undefined) {
         return violation;
@@ -218,6 +221,9 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
       if (compileSchemaPattern(childPattern).status === "invalid") {
         return "patternProperties contains an invalid pattern";
       }
+      if (!isRecord(child)) {
+        return "patternProperties contains an invalid schema";
+      }
       const violation = walkSchema(child, depth + 1);
       if (violation !== undefined) {
         return violation;
@@ -228,11 +234,16 @@ const walkSchema = (schema: unknown, depth: number): string | undefined => {
   const items = schema["items"];
   if (Array.isArray(items)) {
     for (const item of items) {
+      if (!isRecord(item)) {
+        return "items contains an invalid schema";
+      }
       const violation = walkSchema(item, depth + 1);
       if (violation !== undefined) {
         return violation;
       }
     }
+  } else if (items !== undefined && !isRecord(items)) {
+    return "items must be a schema or schema array";
   } else if (isRecord(items)) {
     const violation = walkSchema(items, depth + 1);
     if (violation !== undefined) {

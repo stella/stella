@@ -138,6 +138,27 @@ describe("validateFetchedToolsList: rule 2 (meta-schema)", () => {
     }
   });
 
+  test("unsupported subschema shapes fail closed in every traversed container", () => {
+    const invalidChildren = [
+      { anyOf: [true] },
+      { allOf: ["not-a-schema"] },
+      { properties: { child: 42 } },
+      { patternProperties: { ".*": "not-a-schema" } },
+      { items: [null] },
+      { $defs: { child: false } },
+    ];
+
+    for (const child of invalidChildren) {
+      const tool = validTool({
+        inputSchema: {
+          type: "object",
+          properties: { value: child },
+        },
+      });
+      expect(validateFetchedToolsList(body([tool])).ok).toBe(false);
+    }
+  });
+
   test("serialized RegExp flags are validated with their source", () => {
     const valid = validTool({
       inputSchema: {
