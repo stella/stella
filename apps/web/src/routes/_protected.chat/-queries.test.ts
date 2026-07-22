@@ -545,6 +545,51 @@ describe("buildSendRequestBody", () => {
     });
   });
 
+  test("restores DOCX edit preferences after a reload during approval", () => {
+    const threadId = toChatThreadId("thread-A");
+    const key = { scope: "global", threadId } as const;
+    const initial = buildSendRequestBody({
+      context: {
+        getDocxEditRepresentation: () => "direct",
+        getEditApplyMode: () => "auto",
+      },
+      key,
+      messages: [createMessage("message-A")],
+    });
+    expect(initial.message.metadata).toMatchObject({
+      docxEditPreferences: {
+        docxEditRepresentation: "direct",
+        editApplyMode: "auto",
+      },
+    });
+
+    __resetChatRequestStateForTests();
+    expect(
+      buildSendRequestBody({
+        context: {
+          getDocxEditRepresentation: () => "tracked-changes",
+          getEditApplyMode: () => "manual",
+        },
+        key,
+        messages: [
+          {
+            ...createMessage("message-A"),
+            metadata: {
+              docxEditPreferences: {
+                docxEditRepresentation: "direct",
+                editApplyMode: "auto",
+              },
+            },
+          },
+          { id: "assistant-A", role: "assistant", parts: [] },
+        ],
+      }),
+    ).toMatchObject({
+      docxEditRepresentation: "direct",
+      editApplyMode: "auto",
+    });
+  });
+
   test("forwards the replay truncation target for tool-result continuations", () => {
     const threadId = toChatThreadId("thread-A");
     const truncateAfterMessageId = toSafeId<"chatMessage">(

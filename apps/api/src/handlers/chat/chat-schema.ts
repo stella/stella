@@ -399,6 +399,15 @@ const validateIncomingChatMetadata = (
     validated.mentions = parsed;
   }
 
+  const docxEditPreferences = metadata["docxEditPreferences"];
+  if (docxEditPreferences !== undefined) {
+    const parsed = parseDocxEditPreferencesMetadata(docxEditPreferences);
+    if (parsed === null) {
+      return Result.err(invalidChatMetadataError());
+    }
+    validated.docxEditPreferences = parsed;
+  }
+
   const sourceDocuments = metadata["sourceDocuments"];
   if (sourceDocuments !== undefined) {
     const parsed = parseSourceDocumentsMetadata(sourceDocuments);
@@ -490,6 +499,39 @@ const parseMentionsMetadata = (
   return { mentions };
 };
 
+const parseDocxEditPreferencesMetadata = (
+  value: unknown,
+): ChatMessageMetadata["docxEditPreferences"] | null => {
+  if (!isJsonRecord(value)) {
+    return null;
+  }
+
+  const editApplyMode = value["editApplyMode"];
+  const docxEditRepresentation = value["docxEditRepresentation"];
+  if (
+    editApplyMode !== undefined &&
+    editApplyMode !== "manual" &&
+    editApplyMode !== "auto"
+  ) {
+    return null;
+  }
+  if (
+    docxEditRepresentation !== undefined &&
+    docxEditRepresentation !== "tracked-changes" &&
+    docxEditRepresentation !== "direct"
+  ) {
+    return null;
+  }
+  if (editApplyMode === undefined && docxEditRepresentation === undefined) {
+    return null;
+  }
+
+  return {
+    ...(editApplyMode === undefined ? {} : { editApplyMode }),
+    ...(docxEditRepresentation === undefined ? {} : { docxEditRepresentation }),
+  };
+};
+
 const parseSourceDocumentsMetadata = (
   value: unknown,
 ): ChatMessageMetadata["sourceDocuments"] | null => {
@@ -578,6 +620,7 @@ const parseUsageMetadata = (
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.anonRestorations === undefined &&
+  metadata.docxEditPreferences === undefined &&
   metadata.mentions === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.usage === undefined;

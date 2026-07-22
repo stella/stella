@@ -100,6 +100,12 @@ export type ChatMessageUsage = Pick<
 
 export type ChatMessageMetadata = {
   anonRestorations?: ChatAnonRestorationsData | undefined;
+  docxEditPreferences?:
+    | {
+        docxEditRepresentation?: "tracked-changes" | "direct" | undefined;
+        editApplyMode?: "manual" | "auto" | undefined;
+      }
+    | undefined;
   mentions?: ChatMentionsData | undefined;
   sourceDocuments?: ChatSourceDocument[] | undefined;
   usage?: ChatMessageUsage | undefined;

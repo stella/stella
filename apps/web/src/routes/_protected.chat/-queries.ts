@@ -1026,6 +1026,21 @@ export const buildSendRequestBody = ({
     body.docxEditRepresentation = docxEditRepresentation;
   }
 
+  if (
+    message.role === "user" &&
+    (editApplyMode !== undefined || docxEditRepresentation !== undefined)
+  ) {
+    body.message.metadata = {
+      ...message.metadata,
+      docxEditPreferences: {
+        ...(editApplyMode === undefined ? {} : { editApplyMode }),
+        ...(docxEditRepresentation === undefined
+          ? {}
+          : { docxEditRepresentation }),
+      },
+    };
+  }
+
   if (import.meta.env.DEV) {
     const devModelId = useDevStore.getState().chatModelId;
     if (devModelId) {
@@ -1138,15 +1153,24 @@ const resolveChatRequestDocxEditPreferences = ({
   "userMessageId"
 > => {
   const threadKey = getChatThreadKey(key);
-  const userMessageId = getLatestUserMessageId(messages);
+  const userMessage = getLatestUserMessage(messages);
+  const userMessageId = userMessage?.id ?? null;
   const activeTurn = activeTurnDocxEditPreferences.get(threadKey);
-  const preferences =
-    userMessageId !== null && activeTurn?.userMessageId === userMessageId
-      ? activeTurn
-      : {
-          editApplyMode: context?.getEditApplyMode?.(),
-          docxEditRepresentation: context?.getDocxEditRepresentation?.(),
-        };
+  const persistedPreferences = userMessage?.metadata?.docxEditPreferences;
+  let preferences: Omit<ActiveTurnDocxEditPreferences, "userMessageId">;
+  if (userMessageId !== null && activeTurn?.userMessageId === userMessageId) {
+    preferences = activeTurn;
+  } else if (persistedPreferences !== undefined) {
+    preferences = {
+      editApplyMode: persistedPreferences.editApplyMode,
+      docxEditRepresentation: persistedPreferences.docxEditRepresentation,
+    };
+  } else {
+    preferences = {
+      editApplyMode: context?.getEditApplyMode?.(),
+      docxEditRepresentation: context?.getDocxEditRepresentation?.(),
+    };
+  }
 
   if (userMessageId !== null) {
     activeTurnDocxEditPreferences.set(threadKey, {
@@ -1156,6 +1180,19 @@ const resolveChatRequestDocxEditPreferences = ({
   }
 
   return preferences;
+};
+
+const getLatestUserMessage = (
+  messages: readonly PersistedChatMessage[],
+): PersistedChatMessage | undefined => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages.at(index);
+    if (message?.role === "user") {
+      return message;
+    }
+  }
+
+  return undefined;
 };
 
 const normalizeChatContinuationRequestBody = (
