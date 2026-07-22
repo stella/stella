@@ -75,6 +75,20 @@ describe("discoverTemplate", () => {
     expect(field?.kind).toBe("string");
   });
 
+  test("inline-only condition infers its boolean driver", async () => {
+    const xml = WRAP(
+      P("Buyer{{#if has_spouse}} and their spouse{{/if}} hereby agrees."),
+    );
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields.find((field) => field.path === "has_spouse")).toEqual({
+      path: "has_spouse",
+      kind: "boolean",
+      count: 1,
+    });
+  });
+
   test("loop infers array field with item fields", async () => {
     const xml = WRAP(
       [
@@ -94,6 +108,18 @@ describe("discoverTemplate", () => {
     const itemPaths = field?.itemFields?.map((f) => f.path);
     expect(itemPaths).toContain("name");
     expect(itemPaths).toContain("address");
+  });
+
+  test("inline static loop infers its array input", async () => {
+    const xml = WRAP(P("Parties: {{#each parties}}party; {{/each}}"));
+    const buf = await makeDocx(xml);
+    const result = await discoverTemplate(buf);
+
+    expect(result.fields.find((field) => field.path === "parties")).toEqual({
+      path: "parties",
+      kind: "array",
+      count: 1,
+    });
   });
 
   test("nested object path infers object field", async () => {

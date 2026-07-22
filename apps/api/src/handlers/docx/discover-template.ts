@@ -15,6 +15,7 @@ import { compareCodepoint } from "@/api/lib/collation";
 
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { PLACEHOLDER_RE } from "./discover-placeholders";
+import { parseInlineConditions } from "./inline-conditions";
 import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
 import type {
   DiscoveredField,
@@ -77,6 +78,51 @@ const kindPriority = (kind: TemplateFieldKind): number => {
       return 3;
     default:
       return 0;
+  }
+};
+
+const registerConditionFields = (
+  fields: FieldAccumulator,
+  condition: string,
+): void => {
+  if (condition === "") {
+    return;
+  }
+
+  // Group tokens by and/or to check comparisons per
+  // sub-expression. Uses the tokenizer (not string split)
+  // so `and`/`or` inside string literals are ignored.
+  type SubExpr = { paths: string[]; hasComparison: boolean };
+  const subExprs: SubExpr[] = [];
+  let current: SubExpr = { paths: [], hasComparison: false };
+  subExprs.push(current);
+
+  for (const match of condition.matchAll(CONDITION_TOKEN_RE)) {
+    const raw = match[0];
+    if (!raw) {
+      continue;
+    }
+    const ident = match.groups?.["ident"];
+
+    if (raw === "and" || raw === "or") {
+      current = { paths: [], hasComparison: false };
+      subExprs.push(current);
+    } else if (COMPARISON_OPS.has(raw)) {
+      current.hasComparison = true;
+    } else if (
+      ident &&
+      ident !== "true" &&
+      ident !== "false" &&
+      !NUMERIC_LITERAL_RE.test(ident)
+    ) {
+      current.paths.push(ident);
+    }
+  }
+
+  for (const { paths, hasComparison } of subExprs) {
+    for (const path of paths) {
+      registerField(fields, path, hasComparison ? "string" : "boolean");
+    }
   }
 };
 
@@ -308,45 +354,7 @@ const analyzeContainer = (
       // if block — extract condition variables as booleans
       // (or string if used in a comparison)
       for (const branch of block.branches) {
-        if (branch.condition === "") {
-          continue; // else
-        }
-
-        // Group tokens by and/or to check comparisons per
-        // sub-expression. Uses the tokenizer (not string split)
-        // so `and`/`or` inside string literals are ignored.
-        type SubExpr = { paths: string[]; hasComparison: boolean };
-        const subExprs: SubExpr[] = [];
-        let current: SubExpr = { paths: [], hasComparison: false };
-        subExprs.push(current);
-
-        for (const m of branch.condition.matchAll(CONDITION_TOKEN_RE)) {
-          const raw = m[0];
-          if (!raw) {
-            continue;
-          }
-          const ident = m.groups?.["ident"];
-
-          if (raw === "and" || raw === "or") {
-            current = { paths: [], hasComparison: false };
-            subExprs.push(current);
-          } else if (COMPARISON_OPS.has(raw)) {
-            current.hasComparison = true;
-          } else if (
-            ident &&
-            ident !== "true" &&
-            ident !== "false" &&
-            !NUMERIC_LITERAL_RE.test(ident)
-          ) {
-            current.paths.push(ident);
-          }
-        }
-
-        for (const { paths, hasComparison } of subExprs) {
-          for (const path of paths) {
-            registerField(fields, path, hasComparison ? "string" : "boolean");
-          }
-        }
+        registerConditionFields(fields, branch.condition);
       }
     }
   }
@@ -363,6 +371,29 @@ const analyzeContainer = (
     }
     const text = paragraphText(para);
     const paraCondition = conditionMap.get(i);
+
+    const inline = parseInlineConditions(text);
+    if (inline.ok) {
+      for (const group of inline.groups) {
+        if (group.kind === "if") {
+          for (const branch of group.branches) {
+            registerConditionFields(fields, branch.condition);
+          }
+          continue;
+        }
+
+        registerField(fields, group.arrayPath, "array");
+        const entry = fields.get(group.arrayPath);
+        const content = text.slice(group.contentStart, group.contentEnd);
+        const prefix = `${group.arrayPath}.`;
+        for (const match of content.matchAll(PLACEHOLDER_RE)) {
+          const name = match.groups?.["name"];
+          if (name?.startsWith(prefix)) {
+            entry?.itemPaths.add(name.slice(prefix.length));
+          }
+        }
+      }
+    }
 
     for (const match of text.matchAll(PLACEHOLDER_RE)) {
       const name = match.groups?.["name"];
