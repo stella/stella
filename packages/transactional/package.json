@@ -29,9 +29,9 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@react-email/ui": "^6.8.0",
+    "@react-email/ui": "^6.9.0",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
-    "react-email": "^6.8.0"
+    "react-email": "^6.9.0"
   }
 }
