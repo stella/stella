@@ -1461,6 +1461,25 @@ export const getDeployAvailableRegistryHandlers = (): RegistryHandler[] =>
     handler.isDeployAvailable(),
   );
 
+/**
+ * Registry handlers this organization may actually call: shipped on this
+ * deployment AND enabled for the org (per-adapter native-tool enablement,
+ * expressed here as the set of *disabled* native-tool slugs the caller has
+ * already resolved from `organization_settings`).
+ *
+ * Both advertisement surfaces derive their options from this single source:
+ * the in-app chat tool's `jurisdiction` enum (via `handler.country`) and the
+ * external MCP tool's `registry` enum (via `handler.slug`). Neither can then
+ * advertise a registry the call-time gate would reject with a 403.
+ */
+export const enabledRegistryHandlersForOrg = (
+  disabledNativeToolSlugs: readonly string[] | undefined,
+): RegistryHandler[] =>
+  getDeployAvailableRegistryHandlers().filter(
+    (handler) =>
+      !(disabledNativeToolSlugs?.includes(handler.nativeToolSlug) ?? false),
+  );
+
 export const isBusinessRegistryNativeToolDeployAvailable = (
   nativeToolSlug: string,
 ): boolean => {

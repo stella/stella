@@ -26,6 +26,7 @@ import type {
   McpToolFeatureFlag,
   ToolScope,
 } from "@/api/mcp/tool-types";
+import { enumProp } from "@/api/mcp/tool-utils";
 
 /**
  * A feature-gated tool is advertised and dispatchable only when its deployment
@@ -59,6 +60,57 @@ const externalMcpToolAccess = (
   readOnlyHint: boolean | undefined,
 ): McpToolAccess => (readOnlyHint === true ? "read" : "write");
 
+const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
+
+/**
+ * Narrow the `lookup_business_registry` tool's `registry` enum to the
+ * registries this org can actually reach (`context.enabledRegistrySlugs`,
+ * resolved once at context bootstrap), and drop the tool entirely when none
+ * are. Mirrors the in-app chat tool, so the external MCP surface can no longer
+ * advertise a registry whose call-time gate would 403 — the same defect the
+ * chat tool already avoids.
+ *
+ * `enabledRegistrySlugs === undefined` means the set was not resolved (a
+ * synthetic/test context, or a bootstrap settings-read fault): leave the full
+ * enum advertised and let the call-time gate stay the backstop.
+ */
+const narrowBusinessRegistryTool = (
+  context: McpRequestContext,
+  definitions: McpToolDefinition[],
+): McpToolDefinition[] => {
+  const enabledSlugs = context.enabledRegistrySlugs;
+  if (enabledSlugs === undefined) {
+    return definitions;
+  }
+
+  const index = definitions.findIndex(
+    (definition) => definition.name === LOOKUP_BUSINESS_REGISTRY_TOOL_NAME,
+  );
+  const definition = definitions[index];
+  if (definition === undefined) {
+    return definitions;
+  }
+
+  if (enabledSlugs.length === 0) {
+    return definitions.filter((_definition, i) => i !== index);
+  }
+
+  return definitions.map((current, i) =>
+    i === index
+      ? {
+          ...definition,
+          inputSchema: {
+            ...definition.inputSchema,
+            properties: {
+              ...definition.inputSchema.properties,
+              registry: enumProp("Business register to query", enabledSlugs),
+            },
+          },
+        }
+      : current,
+  );
+};
+
 export const listGatewayMcpToolDefinitions = async ({
   context,
   mode,
@@ -68,11 +120,12 @@ export const listGatewayMcpToolDefinitions = async ({
   mode: McpMode;
   scopes?: readonly string[];
 }): Promise<McpToolDefinition[]> => {
-  const definitions = listStaticMcpToolDefinitions(mode).filter(
+  const staticDefinitions = listStaticMcpToolDefinitions(mode).filter(
     (definition) =>
       hasGrantedScope(scopes, definition.scope) &&
       isMcpToolFeatureEnabled(definition.feature),
   );
+  const definitions = narrowBusinessRegistryTool(context, staticDefinitions);
   if (mode === "anonymized") {
     return definitions;
   }

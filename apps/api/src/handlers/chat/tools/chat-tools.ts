@@ -93,7 +93,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { getDeployAvailableRegistryHandlers } from "@/api/lib/business-registries/dispatch";
+import { enabledRegistryHandlersForOrg } from "@/api/lib/business-registries/dispatch";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
@@ -604,12 +604,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // first (e.g. EDGAR requires EDGAR_USER_AGENT), then by org-level
   // native-tool enablement. Empty list means the tool isn't
   // registered at all (no dead picker for the model).
-  const businessRegistryJurisdictions = getDeployAvailableRegistryHandlers()
-    .filter(
-      (handler) =>
-        !(disabledNativeToolSlugs?.includes(handler.nativeToolSlug) ?? false),
-    )
-    .map((handler) => handler.country);
+  const businessRegistryJurisdictions = enabledRegistryHandlersForOrg(
+    disabledNativeToolSlugs,
+  ).map((handler) => handler.country);
   const businessRegistryTools = createBusinessRegistryTools({
     enabledJurisdictions: businessRegistryJurisdictions,
   });

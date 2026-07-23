@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { rlsDb } from "@/api/db/root";
@@ -8,11 +8,14 @@ import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
+import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { enabledRegistryHandlersForOrg } from "@/api/lib/business-registries/dispatch";
+import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
@@ -58,6 +61,19 @@ export type McpRequestContext = {
    * empty list (it never dispatches the generic path).
    */
   grantedScopes: readonly string[];
+  /**
+   * Registry slugs this org may actually call (deployment-shipped AND enabled
+   * for the org). The `lookup_business_registry` list projection narrows its
+   * `registry` enum to these and drops the tool when empty, mirroring the
+   * in-app chat tool so the MCP surface never advertises a registry the
+   * call-time gate would 403. Computed once here from `organization_settings`.
+   *
+   * `undefined` means "not resolved" (a synthetic/test context, or a settings
+   * read fault): the projection then leaves the full enum advertised and the
+   * call-time gate stays the backstop. It is NOT the same as an empty array,
+   * which means the org can reach no registry and the tool is dropped.
+   */
+  enabledRegistrySlugs?: readonly BusinessRegistrySlug[] | undefined;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
@@ -176,6 +192,24 @@ export const resolveMcpSessionContext = async (
   };
   const requestDatabaseScope = createOperationDatabaseScope();
 
+  // Resolve the org's reachable registries once, so the tools/list projection
+  // can narrow the `lookup_business_registry` enum synchronously. On a read
+  // fault, leave it unresolved (undefined) rather than dropping the tool.
+  const settingsResult = await requestDatabaseScope.safeDb((tx) =>
+    tx.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: organizationId } },
+      columns: { practiceJurisdictions: true, nativeToolOverrides: true },
+    }),
+  );
+  const enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined =
+    Result.isError(settingsResult)
+      ? undefined
+      : enabledRegistryHandlersForOrg(
+          getDisabledNativeToolSlugsFromSettingsRow(
+            settingsResult.value ?? undefined,
+          ),
+        ).map((handler) => handler.slug);
+
   return {
     accessibleWorkspaceIds: usableWorkspaceIds,
     accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,
@@ -184,6 +218,7 @@ export const resolveMcpSessionContext = async (
     ),
     accessibleWorkspaces: usableWorkspaces,
     createOperationDatabaseScope,
+    enabledRegistrySlugs,
     grantedScopes: session.scopes,
     memberRole,
     organizationId,
