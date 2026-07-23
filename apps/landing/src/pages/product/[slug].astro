@@ -343,15 +343,15 @@ const faqJsonLd = {
       </section>
 
       {/* ——— CTA ——— */}
-      <section class="px-6 py-16 lg:py-20">
+      <section class="px-6 py-28 lg:py-40">
         <div class="mx-auto max-w-3xl text-center">
           <h2
             data-reveal
-            class="font-display text-3xl font-medium tracking-tight sm:text-4xl"
+            class="text-balance font-display text-4xl font-medium tracking-tight sm:text-5xl"
           >
             {product.cta.heading}
           </h2>
-          <div class="mt-8">
+          <div class="mt-10">
             <a
               href={product.cta.href}
               data-reveal
@@ -373,17 +373,6 @@ const faqJsonLd = {
       background: color-mix(in srgb, var(--card) 80%, transparent);
       border-color: color-mix(in srgb, var(--border) 90%, transparent);
       box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
-    }
-    .quick-answer::before {
-      content: "";
-      position: absolute;
-      inset: 0 auto 0 0;
-      width: 3px;
-      background: linear-gradient(
-        180deg,
-        var(--primary),
-        color-mix(in srgb, var(--primary) 0%, transparent)
-      );
     }
 
     .capability-card {
