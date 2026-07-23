@@ -549,6 +549,18 @@ const createAuth = () => {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       storeSessionInDatabase: true,
+      // Disable Better Auth's session-freshness gate. It defaults to 1 day
+      // (`create-context.mjs`: `freshAge ?? 3600 * 24`) and compares against
+      // `session.createdAt`, which `updateAge` never refreshes — so every
+      // session older than a day fails it. The only freshness-gated endpoint
+      // Stella actually exposes is `list-sessions` (a read: viewing your own
+      // active sessions), which the account page loads eagerly; the gate turned
+      // that into a 403 for any day-old login and crashed the page. Genuinely
+      // sensitive flows are gated by Stella's own controls (OTP-verified
+      // account deletion, TOTP two-factor), not by this global freshness knob,
+      // so `0` removes the footgun without weakening anything real. Guarded by
+      // the freshAge invariant in `auth.test.ts`.
+      freshAge: 0,
     },
     advanced: {
       ...(authCookiePrefix ? { cookiePrefix: authCookiePrefix } : {}),

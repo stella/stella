@@ -11,6 +11,7 @@ import {
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
+  getAuth,
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
   resolveMemberAuthorization,
@@ -398,5 +399,17 @@ describe("isSixDigitOtpBody", () => {
     expect(isSixDigitOtpBody({ otp: "12345" })).toBe(false);
     expect(isSixDigitOtpBody({ otp: "1234567" })).toBe(false);
     expect(isSixDigitOtpBody({ otp: "12a456" })).toBe(false);
+  });
+});
+
+describe("session freshness", () => {
+  test("freshAge stays disabled so day-old sessions can read list-sessions", () => {
+    // Better Auth defaults `freshAge` to 1 day and gates `list-sessions` (the
+    // account page's active-sessions read) against `session.createdAt`, which
+    // `updateAge` never refreshes — so any login older than a day would 403 and
+    // blank the profile page. It must stay 0; genuinely sensitive flows are
+    // gated by Stella's own OTP/two-factor, not this global knob. See the
+    // `freshAge` comment in auth.ts. If this fails, the footgun is back.
+    expect(getAuth().options.session?.freshAge).toBe(0);
   });
 });
