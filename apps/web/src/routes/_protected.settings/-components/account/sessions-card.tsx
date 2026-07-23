@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { PropsWithChildren } from "react";
 
 import {
   useMutation,
@@ -24,6 +25,7 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/components/frame";
+import { Skeleton } from "@stll/ui/components/skeleton";
 import {
   Table,
   TableBody,
@@ -34,6 +36,7 @@ import {
 } from "@stll/ui/components/table";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, revokeAuthSession } from "@/lib/auth";
 import type { SessionRevocationToken } from "@/lib/auth";
@@ -49,7 +52,65 @@ import {
 
 const MISSING_VALUE = "-";
 
-export const SessionsCard = () => {
+// Contain this card's data dependency behind its own boundary. It suspends on
+// `list-sessions`, a secondary read that is independent of the rest of the
+// account page; without this, any failure of that one query (an auth error, a
+// rate-limit hit, a network blip) would propagate to the route's error boundary
+// and blank the entire profile page instead of just this card.
+export const SessionsCard = () => (
+  <QuerySuspenseBoundary
+    area="account.sessions"
+    errorFallback={({ reset }) => <SessionsCardError onRetry={reset} />}
+    suspenseFallback={<SessionsCardSkeleton />}
+  >
+    <SessionsCardContent />
+  </QuerySuspenseBoundary>
+);
+
+const SessionsCardFrame = ({ children }: PropsWithChildren) => {
+  const t = useTranslations();
+  return (
+    <Frame>
+      <FrameHeader>
+        <FrameTitle>{t("common.sessions")}</FrameTitle>
+      </FrameHeader>
+      {children}
+    </Frame>
+  );
+};
+
+const SessionsCardSkeleton = () => (
+  <SessionsCardFrame>
+    <FramePanel className="flex flex-col gap-3 p-4">
+      {["a", "b", "c"].map((key) => (
+        <div className="flex items-center justify-between gap-4" key={key}>
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-5 w-16 rounded-md" />
+        </div>
+      ))}
+    </FramePanel>
+  </SessionsCardFrame>
+);
+
+const SessionsCardError = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations();
+  return (
+    <SessionsCardFrame>
+      <FramePanel className="flex flex-col items-start gap-3 p-4">
+        <p className="text-muted-foreground text-sm">
+          {t("common.somethingWentWrong")}
+        </p>
+        <Button onClick={onRetry} size="sm" variant="outline">
+          {t("common.retry")}
+        </Button>
+      </FramePanel>
+    </SessionsCardFrame>
+  );
+};
+
+const SessionsCardContent = () => {
   const t = useTranslations();
   const [{ data: sessions }, { data: currentSession }] = useSuspenseQueries({
     queries: [sessionsOptions, sessionOptions],

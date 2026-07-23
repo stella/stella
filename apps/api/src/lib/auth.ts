@@ -527,6 +527,14 @@ const createAuth = () => {
       "/api-key/delete",
       "/api-key/get",
       "/api-key/list",
+      // Account unlinking is not a Stella feature: there is no UI and no
+      // server-side `auth.api.unlinkAccount` caller. Better Auth still mounts
+      // `/unlink-account` and protects it with `freshSessionMiddleware`, so
+      // once `session.freshAge` is 0 (below) that freshness no longer applies.
+      // Rather than let an unused, state-changing endpoint stay reachable with
+      // weaker protection, disable the path outright — removing the surface is
+      // strictly stronger than the freshness it used to carry.
+      "/unlink-account",
     ],
     user: {
       additionalFields: {
@@ -549,6 +557,21 @@ const createAuth = () => {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       storeSessionInDatabase: true,
+      // Disable Better Auth's session-freshness gate. It defaults to 1 day
+      // (`create-context.mjs`: `freshAge ?? 3600 * 24`) and compares against
+      // `session.createdAt`, which `updateAge` never refreshes — so every
+      // session older than a day fails it. Two endpoints use it: `list-sessions`
+      // and `unlink-account`. `list-sessions` is a read (viewing your own active
+      // sessions) that the account page loads eagerly, so the gate turned it
+      // into a 403 for any day-old login and crashed the page; and revoking a
+      // session — the actual sensitive action — is not freshness-gated anyway,
+      // so gating only the read made no sense. `unlink-account` is unused and is
+      // disabled in `disabledPaths` above, so nothing reachable relies on this
+      // knob. Genuinely sensitive flows use Stella's own controls (OTP-verified
+      // account deletion, TOTP two-factor). `0` removes the footgun without
+      // weakening anything real. Guarded by the freshAge invariant in
+      // `auth.test.ts`.
+      freshAge: 0,
     },
     advanced: {
       ...(authCookiePrefix ? { cookiePrefix: authCookiePrefix } : {}),
