@@ -5,7 +5,10 @@ import type {
   PlaybookSeverity,
 } from "@/components/ai-suggestions/playbook-review-store";
 
-import { computeRiskRollup } from "./playbook-risk-rollup";
+import {
+  computeRiskRollup,
+  isFlaggedPlaybookFinding,
+} from "./playbook-risk-rollup";
 
 // A large input space (any combination of severity x verdict across an
 // unbounded number of positions) makes per-example assertions weak;
@@ -141,6 +144,24 @@ describe("computeRiskRollup — counts", () => {
       deviation: 1,
       missing: 1,
     });
+  });
+});
+
+describe("review issue selection", () => {
+  test("keeps fallback and violations while hiding compliant and extract-only results", () => {
+    const findings = [
+      finding({ positionId: "compliant", verdict: "compliant" }),
+      finding({ positionId: "fallback", verdict: "fallback" }),
+      finding({ positionId: "deviation", verdict: "deviation" }),
+      finding({ positionId: "missing", verdict: "missing" }),
+      finding({ positionId: "extract", verdict: null }),
+    ];
+
+    expect(
+      findings
+        .filter(isFlaggedPlaybookFinding)
+        .map((result) => result.positionId),
+    ).toEqual(["fallback", "deviation", "missing"]);
   });
 });
 

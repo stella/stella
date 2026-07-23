@@ -317,15 +317,6 @@ const reviewPlaybook = createSafeHandler(
       usageMetering,
     });
 
-    // Only actionable verdicts are surfaced as review findings. Compliant,
-    // fallback (an accepted alternative), and extract-only (no verdict)
-    // positions are not issues, so the inspector shows "No issues found" when a
-    // document satisfies the playbook instead of rendering non-issue cards.
-    const findings = gradedFindings.filter(
-      (finding) =>
-        finding.verdict === "deviation" || finding.verdict === "missing",
-    );
-
     yield* Result.await(
       safeDb(async (tx) => {
         await recordAuditEvent(tx, {
@@ -335,7 +326,10 @@ const reviewPlaybook = createSafeHandler(
           changes: {
             review: {
               old: null,
-              new: { documentId: body.entityId, findingCount: findings.length },
+              new: {
+                documentId: body.entityId,
+                findingCount: gradedFindings.length,
+              },
             },
           },
         });
@@ -343,7 +337,11 @@ const reviewPlaybook = createSafeHandler(
       }),
     );
 
-    return Result.ok(findings);
+    // Preserve the complete review result at the API boundary. The inspector
+    // derives its risk denominator and verdict breakdown from every reviewed
+    // position, then filters the visible issue list separately. Dropping
+    // compliant or fallback verdicts here makes those totals incomplete.
+    return Result.ok(gradedFindings);
   },
 );
 
