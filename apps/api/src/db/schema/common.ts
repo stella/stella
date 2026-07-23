@@ -33,6 +33,7 @@ import {
   workspaceIdCheck,
   workspaceViewTemplatePolicies,
   wsOrganizationPolicies,
+  wsOrganizationReadOnlyPolicies,
   wsPolicies,
 } from "@/api/db/rls";
 import type {
@@ -389,6 +390,7 @@ export {
   workspaceIdCheck,
   workspaceViewTemplatePolicies,
   wsOrganizationPolicies,
+  wsOrganizationReadOnlyPolicies,
   wsPolicies,
 };
 

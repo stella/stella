@@ -42,7 +42,7 @@ type WorkflowKey = { workspaceId: string };
 type WorkflowTargetCountOptionsInput =
   QueryOptionsInput<WorkflowTargetCountKey>;
 
-const WORKFLOW_DEFAULT_STATUS = { running: false } as const;
+const WORKFLOW_STATUS_POLL_INTERVAL_MS = 2000;
 
 export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
   queryOptions({
@@ -52,13 +52,7 @@ export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
         .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
         .workflow.get({ fetch: { signal } });
 
-      if (response.error) {
-        // Workflow actor may be unavailable (cold start, timeout).
-        // Return safe default instead of crashing the page.
-        return WORKFLOW_DEFAULT_STATUS;
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });
 
@@ -119,6 +113,13 @@ export const useIsWorkflowRunning = (inputWorkspaceId?: string) => {
 
   return data ?? false;
 };
+
+export const useWorkflowStatus = (workspaceId: string) =>
+  useQuery({
+    ...workflowOptions({ key: { workspaceId } }),
+    refetchInterval: (query) =>
+      query.state.data?.running ? WORKFLOW_STATUS_POLL_INTERVAL_MS : false,
+  });
 
 type JustificationsOptionsInput = QueryOptionsInput<JustificationsKey>;
 

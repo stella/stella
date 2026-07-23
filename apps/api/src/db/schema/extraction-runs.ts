@@ -7,7 +7,7 @@ import {
   safeOrganizationId,
   safeWorkspaceId,
   user,
-  wsOrganizationPolicies,
+  wsOrganizationReadOnlyPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
 
@@ -94,6 +94,6 @@ export const extractionRuns = p.pgTable(
       "extraction_runs_completed_within_total_check",
       sql`${table.completed} <= ${table.total}`,
     ),
-    ...wsOrganizationPolicies("extraction_runs"),
+    ...wsOrganizationReadOnlyPolicies("extraction_runs"),
   ],
 );

@@ -285,6 +285,37 @@ export const wsOrganizationPolicies = (tableName: string) => [
   }),
 ];
 
+/**
+ * Tenant-scoped read access for root-owned history tables. Explicit restrictive
+ * write policies keep the rows immutable even if a future permissive policy is
+ * added accidentally.
+ */
+export const wsOrganizationReadOnlyPolicies = (tableName: string) => [
+  p.pgPolicy(`${tableName}_workspace_select`, {
+    for: "select",
+    to: stella,
+    using: workspaceOrganizationCheck,
+  }),
+  p.pgPolicy(`${tableName}_no_insert`, {
+    as: "restrictive",
+    for: "insert",
+    to: stella,
+    withCheck: sql`false`,
+  }),
+  p.pgPolicy(`${tableName}_no_update`, {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+  p.pgPolicy(`${tableName}_no_delete`, {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 export const orgPolicies = () => [
   p.pgPolicy("organization_select", {
     for: "select",

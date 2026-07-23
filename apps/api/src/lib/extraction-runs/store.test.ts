@@ -258,7 +258,7 @@ describe("extraction run store contract", () => {
     });
   });
 
-  test("requires both workspace and organization scope for app-role writes", async () => {
+  test("allows tenant-scoped reads but denies app-role history writes", async () => {
     const policyResult = await testDb.execute<{
       cmd: string;
       policyName: string;
@@ -273,26 +273,40 @@ describe("extraction run store contract", () => {
       FROM pg_catalog.pg_policies
       WHERE tablename = 'extraction_runs'
     `);
-    expect(policyResult.rows).toHaveLength(4);
-    for (const policy of policyResult.rows) {
-      const expression =
-        policy.cmd === "INSERT"
-          ? policy.withCheckExpression
-          : policy.usingExpression;
-      expect(expression).toContain("organization_id");
-      expect(expression).toContain("app.organization_id");
-      expect(expression).toContain("workspace_id");
-    }
-
     const scopedDb = asTestRaw<ScopedDb>(
       createScopedDb(testDb, [workspaceId], organizationId, userId),
     );
+    const existing = await createRun();
+    const visible = await scopedDb((tx) =>
+      tx
+        .select({ id: extractionRuns.id })
+        .from(extractionRuns)
+        .where(eq(extractionRuns.id, existing.id)),
+    );
+    expect(visible).toEqual([{ id: existing.id }]);
+
+    expect(policyResult.rows).toHaveLength(4);
+    const selectPolicy = policyResult.rows.find(
+      (policy) => policy.cmd === "SELECT",
+    );
+    expect(selectPolicy?.usingExpression).toContain("organization_id");
+    expect(selectPolicy?.usingExpression).toContain("app.organization_id");
+    expect(selectPolicy?.usingExpression).toContain("workspace_id");
+    for (const command of ["INSERT", "UPDATE", "DELETE"]) {
+      const policy = policyResult.rows.find((row) => row.cmd === command);
+      expect(
+        command === "INSERT"
+          ? policy?.withCheckExpression
+          : policy?.usingExpression,
+      ).toBe("false");
+    }
+
     const runId = createSafeId<"extractionRun">();
 
     const rejection: unknown = await scopedDb(async (tx) => {
       await tx.insert(extractionRuns).values({
         id: runId,
-        organizationId: otherOrganizationId,
+        organizationId,
         workspaceId,
         requestedBy: userId,
         scope: "workspace",

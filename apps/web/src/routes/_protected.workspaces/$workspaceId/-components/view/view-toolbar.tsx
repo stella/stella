@@ -68,6 +68,7 @@ import {
 } from "@/routes/_protected.knowledge/-queries";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
+import { ExtractionRunProgress } from "@/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress";
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
@@ -126,6 +127,8 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
 
   return (
     <div className="flex min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:ms-auto md:flex-wrap md:justify-end md:overflow-visible [&::-webkit-scrollbar]:hidden">
+      <ExtractionRunProgress workspaceId={workspaceId} />
+
       {view.layout.type === "filesystem" && folderState.hasFolders && (
         <>
           <FolderExpandToggle
