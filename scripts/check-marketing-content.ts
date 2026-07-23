@@ -149,10 +149,11 @@ export const checkMarketingContent = (rootDir: string): string[] => {
     if (
       product.hero.type === "preview" ||
       product.hero.type === "story" ||
-      // A live, in-browser run of the real engine (see AnonymizeLiveDemo) is
-      // more substantiated than a static asset, not less; nothing on disk
-      // to verify.
-      product.hero.type === "live-anonymize"
+      // A live, in-browser run of the real engine (see AnonymizeLiveDemo,
+      // EditorLiveDemo) is more substantiated than a static asset, not
+      // less; nothing on disk to verify.
+      product.hero.type === "live-anonymize" ||
+      product.hero.type === "live-editor"
     ) {
       continue;
     }

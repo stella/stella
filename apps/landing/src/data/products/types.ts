@@ -42,6 +42,19 @@ export type ProductMedia =
       type: "live-anonymize";
       alt: string;
       aspect?: string;
+    }
+  | {
+      /** Live, in-browser run of the real folio DOCX editor (EditorLiveDemo):
+       *  a sample contract opens pre-parsed (no server round-trip) and is
+       *  fully editable, including folio's own formatting toolbar and
+       *  track-changes toggle. Mounted with `client:only` (not
+       *  `client:visible`, unlike `live-anonymize`): folio's `DocxEditor`
+       *  has no SSR guard and crashes under Astro's server render for a
+       *  `document`-seeded editor; see ProductMediaFrame and
+       *  EditorLiveDemo's doc comment. */
+      type: "live-editor";
+      alt: string;
+      aspect?: string;
     };
 
 // Frame recipes for ProductMediaFrame. DORMANT: product pages now use the

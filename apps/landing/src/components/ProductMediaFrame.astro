@@ -7,6 +7,7 @@ import MacWindow from "./MacWindow.astro";
 import MediaSkeleton from "./MediaSkeleton.astro";
 import ThemeImage from "./ThemeImage.astro";
 import { AnonymizeLiveDemo } from "./react/AnonymizeLiveDemo";
+import { EditorLiveDemo } from "./react/EditorLiveDemo";
 import { ProductPreview } from "./react/previews/ProductPreview";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import { RecordedStellaScene } from "./react/product-story/RecordedStellaScene";
@@ -146,6 +147,16 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
       <div class="absolute inset-0">
         <MacWindow class="h-full" label={media.alt}>
           <AnonymizeLiveDemo client:visible />
+        </MacWindow>
+      </div>
+    )
+  }
+
+  {
+    media.type === "live-editor" && !thumbnail && (
+      <div class="absolute inset-0">
+        <MacWindow class="h-full" label={media.alt}>
+          <EditorLiveDemo client:only="react" />
         </MacWindow>
       </div>
     )

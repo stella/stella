@@ -3,15 +3,15 @@ import { frameAccents, type Product } from "./types";
 export const editor: Product = {
   slug: "editor",
   eyebrow: "Editor",
-  title: "Edit Word documents without leaving the matter.",
+  title: "Edit Word documents in the browser, without leaving the matter.",
   summary:
-    "Open and edit Word .docx files directly in stella. The browser editor preserves the document format and its track changes, keeps the file connected to its matter, and saves each revision into the document's version history.",
-  metaTitle: "Legal DOCX editor in the browser | stella",
+    "Open and edit Word .docx files right in your browser: no install, no converting to another format. stella's online DOCX editor preserves the original formatting and track changes, keeps the file connected to its matter, and saves each revision into the document's version history.",
+  metaTitle: "Online DOCX Editor with Track Changes | stella",
   metaDescription:
-    "Open and edit Word .docx files in the browser. The editor preserves the format, renders track changes, keeps the file in its matter, and versions each save.",
+    "Edit Word .docx documents in the browser: no install, no format conversion. stella's online DOCX editor preserves formatting and track changes, in the matter.",
   hero: {
-    type: "story",
-    sceneId: "editor",
+    type: "live-editor",
+    alt: "stella · Editor — live demo",
     aspect: "16 / 10",
   },
   // Frame rhythm down the page: bloom, ripple, bloom.
@@ -24,20 +24,24 @@ export const editor: Product = {
   },
   capabilities: [
     {
-      title: "Native .docx editing",
-      body: "Work on Word documents in the browser instead of converting them into a separate proprietary format.",
+      title: "Edit .docx files in the browser",
+      body: "Open and edit Word documents directly in stella's online editor: no install, and no converting the file into a separate proprietary format.",
+    },
+    {
+      title: "Formatting stays intact",
+      body: "The document stays a .docx throughout, so fonts, styles, and layout render and save the way Word created them.",
     },
     {
       title: "Track changes",
       body: "Tracked insertions and deletions render in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
     },
     {
-      title: "Matter context stays visible",
-      body: "The document remains attached to its matter, alongside its files, properties, tasks, and conversations.",
+      title: "Version history for every save",
+      body: "Saved edits become document revisions, so the current file and its full history stay together.",
     },
     {
-      title: "Versioned saves",
-      body: "Saved edits become document revisions, so the current file and its history stay together.",
+      title: "Matter context stays visible",
+      body: "The document remains attached to its matter, alongside its files, properties, tasks, and conversations.",
     },
     {
       title: "Local Office bridge",
@@ -80,19 +84,29 @@ export const editor: Product = {
   ],
   faqs: [
     {
+      question: "Can I edit Word documents in the browser?",
+      answer:
+        "Yes. Open a .docx file from a matter and edit it directly in stella, in the browser: no download, no separate desktop app required.",
+    },
+    {
+      question: "Is my formatting preserved?",
+      answer:
+        "Yes. The document stays a .docx throughout, so fonts, styles, and page layout render and save the way Word created them.",
+    },
+    {
       question: "Does stella convert the document to another format?",
       answer:
         "No. The browser editor works with the .docx document and saves the result back as a Word file.",
     },
     {
-      question: "Does the editor support track changes?",
+      question: "Does the editor keep track changes?",
       answer:
         "Yes. Tracked insertions and deletions render in place, the way Word shows them. When stella's AI proposes edits, they arrive as tracked changes you accept or reject before they become part of the document.",
     },
     {
-      question: "Can I still edit in Microsoft Word?",
+      question: "Do I need Microsoft Word?",
       answer:
-        "Yes. The stella desktop bridge supports local Office editing when you need Word-specific workflows.",
+        "No. The browser editor handles .docx files directly, so Microsoft Word is not required. The stella desktop bridge is still there for local Office editing when you need Word-specific workflows.",
     },
     {
       question: "What happens when I save?",
