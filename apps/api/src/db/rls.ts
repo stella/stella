@@ -252,6 +252,39 @@ export const wsPolicies = () => [
   }),
 ];
 
+const workspaceOrganizationCheck = sql`(
+  ${workspaceCheck} AND ${organizationCheck}
+)`;
+
+/**
+ * Workspace policies for tables that also persist an organization
+ * discriminator. Requiring both scopes in every command prevents a valid
+ * workspace pin from authorizing a row whose organization_id was corrupted or
+ * supplied from another tenant.
+ */
+export const wsOrganizationPolicies = (tableName: string) => [
+  p.pgPolicy(`${tableName}_workspace_select`, {
+    for: "select",
+    to: stella,
+    using: workspaceOrganizationCheck,
+  }),
+  p.pgPolicy(`${tableName}_workspace_insert`, {
+    for: "insert",
+    to: stella,
+    withCheck: workspaceOrganizationCheck,
+  }),
+  p.pgPolicy(`${tableName}_workspace_update`, {
+    for: "update",
+    to: stella,
+    using: workspaceOrganizationCheck,
+  }),
+  p.pgPolicy(`${tableName}_workspace_delete`, {
+    for: "delete",
+    to: stella,
+    using: workspaceOrganizationCheck,
+  }),
+];
+
 export const orgPolicies = () => [
   p.pgPolicy("organization_select", {
     for: "select",

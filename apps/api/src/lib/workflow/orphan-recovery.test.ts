@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   isCurrentWorkflowRequestState,
   parseRunningLockWorkspaceId,
+  selectExpiredStaleRunWorkspaceIds,
   selectOrphanWorkspaceIds,
   selectRecoverableOrphanWorkspaceIds,
   selectRunningLockReservation,
@@ -10,6 +11,26 @@ import {
 
 const LEGACY_RUNNING_LOCK_VALUE = "1";
 const RECOVERY_LOCK_VALUE = "recovery";
+
+describe("selectExpiredStaleRunWorkspaceIds", () => {
+  test("uses stale rows only after both Redis run-state keys expire", () => {
+    expect(
+      selectExpiredStaleRunWorkspaceIds({
+        currentRequestIds: new Map([
+          ["expired", null],
+          ["planning", "request-planning"],
+          ["partial-expiry", "request-partial"],
+        ]),
+        currentRunningValues: new Map([
+          ["expired", null],
+          ["planning", "request-planning"],
+          ["partial-expiry", null],
+        ]),
+        staleWorkspaceIds: ["expired", "planning", "partial-expiry", "expired"],
+      }),
+    ).toEqual(["expired"]);
+  });
+});
 
 describe("parseRunningLockWorkspaceId", () => {
   test("extracts the workspace id from a running-lock key", () => {

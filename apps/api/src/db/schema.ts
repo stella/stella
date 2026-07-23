@@ -10,6 +10,7 @@ export * from "./schema/case-law";
 export * from "./schema/legislation";
 export * from "./schema/chat";
 export * from "./schema/docx-suggestions";
+export * from "./schema/extraction-runs";
 export * from "./schema/flows";
 export * from "./schema/mcp";
 export * from "./schema/files-views";

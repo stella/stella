@@ -44,6 +44,7 @@ export type SafeIdType =
   | "entityVersionAiSummary"
   | "entityVersion"
   | "expense"
+  | "extractionRun"
   | "field"
   | "flowDefinition"
   | "flowRun"
