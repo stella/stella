@@ -280,7 +280,7 @@
       "version": "0.1.5"
     },
     {
-      "bom-ref": "pkg:cargo/anyhow@1.0.103",
+      "bom-ref": "pkg:cargo/anyhow@1.0.104",
       "evidence": {
         "identity": [
           {
@@ -301,7 +301,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
+          "content": "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
         }
       ],
       "licenses": [
@@ -323,9 +323,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/anyhow@1.0.103",
+      "purl": "pkg:cargo/anyhow@1.0.104",
       "type": "library",
-      "version": "1.0.103"
+      "version": "1.0.104"
     },
     {
       "bom-ref": "pkg:cargo/apple-native-keyring-store@1.0.1",
@@ -907,7 +907,7 @@
       "version": "4.7.1"
     },
     {
-      "bom-ref": "pkg:cargo/async-trait@0.1.89",
+      "bom-ref": "pkg:cargo/async-trait@0.1.91",
       "evidence": {
         "identity": [
           {
@@ -928,7 +928,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
+          "content": "ae36dc4177970ef04fde5178d3e2429882def40e57a451f919c098f72baa6cec"
         }
       ],
       "licenses": [
@@ -950,9 +950,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/async-trait@0.1.89",
+      "purl": "pkg:cargo/async-trait@0.1.91",
       "type": "library",
-      "version": "0.1.89"
+      "version": "0.1.91"
     },
     {
       "bom-ref": "pkg:cargo/atk@0.18.2",
@@ -2089,7 +2089,7 @@
       "version": "3.20.3"
     },
     {
-      "bom-ref": "pkg:cargo/bytemuck@1.25.1",
+      "bom-ref": "pkg:cargo/bytemuck@1.25.2",
       "evidence": {
         "identity": [
           {
@@ -2110,7 +2110,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d6aedf8ae72766347502cf3cb4f41cf5e9cc37d28bee90f1fdaaae15f9cf9424"
+          "content": "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
         }
       ],
       "licenses": [
@@ -2137,9 +2137,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/bytemuck@1.25.1",
+      "purl": "pkg:cargo/bytemuck@1.25.2",
       "type": "library",
-      "version": "1.25.1"
+      "version": "1.25.2"
     },
     {
       "bom-ref": "pkg:cargo/byteorder@1.5.0",
@@ -6094,7 +6094,7 @@
       "version": "0.5.4"
     },
     {
-      "bom-ref": "pkg:cargo/fastrand@2.4.1",
+      "bom-ref": "pkg:cargo/fastrand@2.5.0",
       "evidence": {
         "identity": [
           {
@@ -6115,7 +6115,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
+          "content": "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
         }
       ],
       "licenses": [
@@ -6137,9 +6137,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/fastrand@2.4.1",
+      "purl": "pkg:cargo/fastrand@2.5.0",
       "type": "library",
-      "version": "2.4.1"
+      "version": "2.5.0"
     },
     {
       "bom-ref": "pkg:cargo/fax@0.2.7",
@@ -8038,7 +8038,7 @@
       "version": "0.18.1"
     },
     {
-      "bom-ref": "pkg:cargo/glob@0.3.3",
+      "bom-ref": "pkg:cargo/glob@0.3.4",
       "evidence": {
         "identity": [
           {
@@ -8059,7 +8059,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
+          "content": "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
         }
       ],
       "licenses": [
@@ -8081,9 +8081,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/glob@0.3.3",
+      "purl": "pkg:cargo/glob@0.3.4",
       "type": "library",
-      "version": "0.3.3"
+      "version": "0.3.4"
     },
     {
       "bom-ref": "pkg:cargo/gobject-sys@0.18.0",
@@ -9155,7 +9155,7 @@
       "version": "0.4.13"
     },
     {
-      "bom-ref": "pkg:cargo/hyper@1.10.1",
+      "bom-ref": "pkg:cargo/hyper@1.11.0",
       "evidence": {
         "identity": [
           {
@@ -9176,7 +9176,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "55281c53a1894c864990125767da440a4e630446785086f52523b20033b74498"
+          "content": "d22053281f852e11534f5198498373cbb59295120a20771d90f7ed1897490a72"
         }
       ],
       "licenses": [
@@ -9193,9 +9193,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/hyper@1.10.1",
+      "purl": "pkg:cargo/hyper@1.11.0",
       "type": "library",
-      "version": "1.10.1"
+      "version": "1.11.0"
     },
     {
       "bom-ref": "pkg:cargo/hyper-rustls@0.27.9",
@@ -11258,7 +11258,7 @@
       "version": "0.9.0"
     },
     {
-      "bom-ref": "pkg:cargo/libc@0.2.186",
+      "bom-ref": "pkg:cargo/libc@0.2.189",
       "evidence": {
         "identity": [
           {
@@ -11279,7 +11279,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
+          "content": "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
         }
       ],
       "licenses": [
@@ -11301,9 +11301,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/libc@0.2.186",
+      "purl": "pkg:cargo/libc@0.2.189",
       "type": "library",
-      "version": "0.2.186"
+      "version": "0.2.189"
     },
     {
       "bom-ref": "pkg:cargo/libdbus-sys@0.2.7",
@@ -15783,7 +15783,7 @@
       "version": "1.0.4"
     },
     {
-      "bom-ref": "pkg:cargo/proc-macro2@1.0.106",
+      "bom-ref": "pkg:cargo/proc-macro2@1.0.107",
       "evidence": {
         "identity": [
           {
@@ -15804,7 +15804,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
+          "content": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
         }
       ],
       "licenses": [
@@ -15826,9 +15826,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/proc-macro2@1.0.106",
+      "purl": "pkg:cargo/proc-macro2@1.0.107",
       "type": "library",
-      "version": "1.0.106"
+      "version": "1.0.107"
     },
     {
       "bom-ref": "pkg:cargo/pxfm@0.1.30",
@@ -16152,7 +16152,7 @@
       "version": "0.5.15"
     },
     {
-      "bom-ref": "pkg:cargo/quote@1.0.46",
+      "bom-ref": "pkg:cargo/quote@1.0.47",
       "evidence": {
         "identity": [
           {
@@ -16173,7 +16173,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "dfbc457d0c7a0759a614551b11a6409e5951f6c7537be1f1b7682b9ae9230368"
+          "content": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
         }
       ],
       "licenses": [
@@ -16195,9 +16195,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/quote@1.0.46",
+      "purl": "pkg:cargo/quote@1.0.47",
       "type": "library",
-      "version": "1.0.46"
+      "version": "1.0.47"
     },
     {
       "bom-ref": "pkg:cargo/r-efi@5.3.0",
@@ -16776,7 +16776,7 @@
       "version": "0.5.2"
     },
     {
-      "bom-ref": "pkg:cargo/ref-cast@1.0.25",
+      "bom-ref": "pkg:cargo/ref-cast@1.0.26",
       "evidence": {
         "identity": [
           {
@@ -16797,7 +16797,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "f354300ae66f76f1c85c5f84693f0ce81d747e2c3f21a45fef496d89c960bf7d"
+          "content": "216e8f773d7923bcba9ceb86a86c93cabb3903a11872fc3f138c49630e50b96d"
         }
       ],
       "licenses": [
@@ -16819,12 +16819,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/ref-cast@1.0.25",
+      "purl": "pkg:cargo/ref-cast@1.0.26",
       "type": "library",
-      "version": "1.0.25"
+      "version": "1.0.26"
     },
     {
-      "bom-ref": "pkg:cargo/ref-cast-impl@1.0.25",
+      "bom-ref": "pkg:cargo/ref-cast-impl@1.0.26",
       "evidence": {
         "identity": [
           {
@@ -16845,7 +16845,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b7186006dcb21920990093f30e3dea63b7d6e977bf1256be20c3563a5db070da"
+          "content": "2c9283685feec7d69af75fb0e858d5e7378f33fe4fc699383b2916ab9273e03c"
         }
       ],
       "licenses": [
@@ -16867,9 +16867,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/ref-cast-impl@1.0.25",
+      "purl": "pkg:cargo/ref-cast-impl@1.0.26",
       "type": "library",
-      "version": "1.0.25"
+      "version": "1.0.26"
     },
     {
       "bom-ref": "pkg:cargo/regex@1.13.1",
@@ -18218,7 +18218,7 @@
       "version": "1.0.28"
     },
     {
-      "bom-ref": "pkg:cargo/serde@1.0.228",
+      "bom-ref": "pkg:cargo/serde@1.0.229",
       "evidence": {
         "identity": [
           {
@@ -18239,7 +18239,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
+          "content": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
         }
       ],
       "licenses": [
@@ -18261,9 +18261,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/serde@1.0.228",
+      "purl": "pkg:cargo/serde@1.0.229",
       "type": "library",
-      "version": "1.0.228"
+      "version": "1.0.229"
     },
     {
       "bom-ref": "pkg:cargo/serde-untagged@0.1.9",
@@ -18314,7 +18314,7 @@
       "version": "0.1.9"
     },
     {
-      "bom-ref": "pkg:cargo/serde_core@1.0.228",
+      "bom-ref": "pkg:cargo/serde_core@1.0.229",
       "evidence": {
         "identity": [
           {
@@ -18335,7 +18335,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
+          "content": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48"
         }
       ],
       "licenses": [
@@ -18357,12 +18357,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/serde_core@1.0.228",
+      "purl": "pkg:cargo/serde_core@1.0.229",
       "type": "library",
-      "version": "1.0.228"
+      "version": "1.0.229"
     },
     {
-      "bom-ref": "pkg:cargo/serde_derive@1.0.228",
+      "bom-ref": "pkg:cargo/serde_derive@1.0.229",
       "evidence": {
         "identity": [
           {
@@ -18383,7 +18383,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
+          "content": "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
         }
       ],
       "licenses": [
@@ -18405,9 +18405,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/serde_derive@1.0.228",
+      "purl": "pkg:cargo/serde_derive@1.0.229",
       "type": "library",
-      "version": "1.0.228"
+      "version": "1.0.229"
     },
     {
       "bom-ref": "pkg:cargo/serde_derive_internals@0.29.1",
@@ -18458,7 +18458,7 @@
       "version": "0.29.1"
     },
     {
-      "bom-ref": "pkg:cargo/serde_json@1.0.150",
+      "bom-ref": "pkg:cargo/serde_json@1.0.151",
       "evidence": {
         "identity": [
           {
@@ -18479,7 +18479,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
+          "content": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
         }
       ],
       "licenses": [
@@ -18501,9 +18501,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/serde_json@1.0.150",
+      "purl": "pkg:cargo/serde_json@1.0.151",
       "type": "library",
-      "version": "1.0.150"
+      "version": "1.0.151"
     },
     {
       "bom-ref": "pkg:cargo/serde_path_to_error@0.1.20",
@@ -18554,7 +18554,7 @@
       "version": "0.1.20"
     },
     {
-      "bom-ref": "pkg:cargo/serde_repr@0.1.20",
+      "bom-ref": "pkg:cargo/serde_repr@0.1.21",
       "evidence": {
         "identity": [
           {
@@ -18575,7 +18575,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "175ee3e80ae9982737ca543e96133087cbd9a485eecc3bc4de9c1a37b47ea59c"
+          "content": "8d3b1629de253c70a0508c3899572da79ca359fdab27c7920ff00406df418906"
         }
       ],
       "licenses": [
@@ -18597,9 +18597,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/serde_repr@0.1.20",
+      "purl": "pkg:cargo/serde_repr@0.1.21",
       "type": "library",
-      "version": "0.1.20"
+      "version": "0.1.21"
     },
     {
       "bom-ref": "pkg:cargo/serde_spanned@0.6.9",
@@ -20075,6 +20075,54 @@
       "version": "2.0.119"
     },
     {
+      "bom-ref": "pkg:cargo/syn@3.0.3",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "Cargo.lock",
+            "confidence": 0.6,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.6,
+                "technique": "manifest-analysis",
+                "value": "Cargo.lock"
+              }
+            ]
+          }
+        ]
+      },
+      "group": "",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        },
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "name": "syn",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "Cargo.lock"
+        }
+      ],
+      "purl": "pkg:cargo/syn@3.0.3",
+      "type": "library",
+      "version": "3.0.3"
+    },
+    {
       "bom-ref": "pkg:cargo/sync_wrapper@1.0.2",
       "evidence": {
         "identity": [
@@ -21536,7 +21584,7 @@
       "version": "1.0.69"
     },
     {
-      "bom-ref": "pkg:cargo/thiserror@2.0.18",
+      "bom-ref": "pkg:cargo/thiserror@2.0.19",
       "evidence": {
         "identity": [
           {
@@ -21557,7 +21605,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
+          "content": "09a43598840e33d5b0331f38c5e30d13bb11c11210a4b58f0d9b18a5a5eefcd9"
         }
       ],
       "licenses": [
@@ -21579,9 +21627,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/thiserror@2.0.18",
+      "purl": "pkg:cargo/thiserror@2.0.19",
       "type": "library",
-      "version": "2.0.18"
+      "version": "2.0.19"
     },
     {
       "bom-ref": "pkg:cargo/thiserror-impl@1.0.69",
@@ -21632,7 +21680,7 @@
       "version": "1.0.69"
     },
     {
-      "bom-ref": "pkg:cargo/thiserror-impl@2.0.18",
+      "bom-ref": "pkg:cargo/thiserror-impl@2.0.19",
       "evidence": {
         "identity": [
           {
@@ -21653,7 +21701,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
+          "content": "43cbfe0cf76104d42a574802844187e84a305e531ed54455f11fbde0f10541cd"
         }
       ],
       "licenses": [
@@ -21675,9 +21723,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/thiserror-impl@2.0.18",
+      "purl": "pkg:cargo/thiserror-impl@2.0.19",
       "type": "library",
-      "version": "2.0.18"
+      "version": "2.0.19"
     },
     {
       "bom-ref": "pkg:cargo/thread_local@1.1.10",
@@ -21771,7 +21819,7 @@
       "version": "0.11.3"
     },
     {
-      "bom-ref": "pkg:cargo/time@0.3.53",
+      "bom-ref": "pkg:cargo/time@0.3.54",
       "evidence": {
         "identity": [
           {
@@ -21792,7 +21840,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "18dfaaeddcb932337b5e7866ee7d0ce9b76d2fd092997146f187ec09b4558a50"
+          "content": "3e1d5e639ff6bab73cb6885cc7e7b1de96c3f32c68ec55f3952614bec1092244"
         }
       ],
       "licenses": [
@@ -21814,9 +21862,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/time@0.3.53",
+      "purl": "pkg:cargo/time@0.3.54",
       "type": "library",
-      "version": "0.3.53"
+      "version": "0.3.54"
     },
     {
       "bom-ref": "pkg:cargo/time-core@0.1.9",
@@ -21867,7 +21915,7 @@
       "version": "0.1.9"
     },
     {
-      "bom-ref": "pkg:cargo/time-macros@0.2.31",
+      "bom-ref": "pkg:cargo/time-macros@0.2.32",
       "evidence": {
         "identity": [
           {
@@ -21888,7 +21936,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "c431b87111666e491a90baa837f914fb45cd5dc3c268591b0220ff5057f2085f"
+          "content": "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
         }
       ],
       "licenses": [
@@ -21910,9 +21958,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/time-macros@0.2.31",
+      "purl": "pkg:cargo/time-macros@0.2.32",
       "type": "library",
-      "version": "0.2.31"
+      "version": "0.2.32"
     },
     {
       "bom-ref": "pkg:cargo/tiny-keccak@2.0.2",
@@ -22107,7 +22155,7 @@
       "version": "0.1.1"
     },
     {
-      "bom-ref": "pkg:cargo/tokio@1.53.0",
+      "bom-ref": "pkg:cargo/tokio@1.53.1",
       "evidence": {
         "identity": [
           {
@@ -22128,7 +22176,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "d988bcd52dbe076d3d46903332f58c912b87a2c49b1428419a5845154762ffee"
+          "content": "202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed"
         }
       ],
       "licenses": [
@@ -22145,9 +22193,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tokio@1.53.0",
+      "purl": "pkg:cargo/tokio@1.53.1",
       "type": "library",
-      "version": "1.53.0"
+      "version": "1.53.1"
     },
     {
       "bom-ref": "pkg:cargo/tokio-macros@2.7.1",
@@ -22241,7 +22289,7 @@
       "version": "0.26.4"
     },
     {
-      "bom-ref": "pkg:cargo/tokio-util@0.7.18",
+      "bom-ref": "pkg:cargo/tokio-util@0.7.19",
       "evidence": {
         "identity": [
           {
@@ -22262,7 +22310,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "9ae9cec805b01e8fc3fd2fe289f89149a9b66dd16786abd8b19cfa7b48cb0098"
+          "content": "494815d09bf52b5548659851081238f0ca39ff638363907596da739561c62c52"
         }
       ],
       "licenses": [
@@ -22279,9 +22327,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/tokio-util@0.7.18",
+      "purl": "pkg:cargo/tokio-util@0.7.19",
       "type": "library",
-      "version": "0.7.18"
+      "version": "0.7.19"
     },
     {
       "bom-ref": "pkg:cargo/toml@0.8.2",
@@ -28901,7 +28949,7 @@
       "version": "4.3.4"
     },
     {
-      "bom-ref": "pkg:cargo/zerocopy@0.8.54",
+      "bom-ref": "pkg:cargo/zerocopy@0.8.55",
       "evidence": {
         "identity": [
           {
@@ -28922,7 +28970,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b7cbbc0a705a0fd05cc3676525980d2bf5a9bc4adac6d6475209a7887cf59d19"
+          "content": "b5a105cd7b140f6eeec8acff2ea38135d3cab283ada58540f629fe51e46696eb"
         }
       ],
       "licenses": [
@@ -28949,12 +28997,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/zerocopy@0.8.54",
+      "purl": "pkg:cargo/zerocopy@0.8.55",
       "type": "library",
-      "version": "0.8.54"
+      "version": "0.8.55"
     },
     {
-      "bom-ref": "pkg:cargo/zerocopy-derive@0.8.54",
+      "bom-ref": "pkg:cargo/zerocopy-derive@0.8.55",
       "evidence": {
         "identity": [
           {
@@ -28975,7 +29023,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "e2e817b7b52d0c7358d3246da9d69935ebb18116b2b102b4230dac079b4862f5"
+          "content": "0fe976fb70c78cd64cccfe3a6fc142244e8a77b70959b30faf9d0ac37ee228eb"
         }
       ],
       "licenses": [
@@ -29002,9 +29050,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/zerocopy-derive@0.8.54",
+      "purl": "pkg:cargo/zerocopy-derive@0.8.55",
       "type": "library",
-      "version": "0.8.54"
+      "version": "0.8.55"
     },
     {
       "bom-ref": "pkg:cargo/zerofrom@0.1.8",
@@ -29665,13 +29713,13 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/android_system_properties@0.1.5"
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/anyhow@1.0.103"
+      "ref": "pkg:cargo/anyhow@1.0.104"
     },
     {
       "dependsOn": [
@@ -29699,7 +29747,7 @@
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/parking_lot@0.12.5",
         "pkg:cargo/percent-encoding@2.3.2",
-        "pkg:cargo/windows-sys@0.60.2",
+        "pkg:cargo/windows-sys@0.52.0",
         "pkg:cargo/wl-clipboard-rs@0.9.3",
         "pkg:cargo/x11rb@0.13.2"
       ],
@@ -29727,7 +29775,7 @@
       "dependsOn": [
         "pkg:cargo/async-task@4.7.1",
         "pkg:cargo/concurrent-queue@2.5.0",
-        "pkg:cargo/fastrand@2.4.1",
+        "pkg:cargo/fastrand@2.5.0",
         "pkg:cargo/futures-lite@2.6.1",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/slab@0.4.12"
@@ -29774,8 +29822,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/async-recursion@1.1.1"
@@ -29801,17 +29849,17 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
-        "pkg:cargo/syn@2.0.119"
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
+        "pkg:cargo/syn@3.0.3"
       ],
-      "ref": "pkg:cargo/async-trait@0.1.89"
+      "ref": "pkg:cargo/async-trait@0.1.91"
     },
     {
       "dependsOn": [
         "pkg:cargo/atk-sys@0.18.2",
         "pkg:cargo/glib@0.18.5",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/atk@0.18.2"
     },
@@ -29819,7 +29867,7 @@
       "dependsOn": [
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2"
       ],
       "ref": "pkg:cargo/atk-sys@0.18.2"
@@ -29867,19 +29915,19 @@
         "pkg:cargo/http-body@1.1.0",
         "pkg:cargo/http@1.4.2",
         "pkg:cargo/hyper-util@0.1.20",
-        "pkg:cargo/hyper@1.10.1",
+        "pkg:cargo/hyper@1.11.0",
         "pkg:cargo/itoa@1.0.18",
         "pkg:cargo/matchit@0.8.4",
         "pkg:cargo/memchr@2.8.3",
         "pkg:cargo/mime@0.3.17",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/pin-project-lite@0.2.17",
-        "pkg:cargo/serde_core@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde_core@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/serde_path_to_error@0.1.20",
         "pkg:cargo/serde_urlencoded@0.7.1",
         "pkg:cargo/sync_wrapper@1.0.2",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
@@ -29919,7 +29967,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde_core@1.0.228"
+        "pkg:cargo/serde_core@1.0.229"
       ],
       "ref": "pkg:cargo/bitflags@2.13.1"
     },
@@ -29976,7 +30024,7 @@
       "dependsOn": [
         "pkg:cargo/memchr@2.8.3",
         "pkg:cargo/regex-automata@0.4.16",
-        "pkg:cargo/serde_core@1.0.228"
+        "pkg:cargo/serde_core@1.0.229"
       ],
       "ref": "pkg:cargo/bstr@1.13.0"
     },
@@ -29986,7 +30034,7 @@
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/bytemuck@1.25.1"
+      "ref": "pkg:cargo/bytemuck@1.25.2"
     },
     {
       "dependsOn": [],
@@ -29998,7 +30046,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228"
+        "pkg:cargo/serde@1.0.229"
       ],
       "ref": "pkg:cargo/bytes@1.12.1"
     },
@@ -30007,7 +30055,7 @@
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/cairo-sys-rs@0.18.2",
         "pkg:cargo/glib@0.18.5",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/thiserror@1.0.69"
       ],
@@ -30016,20 +30064,20 @@
     {
       "dependsOn": [
         "pkg:cargo/glib-sys@0.18.1",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2"
       ],
       "ref": "pkg:cargo/cairo-sys-rs@0.18.2"
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde_core@1.0.228"
+        "pkg:cargo/serde_core@1.0.229"
       ],
       "ref": "pkg:cargo/camino@1.2.4"
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228"
+        "pkg:cargo/serde@1.0.229"
       ],
       "ref": "pkg:cargo/cargo-platform@0.1.9"
     },
@@ -30038,15 +30086,15 @@
         "pkg:cargo/camino@1.2.4",
         "pkg:cargo/cargo-platform@0.1.9",
         "pkg:cargo/semver@1.0.28",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
-        "pkg:cargo/thiserror@2.0.18"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
+        "pkg:cargo/thiserror@2.0.19"
       ],
       "ref": "pkg:cargo/cargo_metadata@0.19.2"
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde@1.0.229",
         "pkg:cargo/toml@0.9.12+spec-1.1.0"
       ],
       "ref": "pkg:cargo/cargo_toml@0.22.3"
@@ -30061,7 +30109,7 @@
       "dependsOn": [
         "pkg:cargo/find-msvc-tools@0.1.9",
         "pkg:cargo/jobserver@0.1.35",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/shlex@2.0.1"
       ],
       "ref": "pkg:cargo/cc@1.3.0"
@@ -30106,7 +30154,7 @@
         "pkg:cargo/iana-time-zone@0.1.65",
         "pkg:cargo/js-sys@0.3.103",
         "pkg:cargo/num-traits@0.2.19",
-        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde@1.0.229",
         "pkg:cargo/wasm-bindgen@0.2.126",
         "pkg:cargo/windows-link@0.2.1"
       ],
@@ -30164,7 +30212,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/time@0.3.53",
+        "pkg:cargo/time@0.3.54",
         "pkg:cargo/version_check@0.9.5"
       ],
       "ref": "pkg:cargo/cookie@0.18.1"
@@ -30172,7 +30220,7 @@
     {
       "dependsOn": [
         "pkg:cargo/core-foundation-sys@0.8.7",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/core-foundation@0.10.1"
     },
@@ -30186,7 +30234,7 @@
         "pkg:cargo/core-foundation@0.10.1",
         "pkg:cargo/core-graphics-types@0.2.0",
         "pkg:cargo/foreign-types@0.5.0",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/core-graphics@0.25.0"
     },
@@ -30194,13 +30242,13 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/core-foundation@0.10.1",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/core-graphics-types@0.2.0"
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/cpufeatures@0.3.0"
     },
@@ -30242,7 +30290,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/cssparser-macros@0.6.1"
@@ -30268,8 +30316,8 @@
     {
       "dependsOn": [
         "pkg:cargo/ident_case@1.0.1",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/strsim@0.11.1",
         "pkg:cargo/syn@2.0.119"
       ],
@@ -30278,7 +30326,7 @@
     {
       "dependsOn": [
         "pkg:cargo/darling_core@0.23.0",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/darling_macro@0.23.0"
@@ -30289,7 +30337,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/libdbus-sys@0.2.7",
         "pkg:cargo/windows-sys@0.61.2"
       ],
@@ -30297,14 +30345,14 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde_core@1.0.228"
+        "pkg:cargo/serde_core@1.0.229"
       ],
       "ref": "pkg:cargo/deranged@0.5.8"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/derive_arbitrary@1.4.2"
@@ -30317,8 +30365,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/rustc_version@0.4.1",
         "pkg:cargo/syn@2.0.119"
       ],
@@ -30340,10 +30388,10 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/option-ext@0.2.0",
         "pkg:cargo/redox_users@0.5.2",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.60.2"
       ],
       "ref": "pkg:cargo/dirs-sys@0.5.0"
     },
@@ -30351,15 +30399,15 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/block2@0.6.2",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/objc2@0.6.4"
       ],
       "ref": "pkg:cargo/dispatch2@0.3.1"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/displaydoc@0.2.6"
@@ -30367,7 +30415,7 @@
     {
       "dependsOn": [
         "pkg:cargo/dlopen2_derive@0.4.3",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/winapi@0.3.9"
       ],
@@ -30375,8 +30423,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/dlopen2_derive@0.4.3"
@@ -30405,7 +30453,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228"
+        "pkg:cargo/serde@1.0.229"
       ],
       "ref": "pkg:cargo/dpi@0.1.2"
     },
@@ -30465,14 +30513,14 @@
     {
       "dependsOn": [
         "pkg:cargo/enumflags2_derive@0.7.12",
-        "pkg:cargo/serde@1.0.228"
+        "pkg:cargo/serde@1.0.229"
       ],
       "ref": "pkg:cargo/enumflags2@0.7.12"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/enumflags2_derive@0.7.12"
@@ -30483,16 +30531,16 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/typeid@1.0.3"
       ],
       "ref": "pkg:cargo/erased-serde@0.4.10"
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/libc@0.2.189",
+        "pkg:cargo/windows-sys@0.52.0"
       ],
       "ref": "pkg:cargo/errno@0.3.14"
     },
@@ -30517,7 +30565,7 @@
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/fastrand@2.4.1"
+      "ref": "pkg:cargo/fastrand@2.5.0"
     },
     {
       "dependsOn": [],
@@ -30539,7 +30587,7 @@
     {
       "dependsOn": [
         "pkg:cargo/cfg-if@1.0.4",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/filetime@0.2.29"
     },
@@ -30575,8 +30623,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/foreign-types-macros@0.2.3"
@@ -30597,7 +30645,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/fsevent-sys@4.1.0"
     },
@@ -30625,7 +30673,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/fastrand@2.4.1",
+        "pkg:cargo/fastrand@2.5.0",
         "pkg:cargo/futures-core@0.3.33",
         "pkg:cargo/futures-io@0.3.33",
         "pkg:cargo/parking@2.2.1",
@@ -30635,8 +30683,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/futures-macro@0.3.33"
@@ -30669,7 +30717,7 @@
         "pkg:cargo/gdk-sys@0.18.2",
         "pkg:cargo/gio@0.18.4",
         "pkg:cargo/glib@0.18.5",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/pango@0.18.3"
       ],
       "ref": "pkg:cargo/gdk@0.18.2"
@@ -30679,7 +30727,7 @@
         "pkg:cargo/gdk-pixbuf-sys@0.18.0",
         "pkg:cargo/gio@0.18.4",
         "pkg:cargo/glib@0.18.5",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/once_cell@1.21.4"
       ],
       "ref": "pkg:cargo/gdk-pixbuf@0.18.5"
@@ -30689,7 +30737,7 @@
         "pkg:cargo/gio-sys@0.18.1",
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2"
       ],
       "ref": "pkg:cargo/gdk-pixbuf-sys@0.18.0"
@@ -30701,7 +30749,7 @@
         "pkg:cargo/gio-sys@0.18.1",
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/pango-sys@0.18.0",
         "pkg:cargo/pkg-config@0.3.33",
         "pkg:cargo/system-deps@6.2.2"
@@ -30713,7 +30761,7 @@
         "pkg:cargo/gdk-sys@0.18.2",
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/pkg-config@0.3.33",
         "pkg:cargo/system-deps@6.2.2"
       ],
@@ -30725,7 +30773,7 @@
         "pkg:cargo/gdkx11-sys@0.18.2",
         "pkg:cargo/gio@0.18.4",
         "pkg:cargo/glib@0.18.5",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/x11@2.21.0"
       ],
       "ref": "pkg:cargo/gdkx11@0.18.2"
@@ -30734,7 +30782,7 @@
       "dependsOn": [
         "pkg:cargo/gdk-sys@0.18.2",
         "pkg:cargo/glib-sys@0.18.1",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2",
         "pkg:cargo/x11@2.21.0"
       ],
@@ -30758,7 +30806,7 @@
       "dependsOn": [
         "pkg:cargo/cfg-if@1.0.4",
         "pkg:cargo/js-sys@0.3.103",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/r-efi@6.0.0",
         "pkg:cargo/rand_core@0.10.1",
         "pkg:cargo/wasm-bindgen@0.2.126"
@@ -30773,7 +30821,7 @@
         "pkg:cargo/futures-util@0.3.33",
         "pkg:cargo/gio-sys@0.18.1",
         "pkg:cargo/glib@0.18.5",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/smallvec@1.15.2",
@@ -30785,7 +30833,7 @@
       "dependsOn": [
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2",
         "pkg:cargo/winapi@0.3.9"
       ],
@@ -30803,7 +30851,7 @@
         "pkg:cargo/glib-macros@0.18.5",
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/memchr@2.8.3",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/smallvec@1.15.2",
@@ -30816,27 +30864,27 @@
         "pkg:cargo/heck@0.4.1",
         "pkg:cargo/proc-macro-crate@2.0.2",
         "pkg:cargo/proc-macro-error@1.0.4",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/glib-macros@0.18.5"
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2"
       ],
       "ref": "pkg:cargo/glib-sys@0.18.1"
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/glob@0.3.3"
+      "ref": "pkg:cargo/glob@0.3.4"
     },
     {
       "dependsOn": [
         "pkg:cargo/glib-sys@0.18.1",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2"
       ],
       "ref": "pkg:cargo/gobject-sys@0.18.0"
@@ -30853,7 +30901,7 @@
         "pkg:cargo/glib@0.18.5",
         "pkg:cargo/gtk-sys@0.18.2",
         "pkg:cargo/gtk3-macros@0.18.2",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/pango@0.18.3",
         "pkg:cargo/pkg-config@0.3.33"
       ],
@@ -30868,7 +30916,7 @@
         "pkg:cargo/gio-sys@0.18.1",
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/pango-sys@0.18.0",
         "pkg:cargo/system-deps@6.2.2"
       ],
@@ -30878,8 +30926,8 @@
       "dependsOn": [
         "pkg:cargo/proc-macro-crate@1.3.1",
         "pkg:cargo/proc-macro-error@1.0.4",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/gtk3-macros@0.18.2"
@@ -30894,8 +30942,8 @@
         "pkg:cargo/http@1.4.2",
         "pkg:cargo/indexmap@2.14.0",
         "pkg:cargo/slab@0.4.12",
-        "pkg:cargo/tokio-util@0.7.18",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/tokio-util@0.7.19",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tracing@0.1.44"
       ],
       "ref": "pkg:cargo/h2@0.4.15"
@@ -30904,7 +30952,7 @@
       "dependsOn": [
         "pkg:cargo/cfg-if@1.0.4",
         "pkg:cargo/crunchy@0.2.4",
-        "pkg:cargo/zerocopy@0.8.54"
+        "pkg:cargo/zerocopy@0.8.55"
       ],
       "ref": "pkg:cargo/half@2.7.1"
     },
@@ -30995,19 +31043,19 @@
         "pkg:cargo/itoa@1.0.18",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/smallvec@1.15.2",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/want@0.3.1"
       ],
-      "ref": "pkg:cargo/hyper@1.10.1"
+      "ref": "pkg:cargo/hyper@1.11.0"
     },
     {
       "dependsOn": [
         "pkg:cargo/http@1.4.2",
         "pkg:cargo/hyper-util@0.1.20",
-        "pkg:cargo/hyper@1.10.1",
+        "pkg:cargo/hyper@1.11.0",
         "pkg:cargo/rustls@0.23.42",
         "pkg:cargo/tokio-rustls@0.26.4",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tower-service@0.3.3"
       ],
       "ref": "pkg:cargo/hyper-rustls@0.27.9"
@@ -31020,14 +31068,14 @@
         "pkg:cargo/futures-util@0.3.33",
         "pkg:cargo/http-body@1.1.0",
         "pkg:cargo/http@1.4.2",
-        "pkg:cargo/hyper@1.10.1",
+        "pkg:cargo/hyper@1.11.0",
         "pkg:cargo/ipnet@2.12.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/socket2@0.6.5",
         "pkg:cargo/system-configuration@0.7.0",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/windows-registry@0.6.1"
@@ -31143,7 +31191,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/bytemuck@1.25.1",
+        "pkg:cargo/bytemuck@1.25.2",
         "pkg:cargo/byteorder-lite@0.1.0",
         "pkg:cargo/moxcms@0.8.1",
         "pkg:cargo/num-traits@0.2.19",
@@ -31156,8 +31204,8 @@
       "dependsOn": [
         "pkg:cargo/equivalent@1.0.2",
         "pkg:cargo/hashbrown@0.17.1",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_core@1.0.228"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_core@1.0.229"
       ],
       "ref": "pkg:cargo/indexmap@2.14.0"
     },
@@ -31171,13 +31219,13 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/inotify-sys@0.1.8",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/inotify@0.11.4"
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/inotify-sys@0.1.8"
     },
@@ -31221,7 +31269,7 @@
       "dependsOn": [
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2"
       ],
       "ref": "pkg:cargo/javascriptcore-rs-sys@1.1.1"
@@ -31234,7 +31282,7 @@
         "pkg:cargo/jni-sys@0.4.1",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/simd_cesu8@1.2.0",
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/walkdir@2.5.0",
         "pkg:cargo/windows-link@0.2.1"
       ],
@@ -31242,8 +31290,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/rustc_version@0.4.1",
         "pkg:cargo/simd_cesu8@1.2.0",
         "pkg:cargo/syn@2.0.119"
@@ -31258,7 +31306,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/jni-sys-macros@0.4.1"
@@ -31266,7 +31314,7 @@
     {
       "dependsOn": [
         "pkg:cargo/getrandom@0.4.3",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/jobserver@0.1.35"
     },
@@ -31281,23 +31329,23 @@
     {
       "dependsOn": [
         "pkg:cargo/jsonptr@0.6.3",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/thiserror@1.0.69"
       ],
       "ref": "pkg:cargo/json-patch@3.0.1"
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151"
       ],
       "ref": "pkg:cargo/jsonptr@0.6.3"
     },
     {
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
-        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde@1.0.229",
         "pkg:cargo/unicode-segmentation@1.13.3"
       ],
       "ref": "pkg:cargo/keyboard-types@0.7.0"
@@ -31311,14 +31359,14 @@
     {
       "dependsOn": [
         "pkg:cargo/kqueue-sys@1.1.2",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/kqueue@1.2.0"
     },
     {
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/kqueue-sys@1.1.2"
     },
@@ -31346,7 +31394,7 @@
     },
     {
       "dependsOn": [],
-      "ref": "pkg:cargo/libc@0.2.186"
+      "ref": "pkg:cargo/libc@0.2.189"
     },
     {
       "dependsOn": [
@@ -31363,7 +31411,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/libredox@0.1.18"
     },
@@ -31395,7 +31443,7 @@
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2@0.6.4",
-        "pkg:cargo/time@0.3.53",
+        "pkg:cargo/time@0.3.54",
         "pkg:cargo/uuid@1.24.0"
       ],
       "ref": "pkg:cargo/mac-notification-sys@0.6.15"
@@ -31452,7 +31500,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/wasi@0.11.1+wasi-snapshot-preview1",
         "pkg:cargo/windows-sys@0.61.2"
@@ -31478,9 +31526,9 @@
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/png@0.18.1",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/thiserror@2.0.19",
+        "pkg:cargo/windows-sys@0.60.2"
       ],
       "ref": "pkg:cargo/muda@0.19.3"
     },
@@ -31524,7 +31572,7 @@
         "pkg:cargo/fsevent-sys@4.1.0",
         "pkg:cargo/inotify@0.11.4",
         "pkg:cargo/kqueue@1.2.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/mio@1.2.2",
         "pkg:cargo/notify-types@2.1.0",
@@ -31538,7 +31586,7 @@
         "pkg:cargo/futures-lite@2.6.1",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/mac-notification-sys@0.6.15",
-        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde@1.0.229",
         "pkg:cargo/tauri-winrt-notification@0.7.3",
         "pkg:cargo/zbus@5.18.0"
       ],
@@ -31552,7 +31600,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.60.2"
       ],
       "ref": "pkg:cargo/nu-ansi-term@0.50.3"
     },
@@ -31621,8 +31669,8 @@
     {
       "dependsOn": [
         "pkg:cargo/proc-macro-crate@3.5.0",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/num_enum_derive@0.7.6"
@@ -31715,7 +31763,7 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/block2@0.6.2",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/objc2-core-foundation@0.3.2",
         "pkg:cargo/objc2@0.6.4"
       ],
@@ -31791,7 +31839,7 @@
       "dependsOn": [
         "pkg:cargo/dunce@1.0.5",
         "pkg:cargo/is-wsl@0.4.0",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/open@5.4.0"
     },
@@ -31827,8 +31875,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/libc@0.2.189",
+        "pkg:cargo/windows-sys@0.45.0"
       ],
       "ref": "pkg:cargo/os_pipe@1.2.3"
     },
@@ -31837,9 +31885,9 @@
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/objc2-osa-kit@0.3.2",
         "pkg:cargo/objc2@0.6.4",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
-        "pkg:cargo/thiserror@2.0.18"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
+        "pkg:cargo/thiserror@2.0.19"
       ],
       "ref": "pkg:cargo/osakit@0.3.1"
     },
@@ -31847,7 +31895,7 @@
       "dependsOn": [
         "pkg:cargo/gio@0.18.4",
         "pkg:cargo/glib@0.18.5",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/pango-sys@0.18.0"
       ],
@@ -31857,7 +31905,7 @@
       "dependsOn": [
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2"
       ],
       "ref": "pkg:cargo/pango-sys@0.18.0"
@@ -31876,7 +31924,7 @@
     {
       "dependsOn": [
         "pkg:cargo/cfg-if@1.0.4",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/redox_syscall@0.5.18",
         "pkg:cargo/smallvec@1.15.2",
         "pkg:cargo/windows-link@0.2.1"
@@ -31899,7 +31947,7 @@
       "dependsOn": [
         "pkg:cargo/phf_macros@0.13.1",
         "pkg:cargo/phf_shared@0.13.1",
-        "pkg:cargo/serde@1.0.228"
+        "pkg:cargo/serde@1.0.229"
       ],
       "ref": "pkg:cargo/phf@0.13.1"
     },
@@ -31912,7 +31960,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/fastrand@2.4.1",
+        "pkg:cargo/fastrand@2.5.0",
         "pkg:cargo/phf_shared@0.13.1"
       ],
       "ref": "pkg:cargo/phf_generator@0.13.1"
@@ -31921,8 +31969,8 @@
       "dependsOn": [
         "pkg:cargo/phf_generator@0.13.1",
         "pkg:cargo/phf_shared@0.13.1",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/phf_macros@0.13.1"
@@ -31940,7 +31988,7 @@
     {
       "dependsOn": [
         "pkg:cargo/atomic-waker@1.1.2",
-        "pkg:cargo/fastrand@2.4.1",
+        "pkg:cargo/fastrand@2.5.0",
         "pkg:cargo/futures-io@0.3.33"
       ],
       "ref": "pkg:cargo/piper@0.2.5"
@@ -31954,8 +32002,8 @@
         "pkg:cargo/base64@0.22.1",
         "pkg:cargo/indexmap@2.14.0",
         "pkg:cargo/quick-xml@0.41.0",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/time@0.3.53"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/time@0.3.54"
       ],
       "ref": "pkg:cargo/plist@1.10.0"
     },
@@ -31992,7 +32040,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/zerocopy@0.8.54"
+        "pkg:cargo/zerocopy@0.8.55"
       ],
       "ref": "pkg:cargo/ppv-lite86@0.2.21"
     },
@@ -32009,8 +32057,8 @@
     {
       "dependsOn": [
         "pkg:cargo/proc-macro-error-attr@1.0.4",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@1.0.109",
         "pkg:cargo/version_check@0.9.5"
       ],
@@ -32018,8 +32066,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/version_check@0.9.5"
       ],
       "ref": "pkg:cargo/proc-macro-error-attr@1.0.4"
@@ -32028,7 +32076,7 @@
       "dependsOn": [
         "pkg:cargo/unicode-ident@1.0.24"
       ],
-      "ref": "pkg:cargo/proc-macro2@1.0.106"
+      "ref": "pkg:cargo/proc-macro2@1.0.107"
     },
     {
       "dependsOn": [],
@@ -32054,8 +32102,8 @@
         "pkg:cargo/rustc-hash@2.1.3",
         "pkg:cargo/rustls@0.23.42",
         "pkg:cargo/socket2@0.6.5",
-        "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/thiserror@2.0.19",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/web-time@1.1.0"
       ],
@@ -32074,7 +32122,7 @@
         "pkg:cargo/rustls-pki-types@1.15.0",
         "pkg:cargo/rustls@0.23.42",
         "pkg:cargo/slab@0.4.12",
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/tinyvec@1.12.0",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/web-time@1.1.0"
@@ -32084,19 +32132,19 @@
     {
       "dependsOn": [
         "pkg:cargo/cfg_aliases@0.2.2",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/socket2@0.6.5",
         "pkg:cargo/tracing@0.1.44",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.52.0"
       ],
       "ref": "pkg:cargo/quinn-udp@0.5.15"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106"
+        "pkg:cargo/proc-macro2@1.0.107"
       ],
-      "ref": "pkg:cargo/quote@1.0.46"
+      "ref": "pkg:cargo/quote@1.0.47"
     },
     {
       "dependsOn": [],
@@ -32141,23 +32189,23 @@
       "dependsOn": [
         "pkg:cargo/getrandom@0.2.17",
         "pkg:cargo/libredox@0.1.18",
-        "pkg:cargo/thiserror@2.0.18"
+        "pkg:cargo/thiserror@2.0.19"
       ],
       "ref": "pkg:cargo/redox_users@0.5.2"
     },
     {
       "dependsOn": [
-        "pkg:cargo/ref-cast-impl@1.0.25"
+        "pkg:cargo/ref-cast-impl@1.0.26"
       ],
-      "ref": "pkg:cargo/ref-cast@1.0.25"
+      "ref": "pkg:cargo/ref-cast@1.0.26"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
-        "pkg:cargo/syn@2.0.119"
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
+        "pkg:cargo/syn@3.0.3"
       ],
-      "ref": "pkg:cargo/ref-cast-impl@1.0.25"
+      "ref": "pkg:cargo/ref-cast-impl@1.0.26"
     },
     {
       "dependsOn": [
@@ -32193,7 +32241,7 @@
         "pkg:cargo/http@1.4.2",
         "pkg:cargo/hyper-rustls@0.27.9",
         "pkg:cargo/hyper-util@0.1.20",
-        "pkg:cargo/hyper@1.10.1",
+        "pkg:cargo/hyper@1.11.0",
         "pkg:cargo/js-sys@0.3.103",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/mime@0.3.17",
@@ -32204,12 +32252,12 @@
         "pkg:cargo/rustls-pki-types@1.15.0",
         "pkg:cargo/rustls-platform-verifier@0.7.0",
         "pkg:cargo/rustls@0.23.42",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/sync_wrapper@1.0.2",
         "pkg:cargo/tokio-rustls@0.26.4",
-        "pkg:cargo/tokio-util@0.7.18",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/tokio-util@0.7.19",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tower-http@0.6.11",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
@@ -32226,7 +32274,7 @@
         "pkg:cargo/cc@1.3.0",
         "pkg:cargo/cfg-if@1.0.4",
         "pkg:cargo/getrandom@0.2.17",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/untrusted@0.9.0",
         "pkg:cargo/windows-sys@0.52.0"
       ],
@@ -32253,9 +32301,9 @@
       "dependsOn": [
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/errno@0.3.14",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/linux-raw-sys@0.12.1",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.52.0"
       ],
       "ref": "pkg:cargo/rustix@1.1.4"
     },
@@ -32301,7 +32349,7 @@
         "pkg:cargo/security-framework-sys@2.17.0",
         "pkg:cargo/security-framework@3.7.0",
         "pkg:cargo/webpki-root-certs@1.0.9",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.52.0"
       ],
       "ref": "pkg:cargo/rustls-platform-verifier@0.7.0"
     },
@@ -32341,16 +32389,16 @@
     {
       "dependsOn": [
         "pkg:cargo/dyn-clone@1.0.20",
-        "pkg:cargo/ref-cast@1.0.25",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150"
+        "pkg:cargo/ref-cast@1.0.26",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151"
       ],
       "ref": "pkg:cargo/schemars@1.2.1"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/serde_derive_internals@0.29.1",
         "pkg:cargo/syn@2.0.119"
       ],
@@ -32370,7 +32418,7 @@
         "pkg:cargo/hkdf@0.12.4",
         "pkg:cargo/num@0.4.3",
         "pkg:cargo/once_cell@1.21.4",
-        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde@1.0.229",
         "pkg:cargo/sha2@0.10.9",
         "pkg:cargo/zbus@5.18.0"
       ],
@@ -32381,7 +32429,7 @@
         "pkg:cargo/bitflags@2.13.1",
         "pkg:cargo/core-foundation-sys@0.8.7",
         "pkg:cargo/core-foundation@0.10.1",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/security-framework-sys@2.17.0"
       ],
       "ref": "pkg:cargo/security-framework@3.7.0"
@@ -32389,7 +32437,7 @@
     {
       "dependsOn": [
         "pkg:cargo/core-foundation-sys@0.8.7",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/security-framework-sys@2.17.0"
     },
@@ -32411,45 +32459,45 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_core@1.0.228"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_core@1.0.229"
       ],
       "ref": "pkg:cargo/semver@1.0.28"
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde_core@1.0.228",
-        "pkg:cargo/serde_derive@1.0.228"
+        "pkg:cargo/serde_core@1.0.229",
+        "pkg:cargo/serde_derive@1.0.229"
       ],
-      "ref": "pkg:cargo/serde@1.0.228"
+      "ref": "pkg:cargo/serde@1.0.229"
     },
     {
       "dependsOn": [
         "pkg:cargo/erased-serde@0.4.10",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/typeid@1.0.3"
       ],
       "ref": "pkg:cargo/serde-untagged@0.1.9"
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde_derive@1.0.228"
+        "pkg:cargo/serde_derive@1.0.229"
       ],
-      "ref": "pkg:cargo/serde_core@1.0.228"
+      "ref": "pkg:cargo/serde_core@1.0.229"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
-        "pkg:cargo/syn@2.0.119"
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
+        "pkg:cargo/syn@3.0.3"
       ],
-      "ref": "pkg:cargo/serde_derive@1.0.228"
+      "ref": "pkg:cargo/serde_derive@1.0.229"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/serde_derive_internals@0.29.1"
@@ -32458,31 +32506,31 @@
       "dependsOn": [
         "pkg:cargo/itoa@1.0.18",
         "pkg:cargo/memchr@2.8.3",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/zmij@1.0.23"
       ],
-      "ref": "pkg:cargo/serde_json@1.0.150"
+      "ref": "pkg:cargo/serde_json@1.0.151"
     },
     {
       "dependsOn": [
         "pkg:cargo/itoa@1.0.18",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_core@1.0.228"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_core@1.0.229"
       ],
       "ref": "pkg:cargo/serde_path_to_error@0.1.20"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
-        "pkg:cargo/syn@2.0.119"
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
+        "pkg:cargo/syn@3.0.3"
       ],
-      "ref": "pkg:cargo/serde_repr@0.1.20"
+      "ref": "pkg:cargo/serde_repr@0.1.21"
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde_core@1.0.228"
+        "pkg:cargo/serde_core@1.0.229"
       ],
       "ref": "pkg:cargo/serde_spanned@1.1.1"
     },
@@ -32491,7 +32539,7 @@
         "pkg:cargo/form_urlencoded@1.2.2",
         "pkg:cargo/itoa@1.0.18",
         "pkg:cargo/ryu@1.0.23",
-        "pkg:cargo/serde@1.0.228"
+        "pkg:cargo/serde@1.0.229"
       ],
       "ref": "pkg:cargo/serde_urlencoded@0.7.1"
     },
@@ -32505,34 +32553,34 @@
         "pkg:cargo/indexmap@2.14.0",
         "pkg:cargo/schemars@0.9.0",
         "pkg:cargo/schemars@1.2.1",
-        "pkg:cargo/serde_core@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde_core@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/serde_with_macros@3.21.0",
-        "pkg:cargo/time@0.3.53"
+        "pkg:cargo/time@0.3.54"
       ],
       "ref": "pkg:cargo/serde_with@3.21.0"
     },
     {
       "dependsOn": [
         "pkg:cargo/darling@0.23.0",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/serde_with_macros@3.21.0"
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/serialize-to-javascript-impl@0.1.2"
       ],
       "ref": "pkg:cargo/serialize-to-javascript@0.1.2"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/serialize-to-javascript-impl@0.1.2"
@@ -32564,7 +32612,7 @@
     {
       "dependsOn": [
         "pkg:cargo/errno@0.3.14",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/signal-hook-registry@1.4.8"
     },
@@ -32597,14 +32645,14 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/libc@0.2.189",
+        "pkg:cargo/windows-sys@0.60.2"
       ],
       "ref": "pkg:cargo/socket2@0.6.5"
     },
     {
       "dependsOn": [
-        "pkg:cargo/bytemuck@1.25.1",
+        "pkg:cargo/bytemuck@1.25.2",
         "pkg:cargo/js-sys@0.3.103",
         "pkg:cargo/ndk@0.9.0",
         "pkg:cargo/objc2-core-foundation@0.3.2",
@@ -32626,7 +32674,7 @@
         "pkg:cargo/futures-channel@0.3.33",
         "pkg:cargo/gio@0.18.4",
         "pkg:cargo/glib@0.18.5",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/soup3-sys@0.5.0"
       ],
       "ref": "pkg:cargo/soup3@0.5.0"
@@ -32636,7 +32684,7 @@
         "pkg:cargo/gio-sys@0.18.1",
         "pkg:cargo/glib-sys@0.18.1",
         "pkg:cargo/gobject-sys@0.18.0",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/system-deps@6.2.2"
       ],
       "ref": "pkg:cargo/soup3-sys@0.5.0"
@@ -32657,8 +32705,8 @@
         "pkg:cargo/notify@8.2.0",
         "pkg:cargo/opener@0.8.5",
         "pkg:cargo/reqwest@0.13.4",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/sha2@0.11.0",
         "pkg:cargo/sys-locale@0.3.2",
         "pkg:cargo/tauri-build@2.6.3",
@@ -32671,7 +32719,7 @@
         "pkg:cargo/tauri-plugin-single-instance@2.4.3",
         "pkg:cargo/tauri-plugin-updater@2.10.1",
         "pkg:cargo/tauri@2.11.5",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
@@ -32695,8 +32743,8 @@
       "dependsOn": [
         "pkg:cargo/phf_generator@0.13.1",
         "pkg:cargo/phf_shared@0.13.1",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46"
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47"
       ],
       "ref": "pkg:cargo/string_cache_codegen@0.6.1"
     },
@@ -32711,18 +32759,18 @@
     {
       "dependsOn": [
         "pkg:cargo/base64@0.21.7",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151"
       ],
       "ref": "pkg:cargo/swift-rs@1.0.7"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/unicode-ident@1.0.24"
       ],
-      "ref": "pkg:cargo/syn@2.0.119"
+      "ref": "pkg:cargo/syn@3.0.3"
     },
     {
       "dependsOn": [
@@ -32732,15 +32780,15 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/synstructure@0.13.2"
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/sys-locale@0.3.2"
     },
@@ -32755,7 +32803,7 @@
     {
       "dependsOn": [
         "pkg:cargo/core-foundation-sys@0.8.7",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/system-configuration-sys@0.6.0"
     },
@@ -32784,7 +32832,7 @@
         "pkg:cargo/gdkx11-sys@0.18.2",
         "pkg:cargo/gtk@0.18.2",
         "pkg:cargo/jni@0.21.1",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/ndk-sys@0.6.0+11769913",
         "pkg:cargo/ndk@0.9.0",
@@ -32808,8 +32856,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/tao-macros@0.1.3"
@@ -32817,7 +32865,7 @@
     {
       "dependsOn": [
         "pkg:cargo/filetime@0.2.29",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/xattr@1.6.1"
       ],
       "ref": "pkg:cargo/tar@0.4.46"
@@ -32828,7 +32876,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/anyhow@1.0.103",
+        "pkg:cargo/anyhow@1.0.104",
         "pkg:cargo/bytes@1.12.1",
         "pkg:cargo/cookie@0.18.1",
         "pkg:cargo/data-url@0.3.2",
@@ -32836,12 +32884,12 @@
         "pkg:cargo/dunce@1.0.5",
         "pkg:cargo/embed_plist@1.2.2",
         "pkg:cargo/getrandom@0.3.4",
-        "pkg:cargo/glob@0.3.3",
+        "pkg:cargo/glob@0.3.4",
         "pkg:cargo/gtk@0.18.2",
         "pkg:cargo/heck@0.5.0",
         "pkg:cargo/http@1.4.2",
         "pkg:cargo/jni@0.21.1",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/mime@0.3.17",
         "pkg:cargo/muda@0.19.3",
@@ -32854,9 +32902,9 @@
         "pkg:cargo/plist@1.10.0",
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/reqwest@0.13.4",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
-        "pkg:cargo/serde_repr@0.1.20",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
+        "pkg:cargo/serde_repr@0.1.21",
         "pkg:cargo/serialize-to-javascript@0.1.2",
         "pkg:cargo/swift-rs@1.0.7",
         "pkg:cargo/tauri-build@2.6.3",
@@ -32864,8 +32912,8 @@
         "pkg:cargo/tauri-runtime-wry@2.11.4",
         "pkg:cargo/tauri-runtime@2.11.3",
         "pkg:cargo/tauri-utils@2.9.3",
-        "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/thiserror@2.0.19",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tray-icon@0.24.1",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk@2.0.2",
@@ -32877,16 +32925,16 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/anyhow@1.0.103",
+        "pkg:cargo/anyhow@1.0.104",
         "pkg:cargo/cargo_toml@0.22.3",
         "pkg:cargo/dirs@6.0.0",
-        "pkg:cargo/glob@0.3.3",
+        "pkg:cargo/glob@0.3.4",
         "pkg:cargo/heck@0.5.0",
         "pkg:cargo/json-patch@3.0.1",
         "pkg:cargo/schemars@0.8.22",
         "pkg:cargo/semver@1.0.28",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-utils@2.9.3",
         "pkg:cargo/tauri-winres@0.3.6",
         "pkg:cargo/walkdir@2.5.0"
@@ -32901,16 +32949,16 @@
         "pkg:cargo/json-patch@3.0.1",
         "pkg:cargo/plist@1.10.0",
         "pkg:cargo/png@0.17.16",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/semver@1.0.28",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/sha2@0.10.9",
         "pkg:cargo/syn@2.0.119",
         "pkg:cargo/tauri-utils@2.9.3",
-        "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/time@0.3.53",
+        "pkg:cargo/thiserror@2.0.19",
+        "pkg:cargo/time@0.3.54",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/uuid@1.24.0",
         "pkg:cargo/walkdir@2.5.0"
@@ -32920,8 +32968,8 @@
     {
       "dependsOn": [
         "pkg:cargo/heck@0.5.0",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119",
         "pkg:cargo/tauri-codegen@2.6.3",
         "pkg:cargo/tauri-utils@2.9.3"
@@ -32930,12 +32978,12 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/anyhow@1.0.103",
-        "pkg:cargo/glob@0.3.3",
+        "pkg:cargo/anyhow@1.0.104",
+        "pkg:cargo/glob@0.3.4",
         "pkg:cargo/plist@1.10.0",
         "pkg:cargo/schemars@0.8.22",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-utils@2.9.3",
         "pkg:cargo/walkdir@2.5.0"
       ],
@@ -32944,11 +32992,11 @@
     {
       "dependsOn": [
         "pkg:cargo/auto-launch@0.5.0",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.6.3",
         "pkg:cargo/tauri@2.11.5",
-        "pkg:cargo/thiserror@2.0.18"
+        "pkg:cargo/thiserror@2.0.19"
       ],
       "ref": "pkg:cargo/tauri-plugin-autostart@2.5.1"
     },
@@ -32956,11 +33004,11 @@
       "dependsOn": [
         "pkg:cargo/arboard@3.6.1",
         "pkg:cargo/log@0.4.33",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.6.3",
         "pkg:cargo/tauri@2.11.5",
-        "pkg:cargo/thiserror@2.0.18"
+        "pkg:cargo/thiserror@2.0.19"
       ],
       "ref": "pkg:cargo/tauri-plugin-clipboard-manager@2.3.2"
     },
@@ -32969,12 +33017,12 @@
         "pkg:cargo/dunce@1.0.5",
         "pkg:cargo/plist@1.10.0",
         "pkg:cargo/rust-ini@0.21.3",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.6.3",
         "pkg:cargo/tauri-utils@2.9.3",
         "pkg:cargo/tauri@2.11.5",
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows-registry@0.5.3",
@@ -32987,13 +33035,13 @@
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/notify-rust@4.18.0",
         "pkg:cargo/rand@0.9.5",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
-        "pkg:cargo/serde_repr@0.1.20",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
+        "pkg:cargo/serde_repr@0.1.21",
         "pkg:cargo/tauri-plugin@2.6.3",
         "pkg:cargo/tauri@2.11.5",
-        "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/time@0.3.53",
+        "pkg:cargo/thiserror@2.0.19",
+        "pkg:cargo/time@0.3.54",
         "pkg:cargo/url@2.5.8"
       ],
       "ref": "pkg:cargo/tauri-plugin-notification@2.3.3"
@@ -33001,16 +33049,16 @@
     {
       "dependsOn": [
         "pkg:cargo/dunce@1.0.5",
-        "pkg:cargo/glob@0.3.3",
+        "pkg:cargo/glob@0.3.4",
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-foundation@0.3.2",
         "pkg:cargo/open@5.4.0",
         "pkg:cargo/schemars@0.8.22",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin@2.6.3",
         "pkg:cargo/tauri@2.11.5",
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows@0.61.3",
         "pkg:cargo/zbus@5.18.0"
@@ -33026,12 +33074,12 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-plugin-deep-link@2.4.9",
         "pkg:cargo/tauri@2.11.5",
-        "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/thiserror@2.0.19",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/windows-sys@0.60.2",
         "pkg:cargo/zbus@5.18.0"
@@ -33053,15 +33101,15 @@
         "pkg:cargo/reqwest@0.13.4",
         "pkg:cargo/rustls@0.23.42",
         "pkg:cargo/semver@1.0.28",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tar@0.4.46",
         "pkg:cargo/tauri-plugin@2.6.3",
         "pkg:cargo/tauri@2.11.5",
         "pkg:cargo/tempfile@3.27.0",
-        "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/time@0.3.53",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/thiserror@2.0.19",
+        "pkg:cargo/time@0.3.54",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/windows-sys@0.60.2",
         "pkg:cargo/zip@4.6.1"
@@ -33079,10 +33127,10 @@
         "pkg:cargo/objc2-web-kit@0.3.2",
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/raw-window-handle@0.6.2",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/tauri-utils@2.9.3",
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.38.2",
@@ -33115,13 +33163,13 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/anyhow@1.0.103",
+        "pkg:cargo/anyhow@1.0.104",
         "pkg:cargo/brotli@8.0.4",
         "pkg:cargo/cargo_metadata@0.19.2",
         "pkg:cargo/ctor@0.8.0",
         "pkg:cargo/dom_query@0.27.0",
         "pkg:cargo/dunce@1.0.5",
-        "pkg:cargo/glob@0.3.3",
+        "pkg:cargo/glob@0.3.4",
         "pkg:cargo/http@1.4.2",
         "pkg:cargo/infer@0.19.0",
         "pkg:cargo/json-patch@3.0.1",
@@ -33129,17 +33177,17 @@
         "pkg:cargo/memchr@2.8.3",
         "pkg:cargo/phf@0.13.1",
         "pkg:cargo/plist@1.10.0",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/regex@1.13.1",
         "pkg:cargo/schemars@0.8.22",
         "pkg:cargo/semver@1.0.28",
         "pkg:cargo/serde-untagged@0.1.9",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.151",
         "pkg:cargo/serde_with@3.21.0",
         "pkg:cargo/swift-rs@1.0.7",
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/toml@1.1.3+spec-1.1.0",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/urlpattern@0.3.0",
@@ -33158,7 +33206,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/windows-version@0.1.7",
         "pkg:cargo/windows@0.61.3"
       ],
@@ -33166,11 +33214,11 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/fastrand@2.4.1",
+        "pkg:cargo/fastrand@2.5.0",
         "pkg:cargo/getrandom@0.4.3",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/rustix@1.1.4",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.52.0"
       ],
       "ref": "pkg:cargo/tempfile@3.27.0"
     },
@@ -33182,17 +33230,17 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/thiserror-impl@2.0.18"
+        "pkg:cargo/thiserror-impl@2.0.19"
       ],
-      "ref": "pkg:cargo/thiserror@2.0.18"
+      "ref": "pkg:cargo/thiserror@2.0.19"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
-        "pkg:cargo/syn@2.0.119"
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
+        "pkg:cargo/syn@3.0.3"
       ],
-      "ref": "pkg:cargo/thiserror-impl@2.0.18"
+      "ref": "pkg:cargo/thiserror-impl@2.0.19"
     },
     {
       "dependsOn": [
@@ -33216,11 +33264,11 @@
         "pkg:cargo/deranged@0.5.8",
         "pkg:cargo/num-conv@0.2.2",
         "pkg:cargo/powerfmt@0.2.0",
-        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/time-core@0.1.9",
-        "pkg:cargo/time-macros@0.2.31"
+        "pkg:cargo/time-macros@0.2.32"
       ],
-      "ref": "pkg:cargo/time@0.3.53"
+      "ref": "pkg:cargo/time@0.3.54"
     },
     {
       "dependsOn": [],
@@ -33231,7 +33279,7 @@
         "pkg:cargo/num-conv@0.2.2",
         "pkg:cargo/time-core@0.1.9"
       ],
-      "ref": "pkg:cargo/time-macros@0.2.31"
+      "ref": "pkg:cargo/time-macros@0.2.32"
     },
     {
       "dependsOn": [
@@ -33259,7 +33307,7 @@
     {
       "dependsOn": [
         "pkg:cargo/bytes@1.12.1",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/mio@1.2.2",
         "pkg:cargo/parking_lot@0.12.5",
         "pkg:cargo/pin-project-lite@0.2.17",
@@ -33268,12 +33316,12 @@
         "pkg:cargo/tokio-macros@2.7.1",
         "pkg:cargo/windows-sys@0.61.2"
       ],
-      "ref": "pkg:cargo/tokio@1.53.0"
+      "ref": "pkg:cargo/tokio@1.53.1"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/tokio-macros@2.7.1"
@@ -33281,7 +33329,7 @@
     {
       "dependsOn": [
         "pkg:cargo/rustls@0.23.42",
-        "pkg:cargo/tokio@1.53.0"
+        "pkg:cargo/tokio@1.53.1"
       ],
       "ref": "pkg:cargo/tokio-rustls@0.26.4"
     },
@@ -33290,15 +33338,16 @@
         "pkg:cargo/bytes@1.12.1",
         "pkg:cargo/futures-core@0.3.33",
         "pkg:cargo/futures-sink@0.3.33",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/pin-project-lite@0.2.17",
-        "pkg:cargo/tokio@1.53.0"
+        "pkg:cargo/tokio@1.53.1"
       ],
-      "ref": "pkg:cargo/tokio-util@0.7.18"
+      "ref": "pkg:cargo/tokio-util@0.7.19"
     },
     {
       "dependsOn": [
         "pkg:cargo/indexmap@2.14.0",
-        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/serde_spanned@1.1.1",
         "pkg:cargo/toml_datetime@1.1.1+spec-1.1.0",
         "pkg:cargo/toml_parser@1.1.2+spec-1.1.0",
@@ -33309,7 +33358,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde_core@1.0.228"
+        "pkg:cargo/serde_core@1.0.229"
       ],
       "ref": "pkg:cargo/toml_datetime@1.1.1+spec-1.1.0"
     },
@@ -33338,7 +33387,7 @@
         "pkg:cargo/futures-util@0.3.33",
         "pkg:cargo/pin-project-lite@0.2.17",
         "pkg:cargo/sync_wrapper@1.0.2",
-        "pkg:cargo/tokio@1.53.0",
+        "pkg:cargo/tokio@1.53.1",
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tracing@0.1.44"
@@ -33379,8 +33428,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/tracing-attributes@0.1.31"
@@ -33428,9 +33477,9 @@
         "pkg:cargo/objc2@0.6.4",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/png@0.18.1",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/thiserror@2.0.18",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/thiserror@2.0.19",
+        "pkg:cargo/windows-sys@0.60.2"
       ],
       "ref": "pkg:cargo/tray-icon@0.24.1"
     },
@@ -33462,7 +33511,7 @@
       "dependsOn": [
         "pkg:cargo/memoffset@0.9.1",
         "pkg:cargo/tempfile@3.27.0",
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.60.2"
       ],
       "ref": "pkg:cargo/uds_windows@1.2.1"
     },
@@ -33515,15 +33564,15 @@
         "pkg:cargo/form_urlencoded@1.2.2",
         "pkg:cargo/idna@1.1.0",
         "pkg:cargo/percent-encoding@2.3.2",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_derive@1.0.228"
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_derive@1.0.229"
       ],
       "ref": "pkg:cargo/url@2.5.8"
     },
     {
       "dependsOn": [
         "pkg:cargo/regex@1.13.1",
-        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde@1.0.229",
         "pkg:cargo/unic-ucd-ident@0.9.0",
         "pkg:cargo/url@2.5.8"
       ],
@@ -33537,7 +33586,7 @@
       "dependsOn": [
         "pkg:cargo/getrandom@0.4.3",
         "pkg:cargo/js-sys@0.3.103",
-        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde_core@1.0.229",
         "pkg:cargo/wasm-bindgen@0.2.126"
       ],
       "ref": "pkg:cargo/uuid@1.24.0"
@@ -33556,7 +33605,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/vswhom-sys@0.1.3"
       ],
       "ref": "pkg:cargo/vswhom@0.1.0"
@@ -33564,7 +33613,7 @@
     {
       "dependsOn": [
         "pkg:cargo/cc@1.3.0",
-        "pkg:cargo/libc@0.2.186"
+        "pkg:cargo/libc@0.2.189"
       ],
       "ref": "pkg:cargo/vswhom-sys@0.1.3"
     },
@@ -33610,7 +33659,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/wasm-bindgen-macro-support@0.2.126"
       ],
       "ref": "pkg:cargo/wasm-bindgen-macro@0.2.126"
@@ -33618,8 +33667,8 @@
     {
       "dependsOn": [
         "pkg:cargo/bumpalo@3.20.3",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119",
         "pkg:cargo/wasm-bindgen-shared@0.2.126"
       ],
@@ -33681,9 +33730,9 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/proc-macro2@1.0.107",
         "pkg:cargo/quick-xml@0.39.4",
-        "pkg:cargo/quote@1.0.46"
+        "pkg:cargo/quote@1.0.47"
       ],
       "ref": "pkg:cargo/wayland-scanner@0.31.10"
     },
@@ -33730,7 +33779,7 @@
         "pkg:cargo/gtk-sys@0.18.2",
         "pkg:cargo/gtk@0.18.2",
         "pkg:cargo/javascriptcore-rs@1.1.2",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/soup3@0.5.0",
         "pkg:cargo/webkit2gtk-sys@2.0.2"
@@ -33747,7 +33796,7 @@
         "pkg:cargo/gobject-sys@0.18.0",
         "pkg:cargo/gtk-sys@0.18.2",
         "pkg:cargo/javascriptcore-rs-sys@1.1.1",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/pkg-config@0.3.33",
         "pkg:cargo/soup3-sys@0.5.0",
         "pkg:cargo/system-deps@6.2.2"
@@ -33773,15 +33822,15 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/webview2-com-macros@0.8.1"
     },
     {
       "dependsOn": [
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/windows-core@0.61.2",
         "pkg:cargo/windows@0.61.3"
       ],
@@ -33804,7 +33853,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/windows-sys@0.61.2"
+        "pkg:cargo/windows-sys@0.52.0"
       ],
       "ref": "pkg:cargo/winapi-util@0.1.11"
     },
@@ -33860,16 +33909,16 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/windows-implement@0.60.2"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/windows-interface@0.59.3"
@@ -33998,11 +34047,11 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/log@0.4.33",
         "pkg:cargo/os_pipe@1.2.3",
         "pkg:cargo/rustix@1.1.4",
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/tree_magic_mini@3.2.2",
         "pkg:cargo/wayland-backend@0.3.15",
         "pkg:cargo/wayland-client@0.31.14",
@@ -34030,7 +34079,7 @@
         "pkg:cargo/http@1.4.2",
         "pkg:cargo/javascriptcore-rs@1.1.2",
         "pkg:cargo/jni@0.21.1",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/ndk@0.9.0",
         "pkg:cargo/objc2-app-kit@0.3.2",
         "pkg:cargo/objc2-core-foundation@0.3.2",
@@ -34044,7 +34093,7 @@
         "pkg:cargo/sha2@0.10.9",
         "pkg:cargo/soup3@0.5.0",
         "pkg:cargo/tao-macros@0.1.3",
-        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/thiserror@2.0.19",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/webkit2gtk-sys@2.0.2",
         "pkg:cargo/webkit2gtk@2.0.2",
@@ -34058,14 +34107,14 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/pkg-config@0.3.33"
       ],
       "ref": "pkg:cargo/x11@2.21.0"
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/pkg-config@0.3.33"
       ],
@@ -34085,7 +34134,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/rustix@1.1.4"
       ],
       "ref": "pkg:cargo/xattr@1.6.1"
@@ -34100,8 +34149,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119",
         "pkg:cargo/synstructure@0.13.2"
       ],
@@ -34116,18 +34165,18 @@
         "pkg:cargo/async-process@2.5.0",
         "pkg:cargo/async-recursion@1.1.1",
         "pkg:cargo/async-task@4.7.1",
-        "pkg:cargo/async-trait@0.1.89",
+        "pkg:cargo/async-trait@0.1.91",
         "pkg:cargo/blocking@1.6.2",
         "pkg:cargo/enumflags2@0.7.12",
         "pkg:cargo/event-listener@5.4.1",
         "pkg:cargo/futures-core@0.3.33",
         "pkg:cargo/futures-lite@2.6.1",
         "pkg:cargo/hex@0.4.3",
-        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/libc@0.2.189",
         "pkg:cargo/ordered-stream@0.2.0",
         "pkg:cargo/rustix@1.1.4",
-        "pkg:cargo/serde@1.0.228",
-        "pkg:cargo/serde_repr@0.1.20",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_repr@0.1.21",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/uds_windows@1.2.1",
         "pkg:cargo/uuid@1.24.0",
@@ -34150,8 +34199,8 @@
     {
       "dependsOn": [
         "pkg:cargo/proc-macro-crate@3.5.0",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119",
         "pkg:cargo/zbus_names@4.3.4",
         "pkg:cargo/zvariant@5.13.1",
@@ -34161,7 +34210,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde@1.0.229",
         "pkg:cargo/winnow@1.0.4",
         "pkg:cargo/zvariant@5.13.1"
       ],
@@ -34169,17 +34218,17 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/zerocopy-derive@0.8.54"
+        "pkg:cargo/zerocopy-derive@0.8.55"
       ],
-      "ref": "pkg:cargo/zerocopy@0.8.54"
+      "ref": "pkg:cargo/zerocopy@0.8.55"
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
-      "ref": "pkg:cargo/zerocopy-derive@0.8.54"
+      "ref": "pkg:cargo/zerocopy-derive@0.8.55"
     },
     {
       "dependsOn": [
@@ -34189,8 +34238,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119",
         "pkg:cargo/synstructure@0.13.2"
       ],
@@ -34218,8 +34267,8 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
       "ref": "pkg:cargo/zerovec-derive@0.11.3"
@@ -34251,7 +34300,7 @@
       "dependsOn": [
         "pkg:cargo/endi@1.1.1",
         "pkg:cargo/enumflags2@0.7.12",
-        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde@1.0.229",
         "pkg:cargo/winnow@1.0.4",
         "pkg:cargo/zvariant_derive@5.13.1",
         "pkg:cargo/zvariant_utils@3.5.0"
@@ -34261,8 +34310,8 @@
     {
       "dependsOn": [
         "pkg:cargo/proc-macro-crate@3.5.0",
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119",
         "pkg:cargo/zvariant_utils@3.5.0"
       ],
@@ -34270,9 +34319,9 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/proc-macro2@1.0.106",
-        "pkg:cargo/quote@1.0.46",
-        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/proc-macro2@1.0.107",
+        "pkg:cargo/quote@1.0.47",
+        "pkg:cargo/serde@1.0.229",
         "pkg:cargo/syn@2.0.119",
         "pkg:cargo/winnow@1.0.4"
       ],
