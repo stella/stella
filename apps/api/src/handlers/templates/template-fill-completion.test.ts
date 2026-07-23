@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import {
   decideTemplateFillCompletion,
   TEMPLATE_FILL_COMPLETION_MODES,
@@ -35,6 +37,7 @@ describe("template fill completion policy", () => {
           expect(decision.unmatchedPlaceholders.length).toBeGreaterThan(0);
         },
       ),
+      propertyConfig(),
     );
   });
 });

@@ -9,10 +9,6 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "build": "email build",
-    "dev": "email dev -p 3002",
-    "export": "email export",
-    "start": "email start -p 3002",
     "test": "bun test emails",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "typegen": "bun ../scripts/src/i18n-typegen.ts i18n/langs",
@@ -29,9 +25,7 @@
     "use-intl": "catalog:"
   },
   "devDependencies": {
-    "@react-email/ui": "^6.9.0",
     "@stll/typescript-config": "workspace:*",
-    "@types/react": "catalog:react19",
-    "react-email": "^6.9.0"
+    "@types/react": "catalog:react19"
   }
 }

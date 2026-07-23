@@ -38,13 +38,6 @@
       "reason": "Transitive glob matcher in build tooling (vite/astro/tanstack/eslint), not fed untrusted patterns at runtime."
     },
     {
-      "id": "GHSA-677m-j7p3-52f9",
-      "severity": "high",
-      "package": "socket.io-parser",
-      "title": "socket.io allows an unbounded number of binary attachments",
-      "reason": "Transitive; stella does not run a socket.io server on untrusted input."
-    },
-    {
       "id": "GHSA-f269-vfmq-vjvj",
       "severity": "high",
       "package": "undici",
@@ -99,13 +92,6 @@
       "package": "js-yaml",
       "title": "js-yaml: YAML merge-key chains can force quadratic CPU consumption",
       "reason": "Transitive build-tooling dependency (astro build + @tanstack/start-plugin-core via xmlbuilder2); stella does not parse untrusted YAML at runtime — only build-time config. Not reachable from any request path."
-    },
-    {
-      "id": "GHSA-r635-g3xr-vw7x",
-      "severity": "high",
-      "package": "engine.io",
-      "title": "Socket.IO: Engine.IO Polling Transport Connection Exhaustion",
-      "reason": "Transitive dev-tooling dependency (socket.io ← react-email ← dev @stll/transactional, the email-preview dev server); the production API does not run engine.io/socket.io. Not reachable in production."
     }
   ]
 }
