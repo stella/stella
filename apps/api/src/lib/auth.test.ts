@@ -412,4 +412,12 @@ describe("session freshness", () => {
     // `freshAge` comment in auth.ts. If this fails, the footgun is back.
     expect(getAuth().options.session.freshAge).toBe(0);
   });
+
+  test("the other freshness-gated endpoint (unlink-account) stays disabled", () => {
+    // `freshAge: 0` is only safe because the one other freshness-gated endpoint
+    // Better Auth mounts, `/unlink-account`, is not a Stella feature and is
+    // disabled. If it were re-exposed, relaxing freshAge would let an old
+    // session unlink a provider. Keep these two decisions coupled.
+    expect(getAuth().options.disabledPaths).toContain("/unlink-account");
+  });
 });
