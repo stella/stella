@@ -55,9 +55,8 @@ type RunSchedulerOnceOptions = {
 type RunSchedulerOnceResult = {
   acquired: number;
   failed: number;
-  deadlineReached: boolean;
-  remainingMayExist: boolean;
   skipped: number;
+  stoppedBecause: "aborted" | "deadlineReached" | "drained" | "limitReached";
   succeeded: number;
 };
 
@@ -97,22 +96,20 @@ export const runSchedulerOnce = async ({
   const deadline = now() + maxSweepDurationMs;
   const result: RunSchedulerOnceResult = {
     acquired: 0,
-    deadlineReached: false,
     failed: 0,
-    remainingMayExist: false,
     skipped: 0,
+    stoppedBecause: "drained",
     succeeded: 0,
   };
 
   while (result.acquired < limit) {
     if (signal?.aborted) {
-      result.remainingMayExist = true;
+      result.stoppedBecause = "aborted";
       break;
     }
 
     if (now() >= deadline) {
-      result.deadlineReached = true;
-      result.remainingMayExist = true;
+      result.stoppedBecause = "deadlineReached";
       break;
     }
 
@@ -149,7 +146,7 @@ export const runSchedulerOnce = async ({
   }
 
   if (result.acquired >= limit) {
-    result.remainingMayExist = true;
+    result.stoppedBecause = "limitReached";
   }
 
   return result;
@@ -279,7 +276,7 @@ export const acquireNextDueJob = async ({
       .where(and(eq(schedulerJobs.id, candidate.id), dueJobPredicate(now)))
       .returning();
 
-    return job ?? null;
+    return job ?? panic("Locked scheduler job disappeared before lease update");
   });
 };
 

@@ -202,10 +202,9 @@ describe("bounded scheduler sweeps", () => {
 
     expect(result).toEqual({
       acquired: 2,
-      deadlineReached: false,
       failed: 0,
-      remainingMayExist: true,
       skipped: 0,
+      stoppedBecause: "limitReached",
       succeeded: 2,
     });
     expect((await readJob("c.job")).lockedBy).toBeNull();
@@ -230,10 +229,9 @@ describe("bounded scheduler sweeps", () => {
 
     expect(result).toEqual({
       acquired: 1,
-      deadlineReached: true,
       failed: 0,
-      remainingMayExist: true,
       skipped: 0,
+      stoppedBecause: "deadlineReached",
       succeeded: 1,
     });
     expect((await readJob("b.job")).lockedBy).toBeNull();
@@ -249,10 +247,9 @@ describe("bounded scheduler sweeps", () => {
 
     expect(result).toEqual({
       acquired: 0,
-      deadlineReached: false,
       failed: 0,
-      remainingMayExist: false,
       skipped: 0,
+      stoppedBecause: "drained",
       succeeded: 0,
     });
   });
@@ -533,6 +530,7 @@ describe("per-job runtime ceiling", () => {
       acquired: 1,
       failed: 0,
       skipped: 0,
+      stoppedBecause: "aborted",
       succeeded: 1,
     });
 
@@ -573,6 +571,7 @@ describe("per-job runtime ceiling", () => {
       acquired: 1,
       failed: 0,
       skipped: 1,
+      stoppedBecause: "aborted",
       succeeded: 0,
     });
     // The task never started, and the lease was released cleanly.
