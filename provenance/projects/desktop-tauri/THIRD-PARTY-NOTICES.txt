@@ -13,7 +13,7 @@ Project: desktop-tauri
 - alloc-no-stdlib 2.0.4 — BSD-3-Clause
 - alloc-stdlib 0.2.4 — BSD-3-Clause
 - android_system_properties 0.1.5 — MIT/Apache-2.0
-- anyhow 1.0.103 — Apache-2.0 OR MIT
+- anyhow 1.0.104 — Apache-2.0 OR MIT
 - apple-native-keyring-store 1.0.1 — Apache-2.0 OR MIT
 - arbitrary 1.4.2 — Apache-2.0 OR MIT
 - arboard 3.6.1 — Apache-2.0 OR MIT
@@ -26,7 +26,7 @@ Project: desktop-tauri
 - async-recursion 1.1.1 — Apache-2.0 OR MIT
 - async-signal 0.2.14 — Apache-2.0 OR MIT
 - async-task 4.7.1 — Apache-2.0 OR MIT
-- async-trait 0.1.89 — Apache-2.0 OR MIT
+- async-trait 0.1.91 — Apache-2.0 OR MIT
 - atk 0.18.2 — MIT
 - atk-sys 0.18.2 — MIT
 - atomic-waker 1.1.2 — Apache-2.0 OR MIT
@@ -52,7 +52,7 @@ Project: desktop-tauri
 - bs58 0.5.1 — MIT/Apache-2.0
 - bstr 1.13.0 — Apache-2.0 OR MIT
 - bumpalo 3.20.3 — Apache-2.0 OR MIT
-- bytemuck 1.25.1 — Apache-2.0 OR MIT OR Zlib
+- bytemuck 1.25.2 — Apache-2.0 OR MIT OR Zlib
 - byteorder 1.5.0 — MIT OR Unlicense
 - byteorder-lite 0.1.0 — MIT OR Unlicense
 - bytes 1.12.1 — MIT
@@ -138,7 +138,7 @@ Project: desktop-tauri
 - error-code 3.3.2 — BSL-1.0
 - event-listener 5.4.1 — Apache-2.0 OR MIT
 - event-listener-strategy 0.5.4 — Apache-2.0 OR MIT
-- fastrand 2.4.1 — Apache-2.0 OR MIT
+- fastrand 2.5.0 — Apache-2.0 OR MIT
 - fax 0.2.7 — MIT
 - fdeflate 0.3.7 — Apache-2.0 OR MIT
 - field-offset 0.3.6 — Apache-2.0 OR MIT
@@ -181,7 +181,7 @@ Project: desktop-tauri
 - glib 0.18.5 — MIT
 - glib-macros 0.18.5 — MIT
 - glib-sys 0.18.1 — MIT
-- glob 0.3.3 — Apache-2.0 OR MIT
+- glob 0.3.4 — Apache-2.0 OR MIT
 - gobject-sys 0.18.0 — MIT
 - gtk 0.18.2 — MIT
 - gtk-sys 0.18.2 — MIT
@@ -205,7 +205,7 @@ Project: desktop-tauri
 - httparse 1.10.1 — Apache-2.0 OR MIT
 - httpdate 1.0.3 — Apache-2.0 OR MIT
 - hybrid-array 0.4.13 — Apache-2.0 OR MIT
-- hyper 1.10.1 — MIT
+- hyper 1.11.0 — MIT
 - hyper-rustls 0.27.9 — Apache-2.0 OR ISC OR MIT
 - hyper-util 0.1.20 — MIT
 - iana-time-zone 0.1.65 — Apache-2.0 OR MIT
@@ -251,7 +251,7 @@ Project: desktop-tauri
 - lazy_static 1.5.0 — Apache-2.0 OR MIT
 - libappindicator 0.9.0 — Apache-2.0 OR MIT
 - libappindicator-sys 0.9.0 — Apache-2.0 OR MIT
-- libc 0.2.186 — Apache-2.0 OR MIT
+- libc 0.2.189 — Apache-2.0 OR MIT
 - libdbus-sys 0.2.7 — Apache-2.0/MIT
 - libloading 0.7.4 — ISC
 - libredox 0.1.18 — MIT
@@ -347,7 +347,7 @@ Project: desktop-tauri
 - proc-macro-crate 3.5.0 — Apache-2.0 OR MIT
 - proc-macro-error 1.0.4 — Apache-2.0 OR MIT
 - proc-macro-error-attr 1.0.4 — Apache-2.0 OR MIT
-- proc-macro2 1.0.106 — Apache-2.0 OR MIT
+- proc-macro2 1.0.107 — Apache-2.0 OR MIT
 - pxfm 0.1.30 — Apache-2.0 OR BSD-3-Clause
 - quick-error 2.0.1 — MIT/Apache-2.0
 - quick-xml 0.39.4 — MIT
@@ -355,7 +355,7 @@ Project: desktop-tauri
 - quinn 0.11.11 — Apache-2.0 OR MIT
 - quinn-proto 0.11.16 — Apache-2.0 OR MIT
 - quinn-udp 0.5.15 — Apache-2.0 OR MIT
-- quote 1.0.46 — Apache-2.0 OR MIT
+- quote 1.0.47 — Apache-2.0 OR MIT
 - r-efi 5.3.0 — Apache-2.0 OR LGPL-2.1-or-later OR MIT
 - r-efi 6.0.0 — Apache-2.0 OR LGPL-2.1-or-later OR MIT
 - rand 0.10.2 — Apache-2.0 OR MIT
@@ -368,8 +368,8 @@ Project: desktop-tauri
 - redox_syscall 0.5.18 — MIT
 - redox_users 0.4.6 — MIT
 - redox_users 0.5.2 — MIT
-- ref-cast 1.0.25 — Apache-2.0 OR MIT
-- ref-cast-impl 1.0.25 — Apache-2.0 OR MIT
+- ref-cast 1.0.26 — Apache-2.0 OR MIT
+- ref-cast-impl 1.0.26 — Apache-2.0 OR MIT
 - regex 1.13.1 — Apache-2.0 OR MIT
 - regex-automata 0.4.16 — Apache-2.0 OR MIT
 - regex-syntax 0.8.11 — Apache-2.0 OR MIT
@@ -399,14 +399,14 @@ Project: desktop-tauri
 - security-framework-sys 2.17.0 — Apache-2.0 OR MIT
 - selectors 0.36.1 — MPL-2.0
 - semver 1.0.28 — Apache-2.0 OR MIT
-- serde 1.0.228 — Apache-2.0 OR MIT
+- serde 1.0.229 — Apache-2.0 OR MIT
 - serde-untagged 0.1.9 — Apache-2.0 OR MIT
-- serde_core 1.0.228 — Apache-2.0 OR MIT
-- serde_derive 1.0.228 — Apache-2.0 OR MIT
+- serde_core 1.0.229 — Apache-2.0 OR MIT
+- serde_derive 1.0.229 — Apache-2.0 OR MIT
 - serde_derive_internals 0.29.1 — Apache-2.0 OR MIT
-- serde_json 1.0.150 — Apache-2.0 OR MIT
+- serde_json 1.0.151 — Apache-2.0 OR MIT
 - serde_path_to_error 0.1.20 — Apache-2.0 OR MIT
-- serde_repr 0.1.20 — Apache-2.0 OR MIT
+- serde_repr 0.1.21 — Apache-2.0 OR MIT
 - serde_spanned 0.6.9 — Apache-2.0 OR MIT
 - serde_spanned 1.1.1 — Apache-2.0 OR MIT
 - serde_urlencoded 0.7.1 — MIT/Apache-2.0
@@ -438,6 +438,7 @@ Project: desktop-tauri
 - swift-rs 1.0.7 — Apache-2.0 OR MIT
 - syn 1.0.109 — Apache-2.0 OR MIT
 - syn 2.0.119 — Apache-2.0 OR MIT
+- syn 3.0.3 — Apache-2.0 OR MIT
 - sync_wrapper 1.0.2 — Apache-2.0
 - synstructure 0.13.2 — MIT
 - sys-locale 0.3.2 — Apache-2.0 OR MIT
@@ -469,22 +470,22 @@ Project: desktop-tauri
 - tempfile 3.27.0 — Apache-2.0 OR MIT
 - tendril 0.5.1 — Apache-2.0 OR MIT
 - thiserror 1.0.69 — Apache-2.0 OR MIT
-- thiserror 2.0.18 — Apache-2.0 OR MIT
+- thiserror 2.0.19 — Apache-2.0 OR MIT
 - thiserror-impl 1.0.69 — Apache-2.0 OR MIT
-- thiserror-impl 2.0.18 — Apache-2.0 OR MIT
+- thiserror-impl 2.0.19 — Apache-2.0 OR MIT
 - thread_local 1.1.10 — Apache-2.0 OR MIT
 - tiff 0.11.3 — MIT
-- time 0.3.53 — Apache-2.0 OR MIT
+- time 0.3.54 — Apache-2.0 OR MIT
 - time-core 0.1.9 — Apache-2.0 OR MIT
-- time-macros 0.2.31 — Apache-2.0 OR MIT
+- time-macros 0.2.32 — Apache-2.0 OR MIT
 - tiny-keccak 2.0.2 — CC0-1.0
 - tinystr 0.8.3 — Unicode-3.0
 - tinyvec 1.12.0 — Apache-2.0 OR MIT OR Zlib
 - tinyvec_macros 0.1.1 — Apache-2.0 OR MIT OR Zlib
-- tokio 1.53.0 — MIT
+- tokio 1.53.1 — MIT
 - tokio-macros 2.7.1 — MIT
 - tokio-rustls 0.26.4 — Apache-2.0 OR MIT
-- tokio-util 0.7.18 — MIT
+- tokio-util 0.7.19 — MIT
 - toml 0.8.2 — Apache-2.0 OR MIT
 - toml 0.9.12+spec-1.1.0 — Apache-2.0 OR MIT
 - toml 1.1.3+spec-1.1.0 — Apache-2.0 OR MIT
@@ -631,8 +632,8 @@ Project: desktop-tauri
 - zbus-secret-service-keyring-store 1.0.0 — Apache-2.0 OR MIT
 - zbus_macros 5.18.0 — MIT
 - zbus_names 4.3.4 — MIT
-- zerocopy 0.8.54 — Apache-2.0 OR BSD-2-Clause OR MIT
-- zerocopy-derive 0.8.54 — Apache-2.0 OR BSD-2-Clause OR MIT
+- zerocopy 0.8.55 — Apache-2.0 OR BSD-2-Clause OR MIT
+- zerocopy-derive 0.8.55 — Apache-2.0 OR BSD-2-Clause OR MIT
 - zerofrom 0.1.8 — Unicode-3.0
 - zerofrom-derive 0.1.7 — Unicode-3.0
 - zeroize 1.9.0 — Apache-2.0 OR MIT
