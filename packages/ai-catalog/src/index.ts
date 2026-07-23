@@ -68,6 +68,44 @@ export const TANSTACK_AI_PROVIDERS = [
 
 export type TanStackAIProvider = (typeof TANSTACK_AI_PROVIDERS)[number];
 
+export const MODEL_CATALOG_PROVIDER_KIND = {
+  google: "first-party",
+  openrouter: "aggregator",
+  openai: "first-party",
+  anthropic: "first-party",
+  bedrock: "platform",
+  mistral: "first-party",
+} as const satisfies Record<
+  TanStackAIProvider,
+  "aggregator" | "first-party" | "platform"
+>;
+
+/** Providers whose picker IDs map directly to public first-party catalogs. */
+export type FirstPartyModelProvider = {
+  [TProvider in TanStackAIProvider]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "first-party"
+    ? TProvider
+    : never;
+}[TanStackAIProvider];
+
+const FIRST_PARTY_MODEL_PROVIDER_VALUES = [
+  "google",
+  "openai",
+  "anthropic",
+  "mistral",
+] as const satisfies readonly FirstPartyModelProvider[];
+
+/**
+ * Runtime form of the first-party provider union. The conditional annotation
+ * makes adding a first-party policy without adding its discovery implementation
+ * a compile error.
+ */
+export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
+  FirstPartyModelProvider,
+  (typeof FIRST_PARTY_MODEL_PROVIDER_VALUES)[number]
+> extends never
+  ? typeof FIRST_PARTY_MODEL_PROVIDER_VALUES
+  : never = FIRST_PARTY_MODEL_PROVIDER_VALUES;
+
 /**
  * Per-role default model IDs for the BYOK-capable cloud providers.
  * Shared between the instance default table (`DEFAULT_MODELS`) and the
@@ -151,11 +189,14 @@ export const DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
     "gemini-3.1-pro-preview",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
   ],
   anthropic: [
+    "claude-sonnet-5",
     "claude-fable-5",
     "claude-opus-4-8",
     "claude-opus-4-7",
@@ -163,11 +204,21 @@ export const BYOK_MODEL_OPTIONS = {
     "claude-opus-4-6",
     "claude-haiku-4-5-20251001",
   ],
-  openai: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
+  openai: [
+    "gpt-5.6",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+    "gpt-5.2",
+  ],
   openrouter: [
+    "google/gemini-3.6-flash",
+    "google/gemini-3.5-flash-lite",
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
     "google/gemini-3.1-flash-lite",
+    "anthropic/claude-sonnet-5",
     "anthropic/claude-opus-4.8",
     "anthropic/claude-sonnet-4.6",
     "openai/gpt-5.5",
@@ -237,7 +288,7 @@ type BYOKModelIdByProvider = {
 export type OfferedBYOKModelId = BYOKModelIdByProvider[BYOKProvider];
 
 const TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS = {
-  anthropic: ["claude-sonnet-4-6"],
+  anthropic: ["claude-sonnet-5", "claude-sonnet-4-6"],
   bedrock: [
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0",
@@ -253,6 +304,7 @@ const TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS = {
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
     "google/gemini-3.1-flash-lite",
+    "anthropic/claude-sonnet-5",
     "anthropic/claude-opus-4.8",
     "anthropic/claude-sonnet-4.6",
     "openai/gpt-5.5",
@@ -273,7 +325,16 @@ const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
     "claude-opus-4-6",
     "claude-haiku-4-5-20251001",
   ],
-  openai: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
+  google: ["gemini-3.6-flash", "gemini-3.5-flash-lite"],
+  openai: [
+    "gpt-5.6",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.4-nano",
+    "gpt-5.2",
+  ],
+  openrouter: ["google/gemini-3.6-flash", "google/gemini-3.5-flash-lite"],
 } as const satisfies Partial<{
   [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
 }>;
@@ -284,10 +345,16 @@ export const BYOK_DOCUMENT_INPUT_MODEL_OPTIONS = {
     ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.anthropic,
   ],
   bedrock: TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.bedrock,
-  google: TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.google,
+  google: [
+    ...TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.google,
+    ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.google,
+  ],
   mistral: [],
   openai: STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.openai,
-  openrouter: TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter,
+  openrouter: [
+    ...TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter,
+    ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter,
+  ],
 } as const satisfies {
   [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
 };
@@ -417,6 +484,7 @@ export const resolveWorkingBYOKModelForRole = ({
  * offered above must appear here or it will 400 on the reasoning role.
  */
 export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
+  "claude-sonnet-5",
   "claude-sonnet-4-6",
   "claude-opus-4-6",
   "claude-opus-4-7",
@@ -466,6 +534,24 @@ export {
   MODEL_TEMPERATURE_SUPPORT,
 } from "./capabilities.gen";
 
+type OfferedFirstPartyModelId =
+  (typeof BYOK_MODEL_OPTIONS)[FirstPartyModelProvider][number];
+
+/**
+ * Provider-native IDs that are exact aliases of an offered catalog ID.
+ * Every metadata lookup normalizes here, so instance/dev overrides cannot
+ * bypass rates or capabilities and duplicated alias rows cannot drift apart.
+ */
+export const MODEL_CATALOG_ID_ALIASES = {
+  "gpt-5.6-sol": "gpt-5.6",
+} as const satisfies Readonly<Record<string, OfferedFirstPartyModelId>>;
+
+const MODEL_CATALOG_ID_ALIAS_TARGET_BY_ID: Readonly<Record<string, string>> =
+  MODEL_CATALOG_ID_ALIASES;
+
+export const normalizeModelCatalogId = (modelId: string): string =>
+  MODEL_CATALOG_ID_ALIAS_TARGET_BY_ID[modelId] ?? modelId;
+
 const MODEL_TEMPERATURE_SUPPORT_BY_ID: Readonly<Record<string, boolean>> =
   MODEL_TEMPERATURE_SUPPORT;
 
@@ -476,7 +562,7 @@ const MODEL_TEMPERATURE_SUPPORT_BY_ID: Readonly<Record<string, boolean>> =
  * a runtime string.
  */
 export const supportsTemperature = (modelId: string): boolean =>
-  MODEL_TEMPERATURE_SUPPORT_BY_ID[modelId] ?? false;
+  MODEL_TEMPERATURE_SUPPORT_BY_ID[normalizeModelCatalogId(modelId)] ?? false;
 
 const MODEL_REASONING_EFFORTS_BY_ID: Readonly<
   Record<string, readonly ReasoningEffort[] | null>
@@ -491,7 +577,7 @@ const MODEL_REASONING_EFFORTS_BY_ID: Readonly<
 export const getModelReasoningEfforts = (
   modelId: string,
 ): readonly ReasoningEffort[] | null =>
-  MODEL_REASONING_EFFORTS_BY_ID[modelId] ?? null;
+  MODEL_REASONING_EFFORTS_BY_ID[normalizeModelCatalogId(modelId)] ?? null;
 
 // Sole constructor of the ResolvedReasoningEffort brand; every call
 // site below has already established membership in the model's
@@ -559,7 +645,7 @@ export const resolveReasoningEffort = ({
  * consistent with upstream catalog cost metadata, so a stale entry
  * fails CI instead of silently mis-attributing usage.
  */
-export type ModelRate = {
+export type ModelRateAmounts = {
   /** Normalized micro-units per 1M input tokens. */
   inputPerMTok: number;
   /** Normalized micro-units per 1M output tokens. */
@@ -573,146 +659,254 @@ export type ModelRate = {
 };
 
 /**
+ * A discriminated rate schedule. Consumers must resolve the schedule from the
+ * request's total input tokens before reading any prices, so a model with a
+ * long-context premium cannot accidentally be metered at its base rate.
+ */
+export type ModelRate =
+  | ({ kind: "flat" } & ModelRateAmounts)
+  | {
+      kind: "input-token-tiered";
+      /** The base tier applies at or below this total input-token count. */
+      inputTokenThreshold: number;
+      standard: ModelRateAmounts;
+      /** Applies to the entire request once input exceeds the threshold. */
+      aboveThreshold: ModelRateAmounts;
+    };
+
+export const getStandardModelRate = (rate: ModelRate): ModelRateAmounts =>
+  rate.kind === "flat" ? rate : rate.standard;
+
+export const resolveModelRate = (
+  rate: ModelRate,
+  inputTokens: number,
+): ModelRateAmounts =>
+  rate.kind === "input-token-tiered" && inputTokens > rate.inputTokenThreshold
+    ? rate.aboveThreshold
+    : getStandardModelRate(rate);
+
+/**
  * Providers whose catalog entries are first-party API model IDs and so
  * must carry an explicit rate. Mirrors `MODELS_DEV_PROVIDER` in the
  * nightly check; `openrouter` (provider-prefixed slugs) and the
  * legacy/custom-deployment providers are metered by their underlying
  * model IDs or the fallback rate.
  */
-type FirstPartyProvider = "google" | "openai" | "anthropic" | "mistral";
-
-type OfferedFirstPartyModelId =
-  (typeof BYOK_MODEL_OPTIONS)[FirstPartyProvider][number];
-
 // `satisfies Record<OfferedFirstPartyModelId, ...>` makes offering a
 // first-party model without a rate a compile error; the intersection
 // with `Record<string, ...>` keeps room for retired models that still
 // appear in historical ledger rows.
 export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
   "gemini-2.5-flash": {
+    kind: "flat",
     inputPerMTok: 30_000,
     outputPerMTok: 250_000,
     cachedInputPerMTok: 7500,
   },
   "gemini-2.5-pro": {
+    kind: "flat",
     inputPerMTok: 125_000,
     outputPerMTok: 1_000_000,
     cachedInputPerMTok: 31_250,
   },
   "gemini-3.1-flash-lite": {
+    kind: "flat",
     inputPerMTok: 25_000,
     outputPerMTok: 150_000,
     cachedInputPerMTok: 2500,
   },
   "gemini-3.5-flash": {
+    kind: "flat",
     inputPerMTok: 150_000,
     outputPerMTok: 900_000,
     cachedInputPerMTok: 15_000,
   },
+  "gemini-3.5-flash-lite": {
+    kind: "flat",
+    inputPerMTok: 30_000,
+    outputPerMTok: 250_000,
+    cachedInputPerMTok: 3000,
+  },
+  "gemini-3.6-flash": {
+    kind: "flat",
+    inputPerMTok: 150_000,
+    outputPerMTok: 750_000,
+    cachedInputPerMTok: 15_000,
+  },
   "gemini-3.1-pro-preview": {
-    inputPerMTok: 200_000,
-    outputPerMTok: 1_200_000,
-    cachedInputPerMTok: 20_000,
+    kind: "input-token-tiered",
+    inputTokenThreshold: 200_000,
+    standard: {
+      inputPerMTok: 200_000,
+      outputPerMTok: 1_200_000,
+      cachedInputPerMTok: 20_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 400_000,
+      outputPerMTok: 1_800_000,
+      cachedInputPerMTok: 40_000,
+    },
   },
   "gpt-4o-mini": {
+    kind: "flat",
     inputPerMTok: 15_000,
     outputPerMTok: 60_000,
     cachedInputPerMTok: 7500,
   },
   "gpt-4o": {
+    kind: "flat",
     inputPerMTok: 250_000,
     outputPerMTok: 1_000_000,
     cachedInputPerMTok: 125_000,
   },
   "gpt-5.2": {
+    kind: "flat",
     inputPerMTok: 175_000,
     outputPerMTok: 1_400_000,
     cachedInputPerMTok: 17_500,
   },
   "gpt-5.4-nano": {
+    kind: "flat",
     inputPerMTok: 20_000,
     outputPerMTok: 125_000,
     cachedInputPerMTok: 2000,
   },
   "gpt-5.4-mini": {
+    kind: "flat",
     inputPerMTok: 75_000,
     outputPerMTok: 450_000,
     cachedInputPerMTok: 7500,
   },
   "gpt-5.4": {
-    inputPerMTok: 250_000,
-    outputPerMTok: 1_500_000,
-    cachedInputPerMTok: 25_000,
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 250_000,
+      outputPerMTok: 1_500_000,
+      cachedInputPerMTok: 25_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 500_000,
+      outputPerMTok: 2_250_000,
+      cachedInputPerMTok: 50_000,
+    },
   },
   "gpt-5.5": {
-    inputPerMTok: 500_000,
-    outputPerMTok: 3_000_000,
-    cachedInputPerMTok: 50_000,
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 500_000,
+      outputPerMTok: 3_000_000,
+      cachedInputPerMTok: 50_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 1_000_000,
+      outputPerMTok: 4_500_000,
+      cachedInputPerMTok: 100_000,
+    },
+  },
+  "gpt-5.6": {
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 500_000,
+      outputPerMTok: 3_000_000,
+      cachedInputPerMTok: 50_000,
+    },
+    aboveThreshold: {
+      // OpenAI prices the entire >272K request at 2x input and 1.5x output.
+      inputPerMTok: 1_000_000,
+      outputPerMTok: 4_500_000,
+      cachedInputPerMTok: 100_000,
+    },
   },
   "claude-haiku-4-5-20251001": {
+    kind: "flat",
     inputPerMTok: 100_000,
     outputPerMTok: 500_000,
     cachedInputPerMTok: 10_000,
   },
   "claude-sonnet-4-6": {
+    kind: "flat",
     inputPerMTok: 300_000,
     outputPerMTok: 1_500_000,
     cachedInputPerMTok: 30_000,
   },
+  "claude-sonnet-5": {
+    kind: "flat",
+    inputPerMTok: 200_000,
+    outputPerMTok: 1_000_000,
+    cachedInputPerMTok: 20_000,
+  },
   "claude-opus-4-6": {
+    kind: "flat",
     inputPerMTok: 500_000,
     outputPerMTok: 2_500_000,
     cachedInputPerMTok: 50_000,
   },
   "claude-opus-4-7": {
+    kind: "flat",
     inputPerMTok: 500_000,
     outputPerMTok: 2_500_000,
     cachedInputPerMTok: 50_000,
   },
   "claude-opus-4-8": {
+    kind: "flat",
     inputPerMTok: 500_000,
     outputPerMTok: 2_500_000,
     cachedInputPerMTok: 50_000,
   },
   "claude-fable-5": {
+    kind: "flat",
     inputPerMTok: 1_000_000,
     outputPerMTok: 5_000_000,
     cachedInputPerMTok: 100_000,
   },
   "mistral-small-latest": {
+    kind: "flat",
     inputPerMTok: 15_000,
     outputPerMTok: 60_000,
   },
   "mistral-large-latest": {
+    kind: "flat",
     inputPerMTok: 50_000,
     outputPerMTok: 150_000,
   },
   "mistral-medium-latest": {
+    kind: "flat",
     inputPerMTok: 150_000,
     outputPerMTok: 750_000,
   },
   "mistral-medium-3-5": {
+    kind: "flat",
     inputPerMTok: 150_000,
     outputPerMTok: 750_000,
   },
   "magistral-medium-latest": {
+    kind: "flat",
     inputPerMTok: 200_000,
     outputPerMTok: 500_000,
   },
   "magistral-small": {
+    kind: "flat",
     inputPerMTok: 50_000,
     outputPerMTok: 150_000,
   },
   "magistral-small-latest": {
+    kind: "flat",
     inputPerMTok: 50_000,
     outputPerMTok: 150_000,
   },
   "pixtral-large-latest": {
+    kind: "flat",
     inputPerMTok: 200_000,
     outputPerMTok: 600_000,
   },
 } satisfies Record<OfferedFirstPartyModelId, ModelRate> &
   Record<string, ModelRate>;
+
+export const getModelRate = (modelId: string): ModelRate | undefined =>
+  MODEL_RATES[normalizeModelCatalogId(modelId)];
 
 /**
  * Documented input context-window sizes (in tokens) per model ID.
@@ -737,8 +931,10 @@ export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
   "gemini-2.5-pro": 1_048_576,
   "gemini-3.1-flash-lite": 1_048_576,
   "gemini-3.5-flash": 1_048_576,
+  "gemini-3.5-flash-lite": 1_048_576,
+  "gemini-3.6-flash": 1_048_576,
   "gemini-3.1-pro-preview": 1_048_576,
-  // OpenAI: GPT-4o family 128K; GPT-5 family 400K input.
+  // OpenAI: GPT-4o family 128K; GPT-5 varies by generation.
   "gpt-4o-mini": 128_000,
   "gpt-4o": 128_000,
   "gpt-5.2": 400_000,
@@ -746,9 +942,11 @@ export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
   "gpt-5.4-mini": 400_000,
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
-  // Anthropic Claude: standard 200K window (1M is beta-gated; not assumed).
+  "gpt-5.6": 922_000,
+  // Anthropic Claude: 200K through Claude 4; Sonnet 5 exposes 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,
+  "claude-sonnet-5": 1_000_000,
   "claude-opus-4-6": 200_000,
   "claude-opus-4-7": 200_000,
   "claude-opus-4-8": 200_000,
@@ -763,9 +961,12 @@ export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
   "magistral-small": 128_000,
   "pixtral-large-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
+  "google/gemini-3.6-flash": 1_048_576,
+  "google/gemini-3.5-flash-lite": 1_048_576,
   "google/gemini-3.1-pro-preview": 1_048_576,
   "google/gemini-3.5-flash": 1_048_576,
   "google/gemini-3.1-flash-lite": 1_048_576,
+  "anthropic/claude-sonnet-5": 1_000_000,
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
   "openai/gpt-5.5": 400_000,
@@ -794,4 +995,5 @@ export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
  * `CONTEXT_WINDOW_TOKENS` directly.
  */
 export const getContextWindowTokens = (modelId: string): number =>
-  CONTEXT_WINDOW_TOKENS[modelId] ?? DEFAULT_CONTEXT_WINDOW_TOKENS;
+  CONTEXT_WINDOW_TOKENS[normalizeModelCatalogId(modelId)] ??
+  DEFAULT_CONTEXT_WINDOW_TOKENS;

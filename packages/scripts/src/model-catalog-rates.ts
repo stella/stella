@@ -14,6 +14,9 @@
  *  3. Cached-rate coverage — when upstream publishes cache-read
  *     pricing, the entry must carry `cachedInputPerMTok`; otherwise
  *     cached tokens are attributed at the full input rate.
+ *  4. Tier coverage — upstream context-price thresholds and every tiered
+ *     input/output/cache amount must match the discriminated local schedule.
+ *     A new upstream tier cannot remain hidden behind a flat local rate.
  *
  * Models without published upstream cost metadata are skipped for
  * invariants 2 and 3 and reported as a warning by the caller.
@@ -22,14 +25,23 @@
  * unit-testable; ledger attribution depends on it.
  */
 
-import type { ModelRate } from "@stll/ai-catalog";
+import { getStandardModelRate } from "@stll/ai-catalog";
+import type { ModelRate, ModelRateAmounts } from "@stll/ai-catalog";
 
 export type CatalogEntry = { provider: string; modelId: string };
 
-export type UpstreamCost = {
+type UpstreamCostAmounts = {
   input: number | undefined;
   output: number | undefined;
   cacheRead: number | undefined;
+};
+
+export type UpstreamCostTier = UpstreamCostAmounts & {
+  inputTokenThreshold: number;
+};
+
+export type UpstreamCost = UpstreamCostAmounts & {
+  inputTokenTiers: readonly UpstreamCostTier[];
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -48,10 +60,33 @@ export const parseUpstreamCost = (modelVal: unknown): UpstreamCost | null => {
     return null;
   }
   const cost = modelVal["cost"];
+  const rawTiers = Array.isArray(cost["tiers"]) ? cost["tiers"] : [];
+  const inputTokenTiers: UpstreamCostTier[] = [];
+  for (const rawTier of rawTiers) {
+    if (!isObject(rawTier) || !isObject(rawTier["tier"])) {
+      continue;
+    }
+    const discriminator = rawTier["tier"];
+    if (
+      (discriminator["type"] !== undefined &&
+        discriminator["type"] !== "context") ||
+      typeof discriminator["size"] !== "number" ||
+      discriminator["size"] <= 0
+    ) {
+      continue;
+    }
+    inputTokenTiers.push({
+      inputTokenThreshold: discriminator["size"],
+      input: readCostField(rawTier, "input"),
+      output: readCostField(rawTier, "output"),
+      cacheRead: readCostField(rawTier, "cache_read"),
+    });
+  }
   return {
     input: readCostField(cost, "input"),
     output: readCostField(cost, "output"),
     cacheRead: readCostField(cost, "cache_read"),
+    inputTokenTiers,
   };
 };
 
@@ -90,6 +125,37 @@ export const validateRates = ({
   const skipped: CatalogEntry[] = [];
   type FactorSample = { entry: CatalogEntry; axis: string; factor: number };
   const samples: FactorSample[] = [];
+  const sampleAmounts = (
+    entry: CatalogEntry,
+    label: string,
+    rateAmounts: ModelRateAmounts,
+    upstreamAmounts: UpstreamCostAmounts,
+  ): void => {
+    if (upstreamAmounts.input !== undefined) {
+      samples.push({
+        entry,
+        axis: `${label}input`,
+        factor: rateAmounts.inputPerMTok / upstreamAmounts.input,
+      });
+    }
+    if (upstreamAmounts.output !== undefined) {
+      samples.push({
+        entry,
+        axis: `${label}output`,
+        factor: rateAmounts.outputPerMTok / upstreamAmounts.output,
+      });
+    }
+    if (
+      upstreamAmounts.cacheRead !== undefined &&
+      rateAmounts.cachedInputPerMTok !== undefined
+    ) {
+      samples.push({
+        entry,
+        axis: `${label}cached-input`,
+        factor: rateAmounts.cachedInputPerMTok / upstreamAmounts.cacheRead,
+      });
+    }
+  };
 
   for (const entry of entries) {
     const mdProvider = firstPartyProviders[entry.provider];
@@ -105,12 +171,16 @@ export const validateRates = ({
       });
       continue;
     }
+    const standardRate = getStandardModelRate(rate);
     const cost = costs.get(`${mdProvider}:${entry.modelId}`);
     if (cost === undefined) {
       skipped.push(entry);
       continue;
     }
-    if (cost.cacheRead !== undefined && rate.cachedInputPerMTok === undefined) {
+    if (
+      cost.cacheRead !== undefined &&
+      standardRate.cachedInputPerMTok === undefined
+    ) {
       failures.push({
         entry,
         label: "NO CACHED RATE",
@@ -120,27 +190,49 @@ export const validateRates = ({
           "input rate",
       });
     }
-    if (cost.input !== undefined) {
-      samples.push({
+    sampleAmounts(entry, "", standardRate, cost);
+
+    if (rate.kind === "flat") {
+      if (cost.inputTokenTiers.length > 0) {
+        failures.push({
+          entry,
+          label: "NO TIERED RATE",
+          detail:
+            "upstream publishes long-context pricing but MODEL_RATES is flat",
+        });
+      }
+      continue;
+    }
+
+    const matchingTiers = cost.inputTokenTiers.filter(
+      (tier) => tier.inputTokenThreshold === rate.inputTokenThreshold,
+    );
+    if (cost.inputTokenTiers.length !== 1 || matchingTiers.length !== 1) {
+      failures.push({
         entry,
-        axis: "input",
-        factor: rate.inputPerMTok / cost.input,
+        label: "TIER DRIFT",
+        detail:
+          `expected exactly one upstream context tier at ${rate.inputTokenThreshold} tokens; ` +
+          `found ${cost.inputTokenTiers.map((tier) => tier.inputTokenThreshold).join(", ") || "none"}`,
+      });
+      continue;
+    }
+    const upstreamTier = matchingTiers[0];
+    if (upstreamTier === undefined) {
+      continue;
+    }
+    if (
+      upstreamTier.cacheRead !== undefined &&
+      rate.aboveThreshold.cachedInputPerMTok === undefined
+    ) {
+      failures.push({
+        entry,
+        label: "NO CACHED TIER RATE",
+        detail:
+          "upstream publishes tiered cache-read pricing but aboveThreshold has no cachedInputPerMTok",
       });
     }
-    if (cost.output !== undefined) {
-      samples.push({
-        entry,
-        axis: "output",
-        factor: rate.outputPerMTok / cost.output,
-      });
-    }
-    if (cost.cacheRead !== undefined && rate.cachedInputPerMTok !== undefined) {
-      samples.push({
-        entry,
-        axis: "cached-input",
-        factor: rate.cachedInputPerMTok / cost.cacheRead,
-      });
-    }
+    sampleAmounts(entry, "tiered-", rate.aboveThreshold, upstreamTier);
   }
 
   // The reference normalization factor is the median sample, so a

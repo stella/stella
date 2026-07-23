@@ -101,22 +101,22 @@ describe("BYOK provider and model configuration", () => {
       getAvailableModelOptions(["anthropic", "openai", "openrouter"]),
     ).toContainEqual({
       provider: "anthropic",
-      modelId: "claude-opus-4-7",
-      value: "anthropic::claude-opus-4-7",
+      modelId: "claude-sonnet-5",
+      value: "anthropic::claude-sonnet-5",
     });
     expect(
       getAvailableModelOptions(["anthropic", "openai", "openrouter"]),
     ).toContainEqual({
       provider: "openai",
-      modelId: "gpt-5.4",
-      value: "openai::gpt-5.4",
+      modelId: "gpt-5.6",
+      value: "openai::gpt-5.6",
     });
     expect(
       getAvailableModelOptions(["anthropic", "openai", "openrouter"]),
     ).toContainEqual({
       provider: "openrouter",
-      modelId: "google/gemini-3.5-flash",
-      value: "openrouter::google/gemini-3.5-flash",
+      modelId: "google/gemini-3.6-flash",
+      value: "openrouter::google/gemini-3.6-flash",
     });
   });
 
@@ -129,18 +129,18 @@ describe("BYOK provider and model configuration", () => {
 
     expect(modelOptions).toContainEqual({
       provider: "anthropic",
-      modelId: "claude-opus-4-6",
-      value: "anthropic::claude-opus-4-6",
+      modelId: "claude-sonnet-5",
+      value: "anthropic::claude-sonnet-5",
     });
     expect(modelOptions).toContainEqual({
       provider: "google",
-      modelId: "gemini-3.5-flash",
-      value: "google::gemini-3.5-flash",
+      modelId: "gemini-3.6-flash",
+      value: "google::gemini-3.6-flash",
     });
     expect(modelOptions).toContainEqual({
       provider: "openai",
-      modelId: "gpt-5.2",
-      value: "openai::gpt-5.2",
+      modelId: "gpt-5.6",
+      value: "openai::gpt-5.6",
     });
     expect(modelOptions).not.toContainEqual({
       provider: "anthropic",

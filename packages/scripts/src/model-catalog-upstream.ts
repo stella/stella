@@ -8,18 +8,22 @@
  * that silent failure into a loud CI failure, using live, public,
  * keyless listings.
  *
- * Two signals:
- *  1. Deprecation — models.dev publishes first-party provider catalogs
+ * Four signals:
+ *  1. Discovery — every newly released, general-purpose first-party model
+ *     must be offered or carry an exact, dated review disposition. This is
+ *     the reverse check the picker previously lacked: upstream additions now
+ *     fail CI instead of remaining invisible.
+ *  2. Deprecation — models.dev publishes first-party provider catalogs
  *     (google/openai/anthropic/mistral) keyed by the provider-native ID
  *     with a `status: "deprecated"` marker. A deprecated model still
  *     answers for now but is on its way out; flagging it gives us lead
  *     time to migrate before the hard shutdown. (This is exactly the
  *     `gemini-3.1-flash-lite-preview` case: still listed everywhere,
  *     but marked deprecated.)
- *  2. Existence — OpenRouter slugs are checked for presence against
+ *  3. Existence — OpenRouter slugs are checked for presence against
  *     OpenRouter's routing API; future non-first-party providers can
  *     fall back to the full upstream model set.
- *  3. Request capabilities — the per-model `MODEL_REASONING_EFFORTS`
+ *  4. Request capabilities — the per-model `MODEL_REASONING_EFFORTS`
  *     and `MODEL_TEMPERATURE_SUPPORT` declarations are compared
  *     against models.dev `reasoning_options` and `temperature`
  *     (first-party and openrouter catalogs), so a model that starts
@@ -38,10 +42,12 @@ import {
   BYOK_MODEL_OPTIONS,
   CAPABILITY_OVERRIDES,
   DEFAULT_MODELS,
+  FIRST_PARTY_MODEL_PROVIDERS,
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
   MODEL_TEMPERATURE_SUPPORT,
 } from "@stll/ai-catalog";
+import type { FirstPartyModelProvider } from "@stll/ai-catalog";
 
 import {
   parseUpstreamCapabilities,
@@ -51,6 +57,11 @@ import type {
   CapabilityFailure,
   UpstreamCapabilities,
 } from "./model-catalog-capabilities";
+import {
+  findUnreviewedModels,
+  isPickerRelevantUpstreamModel,
+} from "./model-catalog-discovery";
+import type { UpstreamDiscoveryModel } from "./model-catalog-discovery";
 import { parseUpstreamCost, validateRates } from "./model-catalog-rates";
 import type {
   CatalogEntry,
@@ -78,13 +89,22 @@ const ACKNOWLEDGED = new Set<AcknowledgementKey>();
  * catalog (same key, same native ID), so we can read its authoritative
  * `status` field. The values are also the models.dev provider keys.
  */
-const MODELS_DEV_PROVIDER: Record<string, string> = {
+const MODELS_DEV_PROVIDER = {
   google: "google",
   openai: "openai",
   anthropic: "anthropic",
   mistral: "mistral",
-};
-const FIRST_PARTY_KEYS = new Set(Object.values(MODELS_DEV_PROVIDER));
+} as const satisfies Record<FirstPartyModelProvider, string>;
+
+// Widened view for runtime provider strings; the declaration above keeps the
+// compile-time exhaustiveness check for every first-party provider.
+const MODELS_DEV_PROVIDER_BY_NAME: Readonly<Record<string, string>> =
+  MODELS_DEV_PROVIDER;
+
+const isFirstPartyModelProvider = (
+  provider: string,
+): provider is FirstPartyModelProvider =>
+  FIRST_PARTY_MODEL_PROVIDERS.some((candidate) => candidate === provider);
 
 /**
  * Providers whose reasoning capability is checkable against models.dev.
@@ -220,6 +240,8 @@ type Upstream = {
    * catalogs plus the models.dev openrouter catalog).
    */
   capabilityMeta: Map<string, UpstreamCapabilities>;
+  /** First-party metadata used to discover newly launched picker models. */
+  discoveryModels: UpstreamDiscoveryModel[];
   /** OpenRouter listing was fetched and parsed. */
   openrouterReachable: boolean;
   /** models.dev listing was fetched and parsed. */
@@ -234,6 +256,7 @@ const loadUpstream = async (): Promise<Upstream> => {
   const firstPartyDeprecated = new Set<string>();
   const firstPartyCost = new Map<string, UpstreamCost>();
   const capabilityMeta = new Map<string, UpstreamCapabilities>();
+  const discoveryModels: UpstreamDiscoveryModel[] = [];
   let openrouterReachable = false;
   let modelsDevReachable = false;
 
@@ -265,7 +288,7 @@ const loadUpstream = async (): Promise<Upstream> => {
       if (!isObject(providerVal) || !isObject(providerVal["models"])) {
         continue;
       }
-      const isFirstParty = FIRST_PARTY_KEYS.has(providerKey);
+      const isFirstParty = isFirstPartyModelProvider(providerKey);
       for (const [modelId, modelVal] of Object.entries(providerVal["models"])) {
         canonAll.add(canonical(modelId));
         count += 1;
@@ -282,6 +305,36 @@ const loadUpstream = async (): Promise<Upstream> => {
         if (!isFirstParty) {
           continue;
         }
+        const modelObject = isObject(modelVal) ? modelVal : {};
+        const modalities = isObject(modelObject["modalities"])
+          ? modelObject["modalities"]
+          : {};
+        const rawOutputModalities = isUnknownArray(modalities["output"])
+          ? modalities["output"]
+          : [];
+        discoveryModels.push({
+          provider: providerKey,
+          modelId,
+          releaseDate:
+            typeof modelObject["release_date"] === "string"
+              ? modelObject["release_date"]
+              : null,
+          status:
+            typeof modelObject["status"] === "string"
+              ? modelObject["status"]
+              : null,
+          toolCall:
+            typeof modelObject["tool_call"] === "boolean"
+              ? modelObject["tool_call"]
+              : null,
+          structuredOutput:
+            typeof modelObject["structured_output"] === "boolean"
+              ? modelObject["structured_output"]
+              : null,
+          outputModalities: rawOutputModalities.filter(
+            (modality): modality is string => typeof modality === "string",
+          ),
+        });
         const key = `${providerKey}:${modelId}`;
         firstPartyPresent.add(key);
         if (isObject(modelVal) && modelVal["status"] === "deprecated") {
@@ -306,6 +359,7 @@ const loadUpstream = async (): Promise<Upstream> => {
     firstPartyDeprecated,
     firstPartyCost,
     capabilityMeta,
+    discoveryModels,
     openrouterReachable,
     modelsDevReachable,
   };
@@ -337,7 +391,7 @@ const classify = (entry: CatalogEntry, upstream: Upstream): Verdict => {
 
   // Native providers with a first-party models.dev catalog: read the
   // authoritative `status` field.
-  const mdProvider = MODELS_DEV_PROVIDER[provider];
+  const mdProvider = MODELS_DEV_PROVIDER_BY_NAME[provider];
   if (mdProvider !== undefined) {
     if (!upstream.modelsDevReachable) {
       return { kind: "unverified", detail: "models.dev listing unreachable" };
@@ -374,6 +428,15 @@ const main = async (): Promise<void> => {
   const upstream = await loadUpstream();
 
   const entries = collectCatalogEntries();
+  const pickerRelevantUpstreamModels = upstream.modelsDevReachable
+    ? upstream.discoveryModels.filter(isPickerRelevantUpstreamModel)
+    : [];
+  const discoveryFailures = upstream.modelsDevReachable
+    ? findUnreviewedModels({
+        upstream: upstream.discoveryModels,
+        offered: BYOK_MODEL_OPTIONS,
+      })
+    : [];
   const failures: { entry: CatalogEntry; verdict: Verdict }[] = [];
   const unverified: { entry: CatalogEntry; verdict: Verdict }[] = [];
 
@@ -476,6 +539,11 @@ const main = async (): Promise<void> => {
   }
 
   console.log(`\nChecked ${entries.length} offered model IDs.`);
+  if (upstream.modelsDevReachable) {
+    console.log(
+      `Reviewed ${pickerRelevantUpstreamModels.length} newly released picker-relevant upstream model IDs.`,
+    );
+  }
 
   if (unverified.length > 0) {
     console.warn(
@@ -497,9 +565,17 @@ const main = async (): Promise<void> => {
   }
 
   const failureCount =
-    failures.length + rateFailures.length + capabilityFailures.length;
+    discoveryFailures.length +
+    failures.length +
+    rateFailures.length +
+    capabilityFailures.length;
   if (failureCount > 0) {
-    console.error(`\n✗ ${failureCount} offered model ID(s) need attention:`);
+    console.error(`\n✗ ${failureCount} model catalog issue(s) need attention:`);
+    for (const model of discoveryFailures) {
+      console.error(
+        `  ✗ [NEW] ${model.provider} / ${model.modelId} — released ${model.releaseDate ?? "without a date"}; not offered or reviewed`,
+      );
+    }
     for (const { entry, verdict } of failures) {
       const label = verdict.kind === "deprecated" ? "DEPRECATED" : "MISSING";
       const detail = "detail" in verdict ? ` — ${verdict.detail}` : "";
@@ -516,10 +592,10 @@ const main = async (): Promise<void> => {
       );
     }
     console.error(
-      "\nResolve by updating @stll/ai-catalog (migrate off the model, or\n" +
-        "refresh its MODEL_RATES / MODEL_REASONING_EFFORTS entry), or, if\n" +
+      "\nResolve by updating @stll/ai-catalog (offer a discovered model, migrate\n" +
+        "off a retired model, or refresh its rates/capabilities), or, if\n" +
         "the divergence is real and deliberate, add the provider-scoped\n" +
-        "acknowledgementKey() form to ACKNOWLEDGED with a dated note.",
+        "exact ID to the appropriate reviewed set with a dated note.",
     );
     process.exit(1);
   }

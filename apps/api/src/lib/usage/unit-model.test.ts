@@ -38,6 +38,66 @@ describe("computeRawUsageMicroUnits", () => {
     expect(withCache).toBeLessThan(noCache);
   });
 
+  for (const [modelId, atThresholdUnits, aboveThresholdUnits] of [
+    ["gpt-5.4", 69_500, 138_251],
+    ["gpt-5.5", 139_000, 276_501],
+    ["gpt-5.6", 139_000, 276_501],
+  ] as const) {
+    test(`${modelId} switches the entire request above 272K input tokens`, () => {
+      const atThreshold = computeRawUsageMicroUnits({
+        modelId,
+        inputTokens: 272_000,
+        outputTokens: 1000,
+      });
+      const aboveThreshold = computeRawUsageMicroUnits({
+        modelId,
+        inputTokens: 272_001,
+        outputTokens: 1000,
+      });
+
+      expect(atThreshold).toBe(atThresholdUnits);
+      expect(aboveThreshold).toBe(aboveThresholdUnits);
+    });
+  }
+
+  test("Gemini 3.1 Pro switches the entire request above 200K input tokens", () => {
+    expect(
+      computeRawUsageMicroUnits({
+        modelId: "gemini-3.1-pro-preview",
+        inputTokens: 200_000,
+        outputTokens: 1000,
+      }),
+    ).toBe(41_200);
+    expect(
+      computeRawUsageMicroUnits({
+        modelId: "gemini-3.1-pro-preview",
+        inputTokens: 200_001,
+        outputTokens: 1000,
+      }),
+    ).toBe(81_801);
+  });
+
+  test("GPT-5.6 applies its long-context multiplier to cached input", () => {
+    expect(
+      computeRawUsageMicroUnits({
+        modelId: "gpt-5.6",
+        inputTokens: 300_000,
+        outputTokens: 0,
+        cacheReadTokens: 300_000,
+      }),
+    ).toBe(30_000);
+  });
+
+  test("GPT-5.6 Sol canonical ID shares the alias rate schedule", () => {
+    const usage = {
+      inputTokens: 300_000,
+      outputTokens: 10_000,
+    };
+    expect(
+      computeRawUsageMicroUnits({ modelId: "gpt-5.6-sol", ...usage }),
+    ).toBe(computeRawUsageMicroUnits({ modelId: "gpt-5.6", ...usage }));
+  });
+
   test("unknown models use the conservative fallback rate", () => {
     const units = computeRawUsageMicroUnits({
       modelId: "unknown-model-name",

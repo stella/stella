@@ -12,6 +12,8 @@ import {
   CONTEXT_WINDOW_TOKENS,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
   getContextWindowTokens,
+  getModelRate,
+  getModelReasoningEfforts,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   DEFAULT_MODELS,
@@ -56,15 +58,23 @@ describe("BYOK_MODEL_OPTIONS", () => {
       expect(models.length).toBeGreaterThan(0);
     }
   });
+
+  test("offers the current stable general-purpose model launches", () => {
+    expect(BYOK_MODEL_OPTIONS.google).toContain("gemini-3.6-flash");
+    expect(BYOK_MODEL_OPTIONS.google).toContain("gemini-3.5-flash-lite");
+    expect(BYOK_MODEL_OPTIONS.openai).toContain("gpt-5.6");
+    expect(BYOK_MODEL_OPTIONS.anthropic).toContain("claude-sonnet-5");
+    expect(BYOK_MODEL_OPTIONS.openrouter).toContain("google/gemini-3.6-flash");
+  });
 });
 
 describe("BYOK provider role support", () => {
   test("documents the curated PDF-capable model set", () => {
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.google).toContain(
-      "gemini-3.5-flash",
+      "gemini-3.6-flash",
     );
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter).toContain(
-      "google/gemini-3.5-flash",
+      "google/gemini-3.6-flash",
     );
     expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.bedrock).toContain(
       "us.amazon.nova-pro-v1:0",
@@ -263,18 +273,40 @@ describe("MODEL_RATES economic ordering", () => {
   // these internal invariants, and runs after the merge window.
   for (const [modelId, rate] of Object.entries(MODEL_RATES)) {
     test(`${modelId}: input>0, output>=input, 0<cached<=input`, () => {
-      expect(rate.inputPerMTok).toBeGreaterThan(0);
-      expect(rate.outputPerMTok).toBeGreaterThanOrEqual(rate.inputPerMTok);
-      if (rate.cachedInputPerMTok !== undefined) {
-        expect(rate.cachedInputPerMTok).toBeGreaterThan(0);
-        // Cache reads must never cost more than fresh input, or caching
-        // becomes a price penalty (computeRawUsageMicroUnits assumes the
-        // opposite).
-        expect(rate.cachedInputPerMTok).toBeLessThanOrEqual(rate.inputPerMTok);
+      const amounts =
+        rate.kind === "flat" ? [rate] : [rate.standard, rate.aboveThreshold];
+      for (const amount of amounts) {
+        expect(amount.inputPerMTok).toBeGreaterThan(0);
+        expect(amount.outputPerMTok).toBeGreaterThanOrEqual(
+          amount.inputPerMTok,
+        );
+        if (amount.cachedInputPerMTok !== undefined) {
+          expect(amount.cachedInputPerMTok).toBeGreaterThan(0);
+          // Cache reads must never cost more than fresh input, or caching
+          // becomes a price penalty (computeRawUsageMicroUnits assumes the
+          // opposite).
+          expect(amount.cachedInputPerMTok).toBeLessThanOrEqual(
+            amount.inputPerMTok,
+          );
+        }
+        expect(Number.isFinite(amount.outputPerMTok)).toBe(true);
       }
-      expect(Number.isFinite(rate.outputPerMTok)).toBe(true);
+      if (rate.kind === "input-token-tiered") {
+        expect(rate.inputTokenThreshold).toBeGreaterThan(0);
+        expect(Number.isInteger(rate.inputTokenThreshold)).toBe(true);
+        expect(rate.aboveThreshold.inputPerMTok).toBeGreaterThanOrEqual(
+          rate.standard.inputPerMTok,
+        );
+        expect(rate.aboveThreshold.outputPerMTok).toBeGreaterThanOrEqual(
+          rate.standard.outputPerMTok,
+        );
+      }
     });
   }
+
+  test("canonical provider aliases share one rate schedule", () => {
+    expect(getModelRate("gpt-5.6-sol")).toBe(getModelRate("gpt-5.6"));
+  });
 });
 
 describe("CONTEXT_WINDOW_TOKENS", () => {
@@ -306,9 +338,20 @@ describe("CONTEXT_WINDOW_TOKENS", () => {
     expect(getContextWindowTokens("claude-sonnet-4-6")).toBe(200_000);
     expect(getContextWindowTokens("gpt-5.4")).toBe(400_000);
   });
+
+  test("canonical provider aliases share context metadata", () => {
+    expect(getContextWindowTokens("gpt-5.6-sol")).toBe(
+      getContextWindowTokens("gpt-5.6"),
+    );
+  });
 });
 
 describe("MODEL_REASONING_EFFORTS", () => {
+  test("canonical provider aliases share reasoning metadata", () => {
+    expect(getModelReasoningEfforts("gpt-5.6-sol")).toEqual(
+      getModelReasoningEfforts("gpt-5.6"),
+    );
+  });
   test("declares every offered BYOK model", () => {
     for (const models of Object.values(BYOK_MODEL_OPTIONS)) {
       for (const modelId of models) {
@@ -355,6 +398,9 @@ describe("MODEL_TEMPERATURE_SUPPORT", () => {
     // Unknown ids: no positive evidence, no parameter.
     expect(supportsTemperature("o3-mini")).toBe(false);
     expect(supportsTemperature("some-env-override-model")).toBe(false);
+    expect(supportsTemperature("gpt-5.6-sol")).toBe(
+      supportsTemperature("gpt-5.6"),
+    );
   });
 });
 

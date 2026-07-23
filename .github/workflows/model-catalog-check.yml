@@ -1,10 +1,10 @@
 name: Model Catalog Upstream Check
 
 # Providers retire and rename models on their own schedules. This
-# nightly job validates every model ID stella offers (@stll/ai-catalog)
-# against live, public, keyless listings (OpenRouter + models.dev) and
-# fails when an offered model is deprecated or gone upstream — so a
-# retired model surfaces here instead of 400-ing a user at runtime.
+# nightly job compares stella's picker (@stll/ai-catalog) bidirectionally
+# with live, public, keyless listings (OpenRouter + models.dev). It fails
+# when an eligible new model has no reviewed disposition, or when an offered
+# model is deprecated or gone upstream.
 
 on:
   schedule:
@@ -37,5 +37,5 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Validate offered model IDs against upstream
+      - name: Discover new models and validate offered IDs
         run: bun run check:model-catalog
