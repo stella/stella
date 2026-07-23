@@ -1,6 +1,6 @@
 ---
 name: regression-hunt
-description: 'Track down a behavior that used to work and now fails, changed, or regressed. Use this when a bug report points to a recent breakage, especially when the cause is not obvious yet.'
+description: "Track down a behavior that used to work and now fails, changed, or regressed. Use this when a bug report points to a recent breakage, especially when the cause is not obvious yet."
 ---
 
 # Regression Hunt
@@ -14,6 +14,7 @@ especially when the cause is not obvious yet.
 $ARGUMENTS — A short description of what regressed.
 
 Helpful extras when available:
+
 - failing test name or file
 - error message or log line
 - expected vs actual behavior
@@ -141,7 +142,7 @@ Preference:
    Either prepend `--inspect-brk` to the test command inside your
    package script temporarily, or invoke directly while replicating the
    flags the script wires — e.g. `bun --inspect-brk test --preload
-   ./setup.ts <file-path>`. Open the printed `devtools://` URL in
+./setup.ts <file-path>`. Open the printed `devtools://` URL in
    Chrome, set one breakpoint at the suspected fault. One breakpoint
    beats ten logs.
 2. Targeted logs at the boundaries that distinguish hypotheses.
@@ -179,7 +180,7 @@ for DB regressions — then bisect. Measure first, fix second.
 ### 10. Post-mortem
 
 Ask: **what would have prevented this regression?** Make this
-recommendation *after* the fix is in — you have more information now than
+recommendation _after_ the fix is in — you have more information now than
 when you started.
 
 Lenses to apply:

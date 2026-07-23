@@ -1,6 +1,6 @@
 ---
 name: product-think
-description: 'Shape a feature or problem before implementation. Use this when the request is still fuzzy, when several solutions are possible, or when execution risks outrunning product clarity.'
+description: "Shape a feature or problem before implementation. Use this when the request is still fuzzy, when several solutions are possible, or when execution risks outrunning product clarity."
 ---
 
 # Product Think
