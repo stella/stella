@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import {
   applyOmittedOptionalPlaceholderDefaults,
   isTemplateFieldRequired,
@@ -65,6 +67,7 @@ describe("optional template placeholder defaults", () => {
           ).toEqual({ defaultedPaths: [], values: first.values });
         },
       ),
+      propertyConfig(),
     );
   });
 

@@ -136,6 +136,11 @@ jobs:
         with:
           bun-version-file: "package.json"
 
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
       - name: Download configured-provider markers
         id: download
         continue-on-error: true
