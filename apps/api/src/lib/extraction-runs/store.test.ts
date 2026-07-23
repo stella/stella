@@ -211,6 +211,33 @@ describe("extraction run store contract", () => {
     expect(run.finishedAt).not.toBeNull();
   });
 
+  test("records an entity failure without finishing until all work drains", async () => {
+    const key = await createRun();
+    await store.start({ ...key, total: 2 });
+
+    await store.recordFailure({ ...key, errorCode: "ProviderFailed" });
+
+    expect(await readRun(key.id)).toMatchObject({
+      completed: 0,
+      errorCode: "ProviderFailed",
+      finishedAt: null,
+      status: "running",
+      total: 2,
+    });
+
+    await store.syncProgress({ ...key, completed: 2, total: 2 });
+    await store.complete(key);
+
+    const run = await readRun(key.id);
+    expect(run).toMatchObject({
+      completed: 2,
+      errorCode: "ProviderFailed",
+      status: "failed",
+      total: 2,
+    });
+    expect(run.finishedAt).not.toBeNull();
+  });
+
   test("requires the complete tenant key for every run mutation", async () => {
     const key = await createRun();
 

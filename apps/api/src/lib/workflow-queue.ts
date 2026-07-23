@@ -1259,7 +1259,7 @@ const handleWorkflowJobFailed = (
         },
       );
       await extractionRunStore
-        .fail({
+        .recordFailure({
           id: brandPersistedExtractionRunId(data.requestId),
           organizationId: branded.organizationId,
           workspaceId: branded.workspaceId,

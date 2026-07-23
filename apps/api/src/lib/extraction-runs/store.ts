@@ -159,14 +159,36 @@ export const createExtractionRunStore = (db: ExtractionRunDb) => ({
       .update(extractionRuns)
       .set({
         completed: sql`${extractionRuns.total}`,
-        errorCode: null,
         finishedAt: new Date(),
-        status: "completed",
+        status: sql`CASE
+          WHEN ${extractionRuns.errorCode} IS NULL THEN 'completed'
+          ELSE 'failed'
+        END`,
       })
       .where(
         and(
           runKeyPredicate({ id, organizationId, workspaceId }),
           inArray(extractionRuns.status, ["running", "finalizing"]),
+        ),
+      );
+  },
+
+  recordFailure: async ({
+    errorCode,
+    id,
+    organizationId,
+    workspaceId,
+  }: FinishExtractionRunOptions): Promise<void> => {
+    const normalizedErrorCode = normalizeErrorCode(errorCode);
+    await db
+      .update(extractionRuns)
+      .set({
+        errorCode: sql`COALESCE(${extractionRuns.errorCode}, ${normalizedErrorCode})`,
+      })
+      .where(
+        and(
+          runKeyPredicate({ id, organizationId, workspaceId }),
+          inArray(extractionRuns.status, ACTIVE_EXTRACTION_RUN_STATUSES),
         ),
       );
   },
