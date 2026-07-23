@@ -6,7 +6,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -72,7 +72,11 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
-  await testDb.delete(extractionRuns);
+  await testDb
+    .delete(extractionRuns)
+    .where(
+      inArray(extractionRuns.workspaceId, [workspaceId, otherWorkspaceId]),
+    );
 });
 
 const createRun = async (
