@@ -68,7 +68,8 @@ const LOOKUP_BUSINESS_REGISTRY_TOOL_NAME = "lookup_business_registry";
  * resolved once at context bootstrap), and drop the tool entirely when none
  * are. Mirrors the in-app chat tool, so the external MCP surface can no longer
  * advertise a registry whose call-time gate would 403 — the same defect the
- * chat tool already avoids.
+ * chat tool already avoids. Applied only to the default surface; the
+ * anonymized projection stays tenant-neutral and is never narrowed.
  *
  * `enabledRegistrySlugs === undefined` means the set was not resolved (a
  * synthetic/test context, or a bootstrap settings-read fault): leave the full
@@ -125,10 +126,14 @@ export const listGatewayMcpToolDefinitions = async ({
       hasGrantedScope(scopes, definition.scope) &&
       isMcpToolFeatureEnabled(definition.feature),
   );
-  const definitions = narrowBusinessRegistryTool(context, staticDefinitions);
+  // The anonymized tools/list is a tenant-neutral pure projection (see
+  // mcp/README.md): keep every tool's schema intact. Per-org registry
+  // narrowing runs only on the default surface, or the anonymized schema
+  // would leak the org's practice-jurisdiction / native-tool settings.
   if (mode === "anonymized") {
-    return definitions;
+    return staticDefinitions;
   }
+  const definitions = narrowBusinessRegistryTool(context, staticDefinitions);
 
   if (hasGrantedScope(scopes, "stella:external_mcps")) {
     for (const tool of await listGatewayExternalMcpTools({ context })) {
