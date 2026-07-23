@@ -294,6 +294,8 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
   </style>
 
   <script>
+    import { parseChangelogMarkdown } from "../lib/changelog-markdown";
+
     type GitHubRelease = {
       body: string | null;
       draft: boolean;
@@ -453,30 +455,10 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
 
     const renderMarkdownFragment = (body: string) => {
       const fragment = document.createDocumentFragment();
-      let currentList: HTMLUListElement | null = null;
 
-      const closeList = () => {
-        if (currentList) {
-          fragment.append(currentList);
-          currentList = null;
-        }
-      };
-
-      for (const rawLine of body.split("\n")) {
-        const line = rawLine.trim();
-        if (!line) {
-          closeList();
-          continue;
-        }
-
-        const htmlVideoSrc = line.match(
-          /^<video\b[^>]*\bsrc=["']([^"']+)["'][^>]*><\/video>$/iu,
-        )?.[1];
-        const markdownVideoSrc = line.match(/^!\[[^\]]*\]\((https:\/\/[^)\s]+)\)$/u)?.[1];
-        const videoSrc = htmlVideoSrc ?? markdownVideoSrc;
-        if (videoSrc) {
-          closeList();
-          const safeSrc = safeHttpsUrl(videoSrc);
+      for (const block of parseChangelogMarkdown(body)) {
+        if (block.type === "video") {
+          const safeSrc = safeHttpsUrl(block.src);
           if (!safeSrc) {continue;}
 
           const video = document.createElement("video");
@@ -487,47 +469,29 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
           continue;
         }
 
-        if (line.startsWith("# ")) {
-          closeList();
-          const heading = document.createElement("h2");
-          heading.textContent = line.slice(2);
+        if (block.type === "heading") {
+          const heading = document.createElement(block.level === 1 ? "h2" : "h3");
+          heading.textContent = block.text;
           fragment.append(heading);
           continue;
         }
 
-        if (line.startsWith("## ")) {
-          closeList();
-          const heading = document.createElement("h3");
-          heading.textContent = line.slice(3);
-          fragment.append(heading);
-          continue;
-        }
-
-        if (line.startsWith("### ")) {
-          closeList();
-          const heading = document.createElement("h3");
-          heading.textContent = line.slice(4);
-          fragment.append(heading);
-          continue;
-        }
-
-        if (line.startsWith("- ")) {
-          if (!currentList) {
-            currentList = document.createElement("ul");
+        if (block.type === "list") {
+          const list = document.createElement("ul");
+          for (const text of block.items) {
+            const item = document.createElement("li");
+            appendTextWithInlineMarkdown(item, text);
+            list.append(item);
           }
-          const item = document.createElement("li");
-          appendTextWithInlineMarkdown(item, line.slice(2));
-          currentList.append(item);
+          fragment.append(list);
           continue;
         }
 
-        closeList();
         const paragraph = document.createElement("p");
-        appendTextWithInlineMarkdown(paragraph, line);
+        appendTextWithInlineMarkdown(paragraph, block.text);
         fragment.append(paragraph);
       }
 
-      closeList();
       return fragment;
     };
 
