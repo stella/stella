@@ -6,6 +6,7 @@ import { productStoryThumbnails } from "../data/product-story";
 import MacWindow from "./MacWindow.astro";
 import MediaSkeleton from "./MediaSkeleton.astro";
 import ThemeImage from "./ThemeImage.astro";
+import { AnonymizeLiveDemo } from "./react/AnonymizeLiveDemo";
 import { ProductPreview } from "./react/previews/ProductPreview";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import { RecordedStellaScene } from "./react/product-story/RecordedStellaScene";
@@ -139,6 +140,16 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
   {media.type === "video" && !videoReady && <MediaSkeleton note={media.alt} />}
 
   {media.type === "placeholder" && <MediaSkeleton note={media.note} />}
+
+  {
+    media.type === "live-anonymize" && !thumbnail && (
+      <div class="absolute inset-0">
+        <MacWindow class="h-full" label={media.alt}>
+          <AnonymizeLiveDemo client:visible />
+        </MacWindow>
+      </div>
+    )
+  }
 </div>
 
 <style>

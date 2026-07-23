@@ -34,6 +34,14 @@ export type ProductMedia =
       poster?: string;
       alt: string;
       aspect?: string;
+    }
+  | {
+      /** Live, in-browser run of the real anonymization engine (AnonymizeLiveDemo):
+       *  an editable paragraph whose detected entities highlight as the WASM
+       *  pipeline re-runs client-side. No server call; see ProductMediaFrame. */
+      type: "live-anonymize";
+      alt: string;
+      aspect?: string;
     };
 
 // Frame recipes for ProductMediaFrame. DORMANT: product pages now use the

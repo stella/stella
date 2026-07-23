@@ -12,10 +12,8 @@ export const anonymization: Product = {
   metaDescription:
     "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
   hero: {
-    type: "image",
-    src: "/media/products/anonymization.png",
-    darkSrc: "/media/products/anonymization-dark.png",
-    alt: "A redacted legal due diligence extract open in stella",
+    type: "live-anonymize",
+    alt: "stella · Anonymization — live demo",
     aspect: "16 / 10",
   },
   // Frame rhythm down the page: ripple, bloom, wash.
