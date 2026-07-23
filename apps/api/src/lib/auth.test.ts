@@ -410,6 +410,6 @@ describe("session freshness", () => {
     // blank the profile page. It must stay 0; genuinely sensitive flows are
     // gated by Stella's own OTP/two-factor, not this global knob. See the
     // `freshAge` comment in auth.ts. If this fails, the footgun is back.
-    expect(getAuth().options.session?.freshAge).toBe(0);
+    expect(getAuth().options.session.freshAge).toBe(0);
   });
 });
