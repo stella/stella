@@ -23,7 +23,7 @@ export const FileViewerWithAI = ({
   activeExternal,
   className,
   docxEditable,
-  docxEditUnsafe,
+  docxEditSafety,
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
@@ -51,7 +51,7 @@ export const FileViewerWithAI = ({
           chatThreadId={chatThreadId}
           docxComments={docxComments}
           docxEditable={docxEditable}
-          docxEditUnsafe={docxEditUnsafe}
+          docxEditSafety={docxEditSafety}
           docxEditorRef={docxEditorRef}
           key={overlayKey}
           onDocxCommentsChange={onDocxCommentsChange}

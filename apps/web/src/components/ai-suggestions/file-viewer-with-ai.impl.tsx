@@ -19,6 +19,7 @@ import { startTransition, useState } from "react";
 import type { DocxEditorRef } from "@stll/folio-react";
 
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -76,12 +77,11 @@ export type FileViewerWithAIProps = {
   /** Whether the current DOCX session may accept AI edit operations. */
   docxEditable?: boolean | undefined;
   /**
-   * The DOCX has structures Folio cannot safely rewrite, so editing is
-   * blocked entirely. The overlay reflects this quietly on the edit-mode
-   * control (a "View only" state) instead of the host toasting on every
-   * edit attempt.
+   * DOCX rewrite-safety. `unsafe` blocks editing (shown quietly as a
+   * "View only" edit-mode chip instead of a toast); `checking` (probe
+   * pending) also withholds the AI edit tool until the result lands.
    */
-  docxEditUnsafe?: boolean | undefined;
+  docxEditSafety?: DocxEditSafety | undefined;
   /** Request editable DOCX mode before applying a confirmed AI edit. */
   requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
   /** The actual file viewer component. */
@@ -99,7 +99,7 @@ export const FileChatOverlayHost = ({
   activeFile,
   activeExternal,
   docxEditable,
-  docxEditUnsafe,
+  docxEditSafety,
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
@@ -133,7 +133,7 @@ export const FileChatOverlayHost = ({
       chatThreadId={currentChatThreadId}
       docxComments={docxComments}
       docxEditable={docxEditable}
-      docxEditUnsafe={docxEditUnsafe}
+      docxEditSafety={docxEditSafety}
       docxEditorRef={docxEditorRef}
       onDocxCommentsChange={onDocxCommentsChange}
       onNewThread={handleNewThread}

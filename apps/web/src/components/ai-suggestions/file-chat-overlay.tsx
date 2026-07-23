@@ -96,6 +96,7 @@ import {
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import {
+  type DocxEditSafety,
   docxEditRepresentationForSelection,
   resolveActiveDocxEditModeState,
 } from "@/lib/chat-edit-mode";
@@ -840,11 +841,11 @@ type FileChatOverlayProps = {
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
   /**
-   * The DOCX is unsafe for Folio to rewrite (editing blocked entirely). The
-   * composer reflects this quietly as a "View only" edit-mode state rather
-   * than the host toasting on every edit attempt.
+   * DOCX rewrite-safety. `unsafe` → "View only" chip + no AI edit tool;
+   * `checking` (probe pending) → no AI edit tool yet, so a prompt sent in that
+   * window can't auto-edit an eventually-unsafe document. Defaults to `safe`.
    */
-  docxEditUnsafe?: boolean | undefined;
+  docxEditSafety?: DocxEditSafety | undefined;
   requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
   /**
    * The host's controlled `DocxEditor` `comments` state. The folio-agents
@@ -881,7 +882,7 @@ export const FileChatOverlay = ({
   activeFile,
   activeExternal,
   docxEditable,
-  docxEditUnsafe,
+  docxEditSafety,
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
@@ -904,7 +905,7 @@ export const FileChatOverlay = ({
           activeFile={{ ...activeFile, fileFieldId }}
           docxComments={docxComments}
           docxEditable={docxEditable}
-          docxEditUnsafe={docxEditUnsafe}
+          docxEditSafety={docxEditSafety}
           docxEditorRef={docxEditorRef}
           onDocxCommentsChange={onDocxCommentsChange}
           onNewThread={onNewThread}
@@ -923,7 +924,7 @@ export const FileChatOverlay = ({
         chatThreadId={chatThreadId}
         docxComments={docxComments}
         docxEditable={docxEditable}
-        docxEditUnsafe={docxEditUnsafe}
+        docxEditSafety={docxEditSafety}
         docxEditorRef={docxEditorRef}
         onDocxCommentsChange={onDocxCommentsChange}
         onNewThread={onNewThread}
@@ -946,7 +947,7 @@ const ResolvedFileChatOverlay = ({
   activeFile,
   docxComments,
   docxEditable,
-  docxEditUnsafe,
+  docxEditSafety,
   docxEditorRef,
   onDocxCommentsChange,
   onNewThread,
@@ -978,7 +979,7 @@ const ResolvedFileChatOverlay = ({
       chatThreadId={chatThreadId}
       docxComments={docxComments}
       docxEditable={docxEditable}
-      docxEditUnsafe={docxEditUnsafe}
+      docxEditSafety={docxEditSafety}
       docxEditorRef={docxEditorRef}
       onDocxCommentsChange={onDocxCommentsChange}
       onNewThread={onNewThread}
@@ -998,7 +999,7 @@ const FileChatOverlayInner = ({
   activeFile,
   activeExternal,
   docxEditable,
-  docxEditUnsafe,
+  docxEditSafety,
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
@@ -1081,7 +1082,7 @@ const FileChatOverlayInner = ({
     activeFileEditable: activeFile?.editable,
     docxEditable,
     hasDocxEditSurface,
-    unsafe: docxEditUnsafe === true,
+    safety: docxEditSafety ?? "safe",
     selection: getChatEditModeSelection(),
   });
   const getLatestActiveDocxEditSelection = useLatestCallback(() => {
@@ -1089,7 +1090,7 @@ const FileChatOverlayInner = ({
       activeFileEditable: activeFile?.editable,
       docxEditable,
       hasDocxEditSurface,
-      unsafe: docxEditUnsafe === true,
+      safety: docxEditSafety ?? "safe",
       selection: getChatEditModeSelection(),
     });
     return state.type === "unavailable" ? null : state.selection;
@@ -1447,7 +1448,7 @@ const FileChatOverlayInner = ({
     // principle AND not blocked as unsafe-to-rewrite (view only). Otherwise the
     // placeholder promises an edit the user can't make.
     const canOfferEdit =
-      activeFile.editable === true && docxEditUnsafe !== true;
+      activeFile.editable === true && docxEditSafety !== "unsafe";
     filePlaceholder = t(
       canOfferEdit ? "chat.editableFilePlaceholder" : "chat.filePlaceholder",
       { fileName: activeFile.fileName },
@@ -2152,7 +2153,7 @@ const FileChatOverlayInner = ({
                   onChange={setEditModeOptionId}
                   optionId={editModeOptionId}
                   selectable={canSelectEditMode}
-                  unsafe={docxEditUnsafe === true}
+                  unsafe={docxEditSafety === "unsafe"}
                 />
               }
               threadRef={threadRef}

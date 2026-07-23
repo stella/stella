@@ -87,6 +87,7 @@ import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$works
 
 import {
   getDocxEditBlockReason,
+  getDocxEditSafety,
   selectDocxBrowserEditorBuffer,
   selectPreviewFile,
   shouldFinalizeEditSession,
@@ -750,7 +751,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const abandonUnsafeEditAttempt = useCallback(() => {
     // Editing is blocked because Folio can't safely rewrite this DOCX. The
     // block is surfaced quietly on the composer's edit-mode control (a "View
-    // only" chip, driven by `docxEditUnsafe` below) instead of a disruptive
+    // only" chip, driven by `docxEditSafety` below) instead of a disruptive
     // toast on every attempt; just abandon the attempt and stay in view mode.
     onClose();
   }, [onClose]);
@@ -1592,11 +1593,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           }}
           docxComments={docxComments}
           docxEditable={isUnlocked}
-          docxEditUnsafe={
-            getDocxEditBlockReason({
-              canSafelyEdit: compatibility?.canSafelyEdit,
-            }) === "unsafe"
-          }
+          docxEditSafety={getDocxEditSafety({
+            canSafelyEdit: compatibility?.canSafelyEdit,
+          })}
           docxEditorRef={editorRef}
           onDocxCommentsChange={handleAiDocxCommentsChange}
           requestDocxEditMode={requestEditMode}
