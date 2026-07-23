@@ -21,6 +21,39 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Enforce that changelog media embeds actually render on the landing changelog
+# and stay accessible. The client renderer only recognizes `<video ... src>`
+# and markdown-image syntax, so a raw user-attachments URL falls through to
+# inert paragraph text; and a `<video>` without `controls` gives readers no way
+# to play, pause, or scrub the demo. This runs on every changelog file (not
+# just the release being cut) so a regression fails the PR check and the release
+# tag gate rather than shipping a broken or inaccessible embed.
+validate_changelog_media() {
+  local had_error=0
+  local file line_no line
+  for file in docs/changelog/v*.md; do
+    [[ -e "$file" ]] || continue
+    line_no=0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line_no=$((line_no + 1))
+      if [[ "$line" == *"<video"* && "$line" != *"controls"* ]]; then
+        echo "::error file=$file,line=$line_no::<video> embed is missing the 'controls' attribute; use <video controls src=\"...\"></video> so readers can play the demo." >&2
+        had_error=1
+      fi
+      if [[ "$line" == *"github.com/user-attachments/"* && "$line" != *"<video"* && "$line" != *"!["* ]]; then
+        echo "::error file=$file,line=$line_no::raw user-attachments URL renders as plain text; wrap it as <video controls src=\"...\"></video> (video) or ![alt](url) (image)." >&2
+        had_error=1
+      fi
+    done < "$file"
+  done
+  if [[ "$had_error" -ne 0 ]]; then
+    echo "::error::Changelog media validation failed; see annotations above." >&2
+    exit 1
+  fi
+}
+
+validate_changelog_media
+
 if [[ -z "$version" ]]; then
   if [[ ! -f VERSION ]]; then
     echo "::error::VERSION file is missing" >&2
