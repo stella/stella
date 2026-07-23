@@ -33,7 +33,9 @@ const FLAGGED_VERDICTS: readonly PlaybookVerdict[] = Object.freeze([
 
 type FlaggedVerdict = Exclude<PlaybookVerdict, "compliant">;
 
-type FlaggedFinding = PlaybookFinding & { verdict: FlaggedVerdict };
+export type FlaggedPlaybookFinding = PlaybookFinding & {
+  verdict: FlaggedVerdict;
+};
 
 export type RiskVerdictCounts = Record<PlaybookVerdict, number>;
 
@@ -54,13 +56,15 @@ export type RiskRollup = {
 
 const TOP_ISSUES_LIMIT = 5;
 
-const isFlagged = (finding: PlaybookFinding): finding is FlaggedFinding =>
+export const isFlaggedPlaybookFinding = (
+  finding: PlaybookFinding,
+): finding is FlaggedPlaybookFinding =>
   finding.verdict !== null && FLAGGED_VERDICTS.includes(finding.verdict);
 
 export const computeRiskRollup = (
   findings: readonly PlaybookFinding[],
 ): RiskRollup => {
-  const flagged = findings.filter(isFlagged);
+  const flagged = findings.filter(isFlaggedPlaybookFinding);
 
   const verdictCounts: RiskVerdictCounts = {
     compliant: 0,
@@ -114,7 +118,7 @@ export const computeRiskRollup = (
 //      handled above).
 //   5. "none" — nothing flagged.
 const computeOverallRisk = (
-  flagged: readonly FlaggedFinding[],
+  flagged: readonly FlaggedPlaybookFinding[],
 ): OverallRisk => {
   const hasBlockerViolation = flagged.some(
     (finding) =>

@@ -53,7 +53,10 @@ import type {
   PlaybookVerdict,
 } from "@/components/ai-suggestions/playbook-review-store";
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
-import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
+import {
+  computeRiskRollup,
+  isFlaggedPlaybookFinding,
+} from "@/components/inspector/playbook-risk-rollup";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -466,9 +469,12 @@ const ResultsView = ({
   const t = useTranslations();
   const format = useFormatter();
   const severityLabels = useSeverityLabels();
+  const flaggedFindings = findings.filter(isFlaggedPlaybookFinding);
 
   const groups = SEVERITY_ORDER.flatMap((severity) => {
-    const items = findings.filter((finding) => finding.severity === severity);
+    const items = flaggedFindings.filter(
+      (finding) => finding.severity === severity,
+    );
     if (items.length === 0) {
       return [];
     }
@@ -496,12 +502,7 @@ const ResultsView = ({
       </header>
 
       {findings.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
-          <CheckIcon className="text-success mb-1 size-5" />
-          <p className="text-foreground text-sm font-medium">
-            {t("knowledge.playbooks.review.noFindings")}
-          </p>
-        </div>
+        <NoReviewIssues />
       ) : (
         <div className="flex-1 overflow-y-auto px-2 py-2">
           <RiskSummaryCard
@@ -546,8 +547,21 @@ const ResultsView = ({
               </ul>
             </section>
           ))}
+          {flaggedFindings.length === 0 && <NoReviewIssues />}
         </div>
       )}
+    </div>
+  );
+};
+
+const NoReviewIssues = () => {
+  const t = useTranslations();
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-1 px-6 py-8 text-center">
+      <CheckIcon className="text-success mb-1 size-5" />
+      <p className="text-foreground text-sm font-medium">
+        {t("knowledge.playbooks.review.noFindings")}
+      </p>
     </div>
   );
 };
