@@ -47,6 +47,10 @@ details unless they are already public in the repository.
 - Never manually reformat code you did not semantically change (auto-formatter output
   from `bun run format` is fine to include)
 - Vary punctuation: prefer colons, semicolons, commas, and parentheses over em dashes
+- Omit needless words. Vigorous writing is concise: a sentence should contain no
+  unnecessary words, a paragraph no unnecessary sentences, for the same reason that a
+  drawing should have no unnecessary lines and a machine no unnecessary parts. Applies
+  to comments, commits, PRs, and docs.
 - Prefer explicit over implicit; when a backend endpoint accepts a discriminator
   (e.g., `?type=document|file`), thread it through the full stack (URL params,
   component props) instead of hardcoding a default on the frontend
