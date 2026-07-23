@@ -3,6 +3,8 @@ import { useTranslations } from "use-intl";
 
 import { useWorkflowStatus } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 
+import { hasActiveExtractionProgress } from "./extraction-run-progress.logic";
+
 type ExtractionRunProgressProps = {
   workspaceId: string;
 };
@@ -17,7 +19,7 @@ export const ExtractionRunProgress = ({
   }
 
   const run = data.run;
-  const hasProgress = run !== null && run.total > 0;
+  const hasProgress = hasActiveExtractionProgress(run);
 
   return (
     <div
