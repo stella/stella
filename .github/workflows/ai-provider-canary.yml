@@ -121,7 +121,7 @@ jobs:
     if: always()
     needs: provider-canary
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
