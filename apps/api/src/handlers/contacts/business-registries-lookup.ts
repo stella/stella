@@ -2,17 +2,13 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import {
-  getDisabledNativeToolSlugsFromSettingsRow,
-  isNativeToolEnabledForOrg,
-} from "@/api/handlers/mcp-connectors/catalog-metadata";
+import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUSINESS_REGISTRY_DISPATCH,
   BUSINESS_REGISTRY_SLUGS,
-  enabledRegistryHandlersForOrg,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type {
@@ -81,19 +77,16 @@ export const lookupBusinessRegistryShared = async ({
     nativeToolOverrides: settings?.nativeToolOverrides ?? {},
   });
   if (!enabled) {
-    // Self-correcting error: name the registries this org *can* reach so an
-    // agent recovers in one hop instead of guessing. Carried in the message
-    // because the MCP failure envelope forwards only `code` + `message`, not
-    // structured fields.
-    const enabledSlugs = enabledRegistryHandlersForOrg(
-      getDisabledNativeToolSlugsFromSettingsRow(settings ?? undefined),
-    ).map((enabledHandler) => enabledHandler.slug);
-    const enabledList =
-      enabledSlugs.length > 0 ? enabledSlugs.join(", ") : "none";
+    // Tenant-neutral denial: do NOT enumerate the org's enabled registries.
+    // This handler is shared by the anonymized MCP surface, whose tools/list is
+    // deliberately tenant-neutral; naming the enabled set here would leak the
+    // org's practice-jurisdiction / native-tool settings through tools/call.
+    // The default surface's narrowed tools/list already steers the agent to
+    // reachable registries.
     return Result.err(
       new HandlerError({
         status: 403,
-        message: `Registry '${registry}' is disabled for this organization. Registries enabled for this organization: ${enabledList}.`,
+        message: `Registry '${registry}' is disabled for this organization`,
       }),
     );
   }
