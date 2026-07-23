@@ -58,8 +58,9 @@ export const tabularReview: Product = {
         "Mix extraction (dates, parties, amounts) with judgement questions",
       ],
       media: {
-        type: "preview",
-        key: "review-grid",
+        type: "story",
+        sceneId: "review",
+        aspect: "16 / 10",
       },
       frameVariant: "wash",
     },

@@ -3,10 +3,8 @@
 // storyboard rendered from components, tokens, and source-controlled product
 // captures. New preview = add a key here + a case in ProductPreview (exhaustive).
 //
-// review-grid renders the real app FieldValue/skeleton via @stll/workspace-ui
-// (drift-proof). The rest are token-adaptive lookalikes modeled on the app UI.
+// These are token-adaptive lookalikes modeled on the app UI.
 export type ProductPreviewKey =
-  | "review-grid"
   | "case-law-reader"
   | "cli-mcp"
   | "cli-mcp-template"
