@@ -109,6 +109,13 @@ type ResolveActiveDocxEditModeStateOptions = {
   activeFileEditable: boolean | undefined;
   docxEditable: boolean | undefined;
   hasDocxEditSurface: boolean;
+  /**
+   * The DOCX is unsafe for Folio to rewrite. Editing is blocked entirely, so
+   * the AI edit tool must not be advertised (auto mode would otherwise create a
+   * new version of a document that can't round-trip) — the mode resolves to
+   * `unavailable` regardless of lock state.
+   */
+  unsafe?: boolean | undefined;
   selection: ChatEditModeSelection;
 };
 
@@ -123,9 +130,10 @@ export const resolveActiveDocxEditModeState = ({
   activeFileEditable,
   docxEditable,
   hasDocxEditSurface,
+  unsafe,
   selection,
 }: ResolveActiveDocxEditModeStateOptions): ActiveDocxEditModeState => {
-  if (!hasDocxEditSurface || activeFileEditable !== true) {
+  if (unsafe === true || !hasDocxEditSurface || activeFileEditable !== true) {
     return { type: "unavailable" };
   }
   if (docxEditable === true) {

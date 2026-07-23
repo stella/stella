@@ -59,6 +59,9 @@ export const selectRecentWorkspaces = <TWorkspace extends RecentWorkspace>({
     .toSorted(
       (left, right) => recentActivityTime(right) - recentActivityTime(left),
     );
+  if (limit <= 0) {
+    return [];
+  }
   // Order is driven ONLY by activity time. Selecting/opening a matter must not
   // reorder the list: forcing the active matter to the top made every click
   // yank the clicked row upward (a dizzy jump). The active matter keeps its

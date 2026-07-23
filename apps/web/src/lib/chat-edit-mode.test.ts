@@ -98,4 +98,20 @@ describe("resolveActiveDocxEditModeState", () => {
       }),
     ).toEqual({ type: "unavailable" });
   });
+
+  test("disables editing for an unsafe DOCX even when it would otherwise be selectable", () => {
+    // A locked, editable current file would normally be `selectable`; being
+    // unsafe to rewrite must make it unavailable so the AI edit tool is never
+    // advertised (auto mode would otherwise version a doc that can't
+    // round-trip).
+    expect(
+      resolveActiveDocxEditModeState({
+        activeFileEditable: true,
+        docxEditable: false,
+        hasDocxEditSurface: true,
+        unsafe: true,
+        selection: autoSelection,
+      }),
+    ).toEqual({ type: "unavailable" });
+  });
 });

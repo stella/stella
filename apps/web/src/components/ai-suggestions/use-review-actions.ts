@@ -51,6 +51,13 @@ type ApplyOutcome = {
   status: "accepted" | "skipped";
   revisionIds: readonly number[] | null;
   undoHandle: ReviewSuggestion["undoHandle"];
+  /**
+   * The apply mode the operation was actually applied with. Recorded on the
+   * suggestion so a later re-apply (the revert-recovery path) restores the
+   * change with the mode it was originally accepted under, not whatever mode
+   * the picker happens to show now.
+   */
+  appliedMode: FolioAIEditApplyMode;
   skipReason?: string;
 };
 
@@ -181,7 +188,14 @@ export const useReviewActions = ({
    * one).
    */
   const applyPending = useLatestCallback(
-    (item: ReviewSuggestion): ApplyOutcome => {
+    (
+      item: ReviewSuggestion,
+      applyModeOverride?: FolioAIEditApplyMode,
+    ): ApplyOutcome => {
+      // Default to the currently selected mode; the revert-recovery path passes
+      // the mode the change was originally accepted with so a re-apply can't
+      // silently switch tracked-changes ↔ direct.
+      const mode = applyModeOverride ?? applyMode;
       const editor = docxEditorRef.current;
       const op = item.pendingOperation;
       if (!editor || !op) {
@@ -189,6 +203,7 @@ export const useReviewActions = ({
           status: "skipped",
           revisionIds: null,
           undoHandle: null,
+          appliedMode: mode,
           skipReason: "documentNotEditable",
         };
       }
@@ -205,6 +220,7 @@ export const useReviewActions = ({
           status: "skipped",
           revisionIds: null,
           undoHandle: null,
+          appliedMode: mode,
           skipReason: "documentNotEditable",
         };
       }
@@ -213,7 +229,7 @@ export const useReviewActions = ({
         snapshot,
         batch: {
           version: DOCUMENT_OPERATION_CONTRACT_VERSION,
-          mode: applyMode,
+          mode,
           operations: [op],
         },
         ...(wordAuthor.length > 0 && { author: wordAuthor }),
@@ -224,6 +240,7 @@ export const useReviewActions = ({
           status: "accepted",
           revisionIds: applied.revisionIds ?? null,
           undoHandle: result.undoHandle,
+          appliedMode: mode,
         };
       }
       const skipped = result.skipped.at(0);
@@ -231,6 +248,7 @@ export const useReviewActions = ({
         status: "skipped",
         revisionIds: null,
         undoHandle: null,
+        appliedMode: mode,
         skipReason: skipped?.reason ?? "unsupportedBlock",
       };
     },
@@ -246,7 +264,7 @@ export const useReviewActions = ({
         status: outcome.status,
         revisionIds: outcome.revisionIds,
         undoHandle: outcome.undoHandle,
-        applyMode: outcome.status === "accepted" ? applyMode : null,
+        applyMode: outcome.status === "accepted" ? outcome.appliedMode : null,
         ...(outcome.skipReason !== undefined && {
           skipReason: outcome.skipReason,
         }),
@@ -560,8 +578,11 @@ export const useReviewActions = ({
           // Re-apply to restore the accepted change with fresh identifiers:
           // the local revert already removed it (the tracked marks were
           // rejected, or the direct-mode undo handle was consumed), so the old
-          // revisionIds / undoHandle no longer resolve.
-          const outcome = applyPending(item);
+          // revisionIds / undoHandle no longer resolve. Restore with the mode
+          // it was ORIGINALLY accepted under (prev.applyMode), not whatever the
+          // picker shows now, so the editor state can't drift from the server's
+          // still-recorded tracked-changes/direct resolution.
+          const outcome = applyPending(item, prev.applyMode ?? undefined);
           recordOutcome(item, outcome);
         } else {
           updateSuggestion(entityId, item.id, {

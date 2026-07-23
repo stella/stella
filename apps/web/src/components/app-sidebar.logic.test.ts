@@ -46,6 +46,20 @@ describe("sidebar matter context", () => {
     ).toEqual(["matter-0", "matter-1", "matter-2", "matter-3", "matter-5"]);
   });
 
+  test("returns nothing for a non-positive limit even with an active matter", () => {
+    expect(
+      selectRecentWorkspaces({
+        activeWorkspaceId: "matter-0",
+        chatActivityByWorkspaceId: new Map(),
+        limit: 0,
+        pinnedIds: new Set(),
+        workspaces: [
+          { id: "matter-0", lastActivityAt: "2026-07-06T12:00:00.000Z" },
+        ],
+      }),
+    ).toEqual([]);
+  });
+
   test("does not reorder when the active matter is already within the window", () => {
     const workspaces = Array.from({ length: 6 }, (_, index) => ({
       id: `matter-${index}`,

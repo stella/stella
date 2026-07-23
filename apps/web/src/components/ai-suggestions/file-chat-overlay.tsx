@@ -1081,6 +1081,7 @@ const FileChatOverlayInner = ({
     activeFileEditable: activeFile?.editable,
     docxEditable,
     hasDocxEditSurface,
+    unsafe: docxEditUnsafe === true,
     selection: getChatEditModeSelection(),
   });
   const getLatestActiveDocxEditSelection = useLatestCallback(() => {
@@ -1088,6 +1089,7 @@ const FileChatOverlayInner = ({
       activeFileEditable: activeFile?.editable,
       docxEditable,
       hasDocxEditSurface,
+      unsafe: docxEditUnsafe === true,
       selection: getChatEditModeSelection(),
     });
     return state.type === "unavailable" ? null : state.selection;
@@ -1405,6 +1407,12 @@ const FileChatOverlayInner = ({
     }) => {
       try {
         if (!(await ensureAIAvailable())) {
+          return;
+        }
+        // Don't let a model just chosen from the (+) Models submenu race the
+        // send: wait for its PATCH to settle (already toasted on failure) and
+        // abort so the request can't run against the previous thread model.
+        if (Result.isError(await modelSelection.awaitPendingSelection())) {
           return;
         }
 
@@ -2041,6 +2049,14 @@ const FileChatOverlayInner = ({
                 detached(
                   editorController.submit(async (draft) => {
                     if (!(await ensureAIAvailable())) {
+                      return;
+                    }
+                    // Same model-race guard as the composer send path.
+                    if (
+                      Result.isError(
+                        await modelSelection.awaitPendingSelection(),
+                      )
+                    ) {
                       return;
                     }
                     await sendMessage(await buildChatRequestMessage(draft));
