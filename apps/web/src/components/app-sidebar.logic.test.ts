@@ -26,12 +26,15 @@ describe("sidebar matter context", () => {
     ).toBe("workspace-matter");
   });
 
-  test("keeps an active chat matter inside the fixed recent limit", () => {
+  test("surfaces an active below-window matter at the bottom without reordering the rest", () => {
     const workspaces = Array.from({ length: 6 }, (_, index) => ({
       id: `matter-${index}`,
       lastActivityAt: `2026-07-0${6 - index}T12:00:00.000Z`,
     }));
 
+    // matter-5 is the OLDEST (ranks below the 5-row window). Selecting it must
+    // NOT yank it to the top; the activity-sorted rows above stay put and the
+    // active matter is appended last so it remains reachable.
     expect(
       selectRecentWorkspaces({
         activeWorkspaceId: "matter-5",
@@ -40,7 +43,26 @@ describe("sidebar matter context", () => {
         pinnedIds: new Set(),
         workspaces,
       }).map(({ id }) => id),
-    ).toEqual(["matter-5", "matter-0", "matter-1", "matter-2", "matter-3"]);
+    ).toEqual(["matter-0", "matter-1", "matter-2", "matter-3", "matter-5"]);
+  });
+
+  test("does not reorder when the active matter is already within the window", () => {
+    const workspaces = Array.from({ length: 6 }, (_, index) => ({
+      id: `matter-${index}`,
+      lastActivityAt: `2026-07-0${6 - index}T12:00:00.000Z`,
+    }));
+
+    // matter-1 already sits at its activity-ranked slot; selecting it changes
+    // nothing (no push-to-top).
+    expect(
+      selectRecentWorkspaces({
+        activeWorkspaceId: "matter-1",
+        chatActivityByWorkspaceId: new Map(),
+        limit: 5,
+        pinnedIds: new Set(),
+        workspaces,
+      }).map(({ id }) => id),
+    ).toEqual(["matter-0", "matter-1", "matter-2", "matter-3", "matter-4"]);
   });
 
   test("does not duplicate an active matter that is already pinned", () => {

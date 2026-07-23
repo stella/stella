@@ -38,53 +38,53 @@ Scope / feature / anonymized policy / one-line purpose. `anon` column: `A`=anony
 (enumerable textFields), `P`=passthrough (public data), `X:w`=excluded (write),
 `X:dyn`=excluded (dynamic tenant payload, fail-closed).
 
-| # | Tool | Scope | Feature | anon | Purpose |
-|---|------|-------|---------|------|---------|
-| 1 | `search` | search | — | A | Compat (OpenAI-shape) search over tenant knowledge → id/title/url |
-| 2 | `fetch` | read | — | A | Compat (OpenAI-shape) fetch doc text by id, windowed |
-| 3 | `list_matters` | read | — | A | List accessible matters |
-| 4 | `get_matter_overview` | read | — | A | One matter's dashboard (counts, recent entities, contacts, members) |
-| 5 | `search_across_matters` | search | — | A | Native cross-matter search → hits |
-| 6 | `search_case_law` | search | PUBLIC_LAW | P | Search public case-law corpus |
-| 7 | `read_content_across_matters` | read | — | A | Read a doc's extracted text by id, windowed |
-| 8 | `read_case_law_decision` | read | PUBLIC_LAW | P | Read one case-law decision, windowed |
-| 9 | `read_contact` | read | — | A | Read one contact (no list sibling) |
-| 10 | `set_practice_jurisdictions` | onboarding | — | X:w | Set org practice jurisdictions (onboarding recovery) |
-| 11 | `list_templates` | templates | — | A | List document templates |
-| 12 | `describe_template` | templates | — | A | Read one template's fillable-field config (round-trips to configure) |
-| 13 | `fill_template` | templates | — | X:w | Fill a template, return text + DOCX |
-| 14 | `template_marker_reference` | templates | — | P | Static `{{...}}` grammar doc; no args |
-| 15 | `create_template` | templates | — | X:w | Create template from DOCX + optional fields overlay |
-| 16 | `configure_template_fields` | templates | — | X:w | Configure an existing template's fields |
-| 17 | `list_documents` | read | — | A | List docs/folders in a matter (flat/children) |
-| 18 | `read_document` | read | — | A | Read one doc's metadata/fields/versions/**diff** |
-| 19 | `create_document` | documents_write | — | X:w | Create doc/folder |
-| 20 | `update_document` | documents_write | — | X:w | Rename/move/annotate a doc |
-| 21 | `delete_document` | documents_write | — | X:w | Delete doc or one version |
-| 22 | `list_properties` | read | — | A | List a matter's column (property) definitions |
-| 23 | `set_field_value` | documents_write | — | X:w | Set a doc's cell for a property |
-| 24 | `save_matter` | matters_write | — | X:w | Create/update/archive a matter |
-| 25 | `delete_matter` | matters_write | — | X:w | Delete a matter |
-| 26 | `save_contact` | matters_write | — | X:w | Create/update a contact |
-| 27 | `delete_contact` | matters_write | — | X:w | Delete a contact |
-| 28 | `lookup_business_registry` | read | — | P | Query a public business register |
-| 29 | `list_tasks` | read | — | A | List tasks / read one task |
-| 30 | `save_task` | matters_write | — | X:w | Create/update task + assignees + links |
-| 31 | `link_matter_contact` | matters_write | — | X:w | Link/unlink contact↔matter party role |
-| 32 | `list_clauses` | read | — | A | List clauses / read one clause + versions |
-| 33 | `save_clause` | knowledge_write | — | X:w | Create/update a clause |
-| 34 | `delete_clause` | knowledge_write | — | X:w | Delete a clause |
-| 35 | `list_playbooks` | read | — | A | List playbooks / read one |
-| 36 | `run_playbook` | knowledge_write | — | X:w | Run a review playbook over a matter |
-| 37 | `list_time_entries` | read | TIME_BILLING | A | List time entries / read one |
-| 38 | `save_time_entry` | billing_write | TIME_BILLING | X:w | Create/update a time entry |
-| 39 | `delete_time_entry` | billing_write | TIME_BILLING | X:w | Delete/write-off a time entry |
-| 40 | `resolve_rate` | read | TIME_BILLING | P | Compute effective hourly rate |
-| 41 | `read_invoices` | read | TIME_BILLING | A | List invoices / read one |
-| 42 | `get_usage` | read | USAGE | P | Read org usage entitlement; no args |
-| 43 | `search_legislation` | read | PUBLIC_LAW | P | Search **and** read Spanish BOE legislation |
-| 44 | `read_audit_log` | admin_read | — | X:dyn | Read org audit trail (fails closed on free-form diffs) |
-| 45 | `manage_organization` | admin_write | — | X:w | Admin action dispatcher (members, org settings) |
+| #   | Tool                          | Scope           | Feature      | anon  | Purpose                                                              |
+| --- | ----------------------------- | --------------- | ------------ | ----- | -------------------------------------------------------------------- |
+| 1   | `search`                      | search          | —            | A     | Compat (OpenAI-shape) search over tenant knowledge → id/title/url    |
+| 2   | `fetch`                       | read            | —            | A     | Compat (OpenAI-shape) fetch doc text by id, windowed                 |
+| 3   | `list_matters`                | read            | —            | A     | List accessible matters                                              |
+| 4   | `get_matter_overview`         | read            | —            | A     | One matter's dashboard (counts, recent entities, contacts, members)  |
+| 5   | `search_across_matters`       | search          | —            | A     | Native cross-matter search → hits                                    |
+| 6   | `search_case_law`             | search          | PUBLIC_LAW   | P     | Search public case-law corpus                                        |
+| 7   | `read_content_across_matters` | read            | —            | A     | Read a doc's extracted text by id, windowed                          |
+| 8   | `read_case_law_decision`      | read            | PUBLIC_LAW   | P     | Read one case-law decision, windowed                                 |
+| 9   | `read_contact`                | read            | —            | A     | Read one contact (no list sibling)                                   |
+| 10  | `set_practice_jurisdictions`  | onboarding      | —            | X:w   | Set org practice jurisdictions (onboarding recovery)                 |
+| 11  | `list_templates`              | templates       | —            | A     | List document templates                                              |
+| 12  | `describe_template`           | templates       | —            | A     | Read one template's fillable-field config (round-trips to configure) |
+| 13  | `fill_template`               | templates       | —            | X:w   | Fill a template, return text + DOCX                                  |
+| 14  | `template_marker_reference`   | templates       | —            | P     | Static `{{...}}` grammar doc; no args                                |
+| 15  | `create_template`             | templates       | —            | X:w   | Create template from DOCX + optional fields overlay                  |
+| 16  | `configure_template_fields`   | templates       | —            | X:w   | Configure an existing template's fields                              |
+| 17  | `list_documents`              | read            | —            | A     | List docs/folders in a matter (flat/children)                        |
+| 18  | `read_document`               | read            | —            | A     | Read one doc's metadata/fields/versions/**diff**                     |
+| 19  | `create_document`             | documents_write | —            | X:w   | Create doc/folder                                                    |
+| 20  | `update_document`             | documents_write | —            | X:w   | Rename/move/annotate a doc                                           |
+| 21  | `delete_document`             | documents_write | —            | X:w   | Delete doc or one version                                            |
+| 22  | `list_properties`             | read            | —            | A     | List a matter's column (property) definitions                        |
+| 23  | `set_field_value`             | documents_write | —            | X:w   | Set a doc's cell for a property                                      |
+| 24  | `save_matter`                 | matters_write   | —            | X:w   | Create/update/archive a matter                                       |
+| 25  | `delete_matter`               | matters_write   | —            | X:w   | Delete a matter                                                      |
+| 26  | `save_contact`                | matters_write   | —            | X:w   | Create/update a contact                                              |
+| 27  | `delete_contact`              | matters_write   | —            | X:w   | Delete a contact                                                     |
+| 28  | `lookup_business_registry`    | read            | —            | P     | Query a public business register                                     |
+| 29  | `list_tasks`                  | read            | —            | A     | List tasks / read one task                                           |
+| 30  | `save_task`                   | matters_write   | —            | X:w   | Create/update task + assignees + links                               |
+| 31  | `link_matter_contact`         | matters_write   | —            | X:w   | Link/unlink contact↔matter party role                                |
+| 32  | `list_clauses`                | read            | —            | A     | List clauses / read one clause + versions                            |
+| 33  | `save_clause`                 | knowledge_write | —            | X:w   | Create/update a clause                                               |
+| 34  | `delete_clause`               | knowledge_write | —            | X:w   | Delete a clause                                                      |
+| 35  | `list_playbooks`              | read            | —            | A     | List playbooks / read one                                            |
+| 36  | `run_playbook`                | knowledge_write | —            | X:w   | Run a review playbook over a matter                                  |
+| 37  | `list_time_entries`           | read            | TIME_BILLING | A     | List time entries / read one                                         |
+| 38  | `save_time_entry`             | billing_write   | TIME_BILLING | X:w   | Create/update a time entry                                           |
+| 39  | `delete_time_entry`           | billing_write   | TIME_BILLING | X:w   | Delete/write-off a time entry                                        |
+| 40  | `resolve_rate`                | read            | TIME_BILLING | P     | Compute effective hourly rate                                        |
+| 41  | `read_invoices`               | read            | TIME_BILLING | A     | List invoices / read one                                             |
+| 42  | `get_usage`                   | read            | USAGE        | P     | Read org usage entitlement; no args                                  |
+| 43  | `search_legislation`          | read            | PUBLIC_LAW   | P     | Search **and** read Spanish BOE legislation                          |
+| 44  | `read_audit_log`              | admin_read      | —            | X:dyn | Read org audit trail (fails closed on free-form diffs)               |
+| 45  | `manage_organization`         | admin_write     | —            | X:w   | Admin action dispatcher (members, org settings)                      |
 
 **Established idioms already in place** (the consolidation target, not new): `save_*`
 merges create+update (matter, contact, task, clause, time_entry); `list_*` absorbs
@@ -96,16 +96,16 @@ tool; `manage_organization` is a single multi-action write.
 
 ## 2. Grouping by consumer intent
 
-| Group | Tools | Consolidation state |
-|-------|-------|---------------------|
-| **A. Find & read text** | search, fetch, search_across_matters, read_content_across_matters, search_case_law, read_case_law_decision, search_legislation | Fragmented by design (different corpora + policies). See §4 rejects. |
-| **B. Templates** | list_templates, describe_template, fill_template, template_marker_reference, create_template, configure_template_fields | **Pre-idiom. 6 → 4 (or 3).** Biggest win. |
-| **C. Documents** | list_documents, read_document, create_document, update_document, delete_document, list_properties, set_field_value | **7 → 6** (save_document). |
-| **D. Matters / contacts / tasks** | list_matters, get_matter_overview, save_matter, delete_matter, read_contact, save_contact, delete_contact, lookup_business_registry, list_tasks, save_task, link_matter_contact | **list_matters ← overview.** Contact read/list gap noted. |
-| **E. Knowledge** | list_clauses, save_clause, delete_clause, list_playbooks, run_playbook | Already idiom-clean. No change. |
-| **F. Billing** | list_time_entries, save_time_entry, delete_time_entry, resolve_rate, read_invoices, get_usage | Idiom-clean. Optional rename only. |
-| **G. Research / admin** | search_legislation, read_audit_log, manage_organization | Already consolidated. No change. |
-| **H. Onboarding** | set_practice_jurisdictions | Standalone by design (least-privilege scope). No change. |
+| Group                             | Tools                                                                                                                                                                           | Consolidation state                                                  |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **A. Find & read text**           | search, fetch, search_across_matters, read_content_across_matters, search_case_law, read_case_law_decision, search_legislation                                                  | Fragmented by design (different corpora + policies). See §4 rejects. |
+| **B. Templates**                  | list_templates, describe_template, fill_template, template_marker_reference, create_template, configure_template_fields                                                         | **Pre-idiom. 6 → 4 (or 3).** Biggest win.                            |
+| **C. Documents**                  | list_documents, read_document, create_document, update_document, delete_document, list_properties, set_field_value                                                              | **7 → 6** (save_document).                                           |
+| **D. Matters / contacts / tasks** | list_matters, get_matter_overview, save_matter, delete_matter, read_contact, save_contact, delete_contact, lookup_business_registry, list_tasks, save_task, link_matter_contact | **list_matters ← overview.** Contact read/list gap noted.            |
+| **E. Knowledge**                  | list_clauses, save_clause, delete_clause, list_playbooks, run_playbook                                                                                                          | Already idiom-clean. No change.                                      |
+| **F. Billing**                    | list_time_entries, save_time_entry, delete_time_entry, resolve_rate, read_invoices, get_usage                                                                                   | Idiom-clean. Optional rename only.                                   |
+| **G. Research / admin**           | search_legislation, read_audit_log, manage_organization                                                                                                                         | Already consolidated. No change.                                     |
+| **H. Onboarding**                 | set_practice_jurisdictions                                                                                                                                                      | Standalone by design (least-privilege scope). No change.             |
 
 ---
 
@@ -114,53 +114,53 @@ tool; `manage_organization` is a single multi-action write.
 Action key: **KEEP** · **RENAME** · **MERGE→x** (this tool disappears into x) ·
 **ABSORB(y)** (this tool stays and swallows y) · **RESOURCE** (leave the tool set).
 
-| # | Tool | Action | New name | One-line justification |
-|---|------|--------|----------|------------------------|
-| 1 | search | KEEP | search | OpenAI connector contract; exact name/shape mandated. |
-| 2 | fetch | KEEP | fetch | OpenAI connector contract. |
-| 3 | list_matters | ABSORB(4) | list_matters | list-or-read-one idiom (as list_tasks); `matter_id` → overview. |
-| 4 | get_matter_overview | MERGE→3 | — | Read-one folds into the list tool; drops a non-idiomatic `get_` verb. |
-| 5 | search_across_matters | KEEP | search_across_matters | Tenant `anonymize`; can't share a tool with public `passthrough` corpora. |
-| 6 | search_case_law | KEEP | search_case_law | Public `passthrough`; policy differs from tenant search. |
-| 7 | read_content_across_matters | KEEP | read_content_across_matters | Windowed single-doc read; deliberate search→read split. |
-| 8 | read_case_law_decision | KEEP | read_case_law_decision | Windowed read; merge into search_case_law creates cursor double-duty (§4). |
-| 9 | read_contact | KEEP | read_contact | Single-item read; no list sibling to fold into (gap noted §6). |
-| 10 | set_practice_jurisdictions | KEEP | set_practice_jurisdictions | `onboarding` scope = lower privilege than admin_write; must stay separate. |
-| 11 | list_templates | ABSORB(12) | list_templates | list-or-read-one; `template_id` → field detail. |
-| 12 | describe_template | MERGE→11 | — | Read-one of a template folds into its list, per the dominant idiom. |
-| 13 | fill_template | KEEP | fill_template | Distinct write action (assemble + render); not a create/update of the resource. |
-| 14 | template_marker_reference | RESOURCE (opt.) | — | Static grammar doc → MCP resource; frees a slot, off the tool ceiling. |
-| 15 | create_template | ABSORB(16) | **save_template** | save_* create+update idiom; omit id+docx → configure existing. |
-| 16 | configure_template_fields | MERGE→15 | — | Update path of the template resource; de-dupes the huge fields overlay schema. |
-| 17 | list_documents | KEEP | list_documents | Keep separate from read_document (diff-mode density, §4). |
-| 18 | read_document | KEEP | read_document | Diff/version/compare modes too dense to fold into the list. |
-| 19 | create_document | ABSORB(20) | **save_document** | save_* create+update idiom. |
-| 20 | update_document | MERGE→19 | — | Update path folds into save_document; reconcile `title`→`name`. |
-| 21 | delete_document | KEEP | delete_document | Only delete_* stays standalone. |
-| 22 | list_properties | KEEP | list_properties | Distinct resource (schema columns), not documents. |
-| 23 | set_field_value | KEEP | set_field_value | Distinct cell write; different granularity from save_document. |
-| 24 | save_matter | KEEP | save_matter | Already the target idiom. |
-| 25 | delete_matter | KEEP | delete_matter | Standalone delete. |
-| 26 | save_contact | KEEP | save_contact | Already idiom. |
-| 27 | delete_contact | KEEP | delete_contact | Standalone delete. |
-| 28 | lookup_business_registry | KEEP | lookup_business_registry | Public `passthrough`; won't share a policy with tenant reads. |
-| 29 | list_tasks | KEEP | list_tasks | Already list-or-read-one. |
-| 30 | save_task | KEEP | save_task | Already idiom. |
-| 31 | link_matter_contact | KEEP | link_matter_contact | Distinct relation write; not a create/update of matter or contact. |
-| 32 | list_clauses | KEEP | list_clauses | Already idiom. |
-| 33 | save_clause | KEEP | save_clause | Already idiom. |
-| 34 | delete_clause | KEEP | delete_clause | Standalone delete. |
-| 35 | list_playbooks | KEEP | list_playbooks | Already idiom. |
-| 36 | run_playbook | KEEP | run_playbook | Distinct action verb. |
-| 37 | list_time_entries | KEEP | list_time_entries | Already idiom. |
-| 38 | save_time_entry | KEEP | save_time_entry | Already idiom. |
-| 39 | delete_time_entry | KEEP | delete_time_entry | Standalone delete. |
-| 40 | resolve_rate | KEEP | resolve_rate | Distinct compute action. |
-| 41 | read_invoices | RENAME (opt.) | **list_invoices** | It's list-or-read-one; `read_` misnames it vs list_time_entries. |
-| 42 | get_usage | KEEP | get_usage | Distinct no-arg read. |
-| 43 | search_legislation | KEEP | search_legislation | Public `passthrough`; already search+read combined. |
-| 44 | read_audit_log | RENAME (opt.) | **list_audit_log** | List-only; `read_` misnames it. Fail-closed exclusion unchanged. |
-| 45 | manage_organization | KEEP | manage_organization | Already a consolidated multi-action write. |
+| #   | Tool                        | Action          | New name                    | One-line justification                                                          |
+| --- | --------------------------- | --------------- | --------------------------- | ------------------------------------------------------------------------------- |
+| 1   | search                      | KEEP            | search                      | OpenAI connector contract; exact name/shape mandated.                           |
+| 2   | fetch                       | KEEP            | fetch                       | OpenAI connector contract.                                                      |
+| 3   | list_matters                | ABSORB(4)       | list_matters                | list-or-read-one idiom (as list_tasks); `matter_id` → overview.                 |
+| 4   | get_matter_overview         | MERGE→3         | —                           | Read-one folds into the list tool; drops a non-idiomatic `get_` verb.           |
+| 5   | search_across_matters       | KEEP            | search_across_matters       | Tenant `anonymize`; can't share a tool with public `passthrough` corpora.       |
+| 6   | search_case_law             | KEEP            | search_case_law             | Public `passthrough`; policy differs from tenant search.                        |
+| 7   | read_content_across_matters | KEEP            | read_content_across_matters | Windowed single-doc read; deliberate search→read split.                         |
+| 8   | read_case_law_decision      | KEEP            | read_case_law_decision      | Windowed read; merge into search_case_law creates cursor double-duty (§4).      |
+| 9   | read_contact                | KEEP            | read_contact                | Single-item read; no list sibling to fold into (gap noted §6).                  |
+| 10  | set_practice_jurisdictions  | KEEP            | set_practice_jurisdictions  | `onboarding` scope = lower privilege than admin_write; must stay separate.      |
+| 11  | list_templates              | ABSORB(12)      | list_templates              | list-or-read-one; `template_id` → field detail.                                 |
+| 12  | describe_template           | MERGE→11        | —                           | Read-one of a template folds into its list, per the dominant idiom.             |
+| 13  | fill_template               | KEEP            | fill_template               | Distinct write action (assemble + render); not a create/update of the resource. |
+| 14  | template_marker_reference   | RESOURCE (opt.) | —                           | Static grammar doc → MCP resource; frees a slot, off the tool ceiling.          |
+| 15  | create_template             | ABSORB(16)      | **save_template**           | save_* create+update idiom; omit id+docx → configure existing.                  |
+| 16  | configure_template_fields   | MERGE→15        | —                           | Update path of the template resource; de-dupes the huge fields overlay schema.  |
+| 17  | list_documents              | KEEP            | list_documents              | Keep separate from read_document (diff-mode density, §4).                       |
+| 18  | read_document               | KEEP            | read_document               | Diff/version/compare modes too dense to fold into the list.                     |
+| 19  | create_document             | ABSORB(20)      | **save_document**           | save_* create+update idiom.                                                     |
+| 20  | update_document             | MERGE→19        | —                           | Update path folds into save_document; reconcile `title`→`name`.                 |
+| 21  | delete_document             | KEEP            | delete_document             | Only delete_* stays standalone.                                                 |
+| 22  | list_properties             | KEEP            | list_properties             | Distinct resource (schema columns), not documents.                              |
+| 23  | set_field_value             | KEEP            | set_field_value             | Distinct cell write; different granularity from save_document.                  |
+| 24  | save_matter                 | KEEP            | save_matter                 | Already the target idiom.                                                       |
+| 25  | delete_matter               | KEEP            | delete_matter               | Standalone delete.                                                              |
+| 26  | save_contact                | KEEP            | save_contact                | Already idiom.                                                                  |
+| 27  | delete_contact              | KEEP            | delete_contact              | Standalone delete.                                                              |
+| 28  | lookup_business_registry    | KEEP            | lookup_business_registry    | Public `passthrough`; won't share a policy with tenant reads.                   |
+| 29  | list_tasks                  | KEEP            | list_tasks                  | Already list-or-read-one.                                                       |
+| 30  | save_task                   | KEEP            | save_task                   | Already idiom.                                                                  |
+| 31  | link_matter_contact         | KEEP            | link_matter_contact         | Distinct relation write; not a create/update of matter or contact.              |
+| 32  | list_clauses                | KEEP            | list_clauses                | Already idiom.                                                                  |
+| 33  | save_clause                 | KEEP            | save_clause                 | Already idiom.                                                                  |
+| 34  | delete_clause               | KEEP            | delete_clause               | Standalone delete.                                                              |
+| 35  | list_playbooks              | KEEP            | list_playbooks              | Already idiom.                                                                  |
+| 36  | run_playbook                | KEEP            | run_playbook                | Distinct action verb.                                                           |
+| 37  | list_time_entries           | KEEP            | list_time_entries           | Already idiom.                                                                  |
+| 38  | save_time_entry             | KEEP            | save_time_entry             | Already idiom.                                                                  |
+| 39  | delete_time_entry           | KEEP            | delete_time_entry           | Standalone delete.                                                              |
+| 40  | resolve_rate                | KEEP            | resolve_rate                | Distinct compute action.                                                        |
+| 41  | read_invoices               | RENAME (opt.)   | **list_invoices**           | It's list-or-read-one; `read_` misnames it vs list_time_entries.                |
+| 42  | get_usage                   | KEEP            | get_usage                   | Distinct no-arg read.                                                           |
+| 43  | search_legislation          | KEEP            | search_legislation          | Public `passthrough`; already search+read combined.                             |
+| 44  | read_audit_log              | RENAME (opt.)   | **list_audit_log**          | List-only; `read_` misnames it. Fail-closed exclusion unchanged.                |
+| 45  | manage_organization         | KEEP            | manage_organization         | Already a consolidated multi-action write.                                      |
 
 **Net: 45 → 41** (four MERGE rows: #4, #12, #16, #20). **→ 40** if #14 becomes a
 resource. Renames (#41, #44) are slot-neutral.
@@ -173,6 +173,7 @@ For every merge the rule is: **the merged tool's anonymized policy must cover th
 union of its parts' text fields, and must not mix policy classes.** All four pass.
 
 ### M1 — `list_matters` ABSORB `get_matter_overview`
+
 - **Why:** list-or-read-one is the dominant idiom (list_tasks/list_clauses/…). `get_*`
   is a naming outlier. `matter_id` param selects overview.
 - **Policy:** both `anonymize`. Merged textFields = union
@@ -185,6 +186,7 @@ union of its parts' text fields, and must not mix policy classes.** All four pas
 - **Deltas:** default −1 slot, ~−350 chars. Anonymized surface 24 → 23.
 
 ### M2 — `list_templates` ABSORB `describe_template`
+
 - **Why:** same idiom; `describe_*` is a pre-idiom outlier. `template_id` → field
   detail. Round-trip (detail output feeds `save_template`) preserved.
 - **Policy:** both `anonymize`. Union = `templates[].{name,whenToUse,whenNotToUse}` ∪
@@ -193,16 +195,18 @@ union of its parts' text fields, and must not mix policy classes.** All four pas
 - **Deltas:** default −1 slot, ~−620 chars. Anonymized 23 → 22.
 
 ### M3 — `save_template` = `create_template` + `configure_template_fields`
+
 - **Why:** `save_*` create+update idiom. Omit `template_id`+`docx_base64` → create;
   pass `template_id`+`fields` → configure existing. Mirrors save_matter/save_task.
 - **Policy:** both `X:w` (excluded/write). Merged = write → never on anonymized
   surface. **No policy surface at all.** ✓
-- **Schema cost:** *net simpler on the wire.* Both tools currently serialize the full
+- **Schema cost:** _net simpler on the wire._ Both tools currently serialize the full
   ~1.5k-char `fieldsOverlayProp`; merged it appears **once**. Create-only
   (`docx_base64`) vs update-only fields are distinguished by presence, as elsewhere.
 - **Deltas:** default −1 slot, **~−1,800 chars** (the de-duplicated overlay).
 
 ### M4 — `save_document` = `create_document` + `update_document`
+
 - **Why:** `save_*` idiom. Omit `entity_id` → create; pass it → update. Reconcile the
   `title` (create) / `name` (update) naming to a single `name`.
 - **Policy:** both `X:w`. Merged is write. No anonymized surface. ✓
@@ -211,7 +215,8 @@ union of its parts' text fields, and must not mix policy classes.** All four pas
 - **Deltas:** default −1 slot, ~−800 chars.
 
 ### M5 (optional) — `template_marker_reference` → MCP **resource**
-- Static, no-arg grammar documentation is the textbook MCP *resource*, not a *tool*.
+
+- Static, no-arg grammar documentation is the textbook MCP _resource_, not a _tool_.
   Moving it frees a slot and takes it off both the 45-count and the char ceilings, with
   zero ergonomic loss for resource-aware clients.
 - **Caveat:** some MCP clients read tools but not resources. If that matters, keep it as
@@ -238,7 +243,7 @@ schema meaningfully harder for an LLM.
   (which would also balloon: the union of case-law + legislation + tenant filter sets).
 - **`read_case_law_decision` into `search_case_law`.** Tempting (mirror
   search_legislation), but case-law read is **cursor-windowed**, so the merged tool's
-  `cursor` would mean "next search page" *or* "next text window" depending on mode —
+  `cursor` would mean "next search page" _or_ "next text window" depending on mode —
   the exact ambiguity that hurts LLMs. legislation avoids this (read mode uses
   `block_id`/`full_text`, not the search cursor). **Keep split.**
 - **`read_document` into `list_documents`.** read_document carries three modes
@@ -309,8 +314,8 @@ schema meaningfully harder for an LLM.
 
 ## 8. Risks
 
-- **Denser save_* schemas (M3, M4).** The model must learn "omit id ⇒ create,
-  create-only vs update-only fields." *Mitigant:* five existing `save_*` tools already
+- _*Denser save_* schemas (M3, M4)._* The model must learn "omit id ⇒ create,
+  create-only vs update-only fields." _Mitigant:_ five existing `save_*` tools already
   teach this exact pattern — consolidation makes the surface **more** uniform, which
   helps the LLM more than the extra optional fields hurt. The `fieldsOverlayProp` union
   in save_template is genuinely complex, but that complexity **already exists** in both

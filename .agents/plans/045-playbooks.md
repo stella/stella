@@ -8,7 +8,7 @@ Evolve the current "playbook = doc-type extraction column bundle" into a
 first-class **Playbook** primitive: a saved, scoped, versioned set of
 **Positions** that ask graded questions of a contract and can run against a
 single file (inline review + redline) or a whole files table (compliance
-matrix). The playbook adds *policy* on top of primitives we already have
+matrix). The playbook adds _policy_ on top of primitives we already have
 (extraction, condition AST, clause library, clause-to-patch); it does not
 introduce a new evaluation engine.
 
@@ -51,7 +51,7 @@ N-agnostic (1 doc or N docs) and surface-agnostic; only the renderer differs.
   documents are. This resolves the org/workspace seam cleanly and is what
   the "Playbook in the Tools section" ask implies. It supersedes the earlier
   "playbooks stay workspace-scoped" lean. Per-matter/counterparty targeting
-  becomes a *run-time* parameter plus optional scope filters on the
+  becomes a _run-time_ parameter plus optional scope filters on the
   definition, not a reason to keep the definition workspace-bound.
 
 - **Two orthogonal discriminated unions** (`standard.source`, `rule.kind`)
@@ -66,7 +66,7 @@ N-agnostic (1 doc or N docs) and surface-agnostic; only the renderer differs.
 
 - **The new model is a superset of today's bundle.** An extraction column is
   just a Position with ASK only (`rule.kind` absent / `standard.source:
-  none`, no grade). Existing `bundle` rows migrate to ASK-only positions; the
+none`, no grade). Existing `bundle` rows migrate to ASK-only positions; the
   JSONB shape gets a `version` tag with a compat read path.
 
 - **No new engines.** Read = properties + extraction workflow; gate/grade =
@@ -167,7 +167,7 @@ N-agnostic (1 doc or N docs) and surface-agnostic; only the renderer differs.
    redline via the editor's `applyAIEditOperations` tracked-changes path (mirror
    the chat review-store -> inspector Suggestions -> review-panel pipeline).
 4. **Versioning + scope axes.** Playbook versions, counterparty/matter scope
-   + conditional triggers, pin-to-clause-version.
+   - conditional triggers, pin-to-clause-version.
 5. **Governance + authoring polish.** RBAC, audit surfacing, inline→library
    promotion, AI-bootstrap from a reference contract.
 
@@ -209,15 +209,17 @@ slice 2 (no doc-type/scope gate yet; that is slice 4).
 `propertyToolSchema`), carrying `{ askPropertyId, rule (reuse positionRuleSchema),
 severity, standard (snapshot) }`. Per graded position, RUN materializes two
 properties:
+
 - the **ASK** property (ai-model or manual-input, exactly as the old apply did),
   `playbookSourceId = position.sourceId`.
 - the **verdict** property (content = single-select `compliant | fallback |
-  deviation | missing`), `playbookSourceId` = a derived/namespaced id from the
+deviation | missing`), `playbookSourceId` = a derived/namespaced id from the
   position so re-runs stay idempotent. It gets a `propertyDependency` on the ASK
   property, so the execution-plan DAG schedules it in a later level
   (`get-execution-plan.ts`). `extractOnly` positions create no verdict property.
 
 **Executor branch**: the batch processor dispatches on `tool.type`:
+
 - `ai-model` -> existing LLM extraction (unchanged).
 - `playbook-verdict` -> grade `askValue` against `rule`/`standard`:
   - `presence` -> deterministic (value present/absent vs required/restricted).

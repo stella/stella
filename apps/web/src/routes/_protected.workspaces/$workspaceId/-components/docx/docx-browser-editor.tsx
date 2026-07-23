@@ -747,12 +747,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     setCompatibilityState({ targetKey: editTargetKey, value: null });
   }, [editTargetKey, fieldId]);
 
-  const reportUnsupportedEditAttempt = useCallback(() => {
-    stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
-      description: t("folio.unsupportedDocxEditDescription"),
-    });
+  const abandonUnsafeEditAttempt = useCallback(() => {
+    // Editing is blocked because Folio can't safely rewrite this DOCX. The
+    // block is surfaced quietly on the composer's edit-mode control (a "View
+    // only" chip, driven by `docxEditUnsafe` below) instead of a disruptive
+    // toast on every attempt; just abandon the attempt and stay in view mode.
     onClose();
-  }, [onClose, t]);
+  }, [onClose]);
 
   const requestEditMode = useCallback(async () => {
     if (isCollaborativeEditing) {
@@ -778,7 +779,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     if (blockReason === "unsafe") {
-      reportUnsupportedEditAttempt();
+      abandonUnsafeEditAttempt();
       return false;
     }
 
@@ -807,7 +808,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     open,
     previewFile,
     requestCollaboration,
-    reportUnsupportedEditAttempt,
+    abandonUnsafeEditAttempt,
     state.status,
   ]);
 
@@ -840,7 +841,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       getDocxEditBlockReason({ canSafelyEdit: compatibility.canSafelyEdit }) ===
       "unsafe"
     ) {
-      reportUnsupportedEditAttempt();
+      abandonUnsafeEditAttempt();
       return;
     }
     if (collaborationEnabled) {
@@ -857,7 +858,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     open,
     previewFile,
     requestCollaboration,
-    reportUnsupportedEditAttempt,
+    abandonUnsafeEditAttempt,
     state.status,
   ]);
 
@@ -1277,7 +1278,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     if (blockReason === "unsafe") {
-      reportUnsupportedEditAttempt();
+      abandonUnsafeEditAttempt();
       return;
     }
     if (collaborationEnabled) {
@@ -1302,7 +1303,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     open,
     previewFile,
     requestCollaboration,
-    reportUnsupportedEditAttempt,
+    abandonUnsafeEditAttempt,
     state.status,
   ]);
 
@@ -1591,6 +1592,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           }}
           docxComments={docxComments}
           docxEditable={isUnlocked}
+          docxEditUnsafe={
+            getDocxEditBlockReason({
+              canSafelyEdit: compatibility?.canSafelyEdit,
+            }) === "unsafe"
+          }
           docxEditorRef={editorRef}
           onDocxCommentsChange={handleAiDocxCommentsChange}
           requestDocxEditMode={requestEditMode}

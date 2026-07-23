@@ -33,6 +33,7 @@ import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { MatterIcon } from "@/components/matter-icon";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
@@ -62,7 +63,6 @@ import { formatRelativeTime } from "@/lib/relative-time";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
-import { useChatModelSelection } from "@/routes/_protected.chat/-hooks/use-chat-model-selection";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {

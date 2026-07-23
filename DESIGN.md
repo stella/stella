@@ -34,26 +34,26 @@ with purple gradients, gamified, playful, or illustration-heavy.
 All colours are consumed via CSS custom properties. Never hard-code
 hex values in components; use the semantic tokens below.
 
-| Token                  | Light                           | Dark                                  | Role                       |
-| ---------------------- | ------------------------------- | ------------------------------------- | -------------------------- |
-| `--background`         | white                           | neutral-950 / 95% white blend         | Page canvas                |
-| `--foreground`         | neutral-800                     | neutral-100                           | Primary text               |
-| `--card`               | white                           | background / 98% white blend          | Card surfaces              |
-| `--card-foreground`    | neutral-800                     | neutral-100                           | Text on cards              |
-| `--primary`            | neutral-800                     | neutral-100                           | Primary actions, headings  |
-| `--primary-foreground` | neutral-50                      | neutral-800                           | Text on primary            |
-| `--secondary`          | black / 4%                      | white / 4%                            | Secondary surfaces         |
-| `--muted`              | black / 4%                      | white / 4%                            | Subdued backgrounds        |
-| `--muted-foreground`   | neutral-500 / 90% black blend   | neutral-500 / 90% white blend         | Secondary text             |
-| `--accent`             | black / 4%                      | white / 4%                            | Hover/focus highlights     |
-| `--destructive`        | red-500                         | red-500 / 90% white blend             | Destructive actions        |
-| `--info`               | blue-500                        | blue-500                              | Informational status       |
-| `--success`            | emerald-500                     | emerald-500                           | Success status             |
-| `--warning`            | amber-500                       | amber-500                             | Warning status             |
-| `--highlight`          | yellow-300 / 50%                | yellow-500 / 20%                      | Search/text highlight      |
-| `--border`             | black / 8%                      | white / 6%                            | Borders, dividers          |
-| `--input`              | black / 10%                     | white / 8%                            | Input borders              |
-| `--ring`               | neutral-400                     | neutral-500                           | Focus rings                |
+| Token                  | Light                         | Dark                          | Role                      |
+| ---------------------- | ----------------------------- | ----------------------------- | ------------------------- |
+| `--background`         | white                         | neutral-950 / 95% white blend | Page canvas               |
+| `--foreground`         | neutral-800                   | neutral-100                   | Primary text              |
+| `--card`               | white                         | background / 98% white blend  | Card surfaces             |
+| `--card-foreground`    | neutral-800                   | neutral-100                   | Text on cards             |
+| `--primary`            | neutral-800                   | neutral-100                   | Primary actions, headings |
+| `--primary-foreground` | neutral-50                    | neutral-800                   | Text on primary           |
+| `--secondary`          | black / 4%                    | white / 4%                    | Secondary surfaces        |
+| `--muted`              | black / 4%                    | white / 4%                    | Subdued backgrounds       |
+| `--muted-foreground`   | neutral-500 / 90% black blend | neutral-500 / 90% white blend | Secondary text            |
+| `--accent`             | black / 4%                    | white / 4%                    | Hover/focus highlights    |
+| `--destructive`        | red-500                       | red-500 / 90% white blend     | Destructive actions       |
+| `--info`               | blue-500                      | blue-500                      | Informational status      |
+| `--success`            | emerald-500                   | emerald-500                   | Success status            |
+| `--warning`            | amber-500                     | amber-500                     | Warning status            |
+| `--highlight`          | yellow-300 / 50%              | yellow-500 / 20%              | Search/text highlight     |
+| `--border`             | black / 8%                    | white / 6%                    | Borders, dividers         |
+| `--input`              | black / 10%                   | white / 8%                    | Input borders             |
+| `--ring`               | neutral-400                   | neutral-500                   | Focus rings               |
 
 ### Sidebar Tokens
 
@@ -117,13 +117,13 @@ content renders in document-specific fonts (not DM Sans).
 
 ### Typographic Conventions
 
-| Rule                                   | Implementation                            |
-| -------------------------------------- | ----------------------------------------- |
-| Antialiased rendering                  | `@apply antialiased` on `<html>`          |
-| Tabular numerals for dynamic values    | `font-variant-numeric: tabular-nums`      |
-| Balanced headings                      | `text-wrap: balance`                      |
-| Pretty body text (no orphans)          | `text-wrap: pretty` on `<body>`           |
-| Font weights                           | `font-medium` (500) for controls/buttons  |
+| Rule                                | Implementation                           |
+| ----------------------------------- | ---------------------------------------- |
+| Antialiased rendering               | `@apply antialiased` on `<html>`         |
+| Tabular numerals for dynamic values | `font-variant-numeric: tabular-nums`     |
+| Balanced headings                   | `text-wrap: balance`                     |
+| Pretty body text (no orphans)       | `text-wrap: pretty` on `<body>`          |
+| Font weights                        | `font-medium` (500) for controls/buttons |
 
 ### Text Sizes (Tailwind Scale)
 
@@ -193,13 +193,13 @@ Tailwind 4's `--spacing()` function with the default 0.25rem
 
 Root variable: `--radius: 0.625rem` (10px).
 
-| Usage          | Class        | Approximate |
-| -------------- | ------------ | ----------- |
-| Small elements | `rounded-md` | 6px         |
-| Most containers| `rounded-lg` | 8px         |
-| Cards, dialogs | `rounded-xl` | 12px        |
-| Large dialogs  | `rounded-2xl`| 16px        |
-| Circular       | `rounded-full`| -          |
+| Usage           | Class          | Approximate |
+| --------------- | -------------- | ----------- |
+| Small elements  | `rounded-md`   | 6px         |
+| Most containers | `rounded-lg`   | 8px         |
+| Cards, dialogs  | `rounded-xl`   | 12px        |
+| Large dialogs   | `rounded-2xl`  | 16px        |
+| Circular        | `rounded-full` | -           |
 
 **Concentric radius rule:** outer = inner + gap. Nested rounded
 elements must account for the padding between them.
@@ -229,12 +229,12 @@ mobile browser chrome.
 
 ### Transition Defaults
 
-| Property                  | Duration | Easing       |
-| ------------------------- | -------- | ------------ |
-| Interactive states (hover)| 150-200ms| `ease-out`   |
-| Dialogs/popovers entry   | 150ms    | `ease-out`   |
-| Skeleton pulse            | 2s loop  | `linear`     |
-| Caret blink               | 1.25s    | `ease-out`   |
+| Property                   | Duration  | Easing     |
+| -------------------------- | --------- | ---------- |
+| Interactive states (hover) | 150-200ms | `ease-out` |
+| Dialogs/popovers entry     | 150ms     | `ease-out` |
+| Skeleton pulse             | 2s loop   | `linear`   |
+| Caret blink                | 1.25s     | `ease-out` |
 
 ### Entry Animations (data-driven)
 
@@ -266,22 +266,22 @@ layout** to prevent shift on load.
 Patterns that do not belong in a professional legal workspace.
 AI agents: treat these as hard constraints.
 
-| Category        | Banned Pattern                                           |
-| --------------- | -------------------------------------------------------- |
-| Colour          | Neon/glowing outer shadows, oversaturated gradients      |
-| Colour          | Pure `#000000` backgrounds in app chrome                 |
-| Colour          | "AI purple/blue" aesthetic (pulsing gradient borders)    |
-| Typography      | Decorative/display fonts in the product UI               |
-| Layout          | Centred hero sections in application views               |
-| Layout          | Default three-equal-cards grid when data doesn't warrant |
-| Content         | Emojis in the product UI (use Lucide icons instead)      |
-| Content         | Lorem ipsum, "John Doe", "Acme Corp", fake percentages   |
-| Content         | AI copywriting clichés ("Elevate", "Seamless", "Unleash")|
-| Content         | "Scroll to explore", bouncing chevrons                   |
-| Motion          | `transition: all` (specify exact properties)             |
-| Motion          | Animating layout properties (width, height, top, left)   |
-| Motion          | Custom cursors or pointer overrides                      |
-| Motion          | Flashy slot-machine number animations                    |
-| Interaction     | Decorative scroll indicators                             |
-| CSS             | Dynamic Tailwind class construction (`` `bg-${x}-200` ``)|
-| CSS             | Raw colour hex values instead of semantic tokens         |
+| Category    | Banned Pattern                                            |
+| ----------- | --------------------------------------------------------- |
+| Colour      | Neon/glowing outer shadows, oversaturated gradients       |
+| Colour      | Pure `#000000` backgrounds in app chrome                  |
+| Colour      | "AI purple/blue" aesthetic (pulsing gradient borders)     |
+| Typography  | Decorative/display fonts in the product UI                |
+| Layout      | Centred hero sections in application views                |
+| Layout      | Default three-equal-cards grid when data doesn't warrant  |
+| Content     | Emojis in the product UI (use Lucide icons instead)       |
+| Content     | Lorem ipsum, "John Doe", "Acme Corp", fake percentages    |
+| Content     | AI copywriting clichés ("Elevate", "Seamless", "Unleash") |
+| Content     | "Scroll to explore", bouncing chevrons                    |
+| Motion      | `transition: all` (specify exact properties)              |
+| Motion      | Animating layout properties (width, height, top, left)    |
+| Motion      | Custom cursors or pointer overrides                       |
+| Motion      | Flashy slot-machine number animations                     |
+| Interaction | Decorative scroll indicators                              |
+| CSS         | Dynamic Tailwind class construction (`` `bg-${x}-200` ``) |
+| CSS         | Raw colour hex values instead of semantic tokens          |

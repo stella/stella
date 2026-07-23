@@ -1,6 +1,7 @@
 import {
   ChevronDownIcon,
   HistoryIcon,
+  LockIcon,
   UserCheckIcon,
   WandSparklesIcon,
 } from "lucide-react";
@@ -42,6 +43,58 @@ const OPTION_DESCRIPTION_KEY = {
   [CHAT_EDIT_MODE_OPTION_ID.manual]: "chat.editMode.manualDescription",
 } as const satisfies Record<ChatEditModeOptionId, TranslationKey>;
 
+type ComposerEditModeControlProps = {
+  /**
+   * Editing is blocked because Folio cannot safely rewrite this DOCX. Wins
+   * over `selectable`: the mode picker would imply edits are possible.
+   */
+  unsafe: boolean;
+  /** The edit mode is user-selectable (a locked, safely-editable current file). */
+  selectable: boolean;
+  optionId: ChatEditModeOptionId;
+  onChange: (optionId: ChatEditModeOptionId) => void;
+};
+
+/**
+ * The composer dock's edit-mode control. Picks the right chip for the current
+ * DOCX edit state: a quiet "View only" indicator when editing is unsafe, the
+ * mode picker when the mode is selectable, nothing otherwise. Owning the
+ * decision here keeps the "unsafe" state a subtle inline chip instead of a
+ * disruptive toast on every blocked edit attempt.
+ */
+export const ComposerEditModeControl = ({
+  unsafe,
+  selectable,
+  optionId,
+  onChange,
+}: ComposerEditModeControlProps) => {
+  if (unsafe) {
+    return <ViewOnlyEditModeChip />;
+  }
+  if (!selectable) {
+    return null;
+  }
+  return <ChatEditModeSelector onChange={onChange} optionId={optionId} />;
+};
+
+/**
+ * Quiet, non-interactive counterpart to {@link ChatEditModeSelector}, shown
+ * when the DOCX cannot be edited safely. Mirrors the selector's chip shape so
+ * the dock reads consistently; the tooltip carries the reason.
+ */
+const ViewOnlyEditModeChip = () => {
+  const t = useTranslations();
+  return (
+    <span
+      className="text-muted-foreground inline-flex max-w-[180px] items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]"
+      title={t("folio.unsupportedDocxEditDescription")}
+    >
+      <LockIcon aria-hidden="true" className="size-3 shrink-0" />
+      <span className="truncate">{t("folio.viewOnly")}</span>
+    </span>
+  );
+};
+
 type ChatEditModeSelectorProps = {
   optionId: ChatEditModeOptionId;
   onChange: (optionId: ChatEditModeOptionId) => void;
@@ -58,7 +111,7 @@ type ChatEditModeSelectorProps = {
  * `editApplyMode: "manual"` directly instead, since it has no entity-backed
  * active file for `edit_workspace_document` to target.
  */
-export const ChatEditModeSelector = ({
+const ChatEditModeSelector = ({
   optionId,
   onChange,
 }: ChatEditModeSelectorProps) => {

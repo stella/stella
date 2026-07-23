@@ -14,7 +14,7 @@ instead of a generic file-type icon. Originals are never altered.
 - **Async derivative job, not inline at finalize.** Mirror the existing PDF
   derivative pattern (`apps/api/src/lib/file-derivative-queue.ts`): finalize
   stays fast, generation runs on the BullMQ worker, the UI invalidates via SSE
-  when the derivative is ready. We do *not* block `finalize.ts` on image
+  when the derivative is ready. We do _not_ block `finalize.ts` on image
   encoding. Rationale: same failure isolation, retry, and backpressure the PDF
   path already proved; avoids regressing upload latency.
 - **Reuse the `file-derivatives` queue, add a second job type.** The queue and
@@ -125,7 +125,7 @@ instead of a generic file-type icon. Originals are never altered.
 - `apps/api/src/db/schema.ts` (`userFiles`, lines ~3223–3258) — add
   `thumbnailFileId text` + `placeholder text` columns. **Hand-authored
   timestamped Drizzle migration** per project convention (never `drizzle-kit
-  generate`).
+generate`).
 - `apps/api/src/handlers/chat/upload-files.ts` (`uploadUserFile`) — after the
   `userFiles` insert, enqueue a `generate-thumbnail` job variant keyed by
   `userFileId` (or generate inline if simpler) that writes

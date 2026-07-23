@@ -35,6 +35,7 @@ packages/ui/src/components/editable-field/
 ```
 
 The component:
+
 1. Reads `property.content.type` to pick the right widget
 2. Shows display mode by default (matches current CellResult look)
 3. On click/focus, switches to edit mode with native control
@@ -43,14 +44,14 @@ The component:
 
 ### Field type → Widget mapping
 
-| Type | Display | Edit |
-|------|---------|------|
-| text | Inline text, truncated | Textarea (auto-grow) |
-| date | Formatted date string | Date picker |
-| single-select | Colored chip | Dropdown with options |
-| multi-select | Colored chips row | Multi-select dropdown |
-| int | Formatted number | Number input + currency selector |
-| file | File icon + name | Not editable inline |
+| Type          | Display                | Edit                             |
+| ------------- | ---------------------- | -------------------------------- |
+| text          | Inline text, truncated | Textarea (auto-grow)             |
+| date          | Formatted date string  | Date picker                      |
+| single-select | Colored chip           | Dropdown with options            |
+| multi-select  | Colored chips row      | Multi-select dropdown            |
+| int           | Formatted number       | Number input + currency selector |
+| file          | File icon + name       | Not editable inline              |
 
 ### Migration path
 

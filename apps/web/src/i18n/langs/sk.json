@@ -1629,7 +1629,8 @@
     "unlockFile": "Odomknúť súbor",
     "unlockForEditing": "Odomknúť pre úpravy",
     "unsupportedDocxEditDescription": "Tento DOCX obsahuje štruktúry, ktoré Folio nedokáže bezpečne prepísať. Aby sa súbor nepoškodil, stiahnite ho a upravte vo Worde.",
-    "unsupportedDocxEditTitle": "Úpravy zablokované"
+    "unsupportedDocxEditTitle": "Úpravy zablokované",
+    "viewOnly": "Len na čítanie"
   },
   "inspector": {
     "anonymization": {

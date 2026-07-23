@@ -495,13 +495,35 @@ export const useReviewActions = ({
       undoHandle: item.undoHandle,
       applyMode: item.applyMode,
     };
-    if (item.status === "accepted" && item.undoHandle !== null) {
-      const undoResult = docxEditorRef.current?.undoDocumentOperations(
-        item.undoHandle,
-      );
-      if (undoResult?.status !== "undone") {
-        stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-        return;
+    if (item.status === "accepted") {
+      // Reverting an accept must undo whatever the accept applied.
+      //
+      // Tracked-changes accepts carry `revisionIds`: reject those specific
+      // marks by id (`rejectAIEditOperation`), which is position-independent
+      // and works no matter what else changed in the document since. This
+      // replaces `undoDocumentOperations`, a strict LIFO/exact-doc-match undo
+      // that rejected ("Action failed") after any later edit — a second
+      // accept, manual typing, or resolving the change through the Word review
+      // controls — i.e. exactly when an out-of-order revert is most wanted.
+      //
+      // Direct-mode accepts leave no tracked marks (`revisionIds === null`);
+      // there the stack undo is still the only lever, so fall back to it.
+      if (item.revisionIds !== null) {
+        const rejected = docxEditorRef.current?.rejectAIEditOperation(
+          item.revisionIds,
+        );
+        if (rejected !== true) {
+          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+          return;
+        }
+      } else if (item.undoHandle !== null) {
+        const undoResult = docxEditorRef.current?.undoDocumentOperations(
+          item.undoHandle,
+        );
+        if (undoResult?.status !== "undone") {
+          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+          return;
+        }
       }
     }
     updateSuggestion(entityId, item.id, {
@@ -535,8 +557,10 @@ export const useReviewActions = ({
         // already ran. Restore the prior resolution so they agree again.
         captureResolveFailure("revert");
         if (prev.status === "accepted") {
-          // Re-apply to regenerate a fresh undoHandle for the restored
-          // tracked change (the old handle was consumed by the undo above).
+          // Re-apply to restore the accepted change with fresh identifiers:
+          // the local revert already removed it (the tracked marks were
+          // rejected, or the direct-mode undo handle was consumed), so the old
+          // revisionIds / undoHandle no longer resolve.
           const outcome = applyPending(item);
           recordOutcome(item, outcome);
         } else {

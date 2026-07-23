@@ -1,5 +1,7 @@
 import { useTranslations } from "use-intl";
 
+import { cn } from "@stll/ui/lib/utils";
+
 import { SuggestedActions } from "@/components/suggested-actions";
 
 // A user + assistant exchange is the minimum to have something to suggest from.
@@ -13,6 +15,13 @@ type SuggestedFollowupChipsProps = {
   messageCount: number;
   prompts: string[];
   /**
+   * Chip backdrop. `overlay` (default) suits chips floating over document
+   * text; `plain` suits chips rendered on a solid surface such as inside the
+   * thread card, where the card already separates them from the document.
+   */
+  surface?: "plain" | "overlay";
+  className?: string;
+  /**
    * Called when a chip is clicked. The caller is responsible for setting the
    * editor content and submitting via `controller.submit` so the normal
    * `clearDraft` / `clearContent` path runs.
@@ -21,10 +30,12 @@ type SuggestedFollowupChipsProps = {
 };
 
 /**
- * Suggested follow-up prompts above the chat composer, shown as a single
- * horizontally scrolling row when the composer is empty, the AI has just
- * responded, and no generation is in progress. They disappear once the user
- * starts typing or submits a message.
+ * Suggested follow-up prompts, shown as a single horizontally scrolling row
+ * when the composer is empty, the AI has just responded, and no generation is
+ * in progress. They disappear once the user starts typing or submits a
+ * message. Placement is the caller's choice: `surface="overlay"` (default)
+ * for a row floating above the composer, or `surface="plain"` when rendered
+ * inside the thread card so the chips sit within the chat window.
  */
 export const SuggestedFollowupChips = ({
   isGenerating,
@@ -33,6 +44,8 @@ export const SuggestedFollowupChips = ({
   lastMessageRole,
   messageCount,
   prompts,
+  surface,
+  className,
   onSelect,
 }: SuggestedFollowupChipsProps) => {
   const t = useTranslations();
@@ -50,11 +63,11 @@ export const SuggestedFollowupChips = ({
   return (
     <SuggestedActions
       actions={prompts.map((prompt) => ({ id: prompt, label: prompt }))}
-      className="pb-2"
+      className={cn("pb-2", className)}
       label={t("chat.suggestedFollowupsLabel")}
       onSelect={onSelect}
       orientation="horizontal"
-      surface="overlay"
+      surface={surface ?? "overlay"}
     />
   );
 };

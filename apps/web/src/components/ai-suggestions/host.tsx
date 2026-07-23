@@ -55,6 +55,10 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
+import type {
+  ComposerContextMenuProps,
+  ComposerModelsMenuProps,
+} from "@/components/chat/composer-plus-menu";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -235,6 +239,18 @@ type PromptBarProps = {
    * surface that can't send attachments never offers a dead control.
    */
   attachmentsEnabled?: boolean | undefined;
+  /**
+   * The (+) menu's submenus, each gated on its own prop exactly as the
+   * main chat's `ChatInputSurface` gates them — absent ⇒ that submenu is
+   * hidden, so a surface that passes none keeps the attach-only menu.
+   * Only meaningful together with `attachmentsEnabled` (the (+) menu
+   * renders inside that block). The Skills/Context submenus are wired to
+   * this bar's own editor, so their props omit `editor` (supplied here).
+   */
+  models?: ComposerModelsMenuProps | undefined;
+  skillsOrganizationId?: string | undefined;
+  context?: Omit<ComposerContextMenuProps, "editor"> | undefined;
+  mcpOrganizationId?: string | undefined;
 };
 
 /**
@@ -327,6 +343,17 @@ const DOCKED_COMPOSER_WIDTH_CLASS = "w-[min(560px,calc(100%-2rem))]";
  */
 const FLOATING_THREAD_CARD_OFFSET_CLASS = "bottom-24";
 
+/**
+ * Taller bottom offset for the thread card when the floating DOCX
+ * `ReviewBar` is present. The review pill pins at `bottom-28` (112px) and
+ * stands ~40px tall, so its top sits ~152px up. `bottom-44` (176px) drops
+ * the card ~24px above the pill so the two never overlap (the collision
+ * seen when a card and the review bar were both anchored near the pane
+ * bottom). Callers pass this to `ChatThreadCard`'s `bottomOffsetClass`
+ * whenever the entity has pending suggestions driving the review bar.
+ */
+export const FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS = "bottom-44";
+
 type DockedComposerProps = {
   /**
    * Follow-up chips stacked directly above the bar. Owns no offset of
@@ -399,7 +426,7 @@ function ThreadCardCollapseButton({ onCollapse }: { onCollapse: () => void }) {
   return (
     <Button
       aria-label={t("chat.hideThread")}
-      className="text-muted-foreground hover:text-foreground absolute end-1.5 top-1.5 z-20 rounded-full"
+      className="text-muted-foreground hover:text-foreground rounded-full"
       onClick={onCollapse}
       size="icon-xs"
       tooltip={t("chat.hideThread")}
@@ -415,6 +442,13 @@ type ChatThreadCardProps = {
   /** Scroll container ref for the transcript inside the card. */
   scrollRef: RefObject<HTMLDivElement | null>;
   onCollapse: () => void;
+  /**
+   * Bottom offset of the floating card. Defaults to
+   * {@link FLOATING_THREAD_CARD_OFFSET_CLASS}; pass
+   * {@link FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS} when the DOCX
+   * review bar is present so the card clears it.
+   */
+  bottomOffsetClass?: string;
   children: ReactNode;
 };
 
@@ -429,6 +463,7 @@ type ChatThreadCardProps = {
 export function ChatThreadCard({
   scrollRef,
   onCollapse,
+  bottomOffsetClass,
   children,
 }: ChatThreadCardProps) {
   const t = useTranslations();
@@ -437,7 +472,7 @@ export function ChatThreadCard({
       aria-label={t("chat.aiThread")}
       className={cn(
         "absolute start-1/2 z-40 flex max-h-[min(45dvh,380px)] min-h-0 -translate-x-1/2 flex-col overflow-hidden rounded-2xl border",
-        FLOATING_THREAD_CARD_OFFSET_CLASS,
+        bottomOffsetClass ?? FLOATING_THREAD_CARD_OFFSET_CLASS,
         DOCKED_COMPOSER_WIDTH_CLASS,
         "bg-popover/90 border-border text-popover-foreground",
         "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
@@ -449,13 +484,18 @@ export function ChatThreadCard({
       )}
       role="dialog"
     >
-      <ThreadCardCollapseButton onCollapse={onCollapse} />
+      {/* Collapse control lives in its own non-scrolling header row so the
+          transcript's scrollbar runs *below* it — the two no longer clash at
+          the top-end corner. */}
+      <div className="flex shrink-0 justify-end px-1.5 pt-1.5">
+        <ThreadCardCollapseButton onCollapse={onCollapse} />
+      </div>
       {/* Plain scroll container — bypasses the legacy Conversation's
           `size-full` chain, which only resolves when the parent has an
           explicit height (this card caps with `max-h` only, so flex-1
           children get no definite size to base `size-full` on). */}
       <div
-        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3"
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pt-1 pb-3"
         ref={scrollRef}
         style={{ scrollbarGutter: "stable" }}
       >
@@ -543,6 +583,10 @@ export function PromptBar(props: PromptBarProps) {
     dock,
     followupChips,
     attachmentsEnabled = false,
+    models,
+    skillsOrganizationId,
+    context,
+    mcpOrganizationId,
   } = props;
 
   const t = useTranslations();
@@ -827,8 +871,28 @@ export function PromptBar(props: PromptBarProps) {
               otherwise ride 2px below the placeholder's center line. */}
           <span className="flex h-8 shrink-0 items-center">
             <ComposerPlusMenu
+              context={
+                context
+                  ? {
+                      activeOrganizationId: context.activeOrganizationId,
+                      editor,
+                      threadRef: context.threadRef,
+                    }
+                  : undefined
+              }
               disabled={inputDisabled}
+              mcp={
+                mcpOrganizationId
+                  ? { activeOrganizationId: mcpOrganizationId }
+                  : undefined
+              }
+              models={models}
               onOpenFilePicker={openFilePicker}
+              skills={
+                skillsOrganizationId
+                  ? { activeOrganizationId: skillsOrganizationId, editor }
+                  : undefined
+              }
             />
           </span>
         </>

@@ -16,6 +16,7 @@ Allow users to delete their account from the settings page, verified via a one-t
 ## Scope
 
 **In scope:**
+
 - Backend endpoints: `/v1/me/delete/send-otp`, `/v1/me/delete/pending-tasks` [NEW], and `/v1/me/delete/verify`.
 - Checking organizational ownership status before OTP generation.
 - Reassigning pending tasks to selected workspace members.
@@ -23,6 +24,7 @@ Allow users to delete their account from the settings page, verified via a one-t
 - Frontend Danger Zone UI with task reassignment step, confirmation dialog, and OTP input.
 
 **Out of scope:**
+
 - "Export my data" zip job.
 
 ## Implementation

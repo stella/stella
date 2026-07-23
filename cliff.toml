@@ -45,16 +45,16 @@ sort_commits = "newest"
 #     digits leave headroom for new sections without breaking sort
 #     (single-digit `10` would otherwise sort before `2`).
 commit_parsers = [
-  { message = "^feat",            group = "00:🚀 Features" },
-  { message = "^fix",             group = "01:🐛 Bug Fixes" },
-  { message = "^perf",            group = "02:⚡ Performance" },
-  { message = "^refactor",        group = "03:♻️ Refactor" },
-  { message = "^docs",            group = "04:📚 Documentation" },
-  { message = "^test",            group = "05:🧪 Tests" },
+  { message = "^feat", group = "00:🚀 Features" },
+  { message = "^fix", group = "01:🐛 Bug Fixes" },
+  { message = "^perf", group = "02:⚡ Performance" },
+  { message = "^refactor", group = "03:♻️ Refactor" },
+  { message = "^docs", group = "04:📚 Documentation" },
+  { message = "^test", group = "05:🧪 Tests" },
   { message = "^chore\\(deps\\)", group = "06:📦 Dependencies" },
-  { message = "^chore",           group = "07:⚙️ Miscellaneous" },
-  { message = "^style",           skip  = true },
-  { message = "^ci",              skip  = true },
-  { message = "^build",           skip  = true },
-  { message = "^revert",          group = "08:⏪ Reverts" },
+  { message = "^chore", group = "07:⚙️ Miscellaneous" },
+  { message = "^style", skip = true },
+  { message = "^ci", skip = true },
+  { message = "^build", skip = true },
+  { message = "^revert", group = "08:⏪ Reverts" },
 ]

@@ -658,12 +658,10 @@ export function AppSidebar(props: AppSidebarProps) {
             </SidebarGroup>
           )}
 
-          {/* Recents — sorted by lastActivityAt */}
+          {/* Recents — sorted by lastActivityAt. Header intentionally omitted;
+              the list reads as the continuation of the matter list above. */}
           {recents.length > 0 && (
             <SidebarGroup className="min-h-0 flex-1">
-              <SidebarGroupLabel>
-                {t("navigation.recentMatters")}
-              </SidebarGroupLabel>
               <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
                 <SidebarMenu>
                   {recents.map((ws) => (

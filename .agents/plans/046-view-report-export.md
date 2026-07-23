@@ -94,7 +94,7 @@ can adapt it to house style in Template Studio.
 - **Default template is an instance-level built-in, clone to
   customize.** The "Due Diligence Report" DOCX asset (using the grammar:
   `{{#each contracts}}` sections, row-repeat field table, `{{#if
-  hasRisks}}` risk blocks, AI exec-summary field) ships with the
+hasRisks}}` risk blocks, AI exec-summary field) ships with the
   deployment and appears in the picker as a built-in, preselected. No
   per-org seeding or backfill; the default improves with releases;
   self-hosters get it for free. "Edit" means cloning it into the org's
@@ -135,7 +135,7 @@ can adapt it to house style in Template Studio.
 
 - Review-matrix annex — SHIPPED as a follow-up, but with a documented limit.
   The report data now carries a faithful `grid: { columns, rows: [{ name,
-  cells, summary }] }` matrix, and the built-in template appends an
+cells, summary }] }` matrix, and the built-in template appends an
   "Annex — Review matrix" section. Because the row-repeat engine clones a
   `w:tr` per item but has **no cell-repeat** (`block-directives.ts`), a static
   template cannot emit one dynamic column per review column. The v1 annex
@@ -167,11 +167,11 @@ can adapt it to house style in Template Studio.
   `export-view.ts` `{ config, handler }` enqueue endpoint via
   `createSafeHandler` (permissions: workspace read; entity create when
   saving to workspace), `read-export.ts` status endpoint (returns state
-  + presigned URL / entity id on success), worker module on the existing
-  background-queue infra (same backing as extraction /
-  file-derivative queues — the implementing slice picks the one that
-  fits; no new queue system), `routes.ts` under
-  `/workspaces/:workspaceId/reports`.
+  - presigned URL / entity id on success), worker module on the existing
+    background-queue infra (same backing as extraction /
+    file-derivative queues — the implementing slice picks the one that
+    fits; no new queue system), `routes.ts` under
+    `/workspaces/:workspaceId/reports`.
 - Template storage — `kind` column on `templates` (`document | report`,
   default `document`) + hand-authored migration; built-in DD template
   DOCX asset resolved instance-level (no org seeding), exposed in the

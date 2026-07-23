@@ -16,7 +16,11 @@
 import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { LoaderCircleIcon } from "lucide-react";
@@ -37,7 +41,11 @@ import { BidiText } from "@stll/ui/components/bidi-text";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
-import { ChatThreadCard, PromptBar } from "@/components/ai-suggestions/host";
+import {
+  ChatThreadCard,
+  FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS,
+  PromptBar,
+} from "@/components/ai-suggestions/host";
 import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
 import {
   REVIEW_UNSPECIFIED_AREA,
@@ -55,7 +63,7 @@ import { useChatEditor } from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
-import { ChatEditModeSelector } from "@/components/chat/chat-edit-mode-selector";
+import { ComposerEditModeControl } from "@/components/chat/chat-edit-mode-selector";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
@@ -73,6 +81,7 @@ import type {
   UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -99,6 +108,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { toSafeId } from "@/lib/safe-id";
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
@@ -109,6 +119,7 @@ import type {
   ApplyActiveDocxEditsOutput,
 } from "@/routes/_protected.chat/-queries";
 import {
+  applyChatModelChange,
   chatThreadOptions,
   chatThreadSuggestedPromptsOptions,
   fileChatThreadOptions,
@@ -828,6 +839,12 @@ type FileChatOverlayProps = {
   activeExternal?: ActiveExternal | undefined;
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
+  /**
+   * The DOCX is unsafe for Folio to rewrite (editing blocked entirely). The
+   * composer reflects this quietly as a "View only" edit-mode state rather
+   * than the host toasting on every edit attempt.
+   */
+  docxEditUnsafe?: boolean | undefined;
   requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
   /**
    * The host's controlled `DocxEditor` `comments` state. The folio-agents
@@ -864,6 +881,7 @@ export const FileChatOverlay = ({
   activeFile,
   activeExternal,
   docxEditable,
+  docxEditUnsafe,
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
@@ -886,6 +904,7 @@ export const FileChatOverlay = ({
           activeFile={{ ...activeFile, fileFieldId }}
           docxComments={docxComments}
           docxEditable={docxEditable}
+          docxEditUnsafe={docxEditUnsafe}
           docxEditorRef={docxEditorRef}
           onDocxCommentsChange={onDocxCommentsChange}
           onNewThread={onNewThread}
@@ -904,6 +923,7 @@ export const FileChatOverlay = ({
         chatThreadId={chatThreadId}
         docxComments={docxComments}
         docxEditable={docxEditable}
+        docxEditUnsafe={docxEditUnsafe}
         docxEditorRef={docxEditorRef}
         onDocxCommentsChange={onDocxCommentsChange}
         onNewThread={onNewThread}
@@ -926,6 +946,7 @@ const ResolvedFileChatOverlay = ({
   activeFile,
   docxComments,
   docxEditable,
+  docxEditUnsafe,
   docxEditorRef,
   onDocxCommentsChange,
   onNewThread,
@@ -957,6 +978,7 @@ const ResolvedFileChatOverlay = ({
       chatThreadId={chatThreadId}
       docxComments={docxComments}
       docxEditable={docxEditable}
+      docxEditUnsafe={docxEditUnsafe}
       docxEditorRef={docxEditorRef}
       onDocxCommentsChange={onDocxCommentsChange}
       onNewThread={onNewThread}
@@ -976,6 +998,7 @@ const FileChatOverlayInner = ({
   activeFile,
   activeExternal,
   docxEditable,
+  docxEditUnsafe,
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
@@ -1033,6 +1056,23 @@ const FileChatOverlayInner = ({
   }, [docxComments]);
   const hasDocxEditSurface =
     activeFile !== undefined && docxEditorRef !== undefined;
+  // Whether the floating DOCX `ReviewBar` is showing for this entity — it
+  // renders while any suggestion is pending/applying (mirrors the bar's own
+  // `isPending` gate). When it is, the thread card lifts above the bar so the
+  // two floating surfaces never overlap.
+  const reviewEntityId = activeFile?.entityId;
+  const hasPendingReview = useReviewStore((state) => {
+    if (reviewEntityId === undefined) {
+      return false;
+    }
+    const session = state.sessions[reviewEntityId];
+    return (
+      session !== undefined &&
+      session.some(
+        (item) => item.status === "pending" || item.status === "applying",
+      )
+    );
+  });
   const editModeOptionId = useChatEditModeStore((state) => state.optionId);
   const setEditModeOptionId = useChatEditModeStore(
     (state) => state.setOptionId,
@@ -1267,13 +1307,27 @@ const FileChatOverlayInner = ({
       ? {}
       : { getEditApplyMode, getDocxEditRepresentation }),
   };
-  const { data } = useSuspenseQuery(
-    chatThreadOptions({
-      activeOrganizationId,
-      key: threadRef,
-      context: chatThreadContext,
-    }),
-  );
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: chatThreadContext,
+  });
+  const { data } = useSuspenseQuery(threadQueryOptions);
+  const queryClient = useQueryClient();
+  // Persists the composer (+) menu's Models submenu selection into this
+  // thread's cache, mirroring `ChatThreadPage`'s wiring so the file-chat (+)
+  // menu keeps the same functionality as the main chat's.
+  const modelSelection = useChatModelSelection({
+    onPersisted: (model) => {
+      applyChatModelChange({
+        model,
+        queryClient,
+        queryKey: threadQueryOptions.queryKey,
+        threadId: toSafeId<"chatThread">(threadRef.threadId),
+      });
+    },
+    threadRef,
+  });
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -1381,14 +1435,17 @@ const FileChatOverlayInner = ({
       filePlaceholderAction = t("chat.externalSourcePlaceholderAction");
     }
   } else {
+    // Only offer "…or edit" when the file can actually be edited: editable in
+    // principle AND not blocked as unsafe-to-rewrite (view only). Otherwise the
+    // placeholder promises an edit the user can't make.
+    const canOfferEdit =
+      activeFile.editable === true && docxEditUnsafe !== true;
     filePlaceholder = t(
-      activeFile.editable
-        ? "chat.editableFilePlaceholder"
-        : "chat.filePlaceholder",
+      canOfferEdit ? "chat.editableFilePlaceholder" : "chat.filePlaceholder",
       { fileName: activeFile.fileName },
     );
     filePlaceholderAction = t(
-      activeFile.editable
+      canOfferEdit
         ? "chat.editableFilePlaceholderAction"
         : "chat.filePlaceholderAction",
     );
@@ -1851,17 +1908,59 @@ const FileChatOverlayInner = ({
     setPanelOpen(false);
     onNewThread();
   };
+  // A new message (the user's send, or a fresh assistant turn) re-pins the
+  // transcript to the bottom and jumps there, regardless of where the user had
+  // scrolled.
+  const stickToBottomRef = useRef(true);
   useLayoutEffect(() => {
-    const scrollElement = threadScrollRef.current;
-    if (!scrollElement) {
+    const el = threadScrollRef.current;
+    if (!el) {
       return;
     }
-
-    scrollElement.scrollTo({
-      behavior: "instant",
-      top: scrollElement.scrollHeight,
+    stickToBottomRef.current = true;
+    el.scrollTop = el.scrollHeight;
+  }, [lastMessageId, panelOpen]);
+  // While pinned to the bottom, follow every content growth — streaming tokens
+  // during "preparation" steps, the reasoning block expanding, and the async
+  // follow-up chips arriving after the answer — so the view tracks the content
+  // smoothly instead of doing nothing mid-stream and then jumping at the end
+  // (which left the late-loading chips stranded below the fold). Scrolling up
+  // unpins; returning near the bottom re-pins, so history reading isn't yanked.
+  useLayoutEffect(() => {
+    const el = threadScrollRef.current;
+    if (!el || !panelOpen) {
+      return;
+    }
+    const NEAR_BOTTOM_PX = 160;
+    let frame = 0;
+    const onScroll = () => {
+      stickToBottomRef.current =
+        el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+    };
+    const stick = () => {
+      if (!stickToBottomRef.current || frame !== 0) {
+        return;
+      }
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        el.scrollTop = el.scrollHeight;
+      });
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new MutationObserver(stick);
+    observer.observe(el, {
+      characterData: true,
+      childList: true,
+      subtree: true,
     });
-  }, [isGenerating, lastMessageId]);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      observer.disconnect();
+      if (frame !== 0) {
+        cancelAnimationFrame(frame);
+      }
+    };
+  }, [panelOpen]);
 
   return (
     <ChatMattersContext
@@ -1886,6 +1985,11 @@ const FileChatOverlayInner = ({
       >
         {panelOpen && hasThreadContent && (
           <ChatThreadCard
+            bottomOffsetClass={
+              hasPendingReview
+                ? FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS
+                : undefined
+            }
             onCollapse={() => setPanelOpen(false)}
             scrollRef={threadScrollRef}
           >
@@ -1911,20 +2015,10 @@ const FileChatOverlayInner = ({
               streamdownComponents={streamdownComponents}
               workspaceId={workspaceId}
             />
-          </ChatThreadCard>
-        )}
-
-        <ChatAnonymizationLayer
-          editor={editorController.editor}
-          enabled={anonymized}
-          workspaceId={workspaceId ?? threadRef.threadId}
-        />
-        <PromptBar
-          attachmentsEnabled
-          attentionPulseSeq={attentionPulseSeq}
-          canSubmitNow={canSubmitWithCurrentDocxSnapshot}
-          editorController={editorController}
-          followupChips={
+            {/* Follow-up chips ride at the bottom of the transcript flow (not a
+                pinned footer, which the card's `max-h`/`overflow-hidden`
+                clipped): they stay inside the chat window, scroll with the
+                messages, and are never smashed against the card edge. */}
             <SuggestedFollowupChips
               isGenerating={isGenerating}
               isEmpty={
@@ -1935,6 +2029,7 @@ const FileChatOverlayInner = ({
               lastMessageRole={messages.at(-1)?.role ?? null}
               messageCount={messages.length}
               prompts={suggestedPrompts}
+              surface="plain"
               onSelect={(prompt) => {
                 // Mirror the PromptBar send guard: when an editable DOCX's edit
                 // snapshot isn't ready, block the chip send too so the model
@@ -1948,17 +2043,34 @@ const FileChatOverlayInner = ({
                     if (!(await ensureAIAvailable())) {
                       return;
                     }
-                    // Pop the thread open on send (mirrors the PromptBar submit
-                    // path) so a chip sent while the thread is collapsed still
-                    // streams the reply into view.
-                    setPanelOpen(true);
                     await sendMessage(await buildChatRequestMessage(draft));
                   }),
                   "FileChatOverlayInner",
                 );
               }}
             />
-          }
+          </ChatThreadCard>
+        )}
+
+        <ChatAnonymizationLayer
+          editor={editorController.editor}
+          enabled={anonymized}
+          workspaceId={workspaceId ?? threadRef.threadId}
+        />
+        <PromptBar
+          attachmentsEnabled
+          attentionPulseSeq={attentionPulseSeq}
+          canSubmitNow={canSubmitWithCurrentDocxSnapshot}
+          context={{ activeOrganizationId, threadRef }}
+          editorController={editorController}
+          mcpOrganizationId={activeOrganizationId}
+          models={{
+            activeOrganizationId,
+            threadRef,
+            selectedModel: data.model,
+            selectModel: modelSelection.selectModel,
+          }}
+          skillsOrganizationId={activeOrganizationId}
           emptyPlaceholder={
             (activeFile || activeExternal) && filePlaceholderAction ? (
               <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
@@ -2020,12 +2132,12 @@ const FileChatOverlayInner = ({
                 ) : undefined
               }
               endExtras={
-                canSelectEditMode ? (
-                  <ChatEditModeSelector
-                    onChange={setEditModeOptionId}
-                    optionId={editModeOptionId}
-                  />
-                ) : undefined
+                <ComposerEditModeControl
+                  onChange={setEditModeOptionId}
+                  optionId={editModeOptionId}
+                  selectable={canSelectEditMode}
+                  unsafe={docxEditUnsafe === true}
+                />
               }
               threadRef={threadRef}
             />

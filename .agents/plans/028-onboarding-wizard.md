@@ -208,7 +208,7 @@ All under `apps/web/src/routes/onboarding/`:
 - `-components/onboarding-wizard.tsx` — state machine
   orchestrator. Holds current step as a discriminated union
   type: `"welcome" | "organization" | "matter" | "invite"
-  | "creating"`. Collects form data across steps in a single
+| "creating"`. Collects form data across steps in a single
   state object. On the final step, executes all API calls in
   sequence (create org → set active → create matter → seed
   welcome document → send invites → complete onboarding),

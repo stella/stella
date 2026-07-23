@@ -58,30 +58,44 @@ Let users create personal or org-shared `/` prompt shortcuts with a name, descri
 ## DB Schema (sketch)
 
 ```ts
-export const promptShortcuts = stella.table("prompt_shortcuts", {
-  id: safeId("id", "shortcut"),
-  organizationId: safeOrganizationId("organization_id").notNull(),
-  userId: p.text("user_id").notNull(),   // always set; creator for team, owner for private
-  scope: p.text("scope").notNull(),      // "team" | "private"
-  name: p.text("name").notNull(),
-  description: p.text("description"),
-  command: p.text("command").notNull(),
-  prompt: p.text("prompt").notNull(),
-  isDefault: p.boolean("is_default").notNull().default(false),
-  createdAt: p.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: p.timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  // Team commands: unique per org
-  p.uniqueIndex("prompt_shortcuts_org_team_command_idx")
-    .on(table.organizationId, table.command)
-    .where(sql`scope = 'team'`),
-  // Private commands: unique per user
-  p.uniqueIndex("prompt_shortcuts_user_private_command_idx")
-    .on(table.userId, table.command)
-    .where(sql`scope = 'private'`),
-  p.index("prompt_shortcuts_org_scope_idx").on(table.organizationId, table.scope),
-  p.index("prompt_shortcuts_user_idx").on(table.userId),
-]);
+export const promptShortcuts = stella.table(
+  "prompt_shortcuts",
+  {
+    id: safeId("id", "shortcut"),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    userId: p.text("user_id").notNull(), // always set; creator for team, owner for private
+    scope: p.text("scope").notNull(), // "team" | "private"
+    name: p.text("name").notNull(),
+    description: p.text("description"),
+    command: p.text("command").notNull(),
+    prompt: p.text("prompt").notNull(),
+    isDefault: p.boolean("is_default").notNull().default(false),
+    createdAt: p
+      .timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // Team commands: unique per org
+    p
+      .uniqueIndex("prompt_shortcuts_org_team_command_idx")
+      .on(table.organizationId, table.command)
+      .where(sql`scope = 'team'`),
+    // Private commands: unique per user
+    p
+      .uniqueIndex("prompt_shortcuts_user_private_command_idx")
+      .on(table.userId, table.command)
+      .where(sql`scope = 'private'`),
+    p
+      .index("prompt_shortcuts_org_scope_idx")
+      .on(table.organizationId, table.scope),
+    p.index("prompt_shortcuts_user_idx").on(table.userId),
+  ],
+);
 ```
 
 ## Test Cases

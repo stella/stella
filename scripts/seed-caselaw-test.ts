@@ -15,8 +15,7 @@ const db = new Bun.SQL({
   password: "postgres",
 });
 
-const BASE =
-  "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf";
+const BASE = "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf";
 
 // A set of diverse decisions to test rendering
 const UNIDS = [
@@ -125,7 +124,9 @@ const main = async () => {
     );
     success++;
 
-    if (i < UNIDS.length - 1) {await Bun.sleep(300);}
+    if (i < UNIDS.length - 1) {
+      await Bun.sleep(300);
+    }
   }
 
   console.log(`\nDone: ${success} seeded`);

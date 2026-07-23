@@ -1629,7 +1629,8 @@
     "unlockFile": "Datei entsperren",
     "unlockForEditing": "Zum Bearbeiten entsperren",
     "unsupportedDocxEditDescription": "Diese DOCX enthält Strukturen, die Folio nicht sicher umschreiben kann. Laden Sie sie herunter und bearbeiten Sie sie in Word, um eine Beschädigung der Datei zu vermeiden.",
-    "unsupportedDocxEditTitle": "Bearbeitung gesperrt"
+    "unsupportedDocxEditTitle": "Bearbeitung gesperrt",
+    "viewOnly": "Nur Ansicht"
   },
   "inspector": {
     "anonymization": {

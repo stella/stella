@@ -27,7 +27,7 @@ normalization classes that matter for matching:
 
 A survey of the codebase found **no reusable letter-folding primitive**.
 Some surfaces strip tashkeel; **none** fold the orthographic variants —
-and the variants are the *common* query, not the edge case. Eight search
+and the variants are the _common_ query, not the edge case. Eight search
 surfaces are affected (see Scope).
 
 ## Prior-Art Research (2026-06-29)
@@ -37,7 +37,7 @@ docs, Tantivy/Quickwit maintainers) settled the build-vs-adopt question:
 
 - **Build, don't adopt.** No library covers the full class set across our
   runtimes. The only npm options (`arajs`, `arabic-utils`; both MIT) are
-  partial and unmaintained, and `arajs`'s fold directions were *refuted*
+  partial and unmaintained, and `arajs`'s fold directions were _refuted_
   as matching the standard — do not trust it.
 - **Vendor the Lucene `ArabicNormalizer` fold table (Apache-2.0)** as the
   canonical spec, cross-checked against CAMeL Tools (MIT). Fold directions
@@ -72,11 +72,11 @@ docs, Tantivy/Quickwit maintainers) settled the build-vs-adopt question:
   strip harakat + tatweel. Extend it for the classes Lucene omits
   (alef-wasla, waw/yeh/bare hamza, superscript alef, presentation forms,
   digits). Reuse `@stll/stdnum`'s `normalizeArabicDigits` for the digit
-  class. Note: bare NFKC does *not* fold teh-marbuta or alef-maksura
+  class. Note: bare NFKC does _not_ fold teh-marbuta or alef-maksura
   (distinct base letters) — the explicit translate folds are still
   required on top of NFKC.
 - **Design the fold table as per-language, from day one.** Lucene ships a
-  *separate* `PersianNormalizer`, and Persian/Urdu have conflicting
+  _separate_ `PersianNormalizer`, and Persian/Urdu have conflicting
   letters (Persian yeh ی U+06CC vs Arabic ي U+064A; Persian kaf ک U+06A9
   vs Arabic ك U+0643). A single Arabic table would mis-fold `fa`/`ur`, so
   the package exposes per-language fold tables rather than one global
@@ -122,21 +122,21 @@ docs, Tantivy/Quickwit maintainers) settled the build-vs-adopt question:
    (diacritic strip only).
 7. Clauses FTS — `handlers/clauses/search-vector.ts`. **Pre-existing
    bug**: `to_tsvector('english', …)` (wrong language config + no
-   `unaccent`) is broken for *all* non-English UI languages already
+   `unaccent`) is broken for _all_ non-English UI languages already
    shipped (cs/de/pl/…), not just Arabic. Fix as a separate commit.
 
 **Out of scope:**
 
 - Arabic stemming / morphological (root-based) analysis. Normalization is
   not stemming; light-stemming is a possible future enhancement.
-- Improving `@stll/anonymize-wasm` Arabic PII *matching* quality (surface
+- Improving `@stll/anonymize-wasm` Arabic PII _matching_ quality (surface
   8, `lib/anonymization-blacklist.ts`). Related but a separate, larger
   NER effort; this plan only ensures the blacklist call site normalizes
   its keys consistently if cheap, otherwise tracks it separately.
 - Modifying the `@stll` wasm library internals (aho-corasick, regex-set,
   fuzzy-search). Their `normalizeDiacritics` flag stays opt-in; we
   normalize at our call sites instead.
-- Having Arabic legal corpus *content* (Arabic case law/statutes).
+- Having Arabic legal corpus _content_ (Arabic case law/statutes).
 
 ## PR Sequencing
 
@@ -187,10 +187,10 @@ Highest everyday-search value, lowest risk, no reindex.
   whitespace. Exposes a per-language fold table (Arabic first).
 - **SQL `arabic_normalize(text) IMMUTABLE`** — hand-authored timestamped
   migration (never `drizzle-kit generate`); Postgres `normalize(… NFKC)`
-  + `translate()` + `regexp_replace()` for the fold classes. Drives
-  generated columns + query expressions. Respect squawk migration lint
-  (lock/statement timeouts; explicit short index names).
-- **DB call sites** — replace `unaccent(…)` /  bare `ILIKE` /
+  - `translate()` + `regexp_replace()` for the fold classes. Drives
+    generated columns + query expressions. Respect squawk migration lint
+    (lock/statement timeouts; explicit short index names).
+- **DB call sites** — replace `unaccent(…)` / bare `ILIKE` /
   `to_tsquery('simple', …)` with the `arabic_normalize()`-wrapped
   equivalents on both index and query sides. Keep all existing tenant /
   workspace filters intact.
