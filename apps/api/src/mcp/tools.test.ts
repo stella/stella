@@ -757,6 +757,45 @@ describe("OpenAI-compatible MCP tools", () => {
     ]);
   });
 
+  describe("lookup_business_registry org narrowing", () => {
+    const registryTool = async (context: McpRequestContext) =>
+      (await listMcpTools(context)).find(
+        (tool) => tool.name === "lookup_business_registry",
+      );
+
+    test("narrows the registry enum to the org's enabled registries", async () => {
+      const tool = await registryTool({
+        ...createContext(),
+        enabledRegistrySlugs: ["orsr", "vies"],
+      });
+
+      expect(tool?.inputSchema.properties?.["registry"]).toEqual({
+        type: "string",
+        enum: ["orsr", "vies"],
+        description: "Business register to query",
+      });
+    });
+
+    test("drops the tool when the org can reach no registry", async () => {
+      const tool = await registryTool({
+        ...createContext(),
+        enabledRegistrySlugs: [],
+      });
+
+      expect(tool).toBeUndefined();
+    });
+
+    test("leaves the full enum when the enabled set is unresolved", async () => {
+      const tool = await registryTool(createContext());
+
+      // A context that never resolved its reachable registries (test/synthetic
+      // or a bootstrap read fault) keeps the full advertisement.
+      expect(tool?.inputSchema.properties?.["registry"]).toMatchObject({
+        enum: expect.arrayContaining(["ares", "vies"]),
+      });
+    });
+  });
+
   test("remaps case-law tools to anonymized scopes", async () => {
     expect(
       (
