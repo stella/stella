@@ -75,7 +75,7 @@ isolated from the host process.
     deadline
   - Max number of host calls per execution
   - Max output bytes
-  Any breach aborts execution and returns a tagged error to the model.
+    Any breach aborts execution and returns a tagged error to the model.
 - **One context per execution, disposed at the end.** No reuse, no
   cached state across calls, no globals leaking between conversations.
   Use the `Scope` helper from `quickjs-emscripten` to guarantee
@@ -112,8 +112,8 @@ isolated from the host process.
   `apps/api/package.json` and `apps/web/package.json`.
 - New `apps/api/src/handlers/chat/tools/execute/sandbox/` module:
   - `run-sandbox.ts` — pure runner: takes `{ source, registry,
-    limits }`, returns `{ result | error, hostCalls, durationMs,
-    output }`.
+limits }`, returns `{ result | error, hostCalls, durationMs,
+output }`.
   - `transpile.ts` — thin Bun.Transpiler wrapper, TS → JS.
   - `bridge.ts` — host-side dispatch: parse `{ name, argsJson }`, look
     up the registry entry, call `execute`, JSON-encode the result.
@@ -121,7 +121,7 @@ isolated from the host process.
 - New `apps/api/src/handlers/chat/tools/execute/manifest-to-typescript.ts`
   — render a `WorkspaceFunctionManifest[]` as a `.d.ts` snippet
   (`declare const stella: { searchContent(input: { ... }):
-  Promise<{ ... }> }`).
+Promise<{ ... }> }`).
 - New chat tools in `workspace-tools.ts`:
   - `stella-capabilities` — returns the TypeScript declarations + a
     short usage note.
@@ -190,6 +190,7 @@ isolated from the host process.
   breach, or oversized return.
 
 - `apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts`
+
   ```ts
   type RunSandboxInput = {
     source: string; // raw TypeScript from the model
@@ -198,18 +199,18 @@ isolated from the host process.
   };
   type RunSandboxResult =
     | { ok: true; value: unknown; hostCalls: number; durationMs: number }
-    | { ok: false; error: SandboxError; hostCalls: number;
-        durationMs: number };
+    | { ok: false; error: SandboxError; hostCalls: number; durationMs: number };
   ```
+
   Steps:
   1. Transpile TS → JS.
   2. Build header that injects:
      - `globalThis.console = { log: () => {}, warn: () => {},
-       error: () => {}, info: () => {}, debug: () => {} }` — every
+error: () => {}, info: () => {}, debug: () => {} }` — every
        log method is an in-VM no-op so model code that uses them
        doesn't crash, but nothing crosses the boundary.
      - `globalThis.stella = new Proxy({}, { get: (_, name) =>
-       (input) => __stellaCall(name, JSON.stringify(input)).then(JSON.parse) })`
+(input) => __stellaCall(name, JSON.stringify(input)).then(JSON.parse) })`
   3. Wrap the user source in `(async () => { ... })()` and capture
      the resolved value via a `__return` host function.
   4. Create one `QuickJSAsyncContext` inside a `Scope`, set memory /
@@ -294,7 +295,7 @@ isolated from the host process.
 - Programmatic timeout: `while (true) {}` is killed within
   `MAX_DURATION_MS`.
 - Programmatic memory blow-up: `let s = "a"; for (let i=0;i<40;i++) s
-  += s` is killed by the memory limit.
++= s` is killed by the memory limit.
 - Network/IO escape attempts: `fetch`, `XMLHttpRequest`, `process`,
   `require`, `import("...")`, `globalThis.eval` access do not return
   host references; either undefined or no-op.

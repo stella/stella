@@ -20,7 +20,7 @@ mutation to an actor and timestamp.
   request. Logs include IP-related headers and User-Agent in metadata.
 - Diff-shaped changes: updates store `{ old, new }` pairs.
 - Cursor pagination: reads use keyset pagination over `(createdAt,
-  id)`.
+id)`.
 - Indexed resource filters: resource lookups require `resourceType`
   with `resourceId`.
 - Handler-level calls: each handler calls `writeAuditLog()` explicitly

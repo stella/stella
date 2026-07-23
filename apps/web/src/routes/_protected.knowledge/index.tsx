@@ -131,7 +131,7 @@ function KnowledgeLanding() {
     sectionCards.push(
       <Link
         className={cn(
-          "bg-card rounded-xl border p-5",
+          "bg-card flex h-full flex-col rounded-xl border p-5",
           "transition-colors",
           "hover:border-foreground/15 hover:shadow-sm",
         )}
@@ -145,7 +145,7 @@ function KnowledgeLanding() {
 
   return (
     <div className="flex flex-1 flex-col p-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {sectionCards}
       </div>
     </div>

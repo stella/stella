@@ -25,7 +25,7 @@ without changing any call site behaviour.
   helper read from the same function.
 - **Default ON for cost + latency; OFF as an explicit compliance
   choice.** UI copy names the trade-off honestly — the toggle
-  controls *whether stella sends cache markers/keys*, not whether
+  controls _whether stella sends cache markers/keys_, not whether
   the provider caches server-side (providers may auto-cache
   opportunistically; only ZDR truly disables, a later concern).
 - **Boolean lives outside the encrypted blob.** Prompt-caching
@@ -128,7 +128,7 @@ without changing any call site behaviour.
 - `apps/api/src/lib/workflow/ai-generate-batch.ts` —
   - Add `scopeKey: entityVersionId` to `getModelForRole`.
   - Wrap the last static content part (after files + textInputs,
-    *before* `buildPromptsMessage`) with `markCacheBreakpoint`.
+    _before_ `buildPromptsMessage`) with `markCacheBreakpoint`.
 - `apps/api/src/handlers/chat/stream-chat.ts` —
   - Drop `providerOptions.openai.promptCacheKey` from the
     `streamText` call.

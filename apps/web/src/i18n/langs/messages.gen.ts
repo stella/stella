@@ -1633,6 +1633,7 @@ type Messages = {
     "unlockForEditing": "Unlock to edit";
     "unsupportedDocxEditDescription": "This DOCX contains structures Folio cannot safely rewrite. To avoid corrupting the file, download it and edit it in Word.";
     "unsupportedDocxEditTitle": "Editing blocked";
+    "viewOnly": "View only";
   };
   "inspector": {
     "anonymization": {

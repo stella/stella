@@ -281,7 +281,7 @@ describe("chat thread messages", () => {
     expect(html).not.toContain("Working with context");
   });
 
-  test("keeps assistant reasoning visible if streaming settles before answer text starts", () => {
+  test("folds assistant reasoning once streaming settles, even before answer text starts", () => {
     const chatMessages: PersistedChatMessage[] = [
       {
         id: "message-A",
@@ -303,7 +303,11 @@ describe("chat thread messages", () => {
       />,
     );
 
-    expect(html).not.toContain("<details");
+    // A settled message that never produced answer text now collapses into a
+    // foldable <details> (collapsed by default) rather than staying pinned
+    // open — the reasoning text is still present, just tucked away.
+    expect(html).toContain("<details");
+    expect(html).not.toContain("<details open");
     expect(html).toContain("Checking cited filings.");
     expect(html).not.toContain("Working with context");
   });

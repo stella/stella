@@ -240,7 +240,7 @@ export const ChatMatterPicker = ({
       }}
     >
       <MenuTrigger
-        className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex max-w-[220px] items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
+        className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex max-w-[220px] min-w-0 shrink items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
         title={
           selected.length > 1
             ? selected.map((m) => m.name).join(", ")

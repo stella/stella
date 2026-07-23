@@ -15,7 +15,7 @@ the "Document Type" classifier.
   `(organization_id, key)`, RLS via `orgPolicies()`. Lazily seeded from
   `DEFAULT_DOCUMENT_TYPES` (20 entries) on first read.
 - Exposed **read-only**: `GET /document-types` → `{ items: [{ id, key, label,
-  sortOrder }] }`. No write path anywhere.
+sortOrder }] }`. No write path anywhere.
 - Two consumers of the taxonomy:
   - **Playbook scoping**: `playbook.scope.documentTypeKey` stores the stable
     `key` (JSONB, not a FK).
@@ -44,7 +44,7 @@ the "Document Type" classifier.
   shape `route-playbooks.ts` already uses). If in use → block (409 + the
   referencing playbook names) so the user reassigns first. Already-classified
   documents keep their stored classifier label (free-form single-select value);
-  delete only removes the type as a *future* option — call this out in the UI.
+  delete only removes the type as a _future_ option — call this out in the UI.
 
 - **Reorder via `sortOrder`, drag-and-drop.** Reuse the in-repo
   `@atlaskit/pragmatic-drag-and-drop` pattern (same as the playbook position
@@ -116,7 +116,7 @@ the "Document Type" classifier.
 ## Open Questions
 
 - **Classifier option re-sync.** When the taxonomy changes, do we update the
-  option set of *existing* per-workspace "Document Type" classifier columns, or
+  option set of _existing_ per-workspace "Document Type" classifier columns, or
   only influence newly-created ones? Recommendation: **no auto-resync in v1** —
   routing already matches by resolved label, so drift is tolerable; a later
   "sync classifier options" action can reconcile. Needs a quick check of where

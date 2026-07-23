@@ -1,8 +1,5 @@
 [mcp_servers.stella-docs]
-args = [
-    "run",
-    ".claude/mcp/stella-docs.ts",
-]
+args = ["run", ".claude/mcp/stella-docs.ts"]
 command = "bun"
 
 [shell_environment_policy]

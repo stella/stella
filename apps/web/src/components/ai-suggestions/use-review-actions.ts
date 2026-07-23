@@ -51,6 +51,13 @@ type ApplyOutcome = {
   status: "accepted" | "skipped";
   revisionIds: readonly number[] | null;
   undoHandle: ReviewSuggestion["undoHandle"];
+  /**
+   * The apply mode the operation was actually applied with. Recorded on the
+   * suggestion so a later re-apply (the revert-recovery path) restores the
+   * change with the mode it was originally accepted under, not whatever mode
+   * the picker happens to show now.
+   */
+  appliedMode: FolioAIEditApplyMode;
   skipReason?: string;
 };
 
@@ -181,7 +188,14 @@ export const useReviewActions = ({
    * one).
    */
   const applyPending = useLatestCallback(
-    (item: ReviewSuggestion): ApplyOutcome => {
+    (
+      item: ReviewSuggestion,
+      applyModeOverride?: FolioAIEditApplyMode,
+    ): ApplyOutcome => {
+      // Default to the currently selected mode; the revert-recovery path passes
+      // the mode the change was originally accepted with so a re-apply can't
+      // silently switch tracked-changes ↔ direct.
+      const mode = applyModeOverride ?? applyMode;
       const editor = docxEditorRef.current;
       const op = item.pendingOperation;
       if (!editor || !op) {
@@ -189,6 +203,7 @@ export const useReviewActions = ({
           status: "skipped",
           revisionIds: null,
           undoHandle: null,
+          appliedMode: mode,
           skipReason: "documentNotEditable",
         };
       }
@@ -205,6 +220,7 @@ export const useReviewActions = ({
           status: "skipped",
           revisionIds: null,
           undoHandle: null,
+          appliedMode: mode,
           skipReason: "documentNotEditable",
         };
       }
@@ -213,7 +229,7 @@ export const useReviewActions = ({
         snapshot,
         batch: {
           version: DOCUMENT_OPERATION_CONTRACT_VERSION,
-          mode: applyMode,
+          mode,
           operations: [op],
         },
         ...(wordAuthor.length > 0 && { author: wordAuthor }),
@@ -224,6 +240,7 @@ export const useReviewActions = ({
           status: "accepted",
           revisionIds: applied.revisionIds ?? null,
           undoHandle: result.undoHandle,
+          appliedMode: mode,
         };
       }
       const skipped = result.skipped.at(0);
@@ -231,6 +248,7 @@ export const useReviewActions = ({
         status: "skipped",
         revisionIds: null,
         undoHandle: null,
+        appliedMode: mode,
         skipReason: skipped?.reason ?? "unsupportedBlock",
       };
     },
@@ -246,7 +264,7 @@ export const useReviewActions = ({
         status: outcome.status,
         revisionIds: outcome.revisionIds,
         undoHandle: outcome.undoHandle,
-        applyMode: outcome.status === "accepted" ? applyMode : null,
+        applyMode: outcome.status === "accepted" ? outcome.appliedMode : null,
         ...(outcome.skipReason !== undefined && {
           skipReason: outcome.skipReason,
         }),
@@ -495,13 +513,35 @@ export const useReviewActions = ({
       undoHandle: item.undoHandle,
       applyMode: item.applyMode,
     };
-    if (item.status === "accepted" && item.undoHandle !== null) {
-      const undoResult = docxEditorRef.current?.undoDocumentOperations(
-        item.undoHandle,
-      );
-      if (undoResult?.status !== "undone") {
-        stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-        return;
+    if (item.status === "accepted") {
+      // Reverting an accept must undo whatever the accept applied.
+      //
+      // Tracked-changes accepts carry `revisionIds`: reject those specific
+      // marks by id (`rejectAIEditOperation`), which is position-independent
+      // and works no matter what else changed in the document since. This
+      // replaces `undoDocumentOperations`, a strict LIFO/exact-doc-match undo
+      // that rejected ("Action failed") after any later edit — a second
+      // accept, manual typing, or resolving the change through the Word review
+      // controls — i.e. exactly when an out-of-order revert is most wanted.
+      //
+      // Direct-mode accepts leave no tracked marks (`revisionIds === null`);
+      // there the stack undo is still the only lever, so fall back to it.
+      if (item.revisionIds !== null) {
+        const rejected = docxEditorRef.current?.rejectAIEditOperation(
+          item.revisionIds,
+        );
+        if (rejected !== true) {
+          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+          return;
+        }
+      } else if (item.undoHandle !== null) {
+        const undoResult = docxEditorRef.current?.undoDocumentOperations(
+          item.undoHandle,
+        );
+        if (undoResult?.status !== "undone") {
+          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+          return;
+        }
       }
     }
     updateSuggestion(entityId, item.id, {
@@ -535,9 +575,14 @@ export const useReviewActions = ({
         // already ran. Restore the prior resolution so they agree again.
         captureResolveFailure("revert");
         if (prev.status === "accepted") {
-          // Re-apply to regenerate a fresh undoHandle for the restored
-          // tracked change (the old handle was consumed by the undo above).
-          const outcome = applyPending(item);
+          // Re-apply to restore the accepted change with fresh identifiers:
+          // the local revert already removed it (the tracked marks were
+          // rejected, or the direct-mode undo handle was consumed), so the old
+          // revisionIds / undoHandle no longer resolve. Restore with the mode
+          // it was ORIGINALLY accepted under (prev.applyMode), not whatever the
+          // picker shows now, so the editor state can't drift from the server's
+          // still-recorded tracked-changes/direct resolution.
+          const outcome = applyPending(item, prev.applyMode ?? undefined);
           recordOutcome(item, outcome);
         } else {
           updateSuggestion(entityId, item.id, {

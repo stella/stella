@@ -28,11 +28,11 @@ Container: `{ version: 2, items: Position[] (max 200) }` — hard
 ```ts
 type Position =
   | {
-      mode: "extract";               // captures a value, no grading
+      mode: "extract"; // captures a value, no grading
       sourceId: Uuid;
-      issue: string;                 // 1..256
-      ask: AskManual;                // extract-only asks stay explicit
-      guidance?: string;             // ≤2000
+      issue: string; // 1..256
+      ask: AskManual; // extract-only asks stay explicit
+      guidance?: string; // ≤2000
       enabled: boolean;
     }
   | {
@@ -42,20 +42,20 @@ type Position =
       severity: "blocker" | "high" | "medium" | "low";
       tiers: {
         acceptable: { rules: TierRule[]; ideal?: IdealLanguage };
-        fallback: { entries: FallbackEntry[] };      // ranked by array order, ≤10
-        notAcceptable: { rules: TierRule[] };        // red lines
+        fallback: { entries: FallbackEntry[] }; // ranked by array order, ≤10
+        notAcceptable: { rules: TierRule[] }; // red lines
       };
-      check?: DeterministicCheck;    // Advanced-only deterministic override
+      check?: DeterministicCheck; // Advanced-only deterministic override
       ask: AskConfig;
       guidance?: string;
       enabled: boolean;
     };
 
-type TierRule = { id: Uuid; text: string };          // 1..500, plain language
+type TierRule = { id: Uuid; text: string }; // 1..500, plain language
 type FallbackEntry = { id: Uuid; text: string; label?: string };
 type IdealLanguage =
   | { source: "clause"; clauseId: Uuid; clauseVersion?: number }
-  | { source: "inline"; text: string };              // ≤10_000
+  | { source: "inline"; text: string }; // ≤10_000
 
 type DeterministicCheck =
   | { kind: "presence"; expectation: "required" | "restricted" }
@@ -70,8 +70,8 @@ type AskConfig =
 Decisions:
 
 - **Tiers replace `standard`.** Ideal language (clause link or inline text)
-  lives inside `acceptable`; v1's ranked fallback *variants* become fallback
-  *entries* (they are simultaneously rules and language). `positionMatch` as a
+  lives inside `acceptable`; v1's ranked fallback _variants_ become fallback
+  _entries_ (they are simultaneously rules and language). `positionMatch` as a
   rule kind disappears — LLM tier-match is the default grading for every
   graded position.
 - **`presence`/`propertyConstraint` survive as `check`,** an optional
@@ -204,7 +204,7 @@ classifier). Slice D formalizes it:
 - Update in lockstep: `playbookVerdictToolSchema` (`schema-validators.ts`),
   MCP `knowledge-tools.ts` redaction `textFields` paths (hardcode
   `positions.items[]` field paths — must match v2: `tiers.acceptable.rules[]
-  .text`, `tiers.fallback.entries[].text`, `tiers.notAcceptable.rules[].text`,
+.text`, `tiers.fallback.entries[].text`, `tiers.notAcceptable.rules[].text`,
   `tiers.acceptable.ideal.text`, `ask.*.question`), `positions-validation.ts`
   (unique sourceId; in-org clause refs now under `tiers.acceptable.ideal`;
   new: graded position must have ≥1 rule in some tier or an ideal, rule ids

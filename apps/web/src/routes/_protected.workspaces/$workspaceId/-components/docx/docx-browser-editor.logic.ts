@@ -1,3 +1,5 @@
+import type { DocxEditSafety } from "@/lib/chat-edit-mode";
+
 import { selectStableArrayBuffer } from "./array-buffer-utils";
 import type { EditSessionState } from "./use-edit-session";
 
@@ -161,6 +163,25 @@ export const shouldBlockDocxEdit = ({
   canSafelyEdit,
 }: ShouldBlockDocxEditOptions) =>
   getDocxEditBlockReason({ canSafelyEdit }) !== null;
+
+/**
+ * The DOCX rewrite-safety state the chat overlay consumes: `unsafe` and
+ * `checking` (compatibility probe still pending) both withhold the AI edit
+ * tool, but only `unsafe` surfaces the "View only" chip. `safe` means the
+ * probe confirmed the document round-trips.
+ */
+export const getDocxEditSafety = ({
+  canSafelyEdit,
+}: ShouldBlockDocxEditOptions): DocxEditSafety => {
+  switch (getDocxEditBlockReason({ canSafelyEdit })) {
+    case "unsafe":
+      return "unsafe";
+    case "pendingCompatibility":
+      return "checking";
+    default:
+      return "safe";
+  }
+};
 
 type ShouldUseDocxBrowserEditorOptions = {
   isDocxFile: boolean;

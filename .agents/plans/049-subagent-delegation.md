@@ -33,7 +33,7 @@ existing flat `parts[]` transcript.
 
 ## Design Decisions (settled)
 
-- **A subagent's *result* is a tool call.** `spawn_subagents` returns its
+- **A subagent's _result_ is a tool call.** `spawn_subagents` returns its
   results as a normal `tool-call` + `tool-result` pair in the existing
   transcript. No separate `run → steps → agent` table.
 - **Cheap tier = existing `role: "fast"`.** No new model role.
@@ -55,7 +55,7 @@ existing flat `parts[]` transcript.
 Requirement: a subagent that hits an approval-gated tool must not silently
 proceed or hang. The existing approval flow ends the turn on an
 `approval-requested` part and resumes on the next request; a subagent runs
-*inside* the parent's tool handler, so per-write approval can't reach the client
+_inside_ the parent's tool handler, so per-write approval can't reach the client
 without durable/resumable runs.
 
 **Locked: Option A — Delegation-grant.** `spawn_subagents` is `needsApproval`
@@ -64,7 +64,7 @@ subagent runs its scoped writes under that grant with no further per-write
 prompt. No new server-side "yolo" concept is needed — the existing client-side
 **always-allow / allow-in-conversation grants** (session/localStorage,
 `tool-approval-card.tsx`) already auto-approve a granted tool, so always-allowing
-`spawn_subagents` *is* the yolo bypass. Fits the synchronous-tool model, no
+`spawn_subagents` _is_ the yolo bypass. Fits the synchronous-tool model, no
 durable-run infra.
 
 **Hard correctness rule:** the subagent's own tool map must be built with
@@ -110,8 +110,8 @@ approval queue UI. Out of scope here.
 ## Implementation
 
 - `apps/api/src/lib/tanstack-ai-agent.ts` (new) — `runSubagent`: `chat({ tools,
-  agentLoopStrategy: maxIterations(n), abortController, middleware: [analytics],
-  modelOptions, context })`, consume stream with a local `StreamProcessor`,
+agentLoopStrategy: maxIterations(n), abortController, middleware: [analytics],
+modelOptions, context })`, consume stream with a local `StreamProcessor`,
   return the reconstructed final message. Reuses `resolveTanStackTextModel`,
   `getTanStackTextModelById`, `mergeGenerationOptions`, `systemPromptsPatch`,
   `abortControllerFromSignal` from `tanstack-ai-generate.ts` /

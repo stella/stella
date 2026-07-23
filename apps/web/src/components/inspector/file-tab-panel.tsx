@@ -530,9 +530,9 @@ export const FileTabPanel = ({
     }
 
     if (blockReason === "unsafe") {
-      stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
-        description: t("folio.unsupportedDocxEditDescription"),
-      });
+      // Editing is blocked because Folio can't safely rewrite this DOCX. The
+      // block is surfaced quietly on the composer's edit-mode control (a "View
+      // only" chip) instead of a disruptive toast; just stay locked.
       return;
     }
     if (canUnlockNativeDocx) {

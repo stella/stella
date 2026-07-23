@@ -38,7 +38,7 @@ individual items below.
   ambiguous gets rejected at PR time.
 
 - **One catalogue, three internal `kind`s.** `kind: "skill" |
-  "mcp" | "native-tool"`. Users see one marketplace; the
+"mcp" | "native-tool"`. Users see one marketplace; the
   discriminator is an implementation detail. Designed so a fourth
   `kind` can land later (templates, citation styles, etc.) without
   reworking the shape — but the v1 scope stays at these three.
@@ -53,7 +53,7 @@ individual items below.
   product.
 
 - **MCP entries stay as URL pointers.** MCPs run remotely by
-  protocol — we can't host them. The *manifest* (description,
+  protocol — we can't host them. The _manifest_ (description,
   auth scopes, jurisdictions, recommendation, docs URL) is in-tree
   and community-editable. Server-behaviour drift is an industry
   problem shared with Smithery, Cline, and Anthropic; mitigated

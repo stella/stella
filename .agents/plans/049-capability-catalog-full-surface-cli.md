@@ -13,7 +13,7 @@ because all three remain generated projections of one registry.
 
 Current state: 41 curated static tools against ~315 safe handlers. Every
 handler already carries an `mcp` disposition (`tool | covered | internal`;
-the `pending` baseline is empty), so the full surface is *accounted for*, but
+the `pending` baseline is empty), so the full surface is _accounted for_, but
 `covered` means "reachable through a consolidated tool, lossily" and the CLI
 inherits the 41-tool list — a ceiling that exists for LLM context budgets, a
 constraint that does not apply to a CLI. The tool-count/payload ceilings in
@@ -55,7 +55,7 @@ them wholesale.
   advertised tools.** New static tools `list_capabilities` (paginated,
   filterable by domain/access), `describe_capability` (full schema +
   metadata), and `invoke_capability` (`{ capability, input, validateOnly?,
-  confirm? }`). Static tool count goes 41 → 44, inside the 45 hard ceiling.
+confirm? }`). Static tool count goes 41 → 44, inside the 45 hard ceiling.
   The advertised `tools/list` payload stays small; agents discover the long
   tail on demand. All three are `excluded` on the anonymized surface (the
   generic path cannot prove egress safety per-capability; the anonymized
@@ -130,18 +130,18 @@ them wholesale.
 ## Phases
 
 1. **Catalog foundation (api-only, no surface change).** Capability ID
-  scheme + export script + `capability-catalog.json` + drift guard wired into
-  `bun run verify`/CI; envelope `issues[]` + `validation_error` unification.
+   scheme + export script + `capability-catalog.json` + drift guard wired into
+   `bun run verify`/CI; envelope `issues[]` + `validation_error` unification.
 2. **Server meta-tools.** Generated dispatch module; `list_capabilities`,
-  `describe_capability`, `invoke_capability` with scope/permission/confirm/
-  `validateOnly` gates; ceilings 41 → 44; registry-quality and coverage-guard
-  extensions; tests.
+   `describe_capability`, `invoke_capability` with scope/permission/confirm/
+   `validateOnly` gates; ceilings 41 → 44; registry-quality and coverage-guard
+   extensions; tests.
 3. **CLI full surface.** Catalog snapshot + codegen merge into the command
-  tree; leaf executor via `invoke_capability`; trust-boundary catalog
-  validator; output-contract tests (`--no-input`, JSONL, stdout/stderr);
-  skill regeneration.
+   tree; leaf executor via `invoke_capability`; trust-boundary catalog
+   validator; output-contract tests (`--no-input`, JSONL, stdout/stderr);
+   skill regeneration.
 4. **Receipts and docs.** Request ID in request context + envelope/success
-  meta; generated capability-coverage table in docs.
+   meta; generated capability-coverage table in docs.
 
 ## Open Decisions
 

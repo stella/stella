@@ -19,8 +19,7 @@ const db = new Bun.SQL({
   password: "postgres",
 });
 
-const BASE_URL =
-  "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf";
+const BASE_URL = "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf";
 
 type DecisionRow = {
   id: string;
@@ -39,7 +38,9 @@ const fetchHtml = async (
 ): Promise<string | null> => {
   try {
     const response = await fetch(url, { signal });
-    if (!response.ok) {return null;}
+    if (!response.ok) {
+      return null;
+    }
     return await response.text();
   } catch {
     return null;
@@ -62,9 +63,7 @@ const main = async () => {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
-    const unid = row.source_url
-      ? extractUnid(row.source_url)
-      : null;
+    const unid = row.source_url ? extractUnid(row.source_url) : null;
 
     if (!unid) {
       skipped++;

@@ -59,17 +59,31 @@ export const selectRecentWorkspaces = <TWorkspace extends RecentWorkspace>({
     .toSorted(
       (left, right) => recentActivityTime(right) - recentActivityTime(left),
     );
+  if (limit <= 0) {
+    return [];
+  }
+  // Order is driven ONLY by activity time. Selecting/opening a matter must not
+  // reorder the list: forcing the active matter to the top made every click
+  // yank the clicked row upward (a dizzy jump). The active matter keeps its
+  // activity-ranked position and only moves when a real change updates its
+  // lastActivityAt / chat activity.
+  const shown = sorted.slice(0, limit);
+  if (
+    activeWorkspaceId === undefined ||
+    shown.some((workspace) => workspace.id === activeWorkspaceId)
+  ) {
+    return shown;
+  }
   const activeWorkspace = sorted.find(
     (workspace) => workspace.id === activeWorkspaceId,
   );
-  if (!activeWorkspace) {
-    return sorted.slice(0, limit);
+  if (activeWorkspace === undefined) {
+    return shown;
   }
-
-  return [
-    activeWorkspace,
-    ...sorted.filter((workspace) => workspace.id !== activeWorkspace.id),
-  ].slice(0, limit);
+  // The active matter ranks below the visible window: surface it as the last
+  // row so it stays reachable and its tree can auto-expand, without disturbing
+  // the order of the rows above it (no jump-to-top).
+  return [...sorted.slice(0, Math.max(limit - 1, 0)), activeWorkspace];
 };
 
 export type EntityActivityDestination =

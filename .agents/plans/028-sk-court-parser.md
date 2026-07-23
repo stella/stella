@@ -62,18 +62,18 @@ Output: `{ documentAst: DocumentAst, fulltext: string }`.
 
 **Section detection patterns (Slovak):**
 
-| Section | Pattern | Role |
-|---------|---------|------|
-| Header metadata | `Súd:`, `Spisová značka:`, `ECLI:` lines | (skipped, metadata from API) |
-| Decision title | `Uznesenie`, `Rozsudok`, `Trestný rozkaz` on its own line | heading level 1 |
-| Intro | Court name + composition + "v ... veci" | `"intro"` paragraph |
-| Holding marker | `r o z h o d o l :` or `rozhodol:` | heading level 2 |
-| Holding items | Roman numerals (I., II.) or continuous ruling | `"holding"` paragraphs |
-| Reasoning marker | `o d ô v o d n e n i e :` or `Odôvodnenie:` | heading level 2 |
-| Reasoning items | Numbered paragraphs (1., 2., 3.) | regular paragraphs |
-| Closing | `V {City} dňa ...` | `"closing"` paragraph |
-| Signature | Title prefixes (JUDr., Mgr., doc.) | `"signature"` paragraph |
-| Poučenie | `P o u č e n i e :` or `Poučenie:` | heading level 2 |
+| Section          | Pattern                                                   | Role                         |
+| ---------------- | --------------------------------------------------------- | ---------------------------- |
+| Header metadata  | `Súd:`, `Spisová značka:`, `ECLI:` lines                  | (skipped, metadata from API) |
+| Decision title   | `Uznesenie`, `Rozsudok`, `Trestný rozkaz` on its own line | heading level 1              |
+| Intro            | Court name + composition + "v ... veci"                   | `"intro"` paragraph          |
+| Holding marker   | `r o z h o d o l :` or `rozhodol:`                        | heading level 2              |
+| Holding items    | Roman numerals (I., II.) or continuous ruling             | `"holding"` paragraphs       |
+| Reasoning marker | `o d ô v o d n e n i e :` or `Odôvodnenie:`               | heading level 2              |
+| Reasoning items  | Numbered paragraphs (1., 2., 3.)                          | regular paragraphs           |
+| Closing          | `V {City} dňa ...`                                        | `"closing"` paragraph        |
+| Signature        | Title prefixes (JUDr., Mgr., doc.)                        | `"signature"` paragraph      |
+| Poučenie         | `P o u č e n i e :` or `Poučenie:`                        | heading level 2              |
 
 **Spaced-text normalization:**
 

@@ -1202,12 +1202,15 @@ const AssistantMessageParts = ({
             <AssistantThinkingPart
               components={streamdownComponents}
               displayState={
-                hasAnswerText
-                  ? { status: "folded" }
-                  : {
-                      isStreaming: isGenerating && isLatestAssistantMessage,
-                      status: "expanded",
-                    }
+                // Only show the always-open live view while this message is
+                // actively streaming its reasoning (no answer text yet).
+                // Otherwise — including a finished message that never produced
+                // answer text — render the collapsible `<details>`, collapsed
+                // by default and clickable, so a completed reasoning block can
+                // always be minimised.
+                !hasAnswerText && isGenerating && isLatestAssistantMessage
+                  ? { isStreaming: true, status: "expanded" }
+                  : { status: "folded" }
               }
               // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
               key={`${message.id}-thinking-${index}`}

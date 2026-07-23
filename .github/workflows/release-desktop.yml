@@ -54,8 +54,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      actions: read   # read upstream workflow_run artifacts
-      contents: read  # checkout
+      actions: read # read upstream workflow_run artifacts
+      contents: read # checkout
     outputs:
       release_ref: ${{ steps.ref.outputs.value }}
       release_sha: ${{ steps.ref.outputs.sha }}
@@ -572,8 +572,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: write   # upload latest.json to GitHub Release
-      id-token: write   # OIDC for AWS S3 + CloudFront
+      contents: write # upload latest.json to GitHub Release
+      id-token: write # OIDC for AWS S3 + CloudFront
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -674,7 +674,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: write   # download from / upload to / edit GitHub Releases
+      contents: write # download from / upload to / edit GitHub Releases
     env:
       # `gh` resolves the repo from GH_REPO, so no checkout is needed.
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

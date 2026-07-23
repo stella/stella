@@ -105,10 +105,25 @@ export type ActiveDocxEditModeState =
   | { type: "manual"; selection: { editApplyMode: "manual" } }
   | { type: "selectable"; selection: ChatEditModeSelection };
 
+/**
+ * DOCX rewrite-safety, resolved from Folio's compatibility probe:
+ * - `safe`: confirmed round-trippable; editing may be offered.
+ * - `unsafe`: Folio can't rewrite it without corrupting it; editing is blocked.
+ * - `checking`: the probe hasn't resolved yet. Treated as non-editable so the
+ *   AI edit tool is never advertised before the result lands (a prompt sent in
+ *   that window must not be able to auto-edit an eventually-unsafe document).
+ *
+ * A named state, not a boolean, so callers can't conflate "unchecked" with
+ * "safe" (they are distinct: only `safe` unlocks editing).
+ */
+export type DocxEditSafety = "safe" | "checking" | "unsafe";
+
 type ResolveActiveDocxEditModeStateOptions = {
   activeFileEditable: boolean | undefined;
   docxEditable: boolean | undefined;
   hasDocxEditSurface: boolean;
+  /** Editing is only offered when the DOCX is confirmed `safe`. */
+  safety: DocxEditSafety;
   selection: ChatEditModeSelection;
 };
 
@@ -123,9 +138,10 @@ export const resolveActiveDocxEditModeState = ({
   activeFileEditable,
   docxEditable,
   hasDocxEditSurface,
+  safety,
   selection,
 }: ResolveActiveDocxEditModeStateOptions): ActiveDocxEditModeState => {
-  if (!hasDocxEditSurface || activeFileEditable !== true) {
+  if (safety !== "safe" || !hasDocxEditSurface || activeFileEditable !== true) {
     return { type: "unavailable" };
   }
   if (docxEditable === true) {

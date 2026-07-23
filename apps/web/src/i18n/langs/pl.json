@@ -1629,7 +1629,8 @@
     "unlockFile": "Odblokuj plik",
     "unlockForEditing": "Odblokuj, aby edytować",
     "unsupportedDocxEditDescription": "Ten plik DOCX zawiera struktury, których Folio nie może bezpiecznie przepisać. Aby nie uszkodzić pliku, pobierz go i edytuj w programie Word.",
-    "unsupportedDocxEditTitle": "Edycja zablokowana"
+    "unsupportedDocxEditTitle": "Edycja zablokowana",
+    "viewOnly": "Tylko do odczytu"
   },
   "inspector": {
     "anonymization": {

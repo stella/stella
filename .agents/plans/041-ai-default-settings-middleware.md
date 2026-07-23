@@ -25,7 +25,7 @@ the other "every call sets the same thing" settings.
   Role drives sampling and verbosity; provider drives which provider
   options apply.
 - **Centralise in `ai-models.ts`**. A new `defaultsForRole(role,
-  provider)` helper builds the settings object the middleware
+provider)` helper builds the settings object the middleware
   receives at factory time. Lives next to `TEMPERATURE_PER_ROLE` and
   the existing role tables.
 - **Compose into the existing `withInstrumentation`**: order
@@ -62,8 +62,8 @@ the other "every call sets the same thing" settings.
   - `temperature: getTemperatureForRole(...)` inline arg
   - `maxOutputTokens: <magic>` where the magic equals the new default
   - `providerOptions: googleMinimalThinking()` inline arg
-  Keep overrides where the handler actually needs a non-default
-  value.
+    Keep overrides where the handler actually needs a non-default
+    value.
 - Delete `googleMinimalThinking()` after the last call site goes.
 - Unit tests:
   - `defaultsForRole("fast", "google")` includes
@@ -88,10 +88,10 @@ the other "every call sets the same thing" settings.
   - Import `defaultSettingsMiddleware` from `ai`.
   - Add `MAX_OUTPUT_BY_ROLE` table.
   - Add `defaultsForRole(role: ModelRole, provider: AIProvider,
-    orgId: SafeId<"organization"> | null): Settings` helper.
+orgId: SafeId<"organization"> | null): Settings` helper.
   - Insert the middleware into `withInstrumentation` ahead of the
     caching middleware.
-  - Threads `orgId` from `getModelForRole` /  `getModelById`
+  - Threads `orgId` from `getModelForRole` / `getModelById`
     options so anthropic `metadata.user_id` can use a hashed
     org identifier.
 - `getModelForRole` / `getModelById` signatures gain
@@ -110,8 +110,8 @@ the other "every call sets the same thing" settings.
   - `handlers/properties/suggest-prompt.ts`
   - `handlers/skills/generate-draft.ts`
   - `handlers/skills/resources/rewrite.ts`
-  Each drops the boilerplate args that now come from the middleware;
-  keeps any genuine per-call overrides.
+    Each drops the boilerplate args that now come from the middleware;
+    keeps any genuine per-call overrides.
 - Delete `googleMinimalThinking` helper once all call sites are
   migrated.
 

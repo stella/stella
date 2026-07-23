@@ -30,6 +30,7 @@ credentials intended for anonymous browser access, not private
 API keys.
 
 **What this means for our adapter:**
+
 - We need to call `/o/oauth2/token` with client_id +
   client_secret before each search session
 - Tokens expire (likely 600s based on typical Liferay config);
@@ -161,22 +162,22 @@ const getToken = async (): Promise<string> => {
 
 ### Adapter key fields mapping
 
-| API field | IngestionResult field |
-|-----------|----------------------|
-| `mkRSAPNumberOfFile` | `caseNumber` |
-| `mkECLI` | `ecli` |
-| `"Ústavný súd SR"` | `court` (constant) |
-| `mkDateOfDecision` | `decisionDate` |
-| `mkFormOfDecision` | `decisionType` |
-| `documentId` → `/docDownload/{id}` | `documentUrl` |
-| `mkJudgeReporter` | `metadata.judge` |
-| `mkCause` | `metadata.cause` |
-| `mkTypeOfProceeding` | `metadata.proceedingType` |
-| `mkResultOfNegotiation` | `metadata.result` |
-| `mkDecisionInTermsOf` | `metadata.legalBasis` |
-| `mkComplainedLegalRegulation` | `metadata.challengedLegislation` |
-| `mkWordRegister` | `metadata.wordRegister` |
-| `mkDifferentView` | `metadata.dissentingOpinion` |
+| API field                          | IngestionResult field            |
+| ---------------------------------- | -------------------------------- |
+| `mkRSAPNumberOfFile`               | `caseNumber`                     |
+| `mkECLI`                           | `ecli`                           |
+| `"Ústavný súd SR"`                 | `court` (constant)               |
+| `mkDateOfDecision`                 | `decisionDate`                   |
+| `mkFormOfDecision`                 | `decisionType`                   |
+| `documentId` → `/docDownload/{id}` | `documentUrl`                    |
+| `mkJudgeReporter`                  | `metadata.judge`                 |
+| `mkCause`                          | `metadata.cause`                 |
+| `mkTypeOfProceeding`               | `metadata.proceedingType`        |
+| `mkResultOfNegotiation`            | `metadata.result`                |
+| `mkDecisionInTermsOf`              | `metadata.legalBasis`            |
+| `mkComplainedLegalRegulation`      | `metadata.challengedLegislation` |
+| `mkWordRegister`                   | `metadata.wordRegister`          |
+| `mkDifferentView`                  | `metadata.dissentingOpinion`     |
 
 ## Test Cases
 

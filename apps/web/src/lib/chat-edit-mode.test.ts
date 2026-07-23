@@ -69,6 +69,7 @@ describe("resolveActiveDocxEditModeState", () => {
         activeFileEditable: true,
         docxEditable: false,
         hasDocxEditSurface: true,
+        safety: "safe",
         selection: autoSelection,
       }),
     ).toEqual({ type: "selectable", selection: autoSelection });
@@ -80,6 +81,7 @@ describe("resolveActiveDocxEditModeState", () => {
         activeFileEditable: true,
         docxEditable: true,
         hasDocxEditSurface: true,
+        safety: "safe",
         selection: autoSelection,
       }),
     ).toEqual({
@@ -94,6 +96,38 @@ describe("resolveActiveDocxEditModeState", () => {
         activeFileEditable: false,
         docxEditable: false,
         hasDocxEditSurface: true,
+        safety: "safe",
+        selection: autoSelection,
+      }),
+    ).toEqual({ type: "unavailable" });
+  });
+
+  test("disables editing for an unsafe DOCX even when it would otherwise be selectable", () => {
+    // A locked, editable current file would normally be `selectable`; being
+    // unsafe to rewrite must make it unavailable so the AI edit tool is never
+    // advertised (auto mode would otherwise version a doc that can't
+    // round-trip).
+    expect(
+      resolveActiveDocxEditModeState({
+        activeFileEditable: true,
+        docxEditable: false,
+        hasDocxEditSurface: true,
+        safety: "unsafe",
+        selection: autoSelection,
+      }),
+    ).toEqual({ type: "unavailable" });
+  });
+
+  test("disables editing while the compatibility probe is still checking", () => {
+    // The AI edit tool must not be advertised before the safety probe lands —
+    // a prompt sent in that window could otherwise auto-edit a document that
+    // turns out to be unsafe.
+    expect(
+      resolveActiveDocxEditModeState({
+        activeFileEditable: true,
+        docxEditable: false,
+        hasDocxEditSurface: true,
+        safety: "checking",
         selection: autoSelection,
       }),
     ).toEqual({ type: "unavailable" });

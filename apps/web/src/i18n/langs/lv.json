@@ -1629,7 +1629,8 @@
     "unlockFile": "Atbloķēt failu",
     "unlockForEditing": "Atbloķēt rediģēšanai",
     "unsupportedDocxEditDescription": "Šajā DOCX failā ir struktūras, ko Folio nevar droši pārrakstīt. Lai nesabojātu failu, lejupielādējiet to un rediģējiet programmā Word.",
-    "unsupportedDocxEditTitle": "Rediģēšana bloķēta"
+    "unsupportedDocxEditTitle": "Rediģēšana bloķēta",
+    "viewOnly": "Tikai skatīšana"
   },
   "inspector": {
     "anonymization": {

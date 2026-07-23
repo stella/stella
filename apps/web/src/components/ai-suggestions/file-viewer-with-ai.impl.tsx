@@ -19,6 +19,7 @@ import { startTransition, useState } from "react";
 import type { DocxEditorRef } from "@stll/folio-react";
 
 import type { DocxComments } from "@/components/docx/app-docx-editor";
+import type { DocxEditSafety } from "@/lib/chat-edit-mode";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -75,6 +76,12 @@ export type FileViewerWithAIProps = {
   onDocxCommentsChange?: ((comments: DocxComments) => void) | undefined;
   /** Whether the current DOCX session may accept AI edit operations. */
   docxEditable?: boolean | undefined;
+  /**
+   * DOCX rewrite-safety. `unsafe` blocks editing (shown quietly as a
+   * "View only" edit-mode chip instead of a toast); `checking` (probe
+   * pending) also withholds the AI edit tool until the result lands.
+   */
+  docxEditSafety?: DocxEditSafety | undefined;
   /** Request editable DOCX mode before applying a confirmed AI edit. */
   requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
   /** The actual file viewer component. */
@@ -92,6 +99,7 @@ export const FileChatOverlayHost = ({
   activeFile,
   activeExternal,
   docxEditable,
+  docxEditSafety,
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
@@ -125,6 +133,7 @@ export const FileChatOverlayHost = ({
       chatThreadId={currentChatThreadId}
       docxComments={docxComments}
       docxEditable={docxEditable}
+      docxEditSafety={docxEditSafety}
       docxEditorRef={docxEditorRef}
       onDocxCommentsChange={onDocxCommentsChange}
       onNewThread={handleNewThread}
