@@ -448,7 +448,7 @@ type ChatThreadCardProps = {
    * {@link FLOATING_THREAD_CARD_OFFSET_WITH_REVIEW_CLASS} when the DOCX
    * review bar is present so the card clears it.
    */
-  bottomOffsetClass?: string;
+  bottomOffsetClass?: string | undefined;
   children: ReactNode;
 };
 

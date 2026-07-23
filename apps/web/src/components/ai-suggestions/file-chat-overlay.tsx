@@ -1937,7 +1937,7 @@ const FileChatOverlayInner = ({
   useLayoutEffect(() => {
     const el = threadScrollRef.current;
     if (!el || !panelOpen) {
-      return;
+      return undefined;
     }
     const NEAR_BOTTOM_PX = 160;
     let frame = 0;
