@@ -107,10 +107,10 @@ describe("resolveTanStackAIProviderSupport", () => {
 
 describe("isAllowedBYOKModel", () => {
   test("accepts curated TanStack BYOK catalog models", () => {
-    expect(isAllowedBYOKModel("anthropic", "claude-opus-4-7")).toBe(true);
-    expect(isAllowedBYOKModel("google", "gemini-3.5-flash")).toBe(true);
-    expect(isAllowedBYOKModel("openai", "gpt-5.4")).toBe(true);
-    expect(isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.8")).toBe(
+    expect(isAllowedBYOKModel("anthropic", "claude-sonnet-5")).toBe(true);
+    expect(isAllowedBYOKModel("google", "gemini-3.6-flash")).toBe(true);
+    expect(isAllowedBYOKModel("openai", "gpt-5.6")).toBe(true);
+    expect(isAllowedBYOKModel("openrouter", "google/gemini-3.6-flash")).toBe(
       true,
     );
     expect(isAllowedBYOKModel("mistral", "mistral-large-latest")).toBe(true);

@@ -10,7 +10,7 @@
 
 import { panic } from "better-result";
 
-import { MODEL_RATES } from "@stll/ai-catalog";
+import { getModelRate, resolveModelRate } from "@stll/ai-catalog";
 import type { ModelRate } from "@stll/ai-catalog";
 
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
@@ -27,11 +27,12 @@ import {
 export const MICRO_UNITS_PER_USAGE_UNIT = 100;
 
 /**
- * Conservative default used for any model not in MODEL_RATES.
+ * Conservative default used for any model not in the catalog rate table.
  * Picked above the typical low-tier model rate so unknown
  * models are attributed defensively rather than escaping the meter.
  */
 const FALLBACK_RATE: ModelRate = {
+  kind: "flat",
   inputPerMTok: 500_000,
   outputPerMTok: 2_000_000,
 };
@@ -73,7 +74,10 @@ export const computeRawUsageMicroUnits = ({
       "computeRawUsageMicroUnits got negative or inconsistent token counts",
     );
   }
-  const rate = MODEL_RATES[modelId] ?? FALLBACK_RATE;
+  const rate = resolveModelRate(
+    getModelRate(modelId) ?? FALLBACK_RATE,
+    inputTokens,
+  );
   const billedInputTokens = inputTokens - cacheReadTokens;
   const cachedRate = rate.cachedInputPerMTok ?? rate.inputPerMTok;
   const inputCost = Math.ceil(
