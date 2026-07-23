@@ -80,6 +80,9 @@ describe("policy coverage", () => {
     "usage_entitlements",
     "usage_allocations",
     "usage_events",
+    // Root-owned lifecycle history is tenant-readable but app-role immutable;
+    // its dedicated assertion below covers the restrictive write policies.
+    "extraction_runs",
     // Control-plane auth table: same trust tier as oauth_client /
     // agent_registration. It carries organization_id/user_id columns but is
     // not tenant-scoped — it has a deny-all RLS policy plus REVOKE ALL from
@@ -306,6 +309,35 @@ describe("policy coverage", () => {
       const denyPolicy = denyPolicies.at(0);
       expect(denyPolicy?.permissive).toBe(false);
       expect(denyPolicy?.using_expr).toBe("false");
+    }
+  });
+
+  test("extraction run history is read-only for stella", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const runPolicies = policies.filter(
+      (policy) => policy.table_name === "extraction_runs",
+    );
+    const selectPolicy = runPolicies.find(
+      (policy) => policy.policy_name === "extraction_runs_workspace_select",
+    );
+
+    expect(selectPolicy?.command).toBe("r");
+    expect(selectPolicy?.using_expr).toContain("workspace_id");
+    expect(selectPolicy?.using_expr).toContain(SETTING_WORKSPACE_IDS);
+    expect(selectPolicy?.using_expr).toContain("organization_id");
+    expect(selectPolicy?.using_expr).toContain(SETTING_ORGANIZATION_ID);
+
+    for (const [policyName, command, expression] of [
+      ["extraction_runs_no_insert", "a", "check_expr"],
+      ["extraction_runs_no_update", "w", "using_expr"],
+      ["extraction_runs_no_delete", "d", "using_expr"],
+    ] as const) {
+      const denyPolicy = runPolicies.find(
+        (policy) => policy.policy_name === policyName,
+      );
+      expect(denyPolicy?.command).toBe(command);
+      expect(denyPolicy?.permissive).toBe(false);
+      expect(denyPolicy?.[expression]).toBe("false");
     }
   });
 
