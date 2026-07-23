@@ -66,7 +66,7 @@ type Messages = {
     "titleLine2": "on every matter.";
   };
   "home": {
-    "ctaTitle": "Your matters. Your stack. Your terms.";
+    "ctaTitle": "Bring AI to your law firm.";
   };
   "meta": {
     "homeDescription": "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.";
