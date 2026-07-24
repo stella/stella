@@ -2301,7 +2301,8 @@
       "owner": "Vlastník"
     },
     "settings": "Nastavenia organizácie",
-    "settingsDescription": "Upravte názov a slug organizácie"
+    "settingsDescription": "Upravte názov a slug organizácie",
+    "switchOrganization": "Prepnúť organizáciu"
   },
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",

@@ -2301,7 +2301,8 @@
       "owner": "Propietario"
     },
     "settings": "Configuración de la organización",
-    "settingsDescription": "Edite el nombre y el slug de su organización"
+    "settingsDescription": "Edite el nombre y el slug de su organización",
+    "switchOrganization": "Cambiar de organización"
   },
   "search": {
     "aiRefine": "Mejorar consulta con IA",

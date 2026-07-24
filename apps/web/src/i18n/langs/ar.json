@@ -2301,7 +2301,8 @@
       "owner": "المالك"
     },
     "settings": "إعدادات المؤسسة",
-    "settingsDescription": "عدّل اسم مؤسستك والمعرّف"
+    "settingsDescription": "عدّل اسم مؤسستك والمعرّف",
+    "switchOrganization": "تبديل المؤسسة"
   },
   "search": {
     "aiRefine": "تحسين الاستعلام باستخدام AI",

@@ -75,7 +75,7 @@ export const OrganizationProfileCard = () => {
       throw toAuthClientError(result.error);
     }
 
-    await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
+    await queryClient.invalidateQueries({ queryKey: organizationKeys.root });
     form.reset({ name: pendingName });
     stellaToast.add({
       title: t("success.organizationUpdated"),

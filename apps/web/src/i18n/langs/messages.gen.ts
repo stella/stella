@@ -2305,6 +2305,7 @@ type Messages = {
     };
     "settings": "Organization settings";
     "settingsDescription": "Edit your organization name and slug";
+    "switchOrganization": "Switch organization";
   };
   "search": {
     "aiRefine": "Improve query with AI";

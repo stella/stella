@@ -2301,7 +2301,8 @@
       "owner": "Īpašnieks"
     },
     "settings": "Organizācijas iestatījumi",
-    "settingsDescription": "Rediģēt organizācijas nosaukumu un slug"
+    "settingsDescription": "Rediģēt organizācijas nosaukumu un slug",
+    "switchOrganization": "Mainīt organizāciju"
   },
   "search": {
     "aiRefine": "Uzlabot vaicājumu ar AI",

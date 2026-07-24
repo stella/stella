@@ -2301,7 +2301,8 @@
       "owner": "Tulajdonos"
     },
     "settings": "Szervezet beállításai",
-    "settingsDescription": "Szervezet nevének és slugjának szerkesztése"
+    "settingsDescription": "Szervezet nevének és slugjának szerkesztése",
+    "switchOrganization": "Szervezet váltása"
   },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
