@@ -57,6 +57,64 @@ jobs:
             echo "::notice::Fork PR without 'run-ci' label — CI skipped. A maintainer must review the code and add the 'run-ci' label to run checks."
           fi
 
+  changeset:
+    name: Changeset present for published package changes
+    needs: trust-check
+    if: >-
+      github.event_name == 'pull_request'
+      && needs.trust-check.outputs.trusted == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Enforce release intent
+        # The repository owner publishes this versioned shared contract.
+        uses: stella/.github/.github/actions/changeset-policy@v1.2.0 # zizmor: ignore[unpinned-uses]
+        with:
+          release-paths: |
+            packages/cli/README.md
+            packages/cli/package.json
+            packages/cli/src/**
+            packages/cli/skills/**
+            packages/cli/tsconfig.build.json
+            packages/conditions/README.md
+            packages/conditions/package.json
+            packages/conditions/src/**
+            packages/conditions/tsconfig.build.json
+            packages/conditions/tsdown.config.ts
+            packages/template-conditions/README.md
+            packages/template-conditions/package.json
+            packages/template-conditions/src/**
+            packages/template-conditions/tsconfig.build.json
+            packages/template-conditions/tsdown.config.ts
+            packages/docx-utils/README.md
+            packages/docx-utils/package.json
+            packages/docx-utils/src/**
+            packages/docx-utils/tsconfig.build.json
+            packages/docx-utils/tsdown.config.ts
+          generated-paths: |
+            bun.lock
+            packages/cli/CHANGELOG.md
+            packages/cli/package.json
+            packages/conditions/CHANGELOG.md
+            packages/conditions/package.json
+            packages/template-conditions/CHANGELOG.md
+            packages/template-conditions/package.json
+            packages/docx-utils/CHANGELOG.md
+            packages/docx-utils/package.json
+          package-files: |
+            packages/cli/package.json
+            packages/conditions/package.json
+            packages/template-conditions/package.json
+            packages/docx-utils/package.json
+          version-file: bun.lock
+          version-pr-author: "stella-release-deployer[bot]"
+
   ci-changes:
     needs: trust-check
     if: >-
@@ -1450,6 +1508,7 @@ jobs:
     needs:
       [
         trust-check,
+        changeset,
         ci-checks,
         lint,
         typecheck,
@@ -1470,6 +1529,7 @@ jobs:
       - name: Evaluate CI outcome
         env:
           API_IMAGE_DEPS_RESULT: ${{ needs.api-image-deps.result }}
+          CHANGESET_RESULT: ${{ needs.changeset.result }}
           CI_CHANGES_RESULT: ${{ needs.ci-changes.result }}
           CI_RESULT: ${{ needs.ci-checks.result }}
           DESKTOP_CLIPPY_RESULT: ${{ needs.desktop-clippy.result }}
@@ -1505,6 +1565,7 @@ jobs:
                   || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" \
                   || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" \
                   || "$CI_CHANGES_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "cancelled" \
+                  || "$CHANGESET_RESULT" == "failure" || "$CHANGESET_RESULT" == "cancelled" \
                   || "$DESKTOP_CLIPPY_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
               echo "::error::CI checks failed."
               exit 1
@@ -1519,12 +1580,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$LINT_RESULT" == "cancelled" || "$TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$LINT_RESULT" == "cancelled" || "$TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$LINT_RESULT" == "failure" || "$TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$LINT_RESULT" == "failure" || "$TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi

@@ -1,0 +1,24 @@
+name: Release PR
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  version:
+    name: Maintain Version Packages PR
+    permissions:
+      contents: read
+    # The repository owner publishes this versioned shared contract.
+    uses: stella/.github/.github/workflows/changeset-release-pr.yml@v1.2.0 # zizmor: ignore[unpinned-uses]
+    with:
+      bun-version-file: package.json
+    secrets:
+      CHANGELOG_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
+      CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}

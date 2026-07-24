@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.4/schema.json",
+  "changelog": ["@changesets/changelog-github", { "repo": "stella/stella" }],
+  "commit": false,
+  "fixed": [],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@stll/api",
+    "@stll/boe",
+    "@stll/business-registries",
+    "@stll/country-codes",
+    "@stll/infosoud",
+    "@stll/locales",
+    "@stll/text-normalize"
+  ]
+}
