@@ -15,7 +15,6 @@ Project: root
 - @aws-sdk/client-sesv2 3.1089.0 — Apache-2.0
 - @aws-sdk/client-sts 3.1089.0 — Apache-2.0
 - @aws-sdk/s3-request-presigner 3.1089.0 — Apache-2.0
-- @babel/core  — MIT
 - @babel/core 7.29.0 — MIT
 - @babel/core 7.29.7 — MIT
 - @babel/core 8.0.1 — MIT
