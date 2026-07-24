@@ -30,6 +30,13 @@ import {
 
 import pkg from "../package.json" with { type: "json" };
 
+import {
+  AnonymizeSurfaceError,
+  exitCodeForError,
+  isAnonymizeSurfaceError,
+} from "@stll/anonymize/agent-surface";
+import { preloadNativeBinding } from "@stll/anonymize/native-runtime";
+
 import type { CliOptions } from "./args";
 import {
   DEFAULT_THRESHOLD,
@@ -38,6 +45,7 @@ import {
   parseCountries,
   UsageError,
 } from "./args";
+import { runFeedbackCommand } from "./feedback";
 import type { DictionaryScope } from "./dictionary-scope";
 import {
   type DocxCliPipeline,
@@ -898,6 +906,16 @@ const dispatch = async (engine: CliEngine): Promise<void> => {
     });
     return;
   }
+  if (argv.at(0) === "feedback") {
+    await runFeedbackCommand({
+      argv: argv.slice(1),
+      readStdin,
+      write: (text) => {
+        process.stdout.write(text);
+      },
+    });
+    return;
+  }
   if (argv.at(0) === "pdf") {
     await runPdfCommand({
       argv: argv.slice(1),
@@ -944,16 +962,53 @@ const dispatch = async (engine: CliEngine): Promise<void> => {
  */
 export const runCli = async (engine: CliEngine): Promise<void> => {
   try {
+    // Install the runtime binding (wasm under Bun) before any native call.
+    // A no-op on Node, where the CLI ships to run.
+    await preloadNativeBinding();
     await dispatch(engine);
   } catch (err) {
+    const surface = isAnonymizeSurfaceError(err) ? err : mapFsError(err);
     if (err instanceof UsageError) {
       process.stderr.write(`anonymize: ${err.message}\n`);
       process.stderr.write(`Try "anonymize --help" for usage.\n`);
       process.exitCode = 2;
+    } else if (surface !== undefined) {
+      process.stderr.write(`anonymize: ${surface.message}\n`);
+      process.stderr.write(`hint: ${surface.hint}\n`);
+      process.exitCode = exitCodeForError(surface);
     } else {
       const message = err instanceof Error ? err.message : String(err);
       process.stderr.write(`anonymize: ${message}\n`);
       process.exitCode = 1;
     }
   }
+};
+
+/**
+ * Map a raw filesystem error to the agent-surface taxonomy so a missing or
+ * inaccessible input/output path exits with a stable code instead of the
+ * generic runtime-error class. Returns undefined for anything else.
+ */
+const mapFsError = (error: unknown): AnonymizeSurfaceError | undefined => {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return undefined;
+  }
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === "ENOENT") {
+    return new AnonymizeSurfaceError("not_found", "input path does not exist", {
+      hint: "Check the path; pass an existing file or directory.",
+      cause: error,
+    });
+  }
+  if (code === "EACCES" || code === "EPERM") {
+    return new AnonymizeSurfaceError(
+      "path_not_allowed",
+      "permission denied for the given path",
+      {
+        hint: "Adjust file permissions or choose an accessible path.",
+        cause: error,
+      },
+    );
+  }
+  return undefined;
 };

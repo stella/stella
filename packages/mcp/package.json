@@ -33,7 +33,7 @@
   "scripts": {
     "build": "tsdown",
     "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.test.json",
-    "test": "bun test src/__test__/local.test.ts src/__test__/server.test.ts && bun run test:node-runtime",
+    "test": "bun test src/__test__/local.test.ts src/__test__/server.test.ts src/__test__/instructions.test.ts && bun run test:node-runtime",
     "test:node-runtime": "node --import tsx --test src/__test__/durable-sessions.test.ts && node scripts/test-packed-bin.mjs",
     "format": "oxfmt ."
   },

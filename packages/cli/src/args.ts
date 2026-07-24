@@ -59,6 +59,11 @@ PDF workflows:
   Run "anonymize pdf --help" for destructive local Poppler/Tesseract PDF
   anonymization into a verified fresh image-only output.
 
+Feedback:
+  Run "anonymize feedback --help" to report a bug or gap. It sanitizes your
+  text locally and prints a prefilled GitHub issue URL you submit yourself;
+  it makes no network calls.
+
 Options:
   -o, --output <path>       Output file, or directory for batch
                             input (multiple files or a directory)
@@ -120,9 +125,12 @@ Interactive prompt:
   and agents never block on input.
 
 Exit codes:
-  0  success
-  1  runtime error (message on stderr)
-  2  usage error (message on stderr)
+  0  success                  4  not found (missing path)
+  1  runtime error            5  unsupported format
+  2  usage error              6  output already exists
+  3  path not allowed         7  session unavailable
+                              8  dependency missing
+  Messages and, for coded failures, a "hint:" line print on stderr.
 
 JSON output (--json):
   { "entityCount": number,

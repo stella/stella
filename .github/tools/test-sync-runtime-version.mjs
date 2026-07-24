@@ -102,6 +102,26 @@ const packageFiles = [
   "packages/mcp/package.json",
 ];
 
+const changesetConfig = JSON.parse(
+  readFileSync(join(repoRoot, ".changeset", "config.json"), "utf8"),
+);
+const fixedRuntimePackages = changesetConfig.fixed?.at(0) ?? [];
+const synchronizedRuntimePackages = packageFiles.map(
+  (packageFile) =>
+    JSON.parse(readFileSync(join(repoRoot, packageFile), "utf8")).name,
+);
+if (
+  changesetConfig.fixed?.length !== 1 ||
+  fixedRuntimePackages.length !== synchronizedRuntimePackages.length ||
+  synchronizedRuntimePackages.some(
+    (packageName) => !fixedRuntimePackages.includes(packageName),
+  )
+) {
+  throw new Error(
+    "the Changesets fixed group must exactly match the synchronized runtime packages",
+  );
+}
+
 const sidecars = [
   "@stll/anonymize-darwin-arm64",
   "@stll/anonymize-darwin-x64",

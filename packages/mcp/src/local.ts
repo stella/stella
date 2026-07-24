@@ -1,10 +1,24 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
   CAPABILITY_MANIFEST,
   type NativeCallerDetection,
   type NativeTextReplacement,
   type PreparedNativePipeline,
 } from "@stll/anonymize";
+import { preloadNativeBinding } from "@stll/anonymize/native-runtime";
+import {
+  AnonymizeSurfaceError,
+  classifyToEnvelope,
+  type AnonymizeErrorCode,
+  type AnonymizeErrorEnvelope,
+} from "@stll/anonymize/agent-surface";
+import {
+  FEEDBACK_KINDS,
+  MAX_FEEDBACK_BODY_CHARS,
+  MAX_FEEDBACK_TITLE_CHARS,
+  buildFeedbackSubmission,
+} from "@stll/anonymize/feedback";
 import {
   DOCX_ARCHIVE_MAX_BYTES,
   DOCX_COVERAGE_MODES,
@@ -40,6 +54,8 @@ import {
 } from "node:path";
 import * as z from "zod/v4";
 
+import pkg from "../package.json" with { type: "json" };
+
 import { DurableSessionStore } from "./durable-sessions";
 
 const TEXT_MAX_BYTES = 64 * 1024 * 1024;
@@ -49,6 +65,60 @@ const PATH_MAX_CHARACTERS = 32_768;
 const SESSION_MAX_COUNT = 256;
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const READ_CHUNK_BYTES = 64 * 1024;
+
+/** Build an agent-surface error carrying a stable code, message, and hint. */
+const surfaceError = (
+  code: AnonymizeErrorCode,
+  message: string,
+  hint: string,
+  retryable = false,
+): AnonymizeSurfaceError =>
+  new AnonymizeSurfaceError(code, message, { hint, retryable });
+
+const nodeErrorCode = (error: unknown): string | undefined =>
+  typeof error === "object" && error !== null && "code" in error
+    ? (error as NodeJS.ErrnoException).code
+    : undefined;
+
+/**
+ * The local PDF provider collapses a missing/failed pdftoppm or tesseract into a
+ * `PdfLocalProviderError` with code `executable-failed`; treat it as a missing
+ * dependency so agents get an actionable install hint instead of a generic
+ * internal error. Duck-typed to avoid importing the provider's internals.
+ */
+const isPdfToolchainUnavailable = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  (error as { name?: unknown }).name === "PdfLocalProviderError" &&
+  (error as { code?: unknown }).code === "executable-failed";
+
+/**
+ * The docx package refuses under requireFull coverage with a
+ * `DocxAnonymizationError` (code `incomplete-coverage`). Map it to a
+ * validation_error so the agent gets the actionable allowPartialCoverage hint
+ * instead of a generic internal_error; pass anything else through unchanged.
+ * Duck-typed to avoid importing the docx error class.
+ */
+const mapDocxCoverageError = (error: unknown): unknown => {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: unknown }).name === "DocxAnonymizationError" &&
+    (error as { code?: unknown }).code === "incomplete-coverage"
+  ) {
+    // Preserve the docx package's specific (content-free) coverage message; add
+    // the stable code and the actionable hint.
+    return new AnonymizeSurfaceError(
+      "validation_error",
+      (error as Error).message,
+      {
+        hint: "Re-run with allowPartialCoverage: true to accept partial coverage.",
+        cause: error,
+      },
+    );
+  }
+  return error;
+};
 
 const observedAtEpochSeconds = (): number => {
   const seconds = Math.floor(Date.now() / 1000);
@@ -183,7 +253,11 @@ const readHandleBounded = async (
     }
     total += bytesRead;
     if (total > maximumBytes) {
-      throw new Error(`${label} inputs must not exceed ${maximumBytes} bytes`);
+      throw surfaceError(
+        "validation_error",
+        `${label} inputs must not exceed ${maximumBytes} bytes`,
+        "Split or shrink the input below the size limit and retry.",
+      );
     }
     chunks.push(chunk.subarray(0, bytesRead));
   }
@@ -244,16 +318,35 @@ export class PathScope {
     maximumBytes,
     label,
   }: ReadInputOptions): Promise<ScopedInput> {
-    if (!isAbsolute(path) || extname(path).toLowerCase() !== extension) {
-      throw new Error(`Input must be an absolute ${extension} path`);
+    if (!isAbsolute(path)) {
+      throw surfaceError(
+        "validation_error",
+        `Input must be an absolute ${extension} path`,
+        "Pass an absolute path to an existing file inside a configured --root.",
+      );
     }
-    const initiallyCanonical = await realpath(path);
+    if (extname(path).toLowerCase() !== extension) {
+      throw surfaceError(
+        "unsupported_format",
+        `Input must be an absolute ${extension} path`,
+        `Provide a file with the ${extension} extension.`,
+      );
+    }
+    const initiallyCanonical = await this.canonicalInput(path);
     if (!this.#roots.some((root) => inside(root, initiallyCanonical))) {
-      throw new Error("Input is outside the configured roots");
+      throw surfaceError(
+        "path_not_allowed",
+        "Input is outside the configured roots",
+        "Move the input under a configured --root, or add its directory with --root.",
+      );
     }
     const initiallyRequestedMetadata = await lstat(path);
     if (!initiallyRequestedMetadata.isFile()) {
-      throw new Error("Input must be a regular file");
+      throw surfaceError(
+        "validation_error",
+        "Input must be a regular file",
+        "Point at a regular file, not a directory, symlink, or special file.",
+      );
     }
     const handle = await open(
       path,
@@ -262,11 +355,19 @@ export class PathScope {
     try {
       const openedMetadata = await handle.stat();
       if (!openedMetadata.isFile()) {
-        throw new Error("Input must be a regular file");
+        throw surfaceError(
+          "validation_error",
+          "Input must be a regular file",
+          "Point at a regular file, not a directory, symlink, or special file.",
+        );
       }
       const canonical = await realpath(path);
       if (!this.#roots.some((root) => inside(root, canonical))) {
-        throw new Error("Input is outside the configured roots");
+        throw surfaceError(
+          "path_not_allowed",
+          "Input is outside the configured roots",
+          "Move the input under a configured --root, or add its directory with --root.",
+        );
       }
       const currentMetadata = await stat(canonical);
       if (
@@ -276,8 +377,10 @@ export class PathScope {
         throw new Error("Input changed while it was being validated");
       }
       if (openedMetadata.size > maximumBytes) {
-        throw new Error(
+        throw surfaceError(
+          "validation_error",
           `${label} inputs must not exceed ${maximumBytes} bytes`,
+          "Split or shrink the input below the size limit and retry.",
         );
       }
       const bytes = await readHandleBounded(handle, maximumBytes, label);
@@ -287,17 +390,63 @@ export class PathScope {
     }
   }
 
+  /**
+   * Canonicalize an input path, mapping a missing path to a `not_found` surface
+   * error instead of a raw fs `ENOENT` so agents get a stable code.
+   */
+  private async canonicalInput(path: string): Promise<string> {
+    try {
+      return await realpath(path);
+    } catch (error) {
+      if (nodeErrorCode(error) === "ENOENT") {
+        throw surfaceError(
+          "not_found",
+          "Input path does not exist",
+          "Create the file first, or pass an existing path inside a configured --root.",
+        );
+      }
+      throw error;
+    }
+  }
+
   async output(
     path: string,
     extension: ".docx" | ".pdf" | ".txt",
   ): Promise<ScopedOutput> {
-    if (!isAbsolute(path) || extname(path).toLowerCase() !== extension) {
-      throw new Error(`Output must be an absolute ${extension} path`);
+    if (!isAbsolute(path)) {
+      throw surfaceError(
+        "validation_error",
+        `Output must be an absolute ${extension} path`,
+        "Pass an absolute output path inside a configured --root.",
+      );
+    }
+    if (extname(path).toLowerCase() !== extension) {
+      throw surfaceError(
+        "unsupported_format",
+        `Output must be an absolute ${extension} path`,
+        `Name the output with the ${extension} extension.`,
+      );
     }
     const normalized = resolve(path);
-    const parent = await realpath(dirname(normalized));
+    let parent: string;
+    try {
+      parent = await realpath(dirname(normalized));
+    } catch (error) {
+      if (nodeErrorCode(error) === "ENOENT") {
+        throw surfaceError(
+          "not_found",
+          "Output directory does not exist",
+          "Create the output directory first, inside a configured --root.",
+        );
+      }
+      throw error;
+    }
     if (!this.#roots.some((root) => inside(root, parent))) {
-      throw new Error("Output is outside the configured roots");
+      throw surfaceError(
+        "path_not_allowed",
+        "Output is outside the configured roots",
+        "Choose an output directory under a configured --root.",
+      );
     }
     const parentMetadata = await stat(parent);
     try {
@@ -314,7 +463,11 @@ export class PathScope {
         cause: error,
       });
     }
-    throw new Error("Output already exists; overwriting is not supported");
+    throw surfaceError(
+      "output_exists",
+      "Output already exists; overwriting is not supported",
+      "Pick a new output path; anonymize never overwrites an existing file.",
+    );
   }
 }
 
@@ -467,7 +620,14 @@ const decodeUtf8 = (bytes: Uint8Array, label: string): string => {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch (error) {
-    throw new Error(`${label} must contain valid UTF-8`, { cause: error });
+    throw new AnonymizeSurfaceError(
+      "validation_error",
+      `${label} must contain valid UTF-8`,
+      {
+        hint: "Provide UTF-8 encoded text; re-encode the file and retry.",
+        cause: error,
+      },
+    );
   }
 };
 
@@ -514,7 +674,11 @@ const isUtf16Boundary = (text: string, offset: number): boolean => {
 
 const assertDifferentPaths = (input: string, output: string): void => {
   if (input === output) {
-    throw new Error("Input and output paths must differ");
+    throw surfaceError(
+      "validation_error",
+      "Input and output paths must differ",
+      "Choose a distinct output path so the input is never overwritten.",
+    );
   }
 };
 
@@ -629,6 +793,11 @@ export class LocalAnonymizeService {
     }
     this.#activeOperations += 1;
     try {
+      // Count the operation before the asynchronous preload so close() cannot
+      // pass its drain barrier while this call is waiting for the binding.
+      // The preload installs wasm under Bun before any inline native load in
+      // the docx or pdf package; it is a no-op on Node.
+      await preloadNativeBinding();
       return await operation();
     } finally {
       this.#activeOperations -= 1;
@@ -648,7 +817,11 @@ export class LocalAnonymizeService {
     const existing = this.#sessions.get(sessionId);
     if (existing !== undefined) {
       if (language !== undefined && existing.language !== language) {
-        throw new Error("A session cannot change language");
+        throw surfaceError(
+          "validation_error",
+          "A session cannot change language",
+          "Use a new session id for a different language, or drop the language override.",
+        );
       }
       if (existing.status === "initializing") {
         throw new Error("The requested session is still initializing");
@@ -685,7 +858,11 @@ export class LocalAnonymizeService {
         session = pipeline.createRedactionSession(sessionId);
       } else {
         if (durableSessions === undefined) {
-          throw new Error("Durable session storage is unavailable");
+          throw surfaceError(
+            "session_unavailable",
+            "Durable session storage is unavailable",
+            "Start the server with --session-dir and --key-file to enable restores.",
+          );
         }
         try {
           session = durableSessions.restore({
@@ -695,9 +872,14 @@ export class LocalAnonymizeService {
             restorer: pipeline,
           });
         } catch (error) {
-          throw new Error("The requested durable session is unavailable", {
-            cause: error,
-          });
+          throw new AnonymizeSurfaceError(
+            "session_unavailable",
+            "The requested durable session is unavailable",
+            {
+              hint: "Confirm the session id and key file match the archive that created it.",
+              cause: error,
+            },
+          );
         }
       }
       const entry: SessionEntry = {
@@ -778,9 +960,14 @@ export class LocalAnonymizeService {
             };
             this.#sessions.set(sessionId, entry);
           } catch (error) {
-            throw new Error("The requested durable session is unavailable", {
-              cause: error,
-            });
+            throw new AnonymizeSurfaceError(
+              "session_unavailable",
+              "The requested durable session is unavailable",
+              {
+                hint: "Confirm the session id and key file match the archive that created it.",
+                cause: error,
+              },
+            );
           }
         }
       } finally {
@@ -788,10 +975,19 @@ export class LocalAnonymizeService {
       }
     }
     if (entry === undefined) {
-      throw new Error("The requested session is unavailable");
+      throw surfaceError(
+        "session_unavailable",
+        "The requested session is unavailable",
+        "Anonymize with this session id first, or start the server with a durable session store.",
+      );
     }
     if (entry.status !== "ready") {
-      throw new Error("The requested in-memory session is unavailable");
+      throw surfaceError(
+        "session_unavailable",
+        "The requested in-memory session is unavailable",
+        "Wait for the prior operation on this session to finish, then retry.",
+        true,
+      );
     }
     entry.status = "busy";
     return { entry, sessionId, rollback: { type: "release" } };
@@ -857,13 +1053,28 @@ export class LocalAnonymizeService {
         ? {}
         : { language: input.detectionLanguage },
     );
-    const observed = await renderPdfWithPopplerTesseract({
-      document: source.bytes,
-      ocrLanguage: input.ocrLanguage,
-      dpi: input.dpi,
-      timeoutMs: input.timeoutMs,
-      ...this.#pdfProvider,
-    });
+    let observed: Awaited<ReturnType<typeof renderPdfWithPopplerTesseract>>;
+    try {
+      observed = await renderPdfWithPopplerTesseract({
+        document: source.bytes,
+        ocrLanguage: input.ocrLanguage,
+        dpi: input.dpi,
+        timeoutMs: input.timeoutMs,
+        ...this.#pdfProvider,
+      });
+    } catch (error) {
+      if (isPdfToolchainUnavailable(error)) {
+        throw new AnonymizeSurfaceError(
+          "dependency_missing",
+          "The local PDF toolchain is unavailable",
+          {
+            hint: "Install Poppler (pdftoppm) and Tesseract on PATH, or pass --pdftoppm/--tesseract.",
+            cause: error,
+          },
+        );
+      }
+      throw error;
+    }
     const anonymized = anonymizePdfRaster({
       document: source.bytes,
       pipeline,
@@ -1103,7 +1314,7 @@ export class LocalAnonymizeService {
       };
     } catch (error) {
       await this.#rollbackSession(lease);
-      throw error;
+      throw mapDocxCoverageError(error);
     }
   }
 
@@ -1132,8 +1343,10 @@ export class LocalAnonymizeService {
         expectedSessionId: input.sessionId,
       });
       if (result.coverage.status === "partial" && !input.allowPartialCoverage) {
-        throw new Error(
+        throw surfaceError(
+          "validation_error",
           "DOCX restoration has partial coverage; set allowPartialCoverage to publish it",
+          "Re-run with allowPartialCoverage: true to accept partial restoration.",
         );
       }
       await destination.write(result.document);
@@ -1184,7 +1397,7 @@ export class LocalAnonymizeService {
   }
 }
 
-const result = (value: AuditSafeResult) => ({
+const result = (value: AuditSafeResult): CallToolResult => ({
   content: [{ type: "text" as const, text: JSON.stringify(value) }],
   structuredContent: { ...value },
 });
@@ -1198,9 +1411,88 @@ const MCP_TOOL_NAMES = [
   "inspect_docx_file",
   "restore_docx_file",
   "restore_text_file",
+  "send_feedback",
 ] as const;
 
-const capabilitiesResult = (service: LocalAnonymizeService) => {
+/**
+ * Map the external-detection failure taxonomy onto the shared agent-surface
+ * codes. The specific failure identity is preserved in the envelope `message`;
+ * `code` gives the agent the coarse, branchable class.
+ */
+const EXTERNAL_DETECTION_ENVELOPE: Record<
+  ExternalDetectionFailure["code"],
+  { code: AnonymizeErrorCode; hint: string; retryable: boolean }
+> = {
+  EXTERNAL_DETECTION_BATCH_REJECTED: {
+    code: "validation_error",
+    hint: "Fix the ExternalDetectionBatch v1 sidecar to match the schema and retry.",
+    retryable: false,
+  },
+  EXTERNAL_DETECTION_DOCUMENT_REJECTED: {
+    code: "validation_error",
+    hint: "Align the sidecar's document metadata with the input, then retry.",
+    retryable: false,
+  },
+  EXTERNAL_DETECTION_INPUT_REJECTED: {
+    code: "validation_error",
+    hint: "Use distinct absolute paths inside a configured --root for input, sidecar, and output.",
+    retryable: false,
+  },
+  EXTERNAL_DETECTION_OPERATION_FAILED: {
+    code: "internal_error",
+    hint: "Retry; if it persists, file it with the send_feedback tool.",
+    retryable: true,
+  },
+  EXTERNAL_DETECTION_SESSION_REJECTED: {
+    code: "session_unavailable",
+    hint: "Use a fresh session id, or confirm the session store and key file match.",
+    retryable: false,
+  },
+};
+
+const toEnvelope = (error: unknown): AnonymizeErrorEnvelope => {
+  if (error instanceof ExternalDetectionAuditError) {
+    const mapped = EXTERNAL_DETECTION_ENVELOPE[error.code];
+    return {
+      error: {
+        code: mapped.code,
+        message: error.message,
+        hint: mapped.hint,
+        retryable: mapped.retryable,
+      },
+    };
+  }
+  return classifyToEnvelope(error);
+};
+
+const errorResult = (error: unknown): CallToolResult => {
+  const envelope = toEnvelope(error);
+  return {
+    isError: true,
+    content: [{ type: "text" as const, text: JSON.stringify(envelope) }],
+    structuredContent: { ...envelope },
+  };
+};
+
+/**
+ * Run a tool body, rendering any thrown error as the structured envelope so
+ * every tool fails the same, agent-legible way instead of surfacing a raw
+ * protocol error.
+ */
+const guard = async (
+  produce: () => CallToolResult | Promise<CallToolResult>,
+): Promise<CallToolResult> => {
+  try {
+    return await produce();
+  } catch (error) {
+    return errorResult(error);
+  }
+};
+
+const capabilitiesResult = async (
+  service: LocalAnonymizeService,
+): Promise<CallToolResult> => {
+  await preloadNativeBinding();
   const value = {
     capabilityManifest: CAPABILITY_MANIFEST,
     runtimeVersion: nativeNodeSurface.native_package_version(),
@@ -1221,30 +1513,57 @@ const capabilitiesResult = (service: LocalAnonymizeService) => {
   };
 };
 
-const externalDetectionErrorResult = (error: unknown) => {
-  const failure = externalDetectionFailure(
-    error,
-    EXTERNAL_DETECTION_FAILURES.operationFailed,
-  );
-  const value = { errorCode: failure.code, message: failure.message };
+const feedbackInput = z.object({
+  kind: z.enum(FEEDBACK_KINDS),
+  title: z.string().min(1).max(MAX_FEEDBACK_TITLE_CHARS),
+  body: z.string().min(1).max(MAX_FEEDBACK_BODY_CHARS),
+});
+
+const feedbackResult = (
+  input: z.infer<typeof feedbackInput>,
+): CallToolResult => {
+  const submission = buildFeedbackSubmission(input);
+  const value = {
+    channel: "github" as const,
+    redactions: submission.redactions,
+    title: submission.title,
+    sanitizedBody: submission.sanitizedBody,
+    issueUrl: submission.issueUrl,
+    ghCommand: submission.ghCommand,
+    note: "Nothing was sent. Review the sanitized content, then open the URL (or run the gh command) to submit the issue under your own GitHub account.",
+  };
   return {
-    isError: true,
     content: [{ type: "text" as const, text: JSON.stringify(value) }],
-    structuredContent: value,
+    structuredContent: { ...value },
   };
 };
+
+/**
+ * Server `instructions` handed to MCP clients at connect time. Kept terse and
+ * factual; the char budget is asserted in `instructions.test.ts` to guard drift.
+ */
+export const MCP_INSTRUCTIONS_MAX_CHARS = 1200;
+export const MCP_INSTRUCTIONS = `stella-anonymize redacts PII in local text, DOCX, and PDF files. Every tool reads and writes local paths only, inside the directories passed as --root; it never returns document text or session mappings, and it never overwrites, so outputs must be new paths.
+
+Errors: a failed tool returns a single text content of {"error":{"code","message","hint","retryable"}} with isError set. Branch on code (validation_error, path_not_allowed, not_found, unsupported_format, output_exists, session_unavailable, dependency_missing, internal_error); hint states the next step. Nothing here is destructive: there is no delete and existing files are never overwritten, so no confirm step is needed.
+
+Sessions: reversible replace mode uses a session; a restore needs the same session id, plus a durable store (server started with --session-dir and --key-file) to survive a restart.
+
+Hit a bug or a gap? Use send_feedback: it sanitizes your text locally and returns a prefilled GitHub issue URL you open and submit yourself. It sends nothing over the network.`;
 
 export const createAnonymizeMcpServer = (
   service: LocalAnonymizeService,
 ): McpServer => {
+  // Synchronous by contract (public factory). The server version comes from the
+  // package manifest, not a native call, so construction touches no binding; the
+  // wasm binding is preloaded lazily on the first operation (see `#runOperation`).
   const server = new McpServer(
     {
       name: "stella-anonymize-local",
-      version: nativeNodeSurface.native_package_version(),
+      version: pkg.version,
     },
     {
-      instructions:
-        "All tools accept local paths only. Never request or return document contents or session mappings. Outputs must be new explicit paths inside configured roots.",
+      instructions: MCP_INSTRUCTIONS,
     },
   );
   server.registerTool(
@@ -1259,7 +1578,7 @@ export const createAnonymizeMcpServer = (
         idempotentHint: true,
       },
     },
-    async () => capabilitiesResult(service),
+    async () => guard(() => capabilitiesResult(service)),
   );
   server.registerTool(
     "anonymize_text_file",
@@ -1268,7 +1587,8 @@ export const createAnonymizeMcpServer = (
       inputSchema: textInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) => result(await service.anonymizeText(input)),
+    async (input) =>
+      guard(async () => result(await service.anonymizeText(input))),
   );
   server.registerTool(
     "restore_text_file",
@@ -1277,7 +1597,8 @@ export const createAnonymizeMcpServer = (
       inputSchema: restoreInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) => result(await service.restoreText(input)),
+    async (input) =>
+      guard(async () => result(await service.restoreText(input))),
   );
   server.registerTool(
     "anonymize_text_file_with_external_detections",
@@ -1287,13 +1608,10 @@ export const createAnonymizeMcpServer = (
       inputSchema: externalDetectionTextInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) => {
-      try {
-        return result(await service.anonymizeTextWithExternalDetections(input));
-      } catch (error) {
-        return externalDetectionErrorResult(error);
-      }
-    },
+    async (input) =>
+      guard(async () =>
+        result(await service.anonymizeTextWithExternalDetections(input)),
+      ),
   );
   server.registerTool(
     "anonymize_docx_file",
@@ -1303,7 +1621,8 @@ export const createAnonymizeMcpServer = (
       inputSchema: docxInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) => result(await service.anonymizeDocx(input)),
+    async (input) =>
+      guard(async () => result(await service.anonymizeDocx(input))),
   );
   server.registerTool(
     "anonymize_pdf_file",
@@ -1313,7 +1632,8 @@ export const createAnonymizeMcpServer = (
       inputSchema: pdfInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) => result(await service.anonymizePdf(input)),
+    async (input) =>
+      guard(async () => result(await service.anonymizePdf(input))),
   );
   server.registerTool(
     "restore_docx_file",
@@ -1322,7 +1642,8 @@ export const createAnonymizeMcpServer = (
       inputSchema: docxRestoreInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
-    async (input) => result(await service.restoreDocx(input)),
+    async (input) =>
+      guard(async () => result(await service.restoreDocx(input))),
   );
   server.registerTool(
     "inspect_docx_file",
@@ -1338,7 +1659,23 @@ export const createAnonymizeMcpServer = (
         idempotentHint: true,
       },
     },
-    async ({ inputPath }) => result(await service.inspectDocx(inputPath)),
+    async ({ inputPath }) =>
+      guard(async () => result(await service.inspectDocx(inputPath))),
+  );
+  server.registerTool(
+    "send_feedback",
+    {
+      description:
+        "File a bug, feature request, or docs issue with the stella-anonymize maintainers. Sanitizes the title and body locally (emails, ids, secrets, URLs, IPs are redacted) and returns a prefilled GitHub new-issue URL and a gh command that you open and submit under your own account. It sends nothing over the network and publishes nothing on its own. Never include document text, client names, ids, or secrets; describe the problem, steps, and expected vs actual result.",
+      inputSchema: feedbackInput,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input) => guard(() => feedbackResult(input)),
   );
   return server;
 };

@@ -4,10 +4,14 @@ export default defineConfig([
   {
     entry: [
       "src/index.ts",
+      "src/agent-surface.ts",
       "src/capabilities.ts",
       "src/constants.ts",
+      "src/feedback.ts",
+      "src/feedback-sanitize.ts",
       "src/native.ts",
       "src/native-node.ts",
+      "src/native-runtime.ts",
     ],
     outDir: "dist",
     format: ["esm"],

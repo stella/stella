@@ -13,6 +13,7 @@
       "@stll/anonymize-wasm",
       "@stll/anonymize-cli",
       "@stll/anonymize-docx",
+      "@stll/anonymize-pdf",
       "@stll/anonymize-mcp"
     ]
   ],

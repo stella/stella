@@ -116,9 +116,33 @@ const defaultNativePipelineInflightCache = new WeakMap<
 
 export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 
+/**
+ * A binding installed by the runtime layer to override the NAPI loader. Used to
+ * route every `loadNativeAnonymizeBinding()` caller (including the docx and pdf
+ * packages, which load the binding inline) to the portable wasm binding under
+ * Bun, where the NAPI addon cannot run. Undefined on Node, so the NAPI path is
+ * unaffected. See `native-runtime.ts` (`preloadNativeBinding`).
+ */
+let nativeBindingOverride: NativeAnonymizeBinding | undefined;
+
+export const setNativeBindingOverride = (
+  binding: NativeAnonymizeBinding | undefined,
+): void => {
+  nativeBindingOverride = binding;
+};
+
 export const loadNativeAnonymizeBinding = (
   options: LoadNativeBindingOptions = {},
 ): NativeAnonymizeBinding => {
+  if (nativeBindingOverride !== undefined) {
+    if (options.expectedVersion !== undefined) {
+      assertNativeBindingVersion({
+        binding: nativeBindingOverride,
+        expectedVersion: options.expectedVersion,
+      });
+    }
+    return nativeBindingOverride;
+  }
   const requireModule = options.requireModule ?? createRequire(import.meta.url);
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;

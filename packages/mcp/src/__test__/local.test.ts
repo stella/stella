@@ -813,6 +813,7 @@ try {
       "inspect_docx_file",
       "restore_docx_file",
       "restore_text_file",
+      "send_feedback",
     ]);
     for (const tool of tools.tools) {
       const properties = tool.inputSchema.properties ?? {};
@@ -923,21 +924,18 @@ try {
             sessionId: `external_tool_failure_${index}`,
           },
         });
+        const batchEnvelope = {
+          error: {
+            code: "validation_error",
+            message: "The external detection batch was rejected.",
+            hint: "Fix the ExternalDetectionBatch v1 sidecar to match the schema and retry.",
+            retryable: false,
+          },
+        };
         expect(failure).toEqual({
           isError: true,
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                errorCode: "EXTERNAL_DETECTION_BATCH_REJECTED",
-                message: "The external detection batch was rejected.",
-              }),
-            },
-          ],
-          structuredContent: {
-            errorCode: "EXTERNAL_DETECTION_BATCH_REJECTED",
-            message: "The external detection batch was rejected.",
-          },
+          content: [{ type: "text", text: JSON.stringify(batchEnvelope) }],
+          structuredContent: batchEnvelope,
         });
         const serialized = JSON.stringify(failure);
         for (const secret of [
@@ -959,21 +957,18 @@ try {
           sessionId: "external_tool_path_failure",
         },
       });
+      const inputEnvelope = {
+        error: {
+          code: "validation_error",
+          message: "The external detection request paths were rejected.",
+          hint: "Use distinct absolute paths inside a configured --root for input, sidecar, and output.",
+          retryable: false,
+        },
+      };
       expect(missingPathFailure).toEqual({
         isError: true,
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({
-              errorCode: "EXTERNAL_DETECTION_INPUT_REJECTED",
-              message: "The external detection request paths were rejected.",
-            }),
-          },
-        ],
-        structuredContent: {
-          errorCode: "EXTERNAL_DETECTION_INPUT_REJECTED",
-          message: "The external detection request paths were rejected.",
-        },
+        content: [{ type: "text", text: JSON.stringify(inputEnvelope) }],
+        structuredContent: inputEnvelope,
       });
       expect(JSON.stringify(missingPathFailure)).not.toContain(secretPath);
       expect(consoleError).not.toHaveBeenCalled();

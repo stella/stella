@@ -519,6 +519,23 @@ void describe("durable MCP sessions", () => {
     await next.close();
   });
 
+  void test("service close counts work waiting for runtime preload", async () => {
+    const paths = await createStorePaths();
+    const service = await createService(paths);
+    const input = join(paths.root, "preload-close-input.txt");
+    await writeFile(input, "Alice Smith signed.");
+
+    const operation = service.anonymizeText({
+      inputPath: input,
+      outputPath: join(paths.root, "preload-close-output.txt"),
+      sessionId: "preload_close_1",
+    });
+    const close = service.close();
+
+    await operation;
+    await close;
+  });
+
   void test("rejects a second process and releases the lock after a crash", async () => {
     const paths = await createStorePaths();
     const child = spawn(

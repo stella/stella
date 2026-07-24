@@ -27,6 +27,16 @@
       "import": "./dist/capabilities.mjs",
       "default": "./dist/capabilities.mjs"
     },
+    "./agent-surface": {
+      "types": "./dist/agent-surface.d.mts",
+      "import": "./dist/agent-surface.mjs",
+      "default": "./dist/agent-surface.mjs"
+    },
+    "./feedback": {
+      "types": "./dist/feedback.d.mts",
+      "import": "./dist/feedback.mjs",
+      "default": "./dist/feedback.mjs"
+    },
     "./native": {
       "types": "./dist/native.d.mts",
       "import": "./dist/native.mjs",
@@ -36,6 +46,11 @@
       "types": "./dist/native-node.d.mts",
       "import": "./dist/native-node.mjs",
       "default": "./dist/native-node.mjs"
+    },
+    "./native-runtime": {
+      "types": "./dist/native-runtime.d.mts",
+      "import": "./dist/native-runtime.mjs",
+      "default": "./dist/native-runtime.mjs"
     }
   },
   "types": "dist/index.d.mts",
@@ -89,6 +104,7 @@
     }
   },
   "optionalDependencies": {
+    "@stll/anonymize-wasm": "2.4.2",
     "@stll/anonymize-darwin-arm64": "2.4.2",
     "@stll/anonymize-darwin-x64": "2.4.2",
     "@stll/anonymize-linux-arm64-gnu": "2.4.2",
