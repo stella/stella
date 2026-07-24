@@ -487,6 +487,12 @@ jobs:
       - name: Test release-channel script
         run: bash scripts/release-channel.test.sh
 
+      # The staging caller must outlive the infra job it dispatches, while
+      # rotating its short-lived GitHub App credential. This also tests that
+      # slow API calls consume a wall-clock deadline rather than extending it.
+      - name: Test staging deployment watcher
+        run: bash scripts/watch-github-run.test.sh
+
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
       # and the dependency install above is intentionally skipped.

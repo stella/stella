@@ -225,6 +225,7 @@ run_step "Knip production deps" run_knip
 run_step "Test" run_test
 run_step "Bridge-version guard self-test" bash scripts/check-bridge-version.test.sh
 run_step "Release-channel self-test" bash scripts/release-channel.test.sh
+run_step "Staging watcher self-test" bash scripts/watch-github-run.test.sh
 run_step "API release contract self-test" bun test \
   --preload ./apps/api/src/tests/setup-env.ts \
   scripts/check-api-cli-contract.test.ts \
