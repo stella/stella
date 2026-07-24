@@ -256,7 +256,7 @@ const formatPeriod = (
 
 const USAGE_STATUS_KEYS = {
   trialing: "settings.organization.usageStatusTrialing",
-  active: "settings.organization.usageStatusActive",
+  active: "common.active",
   past_due: "settings.organization.usageStatusPastDue",
   cancelled: "settings.organization.usageStatusCancelled",
   paused: "settings.organization.usageStatusPaused",

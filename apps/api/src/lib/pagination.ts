@@ -83,3 +83,29 @@ export const parseDateTimePaginationCursorPart = (
 
   return parsed;
 };
+
+const microsecondTimestampCursorPartPattern =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/u;
+
+// Validates a `to_char(ts, 'YYYY-MM-DD"T"HH24:MI:SS.US')` cursor part:
+// a microsecond-precision timestamp kept verbatim for the keyset
+// `::timestamp` comparison. Unlike parseDateTimePaginationCursorPart, it
+// does not round-trip through Date (which truncates to milliseconds and
+// would drop/duplicate rows sharing a millisecond across a page boundary).
+export const isMicrosecondTimestampPaginationCursorPart = (
+  value: unknown,
+): value is string => {
+  if (
+    typeof value !== "string" ||
+    !microsecondTimestampCursorPartPattern.test(value)
+  ) {
+    return false;
+  }
+
+  const millisecondIso = `${value.slice(0, -3)}Z`;
+  const parsed = new Date(millisecondIso);
+
+  return (
+    !Number.isNaN(parsed.getTime()) && parsed.toISOString() === millisecondIso
+  );
+};

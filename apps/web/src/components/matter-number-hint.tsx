@@ -11,9 +11,9 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
+import { organizationSettingsOptions } from "@/features/organization-settings/organization-settings-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { matchesPattern, previewReference } from "@/lib/matter-reference";
-import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
 export type MatterNumberHintProps = InlineProps | PopoverProps;
 

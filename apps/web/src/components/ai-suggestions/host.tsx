@@ -1084,7 +1084,7 @@ export function SuggestionCard(props: SuggestionCardProps) {
         )}
         {suggestion.status === "stale" && (
           <span className="bg-destructive/12 text-destructive ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
-            {t("chat.suggestionStatus.stale")}
+            {t("common.stale")}
           </span>
         )}
         {suggestion.status === "accepted" && (

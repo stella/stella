@@ -6,14 +6,14 @@ import { useTranslations } from "use-intl";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
+import {
+  organizationSettingsKeys,
+  organizationSettingsOptions,
+} from "@/features/organization-settings/organization-settings-queries";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
-import {
-  organizationSettingsKeys,
-  organizationSettingsOptions,
-} from "@/routes/_protected.organization/-settings-queries";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 export const OrganizationJurisdictionsCard = () => {

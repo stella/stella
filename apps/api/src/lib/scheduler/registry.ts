@@ -11,6 +11,14 @@ import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
+import {
+  MEMORY_CURATOR_TASK,
+  curateAiMemories,
+} from "@/api/lib/scheduler/tasks/memory-curator";
+import {
+  MEMORY_EXTRACTOR_TASK,
+  extractMemoriesFromCompactions,
+} from "@/api/lib/scheduler/tasks/memory-extractor";
 import type {
   SchedulerTask,
   SchedulerTaskRegistry,
@@ -27,4 +35,6 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     [INFO_SOUD_SYNC_TRACKED_CASES_TASK, syncInfoSoudTrackedCases],
     [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
     [FLOW_RUN_TASK, runScheduledFlow],
+    [MEMORY_CURATOR_TASK, curateAiMemories],
+    [MEMORY_EXTRACTOR_TASK, extractMemoriesFromCompactions],
   ]);

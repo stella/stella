@@ -2011,6 +2011,15 @@
       "pt-BR",
       "sk"
     ],
+    "memory.kinds.instruction": [
+      "fr"
+    ],
+    "memory.kinds.preference": [
+      "cs"
+    ],
+    "memory.suggestionsTitle": [
+      "fr"
+    ],
     "navigation.chat": [
       "cs",
       "de",

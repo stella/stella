@@ -35,6 +35,7 @@ export const BillingCodesDialog = ({
   workspaceId,
 }: BillingCodesDialogProps) => {
   const t = useTranslations();
+  const commonT = useTranslations("common");
   const [activeTab, setActiveTab] = useState<"task" | "activity">("task");
   const [showForm, setShowForm] = useState(false);
 
@@ -227,7 +228,7 @@ export const BillingCodesDialog = ({
                       title={
                         code.active
                           ? t("billing.codes.inactive")
-                          : t("billing.codes.active")
+                          : commonT("active")
                       }
                       variant="ghost"
                     >
