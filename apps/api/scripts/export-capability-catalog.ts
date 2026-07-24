@@ -172,7 +172,9 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // than borrowing the workspace write scope.
   chat: "stella:chat",
   clauses: "stella:knowledge_write",
-  contacts: "stella:matters_write",
+  // Organization-wide address-book mutations cross matter boundaries, so
+  // they require their own consent instead of borrowing a workspace write.
+  contacts: "stella:contacts_write",
   "document-types": "stella:matters_write",
   entities: "stella:matters_write",
   expenses: "stella:billing_write",
@@ -241,6 +243,7 @@ const SCOPE_STRICTNESS: Record<string, number> = {
   "stella:read": 1,
   "stella:onboarding": 2,
   "stella:templates": 2,
+  "stella:contacts_write": 2,
   "stella:documents_write": 2,
   "stella:matters_write": 2,
   "stella:chat": 2,

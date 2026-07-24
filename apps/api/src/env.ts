@@ -345,6 +345,31 @@ const envApi = createEnv({
     /** Enables pre-flight usage-limit enforcement when true. */
     USAGE_ENFORCEMENT_ENABLED: featureFlagSchema,
 
+    /** Enables agent-sandbox chat runs (plan 050) when true. */
+    AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
+
+    /**
+     * Agent-sandbox engine config (plan 050). The schema keeps these optional
+     * so deployments with the feature disabled need no sandbox infrastructure.
+     * An explicit agent request fails closed unless every required field is
+     * present. Harness credential sourcing from org BYOK is a follow-up; for
+     * now the harness key is env-provided.
+     */
+    AGENT_SANDBOX_IMAGE: v.optional(v.string()),
+    AGENT_SANDBOX_HARNESS_MODEL: v.optional(v.string()),
+    AGENT_SANDBOX_HARNESS_API_KEY: v.optional(v.string()),
+    AGENT_SANDBOX_HARNESS_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
+    /** Container-reachable MCP base URL, e.g. http://host.docker.internal:3001/mcp */
+    AGENT_SANDBOX_MCP_URL: v.optional(v.pipe(v.string(), v.url())),
+    /** Docker daemon socket; Linux default is /var/run/docker.sock. */
+    AGENT_SANDBOX_DOCKER_SOCKET: v.optional(v.string()),
+    /**
+     * Docker network for the sandbox container (`HostConfig.NetworkMode`).
+     * Required when agent runs are enabled. It must name a locked-down network
+     * that denies arbitrary egress so injected secrets cannot be exfiltrated.
+     */
+    AGENT_SANDBOX_DOCKER_NETWORK: v.optional(v.string()),
+
     /**
      * Break-glass diagnostics. When true, 5xx responses additionally
      * log the full `error.msg` and `error.stack` so a deployment can be

@@ -103,7 +103,9 @@ const simulateDeafReconnect = (client: FakeRedisClient): void => {
 
 const createRedisClientMock = mock(() => makeFakeRedisClient());
 
+const realRedisClient = await import("@/api/lib/redis-client");
 void mock.module("@/api/lib/redis-client", () => ({
+  ...realRedisClient,
   createRedisClient: createRedisClientMock,
 }));
 

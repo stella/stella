@@ -8,6 +8,7 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:templates",
   "stella:documents_write",
   "stella:matters_write",
+  "stella:contacts_write",
   "stella:chat",
   "stella:knowledge_write",
   "stella:billing_write",

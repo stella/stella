@@ -23,7 +23,11 @@ const s3FileMock = mock((key: string) => ({ key }));
 const s3WriteMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
 
+// Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
+const realS3 = await import("@/api/lib/s3");
+
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   getS3: () => ({
     delete: s3DeleteMock,
     file: s3FileMock,

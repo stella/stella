@@ -18,7 +18,11 @@ const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 
+// Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
+const realS3 = await import("@/api/lib/s3");
+
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   getS3: () => ({
     write: s3WriteMock,
     delete: s3DeleteMock,

@@ -56,6 +56,28 @@ describe("extractMcpSession", () => {
     ).toThrow("Token missing sub claim");
   });
 
+  test("preserves a server-issued workspace attenuation", () => {
+    expect(
+      extractMcpSession({
+        org_id: "org_123",
+        scope: "stella:read",
+        sub: "user_123",
+        workspace_ids: ["workspace_1"],
+      }).workspaceIds,
+    ).toEqual(["workspace_1"]);
+  });
+
+  test("rejects a malformed workspace attenuation", () => {
+    expect(() =>
+      extractMcpSession({
+        org_id: "org_123",
+        scope: "stella:read",
+        sub: "user_123",
+        workspace_ids: ["workspace_1", 42],
+      }),
+    ).toThrow("Token has invalid workspace_ids claim");
+  });
+
   test("rejects tokens without an organization claim", () => {
     expect(() =>
       extractMcpSession({

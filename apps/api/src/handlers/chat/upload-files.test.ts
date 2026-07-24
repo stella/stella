@@ -55,7 +55,12 @@ const writeMock = mock(async () => undefined);
 const s3DeleteMock = mock(async () => undefined);
 const workspaceId = toSafeId<"workspace">("workspace_1");
 
+// Spread the real module so only `getS3` is overridden: `mock.module` is
+// process-global and never auto-restored, so a partial mock would delete the
+// other s3 exports (e.g. `getCorpusS3`) for every later test file in the run.
+const realS3 = await import("@/api/lib/s3");
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
 }));
 

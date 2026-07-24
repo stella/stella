@@ -47,6 +47,7 @@
     "@react-email/render": "^2.1.0",
     "@sinclair/typebox": "^0.34.52",
     "@smithy/fetch-http-handler": "^5.6.7",
+    "@stll/agent-engine": "workspace:*",
     "@stll/ai-catalog": "workspace:*",
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",

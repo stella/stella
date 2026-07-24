@@ -68,6 +68,7 @@ const createContext = (): McpRequestContext => {
     grantedScopes: [
       "stella:read",
       "stella:billing_write",
+      "stella:contacts_write",
       "stella:knowledge_write",
       "stella:matters_write",
     ],

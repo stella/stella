@@ -7,6 +7,8 @@ import { workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
+  createSafeDb,
+  createScopedDb,
 } from "@/api/db/scoped";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -25,6 +27,7 @@ import {
 import type { McpSession } from "@/api/mcp/auth";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
+import { filterUsableMcpWorkspaces } from "@/api/mcp/workspace-session-scope";
 
 export type McpOperationDatabaseScope = {
   /**
@@ -162,23 +165,46 @@ export const resolveMcpSessionContext = async (
   // Business-logic fields exclude deleting workspaces so MCP tools don't
   // surface content from sealed workspaces. RLS derives membership from the
   // organization/user transaction settings independently.
-  const usableWorkspaces = accessibleWorkspaces.filter(
-    (w) => w.status !== "deleting",
-  );
+  const usableWorkspaces = filterUsableMcpWorkspaces({
+    accessibleWorkspaces,
+    tokenWorkspaceIds: session.workspaceIds,
+  });
   const usableWorkspaceIds = usableWorkspaces.map((workspace) =>
     brandPersistedWorkspaceId(workspace.id),
   );
   const workspaceAccessBoundary =
     createWorkspaceAccessBoundary(usableWorkspaceIds);
+  const hasTokenWorkspaceAttenuation = session.workspaceIds !== undefined;
   const createOperationDatabaseScope = (): McpOperationDatabaseScope => {
     const serverValidatedWorkspaceIds: SafeId<"workspace">[] = [];
     const pinServerValidatedWorkspaceId =
       workspaceAccessBoundary.bindWorkspacePin((workspaceId) => {
-        if (!serverValidatedWorkspaceIds.includes(workspaceId)) {
+        if (
+          !hasTokenWorkspaceAttenuation &&
+          !serverValidatedWorkspaceIds.includes(workspaceId)
+        ) {
           serverValidatedWorkspaceIds.push(workspaceId);
         }
         return true;
       });
+
+    // A workspace_ids claim is a signed attenuation boundary, not just a
+    // tool-discovery hint. After intersecting it with live authorization
+    // above, carry that exact subset into RLS explicit mode so root/list
+    // queries cannot see another workspace through ordinary membership.
+    if (hasTokenWorkspaceAttenuation) {
+      return {
+        pinServerValidatedWorkspaceId,
+        safeDb: createSafeDb(rlsDb, usableWorkspaceIds, organizationId, userId),
+        scopedDb: createScopedDb(
+          rlsDb,
+          usableWorkspaceIds,
+          organizationId,
+          userId,
+        ),
+      };
+    }
+
     const databaseIdentity = {
       organizationId,
       serverValidatedWorkspaceIds,

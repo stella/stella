@@ -106,6 +106,8 @@
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/ai": "0.42.0",
     "@tanstack/ai-anthropic": "0.16.3",
+    "@tanstack/ai-codex": "0.2.2",
+    "@tanstack/ai-sandbox": "0.2.3",
     "@tanstack/ai-code-mode": "0.3.8",
     "@tanstack/ai-bedrock": "0.1.4",
     "@tanstack/ai-client": "0.22.1",

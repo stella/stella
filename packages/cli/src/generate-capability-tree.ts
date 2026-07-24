@@ -80,6 +80,7 @@ export type FormattedCapabilityCommand =
 /** Valid `ToolScope` strings, for mapping a catalog `stella:*` scope to a precheck. */
 const TOOL_SCOPES: ReadonlySet<string> = new Set<ToolScope>([
   "read",
+  "contacts_write",
   "matters_write",
   "chat",
   "documents_write",

@@ -514,6 +514,49 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
+  test("mock.module of leaky shared modules spreads the real module", () => {
+    // bun's `mock.module` is process-global and cannot be restored, so a
+    // PARTIAL mock of a shared module (overriding one export, dropping the
+    // rest) deletes the other exports for every LATER test file in the run —
+    // any file that imports a dropped export then crashes with
+    // "Export ... not found", an order-dependent failure. For modules other
+    // test files import for real, the mock MUST spread the real module first
+    // (`...realX`) so nothing is dropped. Add modules here as leaks surface.
+    const leakyModules = ["@/api/lib/s3", "@/api/lib/redis-client", "bullmq"];
+    const root = path.join(import.meta.dir, "../../../../..");
+    const offenders: string[] = [];
+
+    for (const relative of new Bun.Glob("apps/api/src/**/*.test.ts").scanSync(
+      root,
+    )) {
+      const source = readFileSync(path.join(root, relative), "utf-8");
+      for (const moduleId of leakyModules) {
+        const marker = `mock.module("${moduleId}"`;
+        const hasRealImport = source.includes(`await import("${moduleId}")`);
+        let index = source.indexOf(marker);
+        while (index !== -1) {
+          // Skip quoted mentions (assertions referencing the pattern as a
+          // string, e.g. in this guardrail itself) — only real calls count.
+          const precedingChar = source[index - 1];
+          const isQuotedMention =
+            precedingChar === '"' ||
+            precedingChar === "'" ||
+            precedingChar === "`";
+          if (!isQuotedMention) {
+            const factoryStart = source.slice(index, index + 200);
+            const spreadsReal = /[=]>\s*\(\{\s*\.\.\.\w+/u.test(factoryStart);
+            if (!hasRealImport || !spreadsReal) {
+              offenders.push(`${relative} → ${moduleId}`);
+            }
+          }
+          index = source.indexOf(marker, index + marker.length);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   test("devtools shell lazy-loads TanStack panels", () => {
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-static-devtools-import.ts",

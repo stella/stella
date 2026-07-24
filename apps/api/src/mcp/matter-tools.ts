@@ -332,7 +332,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_contact",
-    scope: "stella:matters_write",
+    scope: "stella:contacts_write",
   },
   {
     annotations: {
@@ -355,7 +355,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "delete_contact",
-    scope: "stella:matters_write",
+    scope: "stella:contacts_write",
   },
   {
     annotations: { readOnlyHint: true, openWorldHint: true },
