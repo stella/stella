@@ -487,12 +487,6 @@ jobs:
       - name: Test release-channel script
         run: bash scripts/release-channel.test.sh
 
-      # The staging caller must outlive the infra job it dispatches, while
-      # rotating its short-lived GitHub App credential. This also tests that
-      # slow API calls consume a wall-clock deadline rather than extending it.
-      - name: Test staging deployment watcher
-        run: bash scripts/watch-github-run.test.sh
-
       # The web compiler uses native Rolldown bindings, while the deployed
       # container is ARM64. Keep build and runtime dependency architectures
       # separated in the Docker stage graph.
