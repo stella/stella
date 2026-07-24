@@ -1,5 +1,28 @@
 # @stll/anonymize-mcp
 
+## 2.5.0
+
+### Minor Changes
+
+- [#398](https://github.com/stella/anonymize/pull/398) [`2414231`](https://github.com/stella/anonymize/commit/2414231ba7f016787c10ca66fd6b40b71a10d251) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an agent-native CLI/MCP surface and Bun runtime support.
+
+  - Structured tool-error envelope `{error:{code,message,hint,retryable}}` across the
+    MCP, a distinct CLI exit code per code, budgeted `initialize` instructions, and a
+    local, offline `send_feedback` tool / `anonymize feedback` command that sanitizes
+    the text and returns a prefilled GitHub issue URL the human submits (no network
+    call). anonymize has no destructive tools, so there is no confirm gate.
+  - Run the native pipeline under Bun via the `@stll/anonymize-wasm` binding, exposed
+    through `@stll/anonymize/native-runtime` (`preloadNativeBinding`): the NAPI addon
+    calls `uv_get_osfhandle`, which Bun does not implement, so under Bun the wasm
+    binding is installed as the loader backend. A no-op on Node.
+
+### Patch Changes
+
+- Updated dependencies [[`2414231`](https://github.com/stella/anonymize/commit/2414231ba7f016787c10ca66fd6b40b71a10d251), [`83d58ef`](https://github.com/stella/anonymize/commit/83d58efecb0e8f0ef9161bc7568d8c397b5072ab)]:
+  - @stll/anonymize@2.5.0
+  - @stll/anonymize-pdf@2.5.0
+  - @stll/anonymize-docx@2.5.0
+
 ## 2.4.2
 
 ### Patch Changes

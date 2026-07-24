@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-cli",
-  "version": "2.4.2",
+  "version": "2.5.0",
   "description": "Command-line PII detection and anonymization powered by @stll/anonymize",
   "keywords": [
     "anonymization",
@@ -36,10 +36,10 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stll/anonymize": "^2.4.2",
+    "@stll/anonymize": "^2.5.0",
     "@stll/anonymize-data": "^0.0.7",
-    "@stll/anonymize-docx": "^2.4.2",
-    "@stll/anonymize-pdf": "^2.4.2"
+    "@stll/anonymize-docx": "^2.5.0",
+    "@stll/anonymize-pdf": "^2.5.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
