@@ -301,13 +301,6 @@ function OrganizationMenuSection({
         });
 
         if (error) {
-          stellaToast.add({
-            title: userErrorFromThrown(
-              toAuthClientError(error),
-              t("errors.actionFailed"),
-            ),
-            type: "error",
-          });
           throw toAuthClientError(error);
         }
 
@@ -315,6 +308,10 @@ function OrganizationMenuSection({
         await navigate({ to: "/", replace: true });
       },
       onError: (error) => {
+        stellaToast.add({
+          title: userErrorFromThrown(error, t("errors.actionFailed")),
+          type: "error",
+        });
         analytics.captureError(error);
       },
     });
