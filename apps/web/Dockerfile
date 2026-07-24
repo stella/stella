@@ -1,8 +1,15 @@
-# Pin to digest for supply-chain integrity (oven/bun:1.3.14-slim)
-FROM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS base
+# Pin to digest for supply-chain integrity (oven/bun:1.3.14-slim).
+# Compile on the native build host; only the runtime dependency tree and final
+# image belong to the deployment target. This keeps Rolldown and its native
+# binding off target-architecture emulation while preserving ARM64 runtime
+# dependencies such as sharp/canvas.
+FROM --platform=$BUILDPLATFORM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS build-base
 WORKDIR /app
 
-FROM base AS install-inputs
+FROM --platform=$TARGETPLATFORM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS runtime-base
+WORKDIR /app
+
+FROM build-base AS install-inputs
 # Preserve Bun's committed root lockfile and full workspace manifest map.
 # Turbo's pruned bun.lock is a generated approximation and can drift from
 # Bun's catalog/resolution semantics.
@@ -16,7 +23,7 @@ RUN mkdir -p /json && \
       -not -path '*/node_modules/*' \
       -exec cp --parents -t /json/ {} +
 
-FROM base AS pruner
+FROM build-base AS pruner
 # Keep in sync with the turbo version in the root package.json.
 RUN bun install -g turbo@2.10.5
 COPY . .
@@ -28,14 +35,14 @@ COPY . .
 # transitive workspace graph (@stll/web -> @stll/api -> ...) changes.
 RUN turbo prune @stll/web --docker
 
-FROM base AS deps
+FROM build-base AS deps
 COPY --from=install-inputs /json/ .
 RUN bun install --filter @stll/web --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 # Runtime install: the SSR server bundle (dist/server/server.js) externalises
 # its imports, so they must resolve from `dependencies` alone with
 # devDependencies stripped. The web-build CI job boot-smokes this same install.
-FROM base AS deps-prod
+FROM runtime-base AS deps-prod
 COPY --from=install-inputs /json/ .
 RUN bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts --network-concurrency=8
 

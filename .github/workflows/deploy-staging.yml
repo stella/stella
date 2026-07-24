@@ -22,11 +22,9 @@ jobs:
     name: Build + deploy staging
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04-arm
-    # Headroom for a cache-miss image build (~15-25 min) plus the
-    # watcher budget below (45 min). Keep this strictly greater than
-    # build + watcher so the job's own timeout never guillotines the
-    # watcher before it can read the infra run's real conclusion.
-    timeout-minutes: 90
+    # Checked by scripts/watch-github-run.test.sh against the build and
+    # watcher budgets in deploy-staging-watch-config.sh.
+    timeout-minutes: 180
     permissions:
       contents: read
       packages: write
@@ -91,7 +89,7 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
 
       - name: Mint App token for the infra repo
-        id: app-token
+        id: initial-app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
@@ -100,14 +98,17 @@ jobs:
           repositories: stella-infra
           permission-actions: write
 
-      - name: Dispatch and watch staging promote
+      - name: Dispatch staging promote
+        id: dispatch
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.initial-app-token.outputs.token }}
           INFRA_REPO: ${{ github.repository_owner }}/stella-infra
           RELEASE_REF: ${{ steps.ref.outputs.release_ref }}
           GIT_SHA: ${{ github.sha }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
+          source scripts/deploy-staging-watch-config.sh
+          dispatch_epoch="$(date +%s)"
           dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           expected_title="Promote ${RELEASE_REF} → staging"
           run_id=""
@@ -191,70 +192,81 @@ jobs:
             exit 1
           fi
 
-          watch_run_with_retry() {
-            local run_id="$1"
-            # Budget is bounded by the GitHub App installation token's
-            # hard 1-hour lifetime: GH_TOKEN is minted in the prior step
-            # and `gh run view` against the infra repo needs it, so
-            # polling past ~1h starts hitting auth failures that this
-            # loop miscounts as transient errors and bails on after only
-            # ~2 min (max_consecutive_errors), masking the infra run's
-            # real status. Stay well under the hour: 270 x 10s = 45 min,
-            # which still covers a realistic promote (image import +
-            # migrate + terraform + a couple of ECS stabilize cycles run
-            # well under that) and far outlasts the old 30-min budget
-            # that gave up before a slow deploy could report its
-            # conclusion. A promote that hangs near the infra job's own
-            # 60-min timeout is surfaced as a watcher timeout here rather
-            # than chased past token expiry. Do NOT raise past ~55 min
-            # without first refreshing the App token inside the loop.
-            local max_attempts=270
-            local sleep_seconds=10
-            local max_consecutive_errors=12
-            local consecutive_errors=0
+          queue_deadline_epoch=$((dispatch_epoch + INFRA_PROMOTE_QUEUE_TIMEOUT_SECONDS))
+          phase_deadline_epoch=$((dispatch_epoch + INFRA_WATCH_TOKEN_PHASE_SECONDS))
+          {
+            echo "run_id=${run_id}"
+            echo "queue_deadline_epoch=${queue_deadline_epoch}"
+            echo "phase_deadline_epoch=${phase_deadline_epoch}"
+          } >> "$GITHUB_OUTPUT"
 
-            echo "Watching infra run ${run_id}..."
-            for attempt in $(seq 1 "$max_attempts"); do
-              if ! run_state="$(
-                gh run view "$run_id" \
-                  --repo "$INFRA_REPO" \
-                  --json status,conclusion,url \
-                  --jq '[.status, (.conclusion // ""), .url] | @tsv' 2>&1
-              )"; then
-                consecutive_errors=$((consecutive_errors + 1))
-                echo "::warning::Could not read infra run status (${consecutive_errors}/${max_consecutive_errors} transient errors): ${run_state}" >&2
-                if (( consecutive_errors >= max_consecutive_errors )); then
-                  echo "::error::Giving up after repeated GitHub API errors while watching infra run ${run_id}." >&2
-                  return 1
-                fi
-                sleep "$sleep_seconds"
-                continue
-              fi
+      - name: Watch staging promote
+        id: initial-watch
+        env:
+          GH_TOKEN: ${{ steps.initial-app-token.outputs.token }}
+          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
+        run: |
+          source scripts/deploy-staging-watch-config.sh
+          bash scripts/watch-github-run.sh \
+            "${{ steps.dispatch.outputs.run_id }}" \
+            0 \
+            "${{ steps.dispatch.outputs.queue_deadline_epoch }}" \
+            "${{ steps.dispatch.outputs.phase_deadline_epoch }}"
 
-              consecutive_errors=0
-              IFS=$'\t' read -r status conclusion url <<< "$run_state"
+      # Installation tokens have a hard one-hour lifetime. A new token lets the
+      # watcher outlive the child job's full timeout without exposing App keys to
+      # the polling script.
+      - name: Refresh App token for the infra repo
+        if: steps.initial-watch.outputs.state == 'pending'
+        id: refreshed-app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+          permission-actions: write
 
-              if [[ "$status" == "completed" ]]; then
-                if [[ "$conclusion" == "success" ]]; then
-                  echo "Infra run succeeded: ${url}"
-                  return 0
-                fi
+      - name: Continue watching staging promote
+        id: refreshed-watch
+        if: steps.initial-watch.outputs.state == 'pending'
+        env:
+          GH_TOKEN: ${{ steps.refreshed-app-token.outputs.token }}
+          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
+        run: |
+          source scripts/deploy-staging-watch-config.sh
+          phase_deadline_epoch=$(($(date +%s) + INFRA_WATCH_TOKEN_PHASE_SECONDS))
+          bash scripts/watch-github-run.sh \
+            "${{ steps.dispatch.outputs.run_id }}" \
+            "${{ steps.initial-watch.outputs.watch_deadline_epoch }}" \
+            "${{ steps.dispatch.outputs.queue_deadline_epoch }}" \
+            "$phase_deadline_epoch"
 
-                echo "::error::Infra run completed with conclusion '${conclusion}': ${url}" >&2
-                return 1
-              fi
+      - name: Refresh App token for a queued staging promote
+        if: steps.refreshed-watch.outputs.state == 'pending'
+        id: final-app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+          permission-actions: write
 
-              if (( attempt == 1 || attempt % 6 == 0 )); then
-                echo "Infra run status: ${status} (${attempt}/${max_attempts})"
-              fi
-              sleep "$sleep_seconds"
-            done
-
-            echo "::error::Infra run ${run_id} did not complete within $((max_attempts * sleep_seconds / 60)) minutes." >&2
-            return 1
-          }
-
-          watch_run_with_retry "$run_id"
+      - name: Finish watching queued staging promote
+        if: steps.refreshed-watch.outputs.state == 'pending'
+        env:
+          GH_TOKEN: ${{ steps.final-app-token.outputs.token }}
+          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
+        run: |
+          source scripts/deploy-staging-watch-config.sh
+          queue_deadline_epoch="${{ steps.dispatch.outputs.queue_deadline_epoch }}"
+          final_phase_deadline_epoch=$((queue_deadline_epoch + INFRA_WATCH_BUDGET_SECONDS))
+          bash scripts/watch-github-run.sh \
+            "${{ steps.dispatch.outputs.run_id }}" \
+            "${{ steps.refreshed-watch.outputs.watch_deadline_epoch }}" \
+            "${{ steps.dispatch.outputs.queue_deadline_epoch }}" \
+            "$final_phase_deadline_epoch"
 
   # Post-deploy verification: authenticate via the secret-guarded
   # /smoke/session endpoint and click through the deployed app so a
