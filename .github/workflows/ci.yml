@@ -493,6 +493,12 @@ jobs:
       - name: Test staging deployment watcher
         run: bash scripts/watch-github-run.test.sh
 
+      # The web compiler uses native Rolldown bindings, while the deployed
+      # container is ARM64. Keep build and runtime dependency architectures
+      # separated in the Docker stage graph.
+      - name: Test web container platform boundary
+        run: bun test scripts/check-web-docker-platform.test.ts
+
       # Release ordering is a safety property. This test has no workspace
       # dependencies, so it remains runnable when a PR changes only workflows
       # and the dependency install above is intentionally skipped.
