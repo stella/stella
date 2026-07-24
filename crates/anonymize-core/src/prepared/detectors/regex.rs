@@ -1,6 +1,4 @@
 use crate::diagnostics::DiagnosticStage;
-use crate::processors::process_regex_matches;
-
 use super::prelude::*;
 use super::timed_entities;
 
@@ -14,6 +12,7 @@ static_detector_rules! {
       DetectorInput::FullText,
       DetectorInput::RegexMeta,
     ];
+    scales: &[DetectorInput::RegexMatches, DetectorInput::FullText];
     active: regex_is_active;
     detect: detect_regex;
   }
@@ -25,53 +24,35 @@ static_detector_rules! {
       DetectorInput::FullText,
       DetectorInput::CustomRegexMeta,
     ];
+    scales: &[
+      DetectorInput::CustomRegexMatches,
+      DetectorInput::FullText,
+    ];
     active: custom_regex_is_active;
     detect: detect_custom_regex;
   }
 }
 
-const fn regex_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  !context.matches.regex.is_empty()
-    && !context.engine.policy.regex_meta.is_empty()
+fn regex_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  context.regex_is_active()
 }
 
-const fn custom_regex_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  !context.matches.custom_regex.is_empty()
-    && !context.engine.policy.custom_regex_meta.is_empty()
+fn custom_regex_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  context.custom_regex_is_active()
 }
 
 fn detect_regex(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let matches = context.matches;
-  let full_text = context.full_text;
-  timed_entities(|| {
-    process_regex_matches(
-      &matches.regex,
-      engine.policy.slices.regex,
-      full_text,
-      &engine.policy.regex_meta,
-    )
-  })
+  timed_entities(|| context.detect_regex())
 }
 
 fn detect_custom_regex(
   context: &StaticDetectorContext<'_>,
-  _passes: &StaticEntityPasses,
+  _dependencies: DetectorDependencies<'_>,
   _diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let matches = context.matches;
-  let full_text = context.full_text;
-  timed_entities(|| {
-    process_regex_matches(
-      &matches.custom_regex,
-      engine.policy.slices.custom_regex,
-      full_text,
-      &engine.policy.custom_regex_meta,
-    )
-  })
+  timed_entities(|| context.detect_custom_regex())
 }

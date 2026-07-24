@@ -46,7 +46,7 @@ impl ResolverStep {
 
 pub(super) fn record_detector_entities(
   diagnostics: &mut StaticRedactionDiagnostics,
-  detector: StaticDetectorSpec,
+  detector: &StaticDetectorSpec,
   timed: &TimedEntities,
   full_text: &str,
 ) {

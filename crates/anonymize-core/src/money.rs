@@ -67,19 +67,27 @@ pub(crate) struct PreparedMonetaryData {
 }
 
 impl PreparedMonetaryData {
-  pub(crate) fn new(data: MonetaryData) -> Result<Option<Self>> {
+  pub(crate) fn new(data: MonetaryData) -> Option<Self> {
     AnchoredExtractor::new(MonetaryRule::new(data))
-      .map(|extractor| extractor.map(|extractor| Self { extractor }))
+      .map(|extractor| Self { extractor })
   }
 
-  pub(crate) fn process(&self, full_text: &str) -> Result<Vec<PipelineEntity>> {
-    self.extractor.extract(full_text)
+  pub(crate) fn anchor_terms(&self) -> Vec<AnchorTerm> {
+    self.extractor.anchor_terms()
+  }
+
+  pub(crate) fn process(
+    &self,
+    full_text: &str,
+    anchors: &[AnchorSpan],
+  ) -> Result<Vec<PipelineEntity>> {
+    self.extractor.extract(full_text, anchors)
   }
 
   pub(crate) fn extend_entities(
     &self,
     full_text: &str,
-    entities: &[PipelineEntity],
+    entities: Vec<PipelineEntity>,
   ) -> Vec<PipelineEntity> {
     self.extractor.rule().extend_entities(full_text, entities)
   }
@@ -251,27 +259,21 @@ impl MonetaryRule {
   fn extend_entities(
     &self,
     full_text: &str,
-    entities: &[PipelineEntity],
+    mut entities: Vec<PipelineEntity>,
   ) -> Vec<PipelineEntity> {
-    let mut extended = Vec::with_capacity(entities.len());
-    for entity in entities {
-      extended.push(self.extend_entity(full_text, entity));
+    for entity in &mut entities {
+      self.extend_entity(full_text, entity);
     }
-    extended
+    entities
   }
 
-  fn extend_entity(
-    &self,
-    full_text: &str,
-    entity: &PipelineEntity,
-  ) -> PipelineEntity {
+  fn extend_entity(&self, full_text: &str, entity: &mut PipelineEntity) {
     if entity.label != MONETARY_AMOUNT_LABEL || caller_owned(entity) {
-      return entity.clone();
+      return;
     }
 
-    let mut next = entity.clone();
-    let mut end = usize::try_from(next.end).unwrap_or(usize::MAX);
-    if !ends_with_letter(&next.text)
+    let mut end = usize::try_from(entity.end).unwrap_or(usize::MAX);
+    if !ends_with_letter(&entity.text)
       && let Some(currency_end) = self.trailing_currency_end(full_text, end)
     {
       end = currency_end;
@@ -279,21 +281,20 @@ impl MonetaryRule {
     end = self.extend_written_amount(full_text, end);
 
     let Ok(end_u32) = u32::try_from(end) else {
-      return next;
+      return;
     };
-    if end_u32 == next.end {
-      return next;
+    if end_u32 == entity.end {
+      return;
     }
 
-    let Ok(start) = usize::try_from(next.start) else {
-      return next;
+    let Ok(start) = usize::try_from(entity.start) else {
+      return;
     };
     let Some(text) = str_slice(full_text, start, end) else {
-      return next;
+      return;
     };
-    next.end = end_u32;
-    text.clone_into(&mut next.text);
-    next
+    entity.end = end_u32;
+    text.clone_into(&mut entity.text);
   }
 
   fn trailing_currency_end(&self, text: &str, index: usize) -> Option<usize> {

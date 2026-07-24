@@ -79,12 +79,48 @@ The Rust prepared engine is split by phase:
 Detector modules live under `crates/anonymize-core/src/prepared/detectors`.
 Adding a detector should mean adding module-local rule metadata and detection
 logic through `static_detector_rules!`; the registry only preserves module order.
+The registry constructs a capability-scoped `StaticDetectorContext` for each
+rule. Detectors cannot reach the whole engine, arbitrary search branches, or
+undeclared prior layers: context and dependency accessors correspond to the
+inputs declared in the rule metadata. This keeps cross-domain joins visible and
+prevents a new detector from quietly coupling itself to every match or entity.
+Detector modules receive domain operations such as `detect_regex`, not the
+iterable match/entity storage behind those operations. Every rule also declares
+the growing domains in which its work scales additively; construction fails
+closed if that declaration omits, duplicates, or invents a growing input.
 Prepared support resources are declared once in `support_resources.rs`; prepare
 timing, detector input checks, and snapshots derive from that declaration where
 the resource-specific data type still allows it.
 The detector registry and support-resource contracts are snapshot-tested, so
 changes to ids, stages, inputs, dependencies, and required prepared data produce
 reviewable diffs.
+
+### Execution Complexity
+
+Resolution phases share lazy per-document analysis, and candidate-dense paths
+use typed indexes. Any document-wide analysis needed by more than one phase
+belongs on the request document and is built at most once, only when an enabled
+phase needs it. Growing match and dependency collections remain private behind
+the detector contract; detector modules receive domain operations instead of
+iterable storage. Resolver indexes likewise keep their backing collections
+private and expose bounded queries.
+
+This is enforced with three complementary gates:
+
+1. detector metadata declares every analysis resource it consumes;
+2. indexed implementations are checked against straightforward reference
+   models for exact behavioral equivalence;
+3. dense synthetic scaling tests count structural work rather than asserting
+   noisy wall-clock thresholds.
+
+The cross-provider performance runner remains the release measurement. Its
+`stella-full` profile must keep every default detector enabled; a faster narrow
+profile does not satisfy the full-pipeline performance contract.
+
+Candidate-dense paths have release-mode scaling contracts. CI runs every
+ignored core test as one automatically discovered serial suite, so adding a
+contract does not require editing a workflow allowlist. Wall time remains only
+a secondary ceiling where retained.
 
 ## Extension Rules
 
@@ -101,4 +137,6 @@ reviewable diffs.
 - Are TS/Python/Rust fixture outputs still aligned through native SDK tests?
 - Are cold start, warm run, package load, prepare, and execution measured
   separately when performance changes?
+- Does candidate processing use bounded indexed queries, with deterministic
+  scaling coverage for dense inputs?
 - Is raw input text kept out of logs and snapshots?

@@ -42,17 +42,15 @@ where
 {
   let start = Instant::now();
   let entities = detect()?;
-  Ok(TimedEntities {
-    entities,
-    elapsed_us: elapsed_us(start),
-  })
+  TimedEntities::new(entities, elapsed_us(start))
 }
 
 #[cfg(test)]
 mod tests {
   use super::{STATIC_DETECTOR_MODULES, static_entity_rules};
   use crate::prepared::detector_contract::{
-    StaticDetectorId, StaticDetectorModule, StaticDetectorRule,
+    StaticDetectFn, StaticDetectorActiveFn, StaticDetectorId,
+    StaticDetectorModule, StaticDetectorRule,
   };
 
   #[derive(serde::Serialize)]
@@ -73,6 +71,7 @@ mod tests {
     inputs: Vec<String>,
     dependencies: Vec<String>,
     support_resources: Vec<String>,
+    additive_scaling_domains: Vec<String>,
   }
 
   #[test]
@@ -122,6 +121,11 @@ mod tests {
         metadata.has_declared_inputs(),
         "detectors must declare their required inputs",
       );
+      assert!(
+        metadata.complexity_covers_growing_inputs(),
+        "detector complexity contract must cover each growing input exactly once: {:?}",
+        metadata.id(),
+      );
       let mut dependencies = Vec::new();
       for dependency in metadata.dependencies() {
         assert_ne!(
@@ -165,6 +169,17 @@ mod tests {
       }
       ids.push(metadata.id());
       stages.push(metadata.diagnostic_stage());
+    }
+  }
+
+  #[test]
+  fn rule_hooks_are_statically_typed_rust_functions() {
+    fn accept_active_hook(_hook: StaticDetectorActiveFn) {}
+    fn accept_detect_hook(_hook: StaticDetectFn) {}
+
+    for rule in static_entity_rules() {
+      accept_active_hook(rule.active_hook());
+      accept_detect_hook(rule.detect_hook());
     }
   }
 
@@ -240,6 +255,11 @@ mod tests {
         .support_resources()
         .iter()
         .map(|resource| format!("{resource:?}"))
+        .collect(),
+      additive_scaling_domains: spec
+        .additive_scaling_domains()
+        .iter()
+        .map(|input| format!("{input:?}"))
         .collect(),
     }
   }

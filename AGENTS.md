@@ -351,6 +351,7 @@ static_detector_rules! {
     id: DetectorId::Example;
     stage: DiagnosticStage::EntityExample;
     inputs: &[DetectorInput::FullText];
+    scales: &[DetectorInput::FullText];
     uses: &[SupportResource::Example];
     active: example_is_active;
     detect: detect_example;
@@ -363,6 +364,41 @@ cross-module execution order. Avoid adding detector-specific branching,
 diagnostic-stage mapping, or activation logic outside the detector module.
 Brand-new detector concepts may still require adding a detector id, input, or
 support resource, but the rule metadata and behavior stay module-local.
+
+### Runtime Complexity
+
+- Treat asymptotic work as part of the runtime contract. Detector and resolver
+  code must not scan every entity, match, rule, or hit for each candidate;
+  build a typed index once and expose only the bounded query needed by callers.
+- Reuse the request's lazy document analysis for offsets, tokens, lines,
+  boundaries, and normalized views. Do not build an independent full-text map
+  or rescan the document in each detector when a shared analysis resource can
+  own that work.
+- Keep index storage private. Hot-path callers receive query APIs, not backing
+  slices or maps that make an accidental fallback to full iteration possible.
+- Transfer ownership of the entity buffer between resolution stages. A stage
+  must consume and return the buffer; do not accept a growing entity slice and
+  clone it, concatenate entity vectors, or retain a borrowed backing slice in
+  an index. Build compact owned indexes before consuming the buffer.
+- Prove indexed implementations equivalent to a simple reference model with
+  generated fixtures. Add deterministic operation-count or structural scaling
+  tests for dense inputs; wall-clock benchmarks are evidence, not the CI
+  correctness gate.
+- A performance optimization must preserve exact resolved output and report
+  cold preparation, warm execution, and the affected diagnostic stages
+  separately. Disabling detectors or narrowing the full-pipeline profile is not
+  an optimization.
+- Detector code must use `StaticDetectorContext` capability operations.
+  Declare every input and dependency in the rule block so undeclared ambient
+  access fails closed in every build.
+- Detector modules receive capability operations, never iterable match or
+  dependency collections. Keep raw growing-domain storage private to the
+  detector contract. The mandatory `scales` declaration must list every
+  growing input exactly once; it describes additive work, never permission to
+  multiply those domains with a nested scan.
+- Mark release-mode scaling contracts ignored in the ordinary test suite. CI
+  discovers and runs the complete ignored core set automatically; never add a
+  manually maintained workflow allowlist.
 
 ## Cursor Cloud specific instructions
 

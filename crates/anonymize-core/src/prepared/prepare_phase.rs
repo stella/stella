@@ -7,7 +7,9 @@ use crate::types::{Error, Result};
 
 use super::artifacts::{PreparedEngineArtifacts, PreparedEngineArtifactsView};
 use super::config_validation::validate_supported_config_for_artifacts;
-use super::engine_state::{PipelinePolicy, PreparedStaticData, SearchIndexes};
+use super::engine_state::{
+  PipelinePolicy, PreparedAnchoredData, PreparedStaticData, SearchIndexes,
+};
 use super::index_prepare::{
   PreparedEngineIndexBundle, SearchIndexConfigInput, prepare_search_artifacts,
   prepare_search_index_bundle,
@@ -200,6 +202,7 @@ impl PreparedEngine {
     } = prepare_engine_branches(PrepareEngineBranchInput {
       date_data: date_data_input,
       monetary_data: monetary_data_input,
+      monetary_extraction,
       search: search_input,
       support: support_input,
       slices: &slices,
@@ -207,7 +210,6 @@ impl PreparedEngine {
       collect_diagnostics,
     })?;
     append_prepare_branch_diagnostics(&mut diagnostics, branch_diagnostics);
-    let (date_data, monetary_data) = anchored;
     let PreparedEngineIndexBundle {
       regex,
       custom_regex,
@@ -235,10 +237,8 @@ impl PreparedEngine {
       slices,
       regex_meta,
       custom_regex_meta,
-      monetary_extraction,
     };
-    let data =
-      prepared_static_data(detectors, support_data, date_data, monetary_data);
+    let data = prepared_static_data(detectors, support_data, anchored);
     Ok(Self {
       indexes,
       policy,
@@ -246,9 +246,6 @@ impl PreparedEngine {
     })
   }
 }
-
-type PreparedAnchoredData =
-  (Option<PreparedDateData>, Option<PreparedMonetaryData>);
 
 struct PrepareBranch<T> {
   value: T,
@@ -264,6 +261,7 @@ struct PrepareBranchDiagnostics {
 struct PrepareEngineBranchInput<'a> {
   date_data: Option<&'a DateData>,
   monetary_data: Option<MonetaryData>,
+  monetary_extraction: bool,
   search: SearchIndexConfigInput,
   support: super::support_prepare::SupportDataInput,
   slices: &'a PreparedEngineSlices,
@@ -284,6 +282,7 @@ fn prepare_engine_branches(
   let PrepareEngineBranchInput {
     date_data,
     monetary_data,
+    monetary_extraction,
     search,
     support,
     slices,
@@ -296,6 +295,7 @@ fn prepare_engine_branches(
       prepare_anchored_branch(
         date_data,
         monetary_data,
+        monetary_extraction,
         search.anchored_len,
         collect_diagnostics,
       )
@@ -326,6 +326,7 @@ fn prepare_engine_branches(
 fn prepare_anchored_branch(
   date_data: Option<&DateData>,
   monetary_data: Option<MonetaryData>,
+  monetary_extraction: bool,
   anchored_len: usize,
   collect_diagnostics: bool,
 ) -> Result<PrepareBranch<PreparedAnchoredData>> {
@@ -333,6 +334,7 @@ fn prepare_anchored_branch(
   let value = prepare_anchored_data(
     date_data,
     monetary_data,
+    monetary_extraction,
     anchored_len,
     diagnostics.as_mut(),
   )?;
@@ -444,8 +446,7 @@ fn warm_search_index(
 fn prepared_static_data(
   detectors: PreparedEngineDetectorConfig,
   support_data: PreparedSupportData,
-  date_data: Option<PreparedDateData>,
-  monetary_data: Option<PreparedMonetaryData>,
+  anchored: PreparedAnchoredData,
 ) -> PreparedStaticData {
   PreparedStaticData {
     deny_list: detectors.deny_list_data,
@@ -461,8 +462,7 @@ fn prepared_static_data(
     coreference: support_data.coreference,
     name_corpus: support_data.names,
     signatures: support_data.signature,
-    dates: date_data,
-    monetary: monetary_data,
+    anchored,
   }
 }
 
@@ -511,20 +511,13 @@ fn anchored_config_len(
 fn prepare_anchored_data(
   date_data: Option<&DateData>,
   monetary_data: Option<MonetaryData>,
+  monetary_extraction: bool,
   anchored_len: usize,
   diagnostics: Option<&mut StaticRedactionDiagnostics>,
-) -> Result<(Option<PreparedDateData>, Option<PreparedMonetaryData>)> {
+) -> Result<PreparedAnchoredData> {
   let anchored_start = Instant::now();
-  let prepared_date = if let Some(data) = date_data {
-    PreparedDateData::new(data)?
-  } else {
-    None
-  };
-  let prepared_monetary = if let Some(data) = monetary_data {
-    PreparedMonetaryData::new(data)?
-  } else {
-    None
-  };
+  let prepared_date = date_data.and_then(PreparedDateData::new);
+  let prepared_monetary = monetary_data.and_then(PreparedMonetaryData::new);
 
   if let Some(diagnostics) = diagnostics {
     diagnostics.record_stage(
@@ -535,5 +528,9 @@ fn prepare_anchored_data(
     );
   }
 
-  Ok((prepared_date, prepared_monetary))
+  PreparedAnchoredData::new(
+    prepared_date,
+    prepared_monetary,
+    monetary_extraction,
+  )
 }

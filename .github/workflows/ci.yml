@@ -172,59 +172,15 @@ jobs:
       - name: Build
         run: bun run build
 
-      - name: Address-context scaling regression
-        # Runs after the release build so this gates normalized 48 KiB-to-1 MiB
-        # scaling without making the ordinary debug test suite machine-sensitive.
+      - name: Native scaling regression suite
+        # Every ignored core test is a release-mode scaling contract. Running
+        # the complete set means a newly added contract is gated automatically;
+        # no workflow allowlist can silently fall out of sync. Serial execution
+        # limits contention for the few contracts that also retain a generous
+        # wall-clock ceiling alongside their deterministic operation budget.
         run: >-
           cargo test --release --locked -p stella-anonymize-core
-          --test prepared address_context_cost_scales_with_input_size
-          -- --ignored --exact
-
-      - name: Legal-form list scaling regression
-        # Gates delimiter-dense organization-list splitting with a deliberately
-        # crowded trailing-character bucket in the optimized release profile.
-        run: >-
-          cargo test --release --locked -p stella-anonymize-core
-          --lib legal_forms::tests::delimiter_dense_legal_form_lists_scale_with_input_size
-          -- --ignored --exact
-
-      - name: Address-seed scaling regression
-        # Gates candidate-heavy postal collection and clustering from 48 KiB
-        # to 1 MiB, plus a fixed end-to-end output digest, in release mode.
-        run: |
-          cargo test --release --locked -p stella-anonymize-core \
-            --test prepared address_seed_collection_and_clustering_scale_with_input_size \
-            -- --ignored --exact
-          cargo test --release --locked -p stella-anonymize-core \
-            --lib address_seeds::tests::boundary_phrase_search_scales_with_input_size \
-            -- --ignored --exact
-          cargo test --release --locked -p stella-anonymize-core \
-            --lib address_seeds::tests::postal_context_collection_scales_for_dynamic_states_and_zip_plus_four \
-            -- --ignored --exact
-
-      - name: Boundary-resolution scaling regression
-        # Gates same-label partial-word resolution with a structural index-node
-        # budget, while wall time remains diagnostic on shared CI machines.
-        run: >-
-          cargo test --release --locked -p stella-anonymize-core
-          --lib resolution::boundary::tests::fix_partial_words_same_label_scaling_is_bounded
-          -- --ignored --exact
-
-      - name: Adjacent-boundary scaling regression
-        # Covers both unmergeable legal-document separators and mergeable
-        # same-label gaps with structural query/activation budgets.
-        run: >-
-          cargo test --release --locked -p stella-anonymize-core
-          --lib resolution::boundary::tests::merge_adjacent_same_label_scaling_is_bounded
-          -- --ignored --exact
-
-      - name: Resolution-merge scaling regression
-        # Gates the direct accumulated-entity adversary by operation count and
-        # a fixed resolved-output digest in the optimized release profile.
-        run: >-
-          cargo test --release --locked -p stella-anonymize-core
-          --lib resolution::merge::tests::disjoint_resolution_merge_scales_with_candidate_count
-          -- --ignored --exact
+          -- --ignored --test-threads=1
 
       - name: Package exports (publint + attw)
         # Validates the published @stll/anonymize package.json exports and that

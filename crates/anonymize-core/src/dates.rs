@@ -23,13 +23,21 @@ pub(crate) struct PreparedDateData {
 }
 
 impl PreparedDateData {
-  pub(crate) fn new(data: &DateData) -> Result<Option<Self>> {
+  pub(crate) fn new(data: &DateData) -> Option<Self> {
     AnchoredExtractor::new(DateRule::new(data))
-      .map(|extractor| extractor.map(|extractor| Self { extractor }))
+      .map(|extractor| Self { extractor })
   }
 
-  pub(crate) fn process(&self, full_text: &str) -> Result<Vec<PipelineEntity>> {
-    self.extractor.extract(full_text)
+  pub(crate) fn anchor_terms(&self) -> Vec<AnchorTerm> {
+    self.extractor.anchor_terms()
+  }
+
+  pub(crate) fn process(
+    &self,
+    full_text: &str,
+    anchors: &[AnchorSpan],
+  ) -> Result<Vec<PipelineEntity>> {
+    self.extractor.extract(full_text, anchors)
   }
 }
 

@@ -1,7 +1,7 @@
-use crate::byte_offsets::ByteOffsets;
 use crate::types::Result;
 
 use super::common::{byte_len, is_caller_owned};
+use super::document::ResolutionDocument;
 use super::{DetectionSource, PipelineEntity, SourceDetail};
 
 const LEGAL_PERIOD_SUFFIXES: &str =
@@ -11,38 +11,33 @@ const ADDRESS_FINAL_ABBREVS: &str =
 
 #[must_use]
 pub fn sanitize_entities(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
-  let mut sanitized = Vec::new();
-
+  let mut sanitized = Vec::with_capacity(entities.len());
   for entity in entities {
     if is_caller_owned(entity) || has_curated_literal_boundary(entity) {
       sanitized.push(entity.clone());
       continue;
     }
-
-    let Some(cleaned) = clean_entity_text(entity, &entity.text) else {
-      continue;
-    };
-    sanitized.push(cleaned);
+    if let Some(cleaned) = clean_entity_text(entity.clone(), &entity.text) {
+      sanitized.push(cleaned);
+    }
   }
-
   sanitized
 }
 
-pub(crate) fn sanitize_entities_with_source(
-  entities: &[PipelineEntity],
-  full_text: &str,
+pub(crate) fn sanitize_entities_with_document(
+  entities: Vec<PipelineEntity>,
+  document: &ResolutionDocument<'_>,
 ) -> Result<Vec<PipelineEntity>> {
-  let offsets = ByteOffsets::new(full_text);
-  let mut sanitized = Vec::new();
+  let mut sanitized = Vec::with_capacity(entities.len());
 
   for entity in entities {
-    if is_caller_owned(entity) || has_curated_literal_boundary(entity) {
-      sanitized.push(entity.clone());
+    if is_caller_owned(&entity) || has_curated_literal_boundary(&entity) {
+      sanitized.push(entity);
       continue;
     }
 
-    let raw_text = offsets.slice(entity.start, entity.end)?;
-    let Some(cleaned) = clean_entity_text(entity, &raw_text) else {
+    let raw_text = document.slice_ref(entity.start, entity.end)?;
+    let Some(cleaned) = clean_entity_text(entity, raw_text) else {
       continue;
     };
     sanitized.push(cleaned);
@@ -52,7 +47,7 @@ pub(crate) fn sanitize_entities_with_source(
 }
 
 fn clean_entity_text(
-  entity: &PipelineEntity,
+  mut entity: PipelineEntity,
   raw_text: &str,
 ) -> Option<PipelineEntity> {
   let mut start_byte = 0;
@@ -66,7 +61,7 @@ fn clean_entity_text(
     break;
   }
 
-  trim_leading_date_artifacts(entity, raw_text, &mut start_byte, end_byte);
+  trim_leading_date_artifacts(&entity, raw_text, &mut start_byte, end_byte);
 
   while let Some((ch, len)) = first_char(raw_text.get(start_byte..end_byte)?) {
     if ch.is_whitespace() {
@@ -84,7 +79,7 @@ fn clean_entity_text(
     break;
   }
 
-  if should_strip_period(entity, raw_text, start_byte, end_byte) {
+  if should_strip_period(&entity, raw_text, start_byte, end_byte) {
     end_byte = end_byte.saturating_sub('.'.len_utf8());
   }
 
@@ -105,17 +100,19 @@ fn clean_entity_text(
     return None;
   }
 
-  let display_text = collapse_display_whitespace(cleaned_raw);
   let start = entity
     .start
     .saturating_add(byte_len(raw_text.get(..start_byte).unwrap_or_default()));
   let end = start.saturating_add(byte_len(cleaned_raw));
 
-  let mut cleaned = entity.clone();
-  cleaned.start = start;
-  cleaned.end = end;
-  cleaned.text = display_text;
-  Some(cleaned)
+  entity.start = start;
+  entity.end = end;
+  if entity.text != cleaned_raw
+    || display_whitespace_needs_collapse(cleaned_raw)
+  {
+    entity.text = collapse_display_whitespace(cleaned_raw);
+  }
+  Some(entity)
 }
 
 fn has_curated_literal_boundary(entity: &PipelineEntity) -> bool {
@@ -293,6 +290,21 @@ fn collapse_display_whitespace(text: &str) -> String {
   output
 }
 
+fn display_whitespace_needs_collapse(text: &str) -> bool {
+  let mut whitespace_count = 0usize;
+  for ch in text.chars() {
+    if !ch.is_whitespace() {
+      whitespace_count = 0;
+      continue;
+    }
+    if matches!(ch, '\n' | '\r') || whitespace_count > 0 {
+      return true;
+    }
+    whitespace_count = 1;
+  }
+  false
+}
+
 fn flush_whitespace(output: &mut String, whitespace: &mut String) {
   if whitespace.is_empty() {
     return;
@@ -315,4 +327,68 @@ fn first_char(text: &str) -> Option<(char, usize)> {
 
 fn last_char(text: &str) -> Option<(char, usize)> {
   text.chars().next_back().map(|ch| (ch, ch.len_utf8()))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn document_sanitization_reuses_unchanged_text_allocation() -> Result<()> {
+    let full_text = "Alice";
+    let entity = PipelineEntity::detected(
+      0,
+      5,
+      "person",
+      full_text,
+      0.9,
+      DetectionSource::Regex,
+    );
+    let text_pointer = entity.text.as_ptr();
+    let document = ResolutionDocument::new(full_text);
+    let sanitized = sanitize_entities_with_document(vec![entity], &document)?;
+
+    assert_eq!(sanitized.len(), 1);
+    assert_eq!(
+      sanitized
+        .first()
+        .map(|sanitized_entity| sanitized_entity.text.as_ptr()),
+      Some(text_pointer)
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn unchanged_text_allocations_stay_constant_as_entity_count_scales()
+  -> Result<()> {
+    const ENTITY_COUNT: usize = 20_000;
+    let full_text = "Alice";
+    let entities = (0..ENTITY_COUNT)
+      .map(|_| {
+        PipelineEntity::detected(
+          0,
+          5,
+          "person",
+          full_text,
+          0.9,
+          DetectionSource::Regex,
+        )
+      })
+      .collect::<Vec<_>>();
+    let input_pointers = entities
+      .iter()
+      .map(|entity| entity.text.as_ptr())
+      .collect::<Vec<_>>();
+    let document = ResolutionDocument::new(full_text);
+    let sanitized = sanitize_entities_with_document(entities, &document)?;
+
+    assert_eq!(sanitized.len(), ENTITY_COUNT);
+    assert!(
+      sanitized
+        .iter()
+        .zip(input_pointers)
+        .all(|(entity, input_pointer)| entity.text.as_ptr() == input_pointer)
+    );
+    Ok(())
+  }
 }

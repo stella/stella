@@ -40,6 +40,10 @@ impl<'a> ByteOffsets<'a> {
   }
 
   pub(crate) fn slice(&self, start: u32, end: u32) -> Result<String> {
+    Ok(self.slice_ref(start, end)?.to_owned())
+  }
+
+  pub(crate) fn slice_ref(&self, start: u32, end: u32) -> Result<&'a str> {
     if start > end {
       return Err(Error::InvalidSpan { start, end });
     }
@@ -47,13 +51,10 @@ impl<'a> ByteOffsets<'a> {
     let start_byte = self.validate_offset(start)?;
     let end_byte = self.validate_offset(end)?;
 
-    Ok(
-      self
-        .text
-        .get(start_byte..end_byte)
-        .ok_or(Error::InvalidSpan { start, end })?
-        .to_owned(),
-    )
+    self
+      .text
+      .get(start_byte..end_byte)
+      .ok_or(Error::InvalidSpan { start, end })
   }
 
   pub(crate) fn utf16_units_between(

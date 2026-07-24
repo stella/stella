@@ -1,5 +1,6 @@
 use super::{DetectionSource, PipelineEntity, SourceDetail};
 
+#[cfg(test)]
 pub(crate) const fn contains_span(
   outer: &PipelineEntity,
   inner: &PipelineEntity,

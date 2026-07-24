@@ -13,6 +13,9 @@ modules:
           - RegexMeta
         dependencies: []
         support_resources: []
+        additive_scaling_domains:
+          - RegexMatches
+          - FullText
       - id: CustomRegex
         stage: EntityCustomRegex
         inputs:
@@ -21,6 +24,9 @@ modules:
           - CustomRegexMeta
         dependencies: []
         support_resources: []
+        additive_scaling_domains:
+          - CustomRegexMatches
+          - FullText
   - name: literal
     rules:
       - id: DenyList
@@ -28,22 +34,34 @@ modules:
         inputs:
           - LiteralMatches
           - DenyListData
+          - FullText
         dependencies: []
         support_resources: []
+        additive_scaling_domains:
+          - LiteralMatches
+          - FullText
       - id: Gazetteer
         stage: EntityGazetteer
         inputs:
           - LiteralMatches
           - GazetteerData
+          - FullText
         dependencies: []
         support_resources: []
+        additive_scaling_domains:
+          - LiteralMatches
+          - FullText
       - id: Country
         stage: EntityCountry
         inputs:
           - LiteralMatches
           - CountryData
+          - FullText
         dependencies: []
         support_resources: []
+        additive_scaling_domains:
+          - LiteralMatches
+          - FullText
   - name: anchored
     rules:
       - id: Anchored
@@ -54,15 +72,22 @@ modules:
           - MonetaryData
         dependencies: []
         support_resources: []
+        additive_scaling_domains:
+          - FullText
   - name: trigger
     rules:
       - id: Trigger
         stage: EntityTrigger
         inputs:
           - RegexMatches
+          - FullText
+          - TitleTokens
         dependencies: []
         support_resources:
           - Triggers
+        additive_scaling_domains:
+          - RegexMatches
+          - FullText
   - name: signature
     rules:
       - id: Signature
@@ -72,15 +97,21 @@ modules:
         dependencies: []
         support_resources:
           - Signature
+        additive_scaling_domains:
+          - FullText
   - name: legal_form
     rules:
       - id: LegalForm
         stage: EntityLegalForm
         inputs:
           - RegexMatches
+          - FullText
         dependencies: []
         support_resources:
           - LegalForms
+        additive_scaling_domains:
+          - RegexMatches
+          - FullText
   - name: name_corpus
     rules:
       - id: NameCorpus
@@ -92,6 +123,9 @@ modules:
           - DenyList
         support_resources:
           - NameCorpus
+        additive_scaling_domains:
+          - FullText
+          - DenyListEntities
   - name: address_seed
     rules:
       - id: AddressSeed
@@ -99,6 +133,7 @@ modules:
         inputs:
           - LiteralMatches
           - ContextEntities
+          - FullText
         dependencies:
           - Regex
           - CustomRegex
@@ -111,3 +146,7 @@ modules:
           - NameCorpus
         support_resources:
           - AddressSeed
+        additive_scaling_domains:
+          - LiteralMatches
+          - ContextEntities
+          - FullText

@@ -1034,31 +1034,26 @@ fn drop_overlapping(
       .then_with(|| right.end.cmp(&left.end))
   });
 
-  let mut out = Vec::<Candidate>::new();
-  for candidate in sorted {
-    let blocked_by_container = out.iter().any(|outer| {
-      if candidate.start < outer.start || candidate.end > outer.end {
-        return false;
-      }
-      let outer_is_institutional = full_text
-        .get(outer.matched_suffix_start..outer.suffix_end)
-        .is_some_and(|head| {
-          data
-            .institutional_heads
-            .contains(&normalize_suffix_token(head).to_lowercase())
-        });
-      let separated_earlier_suffix = candidate.suffix_end
-        <= outer.matched_suffix_start
-        && full_text
-          .get(candidate.suffix_end..outer.matched_suffix_start)
-          .is_some_and(|between| between.contains([',', ';']));
-      !(outer_is_institutional && separated_earlier_suffix)
-    });
-    if blocked_by_container {
+  let mut accepted = vec![false; sorted.len()];
+  let mut containment =
+    CandidateContainmentIndex::new(&sorted, full_text, data);
+  for index in 0..sorted.len() {
+    let Some(candidate) = sorted.get(index) else {
+      continue;
+    };
+    if containment.has_blocking_container(candidate) {
       continue;
     }
-    out.push(candidate);
+    if let Some(slot) = accepted.get_mut(index) {
+      *slot = true;
+    }
+    containment.accept(candidate, full_text, data);
   }
+  let mut out = sorted
+    .into_iter()
+    .zip(accepted)
+    .filter_map(|(candidate, accepted)| accepted.then_some(candidate))
+    .collect::<Vec<_>>();
   out.sort_by(|left, right| {
     left
       .start
@@ -1066,6 +1061,131 @@ fn drop_overlapping(
       .then_with(|| left.end.cmp(&right.end))
   });
   out
+}
+
+struct CandidateContainmentIndex {
+  institutional_suffix_starts: Vec<usize>,
+  institutional_max_ends: Vec<usize>,
+  non_institutional_max_end: usize,
+  delimiter_offsets: Vec<usize>,
+  #[cfg(test)]
+  operations: std::cell::Cell<usize>,
+}
+
+impl CandidateContainmentIndex {
+  fn new(
+    candidates: &[Candidate],
+    full_text: &str,
+    data: &PreparedLegalFormData,
+  ) -> Self {
+    let mut institutional_suffix_starts = candidates
+      .iter()
+      .filter(|candidate| {
+        candidate_is_institutional(candidate, full_text, data)
+      })
+      .map(|candidate| candidate.matched_suffix_start)
+      .collect::<Vec<_>>();
+    institutional_suffix_starts.sort_unstable();
+    institutional_suffix_starts.dedup();
+    Self {
+      institutional_max_ends: vec![
+        0;
+        institutional_suffix_starts
+          .len()
+          .saturating_add(1)
+      ],
+      institutional_suffix_starts,
+      non_institutional_max_end: 0,
+      delimiter_offsets: full_text
+        .char_indices()
+        .filter_map(|(offset, character)| {
+          matches!(character, ',' | ';').then_some(offset)
+        })
+        .collect(),
+      #[cfg(test)]
+      operations: std::cell::Cell::new(0),
+    }
+  }
+
+  fn accept(
+    &mut self,
+    candidate: &Candidate,
+    full_text: &str,
+    data: &PreparedLegalFormData,
+  ) {
+    if !candidate_is_institutional(candidate, full_text, data) {
+      self.non_institutional_max_end =
+        self.non_institutional_max_end.max(candidate.end);
+      return;
+    }
+    let mut position = self
+      .institutional_suffix_starts
+      .partition_point(|start| *start < candidate.matched_suffix_start)
+      .saturating_add(1);
+    while position < self.institutional_max_ends.len() {
+      #[cfg(test)]
+      {
+        self.operations.set(self.operations.get().saturating_add(1));
+      }
+      if let Some(max_end) = self.institutional_max_ends.get_mut(position) {
+        *max_end = (*max_end).max(candidate.end);
+      }
+      position = position.saturating_add(position & position.wrapping_neg());
+    }
+  }
+
+  fn has_blocking_container(&self, candidate: &Candidate) -> bool {
+    if self.non_institutional_max_end >= candidate.end {
+      return true;
+    }
+    let delimiter = self
+      .delimiter_offsets
+      .get(
+        self
+          .delimiter_offsets
+          .partition_point(|offset| *offset < candidate.suffix_end),
+      )
+      .copied()
+      .unwrap_or(usize::MAX);
+    let mut position = self
+      .institutional_suffix_starts
+      .partition_point(|start| *start <= delimiter);
+    let mut max_end = 0;
+    while position > 0 {
+      #[cfg(test)]
+      {
+        self.operations.set(self.operations.get().saturating_add(1));
+      }
+      max_end = max_end.max(
+        self
+          .institutional_max_ends
+          .get(position)
+          .copied()
+          .unwrap_or_default(),
+      );
+      position &= position.saturating_sub(1);
+    }
+    max_end >= candidate.end
+  }
+
+  #[cfg(test)]
+  const fn operations(&self) -> usize {
+    self.operations.get()
+  }
+}
+
+fn candidate_is_institutional(
+  candidate: &Candidate,
+  full_text: &str,
+  data: &PreparedLegalFormData,
+) -> bool {
+  full_text
+    .get(candidate.matched_suffix_start..candidate.suffix_end)
+    .is_some_and(|head| {
+      data
+        .institutional_heads
+        .contains(&normalize_suffix_token(head).to_lowercase())
+    })
 }
 
 fn process_candidate(
@@ -2557,16 +2677,55 @@ mod tests {
   #![allow(clippy::expect_used, clippy::unwrap_used)]
 
   use super::{
-    LegalFormData, PreparedLegalFormData, crosses_sentence_end,
-    ends_with_list_suffix, extend_backward, is_roman_legal_suffix,
-    process_legal_form_matches, split_embedded_legal_form_list,
-    trim_embedded_legal_form_list_prefix, trim_leading_clause, trim_role_head,
+    Candidate, CandidateContainmentIndex, LegalFormData, PreparedLegalFormData,
+    crosses_sentence_end, drop_overlapping, ends_with_list_suffix,
+    extend_backward, is_roman_legal_suffix, process_legal_form_matches,
+    split_embedded_legal_form_list, trim_embedded_legal_form_list_prefix,
+    trim_leading_clause, trim_role_head,
   };
   use crate::processors::PatternSlice;
   use crate::types::SearchMatch;
   use proptest::prelude::*;
 
   proptest! {
+    #[test]
+    fn indexed_overlap_filter_matches_exhaustive_reference(
+      raw in proptest::collection::vec(
+        (any::<u8>(), any::<u8>(), any::<u8>(), any::<u8>()),
+        0..512,
+      ),
+    ) {
+      let full_text = "A,;".repeat(100);
+      let data = PreparedLegalFormData::new(LegalFormData {
+        institutional_heads: vec![String::from("a")],
+        ..LegalFormData::default()
+      });
+      let candidates = raw.into_iter().map(|(left, right, suffix, tail)| {
+        let start = usize::from(left.min(right));
+        let end = usize::from(left.max(right)).saturating_add(1);
+        let width = end.saturating_sub(start).max(1);
+        let suffix_offset =
+          usize::from(suffix).checked_rem(width).unwrap_or_default();
+        let matched_suffix_start = start.saturating_add(suffix_offset);
+        let suffix_end = matched_suffix_start
+          .saturating_add(1)
+          .min(end);
+        Candidate {
+          start,
+          suffix_start: matched_suffix_start,
+          matched_suffix_start,
+          suffix_end,
+          end: end.saturating_add(usize::from(tail) % 2),
+          trimmed: false,
+        }
+      }).collect::<Vec<_>>();
+
+      prop_assert_eq!(
+        drop_overlapping(candidates.clone(), &full_text, &data),
+        legacy_drop_overlapping(candidates, &full_text, &data),
+      );
+    }
+
     #[test]
     fn trailing_suffix_index_matches_exhaustive_lookup(
       suffixes in proptest::collection::vec("[A-Z][A-Za-z.]{0,7}", 0..80),
@@ -2677,6 +2836,89 @@ mod tests {
         ),
       );
     }
+  }
+
+  #[test]
+  fn containment_index_bounds_work_for_dense_institutional_candidates() {
+    const CANDIDATE_COUNT: usize = 10_000;
+    let data = PreparedLegalFormData::new(LegalFormData {
+      institutional_heads: vec![String::from("a")],
+      ..LegalFormData::default()
+    });
+    let full_text = "A".repeat(CANDIDATE_COUNT);
+    let candidates = (0..CANDIDATE_COUNT)
+      .map(|index| Candidate {
+        start: index,
+        suffix_start: index,
+        matched_suffix_start: index,
+        suffix_end: index + 1,
+        end: index + 1,
+        trimmed: false,
+      })
+      .collect::<Vec<_>>();
+    let mut index =
+      CandidateContainmentIndex::new(&candidates, &full_text, &data);
+    for candidate in &candidates {
+      assert!(!index.has_blocking_container(candidate));
+      index.accept(candidate, &full_text, &data);
+    }
+
+    let logarithmic_bound = CANDIDATE_COUNT * 30;
+    assert!(index.operations() < logarithmic_bound);
+  }
+
+  fn candidate_blocks(
+    outer: &Candidate,
+    candidate: &Candidate,
+    full_text: &str,
+    data: &PreparedLegalFormData,
+  ) -> bool {
+    if candidate.start < outer.start || candidate.end > outer.end {
+      return false;
+    }
+    let outer_is_institutional = full_text
+      .get(outer.matched_suffix_start..outer.suffix_end)
+      .is_some_and(|head| {
+        data
+          .institutional_heads
+          .contains(&super::normalize_suffix_token(head).to_lowercase())
+      });
+    let separated_earlier_suffix = candidate.suffix_end
+      <= outer.matched_suffix_start
+      && full_text
+        .get(candidate.suffix_end..outer.matched_suffix_start)
+        .is_some_and(|between| between.contains([',', ';']));
+    !(outer_is_institutional && separated_earlier_suffix)
+  }
+
+  fn legacy_drop_overlapping(
+    mut candidates: Vec<Candidate>,
+    full_text: &str,
+    data: &PreparedLegalFormData,
+  ) -> Vec<Candidate> {
+    candidates.sort_by(|left, right| {
+      left
+        .start
+        .cmp(&right.start)
+        .then_with(|| right.end.cmp(&left.end))
+    });
+    let mut accepted = Vec::new();
+    for candidate in candidates {
+      if accepted
+        .iter()
+        .any(|outer| candidate_blocks(outer, &candidate, full_text, data))
+      {
+        continue;
+      }
+      accepted.push(candidate);
+    }
+    accepted.sort_by(|left, right| {
+      left
+        .start
+        .cmp(&right.start)
+        .then_with(|| left.end.cmp(&right.end))
+    });
+    accepted
   }
 
   fn legacy_list_suffixes(

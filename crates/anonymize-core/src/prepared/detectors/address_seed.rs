@@ -26,6 +26,12 @@ static_detector_rules! {
     inputs: &[
       DetectorInput::LiteralMatches,
       DetectorInput::ContextEntities,
+      DetectorInput::FullText,
+    ];
+    scales: &[
+      DetectorInput::LiteralMatches,
+      DetectorInput::ContextEntities,
+      DetectorInput::FullText,
     ];
     after: ADDRESS_SEED_DEPENDENCIES;
     uses: &[SupportResource::AddressSeed];
@@ -34,43 +40,27 @@ static_detector_rules! {
   }
 }
 
-const fn address_seed_is_active(context: &StaticDetectorContext<'_>) -> bool {
-  context.engine.data.address_seed.is_some()
+fn address_seed_is_active(context: &StaticDetectorContext<'_>) -> Result<bool> {
+  context.address_seed_is_active()
 }
 
 fn detect_address_seed(
   context: &StaticDetectorContext<'_>,
-  passes: &StaticEntityPasses,
+  dependencies: DetectorDependencies<'_>,
   diagnostics: StaticDetectorDiagnostics<'_>,
 ) -> Result<TimedEntities> {
-  let engine = context.engine;
-  let matches = context.matches;
-  let full_text = context.full_text;
   let start = Instant::now();
-  let Some(data) = &engine.data.address_seed else {
-    return Ok(TimedEntities::empty());
-  };
   let context_start = Instant::now();
-  let existing_entities =
-    address_seed_context(ADDRESS_SEED_RULE.spec().dependencies(), passes);
+  let (detection, context_count) = context.detect_address_seed(dependencies)?;
   let context_elapsed_us = elapsed_us(context_start);
-  let detection = data.process_profiled(
-    &matches.literal,
-    engine.policy.slices.street_types,
-    full_text,
-    &existing_entities,
-  )?;
   record_address_seed_profile(
     diagnostics,
     &detection.profile,
-    existing_entities.len(),
+    context_count,
     context_elapsed_us,
-    full_text.len(),
+    context.input_bytes(),
   );
-  Ok(TimedEntities {
-    entities: detection.entities,
-    elapsed_us: elapsed_us(start),
-  })
+  TimedEntities::new(detection.entities, elapsed_us(start))
 }
 
 fn record_address_seed_profile(
@@ -143,19 +133,4 @@ fn record_address_seed_profile(
     Some(profile.expand_elapsed_us),
     Some(input_bytes),
   );
-}
-
-fn address_seed_context(
-  dependencies: &[DetectorId],
-  passes: &StaticEntityPasses,
-) -> Vec<PipelineEntity> {
-  let capacity = dependencies
-    .iter()
-    .map(|detector_id| passes.entities(*detector_id).len())
-    .fold(0usize, usize::saturating_add);
-  let mut entities = Vec::with_capacity(capacity);
-  for detector_id in dependencies {
-    entities.extend(passes.entities(*detector_id).iter().cloned());
-  }
-  entities
 }

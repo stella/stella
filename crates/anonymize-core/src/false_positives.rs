@@ -38,7 +38,7 @@ pub(crate) fn filter_entity_false_positives(
       continue;
     }
 
-    let Some(normalized) = normalize_entity(&entity, &offsets, filters)? else {
+    let Some(normalized) = normalize_entity(entity, &offsets, filters)? else {
       continue;
     };
     if should_reject_entity(&normalized, full_text, &offsets, filters)? {
@@ -51,28 +51,28 @@ pub(crate) fn filter_entity_false_positives(
 }
 
 fn normalize_entity(
-  entity: &PipelineEntity,
+  mut entity: PipelineEntity,
   offsets: &ByteOffsets<'_>,
   filters: Option<&DenyListFilterData>,
 ) -> Result<Option<PipelineEntity>> {
-  let raw_text = offsets.slice(entity.start, entity.end)?;
+  let raw_text = offsets.slice_ref(entity.start, entity.end)?;
   let mut start_byte = 0usize;
   let mut end_byte = raw_text.len();
 
-  trim_leading_artifacts(&raw_text, &mut start_byte, end_byte);
-  trim_leading_whitespace(&raw_text, &mut start_byte, end_byte);
+  trim_leading_artifacts(raw_text, &mut start_byte, end_byte);
+  trim_leading_whitespace(raw_text, &mut start_byte, end_byte);
 
   if entity.label == ADDRESS_LABEL
     && let Some(filters) = filters
   {
     if let Some(trimmed) =
-      address_role_prefix_len(slice(&raw_text, start_byte, end_byte)?, filters)
+      address_role_prefix_len(slice(raw_text, start_byte, end_byte)?, filters)
     {
       start_byte = start_byte.saturating_add(trimmed);
-      trim_leading_whitespace(&raw_text, &mut start_byte, end_byte);
+      trim_leading_whitespace(raw_text, &mut start_byte, end_byte);
     }
 
-    let address_text = slice(&raw_text, start_byte, end_byte)?;
+    let address_text = slice(raw_text, start_byte, end_byte)?;
     if let Some(trimmed_end) =
       trim_trailing_address_prose(address_text, filters)
     {
@@ -86,7 +86,7 @@ fn normalize_entity(
       DetectionSource::Trigger | DetectionSource::Coreference
     )
   {
-    let org_text = slice(&raw_text, start_byte, end_byte)?;
+    let org_text = slice(raw_text, start_byte, end_byte)?;
     // An open-ended trigger org (to-next-comma with no comma before the
     // sentence end) captures the court/company name plus trailing sentence
     // prose ("Conseil de prud'hommes des Sables-d'Olonne a rendu son
@@ -106,23 +106,28 @@ fn normalize_entity(
     }
   }
 
-  trim_trailing_separators(&raw_text, start_byte, &mut end_byte);
+  trim_trailing_separators(raw_text, start_byte, &mut end_byte);
   if start_byte >= end_byte {
     return Ok(None);
   }
 
-  let cleaned_raw = slice(&raw_text, start_byte, end_byte)?;
+  let cleaned_raw = slice(raw_text, start_byte, end_byte)?;
   if !cleaned_raw.chars().any(char::is_alphanumeric) {
     return Ok(None);
   }
 
-  let mut normalized = entity.clone();
-  normalized.start = entity
-    .start
+  let original_start = entity.start;
+  entity.start = original_start
     .saturating_add(byte_len(raw_text.get(..start_byte).unwrap_or_default()));
-  normalized.end = normalized.start.saturating_add(byte_len(cleaned_raw));
-  normalized.text = collapse_display_whitespace(cleaned_raw);
-  Ok(Some(normalized))
+  entity.end = entity.start.saturating_add(byte_len(cleaned_raw));
+  normalize_display_text(NormalizeDisplayTextParams {
+    text: &mut entity.text,
+    raw_text,
+    cleaned_raw,
+    start_byte,
+    end_byte,
+  });
+  Ok(Some(entity))
 }
 
 fn should_reject_entity(
@@ -1112,6 +1117,52 @@ fn collapse_display_whitespace(text: &str) -> String {
   out
 }
 
+struct NormalizeDisplayTextParams<'a> {
+  text: &'a mut String,
+  raw_text: &'a str,
+  cleaned_raw: &'a str,
+  start_byte: usize,
+  end_byte: usize,
+}
+
+fn normalize_display_text(params: NormalizeDisplayTextParams<'_>) {
+  let NormalizeDisplayTextParams {
+    text,
+    raw_text,
+    cleaned_raw,
+    start_byte,
+    end_byte,
+  } = params;
+  if display_whitespace_needs_collapse(cleaned_raw) {
+    *text = collapse_display_whitespace(cleaned_raw);
+    return;
+  }
+  if text == cleaned_raw {
+    return;
+  }
+  if text == raw_text {
+    text.truncate(end_byte);
+    drop(text.drain(..start_byte));
+    return;
+  }
+  *text = cleaned_raw.to_owned();
+}
+
+fn display_whitespace_needs_collapse(text: &str) -> bool {
+  let mut whitespace_count = 0usize;
+  for ch in text.chars() {
+    if !ch.is_whitespace() {
+      whitespace_count = 0;
+      continue;
+    }
+    if matches!(ch, '\n' | '\r') || whitespace_count > 0 {
+      return true;
+    }
+    whitespace_count = 1;
+  }
+  false
+}
+
 fn flush_whitespace(output: &mut String, whitespace: &mut String) {
   if whitespace.is_empty() {
     return;
@@ -1162,6 +1213,71 @@ mod tests {
   use std::collections::BTreeSet;
 
   use super::*;
+
+  #[test]
+  fn normalization_reuses_unchanged_text_allocation() -> Result<()> {
+    let full_text = "Alice";
+    let entity =
+      entity(full_text, full_text, PERSON_LABEL, DetectionSource::Regex);
+    let text_pointer = entity.text.as_ptr();
+    let normalized = filter_entity_false_positives(
+      vec![entity],
+      full_text,
+      Some(&DenyListFilterData::default()),
+    )?;
+
+    assert_eq!(normalized.len(), 1);
+    assert_eq!(
+      normalized.first().map(|item| item.text.as_ptr()),
+      Some(text_pointer)
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn normalization_trims_text_in_place() -> Result<()> {
+    let full_text = ". Alice,";
+    let entity =
+      entity(full_text, full_text, PERSON_LABEL, DetectionSource::Regex);
+    let text_pointer = entity.text.as_ptr();
+    let normalized = normalize_entity(
+      entity,
+      &ByteOffsets::new(full_text),
+      Some(&DenyListFilterData::default()),
+    )?
+    .ok_or(Error::InvalidSpan { start: 0, end: 0 })?;
+
+    assert_eq!(normalized.start, 2);
+    assert_eq!(normalized.end, 7);
+    assert_eq!(normalized.text, "Alice");
+    assert_eq!(normalized.text.as_ptr(), text_pointer);
+    Ok(())
+  }
+
+  #[test]
+  fn unchanged_text_allocations_stay_constant_as_entity_count_scales()
+  -> Result<()> {
+    const ENTITY_COUNT: usize = 20_000;
+    let full_text = "Alice";
+    let entities = (0..ENTITY_COUNT)
+      .map(|_| {
+        entity(full_text, full_text, PERSON_LABEL, DetectionSource::Regex)
+      })
+      .collect::<Vec<_>>();
+    let input_pointers = entities
+      .iter()
+      .map(|entity| entity.text.as_ptr())
+      .collect::<Vec<_>>();
+    let normalized = filter_entity_false_positives(entities, full_text, None)?;
+    let output_pointers = normalized
+      .iter()
+      .map(|entity| entity.text.as_ptr())
+      .collect::<Vec<_>>();
+
+    assert_eq!(normalized.len(), ENTITY_COUNT);
+    assert_eq!(output_pointers, input_pointers);
+    Ok(())
+  }
 
   #[test]
   fn trims_trailing_prose_back_to_last_capital() {

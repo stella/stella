@@ -33,6 +33,7 @@ mod search;
 mod session;
 mod session_archive;
 mod signatures;
+mod span_index;
 mod triggers;
 mod types;
 mod validators;

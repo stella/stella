@@ -1,7 +1,10 @@
+use std::collections::BTreeMap;
+
 use crate::resolution::{PipelineEntity, SourceDetail};
 use crate::search::{
   LiteralSearchOptions, SearchIndex, SearchOptions, SearchPattern,
 };
+use crate::span_index::SpanIndex;
 use crate::types::{Error, Result, SearchMatch};
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -24,6 +27,7 @@ pub struct HotwordRule {
 
 pub(crate) struct PreparedHotwordData {
   rules: Vec<HotwordRule>,
+  rule_indices_by_target_label: BTreeMap<String, Vec<usize>>,
   pattern_rule_indices: Vec<u32>,
   search: SearchIndex,
 }
@@ -32,8 +36,17 @@ impl PreparedHotwordData {
   pub(crate) fn new(data: HotwordRuleData) -> Result<Self> {
     let mut patterns = Vec::new();
     let mut pattern_rule_indices = Vec::new();
+    let mut rule_indices_by_target_label = BTreeMap::new();
 
     for (rule_index, rule) in data.rules.iter().enumerate() {
+      for target_label in &rule.target_labels {
+        let rule_indices = rule_indices_by_target_label
+          .entry(target_label.clone())
+          .or_insert_with(Vec::new);
+        if rule_indices.last().copied() != Some(rule_index) {
+          rule_indices.push(rule_index);
+        }
+      }
       let rule_index =
         u32::try_from(rule_index).map_err(|_| Error::InvalidStaticData {
           field: "hotword_data.rules",
@@ -68,6 +81,7 @@ impl PreparedHotwordData {
 
     Ok(Self {
       rules: data.rules,
+      rule_indices_by_target_label,
       pattern_rule_indices,
       search,
     })
@@ -103,7 +117,7 @@ pub(crate) fn apply_hotword_rules(
 fn collect_hits_by_rule(
   full_text: &str,
   data: &PreparedHotwordData,
-) -> Result<Vec<Vec<SearchMatch>>> {
+) -> Result<Vec<SpanIndex<SearchMatch>>> {
   let mut hits_by_rule = vec![Vec::new(); data.rules.len()];
 
   for found in data.search.find_iter(full_text)? {
@@ -131,33 +145,46 @@ fn collect_hits_by_rule(
     bucket.push(found);
   }
 
-  Ok(hits_by_rule)
+  Ok(
+    hits_by_rule
+      .into_iter()
+      .map(|hits| {
+        SpanIndex::new(
+          hits.into_iter().map(|hit| (hit.start(), hit.end(), hit)),
+        )
+      })
+      .collect(),
+  )
 }
 
 fn apply_entity_rules(
   mut entity: PipelineEntity,
   text_offsets: &Utf16OffsetMap,
   data: &PreparedHotwordData,
-  hits_by_rule: &[Vec<SearchMatch>],
+  hits_by_rule: &[SpanIndex<SearchMatch>],
 ) -> Result<PipelineEntity> {
   let mut best = None::<HotwordAdjustment>;
 
-  for (rule_index, rule) in data.rules.iter().enumerate() {
-    if !rule
-      .target_labels
-      .iter()
-      .any(|label| label == &entity.label)
-    {
-      continue;
-    }
-    let Some(rule_hits) = hits_by_rule.get(rule_index) else {
+  let Some(rule_indices) = data.rule_indices_by_target_label.get(&entity.label)
+  else {
+    return Ok(entity);
+  };
+  for rule_index in rule_indices {
+    let Some(rule) = data.rules.get(*rule_index) else {
       continue;
     };
-    for hit in rule_hits {
+    let Some(rule_hits) = hits_by_rule.get(*rule_index) else {
+      continue;
+    };
+    let window_start =
+      text_offsets.offset_before_units(entity.start, rule.proximity_before)?;
+    let window_end =
+      text_offsets.offset_after_units(entity.end, rule.proximity_after)?;
+    rule_hits.try_for_each_intersecting(window_start, window_end, |hit| {
       let Some((distance, max_distance)) =
         hotword_distance(text_offsets, &entity, hit, rule)?
       else {
-        continue;
+        return Ok(());
       };
       let decay = if max_distance == 0 {
         1.0
@@ -166,13 +193,13 @@ fn apply_entity_rules(
       };
       let adjustment = rule.score_adjustment * decay;
       if adjustment.abs() <= f64::EPSILON {
-        continue;
+        return Ok(());
       }
       if best
         .as_ref()
         .is_some_and(|best| adjustment.abs() <= best.score.abs())
       {
-        continue;
+        return Ok(());
       }
 
       best = Some(HotwordAdjustment {
@@ -183,7 +210,8 @@ fn apply_entity_rules(
           None
         },
       });
-    }
+      Ok(())
+    })?;
   }
 
   let Some(best) = best else {
@@ -279,6 +307,34 @@ impl Utf16OffsetMap {
     Ok(end_units.saturating_sub(start_units))
   }
 
+  fn offset_before_units(&self, offset: u32, units: u32) -> Result<u32> {
+    let offset_units = self.utf16_units_at(offset)?;
+    let minimum_units = offset_units.saturating_sub(units);
+    let index = self
+      .utf16_offsets
+      .partition_point(|candidate| *candidate < minimum_units);
+    self.byte_offset_at(index)
+  }
+
+  fn offset_after_units(&self, offset: u32, units: u32) -> Result<u32> {
+    let offset_units = self.utf16_units_at(offset)?;
+    let maximum_units = offset_units.saturating_add(units);
+    let boundary = self
+      .utf16_offsets
+      .partition_point(|candidate| *candidate <= maximum_units);
+    self.byte_offset_at(boundary.saturating_sub(1))
+  }
+
+  fn byte_offset_at(&self, index: usize) -> Result<u32> {
+    let byte_offset = self
+      .byte_offsets
+      .get(index)
+      .copied()
+      .ok_or(Error::ByteOffsetOutOfBounds { offset: u32::MAX })?;
+    u32::try_from(byte_offset)
+      .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })
+  }
+
   fn utf16_units_at(&self, offset: u32) -> Result<u32> {
     let byte_offset = usize::try_from(offset)
       .map_err(|_| Error::ByteOffsetOutOfBounds { offset })?;
@@ -301,8 +357,11 @@ impl Utf16OffsetMap {
 
 #[cfg(test)]
 mod tests {
+  use proptest::prelude::*;
+
   use super::*;
   use crate::byte_offsets::ByteOffsets;
+  use crate::resolution::DetectionSource;
 
   #[test]
   fn utf16_offset_map_matches_slice_distance_on_boundaries() -> Result<()> {
@@ -333,5 +392,158 @@ mod tests {
     }
 
     Ok(())
+  }
+
+  proptest! {
+    #[test]
+    fn indexed_hotword_rules_match_linear_reference(
+      spans in proptest::collection::vec((0_u16..512, 0_u16..32, 0_u16..1000), 0..256),
+    ) {
+      let full_text = "risk filler client filler ".repeat(24);
+      let data = PreparedHotwordData::new(HotwordRuleData {
+        rules: vec![
+          HotwordRule {
+            hotwords: vec![String::from("risk")],
+            target_labels: vec![String::from("person")],
+            score_adjustment: 0.4,
+            reclassify_to: Some(String::from("organization")),
+            proximity_before: 40,
+            proximity_after: 15,
+          },
+          HotwordRule {
+            hotwords: vec![String::from("client")],
+            target_labels: vec![String::from("person")],
+            score_adjustment: -0.3,
+            reclassify_to: None,
+            proximity_before: 12,
+            proximity_after: 35,
+          },
+        ],
+        pattern_rule_indices: Vec::new(),
+      })?;
+      let entities = spans.into_iter().map(|(start, width, score)| {
+        let start = u32::from(start).min(
+          u32::try_from(full_text.len()).unwrap_or(u32::MAX).saturating_sub(1),
+        );
+        let end = start
+          .saturating_add(u32::from(width).saturating_add(1))
+          .min(u32::try_from(full_text.len()).unwrap_or(u32::MAX));
+        PipelineEntity::detected(
+          start,
+          end,
+          "person",
+          full_text
+            .get(
+              usize::try_from(start).unwrap_or_default()
+                ..usize::try_from(end).unwrap_or_default(),
+            )
+            .unwrap_or_default(),
+          f64::from(score) / 1000.0,
+          DetectionSource::Regex,
+        )
+      }).collect::<Vec<_>>();
+
+      let indexed = apply_hotword_rules(
+        entities.clone(),
+        &full_text,
+        &data,
+        &[],
+      )?;
+      let linear = apply_hotword_rules_linear(entities, &full_text, &data)?;
+      prop_assert_eq!(indexed, linear);
+    }
+  }
+
+  #[test]
+  fn hotword_query_visits_only_hits_intersecting_the_proximity_window()
+  -> Result<()> {
+    let index = SpanIndex::new((0_u32..10_000).map(|start| {
+      let offset = start.saturating_mul(10);
+      (offset, offset.saturating_add(4), offset)
+    }));
+    let mut visited = Vec::new();
+    index.try_for_each_intersecting(50_000, 50_020, |offset| {
+      visited.push(*offset);
+      Ok::<_, Error>(())
+    })?;
+
+    assert_eq!(visited, vec![50_000, 50_010, 50_020]);
+    assert!(
+      index.intersecting_query_work(50_000, 50_020) < 128,
+      "a narrow hotword query must traverse the index, not all 10,000 spans",
+    );
+    Ok(())
+  }
+
+  fn apply_hotword_rules_linear(
+    entities: Vec<PipelineEntity>,
+    full_text: &str,
+    data: &PreparedHotwordData,
+  ) -> Result<Vec<PipelineEntity>> {
+    let mut hits_by_rule = vec![Vec::new(); data.rules.len()];
+    for found in data.search.find_iter(full_text)? {
+      let pattern = usize::try_from(found.pattern()).unwrap_or(usize::MAX);
+      let rule_index = data
+        .pattern_rule_indices
+        .get(pattern)
+        .and_then(|index| usize::try_from(*index).ok())
+        .unwrap_or(usize::MAX);
+      if let Some(hits) = hits_by_rule.get_mut(rule_index) {
+        hits.push(found);
+      }
+    }
+    let offsets = Utf16OffsetMap::new(full_text)?;
+    entities
+      .into_iter()
+      .map(|entity| {
+        let mut best = None::<HotwordAdjustment>;
+        for (rule_index, rule) in data.rules.iter().enumerate() {
+          if !rule
+            .target_labels
+            .iter()
+            .any(|label| label == &entity.label)
+          {
+            continue;
+          }
+          for hit in hits_by_rule.get(rule_index).into_iter().flatten() {
+            let Some((distance, max_distance)) =
+              hotword_distance(&offsets, &entity, hit, rule)?
+            else {
+              continue;
+            };
+            let decay = if max_distance == 0 {
+              1.0
+            } else {
+              1.0 - (f64::from(distance) / f64::from(max_distance))
+            };
+            let adjustment = rule.score_adjustment * decay;
+            if adjustment.abs() <= f64::EPSILON
+              || best
+                .as_ref()
+                .is_some_and(|best| adjustment.abs() <= best.score.abs())
+            {
+              continue;
+            }
+            best = Some(HotwordAdjustment {
+              score: adjustment,
+              reclassify_to: if adjustment.is_sign_positive() {
+                rule.reclassify_to.clone()
+              } else {
+                None
+              },
+            });
+          }
+        }
+        let Some(best) = best else {
+          return Ok(entity);
+        };
+        let mut adjusted = entity;
+        adjusted.score = (adjusted.score + best.score).clamp(0.0, 1.0);
+        if let Some(label) = best.reclassify_to {
+          adjusted.label = label;
+        }
+        Ok(adjusted)
+      })
+      .collect()
   }
 }

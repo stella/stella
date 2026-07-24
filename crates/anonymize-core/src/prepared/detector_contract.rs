@@ -1,8 +1,25 @@
+use std::collections::BTreeSet;
+
+use crate::address_seeds::AddressSeedDetection;
+use crate::address_seeds::PreparedAddressSeedData;
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
-use crate::types::Result;
+use crate::legal_forms::PreparedLegalFormData;
+use crate::legal_forms::process_legal_form_matches;
+use crate::name_corpus::{NameCorpusDetection, PreparedNameCorpusData};
+use crate::processors::{
+  CountryMatchData, DenyListMatchData, GazetteerMatchData, PatternSlice,
+  RegexMatchMeta, process_country_matches, process_deny_list_matches,
+  process_gazetteer_matches, process_regex_matches,
+};
+use crate::resolution::PipelineEntity;
+use crate::signatures::{PreparedSignatureData, detect_signatures};
+use crate::triggers::{PreparedTriggerData, process_trigger_matches};
+use crate::types::{Error, Result, SearchMatch};
 
 use super::PreparedEngine;
+use super::prepared_document::PreparedDocument;
 use super::results::PreparedEngineMatches;
+use super::rule_contract::{RulePack, RuleSpec};
 use super::support_resources::SupportResourceId;
 use super::timing::{StaticEntityPasses, TimedEntities};
 
@@ -35,6 +52,7 @@ pub(super) enum StaticDetectorInput {
   DateData,
   MonetaryData,
   TriggerData,
+  TitleTokens,
   SignatureData,
   LegalFormData,
   NameCorpusData,
@@ -43,135 +61,529 @@ pub(super) enum StaticDetectorInput {
   DenyListEntities,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct StaticDetectorSpec {
-  id: StaticDetectorId,
-  diagnostic_stage: DiagnosticStage,
-  declared_inputs: &'static [StaticDetectorInput],
-  dependencies: &'static [StaticDetectorId],
-  support_resources: &'static [SupportResourceId],
+impl StaticDetectorInput {
+  pub(super) const fn is_growing(self) -> bool {
+    matches!(
+      self,
+      Self::FullText
+        | Self::RegexMatches
+        | Self::CustomRegexMatches
+        | Self::LiteralMatches
+        | Self::ContextEntities
+        | Self::DenyListEntities
+    )
+  }
 }
 
+pub(super) type StaticDetectorSpec = RuleSpec<
+  StaticDetectorId,
+  StaticDetectorInput,
+  SupportResourceId,
+  DiagnosticStage,
+>;
+
 impl StaticDetectorSpec {
-  pub(super) const fn define(
-    id: StaticDetectorId,
-    diagnostic_stage: DiagnosticStage,
-  ) -> Self {
-    Self {
-      id,
-      diagnostic_stage,
-      declared_inputs: &[],
-      dependencies: &[],
-      support_resources: &[],
-    }
-  }
-
-  pub(super) const fn requires(
-    mut self,
-    declared_inputs: &'static [StaticDetectorInput],
-  ) -> Self {
-    self.declared_inputs = declared_inputs;
-    self
-  }
-
-  pub(super) const fn after(
-    mut self,
-    dependencies: &'static [StaticDetectorId],
-  ) -> Self {
-    self.dependencies = dependencies;
-    self
-  }
-
-  pub(super) const fn uses(
-    mut self,
-    support_resources: &'static [SupportResourceId],
-  ) -> Self {
-    self.support_resources = support_resources;
-    self
-  }
-
-  pub(super) const fn id(self) -> StaticDetectorId {
-    self.id
-  }
-
   pub(super) const fn diagnostic_stage(self) -> DiagnosticStage {
-    self.diagnostic_stage
+    self.stage()
   }
 
-  #[cfg(test)]
-  pub(super) const fn declared_inputs(self) -> &'static [StaticDetectorInput] {
-    self.declared_inputs
+  pub(super) fn complexity_covers_growing_inputs(self) -> bool {
+    let growing_inputs = self
+      .declared_inputs()
+      .iter()
+      .copied()
+      .filter(|input| input.is_growing());
+    let domains = self.additive_scaling_domains();
+    growing_inputs.clone().all(|input| {
+      domains.iter().filter(|domain| **domain == input).count() == 1
+    }) && domains.iter().all(|domain| {
+      domain.is_growing()
+        && self.declared_inputs().contains(domain)
+        && domains
+          .iter()
+          .filter(|candidate| *candidate == domain)
+          .count()
+          == 1
+    })
   }
 
-  pub(super) const fn dependencies(self) -> &'static [StaticDetectorId] {
-    self.dependencies
-  }
-
-  pub(super) const fn support_resources(self) -> &'static [SupportResourceId] {
-    self.support_resources
+  pub(super) fn validate_complexity(self) -> Result<()> {
+    if self.complexity_covers_growing_inputs() {
+      return Ok(());
+    }
+    Err(Error::InvalidStaticData {
+      field: "detector complexity contract",
+      reason: format!(
+        "detector {:?} must declare each growing input exactly once as an additive scaling domain",
+        self.id(),
+      ),
+    })
   }
 
   pub(super) fn has_declared_inputs(self) -> bool {
-    !self.declared_inputs.is_empty()
+    !self.declared_inputs().is_empty()
       || self
-        .support_resources
+        .support_resources()
         .iter()
         .any(|resource| resource.spec().detector_input().is_some())
   }
 
   pub(super) fn declares_input(self, input: StaticDetectorInput) -> bool {
-    self.declared_inputs.contains(&input)
+    self.declared_inputs().contains(&input)
       || self
-        .support_resources
+        .support_resources()
         .iter()
         .any(|resource| resource.spec().detector_input() == Some(input))
+  }
+
+  pub(super) fn require_input(self, input: StaticDetectorInput) -> Result<()> {
+    if self.declares_input(input) {
+      return Ok(());
+    }
+    Err(Error::InvalidStaticData {
+      field: "detector rule inputs",
+      reason: format!(
+        "detector {:?} accessed undeclared input {input:?}",
+        self.id(),
+      ),
+    })
+  }
+
+  #[cfg(test)]
+  fn require_dependency(self, detector: StaticDetectorId) -> Result<()> {
+    if self.dependencies().contains(&detector) {
+      return Ok(());
+    }
+    Err(Error::InvalidStaticData {
+      field: "detector rule dependencies",
+      reason: format!(
+        "detector {:?} accessed undeclared dependency {detector:?}",
+        self.id(),
+      ),
+    })
   }
 }
 
 pub(super) struct StaticDetectorContext<'a> {
-  pub(super) engine: &'a PreparedEngine,
-  pub(super) matches: &'a PreparedEngineMatches,
-  pub(super) full_text: &'a str,
+  spec: StaticDetectorSpec,
+  engine: &'a PreparedEngine,
+  matches: &'a PreparedEngineMatches,
+  document: PreparedDocument<'a>,
+}
+
+impl<'a> StaticDetectorContext<'a> {
+  pub(super) const fn new(
+    spec: &StaticDetectorSpec,
+    engine: &'a PreparedEngine,
+    matches: &'a PreparedEngineMatches,
+    full_text: &'a str,
+  ) -> Self {
+    Self {
+      spec: *spec,
+      engine,
+      matches,
+      document: PreparedDocument::new(full_text),
+    }
+  }
+
+  pub(super) fn regex_is_active(&self) -> Result<bool> {
+    Ok(!self.regex_matches()?.is_empty() && !self.regex_meta()?.is_empty())
+  }
+
+  pub(super) fn detect_regex(&self) -> Result<Vec<PipelineEntity>> {
+    process_regex_matches(
+      self.regex_matches()?,
+      self.regex_slice()?,
+      self.full_text()?,
+      self.regex_meta()?,
+    )
+  }
+
+  pub(super) fn custom_regex_is_active(&self) -> Result<bool> {
+    Ok(
+      !self.custom_regex_matches()?.is_empty()
+        && !self.custom_regex_meta()?.is_empty(),
+    )
+  }
+
+  pub(super) fn detect_custom_regex(&self) -> Result<Vec<PipelineEntity>> {
+    process_regex_matches(
+      self.custom_regex_matches()?,
+      self.custom_regex_slice()?,
+      self.full_text()?,
+      self.custom_regex_meta()?,
+    )
+  }
+
+  pub(super) fn deny_list_is_active(&self) -> Result<bool> {
+    Ok(!self.literal_matches()?.is_empty() && self.deny_list_data()?.is_some())
+  }
+
+  pub(super) fn detect_deny_list(&self) -> Result<Vec<PipelineEntity>> {
+    let Some(data) = self.deny_list_data()? else {
+      return Ok(Vec::new());
+    };
+    process_deny_list_matches(
+      self.literal_matches()?,
+      self.deny_list_slice()?,
+      self.full_text()?,
+      data,
+    )
+  }
+
+  pub(super) fn gazetteer_is_active(&self) -> Result<bool> {
+    Ok(!self.literal_matches()?.is_empty() && self.gazetteer_data()?.is_some())
+  }
+
+  pub(super) fn detect_gazetteer(&self) -> Result<Vec<PipelineEntity>> {
+    let Some(data) = self.gazetteer_data()? else {
+      return Ok(Vec::new());
+    };
+    process_gazetteer_matches(
+      self.literal_matches()?,
+      self.gazetteer_slice()?,
+      self.full_text()?,
+      data,
+    )
+  }
+
+  pub(super) fn country_is_active(&self) -> Result<bool> {
+    Ok(!self.literal_matches()?.is_empty() && self.country_data()?.is_some())
+  }
+
+  pub(super) fn detect_country(&self) -> Result<Vec<PipelineEntity>> {
+    let Some(data) = self.country_data()? else {
+      return Ok(Vec::new());
+    };
+    process_country_matches(
+      self.literal_matches()?,
+      self.countries_slice()?,
+      self.full_text()?,
+      data,
+    )
+  }
+
+  pub(super) fn anchored_is_active(&self) -> Result<bool> {
+    Ok(self.anchored_data()?.is_active())
+  }
+
+  pub(super) fn detect_anchored(&self) -> Result<Vec<PipelineEntity>> {
+    self.anchored_data()?.detect(self.full_text()?)
+  }
+
+  pub(super) fn trigger_is_active(&self) -> Result<bool> {
+    Ok(!self.regex_matches()?.is_empty() && self.trigger_data()?.is_some())
+  }
+
+  pub(super) fn detect_trigger(
+    &self,
+    diagnostics: StaticDetectorDiagnostics<'_>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let Some(data) = self.trigger_data()? else {
+      return Ok(Vec::new());
+    };
+    let empty_title_tokens = BTreeSet::new();
+    process_trigger_matches(
+      self.regex_matches()?,
+      self.triggers_slice()?,
+      self.full_text()?,
+      data,
+      self.title_tokens()?.unwrap_or(&empty_title_tokens),
+      diagnostics,
+    )
+  }
+
+  pub(super) fn signature_is_active(&self) -> Result<bool> {
+    Ok(self.signature_data()?.is_some())
+  }
+
+  pub(super) fn detect_signature(&self) -> Result<Vec<PipelineEntity>> {
+    let full_text = self.full_text()?;
+    Ok(
+      self
+        .signature_data()?
+        .map_or_else(Vec::new, |data| detect_signatures(full_text, data)),
+    )
+  }
+
+  pub(super) fn legal_form_is_active(&self) -> Result<bool> {
+    Ok(!self.regex_matches()?.is_empty() && self.legal_form_data()?.is_some())
+  }
+
+  pub(super) fn detect_legal_form(&self) -> Result<Vec<PipelineEntity>> {
+    let Some(data) = self.legal_form_data()? else {
+      return Ok(Vec::new());
+    };
+    process_legal_form_matches(
+      self.regex_matches()?,
+      self.legal_forms_slice()?,
+      self.full_text()?,
+      data,
+    )
+  }
+
+  pub(super) fn name_corpus_is_active(&self) -> Result<bool> {
+    Ok(self.name_corpus_data()?.is_some())
+  }
+
+  pub(super) fn detect_name_corpus(
+    &self,
+    dependencies: DetectorDependencies<'_>,
+  ) -> Result<NameCorpusDetection> {
+    let Some(data) = self.name_corpus_data()? else {
+      return Ok(NameCorpusDetection::default());
+    };
+    data.detect_configured_profiled(
+      self.full_text()?,
+      dependencies.deny_list_entities()?,
+    )
+  }
+
+  pub(super) fn address_seed_is_active(&self) -> Result<bool> {
+    Ok(self.address_seed_data()?.is_some())
+  }
+
+  pub(super) fn detect_address_seed(
+    &self,
+    dependencies: DetectorDependencies<'_>,
+  ) -> Result<(AddressSeedDetection, usize)> {
+    let Some(data) = self.address_seed_data()? else {
+      return Ok((AddressSeedDetection::default(), 0));
+    };
+    let entities = dependencies.collect_context_entities()?;
+    let count = entities.len();
+    let detection = data.process_profiled(
+      self.literal_matches()?,
+      self.street_types_slice()?,
+      self.full_text()?,
+      &entities,
+    )?;
+    Ok((detection, count))
+  }
+
+  pub(super) const fn input_bytes(&self) -> usize {
+    self.document.len()
+  }
+
+  fn full_text(&self) -> Result<&'a str> {
+    self.document.text(&self.spec)
+  }
+
+  fn regex_matches(&self) -> Result<&'a [SearchMatch]> {
+    self.require(StaticDetectorInput::RegexMatches)?;
+    Ok(&self.matches.regex)
+  }
+
+  fn custom_regex_matches(&self) -> Result<&'a [SearchMatch]> {
+    self.require(StaticDetectorInput::CustomRegexMatches)?;
+    Ok(&self.matches.custom_regex)
+  }
+
+  fn literal_matches(&self) -> Result<&'a [SearchMatch]> {
+    self.require(StaticDetectorInput::LiteralMatches)?;
+    Ok(&self.matches.literal)
+  }
+
+  fn regex_meta(&self) -> Result<&'a [RegexMatchMeta]> {
+    self.require(StaticDetectorInput::RegexMeta)?;
+    Ok(&self.engine.policy.regex_meta)
+  }
+
+  fn custom_regex_meta(&self) -> Result<&'a [RegexMatchMeta]> {
+    self.require(StaticDetectorInput::CustomRegexMeta)?;
+    Ok(&self.engine.policy.custom_regex_meta)
+  }
+
+  fn regex_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::RegexMatches)?;
+    Ok(self.engine.policy.slices.regex)
+  }
+
+  fn custom_regex_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::CustomRegexMatches)?;
+    Ok(self.engine.policy.slices.custom_regex)
+  }
+
+  fn deny_list_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::DenyListData)?;
+    Ok(self.engine.policy.slices.deny_list)
+  }
+
+  fn gazetteer_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::GazetteerData)?;
+    Ok(self.engine.policy.slices.gazetteer)
+  }
+
+  fn countries_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::CountryData)?;
+    Ok(self.engine.policy.slices.countries)
+  }
+
+  fn triggers_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::TriggerData)?;
+    Ok(self.engine.policy.slices.triggers)
+  }
+
+  fn legal_forms_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::LegalFormData)?;
+    Ok(self.engine.policy.slices.legal_forms)
+  }
+
+  fn street_types_slice(&self) -> Result<PatternSlice> {
+    self.require(StaticDetectorInput::AddressSeedData)?;
+    Ok(self.engine.policy.slices.street_types)
+  }
+
+  fn deny_list_data(&self) -> Result<Option<&'a DenyListMatchData>> {
+    self.require(StaticDetectorInput::DenyListData)?;
+    Ok(self.engine.data.deny_list.as_ref())
+  }
+
+  fn gazetteer_data(&self) -> Result<Option<&'a GazetteerMatchData>> {
+    self.require(StaticDetectorInput::GazetteerData)?;
+    Ok(self.engine.data.gazetteer.as_ref())
+  }
+
+  fn country_data(&self) -> Result<Option<&'a CountryMatchData>> {
+    self.require(StaticDetectorInput::CountryData)?;
+    Ok(self.engine.data.countries.as_ref())
+  }
+
+  fn anchored_data(
+    &self,
+  ) -> Result<&'a super::engine_state::PreparedAnchoredData> {
+    self.require(StaticDetectorInput::DateData)?;
+    self.require(StaticDetectorInput::MonetaryData)?;
+    Ok(&self.engine.data.anchored)
+  }
+
+  fn trigger_data(&self) -> Result<Option<&'a PreparedTriggerData>> {
+    self.require(StaticDetectorInput::TriggerData)?;
+    Ok(self.engine.data.triggers.as_ref())
+  }
+
+  fn title_tokens(&self) -> Result<Option<&'a BTreeSet<String>>> {
+    self.require(StaticDetectorInput::TitleTokens)?;
+    Ok(
+      self
+        .engine
+        .data
+        .false_positive_filters
+        .as_ref()
+        .map(|filters| &filters.title_tokens),
+    )
+  }
+
+  fn signature_data(&self) -> Result<Option<&'a PreparedSignatureData>> {
+    self.require(StaticDetectorInput::SignatureData)?;
+    Ok(self.engine.data.signatures.as_ref())
+  }
+
+  fn legal_form_data(&self) -> Result<Option<&'a PreparedLegalFormData>> {
+    self.require(StaticDetectorInput::LegalFormData)?;
+    Ok(self.engine.data.legal_forms.as_ref())
+  }
+
+  fn name_corpus_data(&self) -> Result<Option<&'a PreparedNameCorpusData>> {
+    self.require(StaticDetectorInput::NameCorpusData)?;
+    Ok(self.engine.data.name_corpus.as_ref())
+  }
+
+  fn address_seed_data(&self) -> Result<Option<&'a PreparedAddressSeedData>> {
+    self.require(StaticDetectorInput::AddressSeedData)?;
+    Ok(self.engine.data.address_seed.as_ref())
+  }
+
+  fn require(&self, input: StaticDetectorInput) -> Result<()> {
+    self.spec.require_input(input)
+  }
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct DetectorDependencies<'a> {
+  detector: StaticDetectorId,
+  declared_dependencies: &'static [StaticDetectorId],
+  declared_inputs: &'static [StaticDetectorInput],
+  passes: &'a StaticEntityPasses,
+}
+
+impl<'a> DetectorDependencies<'a> {
+  const fn new(
+    spec: &StaticDetectorSpec,
+    passes: &'a StaticEntityPasses,
+  ) -> Self {
+    Self {
+      detector: spec.id(),
+      declared_dependencies: spec.dependencies(),
+      declared_inputs: spec.declared_inputs(),
+      passes,
+    }
+  }
+
+  fn entities(
+    self,
+    detector: StaticDetectorId,
+    input: StaticDetectorInput,
+  ) -> Result<&'a [PipelineEntity]> {
+    self.require_input(input)?;
+    if !self.declared_dependencies.contains(&detector) {
+      return Err(Error::InvalidStaticData {
+        field: "detector rule dependencies",
+        reason: format!(
+          "detector {:?} accessed undeclared dependency {detector:?}",
+          self.detector,
+        ),
+      });
+    }
+    Ok(self.passes.entities(detector))
+  }
+
+  fn deny_list_entities(self) -> Result<&'a [PipelineEntity]> {
+    self.entities(
+      StaticDetectorId::DenyList,
+      StaticDetectorInput::DenyListEntities,
+    )
+  }
+
+  fn collect_context_entities(self) -> Result<Vec<PipelineEntity>> {
+    self.require_input(StaticDetectorInput::ContextEntities)?;
+    let dependencies = self.declared_dependencies;
+    let capacity = dependencies
+      .iter()
+      .map(|detector| self.passes.entities(*detector).len())
+      .fold(0usize, usize::saturating_add);
+    let mut entities = Vec::with_capacity(capacity);
+    for detector in dependencies {
+      entities.extend(self.passes.entities(*detector).iter().cloned());
+    }
+    Ok(entities)
+  }
+
+  fn require_input(self, input: StaticDetectorInput) -> Result<()> {
+    if self.declared_inputs.contains(&input) {
+      return Ok(());
+    }
+    Err(Error::InvalidStaticData {
+      field: "detector rule inputs",
+      reason: format!(
+        "detector {:?} accessed undeclared input {input:?}",
+        self.detector,
+      ),
+    })
+  }
 }
 
 pub(super) type StaticDetectorDiagnostics<'d> =
   Option<&'d mut StaticRedactionDiagnostics>;
 
 pub(super) type StaticDetectorActiveFn =
-  for<'a> fn(&StaticDetectorContext<'a>) -> bool;
+  for<'a> fn(&StaticDetectorContext<'a>) -> Result<bool>;
 
 pub(super) type StaticDetectFn = for<'a, 'p, 'd> fn(
   &StaticDetectorContext<'a>,
-  &'p StaticEntityPasses,
+  DetectorDependencies<'p>,
   StaticDetectorDiagnostics<'d>,
 ) -> Result<TimedEntities>;
-
-#[derive(Clone, Copy)]
-pub(super) struct StaticDetectorModule {
-  name: &'static str,
-  rules: &'static [StaticDetectorRule],
-}
-
-impl StaticDetectorModule {
-  pub(super) const fn declare(
-    name: &'static str,
-    rules: &'static [StaticDetectorRule],
-  ) -> Self {
-    Self { name, rules }
-  }
-
-  pub(super) const fn name(self) -> &'static str {
-    self.name
-  }
-
-  pub(super) const fn rules(self) -> &'static [StaticDetectorRule] {
-    self.rules
-  }
-
-  pub(super) const fn is_empty(self) -> bool {
-    self.rules.is_empty()
-  }
-}
 
 #[derive(Clone, Copy)]
 pub(super) struct StaticDetectorRule {
@@ -180,14 +592,16 @@ pub(super) struct StaticDetectorRule {
   detect: StaticDetectFn,
 }
 
+pub(super) type StaticDetectorModule = RulePack<StaticDetectorRule>;
+
 impl StaticDetectorRule {
   pub(super) const fn declare(
-    spec: StaticDetectorSpec,
+    spec: &StaticDetectorSpec,
     is_active: StaticDetectorActiveFn,
     detect: StaticDetectFn,
   ) -> Self {
     Self {
-      spec,
+      spec: *spec,
       is_active,
       detect,
     }
@@ -197,7 +611,10 @@ impl StaticDetectorRule {
     self.spec
   }
 
-  pub(super) fn is_active(self, context: &StaticDetectorContext<'_>) -> bool {
+  pub(super) fn is_active(
+    self,
+    context: &StaticDetectorContext<'_>,
+  ) -> Result<bool> {
     (self.is_active)(context)
   }
 
@@ -207,7 +624,21 @@ impl StaticDetectorRule {
     passes: &StaticEntityPasses,
     diagnostics: StaticDetectorDiagnostics<'_>,
   ) -> Result<TimedEntities> {
-    (self.detect)(context, passes, diagnostics)
+    (self.detect)(
+      context,
+      DetectorDependencies::new(&self.spec, passes),
+      diagnostics,
+    )
+  }
+
+  #[cfg(test)]
+  pub(super) const fn active_hook(self) -> StaticDetectorActiveFn {
+    self.is_active
+  }
+
+  #[cfg(test)]
+  pub(super) const fn detect_hook(self) -> StaticDetectFn {
+    self.detect
   }
 }
 
@@ -219,6 +650,7 @@ macro_rules! static_detector_rules {
         id: $id:expr;
         stage: $stage:expr;
         inputs: $inputs:expr;
+        scales: $scales:expr;
         $(after: $dependencies:expr;)?
         $(uses: $resources:expr;)?
         active: $is_active:path;
@@ -230,11 +662,12 @@ macro_rules! static_detector_rules {
       $visibility const $rule_name:
         $crate::prepared::detector_contract::StaticDetectorRule =
         $crate::prepared::detector_contract::StaticDetectorRule::declare(
-          $crate::prepared::detector_contract::StaticDetectorSpec::define(
+          &$crate::prepared::detector_contract::StaticDetectorSpec::define(
             $id,
             $stage,
           )
             .requires($inputs)
+            .scales_additively_in($scales)
             $(.after($dependencies))?
             $(.uses($resources))?,
           $is_active,
@@ -272,3 +705,102 @@ macro_rules! static_detector_modules {
 
 pub(super) use static_detector_modules;
 pub(super) use static_detector_rules;
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn undeclared_input_access_is_rejected() {
+    let result = StaticDetectorSpec::define(
+      StaticDetectorId::Regex,
+      DiagnosticStage::EntityRegex,
+    )
+    .requires(&[StaticDetectorInput::RegexMatches])
+    .require_input(StaticDetectorInput::FullText);
+    assert!(result.is_err(), "undeclared input must fail closed");
+    let Some(error) = result.err() else {
+      return;
+    };
+    assert!(error.to_string().contains("undeclared input FullText"));
+  }
+
+  #[test]
+  fn undeclared_dependency_access_is_rejected() {
+    let result = StaticDetectorSpec::define(
+      StaticDetectorId::NameCorpus,
+      DiagnosticStage::EntityNameCorpus,
+    )
+    .require_dependency(StaticDetectorId::DenyList);
+    assert!(result.is_err(), "undeclared dependency must fail closed");
+    let Some(error) = result.err() else {
+      return;
+    };
+    assert!(error.to_string().contains("undeclared dependency DenyList"));
+  }
+
+  #[test]
+  fn dependency_access_requires_the_matching_entity_input() {
+    let passes = StaticEntityPasses::new();
+    let missing_input = StaticDetectorSpec::define(
+      StaticDetectorId::NameCorpus,
+      DiagnosticStage::EntityNameCorpus,
+    )
+    .after(&[StaticDetectorId::DenyList]);
+    let result =
+      DetectorDependencies::new(&missing_input, &passes).deny_list_entities();
+    assert!(result.is_err(), "dependency input must fail closed");
+
+    let declared =
+      missing_input.requires(&[StaticDetectorInput::DenyListEntities]);
+    assert!(
+      DetectorDependencies::new(&declared, &passes)
+        .deny_list_entities()
+        .is_ok(),
+      "declaring both the dependency and entity input must permit access",
+    );
+  }
+
+  #[test]
+  fn dependency_collection_requires_context_entity_input() {
+    let passes = StaticEntityPasses::new();
+    let missing_input = StaticDetectorSpec::define(
+      StaticDetectorId::AddressSeed,
+      DiagnosticStage::EntityAddressSeed,
+    )
+    .after(&[StaticDetectorId::Regex]);
+    let result = DetectorDependencies::new(&missing_input, &passes)
+      .collect_context_entities();
+    assert!(result.is_err(), "context input must fail closed");
+  }
+
+  #[test]
+  fn missing_growing_complexity_domain_is_rejected() {
+    let result = StaticDetectorSpec::define(
+      StaticDetectorId::Regex,
+      DiagnosticStage::EntityRegex,
+    )
+    .requires(&[
+      StaticDetectorInput::RegexMatches,
+      StaticDetectorInput::FullText,
+    ])
+    .scales_additively_in(&[StaticDetectorInput::RegexMatches])
+    .validate_complexity();
+    assert!(result.is_err(), "missing scaling domain must fail closed");
+  }
+
+  #[test]
+  fn duplicate_complexity_domain_is_rejected() {
+    let result = StaticDetectorSpec::define(
+      StaticDetectorId::Signature,
+      DiagnosticStage::EntitySignature,
+    )
+    .requires(&[StaticDetectorInput::FullText])
+    .scales_additively_in(&[
+      StaticDetectorInput::FullText,
+      StaticDetectorInput::FullText,
+    ])
+    .validate_complexity();
+    assert!(result.is_err(), "duplicate scaling domain must fail closed");
+  }
+}

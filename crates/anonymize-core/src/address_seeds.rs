@@ -5,6 +5,7 @@ use regex::Regex;
 use crate::processors::PatternSlice;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::search::{SearchIndex, SearchOptions, SearchPattern};
+use crate::span_index::SpanIndex;
 use crate::types::{Error, Result, SearchEngine, SearchMatch};
 
 const ADDRESS_SCORE_BASE: f64 = 0.5;
@@ -121,19 +122,21 @@ impl PreparedAddressSeedData {
     existing_entities: &[PipelineEntity],
   ) -> Result<AddressSeedDetection> {
     let mut profile = AddressSeedDetectionProfile::default();
+    let entity_index = NonAddressEntityIndex::new(existing_entities);
     let collect_start = Instant::now();
     let seeds = self.collect_seeds_profiled(
       matches,
       street_type_slice,
       full_text,
       existing_entities,
+      &entity_index,
       &mut profile,
     )?;
     profile.collect_elapsed_us = elapsed_us(collect_start);
     profile.seed_count = seeds.len();
 
     let cluster_start = Instant::now();
-    let clusters = cluster_seeds(&seeds, full_text, existing_entities);
+    let clusters = cluster_seeds(&seeds, full_text, &entity_index);
     profile.cluster_elapsed_us = elapsed_us(cluster_start);
     profile.cluster_count = clusters.len();
 
@@ -167,7 +170,7 @@ impl PreparedAddressSeedData {
       let span = self.expand_cluster(
         full_text,
         &cluster,
-        existing_entities,
+        &entity_index,
         boundary_starts,
       );
       profile.expand_elapsed_us = profile
@@ -223,6 +226,7 @@ impl PreparedAddressSeedData {
     street_type_slice: PatternSlice,
     full_text: &str,
     existing_entities: &[PipelineEntity],
+    entity_index: &NonAddressEntityIndex,
     profile: &mut AddressSeedDetectionProfile,
   ) -> Result<Vec<Seed>> {
     let street_type_start = Instant::now();
@@ -233,13 +237,18 @@ impl PreparedAddressSeedData {
 
     let existing_start = Instant::now();
     let before_existing = seeds.len();
-    collect_existing_entity_seeds(&mut seeds, full_text, existing_entities);
+    collect_existing_entity_seeds(
+      &mut seeds,
+      full_text,
+      existing_entities,
+      entity_index,
+    );
     profile.existing_elapsed_us = elapsed_us(existing_start);
     profile.existing_seed_count = seeds.len().saturating_sub(before_existing);
 
     let street_number_start = Instant::now();
     let before_street_number = seeds.len();
-    Self::collect_street_number_seeds(&mut seeds, full_text, existing_entities);
+    Self::collect_street_number_seeds(&mut seeds, full_text, entity_index);
     profile.street_number_elapsed_us = elapsed_us(street_number_start);
     profile.street_number_seed_count =
       seeds.len().saturating_sub(before_street_number);
@@ -399,10 +408,10 @@ impl PreparedAddressSeedData {
   fn collect_street_number_seeds(
     seeds: &mut Vec<Seed>,
     full_text: &str,
-    existing_entities: &[PipelineEntity],
+    entity_index: &NonAddressEntityIndex,
   ) {
     for found in street_number_candidates(full_text) {
-      if range_overlaps_non_address(found.start, found.end, existing_entities) {
+      if entity_index.overlaps(found.start, found.end) {
         continue;
       }
       seeds.push(Seed {
@@ -489,13 +498,13 @@ impl PreparedAddressSeedData {
     &self,
     full_text: &str,
     cluster: &SeedCluster,
-    existing_entities: &[PipelineEntity],
+    entity_index: &NonAddressEntityIndex,
     boundary_starts: &[usize],
   ) -> Span {
     let left_bound = nearest_left_non_address(
       full_text,
       cluster.start,
-      existing_entities,
+      entity_index,
       cluster_starts_with_street_type_word(cluster),
     );
     let left_pos = expand_left(full_text, cluster.start, left_bound);
@@ -507,7 +516,7 @@ impl PreparedAddressSeedData {
     }
 
     let right_pos =
-      self.expand_right(full_text, cluster, existing_entities, boundary_starts);
+      self.expand_right(full_text, cluster, entity_index, boundary_starts);
     Span {
       start: left_pos.min(cluster.start),
       end: right_pos.max(cluster.end),
@@ -518,7 +527,7 @@ impl PreparedAddressSeedData {
     &self,
     full_text: &str,
     cluster: &SeedCluster,
-    existing_entities: &[PipelineEntity],
+    entity_index: &NonAddressEntityIndex,
     boundary_starts: &[usize],
   ) -> usize {
     let right_pos = cluster.end;
@@ -531,9 +540,7 @@ impl PreparedAddressSeedData {
     {
       nearest_boundary = nearest_boundary.min(boundary);
     }
-    if let Some(entity_boundary) =
-      nearest_right_non_address(right_pos, existing_entities)
-    {
+    if let Some(entity_boundary) = entity_index.nearest_right(right_pos) {
       nearest_boundary = nearest_boundary.min(entity_boundary);
     }
     if let Some(double_newline) = remaining.find("\n\n") {
@@ -867,6 +874,7 @@ fn collect_existing_entity_seeds(
   seeds: &mut Vec<Seed>,
   full_text: &str,
   existing_entities: &[PipelineEntity],
+  entity_index: &NonAddressEntityIndex,
 ) {
   for entity in existing_entities {
     if entity.label != "address" {
@@ -875,7 +883,7 @@ fn collect_existing_entity_seeds(
     if entity.source_detail == Some(SourceDetail::CustomDenyList) {
       continue;
     }
-    if overlaps_non_address(entity, existing_entities) {
+    if entity_index.overlaps_entity(entity) {
       continue;
     }
     let Some(kind) = kind_for_existing_entity(entity) else {
@@ -1217,7 +1225,7 @@ fn is_city_zip_gap(text: &str) -> bool {
 fn cluster_seeds(
   seeds: &[Seed],
   full_text: &str,
-  existing_entities: &[PipelineEntity],
+  entity_index: &NonAddressEntityIndex,
 ) -> Vec<SeedCluster> {
   let Some(first) = seeds.first() else {
     return Vec::new();
@@ -1229,8 +1237,6 @@ fn cluster_seeds(
     start: first.start,
     end: first.end,
   };
-  let barrier_index = NonAddressBarrierIndex::new(existing_entities);
-
   for seed in seeds.iter().skip(1) {
     let gap_ok = within_text_window(
       full_text,
@@ -1241,7 +1247,7 @@ fn cluster_seeds(
       full_text,
       current.end,
       seed.start,
-      &barrier_index,
+      entity_index,
     );
     if gap_ok {
       current.seeds.push(seed.clone());
@@ -1259,86 +1265,77 @@ fn cluster_seeds(
   clusters
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct NonAddressBarrierIndex {
-  starts: Vec<usize>,
-  max_end_tree: Vec<usize>,
-  leaf_count: usize,
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct NonAddressEntityIndex {
+  spans: SpanIndex<bool>,
 }
 
-impl NonAddressBarrierIndex {
+impl NonAddressEntityIndex {
   fn new(existing_entities: &[PipelineEntity]) -> Self {
-    let mut intervals = existing_entities
-      .iter()
-      .filter(|entity| non_address_label(&entity.label))
-      .filter_map(|entity| {
-        Some((
-          usize::try_from(entity.start).ok()?,
-          usize::try_from(entity.end).ok()?,
-        ))
-      })
-      .collect::<Vec<_>>();
-    intervals.sort_unstable_by_key(|interval| interval.0);
-
-    let leaf_count = intervals.len().max(1);
-    let mut max_end_tree = vec![0; leaf_count.saturating_mul(2)];
-    let mut starts = Vec::with_capacity(intervals.len());
-    for (index, (start, end)) in intervals.into_iter().enumerate() {
-      starts.push(start);
-      if let Some(leaf) = max_end_tree.get_mut(leaf_count.saturating_add(index))
-      {
-        *leaf = end;
-      }
-    }
-    for index in (1..leaf_count).rev() {
-      let left = max_end_tree
-        .get(index.saturating_mul(2))
-        .copied()
-        .unwrap_or(0);
-      let right = max_end_tree
-        .get(index.saturating_mul(2).saturating_add(1))
-        .copied()
-        .unwrap_or(0);
-      if let Some(node) = max_end_tree.get_mut(index) {
-        *node = left.max(right);
-      }
-    }
-
     Self {
-      starts,
-      max_end_tree,
-      leaf_count,
+      spans: SpanIndex::new(
+        existing_entities
+          .iter()
+          .filter(|entity| non_address_label(&entity.label))
+          .map(|entity| (entity.start, entity.end, date_label(&entity.label))),
+      ),
     }
   }
 
   fn has_barrier(&self, gap_start: usize, gap_end: usize) -> bool {
-    if gap_start >= gap_end {
+    let Ok(gap_start) = u32::try_from(gap_start) else {
       return false;
-    }
-    let first = self.starts.partition_point(|start| *start < gap_start);
-    let last = self.starts.partition_point(|start| *start < gap_end);
-    self.range_max_end(first, last) > gap_start
+    };
+    let Ok(gap_end) = u32::try_from(gap_end) else {
+      return false;
+    };
+    self
+      .spans
+      .any_starting_in_with_end_after(gap_start, gap_end, gap_start)
   }
 
-  fn range_max_end(&self, start: usize, end: usize) -> usize {
-    let mut left = self.leaf_count.saturating_add(start);
-    let mut right = self.leaf_count.saturating_add(end);
-    let mut max_end = 0usize;
-    while left < right {
-      if left % 2 == 1 {
-        max_end =
-          max_end.max(self.max_end_tree.get(left).copied().unwrap_or(0));
-        left = left.saturating_add(1);
-      }
-      if right % 2 == 1 {
-        right = right.saturating_sub(1);
-        max_end =
-          max_end.max(self.max_end_tree.get(right).copied().unwrap_or(0));
-      }
-      left /= 2;
-      right /= 2;
+  fn overlaps(&self, start: usize, end: usize) -> bool {
+    u32::try_from(start)
+      .ok()
+      .zip(u32::try_from(end).ok())
+      .is_some_and(|(start, end)| self.spans.any_overlapping(start, end))
+  }
+
+  fn overlaps_entity(&self, entity: &PipelineEntity) -> bool {
+    self.spans.any_overlapping(entity.start, entity.end)
+  }
+
+  fn nearest_left(
+    &self,
+    full_text: &str,
+    start: usize,
+    ignore_date_prefix: bool,
+  ) -> usize {
+    let Ok(start_offset) = u32::try_from(start) else {
+      return 0;
+    };
+    if !ignore_date_prefix {
+      return self
+        .spans
+        .nearest_end_at_or_before(start_offset)
+        .and_then(|end| usize::try_from(end).ok())
+        .unwrap_or(0);
     }
-    max_end
+    self
+      .spans
+      .find_ending_at_or_before(start_offset, |end, is_date| {
+        !*is_date
+          || !usize::try_from(end)
+            .is_ok_and(|end| date_can_prefix_street_name(full_text, end, start))
+      })
+      .and_then(|(end, _)| usize::try_from(end).ok())
+      .unwrap_or(0)
+  }
+
+  fn nearest_right(&self, offset: usize) -> Option<usize> {
+    let offset = u32::try_from(offset).ok()?;
+    let start = self.spans.nearest_start_after(offset)?;
+    usize::try_from(start.saturating_sub(offset)).ok()
   }
 }
 
@@ -1409,36 +1406,12 @@ fn has_cluster_barrier(
   full_text: &str,
   gap_start: usize,
   gap_end: usize,
-  barrier_index: &NonAddressBarrierIndex,
+  entity_index: &NonAddressEntityIndex,
 ) -> bool {
   full_text
     .get(gap_start..gap_end)
     .is_some_and(has_paragraph_break)
-    || barrier_index.has_barrier(gap_start, gap_end)
-}
-
-fn overlaps_non_address(
-  entity: &PipelineEntity,
-  existing_entities: &[PipelineEntity],
-) -> bool {
-  let start = usize::try_from(entity.start).unwrap_or(usize::MAX);
-  let end = usize::try_from(entity.end).unwrap_or(usize::MAX);
-  range_overlaps_non_address(start, end, existing_entities)
-}
-
-fn range_overlaps_non_address(
-  start: usize,
-  end: usize,
-  existing_entities: &[PipelineEntity],
-) -> bool {
-  existing_entities.iter().any(|existing| {
-    non_address_label(&existing.label)
-      && usize::try_from(existing.end).is_ok_and(|existing_end| {
-        existing_end > start
-          && usize::try_from(existing.start)
-            .is_ok_and(|existing_start| existing_start < end)
-      })
-  })
+    || entity_index.has_barrier(gap_start, gap_end)
 }
 
 fn has_paragraph_break(text: &str) -> bool {
@@ -1511,41 +1484,10 @@ fn score_cluster(cluster: &SeedCluster) -> f64 {
 fn nearest_left_non_address(
   full_text: &str,
   start: usize,
-  existing_entities: &[PipelineEntity],
+  entity_index: &NonAddressEntityIndex,
   ignore_date_prefix: bool,
 ) -> usize {
-  existing_entities
-    .iter()
-    .filter_map(|entity| {
-      if !non_address_label(&entity.label) {
-        return None;
-      }
-      let end = usize::try_from(entity.end).ok()?;
-      if ignore_date_prefix
-        && date_label(&entity.label)
-        && date_can_prefix_street_name(full_text, end, start)
-      {
-        return None;
-      }
-      (end <= start).then_some(end)
-    })
-    .max()
-    .unwrap_or(0)
-}
-
-fn nearest_right_non_address(
-  right_pos: usize,
-  existing_entities: &[PipelineEntity],
-) -> Option<usize> {
-  existing_entities
-    .iter()
-    .filter(|entity| non_address_label(&entity.label))
-    .filter_map(|entity| {
-      let start = usize::try_from(entity.start).ok()?;
-      let offset = start.saturating_sub(right_pos);
-      (offset > 0).then_some(offset)
-    })
-    .min()
+  entity_index.nearest_left(full_text, start, ignore_date_prefix)
 }
 
 fn non_address_label(label: &str) -> bool {
@@ -1975,7 +1917,7 @@ mod tests {
     }
 
     #[test]
-    fn non_address_barrier_index_matches_linear_scan(
+    fn non_address_entity_index_matches_linear_queries(
       ranges in proptest::collection::vec(
         (any::<u32>(), any::<u32>(), any::<bool>()),
         0..512,
@@ -2006,10 +1948,47 @@ mod tests {
       });
 
       prop_assert_eq!(
-        NonAddressBarrierIndex::new(&entities)
+        NonAddressEntityIndex::new(&entities)
           .has_barrier(gap_start, gap_end),
         expected,
       );
+
+      let index = NonAddressEntityIndex::new(&entities);
+      if gap_start < gap_end {
+        let expected_overlap = entities.iter().any(|entity| {
+          non_address_label(&entity.label)
+            && usize::try_from(entity.start).is_ok_and(|start| start < gap_end)
+            && usize::try_from(entity.end).is_ok_and(|end| end > gap_start)
+        });
+        prop_assert_eq!(index.overlaps(gap_start, gap_end), expected_overlap);
+      }
+
+      let expected_left = entities
+        .iter()
+        .filter(|entity| non_address_label(&entity.label))
+        .filter_map(|entity| {
+          usize::try_from(entity.end)
+            .ok()
+            .filter(|end| *end <= gap_start)
+        })
+        .max()
+        .unwrap_or(0);
+      prop_assert_eq!(
+        index.nearest_left("", gap_start, false),
+        expected_left,
+      );
+
+      let expected_right = entities
+        .iter()
+        .filter(|entity| non_address_label(&entity.label))
+        .filter_map(|entity| {
+          usize::try_from(entity.start).ok().and_then(|start| {
+            let distance = start.saturating_sub(gap_start);
+            (distance > 0).then_some(distance)
+          })
+        })
+        .min();
+      prop_assert_eq!(index.nearest_right(gap_start), expected_right);
     }
   }
 

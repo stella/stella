@@ -2,9 +2,10 @@ use std::time::Instant;
 
 use crate::resolution::PipelineEntity;
 use crate::search::SearchIndexFindStats;
-use crate::types::SearchMatch;
+use crate::types::{Error, Result, SearchMatch};
 
 use super::detector_contract::StaticDetectorId;
+use super::finding::{Finding, FindingSpan, SpannedFinding};
 
 pub(super) struct TimedEntities {
   pub(super) entities: Vec<PipelineEntity>,
@@ -12,11 +13,40 @@ pub(super) struct TimedEntities {
 }
 
 impl TimedEntities {
+  pub(super) fn new(
+    entities: Vec<PipelineEntity>,
+    elapsed_us: u64,
+  ) -> Result<Self> {
+    for entity in &entities {
+      let Some(finding) = Finding::new(entity) else {
+        return Err(Error::InvalidStaticData {
+          field: "rule findings",
+          reason: format!(
+            "rule emitted a reversed span: {}..{}",
+            entity.start, entity.end,
+          ),
+        });
+      };
+      let _ = finding.value();
+      let _ = finding.span();
+    }
+    Ok(Self {
+      entities,
+      elapsed_us,
+    })
+  }
+
   pub(super) const fn empty() -> Self {
     Self {
       entities: Vec::new(),
       elapsed_us: 0,
     }
+  }
+}
+
+impl SpannedFinding for PipelineEntity {
+  fn finding_span(&self) -> Option<FindingSpan> {
+    FindingSpan::new(self.start, self.end)
   }
 }
 
@@ -109,4 +139,26 @@ impl StaticEntityPasses {
 pub(super) fn elapsed_us(start: Instant) -> u64 {
   let micros = start.elapsed().as_micros();
   u64::try_from(micros).unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::resolution::DetectionSource;
+
+  #[test]
+  fn timed_rule_output_rejects_reversed_finding_spans() {
+    let entity = PipelineEntity::detected(
+      8,
+      3,
+      "test",
+      "value",
+      1.0,
+      DetectionSource::Regex,
+    );
+
+    let result = TimedEntities::new(vec![entity], 0);
+
+    assert!(result.is_err());
+  }
 }

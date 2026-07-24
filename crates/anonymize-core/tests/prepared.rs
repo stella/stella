@@ -2159,6 +2159,48 @@ fn prepared_engine_extracts_money_from_anchored_data() {
 }
 
 #[test]
+fn anchored_date_and_money_output_digest_is_stable() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    date_data: Some(DateData {
+      month_names_by_language: BTreeMap::from([(
+        String::from("en"),
+        vec![String::from("January"), String::from("May")],
+      )]),
+      lowercase_month_ambiguities: BTreeMap::new(),
+      year_words_by_language: BTreeMap::new(),
+    }),
+    monetary_data: Some(MonetaryData {
+      currencies: CurrencyData {
+        codes: vec![String::from("USD"), String::from("EUR")],
+        symbols: vec![String::from("$")],
+        local_names: vec![],
+      },
+      amount_words: AmountWordsData {
+        written_amount_patterns: vec![],
+        magnitude_suffixes: vec![],
+        share_quantity_terms: vec![],
+      },
+    }),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let full_text = concat!(
+    "Signed 7 January 2025. May 9, 2026 is the renewal date. ",
+    "Fees are USD 1,250.00, $450 and 275 EUR."
+  );
+
+  let result = prepared
+    .redact_static_entities(full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert_eq!(result.redaction.entity_count, 4);
+  assert_eq!(
+    static_redaction_digest(&result),
+    "0475c5cf59979e7b4dffd2644db7aa083c54deda4d4c9b42da535f518ad69e33",
+  );
+}
+
+#[test]
 fn prepared_engine_rejects_long_ungrouped_money_numbers() {
   let prepared = PreparedEngine::new(prepared_config! {
     monetary_data: Some(MonetaryData {
