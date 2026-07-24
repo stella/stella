@@ -35,6 +35,9 @@
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx-preview-zoom.ts#1"
           },
           {
@@ -123,9 +126,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-model-selection.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
@@ -936,6 +936,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
@@ -2622,55 +2625,6 @@
           "name": "The Babel Team (https://babel.dev/team)"
         }
       ],
-      "bom-ref": "pkg:npm/@babel/core",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/next/dist/compiled/babel/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/next/dist/compiled/babel/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "scripts/rc-bailouts.ts#22"
-          }
-        ]
-      },
-      "group": "@babel",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "core",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/next/dist/compiled/babel/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40babel/core",
-      "scope": "required",
-      "type": "library",
-      "version": ""
-    },
-    {
-      "authors": [
-        {
-          "name": "The Babel Team (https://babel.dev/team)"
-        }
-      ],
       "bom-ref": "pkg:npm/@babel/core@7.29.0",
       "description": "Babel compiler core.",
       "evidence": {
@@ -2883,6 +2837,9 @@
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx-preview-zoom.ts#1"
           },
           {
@@ -2971,9 +2928,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-model-selection.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
@@ -3784,6 +3738,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
@@ -5406,6 +5363,9 @@
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx-preview-zoom.ts#1"
           },
           {
@@ -5494,9 +5454,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-model-selection.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
@@ -6307,6 +6264,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
@@ -9419,7 +9379,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#3"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#19"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#23"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#11"
@@ -9710,7 +9670,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#7"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#8"
@@ -10208,7 +10168,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#4"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#20"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#24"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#12"
@@ -12089,6 +12049,9 @@
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx-preview-zoom.ts#1"
           },
           {
@@ -12177,9 +12140,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-model-selection.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
@@ -12990,6 +12950,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
@@ -15588,6 +15551,9 @@
             "location": "apps/api/src/lib/errors/utils.ts#1"
           },
           {
+            "location": "apps/api/src/lib/extraction-runs/store.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/file-derivative-queue.ts#1"
           },
           {
@@ -15819,6 +15785,9 @@
             "location": "apps/web/src/components/chat/chat-ui-tools.ts#7"
           },
           {
+            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/file-download-service.ts#1"
           },
           {
@@ -15865,9 +15834,6 @@
           },
           {
             "location": "apps/web/src/lib/secret-token.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-model-selection.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic.ts#2"
@@ -16056,7 +16022,7 @@
             "location": "apps/desktop/src/mainview/main.tsx#4"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#21"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#25"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#13"
@@ -17814,6 +17780,9 @@
             "location": "apps/api/src/lib/errors/utils.ts#1"
           },
           {
+            "location": "apps/api/src/lib/extraction-runs/store.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/file-derivative-queue.ts#1"
           },
           {
@@ -18045,6 +18014,9 @@
             "location": "apps/web/src/components/chat/chat-ui-tools.ts#7"
           },
           {
+            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/file-download-service.ts#1"
           },
           {
@@ -18091,9 +18063,6 @@
           },
           {
             "location": "apps/web/src/lib/secret-token.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-model-selection.ts#3"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic.ts#2"
@@ -18282,7 +18251,7 @@
             "location": "apps/desktop/src/mainview/main.tsx#4"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#21"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#25"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#13"
@@ -19395,6 +19364,9 @@
             "location": "apps/api/src/db/schema/common.ts#5"
           },
           {
+            "location": "apps/api/src/db/schema/extraction-runs.ts#1"
+          },
+          {
             "location": "apps/api/src/db/schema/reports.ts#1"
           },
           {
@@ -20310,6 +20282,9 @@
             "location": "apps/api/src/handlers/workspaces/read-overview.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/read-workflow-status.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/unarchive.ts#2"
           },
           {
@@ -20422,6 +20397,9 @@
           },
           {
             "location": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts#17"
+          },
+          {
+            "location": "apps/api/src/lib/extraction-runs/store.ts#2"
           },
           {
             "location": "apps/api/src/lib/file-derivative-queue.ts#3"
@@ -20816,6 +20794,9 @@
             "location": "apps/api/src/db/schema/common.ts#5"
           },
           {
+            "location": "apps/api/src/db/schema/extraction-runs.ts#1"
+          },
+          {
             "location": "apps/api/src/db/schema/reports.ts#1"
           },
           {
@@ -21731,6 +21712,9 @@
             "location": "apps/api/src/handlers/workspaces/read-overview.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/read-workflow-status.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/unarchive.ts#2"
           },
           {
@@ -21843,6 +21827,9 @@
           },
           {
             "location": "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts#17"
+          },
+          {
+            "location": "apps/api/src/lib/extraction-runs/store.ts#2"
           },
           {
             "location": "apps/api/src/lib/file-derivative-queue.ts#3"
@@ -24257,7 +24244,7 @@
             "location": "apps/web/src/components/ai-suggestions/accept-all-button.tsx#15"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#22"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#26"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#32"
@@ -24287,10 +24274,10 @@
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/chat-edit-mode-selector.tsx#6"
+            "location": "apps/web/src/components/chat/chat-edit-mode-selector.tsx#7"
           },
           {
-            "location": "apps/web/src/components/chat/chat-edit-mode-selector.tsx#7"
+            "location": "apps/web/src/components/chat/chat-edit-mode-selector.tsx#8"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#5"
@@ -24753,6 +24740,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#19"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value.tsx#2"
@@ -26226,6 +26216,9 @@
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
           },
           {
+            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#1"
+          },
+          {
             "location": "apps/web/src/components/docx-preview-zoom.ts#1"
           },
           {
@@ -26314,9 +26307,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-model-selection.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
@@ -27127,6 +27117,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#1"
@@ -28375,6 +28368,9 @@
             "location": "apps/web/src/components/ai-suggestions/use-review-actions.ts#14"
           },
           {
+            "location": "apps/web/src/components/chat/use-chat-model-selection.ts#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#3"
           },
           {
@@ -28382,9 +28378,6 @@
           },
           {
             "location": "apps/web/src/hooks/use-sign-out.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-model-selection.ts#4"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#13"
@@ -28444,7 +28437,7 @@
             "location": "apps/web/src/components/ai-suggestions/accept-all-button.tsx#16"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#23"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#27"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#33"
@@ -28519,7 +28512,7 @@
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat/chat-edit-mode-selector.tsx#8"
+            "location": "apps/web/src/components/chat/chat-edit-mode-selector.tsx#9"
           },
           {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#3"
@@ -28945,7 +28938,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/account/mcp-server-card.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#8"
+            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/account/two-factor-card.tsx#11"
@@ -29120,6 +29113,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#20"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/extraction-run-progress.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value-select.tsx#1"
@@ -29483,7 +29479,7 @@
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#24"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#28"
           },
           {
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#23"
@@ -29549,7 +29545,7 @@
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#24"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#28"
           },
           {
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#23"
@@ -29615,7 +29611,7 @@
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#24"
+            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#28"
           },
           {
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#23"
