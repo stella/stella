@@ -198,6 +198,7 @@ export function VersionsSidebar({
     // its identity changes on entity switch, so this stops the observer
     // from fetching the previous entity's older page into the current
     // list.
+    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this scroll effect out of compiler memoization
     // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder is a stable closure over refs; onLoadOlder tracks the active entity
   }, [canLoadOlder, isLoadingOlder, loadOlderError, onLoadOlder]);
 

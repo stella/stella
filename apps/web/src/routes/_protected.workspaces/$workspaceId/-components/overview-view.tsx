@@ -319,7 +319,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   // `today` forces a recompute at day rollover; getWeekStart reads the current
   // date itself, so the `today` dependency is intentional despite not being
   // referenced. `locale` drives the first weekday.
-  // eslint-disable-next-line react-hooks/exhaustive-deps, react/react-compiler -- `today` is an intentional extra dep to force recompute at day rollover; getWeekStart reads the current date itself
+  // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this day-rollover memo out of compiler memoization
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `today` is an intentional extra dep to force recompute at day rollover; getWeekStart reads the current date itself
   const weekStart = useMemo(() => getWeekStart(locale), [today, locale]);
   const weekEnd = useMemo(() => {
     const end = new Date(weekStart);

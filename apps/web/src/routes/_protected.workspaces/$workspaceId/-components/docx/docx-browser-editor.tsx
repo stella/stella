@@ -425,7 +425,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // every keystroke / mutation.
   const excludedCanonicalsRef = useRef<readonly string[]>([]);
   useExternalSyncEffect(() => {
-    // eslint-disable-next-line react/react-compiler -- not a state mutation: assigns a freshly-spread copy to a latest-ref mirror the polling effect reads; the compiler's immutability heuristic misfires on ref writes inside effects
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
     // Kick the detection right away so worker-found terms that
     // the user just added to the allowlist disappear without
@@ -615,7 +614,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     [fitZoomRef],
   );
   const t = useTranslations();
-  /* eslint-disable react/react-compiler -- optimistic preview carried across the finalize→refetch window in a mutable ref; reading it during render to seed this render's query placeholder is intentional editor glue (converting to state would add finalize-time re-renders) */
   const optimisticPreview = optimisticPreviewRef.current;
   const previewPlaceholderData =
     optimisticPreview?.fieldId === fieldId
@@ -625,7 +623,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
     placeholderData: previewPlaceholderData,
   });
-  /* eslint-enable react/react-compiler */
   const canAutoRequestCollaboration =
     isEditing &&
     !previewFileQuery.isPlaceholderData &&
@@ -653,7 +650,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     throw previewFileQuery.error;
   }
 
-  /* eslint-disable react/react-compiler -- optimisticPreview holds a mutable ref value read during render (see above); passing it to selectPreviewFile to pick this render's preview is intentional editor glue */
   const previewFile = previewFileQuery.data
     ? selectPreviewFile({
         file: previewFileQuery.data,
@@ -661,8 +657,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         fieldId,
       })
     : null;
-  /* eslint-enable react/react-compiler */
-
   const {
     state,
     isDirty,
@@ -934,6 +928,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         tokenRef.current = null;
       }
     };
+    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this edit-mode effect out of compiler memoization
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `isUnlocked` deliberately excluded; see block comment above.
   }, [entityId, fieldId, requestEditMode]);
 
@@ -1389,7 +1384,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // "saving" with no buffer of its own). Without this we'd reload the
   // editor against `previewFile.buffer` for the few hundred ms before
   // the parent unmounts us — and the Stella fallback would flash.
-  /* eslint-disable react/react-compiler -- buffers preserved across the save transition in refs (so the editor doesn't swap to the preview buffer mid-save); reading their current values to pick this render's editor buffer, then latching this render's buffer for the next render, is intentional editor glue that must happen during render */
   const preservedLoadedBufferSnapshot = preservedLoadedBufferRef.current;
   const preservedLoadedBuffer =
     preservedLoadedBufferSnapshot?.fieldId === fieldId
@@ -1413,8 +1407,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     lastEditingBufferRef.current = editorBuffer;
     preservedLoadedBufferRef.current = null;
   }
-  /* eslint-enable react/react-compiler */
-
   const finishEditingLabel = t("folio.finishEditing");
 
   const toolbarExtra = (() => {
@@ -1533,9 +1525,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     );
   }
 
-  // eslint-disable-next-line react/react-compiler -- last style-picker label kept in a ref so the loading fallback shows the previous label instead of flashing empty; reading it during render is intentional
   const lastStyleLabel = lastStyleLabelRef.current;
-  // eslint-disable-next-line react/react-compiler -- last style-picker label style kept in a ref for the same anti-flash reason; reading it during render is intentional
   const lastStyleLabelStyle = lastStyleLabelStyleRef.current;
 
   if (previewFile === null || editorBuffer === undefined) {

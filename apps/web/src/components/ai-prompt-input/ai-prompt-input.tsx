@@ -127,7 +127,6 @@ export const AIPromptInput = ({
     detached(fetchNextSkillPage(), "AIPromptInput");
   }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
   const slashItemsRef = useRef<SlashItem[]>([]);
-  // eslint-disable-next-line react/react-compiler -- latest-value ref mirror: the memoized slash items are read later by the TipTap suggestion factory (outside render), never during render
   slashItemsRef.current = useMemo<SlashItem[]>(
     () =>
       buildChatSlashItems({
@@ -165,7 +164,6 @@ export const AIPromptInput = ({
       }),
       ...(mentionExtension ? [mentionExtension] : []),
       PromptSlash.configure({
-        // eslint-disable-next-line react/react-compiler -- ref read runs inside the TipTap suggestion callback (invoked outside render), not during render
         suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
       }),
       History,
@@ -228,7 +226,8 @@ export const AIPromptInput = ({
     editor.commands.setContent(initialContent, { emitUpdate: false });
     // `readValue`/`initialContent` derive solely from `value`/`valueFormat`,
     // which are the tracked deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this synchronization effect out of compiler memoization
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- readValue and initialContent derive only from the tracked value/valueFormat inputs
   }, [editor, value, valueFormat]);
 
   return (

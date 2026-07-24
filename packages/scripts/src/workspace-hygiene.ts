@@ -31,6 +31,31 @@ const BABEL_TOOLCHAINS = [
   { expectedMajor: 7, packagePath: "apps/mobile/package.json" },
   { expectedMajor: 8, packagePath: "apps/web/package.json" },
 ] as const;
+const TYPESCRIPT_TOOLCHAIN = {
+  native: "npm:typescript@7.0.2",
+  oxlint: "1.75.0",
+  oxlintConfig: "0.6.0",
+  tsgolint: "7.0.2001",
+  typescript6Compatibility: "6.0.3",
+} as const;
+const TYPESCRIPT6_COMPATIBILITY = {
+  astro: {
+    dependency: "@astrojs/check",
+    packagePath: "apps/landing/package.json",
+    script: "bun --bun astro check",
+    specifier: "^0.9.9",
+  },
+  compilerApi: {
+    dependency: "typescript",
+    packagePath: "packages/scripts/package.json",
+    specifier: "catalog:",
+  },
+  ultracite: {
+    dependency: "ultracite",
+    packagePath: "package.json",
+    specifier: "catalog:",
+  },
+} as const;
 
 export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];
 
@@ -129,6 +154,167 @@ const readDependencySpecifier = (
   }
 
   return null;
+};
+
+const readPackageJson = (
+  packageJsonPath: string,
+): Record<string, unknown> | null => {
+  let packageJson: unknown;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+  } catch {
+    return null;
+  }
+
+  return isRecord(packageJson) ? packageJson : null;
+};
+
+const readStringProperty = (
+  record: Record<string, unknown> | null,
+  field: string,
+  property: string,
+): string | null => {
+  const values = record?.[field];
+  if (!isRecord(values)) {
+    return null;
+  }
+
+  const value = values[property];
+  return typeof value === "string" ? value : null;
+};
+
+const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
+  const issues: WorkspaceIssue[] = [];
+  const rootPackagePath = path.resolve(rootDir, "package.json");
+  const rootPackage = readPackageJson(rootPackagePath);
+  const expectedRootValues = [
+    {
+      dependency: "@stll/oxlint-config",
+      field: "devDependencies",
+      specifier: TYPESCRIPT_TOOLCHAIN.oxlintConfig,
+    },
+    {
+      dependency: "@typescript/native",
+      field: "devDependencies",
+      specifier: TYPESCRIPT_TOOLCHAIN.native,
+    },
+    {
+      dependency: "oxlint-tsgolint",
+      field: "devDependencies",
+      specifier: TYPESCRIPT_TOOLCHAIN.tsgolint,
+    },
+    {
+      dependency: "typescript",
+      field: "devDependencies",
+      specifier: "catalog:",
+    },
+    {
+      dependency: "oxlint",
+      field: "catalog",
+      specifier: TYPESCRIPT_TOOLCHAIN.oxlint,
+    },
+    {
+      dependency: "typescript",
+      field: "catalog",
+      specifier: TYPESCRIPT_TOOLCHAIN.typescript6Compatibility,
+    },
+  ] as const;
+
+  for (const { dependency, field, specifier } of expectedRootValues) {
+    const actual = readStringProperty(rootPackage, field, dependency);
+    if (actual === specifier) {
+      continue;
+    }
+
+    issues.push({
+      message: `${field}.${dependency} must be ${specifier}; found ${actual ?? "missing"}`,
+      path: "package.json",
+    });
+  }
+
+  for (const exception of Object.values(TYPESCRIPT6_COMPATIBILITY)) {
+    const packageJsonPath = path.resolve(rootDir, exception.packagePath);
+    const actual = readDependencySpecifier(
+      packageJsonPath,
+      exception.dependency,
+    );
+    if (actual !== exception.specifier) {
+      issues.push({
+        message: `${exception.dependency} is a pinned TypeScript 6 compatibility exception and must be ${exception.specifier}; found ${actual ?? "missing"}`,
+        path: exception.packagePath,
+      });
+    }
+  }
+
+  const landingPackage = readPackageJson(
+    path.resolve(rootDir, TYPESCRIPT6_COMPATIBILITY.astro.packagePath),
+  );
+  const landingTypecheck = readStringProperty(
+    landingPackage,
+    "scripts",
+    "typecheck",
+  );
+  if (landingTypecheck !== TYPESCRIPT6_COMPATIBILITY.astro.script) {
+    issues.push({
+      message: `scripts.typecheck must remain the isolated Astro TypeScript 6 check ${TYPESCRIPT6_COMPATIBILITY.astro.script}; found ${landingTypecheck ?? "missing"}`,
+      path: TYPESCRIPT6_COMPATIBILITY.astro.packagePath,
+    });
+  }
+
+  for (const parentDir of WORKSPACE_PARENT_DIRS) {
+    const parentPath = path.resolve(rootDir, parentDir);
+    if (!existsSync(parentPath)) {
+      continue;
+    }
+
+    for (const entry of readdirSync(parentPath, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) {
+        continue;
+      }
+
+      const relativePackagePath = `${parentDir}/${entry.name}/package.json`;
+      const packageJsonPath = path.resolve(rootDir, relativePackagePath);
+      if (!existsSync(packageJsonPath)) {
+        continue;
+      }
+
+      const packageJson = readPackageJson(packageJsonPath);
+      const typecheck = readStringProperty(packageJson, "scripts", "typecheck");
+      if (
+        typecheck !== null &&
+        relativePackagePath !== TYPESCRIPT6_COMPATIBILITY.astro.packagePath &&
+        !typecheck.includes("tsc-native.ts")
+      ) {
+        issues.push({
+          message: `scripts.typecheck must use the TypeScript 7 native wrapper; found ${typecheck}`,
+          path: relativePackagePath,
+        });
+      }
+
+      const typescript = readDependencySpecifier(packageJsonPath, "typescript");
+      if (
+        typescript !== null &&
+        relativePackagePath !==
+          TYPESCRIPT6_COMPATIBILITY.compilerApi.packagePath
+      ) {
+        issues.push({
+          message:
+            "TypeScript 6 is compatibility-only and may only be declared by packages/scripts for the compiler API",
+          path: relativePackagePath,
+        });
+      }
+
+      if (readDependencySpecifier(packageJsonPath, "@typescript/native")) {
+        issues.push({
+          message:
+            "@typescript/native is a root-owned TypeScript 7 compiler dependency",
+          path: relativePackagePath,
+        });
+      }
+    }
+  }
+
+  return issues;
 };
 
 const validateBabelToolchains = (rootDir: string): WorkspaceIssue[] => {
@@ -353,6 +539,7 @@ export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [
     ...validateTurboInstallPins(rootDir),
     ...validateBabelToolchains(rootDir),
+    ...validateTypeScriptToolchain(rootDir),
   ];
 
   for (const parentDir of WORKSPACE_PARENT_DIRS) {

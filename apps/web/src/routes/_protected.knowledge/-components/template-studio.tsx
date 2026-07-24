@@ -292,7 +292,6 @@ export const TemplateStudioPage = ({
           return;
         }
         frames += 1;
-        // eslint-disable-next-line react/react-compiler -- recursive local function flagged as its own dependency; `poll` is not a reactive value and cannot be added to the useCallback deps
         requestAnimationFrame(poll);
       };
       requestAnimationFrame(poll);
@@ -401,6 +400,7 @@ export const TemplateStudioPage = ({
       closeTab(templateStudioTabId(templateId));
       reset(templateId);
     };
+    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this seed effect out of compiler memoization
     // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per template; the manifest is the fixed source doc for this templateId and re-seeding would discard edits made in the inspector tab.
   }, [templateId]);
 
@@ -1334,7 +1334,6 @@ export const TemplateStudioPage = ({
     return result !== null;
   };
 
-  // eslint-disable-next-line react/react-compiler -- deliberate latest-ref write: the store actions registered once in useMountEffect delegate through actionsRef.current, which must hold this render's fresh handler closures
   actionsRef.current = {
     toggleDirectives: () => setShowDirectives((visible) => !visible),
     deleteField: (path) => {
