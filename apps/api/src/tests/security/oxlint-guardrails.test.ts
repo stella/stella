@@ -400,7 +400,7 @@ describe("custom oxlint guardrails", () => {
     expect(protectedRouteSource).toContain("AppSidebar");
     expect(protectedRouteSource).toContain("ChatMentionProviders");
     expect(sidebarUserMenuSource).not.toContain("organizationOptions");
-    expect(sidebarUserMenuSource).toContain("organizationSummaryOptions");
+    expect(sidebarUserMenuSource).toContain("organizationListOptions");
     expect(aiConfigQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");
     expect(aiConfigQuerySource).toContain(
       "staleTime: ROUTE_QUERY_STALE_TIME_MS",
