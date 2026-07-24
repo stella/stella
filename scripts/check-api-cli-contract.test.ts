@@ -68,7 +68,7 @@ describe("API and CLI release contract", () => {
     expect(releaseWorkflow).toContain("name: release-source-receipt");
     expect(publishWorkflow).toContain('gh run download "$UPSTREAM_RUN_ID"');
     expect(publishWorkflow).toContain(
-      "UPSTREAM_RELEASE_REF: ${{ needs.release-trigger.outputs.release_ref }}",
+      `UPSTREAM_RELEASE_REF: \${{ needs.release-trigger.outputs.release_ref }}`,
     );
     expect(publishWorkflow).not.toContain(
       "github.event.workflow_run.head_branch",
