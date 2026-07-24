@@ -15,7 +15,10 @@ const SLOW_STREAM_MARKER = "Stream slowly please";
 test("composer draft survives typing while a response is streaming", async ({
   page,
 }) => {
-  await page.goto("/chat");
+  // A route is ready when its UI is ready, not when every cold Vite resource
+  // has fired the browser load event. Commit the document, then synchronize on
+  // the composer below.
+  await page.goto("/chat", { waitUntil: "commit" });
 
   // Route error boundary heading (apps/web/src/components/route-components.tsx:253,
   // title common.somethingWentWrong). Checked after every step below; declared

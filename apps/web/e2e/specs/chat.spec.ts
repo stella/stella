@@ -7,7 +7,10 @@ import { expect, test } from "../helpers/test";
 test("chat composer sends a message and renders the assistant reply", async ({
   page,
 }) => {
-  await page.goto("/chat");
+  // A route is ready when its UI is ready, not when every cold Vite resource
+  // has fired the browser load event. Commit the document, then synchronize on
+  // the composer below.
+  await page.goto("/chat", { waitUntil: "commit" });
 
   // Route error boundary heading (apps/web/src/components/route-components.tsx:253,
   // title common.somethingWentWrong). Checked after every step below; declared

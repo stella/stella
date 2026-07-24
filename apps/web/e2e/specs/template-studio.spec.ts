@@ -70,6 +70,10 @@ test.describe("Template Studio", () => {
         exact: true,
         name: "Save",
       });
+      const saveCompleted = page.getByRole("heading", {
+        exact: true,
+        name: "Template saved",
+      });
       const saveResponse = page.waitForResponse(
         (response) =>
           response.request().method() === "POST" &&
@@ -80,6 +84,10 @@ test.describe("Template Studio", () => {
       );
       await saveButton.click();
       expect((await saveResponse).ok()).toBe(true);
+      // The response event precedes Eden response parsing and the page's
+      // dirty-state reconciliation. The success toast is the explicit product
+      // signal that the save action (including deferred clause renames) won.
+      await expect(saveCompleted).toBeVisible();
       await expect(saveButton).toHaveCount(0);
 
       await page.reload({ waitUntil: "domcontentloaded" });

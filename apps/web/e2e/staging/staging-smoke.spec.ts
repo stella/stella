@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { appShellNavigationLink } from "../helpers/app-shell";
+
 // The smoke user mirrors the production default state: org owner,
 // no usage entitlement row, no AI provider config. Regressions that
 // only appear in that state must fail here, not in front of a user.
@@ -20,14 +22,15 @@ test.beforeEach(({ page }) => {
 });
 
 test("deployed app serves the authenticated shell", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "commit" });
+  await expect(appShellNavigationLink(page, "/chat")).toBeVisible();
   await expect(page).not.toHaveURL(/\/auth(?:\/|$)/u);
 });
 
 test("chat thread page renders for an entitlement-less owner", async ({
   page,
 }) => {
-  await page.goto("/chat/new");
+  await page.goto("/chat/new", { waitUntil: "commit" });
   await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u);
 
   // The route error boundary replaces the thread UI wholesale; its
@@ -69,7 +72,7 @@ test("server-rendered public law pages hydrate cleanly", async ({ page }) => {
     pageErrors.push(error.message);
   });
 
-  await page.goto("/law/cases");
+  await page.goto("/law/cases", { waitUntil: "commit" });
   // Scoped to the decisions table: the shell sidebar also carries a
   // /law/cases nav link that a page-wide href filter could match.
   const firstDecision = page
@@ -83,7 +86,7 @@ test("server-rendered public law pages hydrate cleanly", async ({ page }) => {
 
   // Force a full server-rendered load of the decision page: client-side
   // navigation alone would never exercise the hydration path that broke.
-  await page.reload();
+  await page.reload({ waitUntil: "commit" });
 
   // Case numbers look like "6 Tdo 647/2017"; anchoring on the slash-year
   // tail keeps the regex linear.

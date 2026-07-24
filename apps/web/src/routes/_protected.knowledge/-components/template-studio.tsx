@@ -42,6 +42,7 @@ import {
   TEMPLATES_ROUTE_ID,
   templateStudioTabId,
 } from "@/routes/_protected.knowledge/-components/template-studio-constants";
+import { hasUnsavedEditorChanges } from "@/routes/_protected.knowledge/-components/template-studio-dirty";
 import {
   buildManifest,
   nextFreePath,
@@ -247,6 +248,11 @@ export const TemplateStudioPage = ({
   // Reactive twin of editorViewRef for children that re-render on view
   // creation (the floating AI bar needs a live prop, not a ref).
   const [liveEditorView, setLiveEditorView] = useState<EditorView | null>(null);
+  const handleEditorChange = useCallback(() => {
+    if (hasUnsavedEditorChanges(editorRef.current)) {
+      markDirty();
+    }
+  }, [markDirty]);
   // Right-click on selected text offers the structural gestures directly:
   // turn it into a {{field}}, or wrap it in a condition / loop block.
   const makeFieldContextItems = useMemo(
@@ -994,7 +1000,6 @@ export const TemplateStudioPage = ({
       }
 
       markSaved();
-      stellaToast.add({ title: t("templates.templateSaved"), type: "success" });
 
       // Flush deferred link-row slot renames now that the document (with its
       // already-rewritten {{@clause:...}} markers) is persisted, so the row
@@ -1099,6 +1104,12 @@ export const TemplateStudioPage = ({
           ),
         "handleSave",
       );
+      if (slotRenameErrorMessage === null) {
+        stellaToast.add({
+          title: t("templates.templateSaved"),
+          type: "success",
+        });
+      }
       // Report overall failure when a slot PATCH hard-failed: the document
       // itself saved, but "Save and leave" must stay in the Studio so the
       // still-pending steps (and their retry) are not discarded by the
@@ -1663,7 +1674,7 @@ export const TemplateStudioPage = ({
               documentBuffer={docBuffer}
               initialZoom={fitZoom}
               loadingIndicator={null}
-              onChange={markDirty}
+              onChange={handleEditorChange}
               onEditorViewReady={(view) => {
                 // Folio re-reports null on some re-renders; keep the last live
                 // view so selection syncing doesn't lose its reference.

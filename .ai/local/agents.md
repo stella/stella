@@ -87,3 +87,13 @@ only the non-obvious caveats for this environment.
   checked in the CI typecheck job. Reseeding either baseline
   (`--write` / `--write-baseline`) must be justified in the PR description;
   it is not a mechanical way to make CI green.
+
+## End-to-End Tests
+
+- Browser navigation must name `waitUntil: "commit"` or
+  `waitUntil: "domcontentloaded"`, then synchronize on the specific UI that
+  makes the route ready. Never use the default `load` event as application
+  readiness; `navigation-policy.unit.spec.ts` enforces this for every E2E spec.
+- A successful HTTP response is not necessarily completion of the user action
+  that issued it. Wait for the product's visible completion state before
+  asserting settled UI or navigating away.
