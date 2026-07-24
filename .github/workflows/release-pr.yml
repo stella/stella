@@ -8,44 +8,16 @@ concurrency:
   group: release-pr-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   version:
-    name: Maintain version packages PR
-    runs-on: ubuntu-latest
-    steps:
-      - name: Mint stella-provenance-updater token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.CHANGELOG_APP_ID }}
-          private-key: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          # The write-scoped app token must not be persisted into .git/config,
-          # where it would be readable by `bun install` lifecycle scripts.
-          # changesets/action authenticates its own push/PR API calls via the
-          # GITHUB_TOKEN env var below (it writes its own ~/.netrc), so it
-          # does not need the checkout-persisted credential.
-          persist-credentials: false
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
-
-      - run: bun install --frozen-lockfile
-
-      - name: Create or update the version packages PR
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
-        with:
-          version: bun run changeset:version
-          title: "chore: version packages"
-          commit: "chore: version packages"
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+    name: Maintain Version Packages PR
+    permissions:
+      contents: read
+    uses: stella/.github/.github/workflows/changeset-release-pr.yml@c47bb87cc82047b5fdc2540983148d4e3efa9a37 # v1.3.0
+    with:
+      bun-version-file: package.json
+    secrets:
+      CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
+      CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}

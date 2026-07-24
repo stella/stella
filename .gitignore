@@ -15,9 +15,11 @@ target/
 # Local scripts (corpus download, benchmarks)
 scripts/*
 !scripts/check-ai-skill-sources.sh
-!scripts/check-changeset.ts
+!scripts/bun-lock-workspace-versions.test.ts
 !scripts/check-lockfile-workspace-versions.ts
 !scripts/check-staged-secrets.sh
+!scripts/lib/
+!scripts/lib/bun-lock-workspace-versions.ts
 !scripts/link-codex-skills.sh
 !scripts/sync-changeset-version.mjs
 !scripts/sync-ai-skills.sh

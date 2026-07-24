@@ -24,22 +24,91 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - name: Enforce release intent
+        # The repository owner publishes this immutable shared contract.
+        uses: stella/.github/.github/actions/changeset-policy@c47bb87cc82047b5fdc2540983148d4e3efa9a37 # v1.3.0
         with:
-          bun-version-file: "package.json"
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Require a changeset for runtime source changes
-        run: bun run changeset:check
-        env:
-          CHANGESET_HEAD_REF: ${{ github.head_ref }}
-          CHANGESET_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          CHANGESET_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          CHANGESET_REPOSITORY: ${{ github.repository }}
+          release-paths: |
+            Cargo.lock
+            Cargo.toml
+            crates/anonymize-adapter-contract/**
+            crates/anonymize-core/**
+            crates/anonymize-docx-core/**
+            crates/anonymize-napi/**
+            crates/anonymize-pdf-core/**
+            crates/anonymize-py/**
+            packages/anonymize/package.json
+            packages/anonymize/index.cjs
+            packages/anonymize/scripts/**
+            packages/anonymize/src/**
+            packages/anonymize/tsconfig.json
+            packages/anonymize/tsconfig.wasm.json
+            packages/anonymize/tsdown.config.ts
+            packages/anonymize/wasm/package.json
+            packages/anonymize-darwin-arm64/package.json
+            packages/anonymize-darwin-x64/package.json
+            packages/anonymize-linux-arm64-gnu/package.json
+            packages/anonymize-linux-x64-gnu/package.json
+            packages/anonymize-win32-x64-msvc/package.json
+            packages/cli/package.json
+            packages/cli/src/**
+            packages/cli/tsconfig.json
+            packages/cli/tsdown.config.ts
+            packages/document-docx/package.json
+            packages/document-docx/src/**
+            packages/document-docx/tsconfig.json
+            packages/document-docx/tsdown.config.ts
+            packages/document-pdf/package.json
+            packages/document-pdf/src/**
+            packages/document-pdf/tsconfig.json
+            packages/document-pdf/tsdown.config.ts
+            packages/mcp/package.json
+            packages/mcp/scripts/**
+            packages/mcp/src/**
+            packages/mcp/tsconfig.json
+            packages/mcp/tsdown.config.ts
+          generated-paths: |
+            Cargo.lock
+            Cargo.toml
+            VERSION
+            bun.lock
+            crates/anonymize-py/pyproject.toml
+            packages/anonymize/CHANGELOG.md
+            packages/anonymize/package.json
+            packages/anonymize/wasm/CHANGELOG.md
+            packages/anonymize/wasm/package.json
+            packages/anonymize-darwin-arm64/CHANGELOG.md
+            packages/anonymize-darwin-arm64/package.json
+            packages/anonymize-darwin-x64/CHANGELOG.md
+            packages/anonymize-darwin-x64/package.json
+            packages/anonymize-linux-arm64-gnu/CHANGELOG.md
+            packages/anonymize-linux-arm64-gnu/package.json
+            packages/anonymize-linux-x64-gnu/CHANGELOG.md
+            packages/anonymize-linux-x64-gnu/package.json
+            packages/anonymize-win32-x64-msvc/CHANGELOG.md
+            packages/anonymize-win32-x64-msvc/package.json
+            packages/cli/CHANGELOG.md
+            packages/cli/package.json
+            packages/document-docx/CHANGELOG.md
+            packages/document-docx/package.json
+            packages/document-pdf/CHANGELOG.md
+            packages/document-pdf/package.json
+            packages/mcp/CHANGELOG.md
+            packages/mcp/package.json
+          package-files: |
+            packages/anonymize/package.json
+            packages/anonymize/wasm/package.json
+            packages/anonymize-darwin-arm64/package.json
+            packages/anonymize-darwin-x64/package.json
+            packages/anonymize-linux-arm64-gnu/package.json
+            packages/anonymize-linux-x64-gnu/package.json
+            packages/anonymize-win32-x64-msvc/package.json
+            packages/cli/package.json
+            packages/document-docx/package.json
+            packages/document-pdf/package.json
+            packages/mcp/package.json
 
   validate:
     runs-on: ubuntu-latest
@@ -47,6 +116,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
