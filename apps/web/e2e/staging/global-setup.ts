@@ -12,7 +12,7 @@ type SmokeSession = {
 const API_URL = process.env["E2E_API_URL"] ?? "https://api-staging.stll.app";
 const WEB_URL = process.env["E2E_WEB_URL"] ?? "https://staging.stll.app";
 
-const READINESS_TIMEOUT_MS = 600_000;
+const READINESS_TIMEOUT_MS = 1_200_000;
 const READINESS_INTERVAL_MS = 5000;
 const READINESS_LOG_INTERVAL_MS = 30_000;
 // Require several consecutive expected-commit samples before proceeding:
@@ -183,12 +183,9 @@ const writeReadinessLog = (message: string): void => {
 };
 
 // Block until both the API and the web origin stably serve the deployed
-// revision. verify-staging fires the moment the promote returns, while
-// ECS is still rolling the new task in and the CDN may still front the
-// previous bundle; requests in that window render a blank page. Time-
-// bounded so a hanging endpoint can't exceed the budget; any non-ready
-// sample on either origin resets the streak. With no expected commit
-// (local runs) any healthy response counts.
+// revision. Requests during a rollout may still reach the previous bundle.
+// Any non-ready sample on either origin resets the stable-readiness streak.
+// With no expected commit (local runs), any healthy response counts.
 const waitForDeployedRevision = async (): Promise<void> => {
   const expectedCommit = process.env["EXPECTED_COMMIT"];
   const deadline = Date.now() + READINESS_TIMEOUT_MS;
