@@ -593,7 +593,7 @@ jobs:
       && (needs.trust-check.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
 

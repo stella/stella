@@ -327,6 +327,7 @@ export const ClauseEditor = ({
       lastEmittedKeyRef.current = contentKey;
     }
     return undefined;
+    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this editor effect out of compiler memoization
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editor is a stable ref; only re-sync when contentKey changes
   }, [contentKey]);
 

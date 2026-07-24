@@ -259,7 +259,6 @@ type SearchDialogProps = {
   initialWorkspaceId?: string | undefined;
 };
 
-// eslint-disable-next-line react/react-compiler -- react-compiler skips this component: an API it uses returns functions that cannot be memoized, so the compiler bails out of the whole component (Compilation Skipped: incompatible library)
 export const SearchDialog = ({
   open,
   onOpenChange,
@@ -306,6 +305,7 @@ export const SearchDialog = ({
   // the same cutoff as page 1.
   const updatedFrom = useMemo(
     () => resolveUpdatedFrom(filters.time),
+    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this cutoff memo out of compiler memoization
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: include searchQuery so each new query gets a fresh preset cutoff
     [filters.time, searchQuery],
   );

@@ -516,13 +516,13 @@ const DraftCard = ({
   const promptField: PropertyPromptFieldHandle = useMemo(
     () => ({
       name: `draft-${draft.id}`,
-      // eslint-disable-next-line react/react-compiler -- intentionally stable handle; the editor reads state.value only on init, so draft.prompt/onChange are deliberately excluded from the memo deps (see exhaustive-deps note below)
       state: { value: draft.prompt },
       handleChange: (next) => onChange({ prompt: next }),
       handleBlur: () => undefined,
     }),
     // The editor reads `state.value` only on init; subsequent updates
     // flow through `handleChange`, so a stable handle is fine.
+    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this editor handle out of compiler memoization
     // eslint-disable-next-line react-hooks/exhaustive-deps -- draft.prompt/onChange intentionally excluded; the editor reads state.value only on init, so the handle must stay stable across keystrokes
     [draft.id],
   );
