@@ -36,6 +36,7 @@
     "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts",
     "canary:ai-provider": "bun --cwd apps/api canary:ai-provider",
     "check:auth-md-spec": "bun packages/scripts/src/auth-md-spec-drift.ts",
+    "check:resolutions": "bun scripts/check-resolution-ranges.ts",
     "check:result-consumption": "bun packages/scripts/src/result-consumption.ts",
     "check:railway-template-draft": "bun scripts/check-railway-template-draft.ts",
     "check:railway-template": "bun scripts/check-railway-template-shape.ts",

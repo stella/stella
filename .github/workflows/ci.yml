@@ -194,6 +194,18 @@ jobs:
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         run: bun scripts/check-lockfile-workspace-versions.ts
 
+      - name: Resolution range guard
+        # A root `resolutions`/`overrides` entry force-overrides a package's
+        # version everywhere, ignoring the ranges its dependents declare, and
+        # bun applies it without erroring even when it pins the package BELOW a
+        # dependent's floor. That is silent at install and only surfaces as a
+        # MISSING_EXPORT at build/runtime (how a stale folio-core/docx-core pin
+        # broke folio). This fails when a resolution holds a dependency below
+        # any dependent's required floor; intentional overrides are allowlisted
+        # in the guard.
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        run: bun scripts/check-resolution-ranges.ts
+
       - name: Policy evidence
         run: bun run policies:check
 
