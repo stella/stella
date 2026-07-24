@@ -68,10 +68,29 @@ describe("API and CLI release contract", () => {
     expect(releaseWorkflow).toContain("name: release-source-receipt");
     expect(publishWorkflow).toContain('gh run download "$UPSTREAM_RUN_ID"');
     expect(publishWorkflow).toContain(
-      "UPSTREAM_RELEASE_REF: ${{ needs.release-trigger.outputs.release_ref }}",
+      `UPSTREAM_RELEASE_REF: \${{ needs.release-trigger.outputs.release_ref }}`,
     );
     expect(publishWorkflow).not.toContain(
       "github.event.workflow_run.head_branch",
     );
+  });
+
+  test("shared package publishing uses Changesets release signals", async () => {
+    const publishWorkflow = await Bun.file(
+      new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+    ).text();
+    const pushTrigger = publishWorkflow.slice(
+      0,
+      publishWorkflow.indexOf("  workflow_run:"),
+    );
+
+    for (const packageName of [
+      "conditions",
+      "template-conditions",
+      "docx-utils",
+    ]) {
+      expect(pushTrigger).toContain(`packages/${packageName}/CHANGELOG.md`);
+      expect(pushTrigger).not.toContain(`packages/${packageName}/package.json`);
+    }
   });
 });

@@ -18,9 +18,11 @@ on:
   push:
     branches: [main]
     paths:
-      - packages/conditions/package.json
-      - packages/template-conditions/package.json
-      - packages/docx-utils/package.json
+      # Changesets owns these files, so ordinary manifest maintenance cannot
+      # accidentally start a release transaction.
+      - packages/conditions/CHANGELOG.md
+      - packages/template-conditions/CHANGELOG.md
+      - packages/docx-utils/CHANGELOG.md
   workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the release job receives id-token
     workflows: ["Release Artifacts"]
     types: [completed]
