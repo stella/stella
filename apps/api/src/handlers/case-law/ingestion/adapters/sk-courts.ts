@@ -237,12 +237,15 @@ const parseItemWithDetail = async (
   const rawJson = JSON.stringify(item);
   const rawHash = hashContent(rawJson);
 
-  // PDF download is deferred to a background backfill loop.
+  // PDF download is deferred to the `caseLaw.backfillSkDocuments`
+  // scheduler task (ingestion/sk-document-backfill.ts).
   // Metadata-only ingestion (list + detail) lets us fly
   // through the 4.6M Slovak court decisions (~25 items/page
   // × ~4s/page) instead of blocking on 5-30s PDF downloads.
   // Decisions are searchable by case number, ECLI, court,
-  // and date immediately; fulltext follows via backfill.
+  // and date immediately; fulltext and the AST follow when
+  // that task reaches them. Until it does, the decision has
+  // no readable text, so the two must ship together.
 
   const caseNumber = item.spisovaZnacka;
   const courtInfo = Reflect.get(item, "sud");

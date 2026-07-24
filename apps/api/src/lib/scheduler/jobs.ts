@@ -4,6 +4,7 @@ import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload, SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobs } from "@/api/db/schema";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
+import { BACKFILL_SK_DOCUMENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-sk-documents";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 
@@ -106,5 +107,19 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
       everyMs: 60 * 60 * 1000,
     },
     task: EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
+  });
+
+  // Every 15 minutes rather than nightly: the queue grows with each
+  // ingested page, and a decision sitting in it has no readable text.
+  // One batch is ~40 PDFs, so this keeps pace with the crawl without
+  // ever putting a burst on the court's site.
+  await ensureSchedulerJob({
+    description: "Fetch and parse PDFs for Slovak court decisions",
+    id: "caseLaw.backfillSkDocuments.quarterHourly",
+    schedule: {
+      type: "interval",
+      everyMs: 15 * 60 * 1000,
+    },
+    task: BACKFILL_SK_DOCUMENTS_TASK,
   });
 };
