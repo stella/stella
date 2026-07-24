@@ -58,13 +58,13 @@
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
     "@stll/anonymize-data": "workspace:*",
-    "@stll/oxlint-config": "^0.4.0",
-    "@stll/typescript-config": "^0.4.0",
+    "@stll/oxlint-config": "0.6.0",
+    "@stll/typescript-config": "0.6.0",
     "@typescript/native": "npm:typescript@7.0.2",
     "lefthook": "^2.1.10",
     "oxfmt": "^0.58.0",
-    "oxlint": "^1.73.0",
-    "oxlint-tsgolint": "^0.24.0",
+    "oxlint": "1.75.0",
+    "oxlint-tsgolint": "7.0.2001",
     "turbo": "^2.10.5"
   }
 }

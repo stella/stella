@@ -25,6 +25,7 @@ export default defineConfig([
     // directory via a dynamic `import(new URL(...).href)`, so there is no
     // build-time dependency to keep external here.
     entry: ["src/wasm.ts", "src/capabilities.ts", "src/constants.ts"],
+    tsconfig: "tsconfig.wasm.json",
     outDir: "wasm/dist",
     format: ["esm"],
     dts: true,
