@@ -20,5 +20,5 @@ jobs:
     with:
       bun-version-file: package.json
     secrets:
-      CHANGELOG_APP_ID: ${{ secrets.STELLA_RELEASE_APP_ID }}
-      CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+      CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
+      CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
