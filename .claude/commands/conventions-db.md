@@ -7,6 +7,14 @@ migrations.
 
 - Schema lives in `/apps/api/src/db/schema.ts`
 - Use Drizzle migrations (`bun run db:push`)
+- For closed persisted domain values, define one named `as const` value list and
+  pass it to Drizzle with `text({ enum: VALUES })`. This provides insert/select
+  inference without introducing a TypeScript or PostgreSQL enum.
+- Drizzle's `{ enum: VALUES }` and `.$type<T>()` are compile-time-only; neither
+  validates stored values. Add an explicit database `CHECK` when an invalid value
+  could compromise lifecycle, billing, authorization, audit, or workflow invariants.
+- Reserve `.$type<T>()` for branded or structured types. Use a native PostgreSQL
+  enum only when the value set is genuinely permanent.
 - Cascade deletes for workspace-owned resources
 - Restrict deletes for file references (prevent orphaning)
 - When writing multi-delete transactions, trace the FK graph
