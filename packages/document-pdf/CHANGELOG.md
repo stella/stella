@@ -1,5 +1,12 @@
 # @stll/anonymize-pdf
 
+## 2.6.1
+
+### Patch Changes
+
+- Updated dependencies [[`deb2d7c`](https://github.com/stella/anonymize/commit/deb2d7c3c2dd346589478fd8191bea088a1563b7)]:
+  - @stll/anonymize@2.6.1
+
 ## 2.6.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.1
+
+### Patch Changes
+
+- [#414](https://github.com/stella/anonymize/pull/414) [`deb2d7c`](https://github.com/stella/anonymize/commit/deb2d7c3c2dd346589478fd8191bea088a1563b7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Make incremental document-rule analysis update only edited blocks and affected neighborhoods.
+
 ## 2.6.0
 
 ## 2.5.0
