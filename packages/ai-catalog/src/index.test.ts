@@ -64,7 +64,9 @@ describe("BYOK_MODEL_OPTIONS", () => {
     expect(BYOK_MODEL_OPTIONS.google).toContain("gemini-3.5-flash-lite");
     expect(BYOK_MODEL_OPTIONS.openai).toContain("gpt-5.6");
     expect(BYOK_MODEL_OPTIONS.anthropic).toContain("claude-sonnet-5");
+    expect(BYOK_MODEL_OPTIONS.anthropic).toContain("claude-opus-5");
     expect(BYOK_MODEL_OPTIONS.openrouter).toContain("google/gemini-3.6-flash");
+    expect(BYOK_MODEL_OPTIONS.openrouter).toContain("anthropic/claude-opus-5");
   });
 });
 
