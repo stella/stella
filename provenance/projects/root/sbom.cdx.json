@@ -9514,6 +9514,9 @@
             "location": "apps/web/src/components/search-dialog.tsx#4"
           },
           {
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/translate-document-dialog.tsx#12"
           },
           {
@@ -10264,7 +10267,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#5"
           },
           {
-            "location": "apps/web/src/components/sidebar-user-menu.tsx#1"
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#2"
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#13"
@@ -16007,6 +16010,9 @@
             "location": "scripts/check-lockfile-workspace-versions.ts#27"
           },
           {
+            "location": "scripts/check-resolution-ranges.ts#30"
+          },
+          {
             "location": "scripts/prepare-publish.ts#17"
           },
           {
@@ -18234,6 +18240,9 @@
           },
           {
             "location": "scripts/check-lockfile-workspace-versions.ts#27"
+          },
+          {
+            "location": "scripts/check-resolution-ranges.ts#30"
           },
           {
             "location": "scripts/prepare-publish.ts#17"
@@ -24436,7 +24445,7 @@
             "location": "apps/web/src/components/selfhost-update-banner.tsx#3"
           },
           {
-            "location": "apps/web/src/components/sidebar-user-menu.tsx#10"
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#12"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#7"
@@ -28683,7 +28692,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#7"
           },
           {
-            "location": "apps/web/src/components/sidebar-user-menu.tsx#11"
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#13"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#8"
