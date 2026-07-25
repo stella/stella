@@ -1,5 +1,11 @@
 # @stll/anonymize-wasm
 
+## 2.6.0
+
+### Minor Changes
+
+- [#407](https://github.com/stella/anonymize/pull/407) [`1e7c6c9`](https://github.com/stella/anonymize/commit/1e7c6c9254e5109558da5f009049fff1a1c81460) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Run the complete Rust binding in ordinary single-thread browser WebAssembly, with full native-surface parity and no cross-origin-isolation, shared-memory, worker, or WASI requirement.
+
 ## 2.5.0
 
 ## 2.4.2

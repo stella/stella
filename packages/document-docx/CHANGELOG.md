@@ -1,5 +1,12 @@
 # @stll/anonymize-docx
 
+## 2.6.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @stll/anonymize@2.6.0
+
 ## 2.5.0
 
 ### Patch Changes

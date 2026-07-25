@@ -1,5 +1,7 @@
 # @stll/anonymize-darwin-x64
 
+## 2.6.0
+
 ## 2.5.0
 
 ## 2.4.2
