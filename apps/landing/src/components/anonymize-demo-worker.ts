@@ -1,13 +1,12 @@
 /// <reference lib="webworker" />
 
-// eslint-disable-next-line unicorn/prefer-node-protocol -- this is the `buffer` browser-polyfill package (npm, no Node dependency), not Node's own `node:buffer` core module; `node:buffer` would not resolve the same way in a browser/worker bundle
-import { Buffer } from "buffer";
-
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonResult, ChatAnonRuntime } from "@stll/anonymize-chat";
-import { loadNameDictionaries } from "@stll/anonymize-data";
+import { loadCityDictionary, loadNameDictionaries } from "@stll/anonymize-data";
 import * as anonymizeRuntime from "@stll/anonymize-wasm";
 import type { PipelineConfig } from "@stll/anonymize-wasm";
+// eslint-disable-next-line unicorn/prefer-node-protocol -- this is the `buffer` browser-polyfill package (npm, no Node dependency), not Node's own `node:buffer` core module; `node:buffer` would not resolve the same way in a browser/worker bundle
+import { Buffer } from "buffer";
 
 // The napi-rs/emnapi wasm binding (@stll/anonymize-wasm's native glue) checks
 // `globalThis.Buffer` for some Node-API operations; browsers/workers have no
@@ -42,6 +41,21 @@ type DemoResponse =
 const DEMO_WORKSPACE_ID = "landing-demo";
 const DEMO_LOCALE = "en";
 
+// The chat→AI pipeline keeps places by default (see anonymize-chat); this is a
+// capability showcase, so we opt into the deny-list and load city dictionaries
+// for the countries a visitor is most likely to type. City names resolve to the
+// "address" label. Kept to a focused set so the worker payload stays reasonable.
+const DEMO_DENYLIST_COUNTRIES = [
+  "US",
+  "GB",
+  "FR",
+  "DE",
+  "CZ",
+  "IT",
+  "ES",
+  "NL",
+] as const;
+
 let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
@@ -50,9 +64,7 @@ let dictionariesPromise: Promise<
 // reenter concurrently, so overlapping requests (e.g. a stale debounce
 // firing alongside a fresh one) are queued rather than raced.
 let pipelineQueue: Promise<void> = Promise.resolve();
-const runWithPipelineContext = async <T>(
-  task: () => Promise<T>,
-): Promise<T> => {
+const runWithPipelineContext = async <T>(task: () => Promise<T>): Promise<T> => {
   const run = pipelineQueue.then(task, task);
   pipelineQueue = run.then(
     () => undefined,
@@ -65,8 +77,27 @@ const runWithPipelineContext = async <T>(
 const getDictionaries = (): Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > => {
-  dictionariesPromise ??= loadNameDictionaries();
+  dictionariesPromise ??= loadDemoDictionaries();
   return dictionariesPromise;
+};
+
+// Names (for the person corpus) plus per-country city lists (for the deny-list
+// "Places" layer). `citiesByCountry` drives detection; `cities` is the flat
+// merge the pipeline also expects.
+const loadDemoDictionaries = async (): Promise<
+  NonNullable<PipelineConfig["dictionaries"]>
+> => {
+  const [names, cityResults] = await Promise.all([
+    loadNameDictionaries(),
+    Promise.all(
+      DEMO_DENYLIST_COUNTRIES.map(
+        async (country) => [country, await loadCityDictionary(country)] as const,
+      ),
+    ),
+  ]);
+  const citiesByCountry = Object.fromEntries(cityResults);
+  const cities = cityResults.flatMap(([, entries]) => entries);
+  return { ...names, cities, citiesByCountry };
 };
 
 const handle = async (request: DemoRequest): Promise<DemoResponse> => {
@@ -89,6 +120,8 @@ const handle = async (request: DemoRequest): Promise<DemoResponse> => {
         locale: DEMO_LOCALE,
         workspaceId: DEMO_WORKSPACE_ID,
         gazetteerEntries: [],
+        enableDenyList: true,
+        denyListCountries: DEMO_DENYLIST_COUNTRIES,
         context,
       });
     });
