@@ -32,6 +32,7 @@ const querySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },
   params: paramsSchema,
   query: querySchema,

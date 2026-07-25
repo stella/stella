@@ -53,9 +53,9 @@ export const brandPersistedEntityVersionId = (
   entityVersionId: string,
 ): SafeId<"entityVersion"> => toSafeId<"entityVersion">(entityVersionId);
 
-  export const brandPersistedDocxSuggestionId = (
-    docxSuggestionId: string,
-  ): SafeId<"docxSuggestion"> => toSafeId<"docxSuggestion">(docxSuggestionId);
+export const brandPersistedDocxSuggestionId = (
+  docxSuggestionId: string,
+): SafeId<"docxSuggestion"> => toSafeId<"docxSuggestion">(docxSuggestionId);
 export const brandPersistedLegalListId = (
   listId: string,
 ): SafeId<"legalList"> => toSafeId<"legalList">(listId);

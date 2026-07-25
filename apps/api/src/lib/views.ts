@@ -1,7 +1,7 @@
-import type { SafeId } from "@/api/lib/branded-types";
 import { conditionIncludesKind } from "@stll/conditions";
 
 import type { EntityKind } from "@/api/db/schema-validators";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { SupportedLang } from "@/api/lib/locale";
 import type { ViewLayout, ViewLayoutType } from "@/api/lib/views-schema";
 

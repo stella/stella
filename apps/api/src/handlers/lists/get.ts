@@ -13,6 +13,7 @@ const paramsSchema = t.Object({ listId: tSafeId("legalList") });
 
 const config = {
   permissions: { workspace: ["read"] },
+  access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },
   params: paramsSchema,
 } satisfies HandlerConfig;
