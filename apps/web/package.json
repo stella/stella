@@ -103,7 +103,7 @@
     "immer": "^11.1.15",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^6.1.200",
-    "posthog-js": "^1.404.0",
+    "posthog-js": "^1.404.1",
     "prism-react-renderer": "^2.4.1",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-history": "^1.5.0",
