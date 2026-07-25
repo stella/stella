@@ -393,6 +393,13 @@ fn validate_span(document: &Document, location: &BlockSpan) -> Result<()> {
       block_id: location.block_id().clone(),
     });
   };
+  validate_span_for_block(block, location)
+}
+
+pub(crate) fn validate_span_for_block(
+  block: &DocumentBlock,
+  location: &BlockSpan,
+) -> Result<()> {
   let end = usize::try_from(location.span().end()).map_err(|_| {
     Error::FindingSpanOutOfBounds {
       block_id: location.block_id().clone(),

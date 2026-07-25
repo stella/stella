@@ -290,7 +290,7 @@ jobs:
       - name: Format
         run: bun run format:check
       - name: Typecheck
-        run: bun run typecheck
+        run: bun run typecheck:built
       - name: Knip (unused/undeclared deps)
         run: bun run check:knip
 
@@ -310,7 +310,7 @@ jobs:
           profile: consumer
           cache-scope: build
       - name: Test
-        run: bun run test
+        run: bun run test:built
 
   python:
     name: Python

@@ -452,4 +452,12 @@ impl RuleSet {
       .max()
       .unwrap_or(0)
   }
+
+  #[cfg(feature = "incremental")]
+  pub(crate) fn has_document_rules(&self) -> bool {
+    self
+      .rules
+      .iter()
+      .any(|rule| rule.spec().scope() == RuleScope::DocumentFacts)
+  }
 }

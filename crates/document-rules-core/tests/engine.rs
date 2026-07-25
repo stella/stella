@@ -299,13 +299,16 @@ fn one_block_edit_has_bounded_invalidation() {
       )],
     ))
     .unwrap();
-  session.analyze().unwrap();
+  let incremental = session.analyze().unwrap();
 
   let counts = counters.snapshot();
   assert_eq!(counts.block_analysis(), 1);
   assert_eq!(counts.block_rules(), 1);
   assert_eq!(counts.neighborhood_rules(), 3);
   assert_eq!(counts.document_rules(), 1);
+
+  let batch = engine.analyze(session.document()).unwrap();
+  assert_eq!(incremental.findings(), batch.findings());
 }
 
 #[test]

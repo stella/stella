@@ -20,5 +20,10 @@ salsa = { version = "0.28.1", default-features = false, optional = true, feature
 ] }
 thiserror = "2"
 
+[[bench]]
+name = "incremental_patch"
+harness = false
+required-features = ["incremental"]
+
 [lints]
 workspace = true
