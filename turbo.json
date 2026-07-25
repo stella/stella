@@ -11,6 +11,11 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES",
+        "STELLA_ANONYMIZE_SKIP_WASM_BUILD",
+        "STELLA_ANONYMIZE_WASM_PACKAGE_LANGUAGES"
+      ],
       "outputs": [
         "dist/**",
         "wasm/dist/**",

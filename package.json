@@ -30,7 +30,7 @@
     "check:v1-native": "cd packages/anonymize && bun run check:v1-native",
     "check:v1-native:full": "cd packages/anonymize && bun run check:v1-native:full",
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
-    "check:version": "node .github/tools/sync-runtime-version.mjs --check && node .github/tools/test-sync-runtime-version.mjs && node .github/tools/check-native-sidecars.mjs && bun test scripts/bun-lock-workspace-versions.test.ts",
+    "check:version": "node .github/tools/sync-runtime-version.mjs --check && node .github/tools/test-sync-runtime-version.mjs && node .github/tools/check-native-sidecars.mjs && node .github/tools/check-turbo-build-environment.mjs && bun test scripts/bun-lock-workspace-versions.test.ts",
     "changeset": "changeset",
     "changeset:version": "changeset version && node scripts/sync-changeset-version.mjs && bun scripts/check-lockfile-workspace-versions.ts --write && bun install --frozen-lockfile",
     "check:exports": "bunx publint@0.3.21 packages/anonymize && bunx @arethetypeswrong/cli@0.18.5 --pack packages/anonymize --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-docx && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-docx --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-pdf && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-pdf --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/mcp && bunx @arethetypeswrong/cli@0.18.5 --pack packages/mcp --ignore-rules no-resolution cjs-resolves-to-esm",
