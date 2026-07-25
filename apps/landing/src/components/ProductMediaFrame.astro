@@ -74,6 +74,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
           client:visible
           sceneId={media.sceneId}
           showCompanions={media.showCompanions ?? false}
+          sideWindows={media.sideWindows ?? true}
         />
       </div>
     )
@@ -86,6 +87,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
           includeStyles={false}
           sceneId={media.sceneId}
           showCompanions={media.showCompanions ?? false}
+          sideWindows={media.sideWindows ?? true}
         />
       </div>
     )
@@ -160,6 +162,24 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
         </MacWindow>
       </div>
     )
+  }
+
+  {/* Menu/thumbnail cards can't mount the live islands, so fall back to the
+      product's static capture (the same theme-aware pair used elsewhere). */}
+  {
+    (media.type === "live-anonymize" || media.type === "live-editor") &&
+      thumbnail && (
+        <ThemeImage
+          lightSrc={`/media/products/${media.type === "live-editor" ? "editor" : "anonymization"}.png`}
+          darkSrc={`/media/products/${media.type === "live-editor" ? "editor" : "anonymization"}-dark.png`}
+          alt={media.alt}
+          class="h-full w-full rounded-lg border object-cover"
+          style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5); object-position: 0% 0%"
+          loading="lazy"
+          decoding="async"
+          defer={deferThemeImage ? "manual" : undefined}
+        />
+      )
   }
 </div>
 
