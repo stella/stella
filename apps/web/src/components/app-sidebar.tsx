@@ -112,7 +112,6 @@ import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -450,7 +449,7 @@ export function AppSidebar(props: AppSidebarProps) {
     },
     tools: {
       action: () => {
-        void navigate({ to: "/tools" });
+        detached(navigate({ to: "/tools" }), "action");
       },
       contextMenu: {},
     },
