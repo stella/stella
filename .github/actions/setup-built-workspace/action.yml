@@ -1,0 +1,70 @@
+name: Setup built workspace
+description: Install workspace dependencies and restore the verified CI build outputs
+
+inputs:
+  artifact:
+    description: Name of the build artifact to restore.
+    required: false
+    default: ci-build
+
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-bun-workspace
+
+    - name: Restore build outputs
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      with:
+        name: ${{ inputs.artifact }}
+        path: ${{ runner.temp }}/ci-build
+
+    - name: Extract build outputs
+      shell: bash
+      run: |
+        set -euo pipefail
+        trap 'rm -f .ci-build-sha' EXIT
+        # The artifact is produced by this run's required build job. Give the
+        # restored outputs extraction-time mtimes so freshness checks compare
+        # them to this checkout instead of the producer runner's filesystem.
+        tar -xzmf "$RUNNER_TEMP/ci-build/ci-build.tar.gz" -C .
+        if [[ "$(<.ci-build-sha)" != "$GITHUB_SHA" ]]; then
+          echo "::error::Build artifact does not match checkout $GITHUB_SHA"
+          exit 1
+        fi
+
+        required=(
+          packages/anonymize/dist
+          packages/anonymize/native-wasm-dist
+          packages/anonymize/stella_anonymize_napi.node
+          packages/anonymize/wasm/dist
+          packages/cli/dist
+          packages/data/dist
+          packages/document-docx/dist
+          packages/document-pdf/dist
+          packages/mcp/dist
+        )
+        for path in "${required[@]}"; do
+          if [[ ! -e "$path" ]]; then
+            echo "::error::Build artifact is missing $path"
+            exit 1
+          fi
+        done
+
+        shopt -s nullglob
+        native_packages=(packages/anonymize/native-pipeline*.stlanonpkg)
+        python_packages=(
+          crates/anonymize-py/python/stella_anonymize/native_packages/*.stlanonpkg
+        )
+        sidecars=(packages/anonymize-*/stella_anonymize_napi.node)
+        if [[ "${#native_packages[@]}" -eq 0 ]]; then
+          echo "::error::Build artifact is missing native pipeline packages"
+          exit 1
+        fi
+        if [[ "${#python_packages[@]}" -eq 0 ]]; then
+          echo "::error::Build artifact is missing Python pipeline packages"
+          exit 1
+        fi
+        if [[ "${#sidecars[@]}" -eq 0 ]]; then
+          echo "::error::Build artifact is missing its native sidecar"
+          exit 1
+        fi

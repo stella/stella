@@ -1,6 +1,6 @@
 name: Lint workflows
 
-# Static analysis of the GitHub Actions workflows themselves:
+# Static analysis of the GitHub Actions workflows and local actions:
 #   - actionlint: syntax, expression, and embedded-shell (shellcheck) errors.
 #   - zizmor: security audits (template injection, credential leaks, dangerous
 #     triggers). Started at `high` severity so it lands clean; the pre-existing
@@ -45,4 +45,4 @@ jobs:
         run: |
           curl -sSL https://github.com/zizmorcore/zizmor/releases/download/v1.26.1/zizmor-x86_64-unknown-linux-gnu.tar.gz \
             | tar xz zizmor
-          ./zizmor --min-severity=high .github/workflows/
+          ./zizmor --min-severity=high .github/

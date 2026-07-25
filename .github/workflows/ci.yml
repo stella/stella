@@ -27,7 +27,6 @@ jobs:
           persist-credentials: false
 
       - name: Enforce release intent
-        # The repository owner publishes this immutable shared contract.
         uses: stella/.github/.github/actions/changeset-policy@c47bb87cc82047b5fdc2540983148d4e3efa9a37 # v1.3.0
         with:
           release-paths: |
@@ -110,7 +109,8 @@ jobs:
             packages/document-pdf/package.json
             packages/mcp/package.json
 
-  validate:
+  rust-quality:
+    name: Rust correctness and supply chain
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -118,114 +118,39 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: ./.github/actions/setup-rust-ci
         with:
-          node-version: "22"
-          registry-url: https://registry.npmjs.org
-          scope: "@stll"
-
-      - name: Verify Bun workflow pin
-        run: node .github/tools/check-bun-workflows.mjs
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version-file: "package.json"
-
-      - name: Turbo remote cache
-        uses: rharkor/caching-for-turbo@75f8ebf4a43d2c60b23bc2a27082cfea94ffdad9 # v2.5.0
-
-      - name: Install dependencies
-        run: bun ci
-        env:
-          # .npmrc may reference NPM_TOKEN, but PR installs must not expose
-          # the real npm token to dependency lifecycle scripts.
-          NPM_TOKEN: ""
-
-      - name: Check bun.lock workspace-version drift
-        # A frozen-lockfile install never validates a workspace's cached
-        # "version" in bun.lock against its own package.json, so a stale
-        # entry (see scripts/check-lockfile-workspace-versions.ts) can
-        # silently persist and ship a wrong `workspace:*`/`workspace:^`
-        # range at pack time.
-        run: bun run scripts/check-lockfile-workspace-versions.ts
-
-      - name: Setup Rust
-        run: |
-          rustup toolchain install 1.96.0 --profile minimal \
-            --component rustfmt,clippy \
-            --target wasm32-unknown-unknown
-          rustup toolchain install nightly-2026-04-16 --profile minimal \
-            --component rustc-dev \
-            --component llvm-tools-preview
-          rustup default 1.96.0
-          cargo install cargo-dylint --version 6.0.1 --locked
-          cargo install dylint-link --version 6.0.1 --locked
-
-      - name: Install pinned Rust CI tools (checksum-verified)
-        # Prebuilt nextest (the `cargo ci-test` runner), cargo-deny (the
-        # supply-chain gate, `cargo ci-deny`), and cargo-insta (the
-        # snapshot-hygiene gate, `cargo ci-snapshot`); avoids a from-source
-        # compile on every CI run. taiki-e/install-action verifies release
-        # checksums, unlike a raw `curl | tar`. Version-pinned for
-        # reproducibility, matching the exact-version pins above.
-        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9 # v2.84.0
-        with:
-          tool: nextest@0.9.140,cargo-deny@0.20.2,cargo-insta@1.48.0
-
-      # Cache the compiled dependency graph across runs. Without this the whole
-      # Rust workspace (and its heavy deps) recompiled from scratch every run;
-      # caching also amortizes the optimized `ci` test profile so the faster
-      # test execution is a net win, not just a compile-time trade. Keyed on the
-      # lockfile plus the pinned toolchain, so a dependency or Rust bump
-      # invalidates the cache.
-      - name: Cache Rust build
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-1.96.0-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-1.96.0-
-
+          profile: quality
+          cache-scope: quality
       - name: Rust checks
         run: bun run rust:check
-
       - name: Cargo deny (supply chain)
-        # Full-tree license/advisory/source/duplicate checks; complements the
-        # PR-scoped dependency-review action. See deny.toml.
         run: bun run rust:deny
+      - name: Snapshot hygiene (insta)
+        run: bun run rust:snapshot-check
 
+  detached-rust:
+    name: Detached Rust workspaces
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: detached
+          cache-scope: detached
       - name: Native Nym cargo deny (supply chain)
-        # The benchmark adapter is a detached workspace and therefore needs
-        # its own narrow policy and explicit continuous check.
         run: >-
           cargo deny --locked
           --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml
           --config packages/benchmark/native/nym-adapter/deny.toml
           check
-
-      - name: Snapshot hygiene (insta)
-        # Rejects snapshot mismatches and orphaned .snap files no test
-        # references anymore. Reuses the cached `ci` profile build.
-        run: bun run rust:snapshot-check
-
       - name: Fuzz targets compile (anti-bitrot)
-        # The fuzz crate is its own workspace, so it is not covered by the
-        # `--workspace` build above and can silently stop compiling when the
-        # core public API changes. A compile-check (no nightly / cargo-fuzz /
-        # sanitizer needed) keeps the targets honest; actual fuzzing runs
-        # locally or on demand (see fuzz/README.md).
         run: cargo check --manifest-path fuzz/Cargo.toml --bins
-
       - name: Native Nym benchmark adapter
-        # This optional ONNX tool is deliberately a detached workspace so its
-        # heavy inference dependencies never enter stella's release graph.
-        # Compile and test it explicitly so that isolation cannot hide bitrot.
         run: |
           cargo fmt --check --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml
           cargo clippy --locked --all-targets \
@@ -234,117 +159,299 @@ jobs:
           cargo test --release --locked \
             --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml
 
+  build:
+    name: Build verified workspace
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          repository-checks: "true"
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: build
+          cache-scope: build
       - name: Check runtime package versions
-        # Verify, do not mutate: a PR that bumps VERSION without bumping
-        # the package versions (or vice versa) must fail CI, not be
-        # silently patched in-job.
         run: bun run check:version
-
       - name: Setup browser WebAssembly tools
         uses: ./.github/actions/setup-browser-wasm
-
       - name: Build
         run: bun run build
+      - name: Stage cache-external build outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=crates/anonymize-py/python/stella_anonymize/native_packages
+          rm -rf "$target"
+          mkdir -p "$target"
+          cp packages/anonymize/native-pipeline*.stlanonpkg "$target/"
+          cp \
+            packages/anonymize/stella_anonymize_napi.node \
+            packages/anonymize-linux-x64-gnu/stella_anonymize_napi.node
+      - name: Archive build outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          required=(
+            packages/anonymize/dist
+            packages/anonymize/native-wasm-dist
+            packages/anonymize/stella_anonymize_napi.node
+            packages/anonymize/wasm/dist
+            packages/cli/dist
+            packages/data/dist
+            packages/document-docx/dist
+            packages/document-pdf/dist
+            packages/mcp/dist
+          )
+          for path in "${required[@]}"; do
+            if [[ ! -e "$path" ]]; then
+              echo "::error::Build did not produce $path"
+              exit 1
+            fi
+          done
 
-      - name: Native scaling regression suite
-        # Every ignored core test is a release-mode scaling contract. Running
-        # the complete set means a newly added contract is gated automatically;
-        # no workflow allowlist can silently fall out of sync. Serial execution
-        # limits contention for the few contracts that also retain a generous
-        # wall-clock ceiling alongside their deterministic operation budget.
+          native_packages=(packages/anonymize/native-pipeline*.stlanonpkg)
+          python_packages=(
+            crates/anonymize-py/python/stella_anonymize/native_packages/*.stlanonpkg
+          )
+          sidecars=(packages/anonymize-*/stella_anonymize_napi.node)
+          if [[ "${#native_packages[@]}" -eq 0 ]]; then
+            echo "::error::Build did not produce a native pipeline package"
+            exit 1
+          fi
+          if [[ "${#python_packages[@]}" -eq 0 ]]; then
+            echo "::error::Build did not stage the Python pipeline package"
+            exit 1
+          fi
+          if [[ "${#sidecars[@]}" -eq 0 ]]; then
+            echo "::error::Build did not produce a native platform sidecar"
+            exit 1
+          fi
+
+          trap 'rm -f .ci-build-sha' EXIT
+          printf '%s\n' "$GITHUB_SHA" > .ci-build-sha
+          outputs=(
+            .ci-build-sha
+            packages/*/dist
+            packages/anonymize/wasm/dist
+            packages/anonymize/native-wasm-dist
+            packages/anonymize/stella_anonymize_napi.node
+            packages/anonymize/native-pipeline*.stlanonpkg
+            packages/anonymize-*/stella_anonymize_napi.node
+            crates/anonymize-py/python/stella_anonymize/native_packages/*.stlanonpkg
+          )
+          tar -czf "$RUNNER_TEMP/ci-build.tar.gz" -- "${outputs[@]}"
+      - name: Upload build outputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        with:
+          name: ci-build
+          path: ${{ runner.temp }}/ci-build.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  scaling:
+    name: Native scaling regression suite
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: scaling
+          cache-scope: scaling
+      - name: Run every scaling contract
         run: >-
           cargo test --release --locked -p stella-anonymize-core
           -- --ignored --test-threads=1
 
-      - name: Package exports (publint + attw)
-        # Validates the published @stll/anonymize package.json exports and that
-        # its types resolve for real consumers. Runs after the build so dist/
-        # exists.
-        run: bun run check:exports
-
+  static:
+    name: Static checks
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-built-workspace
       - name: Lint
         run: bun run lint
-
       - name: Verify data mirror
         run: bun run --cwd packages/data check:mirror
-
       - name: Format
         run: bun run format:check
-
       - name: Typecheck
         run: bun run typecheck
-
       - name: Knip (unused/undeclared deps)
-        # High-signal only: undeclared (`unlisted`) and unresolved imports. The
-        # unused-file/export/dependency rules are off — this polyglot monorepo
-        # (native bindings, wasm, .mjs scripts, uv tooling) trips too many false
-        # positives on them to gate. See knip.json.
         run: bun run check:knip
 
-      - name: Install uv
-        run: |
-          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Python typecheck
-        run: bun run python:typecheck
-
-      - name: Python wheel
-        run: bun run python:wheel
-
+  tests:
+    name: Tests
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-built-workspace
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: consumer
+          cache-scope: build
       - name: Test
         run: bun run test
 
+  python:
+    name: Python
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-built-workspace
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: consumer
+          cache-scope: build
+      - name: Install uv
+        shell: bash
+        run: |
+          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Python typecheck
+        run: bun run python:typecheck
+      - name: Python wheel
+        run: bun run python:wheel
+
+  packages:
+    name: Package and browser compatibility
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-built-workspace
+      - name: Package exports (publint + attw)
+        run: bun run check:exports
       - name: Verify package tarballs
         run: node .github/tools/check-packlist.mjs
-
       - name: Smoke test built artifact
         run: bun run --cwd packages/anonymize smoke:dist
-
       - name: Smoke test wasm binding + package entry across runtimes
-        # Runs the raw-binding and package-entry smokes under BOTH Node and Bun.
-        # The same generated ESM module initializes in browsers and both server
-        # runtimes, so a loader regression fails here instead of downstream.
         run: bun run --cwd packages/anonymize smoke:wasm-runtimes
-
       - name: Smoke test wasm browser path
-        # Exercises the browser glue in an ordinary, non-cross-origin-isolated
-        # page. The smoke rejects shared WebAssembly memory and worker creation,
-        # so a generated-loader regression cannot silently narrow compatibility.
-        # Uses the system Chrome preinstalled on ubuntu runners via puppeteer-core
-        # (no browser download).
         env:
           CHROME_BIN: /usr/bin/google-chrome-stable
         run: bun run --cwd packages/anonymize smoke:wasm-browser
 
+  parity:
+    name: Runtime parity
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-built-workspace
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: consumer
+          cache-scope: build
       - name: Native fixture parity
-        # Drives the Rust crates/anonymize-py extension in a subprocess and
-        # asserts its default-package redaction is byte-for-byte identical to
-        # the in-process native binding across the cs/de/en contract fixtures.
-        # This is the go-forward parity gate: the legacy TypeScript pipeline
-        # (and its origin/main migration baseline) has been removed.
         run: bun run --cwd packages/anonymize test:native-fixtures
-
       - name: Native adapter parity and timings
-        # Emits aggregate TS/NAPI and Python/PyO3 timings for the shared
-        # Rust-backed static adapter contract, and gates on adapter failures or
-        # output-parity mismatches. Timings remain informational.
         run: bun run --cwd packages/anonymize perf:native-adapters
-
       - name: Native default SDK parity and timings
-        # Emits fixture-level default package timings for TS and Python SDKs,
-        # and gates on adapter failures or hashed-output parity mismatches.
-        # Timings remain informational.
         run: bun run --cwd packages/anonymize perf:native-default
 
+  mcp-node20:
+    name: MCP Node 20
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-built-workspace
+      - uses: ./.github/actions/setup-rust-ci
+        with:
+          profile: consumer
+          cache-scope: build
       - name: Setup minimum supported Node for MCP
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: "20.20.2"
           registry-url: https://registry.npmjs.org
           scope: "@stll"
-
       - name: MCP Node 20 native-lock and packed-bin smoke
-        # Pins the MCP package's honest runtime floor: exercises the native
-        # advisory lock plus an installed npm tarball through its Unix bin link.
         run: bun run --cwd packages/mcp test:node-runtime
+
+  validate:
+    name: validate
+    if: always()
+    needs:
+      - rust-quality
+      - detached-rust
+      - build
+      - scaling
+      - static
+      - tests
+      - python
+      - packages
+      - parity
+      - mcp-node20
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require every validation lane
+        shell: bash
+        env:
+          RUST_QUALITY: ${{ needs.rust-quality.result }}
+          DETACHED_RUST: ${{ needs.detached-rust.result }}
+          BUILD: ${{ needs.build.result }}
+          SCALING: ${{ needs.scaling.result }}
+          STATIC: ${{ needs.static.result }}
+          TESTS: ${{ needs.tests.result }}
+          PYTHON: ${{ needs.python.result }}
+          PACKAGES: ${{ needs.packages.result }}
+          PARITY: ${{ needs.parity.result }}
+          MCP_NODE20: ${{ needs.mcp-node20.result }}
+        run: |
+          set -euo pipefail
+          for result in \
+            "$RUST_QUALITY" \
+            "$DETACHED_RUST" \
+            "$BUILD" \
+            "$SCALING" \
+            "$STATIC" \
+            "$TESTS" \
+            "$PYTHON" \
+            "$PACKAGES" \
+            "$PARITY" \
+            "$MCP_NODE20"; do
+            if [[ "$result" != "success" ]]; then
+              echo "::error::Validation lane finished with '$result'"
+              exit 1
+            fi
+          done

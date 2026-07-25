@@ -1,0 +1,96 @@
+name: Setup Rust CI
+description: Install and cache the pinned Rust toolchain for one CI lane
+
+inputs:
+  profile:
+    description: Rust lane profile (build, consumer, detached, quality, or scaling).
+    required: true
+  cache-scope:
+    description: Cache namespace shared only by lanes that consume one build graph.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Validate profile
+      shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: |
+        case "$PROFILE" in
+          build|consumer|detached|quality|scaling) ;;
+          *)
+            echo "::error::Unknown Rust CI profile: $PROFILE"
+            exit 1
+            ;;
+        esac
+
+    - name: Install stable Rust
+      shell: bash
+      run: |
+        rustup toolchain install 1.96.0 --profile minimal
+        rustup default 1.96.0
+
+    - if: inputs.profile == 'build'
+      name: Install WebAssembly target
+      shell: bash
+      run: rustup target add wasm32-unknown-unknown --toolchain 1.96.0
+
+    - if: inputs.profile == 'quality' || inputs.profile == 'detached'
+      name: Install Rust quality components
+      shell: bash
+      run: rustup component add rustfmt clippy --toolchain 1.96.0
+
+    - if: inputs.profile == 'quality'
+      name: Install Dylint toolchain
+      shell: bash
+      run: |
+        rustup toolchain install nightly-2026-04-16 --profile minimal \
+          --component rustc-dev \
+          --component llvm-tools-preview
+
+    - name: Cache Rust build
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/.crates.toml
+          ~/.cargo/.crates2.json
+          ~/.cargo/bin/cargo-dylint
+          ~/.cargo/bin/dylint-link
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+          fuzz/target/
+          packages/benchmark/native/nym-adapter/target/
+        key: ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.96.0-tools-v1-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock', 'packages/benchmark/native/nym-adapter/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ inputs.cache-scope }}-1.96.0-tools-v1-
+
+    - if: inputs.profile == 'quality'
+      name: Install pinned Dylint tools
+      shell: bash
+      run: |
+        if ! cargo install --list | grep -Fqx "cargo-dylint v6.0.1:"; then
+          cargo install cargo-dylint --version 6.0.1 --locked
+        fi
+        if ! cargo install --list | grep -Fqx "dylint-link v6.0.1:"; then
+          cargo install dylint-link --version 6.0.1 --locked
+        fi
+
+    - if: inputs.profile == 'quality'
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      with:
+        bun-version-file: package.json
+
+    - if: inputs.profile == 'quality'
+      name: Install pinned Rust quality tools
+      uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9 # v2.84.0
+      with:
+        tool: nextest@0.9.140,cargo-deny@0.20.2,cargo-insta@1.48.0
+
+    - if: inputs.profile == 'detached'
+      name: Install pinned cargo-deny
+      uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9 # v2.84.0
+      with:
+        tool: cargo-deny@0.20.2
