@@ -72,6 +72,10 @@ export const clausesRoute = new Elysia({
     body: importClauses.config.body,
     permissions: importClauses.config.permissions,
   })
+  .post("/import", importClauses.handler, {
+    body: importClauses.config.body,
+    permissions: importClauses.config.permissions,
+  })
   // AI assist: revise a clause body's prose in place (stateless; static path
   // registered before /:clauseId so it isn't captured as an id).
   .post("/ai-rewrite", rewriteClause.handler, {

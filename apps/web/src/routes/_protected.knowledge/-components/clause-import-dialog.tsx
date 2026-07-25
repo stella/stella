@@ -56,18 +56,26 @@ export const ClauseImportDialog = ({
     selected
       .text()
       .then((text) => {
-        const parsed: unknown = JSON.parse(text);
-        if (
-          typeof parsed !== "object" ||
-          parsed === null ||
-          !("clauses" in parsed)
-        ) {
-          setPreviewCount(0);
-          return;
+        try {
+          const parsed = JSON.parse(text);
+          if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            "clauses" in parsed
+          ) {
+            const { clauses } = parsed;
+            setPreviewCount(Array.isArray(clauses) ? clauses.length : 0);
+            return;
+          }
+        } catch {
+          // fallback to CSV preview count
+          const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+          if (lines.length > 1) {
+            setPreviewCount(lines.length - 1);
+            return;
+          }
         }
-        const { clauses } = parsed;
-        setPreviewCount(Array.isArray(clauses) ? clauses.length : 0);
-        return;
+        setPreviewCount(0);
       })
       .catch(() => {
         setPreviewCount(null);
@@ -83,7 +91,7 @@ export const ClauseImportDialog = ({
     }
 
     setImporting(true);
-    const response = await api.clauses.import.put({
+    const response = await api.clauses.import.post({
       file,
     });
     setImporting(false);
@@ -146,7 +154,7 @@ export const ClauseImportDialog = ({
               {t("clauses.selectFile")}
             </Button>
             <input
-              accept=".json"
+              accept=".json,.csv"
               className="hidden"
               onChange={handleFileChange}
               ref={inputRef}
