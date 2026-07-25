@@ -12,14 +12,16 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const temporary = await realpath(
   await mkdtemp(join(tmpdir(), "stella-mcp-pack-")),
 );
-const repositoryRoot = join(import.meta.dirname, "..", "..", "..");
+const repositoryRoot = await realpath(
+  join(import.meta.dirname, "..", "..", ".."),
+);
 const runtimePackageFiles = [
   "packages/anonymize/package.json",
   "packages/anonymize-darwin-arm64/package.json",
@@ -82,6 +84,41 @@ const preparePlatformPackage = async (destination) => {
   await cp(cachedNativeBinding, join(destination, nativeBinding));
 };
 
+const prepareCargoWorkspace = async (destination) => {
+  const { stdout } = await execFileAsync(
+    "cargo",
+    ["metadata", "--no-deps", "--locked", "--format-version", "1"],
+    { cwd: repositoryRoot },
+  );
+  const metadata = JSON.parse(stdout);
+  const workspaceMembers = new Set(metadata.workspace_members);
+  for (const cargoPackage of metadata.packages) {
+    if (!workspaceMembers.has(cargoPackage.id)) {
+      continue;
+    }
+    const packageFiles = new Set([
+      cargoPackage.manifest_path,
+      ...cargoPackage.targets.map((target) => target.src_path),
+    ]);
+    for (const source of packageFiles) {
+      const canonicalSource = await realpath(source);
+      const repositoryRelative = relative(repositoryRoot, canonicalSource);
+      if (
+        isAbsolute(repositoryRelative) ||
+        repositoryRelative === ".." ||
+        repositoryRelative.startsWith(`..${sep}`)
+      ) {
+        throw new Error(
+          `Cargo workspace file escapes the repository: ${canonicalSource}`,
+        );
+      }
+      const target = join(destination, repositoryRelative);
+      await mkdir(dirname(target), { recursive: true });
+      await cp(canonicalSource, target);
+    }
+  }
+};
+
 try {
   const coreArchive = await packPackage(
     join(repositoryRoot, "packages", "anonymize"),
@@ -97,6 +134,7 @@ try {
   for (const file of ["VERSION", "Cargo.toml", "Cargo.lock", "bun.lock"]) {
     await cp(join(repositoryRoot, file), join(releaseWorkspace, file));
   }
+  await prepareCargoWorkspace(releaseWorkspace);
   const pythonManifest = "crates/anonymize-py/pyproject.toml";
   await mkdir(dirname(join(releaseWorkspace, pythonManifest)), {
     recursive: true,

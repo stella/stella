@@ -23,6 +23,18 @@ let workspace;
 let lineEnding = "\n";
 const version = "9.8.7";
 const staleVersion = "9.8.6";
+const newlyAddedCargoPackage = "stella-new-inherited-core";
+const explicitCargoPackage = "stella-independent-tool";
+const explicitCargoVersion = "1.2.3";
+const inheritedCargoPackages = [
+  "stella-anonymize-adapter-contract",
+  "stella-anonymize-core",
+  "stella-anonymize-docx-core",
+  "stella-anonymize-pdf-core",
+  "stella-anonymize-napi",
+  "stella-anonymize-py",
+  newlyAddedCargoPackage,
+];
 
 const releaseWorkflow = readFileSync(
   join(repoRoot, ".github", "workflows", "release.yml"),
@@ -140,9 +152,13 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
       cwd: workspace,
       encoding: "utf8",
     });
-    if (staleCheck.status === 0 || !staleCheck.stderr.includes(sidecars[0])) {
+    if (
+      staleCheck.status === 0 ||
+      !staleCheck.stderr.includes(sidecars[0]) ||
+      !staleCheck.stderr.includes(newlyAddedCargoPackage)
+    ) {
       throw new Error(
-        `stale sidecar versions were not reported (${JSON.stringify(lineEnding)})`,
+        `stale synchronized versions were not reported (${JSON.stringify(lineEnding)})`,
       );
     }
 
@@ -151,6 +167,18 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
       cwd: workspace,
       stdio: "pipe",
     });
+    const syncedCargoLock = readFileSync(join(workspace, "Cargo.lock"), "utf8");
+    if (
+      cargoPackageVersion(syncedCargoLock, newlyAddedCargoPackage) !== version
+    ) {
+      throw new Error("new inherited Cargo package was not synchronized");
+    }
+    if (
+      cargoPackageVersion(syncedCargoLock, explicitCargoPackage) !==
+      explicitCargoVersion
+    ) {
+      throw new Error("explicit Cargo package version was mutated");
+    }
 
     const rootPackage = JSON.parse(
       readFileSync(join(workspace, "packages/anonymize/package.json"), "utf8"),
@@ -351,7 +379,31 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
 
 function writeFixture() {
   writeText("VERSION", `${version}\n`);
-  writeText("Cargo.toml", `[workspace.package]\nversion = "${version}"\n`);
+  const cargoMembers = [
+    ...inheritedCargoPackages.map((name) => cargoMemberDirectory(name)),
+    cargoMemberDirectory(explicitCargoPackage),
+  ];
+  writeText(
+    "Cargo.toml",
+    `[workspace]\nmembers = ${JSON.stringify(cargoMembers, null, 2)}\n\n` +
+      `[workspace.package]\nversion = "${version}"\n`,
+  );
+  for (const name of inheritedCargoPackages) {
+    const versionDeclaration =
+      name === newlyAddedCargoPackage
+        ? "version = { workspace = true }"
+        : "version.workspace = true";
+    writeText(
+      join(cargoMemberDirectory(name), "Cargo.toml"),
+      `[package]\nname = "${name}"\n${versionDeclaration}\nedition = "2024"\n`,
+    );
+    writeText(join(cargoMemberDirectory(name), "src/lib.rs"), "");
+  }
+  writeText(
+    join(cargoMemberDirectory(explicitCargoPackage), "Cargo.toml"),
+    `[package]\nname = "${explicitCargoPackage}"\nversion = "${explicitCargoVersion}"\nedition = "2024"\n`,
+  );
+  writeText(join(cargoMemberDirectory(explicitCargoPackage), "src/lib.rs"), "");
   writeText(
     "crates/anonymize-py/pyproject.toml",
     '[project]\ndynamic = ["version"]\n',
@@ -359,12 +411,13 @@ function writeFixture() {
   writeText(
     "Cargo.lock",
     [
-      cargoPackage("stella-anonymize-adapter-contract"),
-      cargoPackage("stella-anonymize-core"),
-      cargoPackage("stella-anonymize-docx-core"),
-      cargoPackage("stella-anonymize-pdf-core"),
-      cargoPackage("stella-anonymize-napi"),
-      cargoPackage("stella-anonymize-py"),
+      ...inheritedCargoPackages.map((name) =>
+        cargoPackage(
+          name,
+          name === newlyAddedCargoPackage ? staleVersion : version,
+        ),
+      ),
+      cargoPackage(explicitCargoPackage, explicitCargoVersion),
     ].join("\n"),
   );
 
@@ -402,8 +455,20 @@ function writeFixture() {
   writeText("bun.lock", bunLockFixture());
 }
 
-function cargoPackage(name) {
-  return `[[package]]\nname = "${name}"\nversion = "${version}"\n`;
+function cargoPackage(name, packageVersion) {
+  return `[[package]]\nname = "${name}"\nversion = "${packageVersion}"\n`;
+}
+
+function cargoMemberDirectory(name) {
+  return `crates/${name}`;
+}
+
+function cargoPackageVersion(lockText, name) {
+  const normalizedLockText = lockText.replaceAll("\r\n", "\n");
+  const match = new RegExp(
+    `\\[\\[package\\]\\]\\nname = "${name}"\\nversion = "([^"]+)"`,
+  ).exec(normalizedLockText);
+  return match?.[1];
 }
 
 function packageNameFor(file) {
