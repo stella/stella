@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import process from "node:process";
@@ -30,7 +29,6 @@ const ROOT_NATIVE_OPTIONAL_DEPENDENCIES = [
 const CARGO_WORKSPACE_MANIFEST = "Cargo.toml";
 const PYPROJECT_FILES = ["crates/anonymize-py/pyproject.toml"];
 const LOCK_FILE = "bun.lock";
-const CARGO_LOCK_FILE = "Cargo.lock";
 const checkOnly = process.argv.includes("--check");
 const releaseMode = process.argv.includes("--release");
 const version = readFileSync("VERSION", "utf8").trim();
@@ -68,8 +66,6 @@ const escapeRegExp = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // anchor on "\n", so normalize before matching (files are written back LF-only).
 const readTextFile = (file) =>
   readFileSync(file, "utf8").replaceAll("\r\n", "\n");
-
-const cargoLockedPackages = inheritedWorkspacePackageNames();
 
 const synchronizedDependencyRange = ({ dependencyRange, exactCoRelease }) => {
   if (!exactCoRelease) {
@@ -303,98 +299,8 @@ if (lockChanged) {
   );
 }
 
-const cargoLockText = readTextFile(CARGO_LOCK_FILE);
-let cargoLockChanged = false;
-let syncedCargoLockText = cargoLockText;
-
-for (const packageName of cargoLockedPackages) {
-  const packageVersionRe = new RegExp(
-    `(\\[\\[package\\]\\]\\nname = "${escapeRegExp(packageName)}"\\nversion = ")([^"]+)(")`,
-  );
-  const match = syncedCargoLockText.match(packageVersionRe);
-  if (!match) {
-    console.error(`${CARGO_LOCK_FILE} has no package entry for ${packageName}`);
-    hasMismatch = true;
-    continue;
-  }
-  const lockedVersion = match[2];
-  if (lockedVersion === version) {
-    continue;
-  }
-  if (checkOnly) {
-    console.error(
-      `${CARGO_LOCK_FILE} package ${packageName} has version ${lockedVersion}; expected ${version}`,
-    );
-    hasMismatch = true;
-    continue;
-  }
-  syncedCargoLockText = syncedCargoLockText.replace(
-    packageVersionRe,
-    `$1${version}$3`,
-  );
-  cargoLockChanged = true;
-}
-
-if (cargoLockChanged) {
-  writeFileSync(CARGO_LOCK_FILE, syncedCargoLockText);
-  console.log(
-    `Updated ${CARGO_LOCK_FILE} local package versions to ${version}`,
-  );
-}
-
 if (hasMismatch) {
   process.exit(1);
-}
-
-/** Discover every root-workspace package whose version explicitly inherits
- * `[workspace.package].version`. Cargo.lock records those packages with the
- * synchronized version, so deriving this set prevents a newly added crate from
- * being omitted by a manually maintained release allowlist. */
-function inheritedWorkspacePackageNames() {
-  const metadata = JSON.parse(
-    execFileSync(
-      "cargo",
-      ["metadata", "--no-deps", "--locked", "--format-version", "1"],
-      { encoding: "utf8" },
-    ),
-  );
-  const workspaceMembers = new Set(metadata.workspace_members);
-  const packageNames = [];
-  for (const cargoPackage of metadata.packages) {
-    if (!workspaceMembers.has(cargoPackage.id)) {
-      continue;
-    }
-    const packageSection = cargoPackageTable(cargoPackage.manifest_path);
-    const inheritsVersion =
-      /^version\.workspace\s*=\s*true\s*$/m.test(packageSection) ||
-      /^version\s*=\s*\{[^}]*\bworkspace\s*=\s*true\b[^}]*\}\s*$/m.test(
-        packageSection,
-      );
-    if (!inheritsVersion) {
-      continue;
-    }
-    packageNames.push(cargoPackage.name);
-  }
-
-  if (packageNames.length === 0) {
-    throw new Error(
-      `${CARGO_WORKSPACE_MANIFEST} has no members inheriting workspace version`,
-    );
-  }
-  return packageNames.sort((left, right) => left.localeCompare(right, "en"));
-}
-
-function cargoPackageTable(manifestFile) {
-  const text = readTextFile(manifestFile);
-  const header = /^\[package\]\s*$/m;
-  const match = header.exec(text);
-  if (!match) {
-    throw new Error(`${manifestFile} has no [package] table`);
-  }
-  const start = match.index + match[0].length;
-  const remainder = text.slice(start);
-  const nextTable = remainder.search(/^\s*\[/m);
-  return nextTable === -1 ? remainder : remainder.slice(0, nextTable);
 }
 
 function syncNativeOptionalDependencyLockVersion(text, dependency) {

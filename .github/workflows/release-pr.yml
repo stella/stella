@@ -15,9 +15,10 @@ jobs:
     name: Maintain Version Packages PR
     permissions:
       contents: read
-    uses: stella/.github/.github/workflows/changeset-release-pr.yml@c47bb87cc82047b5fdc2540983148d4e3efa9a37 # v1.3.0
+    uses: stella/.github/.github/workflows/changeset-release-pr.yml@4c9e6dbc502a9e9436252315a3be2bd327c5e32e
     with:
       bun-version-file: package.json
+      sync-cargo-inherited-lock: true
     secrets:
       CHANGELOG_APP_ID: ${{ secrets.CHANGELOG_APP_ID }}
       CHANGELOG_APP_PRIVATE_KEY: ${{ secrets.CHANGELOG_APP_PRIVATE_KEY }}
