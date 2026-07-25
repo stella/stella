@@ -218,10 +218,9 @@ const providerOutput = {
 const detections = convert_external_detection_batch(document, providerOutput);
 ```
 
-The same converter is available from `@stll/anonymize-wasm`; its browser and
-Node-WASI entry returns a promise because the WASM binding loads lazily. Node,
-Python, Node-WASI, and browser WASM execute the same Rust validation and offset
-conversion contract.
+The same converter is available from `@stll/anonymize-wasm`; it returns a
+promise because the WebAssembly binding loads lazily. Node, Python, and browser
+WebAssembly execute the same Rust validation and offset conversion contract.
 
 The example provider output is deliberately synthetic. Real providers may run
 in-process, as a local sidecar, or behind an application-owned service.

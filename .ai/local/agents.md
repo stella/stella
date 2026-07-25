@@ -134,7 +134,7 @@ support resource, but the rule metadata and behavior stay module-local.
 
 The VM snapshot already provides Bun 1.3.14, Node 22 (via nvm, set as the
 default alias), and the pinned Rust 1.96.0 toolchain with the
-`wasm32-wasip1-threads` target. The startup update script only runs
+`wasm32-unknown-unknown` target. The startup update script only runs
 `bun install`; standard commands are in [Repository Specifics](#repository-specifics) above and in
 `package.json` scripts. Non-obvious caveats:
 
@@ -144,10 +144,13 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
   satisfies this; on an older Node 22.x the data/CLI build fails with
   `Failed to import module "unrun"`. If a fresh shell resolves an older node,
   run `nvm use default`.
-- **Run the CLI / WASM binding under Node, not Bun.** The runtime uses the
-  `wasm32-wasip1-threads` binding and Bun's `node:wasi` lacks
-  `WASI.prototype.initialize`, so use `node packages/cli/dist/cli.mjs ...`
-  (see `packages/cli/README.md`).
+- **WASM binding smoke tests cover Node, Bun, and browsers.** The generated
+  wasm-bindgen module uses ordinary single-thread memory. Run
+  `smoke:wasm-runtimes` after loader changes; run
+  `smoke:wasm-browser` to prove the ordinary non-isolated browser path. The
+  generator requires exactly wasm-bindgen CLI 0.2.126. Keep the shared runtime
+  artifact policy enforced during both dist assembly and tarball validation;
+  do not bypass its size ceilings or closed `dist/native/` file set.
 - **Build before test / Python.** `bun run build` generates the `.stlanonpkg`
   prepared packages the SDKs, CLI, and Python crate consume. Turbo wires
   `^build` for `test`/`typecheck`, but the Python surface needs a completed

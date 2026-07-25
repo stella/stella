@@ -1,9 +1,7 @@
 [toolchain]
 channel = "1.96.0"
 components = ["rustfmt", "clippy"]
-# The wasm binding for @stll/anonymize-wasm is built for this target via
-# `cd packages/anonymize && bun run build:native-wasm`. Pinning it here means a
-# clean checkout gets the target installed by `rustup` automatically, without a
-# separate `rustup target add wasm32-wasip1-threads` step.
-targets = ["wasm32-wasip1-threads"]
+# The browser binding is a single-thread wasm-bindgen module. It has no WASI,
+# worker, SharedArrayBuffer, or cross-origin-isolation requirement.
+targets = ["wasm32-unknown-unknown"]
 profile = "minimal"

@@ -1,4 +1,4 @@
-use std::time::Instant;
+use web_time::Instant;
 
 use crate::address_seeds::AddressSeedDetectionProfile;
 use crate::diagnostics::DiagnosticStage;

@@ -1,4 +1,4 @@
-use std::time::Instant;
+use web_time::Instant;
 
 use stella_text_search_core as text_search;
 

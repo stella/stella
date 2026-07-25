@@ -2,26 +2,18 @@
 /**
  * Headless-browser smoke test for the @stll/anonymize-wasm BROWSER path.
  *
- * The Node-WASI smokes (`smoke:wasm`, `smoke:wasm-package`) exercise the
- * `index.wasi.cjs` glue under `node:wasi`. They never touch the browser glue
- * (`index.wasi-browser.js`), its Web `Worker`, or the `SharedArrayBuffer` path
- * that the `wasm32-wasip1-threads` binding needs. This smoke closes that gap.
+ * The Node/Bun smokes exercise the same generated ESM module in server
+ * runtimes. This smoke proves its browser path without cross-origin isolation,
+ * shared memory, or workers.
  *
  * Architecture:
- *   - A local static HTTP server serves the built `wasm/dist/` directory. Every
- *     response carries the cross-origin isolation headers the shared-memory
- *     (SharedArrayBuffer) path requires:
- *         Cross-Origin-Opener-Policy:   same-origin
- *         Cross-Origin-Embedder-Policy: require-corp
- *     so `self.crossOriginIsolated === true` in the served document, its module
- *     worker, and the wasm fetch. Serving isolated headers is why NO Chrome
- *     `--enable-features=SharedArrayBuffer` flag is needed: SAB is available to
- *     a properly isolated context by default on every supported channel.
+ *   - A local static HTTP server serves the built `wasm/dist/` directory with
+ *     no cross-origin isolation headers.
  *   - A headless Chrome (system binary; see resolveChrome) navigates to the
- *     isolated document, then dynamically imports the package browser entry
+ *     ordinary document, then dynamically imports the package browser entry
  *     (`/wasm.mjs`) and runs `loadDefaultPipeline("en")` + `redactText`. The
- *     module's own `import.meta.url` resolves the `native/` glue, worker, wasm
- *     binary, and the `en` compressed package from the same origin.
+ *     module's own `import.meta.url` resolves the `native/` glue, wasm binary,
+ *     and the `en` compressed package from the same origin.
  *
  * Assumptions / environment:
  *   - The package must be built first: `bun run build` then
@@ -59,7 +51,7 @@ const pdfFixturePath = join(
 
 const SAMPLE = "A contract was signed by Jan Novak at Praha on 1. 1. 2025.";
 const EXTERNAL_DETECTION_DOCUMENT = "😀Alice signed.";
-// Hard ceiling so a hung browser/worker cannot exceed the CI budget.
+// Hard ceiling so a hung browser cannot exceed the CI budget.
 const OVERALL_TIMEOUT_MS = 90_000;
 const EVAL_TIMEOUT_MS = 45_000;
 
@@ -77,12 +69,6 @@ const CONTENT_TYPES = new Map([
   [".wasm", "application/wasm"],
   [".stlanonpkg", "application/octet-stream"],
 ]);
-
-const ISOLATION_HEADERS = {
-  "Cross-Origin-Opener-Policy": "same-origin",
-  "Cross-Origin-Embedder-Policy": "require-corp",
-  "Cross-Origin-Resource-Policy": "same-origin",
-};
 
 const INDEX_HTML =
   '<!doctype html><html><head><meta charset="utf-8">' +
@@ -131,13 +117,10 @@ const resolveChrome = () => {
   );
 };
 
-/** Static file server for `wasm/dist/`, isolation headers on every response. */
+/** Static file server for `wasm/dist/` without isolation headers. */
 const startServer = () =>
   new Promise((resolve) => {
     const server = createServer((request, response) => {
-      for (const [name, value] of Object.entries(ISOLATION_HEADERS)) {
-        response.setHeader(name, value);
-      }
       const urlPath = decodeURIComponent((request.url ?? "/").split("?")[0]);
       if (urlPath === "/") {
         response.setHeader("Content-Type", CONTENT_TYPES.get(".html"));
@@ -160,14 +143,47 @@ const startServer = () =>
     server.listen(0, "127.0.0.1", () => resolve(server));
   });
 
-/** Runs inside the isolated page: prove SAB is available, load the browser
- * entry, redact, and hand a compact result back to Node. */
+/** Runs inside an ordinary page, rejects shared memory and worker creation,
+ * loads the browser entry, redacts, and hands a compact result back to Node. */
 const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
-  if (self.crossOriginIsolated !== true) {
-    throw new Error("document is not cross-origin isolated");
+  if (self.crossOriginIsolated !== false) {
+    throw new Error("browser smoke unexpectedly has cross-origin isolation");
   }
-  if (typeof SharedArrayBuffer === "undefined") {
-    throw new Error("SharedArrayBuffer is unavailable");
+  const NativeMemory = WebAssembly.Memory;
+  Object.defineProperty(WebAssembly, "Memory", {
+    configurable: true,
+    value: class NonSharedMemory extends NativeMemory {
+      constructor(descriptor) {
+        if (descriptor.shared === true) {
+          throw new Error(
+            "browser binding requested shared WebAssembly memory",
+          );
+        }
+        super(descriptor);
+      }
+    },
+  });
+  Object.defineProperty(self, "Worker", {
+    configurable: true,
+    value: class ForbiddenWorker {
+      constructor() {
+        throw new Error("browser binding attempted to create a worker");
+      }
+    },
+  });
+  const rawModule = await import("/native/index.js");
+  const initialized = await rawModule.default({
+    module_or_path: new URL("/native/index_bg.wasm", location.href),
+  });
+  const SharedBuffer = globalThis.SharedArrayBuffer;
+  const memoryBuffer = initialized.memory.buffer;
+  const sharedMemory =
+    (typeof SharedBuffer === "function" &&
+      memoryBuffer instanceof SharedBuffer) ||
+    Object.prototype.toString.call(memoryBuffer) ===
+      "[object SharedArrayBuffer]";
+  if (sharedMemory) {
+    throw new Error("browser binding uses shared WebAssembly memory");
   }
   const module = await import("/wasm.mjs");
   const expectedExternalLimits = {
@@ -273,6 +289,7 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
     pdfError = String(error?.message ?? error);
   }
   return {
+    singleThread: !sharedMemory,
     entities: result.resolvedEntities.map(({ start, end, text, label }) => ({
       start,
       end,
@@ -292,6 +309,7 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
 
 const validate = (result, expectedPdfJson, expectedPdfError) => {
   const {
+    singleThread,
     entities,
     redactedText,
     archiveByteLength,
@@ -302,6 +320,9 @@ const validate = (result, expectedPdfJson, expectedPdfError) => {
     pdfInspectionJson,
     pdfError,
   } = result;
+  if (singleThread !== true) {
+    throw new Error("browser binding did not prove single-thread memory");
+  }
   const expectedExternalDetection = [
     {
       start: 2,
@@ -432,7 +453,8 @@ const main = async () => {
         event: "wasm-browser-smoke",
         ok: true,
         chrome: executablePath,
-        crossOriginIsolated: true,
+        crossOriginIsolated: false,
+        singleThread: result.singleThread,
         entityCount: result.entities.length,
         encryptedSessionArchive: true,
         pdfInspectionParity: true,
@@ -450,9 +472,6 @@ const main = async () => {
     }
     throw error;
   } finally {
-    // The wasm binding's SharedArrayBuffer worker blocks on Atomics.wait, so a
-    // graceful `browser.close()` can hang waiting for the thread to unwind.
-    // Bound it and SIGKILL the browser process if it does not exit promptly.
     mark("closing");
     const process_ = browser.process();
     await withTimeout(browser.close(), 5_000, "browser close").catch(() => {

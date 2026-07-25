@@ -2,14 +2,10 @@
 /**
  * Runtime-matrix guard for the WebAssembly binding.
  *
- * The wasm binding ships a single Node/Bun WASI loader, but the glue napi-rs
- * generates only works out of the box under Node (its `node:wasi` WASI has
- * `.initialize()`; Bun's does not). `patch-wasm-loader-runtime.mjs` rewrites the
- * glue to the portable `@napi-rs/wasm-runtime` WASI so it loads under both. This
- * runner makes "loads and runs under every supported non-browser runtime" an
- * enforced invariant: it executes each wasm smoke under Node AND Bun and fails
- * if any runtime/smoke pair fails. A future loader change that breaks a runtime
- * is then a red CI check, not a downstream surprise.
+ * The wasm binding ships one generated ESM module for browsers, Node, and Bun.
+ * This runner makes "loads and runs under every supported non-browser runtime"
+ * an enforced invariant: it executes each wasm smoke under Node AND Bun and
+ * fails if any runtime/smoke pair fails.
  *
  * The browser loader is covered separately by `smoke-wasm-browser.mjs`
  * (puppeteer); it is not a non-browser runtime and is intentionally excluded.

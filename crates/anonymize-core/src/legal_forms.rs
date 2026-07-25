@@ -3165,7 +3165,7 @@ mod tests {
 
       let mut best = std::time::Duration::MAX;
       for _ in 0..5 {
-        let started = std::time::Instant::now();
+        let started = web_time::Instant::now();
         let segments = split_embedded_legal_form_list(0, &text, &data);
         let trimmed = trim_embedded_legal_form_list_prefix(0, &text, &data);
         best = best.min(started.elapsed());

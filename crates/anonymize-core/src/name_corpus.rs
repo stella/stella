@@ -1,4 +1,5 @@
-use std::{collections::HashSet, ops::Range, time::Instant};
+use std::{collections::HashSet, ops::Range};
+use web_time::Instant;
 
 use crate::resolution::{DetectionSource, PipelineEntity};
 use crate::types::{Error, Result};

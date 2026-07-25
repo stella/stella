@@ -56,7 +56,10 @@ jobs:
       - name: Setup Rust
         run: |
           rustup toolchain install 1.96.0 --profile minimal \
-            --target wasm32-wasip1-threads
+            --target wasm32-unknown-unknown
+
+      - name: Setup browser WebAssembly tools
+        uses: ./.github/actions/setup-browser-wasm
 
       - name: Build native runtime
         run: bun run build

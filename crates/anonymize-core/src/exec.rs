@@ -1,11 +1,11 @@
 //! Concurrency seam for the prepared-engine branches.
 //!
 //! Native targets fan independent work out across scoped OS threads. WebAssembly
-//! targets (for example `wasm32-wasip1` running in a browser) have no portable
-//! thread pool, so the same closures run sequentially. Both paths share one API
-//! so callers do not scatter `cfg` blocks. Results are byte-identical because
-//! every spawned branch is independent and deterministic; only the wall-clock
-//! scheduling differs.
+//! targets (for example `wasm32-unknown-unknown` running in a browser) have no
+//! portable thread pool, so the same closures run sequentially. Both paths share
+//! one API so callers do not scatter `cfg` blocks. Results are byte-identical
+//! because every spawned branch is independent and deterministic; only the
+//! wall-clock scheduling differs.
 
 #[cfg(not(target_family = "wasm"))]
 mod imp {

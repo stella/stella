@@ -137,6 +137,9 @@ jobs:
       - name: Verify native sidecar metadata
         run: node .github/tools/check-native-sidecars.mjs
 
+      - name: Setup browser WebAssembly tools
+        uses: ./.github/actions/setup-browser-wasm
+
       - name: Build
         run: bun run build
 
@@ -217,7 +220,7 @@ jobs:
         run: bun run build
         env:
           # Native sidecar packs only need the platform .node binding; skip
-          # the wasm32-wasip1-threads build on the platform matrix runners.
+          # the wasm32-unknown-unknown build on the platform matrix runners.
           STELLA_ANONYMIZE_SKIP_WASM_BUILD: "1"
 
       - name: Read package metadata
@@ -363,8 +366,16 @@ jobs:
       - name: Sync runtime package versions
         run: bun run sync:version -- --release
 
+      - name: Setup browser WebAssembly tools
+        if: matrix.package == 'packages/anonymize/wasm'
+        uses: ./.github/actions/setup-browser-wasm
+
       - name: Build
         run: bun run build
+        env:
+          # Only the browser package needs generated WebAssembly assets. Other
+          # release matrix legs still build their own package normally.
+          STELLA_ANONYMIZE_SKIP_WASM_BUILD: ${{ matrix.package == 'packages/anonymize/wasm' && '0' || '1' }}
 
       - name: Read package metadata
         id: package
@@ -599,7 +610,7 @@ jobs:
         run: bun run build
         env:
           # The wheel only needs the generated .stlanonpkg native pipeline
-          # packages; skip the wasm32-wasip1-threads build like pack-native.
+          # packages; skip the wasm32-unknown-unknown build like pack-native.
           STELLA_ANONYMIZE_SKIP_WASM_BUILD: "1"
 
       - name: Bundle native pipeline packages into the wheel source

@@ -1137,7 +1137,7 @@ describe("python binding parity", () => {
       ),
     );
     const node = JSON.parse(
-      loadNativeAnonymizeBinding().inspectPdfJson?.(fixture) ?? "null",
+      loadNativeAnonymizeBinding().inspectPdfJson(fixture),
     ) as unknown;
     expect(python.pdf_inspection).toEqual(node);
     const riskyFixture = readFileSync(
@@ -1151,7 +1151,7 @@ describe("python binding parity", () => {
       ),
     );
     const riskyNode = JSON.parse(
-      loadNativeAnonymizeBinding().inspectPdfJson?.(riskyFixture) ?? "null",
+      loadNativeAnonymizeBinding().inspectPdfJson(riskyFixture),
     ) as { risks?: { formXObjectCount?: unknown } };
     expect(riskyNode.risks?.formXObjectCount).toBeGreaterThanOrEqual(1);
     expect(python.pdf_risky_inspection).toEqual(riskyNode);
@@ -1177,14 +1177,11 @@ describe("python binding parity", () => {
     ];
     const binding = loadNativeAnonymizeBinding();
     expect(python.pdf_observed_inspection).toEqual(
-      JSON.parse(
-        binding.inspectPdfJson?.(fixture, JSON.stringify(observations)) ??
-          "null",
-      ),
+      JSON.parse(binding.inspectPdfJson(fixture, JSON.stringify(observations))),
     );
     let nodeMessage = "";
     try {
-      binding.inspectPdfJson?.(new Uint8Array([0]));
+      binding.inspectPdfJson(new Uint8Array([0]));
     } catch (error) {
       nodeMessage = error instanceof Error ? error.message : String(error);
     }
@@ -1259,11 +1256,10 @@ describe("python binding parity", () => {
       };
       const rewrite =
         loadNativeAnonymizeBinding().rewritePdfRasterFromDetectionsJson;
-      expect(typeof rewrite).toBe("function");
-      const node = rewrite?.(source, JSON.stringify(request), [pixels]);
+      const node = rewrite(source, JSON.stringify(request), [pixels]);
       expect(python.pdf_raster).toEqual({
-        document_base64: Buffer.from(node?.document ?? []).toString("base64"),
-        certificate: JSON.parse(node?.certificateJson ?? "null"),
+        document_base64: Buffer.from(node.document).toString("base64"),
+        certificate: JSON.parse(node.certificateJson),
       });
       expect(python.pdf_raster_detected).toEqual(python.pdf_raster);
       const astralObservation = {
@@ -1290,7 +1286,7 @@ describe("python binding parity", () => {
         ocr: "complete",
         imageCount: 0,
       };
-      const astralNode = rewrite?.(
+      const astralNode = rewrite(
         source,
         JSON.stringify({
           ...request,
@@ -1307,10 +1303,8 @@ describe("python binding parity", () => {
         [pixels],
       );
       expect(python.pdf_raster_astral).toEqual({
-        document_base64: Buffer.from(astralNode?.document ?? []).toString(
-          "base64",
-        ),
-        certificate: JSON.parse(astralNode?.certificateJson ?? "null"),
+        document_base64: Buffer.from(astralNode.document).toString("base64"),
+        certificate: JSON.parse(astralNode.certificateJson),
       });
       expect(python.pdf_detection_error).toEqual({
         code: "detection-failed",

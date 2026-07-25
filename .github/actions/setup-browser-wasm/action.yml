@@ -1,0 +1,14 @@
+name: Setup browser WebAssembly tools
+description: Install and verify the exact wasm-bindgen CLI used by release builds
+
+runs:
+  using: composite
+  steps:
+    - name: Install wasm-bindgen CLI
+      uses: taiki-e/install-action@ed67fa35ac944f3a9b33f12c4dd43b6f31a47e20 # v2.83.3
+      with:
+        tool: wasm-bindgen-cli@0.2.126
+
+    - name: Verify wasm-bindgen CLI
+      shell: bash
+      run: test "$(wasm-bindgen --version)" = "wasm-bindgen 0.2.126"

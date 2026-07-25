@@ -47,9 +47,6 @@
   },
   "homepage": "https://github.com/stella/anonymize",
   "license": "Apache-2.0",
-  "dependencies": {
-    "@napi-rs/wasm-runtime": "^1.1.6"
-  },
   "peerDependencies": {
     "vite": ">=5 <10"
   },

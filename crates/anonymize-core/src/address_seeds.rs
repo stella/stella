@@ -1,4 +1,5 @@
-use std::{collections::BTreeSet, time::Instant};
+use std::collections::BTreeSet;
+use web_time::Instant;
 
 use regex::Regex;
 

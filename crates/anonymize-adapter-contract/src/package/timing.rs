@@ -97,7 +97,7 @@ pub fn prepared_search_package_decode_timing_events(
   }
   events
 }
-pub(crate) fn elapsed_us(start: std::time::Instant) -> u64 {
+pub(crate) fn elapsed_us(start: web_time::Instant) -> u64 {
   let micros = start.elapsed().as_micros();
   u64::try_from(micros).unwrap_or(u64::MAX)
 }

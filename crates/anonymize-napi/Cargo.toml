@@ -13,9 +13,12 @@ crate-type = ["cdylib"]
 
 [features]
 default = ["zstd"]
-# Forwards to the adapter contract's zstd read support. Disabled for wasm
-# builds via `--no-default-features`.
-zstd = ["stella-anonymize-adapter-contract/zstd"]
+# Host bindings enable compressed-package support by default; feature
+# forwarding keeps the shared facade and adapter contract aligned.
+zstd = [
+  "stella-anonymize-adapter-contract/zstd",
+  "stella-anonymize-binding-core/zstd",
+]
 
 [dependencies]
 blake3 = "1"
@@ -26,6 +29,7 @@ napi = { version = "3", default-features = false, features = [
 napi-derive = "3"
 serde_json = "1"
 stella-anonymize-adapter-contract = { path = "../anonymize-adapter-contract", default-features = false }
+stella-anonymize-binding-core = { path = "../anonymize-binding-core", default-features = false }
 stella-anonymize-core = { path = "../anonymize-core" }
 stella-anonymize-docx-core = { path = "../anonymize-docx-core" }
 stella-anonymize-pdf-core = { path = "../anonymize-pdf-core" }

@@ -155,7 +155,7 @@ jobs:
         run: |
           rustup toolchain install 1.96.0 --profile minimal \
             --component rustfmt,clippy \
-            --target wasm32-wasip1-threads
+            --target wasm32-unknown-unknown
           rustup toolchain install nightly-2026-04-16 --profile minimal \
             --component rustc-dev \
             --component llvm-tools-preview
@@ -240,6 +240,9 @@ jobs:
         # silently patched in-job.
         run: bun run check:version
 
+      - name: Setup browser WebAssembly tools
+        uses: ./.github/actions/setup-browser-wasm
+
       - name: Build
         run: bun run build
 
@@ -300,18 +303,16 @@ jobs:
 
       - name: Smoke test wasm binding + package entry across runtimes
         # Runs the raw-binding and package-entry smokes under BOTH Node and Bun.
-        # The napi-rs WASI glue is patched to the portable @napi-rs/wasm-runtime
-        # WASI (node:wasi's WASI lacks .initialize() under Bun); this matrix is
-        # the guard that keeps the binding loadable on every supported non-browser
-        # runtime, so a loader regression fails here instead of downstream.
+        # The same generated ESM module initializes in browsers and both server
+        # runtimes, so a loader regression fails here instead of downstream.
         run: bun run --cwd packages/anonymize smoke:wasm-runtimes
 
       - name: Smoke test wasm browser path
-        # Exercises the browser glue, its Worker, and the SharedArrayBuffer
-        # (cross-origin isolated) path that the Node-WASI smokes never touch.
+        # Exercises the browser glue in an ordinary, non-cross-origin-isolated
+        # page. The smoke rejects shared WebAssembly memory and worker creation,
+        # so a generated-loader regression cannot silently narrow compatibility.
         # Uses the system Chrome preinstalled on ubuntu runners via puppeteer-core
-        # (no browser download). The smoke serves COOP/COEP headers itself, so no
-        # extra Chrome feature flags are required.
+        # (no browser download).
         env:
           CHROME_BIN: /usr/bin/google-chrome-stable
         run: bun run --cwd packages/anonymize smoke:wasm-browser

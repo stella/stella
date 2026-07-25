@@ -1,4 +1,4 @@
-use std::time::Instant;
+use web_time::Instant;
 
 use crate::prepared::detector_contract::{
   StaticDetectorRule, static_detector_modules,

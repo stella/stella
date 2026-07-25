@@ -915,7 +915,7 @@ mod tests {
     assert_eq!(small_checks, 0);
     assert_eq!(large_checks, 0);
 
-    let started = std::time::Instant::now();
+    let started = web_time::Instant::now();
     let resolved = merge_and_dedup(&large);
     let elapsed = started.elapsed();
     assert_eq!(resolved.len(), LARGE_COUNT);

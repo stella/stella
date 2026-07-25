@@ -9,8 +9,13 @@ types, load prepared packages, and call the same Rust core.
   diagnostics, and prepared artifact loading.
 - `crates/anonymize-adapter-contract`: shared JSON/package contract used by
   host-language bindings.
+- `crates/anonymize-binding-core`: runtime-neutral preparation, redaction,
+  session, and serialization operations shared by host bindings.
 - `crates/anonymize-napi`: Node.js binding.
 - `crates/anonymize-py`: Python binding.
+- `crates/anonymize-wasm`: single-thread browser WebAssembly binding.
+- `crates/document-rules-core`: reusable structured-document model, rule
+  kernels, direct batch engine, and optional incremental session cache.
 - `packages/anonymize/src/native.ts`: binding-agnostic TypeScript SDK wrappers.
 - `packages/anonymize/src/native-node.ts`: Node.js binding loader and default
   prepared-package loader.
@@ -40,6 +45,13 @@ The default product path ships an all-language package plus optional scoped
 language packages. When a caller knows the document language, use
 `getDefaultNativePipeline({ language })` so the runtime uses the smaller scoped
 artifact when available.
+
+The browser distribution uses `wasm32-unknown-unknown` and wasm-bindgen. It has
+ordinary unshared WebAssembly memory and does not depend on WASI, workers,
+`SharedArrayBuffer`, or cross-origin isolation. Build and tarball checks enforce
+a closed generated-asset set and explicit size ceilings. Node, Bun, and an
+ordinary non-isolated browser execute the same binding parity manifest and
+behavioral smokes.
 
 ## Runtime Surface Parity
 
@@ -121,6 +133,35 @@ Candidate-dense paths have release-mode scaling contracts. CI runs every
 ignored core test as one automatically discovered serial suite, so adding a
 contract does not require editing a workflow allowlist. Wall time remains only
 a secondary ceiling where retained.
+
+## Structured Document Rules
+
+`crates/document-rules-core` separates reusable rule execution from any file
+format or host binding. Documents contain stable block identifiers, text, and
+bounded neutral metadata. Findings use block-local spans and may refer to
+related spans without flattening a document into one synthetic string.
+
+Rules are Rust implementations collected in a `RuleSet`. Their `RuleSpec`
+declares the execution scope; rule code receives only the corresponding block,
+neighborhood, or document-facts context. Shared block analysis is computed once
+and passed to every applicable rule. Rules do not rescan through binding-owned
+callbacks or access process-global state.
+
+There are two execution paths over the same kernels:
+
+- `RuleEngine::analyze` is the direct batch path. It does not construct a Salsa
+  database, and batch-only builds can disable the `incremental` feature to omit
+  Salsa entirely.
+- `IncrementalDocumentSession` stores stable per-block inputs in Salsa. Text
+  edits invalidate that block, its bounded neighborhood, and derived document
+  facts; structural edits update explicit order/link inputs. Revisioned patches
+  validate completely before mutation.
+
+Exact batch/incremental result parity and deterministic execution counters are
+CI contracts. The counters prove bounded invalidation without relying on noisy
+wall-clock thresholds. The crate also checks on `wasm32-unknown-unknown`, so a
+consumer can compile a static rule set into an ordinary single-thread browser
+module without changing its core rule implementations.
 
 ## Extension Rules
 

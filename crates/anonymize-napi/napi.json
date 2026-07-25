@@ -1,5 +1,0 @@
-{
-  "binaryName": "index",
-  "packageName": "@stll/anonymize-wasm",
-  "targets": ["wasm32-wasip1-threads"]
-}

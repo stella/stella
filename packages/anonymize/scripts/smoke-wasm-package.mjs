@@ -1,9 +1,9 @@
 /**
  * Smoke test for the @stll/anonymize-wasm PACKAGE ENTRY (not just the raw
- * binding): exercises the built `wasm/dist/wasm.mjs` under Node's WASI runtime.
+ * binding): exercises the built `wasm/dist/wasm.mjs` under Node.
  *
- * Proves the new native-SDK surface works end to end: lazy `getBinding()` picks
- * the Node WASI glue, a compressed prepared package is byte-loaded into a
+ * Proves the native-SDK surface works end to end: lazy `getBinding()` initializes
+ * the generated ESM module, a compressed prepared package is byte-loaded into a
  * pipeline, `redactText` round-trips offsets, and `deanonymise` restores the
  * original text from the redaction map.
  *
@@ -20,6 +20,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { strToU8, zipSync } from "fflate";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(here);
@@ -42,6 +43,14 @@ const pdfFixturePath = join(
   "fixtures",
   "minimal-text.pdf",
 );
+const CONTENT_TYPES_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/content-types";
+const PACKAGE_RELATIONSHIPS_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/relationships";
+const OFFICE_RELATIONSHIPS_NAMESPACE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const WORD_NAMESPACE =
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
 for (const [label, path] of [
   ["package entry", entryPath],
@@ -69,6 +78,7 @@ const {
   defaultPackageUrl,
   CAPABILITY_MANIFEST,
   inspect_pdf_json: inspectPdfJson,
+  NATIVE_BINDING_PARITY_MEMBERS,
 } = entry;
 
 if (
@@ -85,14 +95,58 @@ if (typeof binding.nativePackageVersion !== "function") {
 if (typeof binding.inspectPdfJson !== "function") {
   throw new TypeError("getBinding() did not expose PDF inspection");
 }
+assertFunctionMembers(
+  "wasm binding",
+  binding,
+  NATIVE_BINDING_PARITY_MEMBERS.root,
+);
+assertFunctionMembers(
+  "wasm prepared factories",
+  binding.NativePreparedSearch,
+  NATIVE_BINDING_PARITY_MEMBERS.factories,
+);
+
+const docxBytes = minimalDocx("Contact 😀 Alice Smith");
+const nodeBinding = nativeNodeEntry.loadNativeAnonymizeBinding();
+const nodeExtractionJson = nodeBinding.extractDocxTextJson(docxBytes);
+const wasmExtractionJson = binding.extractDocxTextJson(docxBytes);
+if (wasmExtractionJson !== nodeExtractionJson) {
+  throw new Error("Node and wasm DOCX extraction results are not exact");
+}
+const extraction = JSON.parse(nodeExtractionJson);
+const block = extraction.blocks?.at(0);
+if (block?.text !== "Contact 😀 Alice Smith") {
+  throw new Error("DOCX parity fixture did not expose its expected block");
+}
+const rewritesJson = JSON.stringify([
+  {
+    location: block.location,
+    expectedText: block.text,
+    replacements: [{ start: 11, end: 22, replacement: "[PERSON_1]" }],
+  },
+]);
+const nodeRewrite = nodeBinding.rewriteDocxTextNative(docxBytes, rewritesJson);
+const wasmRewrite = binding.rewriteDocxTextNative(docxBytes, rewritesJson);
+if (
+  nodeRewrite.rewrittenBlockCount !== wasmRewrite.rewrittenBlockCount ||
+  nodeRewrite.appliedReplacementCount !== wasmRewrite.appliedReplacementCount ||
+  !Buffer.from(nodeRewrite.document).equals(Buffer.from(wasmRewrite.document))
+) {
+  throw new Error("Node and wasm DOCX rewrite results are not exact");
+}
+const rewrittenExtraction = JSON.parse(
+  binding.extractDocxTextJson(wasmRewrite.document),
+);
+if (rewrittenExtraction.blocks?.at(0)?.text !== "Contact 😀 [PERSON_1]") {
+  throw new Error("wasm DOCX rewrite did not preserve UTF-16 span behavior");
+}
 
 const pdfBytes = new Uint8Array(readFileSync(pdfFixturePath));
-const nodeBinding = nativeNodeEntry.loadNativeAnonymizeBinding();
 const nodePdfJson = nodeBinding.inspectPdfJson(pdfBytes);
 const directPdfJson = binding.inspectPdfJson(pdfBytes);
 const packagePdfJson = await inspectPdfJson(pdfBytes);
 if (packagePdfJson !== directPdfJson || packagePdfJson !== nodePdfJson) {
-  throw new Error("Node and WASI PDF inspection results are not exact");
+  throw new Error("Node and wasm PDF inspection results are not exact");
 }
 let directPdfError;
 let packagePdfError;
@@ -117,7 +171,7 @@ if (
   packagePdfError !== directPdfError ||
   nodePdfError !== directPdfError
 ) {
-  throw new Error("Node and WASI PDF inspection error behavior is not exact");
+  throw new Error("Node and wasm PDF inspection error behavior is not exact");
 }
 
 const version = await nativePackageVersion();
@@ -134,6 +188,34 @@ if (!existsSync(resolvedDefault)) {
 }
 
 const packageBytes = new Uint8Array(readFileSync(defaultPackagePath));
+const wasmPrepared =
+  binding.NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
+const nodePrepared =
+  nodeBinding.NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
+for (const [label, prepared] of [
+  ["wasm prepared search", wasmPrepared],
+  ["node prepared search", nodePrepared],
+]) {
+  assertFunctionMembers(
+    label,
+    prepared,
+    NATIVE_BINDING_PARITY_MEMBERS.prepared,
+  );
+  const session = prepared.createRedactionSession(
+    `${label.replaceAll(" ", "_")}_1`,
+  );
+  assertFunctionMembers(
+    `${label} session`,
+    session,
+    NATIVE_BINDING_PARITY_MEMBERS.session,
+  );
+  const plan = session.planStaticEntitiesWithCallerDetections({ inputs: [] });
+  assertFunctionMembers(
+    `${label} plan`,
+    plan,
+    NATIVE_BINDING_PARITY_MEMBERS.plan,
+  );
+}
 const pipeline = await loadPipeline(packageBytes);
 
 const sample = "A contract was signed by Jan Novak at Praha on 1. 1. 2025.";
@@ -203,6 +285,29 @@ console.log(
     deanonymiseRoundTrip: true,
     loadDefaultPipeline: true,
     regionalLanguageFallback: true,
+    docxParity: true,
     pdfInspectionParity: true,
   }),
 );
+
+function minimalDocx(text) {
+  return zipSync({
+    "[Content_Types].xml": strToU8(
+      `<Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
+    ),
+    "_rels/.rels": strToU8(
+      `<Relationships xmlns="${PACKAGE_RELATIONSHIPS_NAMESPACE}"><Relationship Id="rId1" Type="${OFFICE_RELATIONSHIPS_NAMESPACE}/officeDocument" Target="word/document.xml"/></Relationships>`,
+    ),
+    "word/document.xml": strToU8(
+      `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`,
+    ),
+  });
+}
+
+function assertFunctionMembers(label, value, members) {
+  for (const member of members) {
+    if (typeof value?.[member] !== "function") {
+      throw new TypeError(`${label} is missing required member ${member}`);
+    }
+  }
+}

@@ -14,6 +14,5 @@
     "duplicates": "off",
     "unlisted": "error",
     "unresolved": "error"
-  },
-  "ignoreDependencies": ["@napi-rs/wasm-runtime"]
+  }
 }

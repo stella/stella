@@ -1,11 +1,14 @@
 [workspace]
 members = [
   "crates/anonymize-adapter-contract",
+  "crates/anonymize-binding-core",
   "crates/anonymize-core",
   "crates/anonymize-docx-core",
   "crates/anonymize-pdf-core",
   "crates/anonymize-napi",
   "crates/anonymize-py",
+  "crates/anonymize-wasm",
+  "crates/document-rules-core",
 ]
 resolver = "3"
 
@@ -126,6 +129,11 @@ strip = "symbols"
 
 [profile.dev]
 debug = "line-tables-only"
+
+[profile.wasm-release]
+inherits = "release"
+panic = "abort"
+strip = "symbols"
 
 # CI test profile: keep the dev safety checks (debug-assertions, and
 # overflow-checks so offset/span arithmetic traps instead of silently wrapping),

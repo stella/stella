@@ -2,15 +2,15 @@
  * prepared-package assets survive both Vite's dev pre-bundler and a production
  * `vite build`.
  *
- * The package loads its napi-rs binding and bundled `.stlanonpkg` packages at
+ * The package loads its wasm-bindgen binding and bundled `.stlanonpkg` packages at
  * runtime from its own `native/` asset directory via
- * `new URL("./native/…", import.meta.url)` (the wasm module, the WASI worker,
- * the glue, and the packages). The paths are computed at runtime, so neither
+ * `new URL("./native/…", import.meta.url)` (the wasm module, its ESM glue,
+ * and the packages). The paths are computed at runtime, so neither
  * Vite's optimizer nor Rollup's static `new URL(…, import.meta.url)` handling
  * can follow them on their own.
  *
- * Dev (`vite serve`): the package plus the `@napi-rs/wasm-runtime` loader are
- * added to `optimizeDeps.exclude`, keeping their original on-disk paths so the
+ * Dev (`vite serve`): the package is added to `optimizeDeps.exclude`, keeping
+ * its original on-disk paths so the
  * relative URLs resolve next to the package's own files.
  *
  * Build (`vite build`): Rollup bundles `wasm.mjs` into a chunk, rewriting
@@ -20,8 +20,8 @@
  * AnonymizeWasmPluginOptions.packages}), and re-anchors the package's
  * `assetUrl` base onto a Rollup file-URL reference, so the runtime URLs resolve
  * to the emitted assets from whatever chunk ends up referencing them. The
- * glue's own internal `new URL(…, import.meta.url)` references (its `.wasm` and
- * worker) keep working because the glue directory is emitted side by side.
+ * glue's own internal `new URL(…, import.meta.url)` reference to its `.wasm`
+ * keeps working because the files are emitted side by side.
  *
  * The bundled prepared packages dominate the emitted size (the default
  * full-dictionary package alone is ~20 MB, plus per-language variants). An app
@@ -33,12 +33,12 @@ import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import type { Plugin } from "vite";
 
-const OPTIMIZE_EXCLUDE = ["@stll/anonymize-wasm", "@napi-rs/wasm-runtime"];
+const OPTIMIZE_EXCLUDE = ["@stll/anonymize-wasm"];
 const NATIVE_DIR = "native";
-/** The Node glue is always shipped in `native/`; any file there works as the
+/** The generated glue is always shipped in `native/`; any file there works as the
  * anchor. `new URL(fileName, <anchor>)` resolves to `native/<fileName>` because
  * URL resolution replaces the anchor's last path segment. */
-const ANCHOR_FILE = "index.wasi.cjs";
+const ANCHOR_FILE = "index.js";
 /** The exact `assetUrl` base expression emitted by the build (see wasm.ts).
  * Kept in sync with the compiled `wasm.mjs`; the transform fails loudly if the
  * dist shape drifts so this cannot silently ship broken asset paths. */
@@ -54,7 +54,7 @@ const DEFAULT_PACKAGE_FILE = `${PACKAGE_PREFIX}stlanonpkg`;
 const DEFAULT_PACKAGE_NAME = "default";
 
 /** Which bundled `.stlanonpkg` prepared packages the plugin emits into a
- * production build. The wasm binary, glue, and workers are always emitted; only
+ * production build. The wasm binary and glue are always emitted; only
  * the prepared packages are selectable because they dominate the output size.
  *
  * - `"all"` (default): every bundled package, preserving prior behavior.

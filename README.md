@@ -80,9 +80,10 @@ const pipeline = await loadDefaultPipeline("en");
 const { redaction } = pipeline.redactText("A contract signed by Alice Smith.");
 ```
 
-The threaded WASM build requires cross-origin isolation. Vite applications also
-need the package's Vite helper so the WASM worker and prepared data are emitted
-correctly. See the [browser guide](packages/anonymize/wasm/README.md).
+The browser build is single-threaded and works without cross-origin isolation,
+`SharedArrayBuffer`, or a worker. Vite applications can use the package helper
+to emit the WebAssembly module and prepared data. See the
+[browser guide](packages/anonymize/wasm/README.md).
 
 ### Python
 
@@ -214,17 +215,18 @@ package graph and parity boundaries.
 
 ## Packages
 
-| Package                                                     | Purpose                                             |
-| ----------------------------------------------------------- | --------------------------------------------------- |
-| [`@stll/anonymize`](packages/anonymize/README.md)           | Node.js SDK and native runtime                      |
-| [`stella-anonymize-core`](crates/anonymize-py/README.md)    | Python bindings                                     |
-| [`@stll/anonymize-wasm`](packages/anonymize/wasm/README.md) | Browser/WASM runtime                                |
-| [`@stll/anonymize-cli`](packages/cli/README.md)             | Command-line text, DOCX, and PDF workflows          |
-| [`@stll/anonymize-mcp`](packages/mcp/README.md)             | Path-only local MCP server                          |
-| [`@stll/anonymize-docx`](packages/document-docx/README.md)  | Structure-aware DOCX adapter                        |
-| [`@stll/anonymize-pdf`](packages/document-pdf/README.md)    | PDF inspection and destructive raster anonymization |
-| [`@stll/anonymize-data`](packages/data/README.md)           | Published dictionaries and detector configuration   |
-| [`crates/anonymize-core`](crates/anonymize-core/README.md)  | Shared Rust core                                    |
+| Package                                                              | Purpose                                             |
+| -------------------------------------------------------------------- | --------------------------------------------------- |
+| [`@stll/anonymize`](packages/anonymize/README.md)                    | Node.js SDK and native runtime                      |
+| [`stella-anonymize-core`](crates/anonymize-py/README.md)             | Python bindings                                     |
+| [`@stll/anonymize-wasm`](packages/anonymize/wasm/README.md)          | Browser/WASM runtime                                |
+| [`@stll/anonymize-cli`](packages/cli/README.md)                      | Command-line text, DOCX, and PDF workflows          |
+| [`@stll/anonymize-mcp`](packages/mcp/README.md)                      | Path-only local MCP server                          |
+| [`@stll/anonymize-docx`](packages/document-docx/README.md)           | Structure-aware DOCX adapter                        |
+| [`@stll/anonymize-pdf`](packages/document-pdf/README.md)             | PDF inspection and destructive raster anonymization |
+| [`@stll/anonymize-data`](packages/data/README.md)                    | Published dictionaries and detector configuration   |
+| [`crates/anonymize-core`](crates/anonymize-core/README.md)           | Shared Rust core                                    |
+| [`crates/document-rules-core`](crates/document-rules-core/README.md) | Structured document rule engine                     |
 
 Platform-specific Node.js binary packages are installed automatically as
 optional dependencies of `@stll/anonymize`.
@@ -268,6 +270,5 @@ raw personal data or non-public fixtures. A CLA check runs on pull requests.
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE). Third-party runtime attributions for the
-browser build are listed in
-[`packages/anonymize/wasm/README.md`](packages/anonymize/wasm/README.md).
+Apache-2.0. See [`LICENSE`](LICENSE). Third-party runtime attributions, including
+the browser build, are listed in [`ATTRIBUTION.md`](ATTRIBUTION.md).

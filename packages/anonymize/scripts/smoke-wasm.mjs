@@ -1,241 +1,130 @@
-/**
- * Smoke test for the WebAssembly build of the native binding.
- *
- * Proves the napi-rs `wasm32-wasip1` artifact in `native-wasm-dist/` loads and
- * runs end to end: the sequential (non-threaded) fallbacks in the Rust core are
- * exercised while preparing an engine from a package and while searching text.
- *
- * Build the artifact first with `bun run build:native-wasm`, and make sure
- * `native-pipeline.stlanonpkg` exists (produced by `bun run build`). Run with
- * Node (the loader relies on `node:wasi`): `node scripts/smoke-wasm.mjs`.
- */
-import { readFileSync } from "node:fs";
+#!/usr/bin/env node
+/** Foundational smoke for the generated single-thread wasm-bindgen module. */
 import { createHash } from "node:crypto";
-import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const packageRoot = dirname(here);
-const require = createRequire(import.meta.url);
-
-const wasiBindingPath = join(packageRoot, "native-wasm-dist", "index.wasi.cjs");
-const binding = require(wasiBindingPath);
-
-const {
-  NativePreparedSearch,
-  convertExternalDetectionBatch,
+import init, {
+  convertExternalDetectionBatchJson,
   externalDetectionLimitsJson,
+  inspectPdfJson,
   nativePackageVersion,
   normalizeForSearch,
-} = binding;
+  WasmPreparedSearch,
+} from "../native-wasm-dist/index.js";
 
-if (typeof NativePreparedSearch !== "function") {
-  throw new TypeError("wasm binding is missing NativePreparedSearch");
+const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const wasmBytes = readFileSync(
+  join(packageRoot, "native-wasm-dist", "index_bg.wasm"),
+);
+const module = await WebAssembly.compile(wasmBytes);
+const imports = WebAssembly.Module.imports(module);
+if (imports.some(({ module: name }) => name.startsWith("wasi"))) {
+  throw new Error("browser wasm unexpectedly imports WASI");
 }
-if (typeof convertExternalDetectionBatch !== "function") {
-  throw new TypeError("wasm binding is missing external detection conversion");
-}
-if (typeof externalDetectionLimitsJson !== "function") {
-  throw new TypeError("wasm binding is missing external detection limits");
+const initialized = await init({ module_or_path: module });
+if (initialized.memory.buffer instanceof SharedArrayBuffer) {
+  throw new Error("browser wasm unexpectedly uses shared memory");
 }
 
-const expectedExternalLimits = {
-  batchMaxBytes: 16_777_216,
-  documentMaxBytes: 67_108_864,
-  maxDetections: 100_000,
-  maxLabelMappings: 4_096,
-  maxMetadataBytes: 256,
-  providerIdMaxBytes: 128,
-};
-if (
-  JSON.stringify(JSON.parse(externalDetectionLimitsJson())) !==
-  JSON.stringify(expectedExternalLimits)
-) {
+if (nativePackageVersion().length === 0) {
+  throw new Error("wasm binding version is empty");
+}
+if (normalizeForSearch("Hello").length === 0) {
+  throw new Error("wasm normalization returned an empty result");
+}
+if (JSON.parse(externalDetectionLimitsJson()).maxDetections !== 100_000) {
   throw new Error("wasm external detection limits diverged");
 }
 
-const externalDocument = new TextEncoder().encode("😀Alice signed.");
-const externalDigest = createHash("sha256")
-  .update(externalDocument)
-  .digest("hex");
-const externalBatch = (offsetUnit, start, end) => ({
-  version: 1,
-  document: { sha256: externalDigest },
-  offsetUnit,
-  provider: {
-    id: "wasm-fake-provider",
-    name: "WASM fake provider",
-    version: "1",
-  },
-  labelMap: [{ providerLabel: "PER", entityLabel: "person" }],
-  detections: [{ id: "person-1", start, end, label: "PER", score: 0.99 }],
-});
-for (const [offsetUnit, start, end] of [
-  ["utf8-byte", 4, 9],
-  ["utf16-code-unit", 2, 7],
-  ["unicode-code-point", 1, 6],
-]) {
-  const detections = convertExternalDetectionBatch(
+const externalText = "😀Alice signed.";
+const externalDocument = new TextEncoder().encode(externalText);
+const digest = createHash("sha256").update(externalDocument).digest("hex");
+const converted = JSON.parse(
+  convertExternalDetectionBatchJson(
     externalDocument,
-    JSON.stringify(externalBatch(offsetUnit, start, end)),
-  );
-  if (
-    detections.length !== 1 ||
-    detections[0].start !== 2 ||
-    detections[0].end !== 7
-  ) {
-    throw new Error(`wasm external ${offsetUnit} conversion diverged`);
-  }
-}
-for (const [batch, expectedError] of [
-  [externalBatch("utf8-byte", 1, 9), "valid text boundary"],
-  [externalBatch("utf16-code-unit", 1, 7), "valid text boundary"],
-  [
-    {
-      ...externalBatch("unicode-code-point", 1, 6),
-      document: { sha256: "0".repeat(64) },
-    },
-    "document.sha256 does not match input bytes",
-  ],
-  [
     JSON.stringify({
-      ...externalBatch("unicode-code-point", 1, 6),
-      legacyOffsetGuessing: true,
+      version: 1,
+      document: { sha256: digest },
+      offsetUnit: "utf16-code-unit",
+      provider: { id: "smoke", name: "Smoke", version: "1" },
+      labelMap: [{ providerLabel: "PER", entityLabel: "person" }],
+      detections: [
+        { id: "person-1", start: 2, end: 7, label: "PER", score: 0.99 },
+      ],
     }),
-    "unknown field `legacyOffsetGuessing`",
-  ],
-]) {
-  try {
-    convertExternalDetectionBatch(
-      externalDocument,
-      typeof batch === "string" ? batch : JSON.stringify(batch),
-    );
-  } catch (error) {
-    if (error instanceof Error && error.message.includes(expectedError)) {
-      continue;
-    }
-    throw new Error(`wasm external detection error diverged: ${String(error)}`);
-  }
-  throw new Error("wasm external detection contract did not fail closed");
-}
-
-const version = nativePackageVersion();
-if (typeof version !== "string" || version.length === 0) {
-  throw new Error("nativePackageVersion did not return a version string");
-}
-
-const normalized = normalizeForSearch("Ĥĕllo   WÖRLD");
-if (typeof normalized !== "string" || normalized.length === 0) {
-  throw new Error("normalizeForSearch did not return normalized text");
-}
-
-const packagePath = join(packageRoot, "native-pipeline.stlanonpkg");
-const packageBytes = readFileSync(packagePath);
-const prepared = NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
-
-if (
-  typeof prepared.createRedactionSession !== "function" ||
-  typeof prepared.restoreRedactionSession !== "function" ||
-  typeof prepared.restoreEncryptedRedactionSession !== "function" ||
-  typeof prepared.createRedactionSessionWithLifecycle !== "function"
-) {
-  throw new TypeError("wasm binding is missing redaction session factories");
-}
-
-const sample = "A contract was signed by Jan Novak at Praha on 1. 1. 2025.";
-const result = prepared.redactStaticEntities(sample);
-const entities = result.resolvedEntities;
-
-if (!Array.isArray(entities) || entities.length === 0) {
-  throw new Error("wasm pipeline did not detect any entity");
-}
-
-for (const entity of entities) {
-  const { start, end, text } = entity;
-  if (
-    !Number.isInteger(start) ||
-    !Number.isInteger(end) ||
-    start < 0 ||
-    end <= start ||
-    end > sample.length
-  ) {
-    throw new Error(
-      `entity has out-of-range offsets: start=${start} end=${end} len=${sample.length}`,
-    );
-  }
-  // Offsets are UTF-16 code units, so a JS slice must round-trip the entity text.
-  if (sample.slice(start, end) !== text) {
-    throw new Error(
-      `entity offsets do not map to its text: [${start}, ${end}) => "${sample.slice(start, end)}" != "${text}"`,
-    );
-  }
-}
-
-const session = prepared.createRedactionSession("smoke_1");
-const sessionResult = JSON.parse(session.redactStaticEntitiesJson(sample));
-if (
-  !Array.isArray(sessionResult.redaction?.redaction_map) ||
-  sessionResult.redaction.redaction_map.length === 0 ||
-  session.mappingCount() === 0
-) {
-  throw new Error("wasm redaction session did not retain any mapping");
-}
-const sessionState = session.toPlaintextJson();
-const restoredSession = prepared.restoreRedactionSession(sessionState);
-if (restoredSession.sessionId() !== "smoke_1") {
-  throw new Error("wasm redaction session did not restore its identity");
-}
-const archiveKey = new Uint8Array(32).fill(0x42);
-const encryptedArchive = session.toEncryptedArchive(archiveKey);
-const encryptedRestoredSession = prepared.restoreEncryptedRedactionSession({
-  archive: encryptedArchive,
-  key: archiveKey,
-  expectedSessionId: "smoke_1",
-});
-if (
-  encryptedRestoredSession.sessionId() !== "smoke_1" ||
-  encryptedRestoredSession.mappingCount() !== session.mappingCount()
-) {
-  throw new Error("wasm encrypted session archive did not round-trip");
-}
-const lifecycleSession = prepared.createRedactionSessionWithLifecycle(
-  "lifecycle_smoke_1",
-  100,
-  200,
+  ),
 );
-lifecycleSession.redactStaticEntitiesJsonAt(sample, 150);
-const lifecycleArchive = lifecycleSession.toEncryptedArchiveAt(archiveKey, 150);
-const restoredLifecycleSession = prepared.restoreEncryptedRedactionSession({
-  archive: lifecycleArchive,
-  key: archiveKey,
-  expectedSessionId: "lifecycle_smoke_1",
-  observedAtEpochSeconds: 150,
-});
-if (JSON.parse(restoredLifecycleSession.inspectJson(150)).status !== "active") {
-  throw new Error("wasm encrypted lifecycle session did not round-trip");
+if (converted[0]?.start !== 2 || converted[0]?.end !== 7) {
+  throw new Error("wasm UTF-16 external detection conversion diverged");
 }
-const lifecycleMetadata = JSON.parse(lifecycleSession.inspectJson(200));
-if (lifecycleMetadata.status !== "expired") {
-  throw new Error("wasm lifecycle session did not expire at its boundary");
+
+const packageBytes = readFileSync(
+  join(packageRoot, "native-pipeline.stlanonpkg"),
+);
+const prepared = WasmPreparedSearch.fromPreparedPackageBytes(packageBytes);
+const sample = "A contract was signed by Jan Novak at Praha on 1. 1. 2025.";
+const result = JSON.parse(prepared.redactStaticEntitiesJson(sample));
+if (result.resolved_entities.length === 0) {
+  throw new Error("wasm pipeline found no entities");
 }
-const deletion = JSON.parse(lifecycleSession.deleteJson());
-if (deletion.deleted_mapping_count === 0) {
-  throw new Error("wasm lifecycle deletion did not clear mappings");
+for (const entity of result.resolved_entities) {
+  if (sample.slice(entity.start, entity.end) !== entity.text) {
+    throw new Error("wasm entity offsets are not UTF-16 code-unit offsets");
+  }
+}
+
+const streamEvents = [];
+const streamed = prepared.redactStaticEntitiesResultStreamJson(
+  sample,
+  undefined,
+  (eventJson) => streamEvents.push(JSON.parse(eventJson)),
+);
+const streamedResult = JSON.parse(streamed);
+if (
+  streamEvents.length === 0 ||
+  streamedResult.redaction.redacted_text !== result.redaction.redacted_text ||
+  streamedResult.redaction.entity_count !== result.redaction.entity_count
+) {
+  throw new Error("wasm result stream diverged");
+}
+
+const session = prepared.createRedactionSession("wasm_smoke_1");
+session.redactStaticEntitiesJson(sample);
+const key = new Uint8Array(32).fill(0x42);
+const archive = session.toEncryptedArchive(key);
+const restored = prepared.restoreEncryptedRedactionSession(
+  archive,
+  key,
+  "wasm_smoke_1",
+);
+if (restored.mappingCount() !== session.mappingCount()) {
+  throw new Error("wasm encrypted session archive diverged");
+}
+
+const pdf = readFileSync(
+  join(
+    packageRoot,
+    "..",
+    "..",
+    "crates",
+    "anonymize-pdf-core",
+    "tests",
+    "fixtures",
+    "minimal-text.pdf",
+  ),
+);
+if (JSON.parse(inspectPdfJson(pdf)).pageCount !== 1) {
+  throw new Error("wasm PDF inspection diverged");
 }
 
 console.log(
   JSON.stringify({
-    event: "wasm-smoke",
+    event: "wasm-binding-smoke",
     ok: true,
-    nativeVersion: version,
-    entityCount: entities.length,
-    sessionMappingCount: session.mappingCount(),
-    labels: entities.map((entity) => entity.label),
-    firstEntity: {
-      start: entities[0].start,
-      end: entities[0].end,
-      label: entities[0].label,
-    },
+    imports: imports.length,
+    entities: result.resolved_entities.length,
+    streamEvents: streamEvents.length,
   }),
 );

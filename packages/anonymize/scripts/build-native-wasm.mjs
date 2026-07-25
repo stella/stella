@@ -1,16 +1,9 @@
 #!/usr/bin/env node
-/**
- * Build the napi-rs wasm32-wasip1-threads binding into `native-wasm-dist/`.
- *
- * Set STELLA_ANONYMIZE_SKIP_WASM_BUILD=1 to skip (the release pack-native
- * matrix only packs platform `.node` sidecars and does not need the wasm
- * binding; building it on every platform runner would be wasted work).
- */
+/** Build the browser-native, single-thread wasm-bindgen adapter. */
 import { execFileSync } from "node:child_process";
+import { mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { patchWasiLoadersForBun } from "./patch-wasm-loader-runtime.mjs";
 
 if (process.env.STELLA_ANONYMIZE_SKIP_WASM_BUILD === "1") {
   console.log(
@@ -20,32 +13,63 @@ if (process.env.STELLA_ANONYMIZE_SKIP_WASM_BUILD === "1") {
 }
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const nativeDistDir = join(packageRoot, "native-wasm-dist");
+const repoRoot = dirname(dirname(packageRoot));
+const outputDir = join(packageRoot, "native-wasm-dist");
+const wasmPath = join(
+  repoRoot,
+  "target",
+  "wasm32-unknown-unknown",
+  "wasm-release",
+  "stella_anonymize_wasm.wasm",
+);
+const expectedWasmBindgenVersion = "wasm-bindgen 0.2.126";
+let actualWasmBindgenVersion;
+try {
+  actualWasmBindgenVersion = execFileSync("wasm-bindgen", ["--version"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  }).trim();
+} catch (cause) {
+  throw new Error(`${expectedWasmBindgenVersion} is required`, { cause });
+}
+if (actualWasmBindgenVersion !== expectedWasmBindgenVersion) {
+  throw new Error(
+    `Expected ${expectedWasmBindgenVersion}, got ${actualWasmBindgenVersion}`,
+  );
+}
+
+// wasm-bindgen does not own files left by an earlier generator. Recreate the
+// generated directory so obsolete loaders can never leak into later builds.
+rmSync(outputDir, { recursive: true, force: true });
+mkdirSync(outputDir, { recursive: true });
 
 execFileSync(
-  "napi",
+  "cargo",
   [
     "build",
-    "--manifest-path",
-    "../../crates/anonymize-napi/Cargo.toml",
-    "--config-path",
-    "../../crates/anonymize-napi/napi.json",
-    "--platform",
+    "-p",
+    "stella-anonymize-wasm",
     "--target",
-    "wasm32-wasip1-threads",
-    "--no-default-features",
-    "--release",
-    "--output-dir",
-    "native-wasm-dist",
+    "wasm32-unknown-unknown",
+    "--profile",
+    "wasm-release",
+    "--locked",
   ],
-  { stdio: "inherit", shell: process.platform === "win32" },
+  { cwd: repoRoot, stdio: "inherit" },
+);
+execFileSync(
+  "wasm-bindgen",
+  [
+    wasmPath,
+    "--target",
+    "web",
+    "--no-typescript",
+    "--out-dir",
+    outputDir,
+    "--out-name",
+    "index",
+  ],
+  { cwd: repoRoot, stdio: "inherit" },
 );
 
-// napi-rs generates the Node WASI glue against `node:wasi`, whose `WASI` lacks
-// `.initialize()` under Bun; patch it to the portable `@napi-rs/wasm-runtime`
-// WASI so the binding loads under both runtimes. The Bun leg of
-// `smoke-wasm-runtimes.mjs` guards against this regressing.
-const patched = patchWasiLoadersForBun(nativeDistDir);
-console.log(
-  `build-native-wasm: patched WASI glue for Bun (${patched.join(", ")})`,
-);
+console.log("build-native-wasm: emitted single-thread wasm-bindgen assets");

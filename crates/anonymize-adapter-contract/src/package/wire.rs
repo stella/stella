@@ -503,7 +503,7 @@ pub(crate) fn decode_core_package_parts(
 fn decode_core_package_config(
   config_bytes: &[u8],
 ) -> Result<(PreparedEngineConfig, u64)> {
-  let config_decode_start = std::time::Instant::now();
+  let config_decode_start = web_time::Instant::now();
   let (config, rest) =
     postcard::take_from_bytes::<PreparedEngineConfig>(config_bytes)
       .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
@@ -517,7 +517,7 @@ fn decode_core_package_config(
 fn decode_core_package_artifacts(
   artifacts_bytes: &[u8],
 ) -> Result<(PreparedEngineArtifacts, u64)> {
-  let artifacts_decode_start = std::time::Instant::now();
+  let artifacts_decode_start = web_time::Instant::now();
   let artifacts = PreparedEngineArtifacts::from_bytes(artifacts_bytes)
     .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
   Ok((artifacts, elapsed_us(artifacts_decode_start)))

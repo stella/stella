@@ -442,7 +442,7 @@ impl<'a> PreparedSearchPackageParts<'a> {
           ));
         }
         if digest_policy == PackageDigestPolicy::Verify {
-          let verify_start = std::time::Instant::now();
+          let verify_start = web_time::Instant::now();
           verify_prepared_search_package_digest(digest, payload)?;
           timings.verify = Some(elapsed_us(verify_start));
         }
@@ -485,7 +485,7 @@ impl<'a> PreparedSearchPackageParts<'a> {
             "raw payload length exceeds limit",
           ));
         }
-        let verify_start = std::time::Instant::now();
+        let verify_start = web_time::Instant::now();
         verify_prepared_search_package_digest(digest, payload)?;
         timings.verify = Some(elapsed_us(verify_start));
         Ok(())
@@ -496,7 +496,7 @@ impl<'a> PreparedSearchPackageParts<'a> {
         payload,
         ..
       } => {
-        let verify_start = std::time::Instant::now();
+        let verify_start = web_time::Instant::now();
         verify_prepared_search_compressed_package_digest(
           digest,
           compression,
@@ -518,7 +518,7 @@ fn compressed_digest_payload<'a>(
   digest_policy: PackageDigestPolicy,
 ) -> Result<Cow<'a, [u8]>> {
   if digest_policy == PackageDigestPolicy::Trust {
-    let decompress_start = std::time::Instant::now();
+    let decompress_start = web_time::Instant::now();
     let decompressed =
       decompress_package_payload(compression, payload, uncompressed_len)?;
     timings.decompress = Some(elapsed_us(decompress_start));
@@ -528,7 +528,7 @@ fn compressed_digest_payload<'a>(
   let (verify_result, verify_elapsed, decompressed, decompress_elapsed) =
     stella_anonymize_core::exec::scope(|scope| {
       let verify_handle = scope.spawn(|| {
-        let verify_start = std::time::Instant::now();
+        let verify_start = web_time::Instant::now();
         let result = verify_prepared_search_compressed_package_digest(
           digest,
           compression,
@@ -537,7 +537,7 @@ fn compressed_digest_payload<'a>(
         (result, elapsed_us(verify_start))
       });
       let decompress_handle = scope.spawn(|| {
-        let decompress_start = std::time::Instant::now();
+        let decompress_start = web_time::Instant::now();
         let result =
           decompress_package_payload(compression, payload, uncompressed_len);
         (result, elapsed_us(decompress_start))

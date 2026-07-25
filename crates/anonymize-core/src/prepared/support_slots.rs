@@ -1,4 +1,4 @@
-use std::time::Instant;
+use web_time::Instant;
 
 use crate::address_context::{AddressContextData, PreparedAddressContextData};
 use crate::address_seeds::{AddressSeedData, PreparedAddressSeedData};

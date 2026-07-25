@@ -1,6 +1,11 @@
 import process from "node:process";
 import { execFileSync } from "node:child_process";
 
+import {
+  assertWasmArtifactSize,
+  WASM_RUNTIME_ARTIFACTS,
+} from "../../packages/anonymize/scripts/wasm-artifact-policy.mjs";
+
 const PACKAGES = [
   {
     dir: "packages/anonymize",
@@ -83,20 +88,17 @@ const PACKAGES = [
   },
   {
     dir: "packages/anonymize/wasm",
+    closedDirectories: ["dist/native/"],
     expected: [
       "dist/wasm.d.mts",
       "dist/wasm.mjs",
       "dist/constants.mjs",
       "dist/vite.d.mts",
       "dist/vite.mjs",
-      // Runtime wasm binding + napi-rs WASI/browser glue the entry loads
+      // Runtime wasm binding + wasm-bindgen ESM glue the entry loads
       // from its own `native/` asset directory. Missing any of these means
       // build:wasm-assets did not run after tsdown wiped wasm/dist/native.
-      "dist/native/index.wasm32-wasi.wasm",
-      "dist/native/index.wasi.cjs",
-      "dist/native/index.wasi-browser.js",
-      "dist/native/wasi-worker.mjs",
-      "dist/native/wasi-worker-browser.mjs",
+      ...WASM_RUNTIME_ARTIFACTS.map((artifact) => artifact.packagePath),
       // Bundled default package plus the per-language compressed packages
       // (cs, de, en) that loadDefaultPipeline(language) resolves to.
       "dist/native/native-pipeline.stlanonpkg",
@@ -116,7 +118,12 @@ const PACKAGES = [
 
 const selectedPackages = selectPackages(process.argv.slice(2));
 
-for (const { dir, expected, forbidden = [] } of selectedPackages) {
+for (const {
+  dir,
+  expected,
+  forbidden = [],
+  closedDirectories = [],
+} of selectedPackages) {
   const packJson = execFileSync("npm", ["pack", "--dry-run", "--json"], {
     cwd: dir,
     encoding: "utf8",
@@ -141,6 +148,32 @@ for (const { dir, expected, forbidden = [] } of selectedPackages) {
       `${dir}: unexpected pack files: ${presentForbidden.join(", ")}`,
     );
     process.exit(1);
+  }
+  for (const prefix of closedDirectories) {
+    const expectedInDirectory = new Set(
+      expected.filter((file) => file.startsWith(prefix)),
+    );
+    const unexpected = [...files].filter(
+      (file) => file.startsWith(prefix) && !expectedInDirectory.has(file),
+    );
+    if (unexpected.length > 0) {
+      console.error(
+        `${dir}: unexpected files under ${prefix}: ${unexpected.join(", ")}`,
+      );
+      process.exit(1);
+    }
+  }
+  if (dir === "packages/anonymize/wasm") {
+    for (const artifact of WASM_RUNTIME_ARTIFACTS) {
+      const packed = pack.files.find(
+        ({ path }) => path === artifact.packagePath,
+      );
+      assertWasmArtifactSize({
+        file: artifact.packagePath,
+        bytes: packed?.size ?? Number.POSITIVE_INFINITY,
+        maxBytes: artifact.maxBytes,
+      });
+    }
   }
 }
 
