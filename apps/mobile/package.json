@@ -21,21 +21,21 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "~57.0.6",
+    "expo": "~57.0.7",
     "expo-constants": "~57.0.5",
     "expo-linking": "~57.0.3",
-    "expo-router": "~57.0.6",
+    "expo-router": "~57.0.7",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.1",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-native": "0.86.0",
-    "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "4.25.2",
+    "react-native-safe-area-context": "~5.8.0",
+    "react-native-screens": "4.26.2",
     "react-native-web": "~0.21.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.0",
+    "@babel/core": "^8.0.1",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
     "expo-doctor": "1.20.1"

@@ -78,7 +78,7 @@
     "oxlint-tsgolint": "7.0.2001",
     "react": "catalog:react19",
     "sherif": "catalog:",
-    "squawk-cli": "2.59.0",
+    "squawk-cli": "2.60.0",
     "turbo": "^2.10.5",
     "typescript": "catalog:",
     "ultracite": "catalog:",
