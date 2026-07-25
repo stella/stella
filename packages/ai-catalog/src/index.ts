@@ -198,6 +198,7 @@ export const BYOK_MODEL_OPTIONS = {
   anthropic: [
     "claude-sonnet-5",
     "claude-fable-5",
+    "claude-opus-5",
     "claude-opus-4-8",
     "claude-opus-4-7",
     "claude-sonnet-4-6",
@@ -219,6 +220,7 @@ export const BYOK_MODEL_OPTIONS = {
     "google/gemini-3.5-flash",
     "google/gemini-3.1-flash-lite",
     "anthropic/claude-sonnet-5",
+    "anthropic/claude-opus-5",
     "anthropic/claude-opus-4.8",
     "anthropic/claude-sonnet-4.6",
     "openai/gpt-5.5",
@@ -320,6 +322,7 @@ const TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS = {
 const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
   anthropic: [
     "claude-fable-5",
+    "claude-opus-5",
     "claude-opus-4-8",
     "claude-opus-4-7",
     "claude-opus-4-6",
@@ -334,7 +337,11 @@ const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
     "gpt-5.4-nano",
     "gpt-5.2",
   ],
-  openrouter: ["google/gemini-3.6-flash", "google/gemini-3.5-flash-lite"],
+  openrouter: [
+    "google/gemini-3.6-flash",
+    "google/gemini-3.5-flash-lite",
+    "anthropic/claude-opus-5",
+  ],
 } as const satisfies Partial<{
   [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
 }>;
@@ -485,6 +492,7 @@ export const resolveWorkingBYOKModelForRole = ({
  */
 export const ANTHROPIC_ADAPTIVE_THINKING_MODELS = [
   "claude-sonnet-5",
+  "claude-opus-5",
   "claude-sonnet-4-6",
   "claude-opus-4-6",
   "claude-opus-4-7",
@@ -856,6 +864,12 @@ export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
     outputPerMTok: 2_500_000,
     cachedInputPerMTok: 50_000,
   },
+  "claude-opus-5": {
+    kind: "flat",
+    inputPerMTok: 500_000,
+    outputPerMTok: 2_500_000,
+    cachedInputPerMTok: 50_000,
+  },
   "claude-fable-5": {
     kind: "flat",
     inputPerMTok: 1_000_000,
@@ -943,13 +957,14 @@ export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
   "gpt-5.6": 922_000,
-  // Anthropic Claude: 200K through Claude 4; Sonnet 5 exposes 1M.
+  // Anthropic Claude: 200K through Claude 4; Sonnet 5 and Opus 5 expose 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,
   "claude-sonnet-5": 1_000_000,
   "claude-opus-4-6": 200_000,
   "claude-opus-4-7": 200_000,
   "claude-opus-4-8": 200_000,
+  "claude-opus-5": 1_000_000,
   "claude-fable-5": 200_000,
   // Mistral: 128K across the offered text/vision models.
   "mistral-small-latest": 128_000,
@@ -967,6 +982,7 @@ export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
   "google/gemini-3.5-flash": 1_048_576,
   "google/gemini-3.1-flash-lite": 1_048_576,
   "anthropic/claude-sonnet-5": 1_000_000,
+  "anthropic/claude-opus-5": 1_000_000,
   "anthropic/claude-opus-4.8": 200_000,
   "anthropic/claude-sonnet-4.6": 200_000,
   "openai/gpt-5.5": 400_000,
