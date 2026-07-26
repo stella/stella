@@ -1277,7 +1277,6 @@ export default defineConfig({
           {
             allowedFiles: [
               "apps/api/src/db-url.ts",
-              "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
               "apps/api/src/handlers/health/routes.ts",
               "apps/api/src/server.ts",
