@@ -29,6 +29,17 @@ describe("validatePattern", () => {
     expect(Result.isError(result)).toBe(true);
   });
 
+  // A token cannot contain a brace, so token extraction alone skips over
+  // a stray one and the surrounding garbage reaches the rendered
+  // reference. These patterns must fail on the leftover braces.
+  test.each(["{{SEQ}}", "{SEQ}{BAD{}", "{SEQ}}", "{{SEQ}", "{SEQ}{"])(
+    "rejects unmatched or nested braces in %p",
+    (pattern) => {
+      const result = validatePattern(pattern, 3);
+      expect(Result.isError(result)).toBe(true);
+    },
+  );
+
   test("rejects unrecognized tokens", () => {
     const result = validatePattern("{SEQ}-{UNKNOWN}", 3);
     expect(Result.isError(result)).toBe(true);

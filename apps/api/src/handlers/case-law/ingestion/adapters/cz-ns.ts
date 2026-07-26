@@ -144,9 +144,12 @@ const LABEL_PATTERNS: Record<string, RegExp> = {
  * instead makes the cost quadratic in the length of the decision:
  * every `JUDr.` in the text starts a scan that expands
  * `[\p{L}\s,.-]+?` one character at a time looking for a label that,
- * for a decision signed by a `předsedkyně`, is never there.
+ * in a decision that never names a presiding judge, is never there.
+ *
+ * `kyně` is included because decisions signed by a `předsedkyně
+ * senátu` otherwise lose their judge entirely.
  */
-const PRESIDING_LABEL_RE = /předsed[ay]\s+senátu/iu;
+const PRESIDING_LABEL_RE = /předsed(?:a|y|kyně)\s+senátu/giu;
 const JUDGE_TITLE_RE = /(?:JUDr|Mgr|doc|prof)\./giu;
 
 /** A signature block sits directly above the label. */
@@ -156,23 +159,27 @@ const JUDGE_LOOKBACK_CHARS = 200;
 const JUDGE_NAME_RE = /^(?:JUDr|Mgr|doc|prof)\.[\p{L}\s,.-]{1,80}$/u;
 
 const extractJudge = (text: string): string | undefined => {
-  const label = PRESIDING_LABEL_RE.exec(text);
-  if (!label) {
-    return undefined;
-  }
+  // Every label, not just the first. NS decisions routinely open with
+  // "složeném z předsedy senátu JUDr. …" and sign off with the real
+  // signature block far below; stopping at the first occurrence loses
+  // the judge whenever the opening window does not parse as a name.
+  for (const label of text.matchAll(PRESIDING_LABEL_RE)) {
+    // Trim before windowing: the label is often separated from the
+    // signature by a long run of layout whitespace, which would
+    // otherwise fill the window and push the name out of it.
+    const prefix = text.slice(0, label.index).trimEnd();
+    const window = prefix.slice(
+      Math.max(0, prefix.length - JUDGE_LOOKBACK_CHARS),
+    );
 
-  const window = text.slice(
-    Math.max(0, label.index - JUDGE_LOOKBACK_CHARS),
-    label.index,
-  );
-
-  // Earliest title first, so a stacked one ("doc. JUDr. …") is kept
-  // whole. A candidate that fails the name check is skipped rather
-  // than returned: the text between it and the label is not a name.
-  for (const title of window.matchAll(JUDGE_TITLE_RE)) {
-    const name = window.slice(title.index).trim();
-    if (JUDGE_NAME_RE.test(name)) {
-      return name;
+    // Earliest title first, so a stacked one ("doc. JUDr. …") is kept
+    // whole. A candidate that fails the name check is skipped rather
+    // than returned: the text between it and the label is not a name.
+    for (const title of window.matchAll(JUDGE_TITLE_RE)) {
+      const name = window.slice(title.index).trim();
+      if (JUDGE_NAME_RE.test(name)) {
+        return name;
+      }
     }
   }
 

@@ -7,6 +7,7 @@ class PatternError extends TaggedError("PatternError")<{
 const RECOGNIZED_TOKENS = ["{SEQ}", "{YYYY}", "{YY}", "{MM}"] as const;
 const TOKEN_REGEX = /\{[^{}]+\}/gu;
 const FORBIDDEN_CHARS = /[<>&]/u;
+const BRACE_CHARS = /[{}]/u;
 
 const MIN_PADDING = 1;
 const MAX_PADDING = 6;
@@ -44,6 +45,19 @@ export const validatePattern = (
   }
 
   const tokens = Array.from(pattern.matchAll(TOKEN_REGEX), (match) => match[0]);
+
+  // A token may not contain braces, so anything left over is a stray or
+  // nested one. Without this, `{{SEQ}}` and `{SEQ}{BAD{}` would parse as
+  // a single recognized token and pass, and rendering the accepted
+  // pattern would emit the leftover braces into the reference.
+  if (BRACE_CHARS.test(pattern.replaceAll(TOKEN_REGEX, ""))) {
+    return Result.err(
+      new PatternError({
+        message: "Pattern must not contain unmatched or nested braces",
+      }),
+    );
+  }
+
   const seqCount = tokens.filter((t) => t === "{SEQ}").length;
 
   if (seqCount !== 1) {

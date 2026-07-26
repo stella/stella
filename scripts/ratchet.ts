@@ -52,9 +52,16 @@ const APP_SOURCE_GLOBS = [
 // Every hand-written source file in the repo. Used by metrics that guard a
 // property of the code itself rather than an app convention, so there is no
 // reason for the rule to stop at the two big apps.
+//
+// Deliberately not limited to `src`: a super-linear regex in an ingestion,
+// backfill or codegen script blocks the same event loop as one in a handler,
+// and a metric that claims to be repo-wide has to mean it.
 const ALL_SOURCE_GLOBS = [
   "apps/*/src/**/*.{ts,tsx}",
+  "apps/*/scripts/**/*.{ts,tsx}",
+  "apps/*/e2e/**/*.{ts,tsx}",
   "packages/*/src/**/*.{ts,tsx}",
+  "packages/*/scripts/**/*.{ts,tsx}",
   "scripts/**/*.ts",
   ".oxlint-plugins/*.ts",
 ] as const;
@@ -307,16 +314,18 @@ const countNullishArrayFallback = (content: string): number => {
  * so a regex is hidden by the very characters that make it worth checking. A
  * guard a new regex can evade by containing a quote is not a guard.
  */
-const countSuperLinearRegexes = (content: string): number => {
-  // TSX for every file: it parses ordinary TypeScript too, and the one
-  // construct it reads differently — angle-bracket type assertions — this
-  // codebase does not use.
+const countSuperLinearRegexes = (content: string, file: string): number => {
+  // Pick the dialect from the extension. TSX for every file would
+  // misread a generic arrow such as `<Ts>(…) =>` in a .ts file as JSX,
+  // and the parser's recovery can swallow the rest of the file — which
+  // would silently hide regexes from a guard whose whole value is that
+  // it cannot be evaded.
   const source = ts.createSourceFile(
-    "ratchet-scan.tsx",
+    file,
     content,
     ts.ScriptTarget.Latest,
     true,
-    ts.ScriptKind.TSX,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 
   let total = 0;

@@ -962,9 +962,9 @@ const ROUTE_HOOK_PATTERN = /\.(?:onBeforeHandle|beforeHandle)\s*\(/u;
 const ROUTE_HANDLER_MOUNT_PATTERN =
   /\b(?<local>[A-Za-z_$][\w$]*)\.(?:default\.)?handler\b/gu;
 const ROUTE_IMPORT_STATEMENT =
-  /import\s+(?<clause>[^;]+?)\s+from\s+["'](?<path>@\/api\/handlers\/[^"']+)["']/gu;
+  /import\s+(?<clause>[^;\s](?:[^;]*[^;\s])?)\s+from\s+["'](?<path>@\/api\/handlers\/[^"']+)["']/gu;
 const IDENTIFIER_HEAD = /^(?<name>[A-Za-z_$][\w$]*)/u;
-const NAMED_IMPORT_BLOCK = /\{(?<body>[^}]*)\}/u;
+const NAMED_IMPORT_BLOCK = /\{(?<body>[^{}]*)\}/u;
 const ALIASED_IMPORT =
   /^(?<orig>[A-Za-z_$][\w$]*)\s+as\s+(?<alias>[A-Za-z_$][\w$]*)$/u;
 const PLAIN_IDENTIFIER = /^(?<name>[A-Za-z_$][\w$]*)$/u;

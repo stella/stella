@@ -289,8 +289,21 @@ const cycleSemaphore = createSemaphore(
   MAX_CONCURRENT_ADAPTER_CYCLES,
 );
 
-/** Adapter keys holding a cycle slot right now; read by the watchdog. */
+/** Adapter keys holding a cycle slot right now. */
 const inFlightCycles = new Set<string>();
+
+/**
+ * Adapter keys that have held a cycle slot since the watchdog last
+ * looked, cleared only by the watchdog itself.
+ *
+ * The in-flight set alone cannot attribute a stall. A synchronous block
+ * ends before any timer runs, so the cycle's own cleanup — a microtask —
+ * removes its key first, and the watchdog callback, a macrotask, then
+ * sees an empty set and reports the very thing it exists to identify as
+ * "none". Accumulating until the watchdog drains it keeps the culprit
+ * visible even though it finished during the freeze.
+ */
+const cyclesSinceWatchdogTick = new Set<string>();
 
 const writeHeartbeat = () => {
   void Bun.write(HEARTBEAT_PATH, new Date().toISOString()).catch(() => {
@@ -318,7 +331,8 @@ const startEventLoopWatchdog = (): void => {
       // only the lag, and the adapters whose timers fired late on
       // recovery look like the cause rather than the casualties.
       // Joined rather than an array: log attributes are scalars.
-      const inFlight = [...inFlightCycles].join(",");
+      const suspects = new Set([...cyclesSinceWatchdogTick, ...inFlightCycles]);
+      const inFlight = [...suspects].join(",");
       logger.error("case_law.ingestion.event_loop_starved", {
         lagMs: Math.round(lag),
         starvedTicks,
@@ -345,6 +359,9 @@ const startEventLoopWatchdog = (): void => {
     } else {
       starvedTicks = 0;
     }
+    // Drained every tick, so the next report names only cycles that ran
+    // within the window it measured.
+    cyclesSinceWatchdogTick.clear();
     expectedAt = performance.now() + WATCHDOG_TICK_MS;
     // unref: the watchdog observes the loop, it must not be the sole handle
     // keeping the process alive once everything else has finished.
@@ -623,6 +640,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       // stays responsive), so bound it here: if a cycle outlives the ceiling,
       // exit so ECS relaunches a healthy task.
       inFlightCycles.add(adapterKey);
+      cyclesSinceWatchdogTick.add(adapterKey);
       try {
         // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
         cycle = await runWithHardDeadline(
