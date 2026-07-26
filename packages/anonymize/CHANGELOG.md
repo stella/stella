@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.6.3
+
+### Patch Changes
+
+- [#403](https://github.com/stella/anonymize/pull/403) [`d3363c3`](https://github.com/stella/anonymize/commit/d3363c3e7d4a09a922778b0189866e1d745638aa) Thanks [@cursor](https://github.com/apps/cursor)! - Reject section-marker addresses and numbered page footers misclassified as organizations.
+
+- [#417](https://github.com/stella/anonymize/pull/417) [`90b3834`](https://github.com/stella/anonymize/commit/90b3834436c92925ab717ee827d681036e0420ab) Thanks [@cursor](https://github.com/apps/cursor)! - Drop two EDGAR employment-agreement false positives: person spans ending in
+  configured defined-term heads such as `Job Description`, and city-list address
+  hits ending in a language-scoped non-address head such as `Independence Day`.
+
+- [#404](https://github.com/stella/anonymize/pull/404) [`68672ea`](https://github.com/stella/anonymize/commit/68672eacc8bc6dc89c285ec5a3fe360336b65296) Thanks [@cursor](https://github.com/apps/cursor)! - Keep soft-wrapped EDGAR person surnames and title-case issuer names intact, and reclassify soft-wrapped US city headwords that were labeled as people.
+
+- [#416](https://github.com/stella/anonymize/pull/416) [`b561bac`](https://github.com/stella/anonymize/commit/b561bac2edc4e9e0205e1958fc826e42d7183d6b) Thanks [@cursor](https://github.com/apps/cursor)! - Detect title-led person names whose surname is written in uppercase even when
+  that surname is absent from dictionary evidence (for example `Ing. Firstname
+SURNAME` and hyphenated trading forms like `SURNAME-VL`).
+
 ## 2.6.2
 
 ### Patch Changes

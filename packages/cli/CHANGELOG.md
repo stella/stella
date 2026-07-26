@@ -1,5 +1,14 @@
 # @stll/anonymize-cli
 
+## 2.6.3
+
+### Patch Changes
+
+- Updated dependencies [[`d3363c3`](https://github.com/stella/anonymize/commit/d3363c3e7d4a09a922778b0189866e1d745638aa), [`90b3834`](https://github.com/stella/anonymize/commit/90b3834436c92925ab717ee827d681036e0420ab), [`68672ea`](https://github.com/stella/anonymize/commit/68672eacc8bc6dc89c285ec5a3fe360336b65296), [`b561bac`](https://github.com/stella/anonymize/commit/b561bac2edc4e9e0205e1958fc826e42d7183d6b)]:
+  - @stll/anonymize@2.6.3
+  - @stll/anonymize-pdf@2.6.3
+  - @stll/anonymize-docx@2.6.3
+
 ## 2.6.2
 
 ### Patch Changes
