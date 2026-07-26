@@ -95,29 +95,58 @@ const stripTags = (html: string): string => {
 };
 
 /**
+ * Every entity form we decode, in one alternation so the whole string is
+ * rewritten in a single pass.
+ *
+ * Decoding in separate passes double-unescapes: with `&amp;` replaced
+ * before `&lt;`, the text `&amp;lt;` becomes `&lt;` and the next pass
+ * turns it into `<`, so a document that escaped a literal `&lt;` comes
+ * back as a bracket. One pass never re-reads what it just wrote.
+ */
+const HTML_ENTITY_PATTERN =
+  /&(?<named>nbsp|amp|lt|gt);|&#[xX](?<hex>[0-9a-fA-F]+);|&#(?<dec>\d+);/gu;
+
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: " ",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+};
+
+/**
+ * Replacer for HTML_ENTITY_PATTERN. Takes the captures positionally —
+ * `replace` passes them in order before the offset — so the groups
+ * object never has to be narrowed back out of the variadic tail.
+ */
+const decodeEntity = (
+  entity: string,
+  named: string | undefined,
+  hex: string | undefined,
+  dec: string | undefined,
+): string => {
+  if (named !== undefined) {
+    return NAMED_ENTITIES[named] ?? entity;
+  }
+
+  const codePoint =
+    hex === undefined
+      ? Number.parseInt(dec ?? "", 10)
+      : Number.parseInt(hex, 16);
+  try {
+    return String.fromCodePoint(codePoint);
+  } catch {
+    // Not a valid code point (out of range or a lone surrogate).
+    return entity;
+  }
+};
+
+/**
  * Strip HTML tags, decode common entities (including numeric
  * &#xNN; and &#NNNN; forms), and collapse excessive newlines.
  */
 export const stripHtml = (html: string): string =>
   stripTags(html.replace(/<br\s*\/?>/gi, "\n"))
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&#x(?<hex>[0-9a-f]+);/gi, (match, hex: string) => {
-      try {
-        return String.fromCodePoint(Number.parseInt(hex, 16));
-      } catch {
-        return match;
-      }
-    })
-    .replace(/&#(?<dec>\d+);/g, (match, dec: string) => {
-      try {
-        return String.fromCodePoint(Number.parseInt(dec, 10));
-      } catch {
-        return match;
-      }
-    })
+    .replace(HTML_ENTITY_PATTERN, decodeEntity)
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
