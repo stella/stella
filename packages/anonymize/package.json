@@ -118,7 +118,7 @@
     "fast-check": "^4.9.0",
     "fflate": "^0.8.3",
     "puppeteer-core": "25.3.0",
-    "tsdown": "0.22.9",
+    "tsdown": "0.22.12",
     "typescript": "7.0.2",
     "vite": "^8.1.4"
   }
