@@ -15,6 +15,12 @@ const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 // the video recorder's resolveMarketingViewRoutes, so the agent screenshot
 // never lands on the empty /chat/new composer.
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
+// The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
+// Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Test Firm"), seeded by
+// db:seed-test-user then populated by db:seed-dev. A fresh email-OTP sign-in
+// starts with no active organization, so we set it server-side (below) instead
+// of driving the org-picker UI, which the workspace routes below depend on.
+const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
 const requestedCapture = process.env["MARKETING_CAPTURE"];
 
 const captures = [
@@ -107,18 +113,9 @@ test("capture landing product screenshots", async ({
     localStorage.setItem("theme", "light");
   });
 
-  // Go through the org picker (all orgs are listed there regardless of which
-  // one the session last made active) rather than clicking the /workspaces
-  // switcher, whose visible button is whatever org is currently active — the
-  // dev seed can leave that as a demo org, not Test Firm.
-  await page.goto("/auth/organization", { waitUntil: "commit" });
-  const organization = page.getByRole("button", { name: /Test Firm/u });
-  await organization.waitFor({ state: "visible" });
-  await organization.click();
-  // The org click sets the active-organization cookie asynchronously; wait
-  // for the session to settle before resolving the agent thread below,
-  // otherwise the threads request below can race an unscoped session.
-  await page.waitForLoadState("networkidle");
+  // The active organization is set server-side in authenticateMarketingSession
+  // (via better-auth's set-active endpoint), so the workspace routes below are
+  // already org-scoped — no org-picker UI to drive.
 
   // Resolved once (not per capture/theme): only needed when the "agent"
   // capture is actually part of this run.
@@ -176,7 +173,6 @@ test("capture landing product screenshots", async ({
         // still needs one round trip to fetch it; trigger it explicitly and
         // wait for the outline rail so the capture never lands on the
         // empty/loading margin state.
-        // eslint-disable-next-line no-await-in-loop -- see above
         const analyzeButton = page.getByRole("button", {
           name: "Analyze with AI",
         });
@@ -342,4 +338,16 @@ const authenticateMarketingSession = async (request: APIRequestContext) => {
     { data: { email, otp }, headers: { origin: webOrigin } },
   );
   expect(signInResponse.ok(), await signInResponse.text()).toBe(true);
+
+  // A fresh sign-in has no active organization; set it on the session so the
+  // workspace captures resolve without the org-picker UI. The session cookie
+  // (copied into the browser context by the caller) then carries this scope.
+  const setActiveResponse = await request.post(
+    `${apiBaseURL}/api/auth/organization/set-active`,
+    {
+      data: { organizationId: MARKETING_ORGANIZATION_ID },
+      headers: { origin: webOrigin },
+    },
+  );
+  expect(setActiveResponse.ok(), await setActiveResponse.text()).toBe(true);
 };

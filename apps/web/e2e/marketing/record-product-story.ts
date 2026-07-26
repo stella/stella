@@ -154,7 +154,7 @@ const inspectorPreviewIsPainted = ({
   const painted = [
     ...document.querySelectorAll(".layout-run-text, [data-text-layer]"),
   ]
-    .map((run) => run.textContent ?? "")
+    .map((run) => run.textContent)
     .join("");
   return painted.trim().length >= minLength && painted.includes(bodyMarker);
 };
@@ -266,7 +266,7 @@ const passageHighlightIsPainted = ({
   const painted = [
     ...document.querySelectorAll(".layout-run-text, [data-text-layer]"),
   ]
-    .map((run) => run.textContent ?? "")
+    .map((run) => run.textContent)
     .join("");
   if (painted.trim().length < minLength || !painted.includes(bodyMarker)) {
     return false;

@@ -437,7 +437,11 @@ const resolveVerdictColor = (
   const optionColor = verdictProperty.content.options.find(
     (option) => option.value === tier,
   )?.color;
-  return optionColor ? resolveOptionColor(optionColor) : emptyColor;
+  // `OptionColor` widens to `string` (arbitrary hex); only `undefined` means
+  // the tier had no matching option, so check that explicitly.
+  return optionColor === undefined
+    ? emptyColor
+    : resolveOptionColor(optionColor);
 };
 
 type WithOpenEntityButtonProps = {

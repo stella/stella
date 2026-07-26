@@ -75,7 +75,7 @@ const expectHealthyOpeningScene = async (page: Page) => {
   await expect(story.locator(".cli-window")).toBeVisible();
 
   await expect
-    .poll(() => page.evaluate(readOpeningSceneHealth), {
+    .poll(async () => page.evaluate(readOpeningSceneHealth), {
       message: "opening scene reaches its healthy interactive state",
       timeout: 20_000,
     })
@@ -225,7 +225,7 @@ for (const viewport of CARD_FIT_VIEWPORTS) {
       window.scrollTo({ top: 600, behavior: "instant" }),
     );
     await expect
-      .poll(() => page.evaluate(readCompanionCardFit, CARD_FIT_CHECKS), {
+      .poll(async () => page.evaluate(readCompanionCardFit, CARD_FIT_CHECKS), {
         message: "companion card content fits its card box",
         timeout: 20_000,
       })
@@ -294,7 +294,7 @@ for (const theme of ["light", "dark"] as const) {
     );
     await expect
       .poll(
-        () =>
+        async () =>
           page.evaluate((expectedTheme) => {
             const posters = [
               ...document.querySelectorAll('.product-media img[src*="story-"]'),
