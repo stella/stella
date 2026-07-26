@@ -27,7 +27,20 @@ export const resolveDatabaseUrl = (
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined => {
   if (env["DATABASE_URL"]) {
-    return env["DATABASE_URL"];
+    const url = env["DATABASE_URL"];
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
+        panic("DATABASE_URL must use the postgres:// or postgresql:// scheme");
+      }
+      const sslmode = parsed.searchParams.get("sslmode");
+      if (sslmode && !ALLOWED_SSLMODES.some((mode) => mode === sslmode)) {
+        panic(`DATABASE_URL sslmode must be one of ${ALLOWED_SSLMODES.join(", ")}`);
+      }
+    } catch {
+      panic("DATABASE_URL is not a valid URL");
+    }
+    return url;
   }
 
   const { DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SSLMODE } = env;
