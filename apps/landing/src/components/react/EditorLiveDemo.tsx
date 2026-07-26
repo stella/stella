@@ -45,15 +45,20 @@ export const EditorLiveDemo = () => {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(SAMPLE_DOCX_URL)
-      .then((response) => response.arrayBuffer())
-      .then((buffer) => {
+    const load = async () => {
+      try {
+        const response = await fetch(SAMPLE_DOCX_URL, {
+          signal: AbortSignal.timeout(10_000),
+        });
+        const buffer = await response.arrayBuffer();
         if (!cancelled) {
           setDocumentBuffer(buffer);
         }
-        return;
-      })
-      .catch(() => undefined);
+      } catch {
+        // Demo hero: on failure the loading state stays; nothing to surface.
+      }
+    };
+    void load();
     return () => {
       cancelled = true;
     };

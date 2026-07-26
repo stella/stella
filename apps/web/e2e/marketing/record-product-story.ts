@@ -17,7 +17,7 @@ import {
   CAPTURE_DPR,
   captureDefinitions,
   RECORDINGS_MANIFEST_PATH,
-} from "./captures.ts";
+} from "./captures";
 import type {
   CaptureDefinition,
   CaptureTheme,
@@ -25,7 +25,7 @@ import type {
   RecordingManifestEntry,
   RecordingsManifest,
   StoryCaptureId,
-} from "./captures.ts";
+} from "./captures";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const MEDIA_DIR = path.join(REPO_ROOT, "apps/landing/public/media/products");

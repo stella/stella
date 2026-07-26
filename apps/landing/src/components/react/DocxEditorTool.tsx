@@ -41,24 +41,22 @@ export const DocxEditorTool = () => {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(SAMPLE_DOCX_URL)
-      .then((response) => response.arrayBuffer())
-      .then((buffer) => {
+    const load = async () => {
+      try {
+        const response = await fetch(SAMPLE_DOCX_URL, {
+          signal: AbortSignal.timeout(10_000),
+        });
+        const buffer = await response.arrayBuffer();
         if (!cancelled) {
-          setSource({
-            kind: "doc",
-            buffer,
-            name: SAMPLE_DOCX_NAME,
-            loadId: 0,
-          });
+          setSource({ kind: "doc", buffer, name: SAMPLE_DOCX_NAME, loadId: 0 });
         }
-        return;
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           setError("Couldn't load the sample document.");
         }
-      });
+      }
+    };
+    void load();
     return () => {
       cancelled = true;
     };
@@ -71,7 +69,9 @@ export const DocxEditorTool = () => {
     const file = input.files?.[0];
     // Reset so re-picking the same file still fires `change`.
     input.value = "";
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     try {
       const buffer = await file.arrayBuffer();
@@ -121,7 +121,7 @@ export const DocxEditorTool = () => {
             type="file"
             accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             className="hidden"
-            onChange={handleFileChange}
+            onChange={(event) => void handleFileChange(event)}
           />
           {source.kind === "doc" ? (
             <span

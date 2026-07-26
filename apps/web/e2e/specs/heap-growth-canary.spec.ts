@@ -133,7 +133,7 @@ const runNavigationCycle = async (page: Page) => {
     // alone can happen before a cold route chunk or loader has mounted.
     // eslint-disable-next-line no-await-in-loop -- each marker belongs to the route being left in this sequential navigation cycle
     await currentRouteRoot.evaluate((element, value) => {
-      element.dataset.heapCanaryRouteRoot = value;
+      element.dataset["heapCanaryRouteRoot"] = value;
     }, marker);
     // Scoped to the sidebar shell (apps/web/src/components/sidebar.tsx,
     // data-slot="sidebar") so this never accidentally matches a same-named

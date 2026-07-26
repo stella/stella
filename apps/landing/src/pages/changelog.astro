@@ -1025,7 +1025,7 @@ const formatReleaseDate = (publishedAt: string) =>
         return;
       }
 
-      let ancestor: HTMLElement | null = target;
+      let ancestor: Element | null = target;
       while (ancestor) {
         if (ancestor instanceof HTMLDetailsElement) {
           ancestor.open = true;
