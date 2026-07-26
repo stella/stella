@@ -482,7 +482,7 @@ export const blocksToPlainText = (blocks: readonly Block[]): string =>
 
 // ── Pattern constants ─────────────────────────────────────
 
-const DECISION_TITLE_RE = /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]+$/u;
+const DECISION_TITLE_RE = /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]+$/u;
 
 const DECISION_TYPE_WORDS = new Set([
   "ROZSUDEK",
@@ -629,10 +629,10 @@ const mergeBlocks = (
       const text = firstPara.plainText;
       // Check for embedded title
       const titleMatch =
-        /(?<title>[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})\s*$/u.exec(
+        /(?<title>[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})$/u.exec(
           text,
         );
-      const caseMatch = /(?<caseNumber>\d+\s+\w+\s+\d+\/\d{4}[^\s]*)/u.exec(
+      const caseMatch = /(?<!\w)(?<caseNumber>\d+\s+\w+\s+\d+\/\d{4}\S*)/u.exec(
         text,
       );
 
@@ -676,7 +676,7 @@ const mergeBlocks = (
   // have their own type; plain paragraphs in this zone
   // get role "holding".
   // Match "takto:", "takto :", "t a k t o :", etc.
-  const TAKTO_RE = /t\s*a\s*k\s*t\s*o\s*:?\s*$/iu;
+  const TAKTO_RE = /t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
   let inHolding = false;
 
   for (const block of merged) {

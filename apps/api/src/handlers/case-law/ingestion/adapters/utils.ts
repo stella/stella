@@ -68,7 +68,7 @@ export const toOptionalValue = <T>(
 export const stripHtml = (html: string): string =>
   html
     .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]*>/g, "")
+    .replace(/<[^<>]*>/g, "")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")

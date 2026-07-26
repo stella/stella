@@ -73,7 +73,8 @@ const DECISION_TITLES: ReadonlySet<string> = new Set(
 );
 const CASE_NUMBER_RE = /^sygn(?:atura)?\.?\s*akt[:\s]/iu;
 const REASONS_HEADING_RE = /^uzasadnienie\b/iu;
-const HOLDING_HEADING_RE = /^(?:orzeka|postanawia|uchwala|zarządza)\s*:?\s*$/iu;
+const HOLDING_HEADING_RE =
+  /^(?:orzeka|postanawia|uchwala|zarządza)\s*(?::\s*)?$/iu;
 const HOLDING_ITEM_RE = /^(?:[IVXLC]+\s*[.)]|[0-9]+\s*[.)]|[a-z][)])\s*/u;
 const OPERATIVE_VERB_RE =
   /^(?:oddala|zmienia|uchyla|zasądza|stwierdza|umarza|utrzymuje|nakazuje|odrzuca|ustala|przyznaje|zwraca się|przekazuje|nie obciąża|znosi)\b/iu;
@@ -99,7 +100,7 @@ const hasHtmlTags = (content: string): boolean =>
 const normalizeWhitespace = (text: string): string =>
   text
     .replace(/\u00a0/gu, " ")
-    .replace(/[ \t]+\n/gu, "\n")
+    .replace(/(?<![ \t])[ \t]+\n/gu, "\n")
     .trim();
 
 const normalizeLegacyPlainText = (text: string): string =>

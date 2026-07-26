@@ -70,7 +70,8 @@ const FIRST_YEAR = 1993;
 const toYearSuffix = (year: number): string =>
   String(year % 100).padStart(2, "0");
 
-const REGISTRY_SIGN_PATTERN = /^(?<caseNumber>.+?)\s+ze\s+dne\s+(?<date>.+)$/u;
+const REGISTRY_SIGN_PATTERN =
+  /^(?<caseNumber>\S+(?:\s\S+)*?)\s+ze\s+dne\s+(?<date>\S.*)$/u;
 const DOC_CONTENT_PATTERN = /class="DocContent">(?<body>[\s\S]*?)<\/table>/u;
 
 /**

@@ -9,25 +9,8 @@
     }
   },
   "super-linear-regexes": {
-    "count": 36,
-    "files": {
-      "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns.ts": 4,
-      "apps/api/src/handlers/case-law/ingestion/parsers/cz-nss.ts": 3,
-      "apps/api/src/handlers/case-law/ingestion/parsers/cz-us.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/parsers/pl-courts.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/segmenter.ts": 14,
-      "apps/api/src/handlers/docx/extract-text.ts": 1,
-      "apps/api/src/lib/docx-stamp.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-client.ts": 1,
-      "apps/api/src/lib/matter-reference.ts": 1,
-      "apps/api/src/mcp/feedback-sanitize.ts": 1,
-      "apps/api/src/scripts/post-deploy-smoke.ts": 1,
-      "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 1
-    }
+    "count": 0,
+    "files": {}
   },
   "nullish-array-fallback": {
     "count": 4,

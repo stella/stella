@@ -5,7 +5,7 @@ class PatternError extends TaggedError("PatternError")<{
 }>() {}
 
 const RECOGNIZED_TOKENS = ["{SEQ}", "{YYYY}", "{YY}", "{MM}"] as const;
-const TOKEN_REGEX = /\{[^}]+\}/gu;
+const TOKEN_REGEX = /\{[^{}]+\}/gu;
 const FORBIDDEN_CHARS = /[<>&]/u;
 
 const MIN_PADDING = 1;

@@ -235,7 +235,7 @@ const parseResultRows = (html: string): ParsedRow[] => {
     // č may appear as literal or HTML entity (&#x10D; &#x10d; &#269;)
     // Stop at comma to exclude publication reference (e.g. ", č. 421/2004 Sb. NSS")
     const citMatch =
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<caseNumber>[^",]+?)(?:-\d+)?[",]/iu.exec(
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<caseNumber>[^",\s][^",]*?)(?:-\d+)?[",]/iu.exec(
         block,
       );
     const caseNumber = citMatch?.groups?.["caseNumber"]?.trim();
@@ -826,7 +826,7 @@ export const czNssAdapter: SourceAdapter = {
       const countPatterns = [
         /Nalezeno\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
         /Celkem\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
-        /(?<count>\d+(?:\s\d+)*)\s+výsledk/iu,
+        /(?<!\d)(?<count>\d+(?:\s\d+)*)\s+výsledk/iu,
         /resCount[^>]*>(?<count>\d[\d\s]*)</iu,
         /myResCount[^>]*>(?<count>\d[\d\s]*)</iu,
         /pocetZaznamu[^>]*>(?<count>\d[\d\s]*)</iu,

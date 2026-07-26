@@ -28,7 +28,7 @@ const readMigrationStatements = (migrationPath: string): string[] =>
     .filter((part) => part.length > 0);
 
 const executableSql = (statement: string): string =>
-  statement.replace(/^\s*--.*$/gmu, "").trim();
+  statement.replace(/^[ \t]*--[^\n]*/gmu, "").trim();
 
 export const installPgliteSchemaPrerequisites = async (
   db: PgliteSchemaDb,

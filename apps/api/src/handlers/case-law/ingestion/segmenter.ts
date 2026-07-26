@@ -15,20 +15,20 @@ const SECTION_PATTERNS: {
   // Czech patterns (compact headings)
   {
     type: "ruling",
-    pattern: /^V\s*[ýy]\s*r\s*o\s*k\s*[:.]?\s*$/imu,
+    pattern: /^V\s*[ýy]\s*r\s*o\s*k\s*(?:[:.]\s*)?$/imu,
   },
   {
     type: "argumentation",
-    pattern: /^Od[uů]vodn[eě]n[ií]\s*[:.]?\s*$/imu,
+    pattern: /^Od[uů]vodn[eě]n[ií]\s*(?:[:.]\s*)?$/imu,
   },
   {
     type: "dissent",
     pattern:
-      /^(?:Odli[šs]n[ée]\s+stanovisko|Stanovisko\s+men[šs]iny)\s*[:.]?\s*$/imu,
+      /^(?:Odli[šs]n[ée]\s+stanovisko|Stanovisko\s+men[šs]iny)\s*(?:[:.]\s*)?$/imu,
   },
   {
     type: "footer",
-    pattern: /^Pou[čc]en[ií]\s*[:.]?\s*$/imu,
+    pattern: /^Pou[čc]en[ií]\s*(?:[:.]\s*)?$/imu,
   },
 
   // Czech spaced headings (NSS style: "O d ů v o d n ě n í :")
@@ -39,11 +39,12 @@ const SECTION_PATTERNS: {
   },
   {
     type: "argumentation",
-    pattern: /^O\s+d\s+[ůu]\s+v\s+o\s+d\s+n\s+[ěe]\s+n\s+[ií]\s*[:.]?\s*$/imu,
+    pattern:
+      /^O\s+d\s+[ůu]\s+v\s+o\s+d\s+n\s+[ěe]\s+n\s+[ií]\s*(?:[:.]\s*)?$/imu,
   },
   {
     type: "footer",
-    pattern: /^P\s+o\s+u\s+[čc]\s+e\s+n\s+[ií]\s*[:.]?\s*$/imu,
+    pattern: /^P\s+o\s+u\s+[čc]\s+e\s+n\s+[ií]\s*(?:[:.]\s*)?$/imu,
   },
 
   // Czech non-spaced "takto:" on its own line (NSS/NS)
@@ -61,40 +62,40 @@ const SECTION_PATTERNS: {
   // Slovak patterns
   {
     type: "ruling",
-    pattern: /^(?:V[ýy]rok|Rozhodnutie)\s*[:.]?\s*$/imu,
+    pattern: /^(?:V[ýy]rok|Rozhodnutie)\s*(?:[:.]\s*)?$/imu,
   },
   {
     type: "argumentation",
-    pattern: /^Od[ôo]vodnenie\s*[:.]?\s*$/imu,
+    pattern: /^Od[ôo]vodnenie\s*(?:[:.]\s*)?$/imu,
   },
   {
     type: "footer",
-    pattern: /^Pou[čc]enie\s*[:.]?\s*$/imu,
+    pattern: /^Pou[čc]enie\s*(?:[:.]\s*)?$/imu,
   },
 
   // Procedural history
   {
     type: "history",
     pattern:
-      /^(?:Pr[uů]b[eě]h\s+[řr][ií]zen[ií]|Procesn[ií]\s+historie)\s*[:.]?\s*$/imu,
+      /^(?:Pr[uů]b[eě]h\s+[řr][ií]zen[ií]|Procesn[ií]\s+historie)\s*(?:[:.]\s*)?$/imu,
   },
 
   // Polish patterns
   {
     type: "ruling",
-    pattern: /^(?:Sentencja|Tenor)\s*[:.]?\s*$/imu,
+    pattern: /^(?:Sentencja|Tenor)\s*(?:[:.]\s*)?$/imu,
   },
   {
     type: "argumentation",
-    pattern: /^Uzasadnienie\s*[:.]?\s*$/imu,
+    pattern: /^Uzasadnienie\s*(?:[:.]\s*)?$/imu,
   },
   {
     type: "dissent",
-    pattern: /^Zdanie\s+odr[eę]bne\s*[:.]?\s*$/imu,
+    pattern: /^Zdanie\s+odr[eę]bne\s*(?:[:.]\s*)?$/imu,
   },
   {
     type: "footer",
-    pattern: /^Pouczenie\s*[:.]?\s*$/imu,
+    pattern: /^Pouczenie\s*(?:[:.]\s*)?$/imu,
   },
 ];
 

@@ -1,7 +1,7 @@
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
 
 export const getApiHealthUrl = (apiUrl: string) =>
-  new URL("health", `${apiUrl.replace(/\/+$/u, "")}/`);
+  new URL("health", `${apiUrl.replace(/(?<!\/)\/+$/u, "")}/`);
 
 export const parseHealthCommit = (value: unknown) => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {

@@ -25,7 +25,7 @@ import type {
  * each other.
  */
 const DIRECTIVE_RE =
-  /^\s*\{\{(?<tag>#if|#elseif|#else|#each|\/if|\/each)\s*(?<expr>.*?)\}\}\s*$/u;
+  /^\s*\{\{(?<tag>#if|#elseif|#else|#each|\/if|\/each)(?<expr>[^{}]*)\}\}\s*$/u;
 
 const DIRECTIVE_KIND_MAP: Record<string, BlockDirectiveKind> = {
   "#if": "if",

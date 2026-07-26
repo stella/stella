@@ -235,7 +235,7 @@ const graphql = async (
 };
 
 const normalizeTemplateValue = (value: string) =>
-  value.replaceAll(/\$\{\{\s*/gu, "${{").replaceAll(/\s*\}\}/gu, "}}");
+  value.replaceAll(/\$\{\{\s*/gu, "${{").replaceAll(/(?<!\s)\s*\}\}/gu, "}}");
 
 const sorted = (items: string[]) => [...items].sort();
 

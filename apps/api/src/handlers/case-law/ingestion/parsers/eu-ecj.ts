@@ -658,7 +658,7 @@ const sectionHeadingLevel = (
 const markerLevel = (marker: string): HeadingLevel | undefined => {
   const token = marker
     .replace(/^[(\s]+/u, "")
-    .replace(/[\s.)\u2013\u2014-]+$/u, "");
+    .replace(/(?<![\s.)\u2013\u2014-])[\s.)\u2013\u2014-]+$/u, "");
 
   // A bare dash is the Court's deepest marker: it carries no ordinal.
   if (token === "") {

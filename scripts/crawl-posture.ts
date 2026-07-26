@@ -130,7 +130,7 @@ const parseRobotsGroups = (text: string): RobotsGroup[] => {
   let stackingAgents = false;
 
   for (const rawLine of text.split("\n")) {
-    const line = rawLine.replace(/#.*$/u, "").trim();
+    const line = rawLine.replace(/#.*/u, "").trim();
     if (line === "") {
       continue;
     }
@@ -159,7 +159,7 @@ const parseRobotsGroups = (text: string): RobotsGroup[] => {
   return groups;
 };
 
-const SITEMAP_LINE = /^\s*sitemap\s*:/imu;
+const SITEMAP_LINE = /^[ \t]*sitemap[ \t]*:/imu;
 
 const hasSitemapLine = (robotsText: string): boolean =>
   SITEMAP_LINE.test(robotsText);

@@ -448,11 +448,11 @@ const collapseSpaces = (text: string): string =>
   text.replace(/(?<keep>\S)\s+(?=\S)/gu, "$<keep>");
 
 /** "takto:" separator (with spaced variants). */
-const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*:?\s*$/iu;
+const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
 
 /** "Odůvodnění:" separator (with spaced variants). */
 const ODUVODNENI_RE =
-  /^(?:O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]|Odůvodnění)\s*:?\s*$/iu;
+  /^(?:O\s*d\s*[uů]\s*v\s*o\s*d\s*n\s*[eě]\s*n\s*[ií]|Odůvodnění)\s*(?::\s*)?$/iu;
 
 /**
  * Section heading in Odůvodnění: standalone Roman numeral,

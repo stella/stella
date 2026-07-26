@@ -35,6 +35,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { analyse } from "scslre";
+import ts from "typescript";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -46,6 +47,16 @@ const WRITE_HINT = "bun scripts/ratchet.ts --write";
 const APP_SOURCE_GLOBS = [
   "apps/api/src/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
+] as const;
+
+// Every hand-written source file in the repo. Used by metrics that guard a
+// property of the code itself rather than an app convention, so there is no
+// reason for the rule to stop at the two big apps.
+const ALL_SOURCE_GLOBS = [
+  "apps/*/src/**/*.{ts,tsx}",
+  "packages/*/src/**/*.{ts,tsx}",
+  "scripts/**/*.ts",
+  ".oxlint-plugins/*.ts",
 ] as const;
 
 const isExcludedSource = (file: string): boolean =>
@@ -63,7 +74,7 @@ const isExcludedSource = (file: string): boolean =>
 
 // Lines that are pure comments (JSDoc `*`, `//`, `/* ... */` openers).
 const COMMENT_LINE = /^\s*(?:\/\/|\*|\/\*)/u;
-const LINE_COMMENT_TAIL = /\/\/.*$/u;
+const LINE_COMMENT_TAIL = /\/\/.*/u;
 // `as unknown as T` is one assertion, not two: collapse it before counting.
 const AS_UNKNOWN_AS = /\bas\s+unknown\s+as\b/gu;
 // A type assertion: ` as ` not immediately followed by `const`.
@@ -73,7 +84,8 @@ const MAPPED_TYPE_REMAP_PLACEHOLDER = "remap ";
 // Mapped types use `as` to remap keys (`[K in keyof T as F<K>]`). This is
 // type-level syntax, not a value assertion. The `in` before `as` distinguishes
 // it from computed array/index expressions that may contain a real assertion.
-const MAPPED_TYPE_KEY_REMAP = /(?<mappedPrefix>\[[^\]]*\bin\b[^\]]*)\bas\s+/gu;
+const MAPPED_TYPE_KEY_REMAP =
+  /(?<mappedPrefix>\[[^\][]*\bin\b[^\][]*)\bas\s+/gu;
 
 // Module syntax carries alias `as` (`import { x as y }`, `import * as ns`,
 // `export { x as y }`, `export * as ns`) that is NOT a type assertion. These
@@ -277,14 +289,6 @@ const countNullishArrayFallback = (content: string): number => {
   return total;
 };
 
-// A regex literal: an unescaped `/`, a body, a closing `/`, flags. The
-// lookbehind rejects the division operator, whose left operand ends in an
-// identifier character, `)` or `]`; the leading `*`/`/` rejection keeps
-// comment openers out. Character classes are consumed whole so a `/` inside
-// one does not end the literal early.
-const REGEX_LITERAL =
-  /(?<![A-Za-z0-9_$)\]])\/(?![/*])(?<body>(?:\\.|\[(?:\\.|[^\]])*\]|[^/\n\\[])+)\/(?<flags>[dgimsuvy]*)/gu;
-
 /**
  * Regex literals whose worst case backtracks super-linearly in the length of
  * the subject — the shape that turns one oversized input into minutes of
@@ -294,38 +298,41 @@ const REGEX_LITERAL =
  * It reports both flavours, and both matter here: `Trade` (the pattern
  * re-splits the same text against itself) and `Move` (each retry of the whole
  * pattern re-walks what the previous one consumed). The second reads as
- * harmless and is not — it is the shape that stalled an ingestion worker for
- * half an hour per document.
+ * harmless and is not — it is the shape that stalls a document parser.
+ *
+ * This is the one counter that parses rather than scanning lines. The
+ * line-based approach is not merely approximate here, it is blind in exactly
+ * the wrong direction: the shared literal-blanking pass reads the `"` inside
+ * `/\s*scale="[^"]*"/u` as opening a string and eats the rest of the pattern,
+ * so a regex is hidden by the very characters that make it worth checking. A
+ * guard a new regex can evade by containing a quote is not a guard.
  */
 const countSuperLinearRegexes = (content: string): number => {
+  // TSX for every file: it parses ordinary TypeScript too, and the one
+  // construct it reads differently — angle-bracket type assertions — this
+  // codebase does not use.
+  const source = ts.createSourceFile(
+    "ratchet-scan.tsx",
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+
   let total = 0;
-  let inBlockComment = false;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code: lineCode, state } = stripLine(raw, literalState);
-    literalState = state;
-    const blockResult = stripBlockComments(lineCode, inBlockComment);
-    const code = blockResult.code;
-    inBlockComment = blockResult.inBlockComment;
-    if (COMMENT_LINE.test(code)) {
-      continue;
-    }
-
-    for (const match of code
-      .replace(LINE_COMMENT_TAIL, "")
-      .matchAll(REGEX_LITERAL)) {
-      const { body, flags } = match.groups ?? {};
-      if (body === undefined || flags === undefined) {
-        continue;
-      }
+  const visit = (node: ts.Node): void => {
+    if (node.kind === ts.SyntaxKind.RegularExpressionLiteral) {
+      const literal = node.getText(source);
+      const lastSlash = literal.lastIndexOf("/");
       let expression: RegExp;
       try {
-        expression = new RegExp(body, flags);
+        expression = new RegExp(
+          literal.slice(1, lastSlash),
+          literal.slice(lastSlash + 1),
+        );
       } catch {
-        // Not a regex literal after all (a stray pair of slashes), or one
-        // this runtime cannot compile. Either way there is nothing to score.
-        continue;
+        // A pattern this runtime cannot compile cannot run either.
+        return;
       }
       try {
         if (analyse(expression).reports.length > 0) {
@@ -334,10 +341,12 @@ const countSuperLinearRegexes = (content: string): number => {
       } catch {
         // The analyser bails on constructs it does not model; an
         // unanalysable pattern is not evidence of a finding.
-        continue;
       }
+      return;
     }
-  }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
   return total;
 };
 
@@ -779,7 +788,7 @@ const countDomainActionVerbs = (content: string): number => {
     /export const DOMAIN_ACTION_VERBS = new Set\(\[([\s\S]*?)\]\);/u.exec(
       content,
     )?.[1];
-  return block === undefined ? 0 : (block.match(/^\s*"/gmu) ?? []).length;
+  return block === undefined ? 0 : (block.match(/^[ \t]*"/gmu) ?? []).length;
 };
 
 /**
@@ -792,7 +801,7 @@ const countShadowedNamespaces = (content: string): number => {
     /const SHADOWED_NAMESPACE_ALLOWLIST: readonly string\[\] = \[([\s\S]*?)\];/u.exec(
       content,
     )?.[1];
-  return block === undefined ? 0 : (block.match(/^\s*"/gmu) ?? []).length;
+  return block === undefined ? 0 : (block.match(/^[ \t]*"/gmu) ?? []).length;
 };
 
 type FileCounter = (content: string, file: string) => number;
@@ -817,8 +826,8 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "super-linear-regexes",
     description:
-      "regex literals in app source with super-linear worst-case backtracking (one oversized input blocks the event loop)",
-    include: APP_SOURCE_GLOBS,
+      "regex literals with super-linear worst-case backtracking, repo-wide (one oversized input blocks the event loop); at 0 — keep it there",
+    include: ALL_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countSuperLinearRegexes,
   },
@@ -1242,6 +1251,10 @@ const SUPER_LINEAR_REGEX_FIXTURE_LINES = [
   String.raw`const count = /(?<count>\d[\d\s]*)\s+výsledk/iu;`,
   // Counted: two of them on one line.
   String.raw`const pair = [/^[A-Z]\s+[A-Z\s]+$/u, /(?:a+)+b/u];`,
+  // Counted: quotes inside the pattern must not hide it. A line-based
+  // scanner blanks from the first `"` and never sees the rest.
+  String.raw`const attr = /\s*scale="[^"]*"/u;`,
+  String.raw`const apos = /\s*name='[^']*'/u;`,
   // Not counted: linear, anchored on a literal.
   String.raw`const safe = /Id="rId(?<num>\d+)"/gu;`,
   // Not counted: linear alternation of literals.
@@ -1255,10 +1268,12 @@ const SUPER_LINEAR_REGEX_FIXTURE_LINES = [
   String.raw`const ratio = (total) / (count + 1) / 2;`,
 ];
 const SELF_TEST_SUPER_LINEAR_REGEXES = `${SUPER_LINEAR_REGEX_FIXTURE_LINES.join("\n")}\n`;
-// Expected: judge(1) + count(1) + the two on the `pair` line(2) = 4. The
-// anchored/alternation patterns, the comment, the string and template
-// literals, and the division expression are all excluded.
-const EXPECTED_SUPER_LINEAR_REGEXES = 4;
+// Expected: judge(1) + count(1) + the two on the `pair` line(2) + the two
+// quote-bearing patterns(2) = 6. The anchored/alternation patterns, the
+// comment, the string and template literals, and the division expression are
+// all excluded. The quote-bearing pair is the regression guard for the
+// line-scanner blind spot this counter was rewritten to close.
+const EXPECTED_SUPER_LINEAR_REGEXES = 6;
 
 const NULLISH_FIXTURE_LINES = [
   "const a = list ?? [];",

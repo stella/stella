@@ -597,7 +597,7 @@ const resolveBaseUrl = (): string => {
         "SMOKE_API_URL / E2E_API_URL), e.g. https://api-staging.stll.app",
     });
   }
-  return raw.replace(/\/+$/u, "");
+  return raw.replace(/(?<!\/)\/+$/u, "");
 };
 
 const errorMessage = (error: unknown): string =>
