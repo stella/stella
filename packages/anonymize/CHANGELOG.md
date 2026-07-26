@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.6.2
+
+### Patch Changes
+
+- [#418](https://github.com/stella/anonymize/pull/418) [`d77a69b`](https://github.com/stella/anonymize/commit/d77a69b5d4b97105cff3fe1fde1d00201dda8102) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a lazy, shared NFC document-rule view with safe original-offset mapping.
+
 ## 2.6.1
 
 ### Patch Changes
