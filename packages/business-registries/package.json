@@ -127,7 +127,7 @@
   },
   "dependencies": {
     "@stll/country-codes": "workspace:*",
-    "@stll/stdnum": "^2.1.1"
+    "@stll/stdnum": "^2.1.5"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
