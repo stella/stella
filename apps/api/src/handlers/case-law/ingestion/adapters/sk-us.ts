@@ -1,17 +1,21 @@
 /**
  * Slovak Constitutional Court (Ústavný súd SR) adapter.
  *
- * Fetches decisions from the ustavnysud.sk REST API.
- * The API is a Liferay DXP headless service requiring
- * OAuth2 client_credentials authentication.
+ * Fetches decisions from the ustavnysud.sk REST API, a
+ * Liferay DXP headless service. ~52,000 decisions from 1993
+ * to present.
  *
- * Search: POST /o/v1/dms/search
- * Auth:   POST /o/oauth2/token (client_credentials)
+ * Search: POST /o/v1/dms/search (no auth)
  * PDFs:   GET  /docDownload/{documentId} (no auth)
  *
- * The client_id and client_secret are public credentials
- * embedded in the court's JavaScript bundle for anonymous
- * browser access. ~52,000 decisions from 1993 to present.
+ * Both endpoints are open. The search endpoint previously sat
+ * behind an OAuth2 client_credentials application whose
+ * credentials the court shipped in its own JavaScript bundle;
+ * that application has since been removed, and the token
+ * endpoint now answers `invalid_client` for it. Send no
+ * `Authorization` header at all: the endpoint rejects a
+ * request carrying one it cannot verify, so a stale token is
+ * worse than none.
  *
  * The Liferay DMS search endpoint has an internal pagination
  * cap (~3,000 results per query). To access the full archive,
@@ -50,22 +54,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const BASE_URL = "https://www.ustavnysud.sk";
 const SEARCH_URL = `${BASE_URL}/o/v1/dms/search`;
-const TOKEN_URL = `${BASE_URL}/o/oauth2/token`;
 const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
-
-/**
- * Public OAuth2 client credentials embedded in the court's
- * JavaScript bundle. These are shipped to every browser
- * that visits the search page — not secret API keys.
- * Configurable via env vars for rotation without code change.
- */
-// gitleaks:allow -- public credentials from court's JS bundle
-const CLIENT_ID =
-  process.env["SK_US_CLIENT_ID"] ?? "id-fab237c0-55ad-9fdf-9b9f-976eef3cbd9";
-// gitleaks:allow -- public credentials from court's JS bundle
-const CLIENT_SECRET =
-  process.env["SK_US_CLIENT_SECRET"] ??
-  "secret-579e7b79-b5b2-b22d-c1b3-204386e0447e";
 
 const PAGE_SIZE = 10;
 
@@ -113,54 +102,6 @@ const parseCursor = (cursor: string | null): YearCursor => {
 
 const encodeCursor = (c: YearCursor): string => `${c.year}:${c.offset}`;
 
-// ── OAuth2 token management ──────────────────────────────
-
-type CachedToken = { value: string; expiresAt: number };
-let cachedToken: CachedToken | null = null;
-
-const invalidateToken = (): void => {
-  cachedToken = null;
-};
-
-const getToken = async (signal?: AbortSignal): Promise<string> => {
-  if (cachedToken && Date.now() < cachedToken.expiresAt) {
-    return cachedToken.value;
-  }
-
-  const response = await fetchWithTimeout(TOKEN_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": INGESTION_USER_AGENT,
-    },
-    body: `grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}`,
-    signal,
-    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-  });
-
-  if (!response.ok) {
-    throw new FetchBoundaryError({
-      url: TOKEN_URL,
-      status: response.status,
-      statusText: response.statusText,
-      message: `SK ÚS OAuth2 token failed: ${response.status}`,
-    });
-  }
-
-  const data = await response.json();
-  if (!isTokenResponse(data)) {
-    panic("SK ÚS OAuth2 token returned an invalid payload");
-  }
-
-  // Cache with 30s safety margin
-  cachedToken = {
-    value: data.access_token,
-    expiresAt: Date.now() + (data.expires_in - 30) * 1000,
-  };
-
-  return data.access_token;
-};
-
 // ── Search API types ─────────────────────────────────────
 
 type SearchDocument = {
@@ -199,13 +140,6 @@ type SearchResponse = {
   documents: SearchDocument[];
   numFound: number;
 };
-
-const isTokenResponse = (
-  value: unknown,
-): value is { access_token: string; expires_in: number } =>
-  isRecord(value) &&
-  typeof value["access_token"] === "string" &&
-  typeof value["expires_in"] === "number";
 
 /**
  * Validate only the response envelope. Individual document
@@ -376,13 +310,10 @@ const executeSearch = async (
   offset: number,
   signal?: AbortSignal,
 ): Promise<SearchResponse | null> => {
-  const token = await getToken(signal);
-
   const response = await fetchWithTimeout(SEARCH_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
       "User-Agent": INGESTION_USER_AGENT,
     },
     body: JSON.stringify({
@@ -411,9 +342,9 @@ const executeSearch = async (
   });
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      invalidateToken();
-    }
+    // A 401/403 here means the court put the endpoint back behind
+    // authentication. There is no credential to refresh — the adapter
+    // needs a real one — so surface it rather than retrying blind.
     throw new FetchBoundaryError({
       url: SEARCH_URL,
       status: response.status,
@@ -428,7 +359,6 @@ const executeSearch = async (
 
   const data = await response.json();
   if (!isSearchResponse(data)) {
-    invalidateToken();
     const preview = JSON.stringify(data).slice(0, 200);
     panic(`SK ÚS search returned an invalid payload: ${preview}`);
   }
@@ -464,7 +394,8 @@ export const skUsAdapter: SourceAdapter = {
           if (error instanceof DOMException) {
             throw error;
           }
-          // Retry once with a fresh token
+          // One retry: the DMS search is intermittently flaky under
+          // load. An abort is not retried (handled above).
           data = await executeSearch(year, offset, signal);
         }
 
