@@ -211,7 +211,7 @@ jobs:
 
       - name: Check AI prompt sync
         if: needs.ci-changes.outputs.package_checks_required == 'true'
-        run: bash scripts/sync-ai-skills.sh --check
+        run: bash .ai/shared/scripts/sync-ai-skills.sh --check .
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2

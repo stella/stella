@@ -197,7 +197,7 @@ run_test() {
   fi
 }
 
-run_step "AI skill sync" bash scripts/sync-ai-skills.sh --check
+run_step "AI skill sync" bash .ai/shared/scripts/sync-ai-skills.sh --check .
 run_step "Workspace hygiene" bun run lint:ws
 run_step "Lockfile workspace-version guard" bun scripts/check-lockfile-workspace-versions.ts
 run_step "Policy evidence" bun run policies:check
