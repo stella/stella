@@ -79,7 +79,7 @@
     "security": "Sécurité"
   },
   "story": {
-    "agentBody": "L'agent recherche dans le dossier, lit le texte pertinent et répond avec des citations qui ouvrent la source exactement au passage concerné. Utilisez-le dans stella, Microsoft Teams ou via MCP et la CLI ; les mêmes permissions et les mêmes sources suivent la demande.",
+    "agentBody": "L'agent recherche dans le dossier, lit le texte pertinent et répond avec des citations qui ouvrent la source exactement au passage concerné. Utilisez-le dans stella ou via MCP et la CLI ; les mêmes permissions et les mêmes sources suivent la demande.",
     "agentEyebrow": "Flux de travail de l'agent",
     "agentTitle": "Demandez une fois. Chaque réponse cite sa source.",
     "controlBody": "stella est un logiciel juridique open source que vous pouvez auto-héberger : inspectez le code, exécutez-le à votre façon et exportez tout dans des formats standards ; sans dépendance.",

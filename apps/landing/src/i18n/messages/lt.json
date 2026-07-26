@@ -79,7 +79,7 @@
     "security": "Saugumas"
   },
   "story": {
-    "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir atsako citatomis, kurios atveria šaltinį tiksliai reikiamoje vietoje. Naudokite jį stella, Microsoft Teams arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
+    "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir atsako citatomis, kurios atveria šaltinį tiksliai reikiamoje vietoje. Naudokite jį stella arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
     "agentEyebrow": "Agento darbo eigos",
     "agentTitle": "Paklauskite kartą. Kiekvienas atsakymas nurodo savo šaltinį.",
     "controlBody": "stella – atvirojo kodo teisinė programinė įranga, kurią galite talpinti patys: peržiūrėkite kodą, paleiskite ją savaip ir eksportuokite viską standartiniais formatais; be pririšimo.",

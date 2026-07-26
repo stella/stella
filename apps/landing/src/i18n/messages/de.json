@@ -79,7 +79,7 @@
     "security": "Sicherheit"
   },
   "story": {
-    "agentBody": "Der Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Fundstellen, die die Quelle exakt an der richtigen Textstelle öffnen. Nutzen Sie ihn in stella, Microsoft Teams oder über MCP und die CLI; dieselben Berechtigungen und Quellen gelten für jede Anfrage.",
+    "agentBody": "Der Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Fundstellen, die die Quelle exakt an der richtigen Textstelle öffnen. Nutzen Sie ihn in stella oder über MCP und die CLI; dieselben Berechtigungen und Quellen gelten für jede Anfrage.",
     "agentEyebrow": "Agenten-Workflows",
     "agentTitle": "Einmal fragen. Jede Antwort nennt ihre Quelle.",
     "controlBody": "stella ist juristische Open-Source-Software, die Sie selbst hosten können: Prüfen Sie den Code, betreiben Sie sie auf Ihre Weise und exportieren Sie alles in Standardformaten; ohne Lock-in.",

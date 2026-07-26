@@ -79,7 +79,7 @@
     "security": "Segurança"
   },
   "story": {
-    "agentBody": "O agente pesquisa no caso, lê o texto relevante e responde com citações que abrem a fonte exatamente na passagem correspondente. Use-o na stella, no Microsoft Teams ou via MCP e CLI; as mesmas permissões e fontes acompanham cada solicitação.",
+    "agentBody": "O agente pesquisa no caso, lê o texto relevante e responde com citações que abrem a fonte exatamente na passagem correspondente. Use-o na stella ou via MCP e CLI; as mesmas permissões e fontes acompanham cada solicitação.",
     "agentEyebrow": "Fluxos de trabalho do agente",
     "agentTitle": "Pergunte uma vez. Cada resposta cita sua fonte.",
     "controlBody": "A stella é um software jurídico de código aberto que você pode auto-hospedar: inspecione o código, rode do seu jeito e exporte tudo em formatos padrão; sem dependência de fornecedor.",

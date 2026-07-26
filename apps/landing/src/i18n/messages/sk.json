@@ -79,7 +79,7 @@
     "security": "Bezpečnosť"
   },
   "story": {
-    "agentBody": "Agent prehľadá spis, prečíta relevantný text a odpovie s citáciami, ktoré otvoria zdroj presne v danej pasáži. Použite ho v stelle, v Microsoft Teams alebo cez MCP a CLI; s požiadavkou putujú rovnaké oprávnenia aj zdroje.",
+    "agentBody": "Agent prehľadá spis, prečíta relevantný text a odpovie s citáciami, ktoré otvoria zdroj presne v danej pasáži. Použite ho v stelle alebo cez MCP a CLI; s požiadavkou putujú rovnaké oprávnenia aj zdroje.",
     "agentEyebrow": "Pracovné postupy agenta",
     "agentTitle": "Spýtajte sa raz. Každá odpoveď cituje svoj zdroj.",
     "controlBody": "stella je open source právny softvér, ktorý si môžete hostovať sami: nahliadnite do kódu, prevádzkujte ho po svojom a exportujte všetko v štandardných formátoch; bez viazanosti.",

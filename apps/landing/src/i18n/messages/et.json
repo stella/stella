@@ -79,7 +79,7 @@
     "security": "Turvalisus"
   },
   "story": {
-    "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta seda stellas, Microsoft Teamsis või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
+    "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta seda stellas või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
     "agentEyebrow": "Agendi töövood",
     "agentTitle": "Küsi üks kord. Iga vastus viitab oma allikale.",
     "controlBody": "stella on avatud lähtekoodiga õigustarkvara, mida saad ise majutada: uuri koodi, käita seda oma moodi ja ekspordi kõik standardvormingutes; tarnijalõksuta.",

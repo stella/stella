@@ -79,7 +79,7 @@
     "security": "Drošība"
   },
   "story": {
-    "agentBody": "Aģents meklē lietā, izlasa būtisko tekstu un atbild ar citātiem, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to stella, Microsoft Teams vai ar MCP un komandrindas palīdzību; pieprasījumam seko tās pašas atļaujas un avoti.",
+    "agentBody": "Aģents meklē lietā, izlasa būtisko tekstu un atbild ar citātiem, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to stella vai ar MCP un komandrindas palīdzību; pieprasījumam seko tās pašas atļaujas un avoti.",
     "agentEyebrow": "Aģenta darbplūsmas",
     "agentTitle": "Pajautājiet vienreiz. Katra atbilde norāda savu avotu.",
     "controlBody": "stella ir atvērtā pirmkoda juridiskā programmatūra, ko varat mitināt paši: pārbaudiet kodu, darbiniet to pēc saviem noteikumiem un eksportējiet visu standarta formātos; bez piesaistes.",
