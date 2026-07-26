@@ -183,7 +183,27 @@ Ask: **what would have prevented this regression?** Make this
 recommendation _after_ the fix is in — you have more information now than
 when you started.
 
-Lenses to apply:
+Classify the failure before choosing a guard:
+
+- **Representation:** invalid or mutually exclusive states were representable. Prefer
+  a branded type, discriminated union, private constructor, or exhaustive transition.
+- **Invariant:** behavior must hold across a broad input space. Prefer a property,
+  idempotence, fixed-point, metamorphic, or fuzz test.
+- **Boundary:** malformed or ambiguous data crossed a trust boundary. Parse and
+  validate once, fail early, and return a typed error.
+- **Integration:** individually valid components disagreed at a seam. Prefer a
+  contract, differential, round-trip, or focused integration test.
+- **Observation:** the failure was only visible after degradation or deployment.
+  Prefer a metric, baseline, canary, alert, or durable review artifact.
+- **Heuristic:** behavior is intentionally approximate or distribution-dependent.
+  Prefer a representative benchmark and justified threshold; do not invent a false
+  invariant.
+
+Add the strongest feasible guard for a substantial bug. If the strongest guard needs
+a broader architectural change, land the immediate fix and create a concrete
+follow-up rather than merely mentioning the idea.
+
+Additional lenses:
 
 - **Type system could have caught it?** Lift the constraint into types
   (branded types, discriminated unions, exhaustive checks). Patching the
@@ -203,5 +223,10 @@ Lenses to apply:
 - root cause
 - fix
 - verification
-- prevention recommendation
+- structural prevention:
+  - failure class
+  - strongest applicable mechanism
+  - guard added
+  - why a stronger mechanism was not applicable
+  - remaining ways this class could recur
 - any remaining uncertainty

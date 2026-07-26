@@ -1,17 +1,8 @@
 ## Project Overview
 
-**Monorepo:** `apps/api` (Elysia backend, Bun), `apps/web` (React + Vite frontend),
-shared packages in `packages/`. Use Glob/Grep to explore.
-
-## Database Domain Values
-
-- For closed persisted domain values, use one named `as const` value list with
-  Drizzle `text({ enum: VALUES })`; do not use TypeScript enums or native PostgreSQL
-  enums for evolving state.
-- Drizzle enum inference and `.$type<T>()` do not validate stored values. Add a
-  database `CHECK` when an invalid value could compromise lifecycle, billing,
-  authorization, audit, or workflow invariants. Reserve `.$type<T>()` for branded
-  or structured types.
+**Monorepo:** runnable services and clients live in `apps/` (`api`, `web`, desktop,
+mobile, landing, collaboration, playground, and focused runners); shared or
+publishable code lives in `packages/`. Use Glob/Grep to explore.
 
 ## Workspace Layout
 
@@ -87,13 +78,3 @@ only the non-obvious caveats for this environment.
   checked in the CI typecheck job. Reseeding either baseline
   (`--write` / `--write-baseline`) must be justified in the PR description;
   it is not a mechanical way to make CI green.
-
-## End-to-End Tests
-
-- Browser navigation must name `waitUntil: "commit"` or
-  `waitUntil: "domcontentloaded"`, then synchronize on the specific UI that
-  makes the route ready. Never use the default `load` event as application
-  readiness; `navigation-policy.unit.spec.ts` enforces this for every E2E spec.
-- A successful HTTP response is not necessarily completion of the user action
-  that issued it. Wait for the product's visible completion state before
-  asserting settled UI or navigating away.

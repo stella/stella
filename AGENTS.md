@@ -46,7 +46,9 @@ details unless they are already public in the repository.
 
 - Never manually reformat code you did not semantically change (auto-formatter output
   from `bun run format` is fine to include)
-- Vary punctuation: prefer colons, semicolons, commas, and parentheses over em dashes
+- In prose, vary punctuation: prefer colons, semicolons, commas, and parentheses
+  over em dashes. This does not apply to source code, command syntax, generated
+  content, or exact identifiers.
 - Omit needless words. Vigorous writing is concise: a sentence should contain no
   unnecessary words, a paragraph no unnecessary sentences, for the same reason that a
   drawing should have no unnecessary lines and a machine no unnecessary parts. Applies
@@ -57,6 +59,14 @@ details unless they are already public in the repository.
 - If TypeScript can make a class of bug structurally impossible (branded types,
   discriminated unions, exhaustive checks), prefer that over runtime validation or
   manual discipline
+- Kill the bug class, not the instance: for a recurring or systemic defect, use the
+  strongest applicable mechanism. Make invalid states unrepresentable first; cover
+  remaining behavior with a property, invariant, idempotence, or fixed-point test over
+  the input class. Enforce boundaries with a lint rule or CI check. Keep a minimal
+  example regression only when the broader invariant cannot express the failure. When
+  correctness depends on a helper being called at every call site, enforce it with a
+  custom lint rule, not developer discipline. Do not over-apply this to genuine
+  heuristics (a debounce timer is not a bug class).
 - Avoid boolean fields for states that may grow. Use a named discriminator or
   domain type for values that answer "which kind/status/mode/type?" rather than
   a permanent yes/no question; a two-value union, enum, or equivalent domain type
@@ -71,8 +81,10 @@ details unless they are already public in the repository.
 - Use named constants, not string literals for domain values
 - No direct `document.cookie` assignment
 - Avoid spread in loop accumulators (use `.push()`)
-- If you encounter a pre-existing bug or lint error while working on something else,
-  fix it (separate commit)
+- If you encounter a pre-existing bug or lint error, fix it. Preserve focus through
+  isolation, not omission: use a separate commit when the fix is small and shares the
+  same validation surface; use a separate focused PR when it expands the subsystem,
+  risk, or review burden. Never leave a confirmed defect merely to keep a diff narrow.
 - Orchestrate across model tiers when your harness supports subagents and model
   selection: delegate well-scoped, mechanical, or independently verifiable subtasks
   (edits, searches, refactors, test runs) to a subagent on the cheapest model that
@@ -125,86 +137,6 @@ Start route data in loaders (`ensureRouteQueryData`), batch DB work instead of
 growing a query budget, and tighten baselines after a perf fix. Full guidelines,
 failure playbook, and the current hotspot burn-down list in `/conventions-perf`.
 
-## UX & Brand
-
-Use semantic tokens (`bg-muted`, `text-foreground`, `border`), not raw colour values.
-Full brand deck, micro-interaction guidelines, and visual noise rules in
-`/conventions-ux`.
-
-## React
-
-- Put the root/exported component at the top of the file (after imports); helper
-  components and types follow below.
-- Prefer `if` statements over nested ternaries for conditional rendering. Extract
-  complex logic into a small component that returns early with `if` branches instead
-  of chaining ternaries.
-- React Compiler is enabled in the Vite build. Prefer plain React over prophylactic
-  `useMemo`, `useCallback`, and `React.memo`.
-- Clean up legacy memoization gradually when touching a file; do not do broad
-  mechanical removals. Keep manual memoization only when a library contract requires
-  referential stability or profiling proves a real benefit.
-- Zustand with `useShallow()` for multi-slice selectors
-- Skip barrel files (`index.ts`): import from explicit paths
-- Use coss (Base UI) components, registered as `@coss` in `components.json`. Prefer
-  coss primitives over hand-rolling.
-- Use semantic HTML elements (`<button>`, `<nav>`, `<main>`) over generic `<div>`s with
-  ARIA roles. Provide meaningful `alt` text, proper heading hierarchy, labels for form
-  inputs, and keyboard event handlers alongside mouse events.
-- Never construct Tailwind class names dynamically (e.g. `` `bg-${color}-200` ``);
-  Tailwind cannot detect them. Use `style` with CSS variables instead
-  (e.g. ``style={{ backgroundColor: `var(--color-${name}-200)` }}``).
-- `cn()` utility for conditional class names
-- Frontend calls the API via Eden treaty (`apps/web/src/lib/api.ts`). The `api` export
-  is a typed proxy mirroring backend routes; use dot notation with HTTP verbs:
-  `api.workspaces({ workspaceId }).get()`. Unwrap responses with `.data` / `.error`
-  checks or `toAPIError()`.
-- Return minimal data from endpoints and mutations. Backend handlers should only return
-  what callers actually need; frontend response types should only type what they
-  consume. Do not speculatively return extra fields "for completeness."
-- Do not create single-use mutation hooks just to wrap an API call. Inline the API call
-  at the usage site and use `Result.tryPromise` for retries instead of React Query's
-  `retry` on throwaway mutations.
-- Reuse existing components (`Button`, `Input`, etc.) with `className` overrides
-  instead of writing inline `<button>`, `<input>`, or similar raw HTML elements. This
-  keeps behaviour (focus rings, accessibility, sizing) consistent across the app.
-- Prefer `useRouteContext` for data already provided by parent route loaders
-  (`beforeLoad`) over firing a separate query. Extend the route context if needed
-  rather than adding a query.
-- When a route loader only primes a TanStack Query cache, return `void` from it so its
-  return type stays out of the route tree and does not inflate type-inference cost.
-- Use `useSuspenseQuery` only in route/page content where the query is preloaded or
-  wrapped by an explicit local `Suspense` boundary. In shared chrome (breadcrumbs,
-  headers, toolbars, sidebar shell), prefer `useQuery` so a cache miss cannot suspend
-  the whole layout.
-- Always use `select` with `useParams`, `useSearch`, and `useRouteContext` to subscribe
-  only to the fields the component needs. Without `select`, the component rerenders on
-  any param/search/context change.
-- Pass `from` to `useParams`/`useSearch`/`Link` (or `strict: false` to `useParams`/
-  `useSearch` in shared chrome that spans routes) so types narrow from the full route
-  union to a single route. The unnarrowed union is both imprecise and expensive to
-  typecheck.
-- Use `useDebouncedCallback` from `use-debounce` instead of hand-rolling debounce with
-  `useRef<setTimeout>` + manual `clearTimeout`. The library handles cleanup
-  automatically.
-- Query option file ordering: key type -> key helpers -> input type
-  (`QueryOptionsInput`) -> option factory -> hook (e.g., `useEntitiesOptions`).
-- Query option factories that use `QueryOptionsInput` with a `TContext` must: define a
-  named type alias matching the factory name (e.g., `ViewsOptionsInput` for
-  `viewsOptions`, `ChatThreadOptionsInput` for `chatThreadOptions`), destructure
-  `{ key, context }` in the parameter, and reference `key.*` / `context.*` directly in
-  the body (no further destructuring). This makes it obvious at the call site and
-  inside the function which values drive the cache key vs. which are runtime-only deps.
-- Define a separate key type (e.g., `EntitiesPageKey`) and use it in both the
-  `QueryOptionsInput` and the key helper. The key helper's parameter type must be the
-  key type, not the full options input, so the key builder only accepts cache-identity
-  fields.
-- Never spread input objects into query keys. Explicitly destructure and reconstruct
-  the key object so extra properties from callers cannot leak into the cache identity
-  and cause spurious refetches.
-- Key helpers must compose by spreading the parent key
-  (e.g., `...entitiesKeys.all(workspaceId)`), never by duplicating the parent's array
-  literal. This ensures changes to the parent key shape propagate automatically.
-
 ## Coding Conventions
 
 ### TypeScript
@@ -213,6 +145,11 @@ Full brand deck, micro-interaction guidelines, and visual noise rules in
 - Model mutually exclusive internal states as discriminated unions with a stable
   `type`, `status`, or domain-specific discriminator. Avoid boolean flag sets plus
   optional payload fields when only some combinations are valid.
+- Construct a discriminated-union branch transition explicitly: list the target
+  branch's fields rather than spreading the previous object and overriding the
+  discriminator, so stale fields from the old branch cannot leak through the spread.
+  Read a union with a `switch` plus a `never` exhaustiveness check over an `if`/`else`
+  chain.
 - When the linter blocks an `as` cast, restructure to narrow properly (type guards,
   `in` checks, records instead of arrays). If truly unavoidable, ask before adding and
   include a `// SAFETY:` comment explaining why the cast is sound.
@@ -220,14 +157,15 @@ Full brand deck, micro-interaction guidelines, and visual noise rules in
   that produces the wrong type) rather than casting at the consumer. Check git to
   verify you did not introduce the mismatch yourself before blaming the framework.
 - Never annotate or cast a value the compiler already infers, and never pass explicit
-  type arguments to inference-driven hooks (`useLoaderData<T>()`, `useQuery<T>()`, Eden
-  calls). Every annotation or explicit generic masks real errors and breaks the
-  inference chain; let inference flow and narrow at the boundary instead.
+  type arguments to inference-driven APIs. Every redundant annotation or generic can
+  mask real errors and break the inference chain; let inference flow and narrow at
+  the boundary instead.
 - Validate object literals against a large union type (route, link, query options) with
   `as const satisfies T`, not a `: T` annotation. `satisfies` checks the value without
   widening it or paying the annotation's instantiation cost.
 - Use `.at(0)` when the element may not exist (signals possible absence). Use `[0]`
   only when existence is already established (length check, or a `// SAFETY:` comment).
+- Skip barrel files (`index.ts`); import from explicit module paths.
 - Prefer arrow functions over function expressions
 - Destructure in the parameter when the intermediate variable is not reused
   (e.g., `{ body: { file, name } }` not `body` then `const { file, name } = body`)
@@ -238,21 +176,18 @@ Full brand deck, micro-interaction guidelines, and visual noise rules in
   argument, and also for two arguments when their types are different enough to stay
   readable. Use a named `SomethingOptions`, `SomethingArgs`, or `SomethingParams`
   object for 3+ arguments, or when two same-type or otherwise interchangeable
-  positional arguments would be easy to mix up. Reserve `Props` for React component
-  props.
-- Reuse util types from libraries instead of hand-rolling (e.g.,
-  `React.PropsWithChildren<P>` for props with children,
-  `React.ComponentProps<"button">` for HTML element props). Check React, TanStack, and
-  other deps before defining custom equivalents.
+  positional arguments would be easy to mix up.
+- Reuse utility types from libraries instead of hand-rolling equivalents. Check the
+  dependencies already in use before defining a custom helper type.
 - Keep helper-local types close to the helper they describe: put `SomethingOptions`,
   `SomethingResult`, and similar aliases immediately above the function, not in a
   file-level type dump far away from the implementation.
 - If a return type is noisy enough to hurt readability, hoist it into a nearby alias
   such as `SomethingResult` and use it in the signature (e.g., `SomethingResult` or
   `Promise<SomethingResult>`). If the return type is simple, keep it inline.
-- Watch type-instantiation cost in hot generic paths (route trees, query options, Eden
-  surfaces): prefer narrowing (`satisfies`, route `from`, query `select`) over
-  annotation, and keep large unused types out of inferred return positions.
+- Watch type-instantiation cost in hot generic paths such as schema builders, route
+  trees, and query-option graphs. Prefer narrowing over annotation, and keep large
+  unused types out of inferred return positions.
 
 ### Module Side Effects
 
@@ -267,79 +202,6 @@ Full brand deck, micro-interaction guidelines, and visual noise rules in
   (`betterAuth()`, `drizzle()`) depends on another module's export, wrap it in a
   `getX()` getter so it runs at first use, not at import time. This prevents TDZ
   errors from non-deterministic module evaluation order.
-
-## Backend (Elysia)
-
-- Do not export types that have no consumer. Elysia infers handler types via Eden;
-  manually exporting schema types is unnecessary unless explicitly imported elsewhere.
-- Prefer Bun-native APIs over Web Crypto or manual implementations (e.g.,
-  `Bun.CryptoHasher`, `Bun.file`, `Bun.S3Client`). This is a Bun runtime; do not write
-  browser-compatible code on the backend.
-- Drizzle ORM for all database access (see `/conventions-db`)
-- Do not use `?.` or `?? []` to silently handle relations that are structural invariants
-  of the data model (e.g. `entity.currentVersion` always exists after creation). Use
-  `panic()` instead.
-- Timeouts on all external calls:
-
-  ```typescript
-  fetch(url, { signal: AbortSignal.timeout(10_000) });
-  ```
-
-- Validate inputs at the boundary with Valibot or Elysia schemas
-- Prefer one obvious validation split: use Elysia `t` for HTTP route contracts,
-  Valibot for web and general runtime validation, and Zod only when a dependency
-  explicitly requires it
-- For Valibot objects at untrusted boundaries, prefer `v.strictObject()` over
-  `v.object()` unless stripping unknown keys is intentionally desired
-- Prefer deriving related Valibot schemas with `v.pick()`, `v.omit()`, and
-  `v.partial()` instead of rewriting sibling schemas by hand
-- For cross-field form rules, prefer `v.partialCheck()` plus `v.forward()` so the
-  issue lands on the relevant field
-- Put normalization inside the Valibot schema (`v.trim()`, `v.toLowerCase()`, etc.),
-  then use `v.InferInput` for raw form values and `v.InferOutput` after
-  parsing/normalization
-- Prefer declarative/built-in validators over manual checks (e.g.,
-  `t.File({ maxSize })`, `v.isoDate()`, `v.email()`).
-- Do not add fallback values for properties that the framework already guarantees
-  (e.g., `file.type || "..."` when Elysia's `t.File()` always provides a type). Trust
-  internal code and framework guarantees; only add defensive fallbacks at true system
-  boundaries (external APIs, user-controlled input).
-- Keep `routes.ts` thin: route files should define the route structure, attach macros,
-  choose the HTTP method and path, and wire in handlers. When the handler accepts ctx
-  directly (e.g., `{ config, handler }` exports), pass `something.handler` directly; no
-  arrow wrapper needed. Route-only concerns such as `invalidateQuery` stay in
-  `routes.ts`.
-- Endpoint modules should default-export one `{ config, handler }` object. The
-  `config` owns handler-level concerns such as `body`, `params`, `query`, and
-  `permissions`; reusable helpers must live in a separate module instead of being
-  exported from the endpoint file.
-- Backend handlers should be created via `createSafeHandler` (workspace-scoped) or
-  `createSafeRootHandler` (root-scoped) from `/apps/api/src/lib/api-handlers.ts`.
-  Both wrap handlers in `Result.gen()` for structured error capture. Use
-  `async function*` with `yield* Result.await(safeDb(...))` for DB operations and
-  `Result.err(new HandlerError(...))` for error returns. Do not export raw handlers
-  that accept plain `WorkspaceContext`; use the branded authorized context that the
-  safe handler factories provide instead.
-- Permission requirements live in the handler file next to the schema and business
-  logic. Every workspace-scoped mutation handler must declare permissions in `config`
-  and wrap the implementation with `createSafeHandler`.
-- **Ownership IDs come from server-validated sources.** `workspaceId` from `SafeId` via
-  `validateWorkspaceAccess`, `organizationId` from
-  `ctx.session.activeOrganizationId`. The `no-body-ownership-ids` lint rule catches
-  body/query violations; this guideline covers the architectural intent. Before writing
-  a new handler, read an existing handler with the same scope to follow the established
-  pattern.
-- File uploads use presigned URLs: client requests a URL from the API, uploads directly
-  to S3, then creates the DB record.
-
-### Known Elysia Gotchas
-
-- **Optional UnionEnum coercion:** Elysia coerces absent optional `UnionEnum` fields to
-  the first enum value. Always send all fields explicitly from the frontend, even when
-  the value has not changed.
-- **Function-form macros break type inference.** Define macros in a separate Elysia
-  plugin, not chained inline. The function form (`(app) => app.macro(...)`) loses type
-  propagation.
 
 ## Error Handling
 
@@ -358,11 +220,6 @@ Full brand deck, micro-interaction guidelines, and visual noise rules in
 - Do not leave ad hoc `console.error(...)` in product code. Route telemetry-only
   failures through the shared analytics or logging helpers so observability stays
   structured.
-
-## Database
-
-Schema in `/apps/api/src/db/schema.ts`. Drizzle ORM for all access. Full conventions
-(FK ordering, JSONB, indexes, transactions) in `/conventions-db`.
 
 ## Testing
 
@@ -386,18 +243,9 @@ oxlint (ultracite preset) + oxfmt. To suppress a rule:
 
 ## Project Overview
 
-**Monorepo:** `apps/api` (Elysia backend, Bun), `apps/web` (React + Vite frontend),
-shared packages in `packages/`. Use Glob/Grep to explore.
-
-## Database Domain Values
-
-- For closed persisted domain values, use one named `as const` value list with
-  Drizzle `text({ enum: VALUES })`; do not use TypeScript enums or native PostgreSQL
-  enums for evolving state.
-- Drizzle enum inference and `.$type<T>()` do not validate stored values. Add a
-  database `CHECK` when an invalid value could compromise lifecycle, billing,
-  authorization, audit, or workflow invariants. Reserve `.$type<T>()` for branded
-  or structured types.
+**Monorepo:** runnable services and clients live in `apps/` (`api`, `web`, desktop,
+mobile, landing, collaboration, playground, and focused runners); shared or
+publishable code lives in `packages/`. Use Glob/Grep to explore.
 
 ## Workspace Layout
 
@@ -473,13 +321,3 @@ only the non-obvious caveats for this environment.
   checked in the CI typecheck job. Reseeding either baseline
   (`--write` / `--write-baseline`) must be justified in the PR description;
   it is not a mechanical way to make CI green.
-
-## End-to-End Tests
-
-- Browser navigation must name `waitUntil: "commit"` or
-  `waitUntil: "domcontentloaded"`, then synchronize on the specific UI that
-  makes the route ready. Never use the default `load` event as application
-  readiness; `navigation-policy.unit.spec.ts` enforces this for every E2E spec.
-- A successful HTTP response is not necessarily completion of the user action
-  that issued it. Wait for the product's visible completion state before
-  asserting settled UI or navigating away.

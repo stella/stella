@@ -7,24 +7,63 @@
       "engineering",
       "scalability",
       "performance",
-      "frontend-react",
       "typescript",
-      "backend-elysia",
       "error-handling",
-      "database",
       "testing",
       "i18n",
       "linting"
     ],
-    "local": ".ai/local/agents.md"
+    "local": ".ai/local/agents.md",
+    "scopes": [
+      {
+        "path": "apps/api",
+        "title": "Stella API Development Guidelines",
+        "modules": ["backend-elysia", "database"],
+        "local": ".ai/local/api-agents.md"
+      },
+      {
+        "path": "apps/web",
+        "title": "Stella Web Development Guidelines",
+        "modules": ["frontend", "react", "tanstack-react", "stella-web"],
+        "local": ".ai/local/web-agents.md"
+      },
+      {
+        "path": "apps/desktop",
+        "title": "Stella Desktop Development Guidelines",
+        "modules": ["frontend", "react"]
+      },
+      {
+        "path": "apps/landing",
+        "title": "Stella Landing Development Guidelines",
+        "modules": ["frontend", "react"]
+      },
+      {
+        "path": "apps/playground",
+        "title": "Stella Playground Development Guidelines",
+        "modules": ["frontend", "react"]
+      },
+      {
+        "path": "apps/mobile",
+        "title": "Stella Mobile Development Guidelines",
+        "modules": ["react"]
+      },
+      {
+        "path": "packages/ui",
+        "title": "Stella UI Development Guidelines",
+        "modules": ["frontend", "react"]
+      },
+      {
+        "path": "packages/transactional",
+        "title": "Stella Transactional Email Guidelines",
+        "modules": ["react"]
+      }
+    ]
   },
   "coderabbit": {
     "pathFilters": [
       "!apps/web/src/routeTree.gen.ts",
       "!**/drizzle/**/snapshot.json"
     ],
-    "codeGuidelineFilePatterns": [
-      "**/.cursorrules"
-    ]
+    "codeGuidelineFilePatterns": ["**/.cursorrules"]
   }
 }
