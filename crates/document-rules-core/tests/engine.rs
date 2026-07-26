@@ -133,6 +133,48 @@ struct MetadataRule {
   key: MetadataKey,
 }
 
+struct NormalizedPhraseRule {
+  spec: RuleSpec,
+}
+
+impl DocumentRule for NormalizedPhraseRule {
+  fn spec(&self) -> &RuleSpec {
+    &self.spec
+  }
+
+  fn evaluate(
+    &self,
+    context: RuleContext<'_>,
+    findings: &mut FindingSink,
+  ) -> Result<(), String> {
+    let RuleContext::Block(context) = context else {
+      return Err(String::from("wrong context"));
+    };
+    let normalized = context.block().normalized_text();
+    let Some(start) = normalized.as_str().find("café") else {
+      return Ok(());
+    };
+    let start = u32::try_from(start).map_err(|error| error.to_string())?;
+    let phrase_bytes =
+      u32::try_from("café".len()).map_err(|error| error.to_string())?;
+    let end = start
+      .checked_add(phrase_bytes)
+      .ok_or_else(|| String::from("normalized phrase span overflow"))?;
+    let normalized_span =
+      TextSpan::new(start, end).map_err(|error| error.to_string())?;
+    let original_span = normalized
+      .original_span(normalized_span)
+      .map_err(|error| error.to_string())?;
+    findings.push(FindingDraft::new(
+      FindingKind::new("normalized-phrase")
+        .map_err(|error| error.to_string())?,
+      BlockSpan::new(context.block().id().clone(), original_span),
+      "normalized phrase",
+    ));
+    Ok(())
+  }
+}
+
 impl DocumentRule for MetadataRule {
   fn spec(&self) -> &RuleSpec {
     &self.spec
@@ -279,6 +321,53 @@ fn batch_and_incremental_paths_share_exact_results() {
     &FindingAction::Replace {
       replacement: Arc::from("[marker]"),
     }
+  );
+}
+
+#[test]
+fn normalized_rules_preserve_original_offsets_across_incremental_edits() {
+  let engine = RuleEngine::new(
+    RuleSet::new(vec![Arc::new(NormalizedPhraseRule {
+      spec: RuleSpec::new(
+        RuleId::new("normalized-phrase").unwrap(),
+        RuleScope::Block,
+      ),
+    })])
+    .unwrap(),
+  );
+  let document = Document::new(vec![
+    block("a", "A cafe\u{301} clause"),
+    block("b", "unchanged"),
+  ])
+  .unwrap();
+  let batch = engine.analyze(&document).unwrap();
+  let finding = batch.findings().first().unwrap();
+  assert_eq!(finding.primary().span(), TextSpan::new(2, 8).unwrap());
+
+  let counters = engine.counters();
+  let mut session = IncrementalDocumentSession::new(&engine, document);
+  assert_eq!(session.analyze().unwrap().findings(), batch.findings());
+  counters.reset();
+  session
+    .apply_patch(&DocumentPatch::new(
+      Revision::initial(),
+      vec![DocumentChange::replace_text(
+        BlockId::new("a").unwrap(),
+        "A café clause",
+      )],
+    ))
+    .unwrap();
+  let incremental = session.analyze().unwrap();
+  let updated_finding = incremental.findings().first().unwrap();
+  assert_eq!(
+    updated_finding.primary().span(),
+    TextSpan::new(2, 7).unwrap()
+  );
+  assert_eq!(counters.snapshot().block_analysis(), 1);
+  assert_eq!(counters.snapshot().block_rules(), 1);
+  assert_eq!(
+    incremental.findings(),
+    engine.analyze(session.document()).unwrap().findings()
   );
 }
 

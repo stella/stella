@@ -15,6 +15,12 @@ Rules implement `DocumentRule` and are assembled into a `RuleSet`. Every rule
 receives the shared `BlockAnalysis` produced by the engine rather than building
 its own token or boundary map.
 
+Rules that need canonically stable matching can request the block's lazy NFC
+view with `BlockAnalysis::normalized_text`. The view is computed at most once
+per analyzed block and shared across rules. Matches map back to valid source
+byte spans, including composed characters and canonically reordered combining
+marks. ASCII and already-normalized blocks keep their original text allocation.
+
 ## Execution modes
 
 `RuleEngine::analyze` is the direct one-shot path. It executes the shared rule

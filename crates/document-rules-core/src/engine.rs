@@ -1,7 +1,9 @@
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::NormalizedText;
 use crate::model::{
   BlockSpan, Document, DocumentBlock, Error, Metadata, Result, Revision,
   TextSpan,
@@ -11,14 +13,46 @@ use crate::rule::{
   FindingSink, NeighborhoodRuleContext, RuleContext, RuleScope, RuleSet,
 };
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct BlockAnalysis {
   id: crate::model::BlockId,
   text: Arc<str>,
   word_spans: Arc<[TextSpan]>,
   byte_len: u32,
   metadata: Metadata,
+  normalized_text: OnceLock<NormalizedText>,
 }
+
+impl Clone for BlockAnalysis {
+  fn clone(&self) -> Self {
+    let normalized_text = self
+      .normalized_text
+      .get()
+      .map_or_else(OnceLock::new, |normalized| {
+        OnceLock::from(normalized.clone())
+      });
+    Self {
+      id: self.id.clone(),
+      text: Arc::clone(&self.text),
+      word_spans: Arc::clone(&self.word_spans),
+      byte_len: self.byte_len,
+      metadata: self.metadata.clone(),
+      normalized_text,
+    }
+  }
+}
+
+impl PartialEq for BlockAnalysis {
+  fn eq(&self, other: &Self) -> bool {
+    self.id == other.id
+      && self.text == other.text
+      && self.word_spans == other.word_spans
+      && self.byte_len == other.byte_len
+      && self.metadata == other.metadata
+  }
+}
+
+impl Eq for BlockAnalysis {}
 
 impl BlockAnalysis {
   #[must_use]
@@ -44,6 +78,18 @@ impl BlockAnalysis {
   #[must_use]
   pub const fn metadata(&self) -> &Metadata {
     &self.metadata
+  }
+
+  /// Returns the block's NFC text and its original-offset map.
+  ///
+  /// The view is built only when requested, then shared by every rule that
+  /// evaluates this block. ASCII and already-normalized text retain the
+  /// original allocation and use an identity offset map.
+  #[must_use]
+  pub fn normalized_text(&self) -> &NormalizedText {
+    self
+      .normalized_text
+      .get_or_init(|| NormalizedText::from_source(Arc::clone(&self.text)))
   }
 
   pub fn text_for_span(&self, span: TextSpan) -> Result<&str> {
@@ -230,6 +276,7 @@ pub(crate) fn analyze_block(
     word_spans: word_spans.into(),
     byte_len,
     metadata: block.metadata().clone(),
+    normalized_text: OnceLock::new(),
   }))
 }
 

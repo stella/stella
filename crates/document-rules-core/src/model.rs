@@ -35,6 +35,8 @@ pub enum Error {
   InvalidTextSpan { start: u32, end: u32 },
   #[error("finding span for block '{block_id}' exceeds its text")]
   FindingSpanOutOfBounds { block_id: BlockId },
+  #[error("normalized text span {start}..{end} is not a valid boundary")]
+  NormalizedTextSpanOutOfBounds { start: u32, end: u32 },
   #[error("rule id must be non-blank and at most {MAX_IDENTIFIER_BYTES} bytes")]
   InvalidRuleId,
   #[error(

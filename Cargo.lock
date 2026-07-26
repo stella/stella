@@ -1545,8 +1545,10 @@ dependencies = [
 name = "stella-document-rules-core"
 version = "2.6.1"
 dependencies = [
+ "proptest",
  "salsa",
  "thiserror",
+ "unicode-normalization",
 ]
 
 [[package]]

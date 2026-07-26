@@ -10,6 +10,7 @@ mod engine;
 #[cfg(feature = "incremental")]
 mod incremental;
 mod model;
+mod normalized;
 mod rule;
 
 pub use engine::{
@@ -30,3 +31,4 @@ pub use rule::{
 };
 
 pub use model::{Error, Result};
+pub use normalized::NormalizedText;
