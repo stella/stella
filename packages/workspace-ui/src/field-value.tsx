@@ -15,19 +15,19 @@ type FieldValueVariant = "default" | "table" | "kanban";
 
 type PropertyContentType = GenericProperty["content"]["type"];
 
-type FieldValueProps<P extends GenericProperty> = {
+type FieldValueProps = {
   content: WorkspaceFieldContent | undefined;
-  property: P;
+  property: GenericProperty;
   pendingPreview?: string | null | undefined;
   variant?: FieldValueVariant;
 };
 
-export const FieldValue = <P extends GenericProperty>({
+export const FieldValue = ({
   content,
   property,
   pendingPreview,
   variant,
-}: FieldValueProps<P>) => {
+}: FieldValueProps) => {
   const resolvedVariant = variant ?? "default";
 
   if (!content) {
@@ -263,13 +263,13 @@ const TextFieldValue = ({
   );
 };
 
-const DateFieldValue = <P extends GenericProperty>({
+const DateFieldValue = ({
   content,
   property,
   variant,
 }: {
   content: Extract<WorkspaceFieldContent, { type: "date" }>;
-  property: P;
+  property: GenericProperty;
   variant: FieldValueVariant;
 }) => {
   const format = useFormatter();
@@ -306,12 +306,12 @@ const DateFieldValue = <P extends GenericProperty>({
   );
 };
 
-const SelectFieldValue = <P extends GenericProperty>({
+const SelectFieldValue = ({
   property,
   value,
   variant,
 }: {
-  property: P;
+  property: GenericProperty;
   value: string | null;
   variant: FieldValueVariant;
 }) => {
@@ -353,12 +353,12 @@ const SelectFieldValue = <P extends GenericProperty>({
   );
 };
 
-const MultiSelectFieldValue = <P extends GenericProperty>({
+const MultiSelectFieldValue = ({
   property,
   value,
   variant,
 }: {
-  property: P;
+  property: GenericProperty;
   value: string[];
   variant: FieldValueVariant;
 }) => {
@@ -462,8 +462,8 @@ const PendingSkeleton = ({ contentType }: PendingSkeletonProps) => {
   );
 };
 
-const getSelectPropertyColor = <P extends GenericProperty>(
-  property: P,
+const getSelectPropertyColor = (
+  property: GenericProperty,
   option: string | null,
 ) => {
   if (!option) {
@@ -479,7 +479,7 @@ const getSelectPropertyColor = <P extends GenericProperty>(
 
   const color = property.content.options.find((o) => o.value === option)?.color;
 
-  if (!color) {
+  if (color === undefined) {
     return undefined;
   }
 

@@ -215,7 +215,7 @@ for (const viewport of CARD_FIT_VIEWPORTS) {
     // animations whose transient transforms would otherwise perturb the
     // scrollHeight/rect reads mid-animation.
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("/", { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
     const story = page.locator("#opening-product-story");
     await expect(story.locator(".cli-client")).toBeVisible();
     // Settle the scroll-staged reveal at its resting state (the reveal
@@ -236,7 +236,7 @@ for (const viewport of CARD_FIT_VIEWPORTS) {
 test("opening scene stays healthy after a navigation round-trip", async ({
   page,
 }) => {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await expectHealthyOpeningScene(page);
 
   // Tag the current document so the round-trip provably stays on the
@@ -288,7 +288,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.addInitScript((initialTheme) => {
       localStorage.setItem("theme", initialTheme);
     }, theme);
-    await page.goto("/product/templates", { waitUntil: "networkidle" });
+    await page.goto("/product/templates", { waitUntil: "domcontentloaded" });
     await page.evaluate(() =>
       window.scrollTo({ top: document.body.scrollHeight, behavior: "instant" }),
     );

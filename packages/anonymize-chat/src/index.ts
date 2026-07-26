@@ -186,7 +186,7 @@ export const buildChatAnonPipelineConfig = ({
    * dictionaries — when the caller wants place/deny-list coverage,
    * e.g. a capability showcase.
    */
-  enableDenyList?: boolean;
+  enableDenyList?: boolean | undefined;
   /**
    * Country codes whose deny-list/city dictionaries the caller has
    * loaded. Only meaningful when `enableDenyList` is on.
