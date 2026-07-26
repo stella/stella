@@ -60,12 +60,12 @@
         "@stll/chat-limits": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
-        "@stll/docx-core": "0.5.0",
+        "@stll/docx-core": "0.5.2",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",
         "@stll/folio-agents": "^0.8.2",
-        "@stll/folio-core": "^0.15.0",
+        "@stll/folio-core": "^0.15.2",
         "@stll/infosoud": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/locales": "workspace:*",
@@ -221,7 +221,7 @@
       "name": "@stll/playground",
       "version": "0.1.0",
       "dependencies": {
-        "@stll/folio-react": "^0.12.2",
+        "@stll/folio-react": "^0.13.0",
         "@stll/ui": "workspace:*",
         "lucide-react": "catalog:",
         "react": "catalog:react19",
@@ -262,13 +262,13 @@
         "@stll/chat-limits": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
-        "@stll/docx-core": "0.5.0",
+        "@stll/docx-core": "0.5.2",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/fetch": "workspace:*",
         "@stll/folio-agents": "^0.8.2",
-        "@stll/folio-core": "^0.15.0",
-        "@stll/folio-react": "^0.12.2",
+        "@stll/folio-core": "^0.15.2",
+        "@stll/folio-react": "^0.13.0",
         "@stll/legal-ast": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/money": "workspace:*",
@@ -711,7 +711,7 @@
   "overrides": {
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
-    "@stll/folio-core": "0.15.0",
+    "@stll/folio-core": "0.15.2",
     "brace-expansion": "5.0.8",
     "fast-uri": "3.1.4",
     "fast-xml-parser": "5.10.1",
@@ -2087,7 +2087,7 @@
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 
-    "@stll/docx-core": ["@stll/docx-core@0.5.0", "", { "dependencies": { "better-result": "2.9.2", "jszip": "3.10.1" } }, "sha512-exdk/exNvXDNYktpSCnRpJ0LNHGviDxLoFUOxQnWanvcqI15PUwfZaNbOH4FrgIMkkF8cYQKQSNaWbvnHfbTFw=="],
+    "@stll/docx-core": ["@stll/docx-core@0.5.2", "", { "dependencies": { "better-result": "2.10.0", "jszip": "3.10.1" } }, "sha512-Dq21PKlvz3ciOtFfmW8OiRjIPVSrKnkWMaK26CZpWLhhCcXdAxTddsoaVXlC14AADP6xoh0xt6DVhtpvFaUdpg=="],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
@@ -2097,9 +2097,9 @@
 
     "@stll/folio-agents": ["@stll/folio-agents@0.8.2", "", { "dependencies": { "@stll/folio-core": "^0.15.0" } }, "sha512-rUXnrXrLY8D6zih3Z8xqdz7gfXC6BSsRGQkg+mEiVeSscKcq84U/x2/Z/ODBPj+YzTqYJSd5GnRo7P7sZj1gfQ=="],
 
-    "@stll/folio-core": ["@stll/folio-core@0.15.0", "", { "dependencies": { "@stll/docx-core": "^0.5.0", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": "^0.1.0", "better-result": "2.9.2", "csstype": "^3.1.3", "dompurify": "^3.4.12", "fast-xml-parser": "^5.9.3", "hyphen": "1.14.1", "jszip": "3.10.1", "marked": "^18.0.5", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.41.8", "utif2": "^4.1.0", "valibot": "1.4.2", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-zFQw1rslHMKF6KM1a3KIl7Ge5L1DnH4lYq/jAlNE3MwQvuc54a5XE1teAAmouakm8QWQDCMMW0atbE7iobcWMA=="],
+    "@stll/folio-core": ["@stll/folio-core@0.15.2", "", { "dependencies": { "@stll/docx-core": "^0.5.2", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": "^0.1.0", "better-result": "2.10.0", "csstype": "^3.1.3", "dompurify": "^3.4.12", "fast-xml-parser": "^5.9.3", "hyphen": "1.14.1", "jszip": "3.10.1", "marked": "^18.0.5", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.41.8", "utif2": "^4.1.0", "valibot": "1.4.2", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-w5yI91Mz+cuEk2suQm5Y7LrA5/yKAFim8AytsDwJONFf9x0pz5G8ippVEeus63NYY8H/foiRgUf28ew9v0Fe6A=="],
 
-    "@stll/folio-react": ["@stll/folio-react@0.12.2", "", { "dependencies": { "@base-ui/react": "1.6.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.2.9", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.15.0", "better-result": "2.9.2", "lucide-react": "1.24.0", "prosemirror-history": "^1.5.0", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-view": "^1.41.8", "react-compiler-runtime": "^1.0.0", "yjs": "^13.6.31" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "use-intl": ">=4.0.0" } }, "sha512-mQdJvXYV/dbliarz03wSToSSLtNnNbqyhiQAyc0XRU4etFe5JshgCf3crXxcvW9an0uwgtDkS/yydVu9I3KHFg=="],
+    "@stll/folio-react": ["@stll/folio-react@0.13.0", "", { "dependencies": { "@base-ui/react": "1.6.0", "@fontsource/arimo": "^5.2.8", "@fontsource/caladea": "^5.2.8", "@fontsource/carlito": "^5.2.8", "@fontsource/cousine": "^5.2.7", "@fontsource/lato": "^5.2.7", "@fontsource/noto-sans-arabic": "^5.2.7", "@fontsource/source-sans-3": "^5.2.9", "@fontsource/tinos": "^5.2.7", "@stll/folio-core": "^0.15.1", "better-result": "2.10.0", "lucide-react": "1.24.0", "prosemirror-history": "^1.5.0", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-view": "^1.41.8", "react-compiler-runtime": "^1.0.0", "yjs": "^13.6.31" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0", "react-dom": "^18.0.0 || ^19.0.0", "use-intl": ">=4.0.0" } }, "sha512-kCfWYjDaP3GR+jT7niYAex/RHSc1pWAJcj1m0skCar5iImy98LE/IkSVnXjb+gzh2P8QEQkgrhiRCY3bKPqgBg=="],
 
     "@stll/infosoud": ["@stll/infosoud@workspace:packages/infosoud"],
 
@@ -5106,12 +5106,6 @@
     "@smithy/node-http-handler/@smithy/core": ["@smithy/core@3.29.5", "", { "dependencies": { "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-i0dk2t5B+CwV/dcJdUHILYkOQF5lof8f44dFCfDWToGCxjT9YQ+CgHqTAvJxzc3+zqQwm2QtVoJ5IqiNar/CnQ=="],
 
     "@smithy/signature-v4/@smithy/core": ["@smithy/core@3.29.5", "", { "dependencies": { "@smithy/types": "^4.16.1", "tslib": "^2.6.2" } }, "sha512-i0dk2t5B+CwV/dcJdUHILYkOQF5lof8f44dFCfDWToGCxjT9YQ+CgHqTAvJxzc3+zqQwm2QtVoJ5IqiNar/CnQ=="],
-
-    "@stll/docx-core/better-result": ["better-result@2.9.2", "", {}, "sha512-WIFoBPCdnTOdk9inkE1ZRvCZ4P0CpSkAiLlchC65N7n9DcjZ3NhqkBOlafzpOVnO8ixyi37kicmSJ3ENhPZl7Q=="],
-
-    "@stll/folio-core/better-result": ["better-result@2.9.2", "", {}, "sha512-WIFoBPCdnTOdk9inkE1ZRvCZ4P0CpSkAiLlchC65N7n9DcjZ3NhqkBOlafzpOVnO8ixyi37kicmSJ3ENhPZl7Q=="],
-
-    "@stll/folio-react/better-result": ["better-result@2.9.2", "", {}, "sha512-WIFoBPCdnTOdk9inkE1ZRvCZ4P0CpSkAiLlchC65N7n9DcjZ3NhqkBOlafzpOVnO8ixyi37kicmSJ3ENhPZl7Q=="],
 
     "@stll/web/@babel/core": ["@babel/core@8.0.1", "", { "dependencies": { "@babel/code-frame": "^8.0.0", "@babel/generator": "^8.0.0", "@babel/helper-compilation-targets": "^8.0.0", "@babel/helpers": "^8.0.0", "@babel/parser": "^8.0.0", "@babel/template": "^8.0.0", "@babel/traverse": "^8.0.0", "@babel/types": "^8.0.0", "@types/gensync": "^1.0.5", "convert-source-map": "^2.0.0", "empathic": "^2.0.1", "gensync": "^1.0.0-beta.2", "import-meta-resolve": "^4.2.0", "json5": "^2.2.3", "obug": "^2.1.1", "semver": "^7.7.3" } }, "sha512-5FgxM4dLQpMJHSiVATk8foW263dVHQHBVpXYiimNECVWG01f4nFyEbQixeT6Mwvg7TayREJ2gpKl3o2RoMdnqw=="],
 
