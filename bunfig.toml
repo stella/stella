@@ -23,6 +23,9 @@ minimumReleaseAgeExcludes = [
   # Security fix for GHSA-v2hh-gcrm-f6hx. The patched release has not yet
   # cleared quarantine, so opt in to this package only; keep all others gated.
   "fast-uri",
+  # Security fix for GHSA-mh99-v99m-4gvg. The patched release has not yet
+  # cleared quarantine, so opt in to this package only; keep all others gated.
+  "brace-expansion",
   # Transitive exact pin from @tanstack/ai-openrouter 0.15.6; fresh
   # inside quarantine as part of the TanStack AI 0.39 provider batch.
   "@openrouter/sdk",

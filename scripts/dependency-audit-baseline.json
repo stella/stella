@@ -80,13 +80,6 @@
       "reason": "Transitive dev-tooling dependency (launch-editor ← @tanstack/devtools-vite ← @stll/web, dev-only); stella does not invoke shell-quote `parse()` on untrusted input and it is not in any production runtime path. Bump when the upstream dev dep releases a fixed version."
     },
     {
-      "id": "GHSA-3jxr-9vmj-r5cp",
-      "severity": "high",
-      "package": "brace-expansion",
-      "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
-      "reason": "Transitive dev-tooling dependency (minimatch ← eslint, dev-only); not in any production runtime path. Bump when upstream releases a fix."
-    },
-    {
       "id": "GHSA-52cp-r559-cp3m",
       "severity": "high",
       "package": "js-yaml",
