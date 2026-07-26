@@ -115,7 +115,10 @@ test("capture landing product screenshots", async ({
 
   // The active organization is set server-side in authenticateMarketingSession
   // (via better-auth's set-active endpoint), so the workspace routes below are
-  // already org-scoped — no org-picker UI to drive.
+  // already org-scoped — no org-picker UI to drive. Land on a real page first:
+  // a fresh page sits on about:blank, where the localStorage access in the
+  // theme loop below throws a SecurityError.
+  await page.goto("/", { waitUntil: "domcontentloaded" });
 
   // Resolved once (not per capture/theme): only needed when the "agent"
   // capture is actually part of this run.
