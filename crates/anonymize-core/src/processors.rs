@@ -1438,13 +1438,13 @@ fn append_person_name_hits(
     let single_name_context = if chain.len() == 1 && city_tail {
       SingleNameContext::Capitalized
     } else if chain.len() == 1 {
-      single_name_hit_context(
+      single_name_hit_context(SingleNameHitContextOptions {
         full_text,
-        &offsets,
-        last.end,
+        offsets: &offsets,
+        first_name_span: first.start..last.end,
         filters,
         evidence_hits,
-      )?
+      })?
     } else {
       SingleNameContext::None
     };
@@ -2011,19 +2011,37 @@ enum SingleNameContext {
   KnownUppercaseSurname { end: u32 },
 }
 
+struct SingleNameHitContextOptions<'a> {
+  full_text: &'a str,
+  offsets: &'a ByteOffsets<'a>,
+  first_name_span: std::ops::Range<u32>,
+  filters: &'a DenyListFilterData,
+  evidence_hits: &'a [RawDenyListMatch],
+}
+
 fn single_name_hit_context(
-  full_text: &str,
-  offsets: &ByteOffsets<'_>,
-  end: u32,
-  filters: &DenyListFilterData,
-  evidence_hits: &[RawDenyListMatch],
+  options: SingleNameHitContextOptions<'_>,
 ) -> Result<SingleNameContext> {
-  let tail = slice_from(full_text, offsets, end)?;
-  let (rest, next_start, separator) = skip_leading_middle_initials(tail, end);
-  let next_word = rest
+  let SingleNameHitContextOptions {
+    full_text,
+    offsets,
+    first_name_span,
+    filters,
+    evidence_hits,
+  } = options;
+  let tail = slice_from(full_text, offsets, first_name_span.end)?;
+  let (rest, next_start, separator) =
+    skip_leading_middle_initials(tail, first_name_span.end);
+  let whitespace_token = rest
+    .chars()
+    .take_while(|ch| !ch.is_whitespace())
+    .collect::<String>();
+  let surname_token = strip_trailing_name_punctuation(&whitespace_token);
+  let next_word = surname_token
     .chars()
     .take_while(|ch| ch.is_alphabetic())
     .collect::<String>();
+  let next_lower = next_word.to_lowercase();
   let next_end = next_start.saturating_add(byte_len(&next_word));
   let mut chars = next_word.chars();
   let Some(first) = chars.next() else {
@@ -2033,11 +2051,7 @@ fn single_name_hit_context(
     return Ok(SingleNameContext::None);
   };
   let remaining_is_upper = chars.all(char::is_uppercase);
-  if !first.is_uppercase()
-    || filters
-      .sentence_starters
-      .contains(&next_word.to_lowercase())
-  {
+  if !first.is_uppercase() || filters.sentence_starters.contains(&next_lower) {
     return Ok(SingleNameContext::None);
   }
   if second.is_lowercase() {
@@ -2053,7 +2067,63 @@ fn single_name_hit_context(
   if separator == " " && is_uppercase_czech_feminine_surname(&next_word) {
     return Ok(SingleNameContext::UppercaseShape);
   }
+  // Title-led first names (Ing./Dr./Mgr. …) often write the surname in
+  // all caps without dictionary evidence. Unlock only that shape; bare
+  // `Firstname ACRONYM` stays suppressed.
+  if remaining_is_upper
+    && separator == " "
+    && !filters.stopwords.contains(&next_lower)
+    && !filters.person_stopwords.contains(&next_lower)
+    && !filters.allow_list.contains(&next_lower)
+    && is_title_led_uppercase_surname_candidate(surname_token)
+    && name_preceded_by_title_token(offsets, first_name_span.start, filters)?
+  {
+    return Ok(SingleNameContext::UppercaseShape);
+  }
   Ok(SingleNameContext::None)
+}
+
+fn is_title_led_uppercase_surname_candidate(token: &str) -> bool {
+  let mut parts = token.split('-');
+  let Some(head) = parts.next() else {
+    return false;
+  };
+  let letter_count = head.chars().count();
+  if letter_count < 3 {
+    return false;
+  }
+  if !all_upper(head) || parts.any(|part| !all_upper(part)) {
+    return false;
+  }
+  // Reject short all-ASCII tokens (VAT, NATO); keep diacritic surnames and
+  // longer uppercase tokens, including validated hyphenated forms.
+  !head.is_ascii() || letter_count >= 5
+}
+
+fn name_preceded_by_title_token(
+  offsets: &ByteOffsets<'_>,
+  name_start: u32,
+  filters: &DenyListFilterData,
+) -> Result<bool> {
+  if name_start == 0 {
+    return Ok(false);
+  }
+  let head = offsets.slice_ref(0, name_start)?;
+  let trimmed = head.trim_end();
+  let separator = head.get(trimmed.len()..).unwrap_or_default();
+  if !take_person_name_extension_separator(separator)
+    .is_some_and(|(_, after)| after.is_empty())
+  {
+    return Ok(false);
+  }
+  let Some(token) = trimmed.split_whitespace().next_back() else {
+    return Ok(false);
+  };
+  let bare = token.trim_end_matches('.');
+  if bare.is_empty() {
+    return Ok(false);
+  }
+  Ok(filters.title_tokens.contains(&bare.to_lowercase()))
 }
 
 /// Skip `A.` / `R.` middle initials so the following surname can arm
@@ -3551,6 +3621,65 @@ mod tests {
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "person");
     assert_eq!(entities[0].text, "Ctibor PŘÍKLADOVÁ");
+  }
+
+  #[test]
+  fn deny_list_title_led_uppercase_surname_boundaries() {
+    for (text, title, first_name, expected) in [
+      (
+        "Ing. Ctibor WURTZEL podepsal smlouvu.",
+        "ing",
+        "Ctibor",
+        Some("Ctibor WURTZEL"),
+      ),
+      (
+        "Ing. Ctibor WURTZEL-VL projekt",
+        "ing",
+        "Ctibor",
+        Some("Ctibor WURTZEL-VL"),
+      ),
+      ("Ctibor WURTZEL podepsal smlouvu.", "ing", "Ctibor", None),
+      ("Dr. Mark VAT as exempt.", "dr", "Mark", None),
+      ("Dr. Mark AUGUST", "dr", "Mark", None),
+      ("Dr.\n\nMark ALPHA", "dr", "Mark", None),
+      ("Dr.\r\rMark ALPHA", "dr", "Mark", None),
+      ("Dr.\u{2028}\u{2028}Mark ALPHA", "dr", "Mark", None),
+      ("Dr.\u{2029}Mark ALPHA", "dr", "Mark", None),
+      ("Ing. Ctibor\nWURTZEL", "ing", "Ctibor", None),
+      ("Ing. Ctibor WURTZEL-123", "ing", "Ctibor", None),
+    ] {
+      let start = u32::try_from(text.find(first_name).unwrap()).unwrap();
+      let end = start.saturating_add(byte_len(first_name));
+      let matches = [SearchMatch::Literal {
+        pattern: 0,
+        start,
+        end,
+      }];
+      let data = DenyListMatchData {
+        labels: vec![vec![String::from("person")]].into(),
+        custom_labels: vec![vec![]].into(),
+        originals: vec![String::from(first_name)],
+        pattern_meta: DenyListPatternMetaSet::default(),
+        sources: vec![vec![String::from("first-name")]].into(),
+        filters: Some(DenyListFilterData {
+          person_stopwords: [String::from("august")].into(),
+          title_tokens: [String::from(title)].into(),
+          ..DenyListFilterData::default()
+        }),
+      };
+      let entities = process_deny_list_matches(
+        &matches,
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+      )
+      .unwrap();
+      assert_eq!(
+        entities.first().map(|entity| entity.text.as_str()),
+        expected,
+        "unexpected person span for {text:?}"
+      );
+    }
   }
 
   #[test]

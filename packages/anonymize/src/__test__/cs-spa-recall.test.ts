@@ -237,6 +237,30 @@ describe("Czech commercial-register reference (oddíl X, vložka NNN)", () => {
   });
 });
 
+// ── Case: title + first name + uppercase surname ─────────
+
+describe("Title-led uppercase surnames without dictionary evidence", () => {
+  test("requires an adjacent vocabulary title", async () => {
+    for (const [text, expected] of [
+      ["Ing. Ctibor WURTZEL podepsal smlouvu.", "Ctibor WURTZEL"],
+      ["Ing. Ctibor WURTZEL-VL projekt", "Ctibor WURTZEL-VL"],
+      ["Ctibor WURTZEL podepsal smlouvu.", undefined],
+    ] as const) {
+      const people = (await detect(text)).filter(
+        (entity) => entity.label === "person",
+      );
+      expect(people.some((entity) => entity.text.includes("WURTZEL"))).toBe(
+        expected !== undefined,
+      );
+      if (expected !== undefined) {
+        expect(people.some((entity) => entity.text.includes(expected))).toBe(
+          true,
+        );
+      }
+    }
+  });
+});
+
 // ── Case: party-role triggers must not force sole traders to org ──
 
 describe("Czech zhotovitel/objednatel person-shaped parties", () => {
