@@ -107,8 +107,14 @@ test("capture landing product screenshots", async ({
     localStorage.setItem("theme", "light");
   });
 
-  await page.goto("/workspaces", { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: /Test Firm/u }).click();
+  // Go through the org picker (all orgs are listed there regardless of which
+  // one the session last made active) rather than clicking the /workspaces
+  // switcher, whose visible button is whatever org is currently active — the
+  // dev seed can leave that as a demo org, not Test Firm.
+  await page.goto("/auth/organization", { waitUntil: "commit" });
+  const organization = page.getByRole("button", { name: /Test Firm/u });
+  await organization.waitFor({ state: "visible" });
+  await organization.click();
   // The org click sets the active-organization cookie asynchronously; wait
   // for the session to settle before resolving the agent thread below,
   // otherwise the threads request below can race an unscoped session.
