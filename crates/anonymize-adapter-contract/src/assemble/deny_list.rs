@@ -26,6 +26,8 @@ use crate::{
   BindingSigningPlaceGuardData,
 };
 
+const CITY_HEAD_NAME_SOURCE: &str = "city-head-name";
+
 // ── shared word-collection helpers ──────────────────────────────────────────
 
 /// Mirrors `collectLanguageWordValues`: gather every non-empty string from the
@@ -285,6 +287,7 @@ pub(super) fn build_deny_list_filter_data(
     defined_term_cues: deny_list_filter_static("definedTermCues")?,
     unit_designators,
     in_name_connectors,
+    us_state_abbreviations: Vec::new(),
     signing_place_guards,
     // Both title sources: dotted honorifics ("M.", "Sig.", "Sr.") live in
     // `title_abbreviations` (already trailing-dot-stripped and lowercased),
@@ -639,9 +642,9 @@ struct DenyBuildContext<'a> {
   config: &'a PipelineConfig,
   dictionaries: Option<&'a Dictionaries>,
   use_scoped_name_corpus: bool,
-  deny_list_countries: Option<&'a [String]>,
   corpus: &'a NameCorpus,
   common_words: &'a HashSet<String>,
+  city_head_words: &'a HashSet<String>,
   month_names: &'a HashSet<String>,
   common_word_exemptions: &'a HashSet<String>,
 }
@@ -663,13 +666,24 @@ pub(super) fn build_deny_list(
 ) -> Result<Option<DenyListData>, AssembleError> {
   let month_names = load_month_names()?;
   let common_word_exemptions = load_common_word_exemptions()?;
+  let allowed_countries = resolve_countries(
+    ctx.config.deny_list_regions.as_deref(),
+    ctx.deny_list_countries,
+  );
+  let exclude_categories = exclude_category_set(ctx.config);
+  let city_list = city_entries(ctx.dictionaries, allowed_countries.as_deref());
+  let city_head_words = if exclude_categories.contains("Places") {
+    HashSet::new()
+  } else {
+    city_head_words(&city_list)
+  };
   let dctx = DenyBuildContext {
     config: ctx.config,
     dictionaries: ctx.dictionaries,
     use_scoped_name_corpus: ctx.name_corpus_languages.is_some(),
-    deny_list_countries: ctx.deny_list_countries,
     corpus: ctx.corpus,
     common_words: &ctx.corpus.common_words_set,
+    city_head_words: &city_head_words,
     month_names: &month_names,
     common_word_exemptions: &common_word_exemptions,
   };
@@ -682,11 +696,6 @@ pub(super) fn build_deny_list(
     .custom_deny_list
     .as_ref()
     .is_some_and(|list| !list.is_empty());
-  let allowed_countries = resolve_countries(
-    dctx.config.deny_list_regions.as_deref(),
-    dctx.deny_list_countries,
-  );
-  let city_list = city_entries(dictionaries, allowed_countries.as_deref());
   let has_cities = !city_list.is_empty();
 
   if !has_deny_list && !has_cities && !has_custom_deny_list {
@@ -694,7 +703,6 @@ pub(super) fn build_deny_list(
   }
 
   let mut builder = Builder::new();
-  let exclude_categories = exclude_category_set(dctx.config);
 
   apply_dictionary_entries(
     &mut builder,
@@ -706,6 +714,15 @@ pub(super) fn build_deny_list(
   if has_cities && !exclude_categories.contains("Places") {
     for entry in &city_list {
       add_deny_list_entry(&mut builder, &dctx, entry, "address", "city");
+    }
+    for entry in soft_wrapped_city_head_entries(&city_list) {
+      add_deny_list_entry(
+        &mut builder,
+        &dctx,
+        &entry,
+        "person",
+        CITY_HEAD_NAME_SOURCE,
+      );
     }
   }
 
@@ -828,11 +845,15 @@ fn add_deny_list_entry(
     return;
   }
   let lower = js_lowercase(&normalized);
+  let mut effective_source = source;
   if source != "custom-deny-list" {
+    let is_loaded_city_head_name = source == CITY_HEAD_NAME_SOURCE
+      || source == "name-dictionary" && dctx.city_head_words.contains(&lower);
     if label != "address" {
       if is_single_word(&normalized)
         && dctx.common_words.contains(&lower)
         && !dctx.common_word_exemptions.contains(&lower)
+        && !is_loaded_city_head_name
       {
         return;
       }
@@ -842,12 +863,51 @@ fn add_deny_list_entry(
     } else if dctx.month_names.contains(&lower) {
       return;
     }
+    if is_loaded_city_head_name
+      && dctx.common_words.contains(&lower)
+      && !dctx.common_word_exemptions.contains(&lower)
+    {
+      effective_source = CITY_HEAD_NAME_SOURCE;
+    }
   }
   if let Some(&existing) = builder.pattern_index.get(&lower) {
-    builder.merge_existing(existing, label, source);
+    builder.merge_existing(existing, label, effective_source);
   } else {
-    builder.push_new(normalized, lower, label, source);
+    builder.push_new(normalized, lower, label, effective_source);
   }
+}
+
+fn city_head_words(cities: &[String]) -> HashSet<String> {
+  let mut result = HashSet::new();
+  for city in cities {
+    let normalized = normalize_for_search(city);
+    let mut words = normalized.split_whitespace();
+    let (Some(head), Some(_)) = (words.next(), words.next()) else {
+      continue;
+    };
+    result.insert(js_lowercase(head));
+  }
+  result
+}
+
+fn soft_wrapped_city_head_entries(cities: &[String]) -> Vec<String> {
+  let mut seen = HashSet::new();
+  let mut result = Vec::new();
+  for city in cities {
+    let normalized = normalize_for_search(city);
+    let mut words = normalized.split_whitespace();
+    let (Some(head), Some(continuation)) = (words.next(), words.next()) else {
+      continue;
+    };
+    if !continuation.chars().next().is_some_and(char::is_lowercase) {
+      continue;
+    }
+    let lower = js_lowercase(head);
+    if seen.insert(lower) {
+      result.push(String::from(head));
+    }
+  }
+  result
 }
 
 fn append_name_corpus_entries(
@@ -1210,15 +1270,16 @@ mod tests {
     let config = test_pipeline_config();
     let corpus = test_corpus();
     let common_words = HashSet::from([String::from("citizens")]);
+    let city_head_words = HashSet::new();
     let month_names = HashSet::new();
     let common_word_exemptions = HashSet::from([String::from("citizens")]);
     let dctx = DenyBuildContext {
       config: &config,
       dictionaries: None,
       use_scoped_name_corpus: false,
-      deny_list_countries: None,
       corpus: &corpus,
       common_words: &common_words,
+      city_head_words: &city_head_words,
       month_names: &month_names,
       common_word_exemptions: &common_word_exemptions,
     };
@@ -1245,15 +1306,16 @@ mod tests {
     let config = test_pipeline_config();
     let corpus = test_corpus();
     let common_words = HashSet::from([String::from("agreement")]);
+    let city_head_words = HashSet::new();
     let month_names = HashSet::new();
     let common_word_exemptions = HashSet::new();
     let dctx = DenyBuildContext {
       config: &config,
       dictionaries: None,
       use_scoped_name_corpus: false,
-      deny_list_countries: None,
       corpus: &corpus,
       common_words: &common_words,
+      city_head_words: &city_head_words,
       month_names: &month_names,
       common_word_exemptions: &common_word_exemptions,
     };
@@ -1273,28 +1335,24 @@ mod tests {
     );
   }
 
-  /// Names-category dictionary entries (the injected per-language
-  /// first-name/surname lists plus the mixed `names/global` fallback) must
-  /// be tagged with a person-name source, not the generic `deny-list`
-  /// source, so match-time `has_person_name_source` recognizes them the
-  /// same way it recognizes the scoped name-corpus expansion. Without this,
-  /// a global-only name (present only via the injected dictionary, not the
-  /// scoped `first-name`/`surname` corpus expansion) is silently discarded
-  /// downstream in `append_person_name_hits`.
+  /// A global fallback name that is also a common word must survive when it
+  /// heads a loaded city. It stays tagged as a person-name source so runtime
+  /// city-tail evidence can reclassify it before generic person filtering.
   #[test]
-  fn names_category_dictionary_entries_get_name_dictionary_source() {
+  fn common_word_city_head_gets_conditional_source() {
     let config = PipelineConfig {
       enable_name_corpus: true,
       ..test_pipeline_config()
     };
     let corpus = test_corpus();
-    let common_words = HashSet::new();
+    let common_words = HashSet::from([String::from("fair")]);
+    let city_head_words = HashSet::from([String::from("fair")]);
     let month_names = HashSet::new();
     let common_word_exemptions = HashSet::new();
     let dictionaries = Dictionaries {
       deny_list: Some(OrderedMap(vec![(
         String::from("names/global"),
-        vec![String::from("Aabidah")],
+        vec![String::from("Fair")],
       )])),
       deny_list_meta: Some(OrderedMap(vec![(
         String::from("names/global"),
@@ -1310,9 +1368,9 @@ mod tests {
       config: &config,
       dictionaries: Some(&dictionaries),
       use_scoped_name_corpus: false,
-      deny_list_countries: None,
       corpus: &corpus,
       common_words: &common_words,
+      city_head_words: &city_head_words,
       month_names: &month_names,
       common_word_exemptions: &common_word_exemptions,
     };
@@ -1322,13 +1380,53 @@ mod tests {
 
     let index = builder
       .pattern_index
-      .get("aabidah")
+      .get("fair")
       .copied()
-      .expect("global-only name should be registered");
+      .expect("loaded city head should be registered");
     assert_eq!(
       builder.source_list.get(index),
-      Some(&vec![String::from("name-dictionary")])
+      Some(&vec![String::from(CITY_HEAD_NAME_SOURCE)])
     );
+  }
+
+  #[test]
+  fn excluded_places_do_not_exempt_city_heads_from_common_word_filter() {
+    let config = PipelineConfig {
+      enable_name_corpus: true,
+      deny_list_exclude_categories: Some(vec![String::from("Places")]),
+      ..test_pipeline_config()
+    };
+    let corpus = NameCorpus {
+      common_words_set: HashSet::from([String::from("fair")]),
+      ..test_corpus()
+    };
+    let dictionaries = Dictionaries {
+      cities: Some(vec![String::from("Fair Haven")]),
+      deny_list: Some(OrderedMap(vec![(
+        String::from("names/global"),
+        vec![String::from("Fair")],
+      )])),
+      deny_list_meta: Some(OrderedMap(vec![(
+        String::from("names/global"),
+        DictionaryMeta {
+          label: String::from("person"),
+          category: DenyListCategory::Names,
+          country: None,
+        },
+      )])),
+      ..Dictionaries::default()
+    };
+
+    let data = build_deny_list(&DenyBuildContextArgs {
+      config: &config,
+      dictionaries: Some(&dictionaries),
+      name_corpus_languages: None,
+      deny_list_countries: None,
+      corpus: &corpus,
+    })
+    .expect("deny-list assembly should succeed");
+
+    assert!(data.is_none());
   }
 
   /// The defined-term-quote filter must carry both title sources: plain

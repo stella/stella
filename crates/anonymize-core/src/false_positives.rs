@@ -4,6 +4,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
@@ -180,6 +181,56 @@ fn normalize_entity(
     end_byte,
   });
   Ok(Some(entity))
+}
+
+pub(crate) struct SoftWrappedCityPersonCandidate {
+  pub(crate) city_name: String,
+  pub(crate) end: u32,
+}
+
+/// Soft-wrapped US city lines (`Merritt\nIsland, FL 32953`) can leave the
+/// first city token as a person surname hit. Return the possible city name
+/// and address end; the prepared literal index supplies the city evidence.
+pub(crate) fn soft_wrapped_city_person_candidate(
+  entity: &PipelineEntity,
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  state_abbreviations: &BTreeSet<String>,
+) -> Result<Option<SoftWrappedCityPersonCandidate>> {
+  if entity.label != PERSON_LABEL
+    || entity.source != DetectionSource::DenyList
+    || entity.source_detail == Some(SourceDetail::CustomDenyList)
+  {
+    return Ok(None);
+  }
+  let person = entity.text.trim();
+  if person.split_whitespace().count() != 1
+    || !person.chars().next().is_some_and(char::is_uppercase)
+  {
+    return Ok(None);
+  }
+  let after_byte = offsets.validate_offset(entity.end)?;
+  let after = full_text.get(after_byte..).unwrap_or_default();
+  let Some((tail_len, city_tail)) =
+    soft_wrapped_us_city_tail(after, state_abbreviations)
+  else {
+    return Ok(None);
+  };
+  let Ok(tail_units) = u32::try_from(tail_len) else {
+    return Ok(None);
+  };
+  let mut city_name = String::with_capacity(
+    person
+      .len()
+      .saturating_add(city_tail.len().saturating_add(1)),
+  );
+  city_name.push_str(person);
+  city_name.push(' ');
+  city_name.push_str(city_tail);
+  Ok(Some(SoftWrappedCityPersonCandidate {
+    city_name,
+    end: entity.end.saturating_add(tail_units),
+  }))
 }
 
 fn should_reject_entity(
@@ -1750,6 +1801,68 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn soft_wrapped_us_city_person_produces_lookup_candidate() {
+    // Sidus Space employment agreement (2026-07-24): `Merritt\nIsland, FL
+    // 32953` left the city headword labeled as a person.
+    let full_text = "Merritt\nIsland, FL 32953";
+    let states = std::iter::once(String::from("FL")).collect();
+    let candidate = soft_wrapped_city_person_candidate(
+      &entity(
+        "Merritt",
+        "Merritt",
+        PERSON_LABEL,
+        DetectionSource::DenyList,
+      ),
+      full_text,
+      &ByteOffsets::new(full_text),
+      &states,
+    )
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(candidate.city_name, "Merritt Island");
+    assert_eq!(candidate.end, 24);
+
+    let mut custom = entity(
+      "Merritt",
+      "Merritt",
+      PERSON_LABEL,
+      DetectionSource::DenyList,
+    );
+    custom.source_detail = Some(SourceDetail::CustomDenyList);
+    assert!(
+      soft_wrapped_city_person_candidate(
+        &custom,
+        full_text,
+        &ByteOffsets::new(full_text),
+        &states,
+      )
+      .unwrap()
+      .is_none()
+    );
+  }
+
+  #[test]
+  fn soft_wrapped_us_city_accepts_lowercase_particles() {
+    let full_text = "Coeur\nd'Alene, ID 83814";
+    let states = std::iter::once(String::from("ID")).collect();
+    let candidate = soft_wrapped_city_person_candidate(
+      &entity("Coeur", "Coeur", PERSON_LABEL, DetectionSource::DenyList),
+      full_text,
+      &ByteOffsets::new(full_text),
+      &states,
+    )
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(candidate.city_name, "Coeur d'Alene");
+    assert_eq!(
+      candidate.end,
+      u32::try_from(full_text.len()).unwrap_or(u32::MAX)
+    );
   }
 
   #[test]

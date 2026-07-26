@@ -186,17 +186,19 @@ pub fn assemble_static_search_config(
   let custom_regex_patterns = assemble_custom_regex_patterns(&ctx);
   let custom_regex_len = custom_regex_patterns.len();
 
-  let unit = build_deny_list_unit(&ctx)?;
+  let address_shared = address::build_address_shared_data(&ctx)?;
+  let unit = build_deny_list_unit(&ctx, &address_shared)?;
 
   // ── Literal-side patterns, options, and slices ──
-  let address_seed_data = address::build_address_seed_data(&ctx)?;
+  let address_seed_data =
+    address::build_address_seed_data(&ctx, &address_shared)?;
   let gazetteer_data = gazetteer::build_gazetteer_data(&ctx, gazetteer);
   let country = country::build_country_unit(&ctx)?;
   let literals = build_literals(&LiteralInputs {
     ctx: &ctx,
     gazetteer,
     deny_list_data: unit.deny_list_data.as_ref(),
-    address_seed_present: address_seed_data.is_some(),
+    address_seed_present: ctx.label_allowed("address"),
     gazetteer_data: gazetteer_data.as_ref(),
     country_surface_forms: &country.surface_forms,
   })?;
@@ -264,6 +266,7 @@ struct DenyListUnit {
 /// and finally the name-corpus data (only when name corpus is on).
 fn build_deny_list_unit(
   ctx: &AssembleContext<'_>,
+  address_shared: &address::AddressSharedData,
 ) -> Result<DenyListUnit, AssembleError> {
   let config = ctx.config;
   let scoped = language::apply_pipeline_language_scope(config)?;
@@ -271,10 +274,13 @@ fn build_deny_list_unit(
     ctx.dictionaries,
     scoped.name_corpus_languages.as_deref(),
   )?;
-  let filters = deny_list::build_deny_list_filter_data(
+  let mut filters = deny_list::build_deny_list_filter_data(
     &corpus,
     ctx.content_languages.as_deref(),
   )?;
+  filters
+    .us_state_abbreviations
+    .clone_from(&address_shared.us_state_abbreviations);
 
   let deny_intermediate = if config.enable_deny_list {
     deny_list::build_deny_list(&deny_list::DenyBuildContextArgs {

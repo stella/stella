@@ -56,6 +56,10 @@ fn address_texts(
 fn detects_state_qualified_zip_plus_four_address_seed() {
   let prepared = PreparedEngine::new(prepared_config! {
     address_seed_data: Some(AddressSeedData::default()),
+    false_positive_filters: Some(DenyListFilterData {
+      us_state_abbreviations: std::iter::once(String::from("CA")).collect(),
+      ..DenyListFilterData::default()
+    }),
     ..empty_config(PreparedEngineSlices::default())
   })
   .expect("address seed data should prepare");

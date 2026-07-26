@@ -10,6 +10,7 @@ static_detector_rules! {
     inputs: &[
       DetectorInput::LiteralMatches,
       DetectorInput::DenyListData,
+      DetectorInput::SignatureData,
       DetectorInput::FullText,
     ];
     scales: &[DetectorInput::LiteralMatches, DetectorInput::FullText];

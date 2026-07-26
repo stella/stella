@@ -510,6 +510,8 @@ pub struct BindingDenyListFilterData {
   #[serde(default)]
   pub in_name_connectors: Vec<String>,
   #[serde(default)]
+  pub us_state_abbreviations: Vec<String>,
+  #[serde(default)]
   pub signing_place_guards: Vec<BindingSigningPlaceGuardData>,
   #[serde(default)]
   pub title_tokens: Vec<String>,

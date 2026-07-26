@@ -494,6 +494,10 @@ fn deny_list_filters_from_binding(
     title_tokens: lower_set(filters.title_tokens),
     unit_designators: lower_set(filters.unit_designators),
     in_name_connectors: lower_set(filters.in_name_connectors),
+    us_state_abbreviations: filters
+      .us_state_abbreviations
+      .into_iter()
+      .collect(),
   }
 }
 

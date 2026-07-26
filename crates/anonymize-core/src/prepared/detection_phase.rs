@@ -7,6 +7,7 @@ use super::PreparedEngine;
 use super::detector_contract::StaticDetectorContext;
 use super::detectors::static_entity_rules;
 use super::phase::record_detector_entities;
+use super::prepared_document::PreparedDocument;
 use super::results::{
   PreparedEngineMatches, StaticDetectionResult, StaticEntityLayers,
 };
@@ -17,20 +18,22 @@ impl PreparedEngine {
     &self,
     full_text: &str,
   ) -> Result<StaticDetectionResult> {
-    self.detect_static_entities_inner(full_text, None)
+    let document = PreparedDocument::new(full_text);
+    self.detect_static_entities_inner(&document, None)
   }
 
   pub(super) fn detect_static_entities_inner(
     &self,
-    full_text: &str,
+    document: &PreparedDocument<'_>,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticDetectionResult> {
+    let full_text = document.resolution().text();
     let detect_start = Instant::now();
     let matches =
       self.find_matches_inner(full_text, diagnostics.as_deref_mut())?;
     let passes = self.process_static_entity_passes(
       &matches,
-      full_text,
+      document,
       diagnostics.as_deref_mut(),
     )?;
 
@@ -53,14 +56,14 @@ impl PreparedEngine {
   fn process_static_entity_passes(
     &self,
     matches: &PreparedEngineMatches,
-    full_text: &str,
+    document: &PreparedDocument<'_>,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticEntityPasses> {
     let mut passes = StaticEntityPasses::new();
     for rule in static_entity_rules() {
       let spec = rule.spec();
       spec.validate_complexity()?;
-      let context = StaticDetectorContext::new(&spec, self, matches, full_text);
+      let context = StaticDetectorContext::new(&spec, self, matches, document);
       debug_assert!(
         spec.has_declared_inputs(),
         "static detector registry entries must declare required inputs",

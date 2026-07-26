@@ -2,8 +2,11 @@ use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
 use smallvec::SmallVec;
 
+use crate::address_seeds::soft_wrapped_us_city_tail;
 use crate::byte_offsets::ByteOffsets;
-use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
+use crate::resolution::{
+  DetectionSource, PipelineEntity, ResolutionDocument, SourceDetail,
+};
 use crate::types::{Error, Result, SearchMatch};
 use crate::validators::validate_id;
 
@@ -17,6 +20,7 @@ const DENY_LIST_SOURCE: &str = "deny-list";
 const CITY_SOURCE: &str = "city";
 const FIRST_NAME_SOURCE: &str = "first-name";
 const SURNAME_SOURCE: &str = "surname";
+const CITY_HEAD_NAME_SOURCE: &str = "city-head-name";
 const CZECH_FEMININE_SURNAME_SUFFIX: &str = "ová";
 const TITLE_SOURCE: &str = "title";
 /// A deny-list entry sourced from an injected Names-category dictionary
@@ -433,6 +437,13 @@ impl DenyListMatchData {
       })
       .unwrap_or_default()
   }
+
+  pub(crate) fn pattern_has_city_source(&self, index: usize) -> bool {
+    self
+      .sources
+      .get(index)
+      .is_some_and(|sources| sources.iter().any(|source| source == CITY_SOURCE))
+  }
 }
 
 impl DenyListPatternMetaSet {
@@ -731,6 +742,8 @@ pub struct DenyListFilterData {
   /// Lowercase connective words allowed inside a name ("of", "de", "von",
   /// "and", "&", ...); a run of them between capitals stays part of the name.
   pub in_name_connectors: BTreeSet<String>,
+  /// Country-scoped US postal abbreviations. Empty when US data is disabled.
+  pub us_state_abbreviations: BTreeSet<String>,
 }
 
 #[derive(
@@ -749,8 +762,19 @@ struct RawDenyListMatch {
   labels: Vec<String>,
   custom_labels: Vec<String>,
   has_person_name_source: bool,
+  has_city_head_name_source: bool,
   has_surname_evidence: bool,
   text: String,
+}
+
+fn sources_include(sources: StringGroup<'_>, expected: &str) -> bool {
+  sources.iter().any(|source| source == expected)
+}
+
+fn sources_include_regular_person_name(sources: StringGroup<'_>) -> bool {
+  [FIRST_NAME_SOURCE, SURNAME_SOURCE, NAME_DICTIONARY_SOURCE]
+    .iter()
+    .any(|source| sources_include(sources, source))
 }
 
 pub fn process_regex_matches(
@@ -806,7 +830,25 @@ pub fn process_deny_list_matches(
   full_text: &str,
   data: &DenyListMatchData,
 ) -> Result<Vec<PipelineEntity>> {
-  let offsets = ByteOffsets::new(full_text);
+  let document = ResolutionDocument::new(full_text);
+  process_deny_list_matches_with_field_labels(
+    matches,
+    slice,
+    &document,
+    data,
+    &[],
+  )
+}
+
+pub(crate) fn process_deny_list_matches_with_field_labels(
+  matches: &[SearchMatch],
+  slice: PatternSlice,
+  document: &ResolutionDocument<'_>,
+  data: &DenyListMatchData,
+  person_field_labels: &[String],
+) -> Result<Vec<PipelineEntity>> {
+  let full_text = document.text();
+  let offsets = document.offsets();
   let mut matches =
     collect_deny_list_matches(matches, slice, full_text, data, &offsets)?;
   suppress_shorter_curated_contained_matches(&mut matches);
@@ -865,11 +907,11 @@ pub fn process_deny_list_matches(
 
   append_person_name_hits(
     &mut results,
-    full_text,
-    &offsets,
     data,
     &mut name_hits,
     &matches,
+    person_field_labels,
+    document,
   )?;
   extend_city_districts(
     &mut results,
@@ -974,8 +1016,10 @@ fn collect_deny_list_matches(
       continue;
     }
 
-    let has_surname_source =
-      sources.iter().any(|source| source == SURNAME_SOURCE);
+    let has_city_head_name_source =
+      sources_include(sources, CITY_HEAD_NAME_SOURCE);
+    let city_head_name_requires_tail = has_city_head_name_source
+      && !sources_include_regular_person_name(sources);
     let mut keep_surname_evidence = false;
     let curated_labels = if has_curated_source(sources) {
       let filters = data.filters.as_ref().ok_or(Error::MissingStaticData {
@@ -991,9 +1035,10 @@ fn collect_deny_list_matches(
         labels,
         custom_pattern_labels: &custom_pattern_labels,
         custom_edges_are_valid,
+        city_head_name_requires_tail,
         filters,
       };
-      keep_surname_evidence = has_surname_source
+      keep_surname_evidence = sources_include(sources, SURNAME_SOURCE)
         && uppercase_surname_evidence_is_allowed(&curated_match)?;
       curated_labels_for_match(&curated_match)?
     } else {
@@ -1013,11 +1058,9 @@ fn collect_deny_list_matches(
       end: found.end(),
       labels: curated_labels,
       custom_labels,
-      has_person_name_source: sources.iter().any(|source| {
-        source == FIRST_NAME_SOURCE
-          || source == SURNAME_SOURCE
-          || source == NAME_DICTIONARY_SOURCE
-      }),
+      has_person_name_source: has_city_head_name_source
+        || sources_include_regular_person_name(sources),
+      has_city_head_name_source,
       has_surname_evidence: keep_surname_evidence,
       text: match_text,
     });
@@ -1043,6 +1086,7 @@ struct CuratedDenyListMatch<'a> {
   labels: StringGroup<'a>,
   custom_pattern_labels: &'a [String],
   custom_edges_are_valid: bool,
+  city_head_name_requires_tail: bool,
   filters: &'a DenyListFilterData,
 }
 
@@ -1052,9 +1096,12 @@ fn curated_labels_for_match(
   let acronym_matches_acronym =
     !args.pattern_meta.short_upper_acronym || all_upper(args.match_text);
   let source_char = char_at(args.full_text, args.offsets, args.start)?;
+  let common_word = args.filters.stopwords.contains(args.keyword)
+    || args.filters.allow_list.contains(args.keyword);
+  let has_city_tail = has_soft_wrapped_us_city_tail(args)?;
+  let city_head_candidate = common_word && has_city_tail;
   let passes_filters = source_char.is_some_and(char::is_uppercase)
-    && !args.filters.stopwords.contains(args.keyword)
-    && !args.filters.allow_list.contains(args.keyword)
+    && (!common_word || city_head_candidate)
     && acronym_matches_acronym
     && !all_upper(args.match_text);
 
@@ -1101,10 +1148,32 @@ fn curated_labels_for_match(
         let is_hyphenated_person = has_hyphen_edge
           && !supported_hyphenated_person
           && *label == PERSON_LABEL;
-        !is_custom_duplicate && !is_hyphenated_person
+        let is_city_head_person_without_evidence = args
+          .city_head_name_requires_tail
+          && !has_city_tail
+          && *label == PERSON_LABEL;
+        !is_custom_duplicate
+          && !is_hyphenated_person
+          && !is_city_head_person_without_evidence
       })
       .map(String::from)
       .collect(),
+  )
+}
+
+fn has_soft_wrapped_us_city_tail(
+  args: &CuratedDenyListMatch<'_>,
+) -> Result<bool> {
+  let end = args.start.saturating_add(byte_len(args.match_text));
+  let end_byte = args.offsets.validate_offset(end)?;
+  Ok(
+    args
+      .full_text
+      .get(end_byte..)
+      .and_then(|after| {
+        soft_wrapped_us_city_tail(after, &args.filters.us_state_abbreviations)
+      })
+      .is_some(),
   )
 }
 
@@ -1270,16 +1339,42 @@ fn casefolds_to(value: &str, lower: &str) -> bool {
   value.to_lowercase() == lower
 }
 
-fn append_person_name_hits(
-  results: &mut Vec<PipelineEntity>,
+fn has_city_tail_context(
+  hit: &RawDenyListMatch,
   full_text: &str,
   offsets: &ByteOffsets<'_>,
+  filters: &DenyListFilterData,
+) -> Result<bool> {
+  if !hit.has_city_head_name_source {
+    return Ok(false);
+  }
+  let end_byte = offsets.validate_offset(hit.end)?;
+  Ok(
+    full_text
+      .get(end_byte..)
+      .and_then(|after| {
+        soft_wrapped_us_city_tail(after, &filters.us_state_abbreviations)
+      })
+      .is_some(),
+  )
+}
+
+fn prepare_name_hits(name_hits: &mut [RawDenyListMatch]) -> Vec<bool> {
+  name_hits.sort_by_key(|hit| hit.start);
+  vec![false; name_hits.len()]
+}
+
+fn append_person_name_hits(
+  results: &mut Vec<PipelineEntity>,
   data: &DenyListMatchData,
   name_hits: &mut [RawDenyListMatch],
   evidence_hits: &[RawDenyListMatch],
+  person_field_labels: &[String],
+  document: &ResolutionDocument<'_>,
 ) -> Result<()> {
-  name_hits.sort_by_key(|hit| hit.start);
-  let mut consumed = vec![false; name_hits.len()];
+  let full_text = document.text();
+  let offsets = document.offsets();
+  let mut consumed = prepare_name_hits(name_hits);
 
   for index in 0..name_hits.len() {
     if consumed.get(index).copied().unwrap_or(false) {
@@ -1332,17 +1427,20 @@ fn append_person_name_hits(
     };
     if is_suppressible_defined_term_quote(
       full_text,
-      offsets,
+      &offsets,
       first.start,
       filters,
     )? {
       continue;
     }
 
-    let single_name_context = if chain.len() == 1 {
+    let city_tail = has_city_tail_context(first, full_text, &offsets, filters)?;
+    let single_name_context = if chain.len() == 1 && city_tail {
+      SingleNameContext::Capitalized
+    } else if chain.len() == 1 {
       single_name_hit_context(
         full_text,
-        offsets,
+        &offsets,
         last.end,
         filters,
         evidence_hits,
@@ -1353,17 +1451,16 @@ fn append_person_name_hits(
     if chain.len() == 1 && single_name_context == SingleNameContext::None {
       continue;
     }
-    let mut extended =
-      extend_person_name(full_text, offsets, first.start, last.end, filters)?;
-    let score = if chain.len() >= 2
-      || matches!(
-        single_name_context,
-        SingleNameContext::KnownUppercaseSurname { .. }
-      ) {
-      0.9
-    } else {
-      0.5
-    };
+    let mut extended = extend_person_name(
+      full_text,
+      &offsets,
+      first.start,
+      last.end,
+      filters,
+      person_field_labels,
+      document,
+    )?;
+    let score = extended_person_score(chain.len(), single_name_context);
     if let SingleNameContext::KnownUppercaseSurname { end } =
       single_name_context
       && end > extended.end
@@ -1385,6 +1482,18 @@ fn append_person_name_hits(
   }
 
   Ok(())
+}
+
+const fn extended_person_score(
+  chain_len: usize,
+  context: SingleNameContext,
+) -> f64 {
+  if chain_len >= 2
+    || matches!(context, SingleNameContext::KnownUppercaseSurname { .. })
+  {
+    return 0.9;
+  }
+  0.5
 }
 
 pub fn process_gazetteer_matches(
@@ -1532,6 +1641,7 @@ fn validate_deny_list_sources(sources: StringGroup<'_>) -> Result<()> {
       | FIRST_NAME_SOURCE
       | SURNAME_SOURCE
       | TITLE_SOURCE
+      | CITY_HEAD_NAME_SOURCE
       | NAME_DICTIONARY_SOURCE => {}
       _ => {
         return Err(Error::UnsupportedDenyListSource {
@@ -1666,14 +1776,21 @@ fn has_adjacent_address_evidence(
   end: u32,
   filters: &DenyListFilterData,
 ) -> Result<bool> {
+  let window = adjacent_text_window(full_text, start, end)?;
+  Ok(has_address_format(&window) || has_street_type(&window, filters))
+}
+
+fn adjacent_text_window(
+  full_text: &str,
+  start: u32,
+  end: u32,
+) -> Result<String> {
   let offsets = ByteOffsets::new(full_text);
   let full_len = offsets.len()?;
   let window_start = offsets.floor_offset(start.saturating_sub(40))?;
   let window_end =
     offsets.floor_offset(end.saturating_add(40).min(full_len))?;
-  let window = offsets.slice(window_start, window_end)?;
-
-  Ok(has_address_format(&window) || has_street_type(&window, filters))
+  offsets.slice(window_start, window_end)
 }
 
 fn has_address_format(text: &str) -> bool {
@@ -1817,7 +1934,7 @@ fn street_type_matches(window: &str, street_type: &str) -> bool {
 fn person_chain_breaks(previous_text: &str, gap: &str) -> bool {
   byte_len(gap) > 4
     || gap.is_empty()
-    || gap.contains('\n')
+    || gap.chars().any(is_line_break)
     || gap.contains('\t')
     || gap
       .chars()
@@ -1877,7 +1994,7 @@ fn consume_horizontal_space(
   let mut consumed = 0_usize;
   let mut byte = 0_usize;
   for ch in text.chars() {
-    if ch == '\n' || !ch.is_whitespace() || consumed == max {
+    if is_line_break(ch) || !ch.is_whitespace() || consumed == max {
       break;
     }
     consumed = consumed.saturating_add(1);
@@ -2025,21 +2142,52 @@ struct ExtendedName {
   text: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PersonSoftWrapContext {
+  None,
+  Signature,
+  FieldLabel,
+}
+
 fn extend_person_name(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
   start: u32,
   end: u32,
   filters: &DenyListFilterData,
+  person_field_labels: &[String],
+  document: &ResolutionDocument<'_>,
 ) -> Result<ExtendedName> {
   let mut new_end = end;
-
+  let mut soft_wrap_context =
+    person_soft_wrap_context(document, offsets, start, person_field_labels)?;
+  // EDGAR HTML often soft-wraps the surname onto the next line after a
+  // given name (`/s/ Alan\nKhalili`). Only signature markers and compact
+  // field-label layouts may cross one line break.
   loop {
-    if char_at(full_text, offsets, new_end)? != Some(' ') {
+    let tail = slice_from(full_text, offsets, new_end)?;
+    let Some((separator, after_separator)) =
+      take_person_name_extension_separator(tail)
+    else {
+      break;
+    };
+    let wraps = separator.chars().any(is_line_break);
+    if !wraps && separator != " " {
       break;
     }
-    let word_start = new_end.saturating_add(1);
-    let Some(first) = char_at(full_text, offsets, word_start)? else {
+    if wraps {
+      if soft_wrapped_us_city_tail(tail, &filters.us_state_abbreviations)
+        .is_some()
+      {
+        break;
+      }
+      if soft_wrap_context == PersonSoftWrapContext::None {
+        break;
+      }
+      soft_wrap_context = PersonSoftWrapContext::None;
+    }
+    let word_start = new_end.saturating_add(byte_len(separator));
+    let Some(first) = after_separator.chars().next() else {
       break;
     };
     if !first.is_uppercase() {
@@ -2060,6 +2208,8 @@ fn extend_person_name(
     let lower = stripped.to_lowercase();
     if filters.stopwords.contains(&lower)
       || filters.person_stopwords.contains(&lower)
+      || (wraps && filters.sentence_starters.contains(&lower))
+      || (wraps && word.ends_with(':'))
     {
       break;
     }
@@ -2071,6 +2221,86 @@ fn extend_person_name(
     end: new_end,
     text: offsets.slice(start, new_end)?,
   })
+}
+
+fn person_soft_wrap_context(
+  document: &ResolutionDocument<'_>,
+  offsets: &ByteOffsets<'_>,
+  start: u32,
+  person_field_labels: &[String],
+) -> Result<PersonSoftWrapContext> {
+  let start_byte = offsets.validate_offset(start)?;
+  let Some((current_line, previous_line)) =
+    document.line_prefix_and_previous(start_byte)
+  else {
+    return Err(Error::ByteOffsetOutOfBounds { offset: start });
+  };
+  if current_line.trim() == "/s/" {
+    return Ok(PersonSoftWrapContext::Signature);
+  }
+  let label = previous_line.unwrap_or_default().trim();
+  let normalized_label = label
+    .strip_suffix(':')
+    .map(str::trim)
+    .unwrap_or_default()
+    .to_lowercase();
+  if person_field_labels
+    .iter()
+    .any(|candidate| candidate == &normalized_label)
+  {
+    return Ok(PersonSoftWrapContext::FieldLabel);
+  }
+  Ok(PersonSoftWrapContext::None)
+}
+
+/// Separator before an extended person-name token: one to four whitespace
+/// characters with at most one newline (EDGAR soft wrap).
+fn take_person_name_extension_separator(tail: &str) -> Option<(&str, &str)> {
+  let mut count = 0_usize;
+  let mut line_breaks = 0_usize;
+  let mut byte = 0_usize;
+  let mut previous_was_carriage_return = false;
+  for ch in tail.chars() {
+    if !is_supported_name_separator(ch) {
+      break;
+    }
+    if ch == '\u{2029}' {
+      return None;
+    }
+    count = count.saturating_add(1);
+    match ch {
+      '\r' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = true;
+      }
+      '\n' if previous_was_carriage_return => {
+        previous_was_carriage_return = false;
+      }
+      '\n' | '\u{2028}' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = false;
+      }
+      _ => {
+        previous_was_carriage_return = false;
+      }
+    }
+    byte = byte.saturating_add(ch.len_utf8());
+    if count == 4 {
+      break;
+    }
+  }
+  if !(1..=4).contains(&count) || line_breaks > 1 {
+    return None;
+  }
+  Some((tail.get(..byte)?, tail.get(byte..)?))
+}
+
+const fn is_line_break(ch: char) -> bool {
+  matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}')
+}
+
+fn is_supported_name_separator(ch: char) -> bool {
+  is_line_break(ch) || ch == '\t' || (ch.is_whitespace() && !ch.is_control())
 }
 
 fn is_middle_initial_token(word: &str) -> bool {
@@ -2630,7 +2860,7 @@ fn consume_whitespace_no_newline(
   let mut consumed = 0_usize;
   let mut byte = 0_usize;
   for ch in text.chars() {
-    if ch == '\n' || !ch.is_whitespace() || consumed == max {
+    if is_line_break(ch) || !ch.is_whitespace() || consumed == max {
       break;
     }
     consumed = consumed.saturating_add(1);
@@ -2926,6 +3156,200 @@ mod tests {
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "person");
     assert_eq!(entities[0].text, "Aabidah Rahman");
+  }
+
+  #[test]
+  fn deny_list_keeps_allow_list_name_at_soft_wrapped_city_head() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 4,
+    }];
+    let mut allow_list = BTreeSet::new();
+    allow_list.insert(String::from("fair"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Fair")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("name-dictionary")]].into(),
+      filters: Some(DenyListFilterData {
+        allow_list,
+        us_state_abbreviations: std::iter::once(String::from("CA")).collect(),
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Fair\nOaks, CA 95628",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Fair");
+  }
+
+  #[test]
+  fn deny_list_extends_person_across_edgar_soft_wrap() {
+    // Sidus Space employment agreement (2026-07-24): `/s/ Alan\nKhalili`
+    // left the surname residual when extension stopped at the line break.
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 4,
+      end: 8,
+    }];
+    let mut filters = DenyListFilterData::default();
+    filters.first_names.insert(String::from("alan"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Alan")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(filters),
+    };
+
+    for (text, expected) in [
+      ("/s/ Alan\nKhalili\n", "Alan\nKhalili"),
+      ("/s/ Alan\rKhalili\rZephyr", "Alan\rKhalili"),
+      (
+        "/s/ Alan\u{2028}Khalili\u{2028}Zephyr",
+        "Alan\u{2028}Khalili",
+      ),
+      ("/s/ Alan\u{2029}Khalili", "Alan"),
+      ("/s/ Alan\u{000b}Khalili", "Alan"),
+      ("/s/ Alan\u{000c}Khalili", "Alan"),
+      ("/s/ Alan\tKhalili", "Alan"),
+      ("/s/ Alan Joseph\nKhalili", "Alan Joseph\nKhalili"),
+    ] {
+      let entities = process_deny_list_matches(
+        &matches,
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+      )
+      .unwrap();
+
+      assert_eq!(entities.len(), 1);
+      assert_eq!(entities[0].label, "person");
+      assert_eq!(entities[0].text, expected);
+    }
+
+    let text = "Name:\nAlan Qwxyz\nZyxwv";
+    let document = ResolutionDocument::new(text);
+    let field_entities = process_deny_list_matches_with_field_labels(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: 6,
+        end: 10,
+      }],
+      PatternSlice { start: 0, end: 1 },
+      &document,
+      &data,
+      &[String::from("name")],
+    )
+    .unwrap();
+    assert_eq!(field_entities.len(), 1);
+    assert_eq!(field_entities[0].text, "Alan Qwxyz\nZyxwv");
+  }
+
+  #[test]
+  fn person_soft_wrap_field_label_must_be_adjacent() {
+    let field_labels = [String::from("name")];
+    for (text, expected) in [
+      ("Name:\nAlice", PersonSoftWrapContext::FieldLabel),
+      ("Name:\rAlice", PersonSoftWrapContext::FieldLabel),
+      ("Name:\r\nAlice", PersonSoftWrapContext::FieldLabel),
+      ("Name:\u{2028}Alice", PersonSoftWrapContext::FieldLabel),
+      ("Name:\n\n\nAlice", PersonSoftWrapContext::None),
+      ("Name:\u{2029}Alice", PersonSoftWrapContext::None),
+      ("Invoice:\nAlice", PersonSoftWrapContext::None),
+    ] {
+      let start = u32::try_from(text.find("Alice").unwrap()).unwrap();
+      let document = ResolutionDocument::new(text);
+      assert_eq!(
+        person_soft_wrap_context(
+          &document,
+          &ByteOffsets::new(text),
+          start,
+          &field_labels,
+        )
+        .unwrap(),
+        expected,
+      );
+    }
+  }
+
+  #[test]
+  fn deny_list_soft_wrap_does_not_absorb_email_field_label() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 5,
+    }];
+    let mut filters = DenyListFilterData::default();
+    filters.first_names.insert(String::from("anika"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Anika")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(filters),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Anika Hermann Bargfrede\nEmail: abargfrede@example.com",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Anika Hermann Bargfrede");
+  }
+
+  #[test]
+  fn deny_list_soft_wrap_does_not_absorb_city_state_zip_tail() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 7,
+    }];
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Merritt")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("surname")]].into(),
+      filters: Some(DenyListFilterData {
+        us_state_abbreviations: std::iter::once(String::from("FL")).collect(),
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Merritt\nIsland, FL 32953",
+      &data,
+    )
+    .unwrap();
+
+    // Surname-only hits need capitalized context to emit; Island supplies it,
+    // but the city/state/ZIP tail must block extension so FP reclassification
+    // can recover the address span.
+    assert!(
+      entities
+        .iter()
+        .all(|entity| entity.text.replace('\n', " ") != "Merritt Island"),
+      "city tail must not join the person span: {entities:?}"
+    );
   }
 
   #[test]

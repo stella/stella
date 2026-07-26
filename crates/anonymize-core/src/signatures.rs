@@ -77,6 +77,11 @@ impl PreparedSignatureData {
       field_labels: &self.form_field_labels,
     }
   }
+
+  #[must_use]
+  pub(crate) fn form_field_labels(&self) -> &[String] {
+    &self.form_field_labels
+  }
 }
 
 /// Lowercased vocabulary marking where a person span must stop.

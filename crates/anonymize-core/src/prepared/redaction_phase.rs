@@ -11,6 +11,7 @@ use crate::types::{
 use super::PreparedEngine;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::phase::{PhaseTimer, observe_diagnostic_stream};
+use super::prepared_document::PreparedDocument;
 use super::result_stream::StaticRedactionResultStream;
 use super::results::{StaticRedactionResult, StaticRedactionStreamEvent};
 
@@ -75,15 +76,16 @@ impl PreparedEngine {
       );
     }
     let redact_timer = PhaseTimer::start();
+    let document = PreparedDocument::new(full_text);
     let detections = self
-      .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
+      .detect_static_entities_inner(&document, diagnostics.as_deref_mut())?;
     result_stream
       .observe(StaticRedactionStreamEvent::DetectedEntities(&detections))?;
     observe_diagnostic_stream(&diagnostics, event_stream)?;
     let resolved_entities = self.resolve_static_entities(
       &detections,
       &caller_entities,
-      full_text,
+      &document,
       &mut diagnostics,
       event_stream,
     )?;

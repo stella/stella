@@ -1337,6 +1337,18 @@
       "type": "set",
       "path": ["slices", "hotwords", "end"],
       "value": 6614
+    },
+    {
+      "type": "array",
+      "path": ["address_seed_data", "boundary_words"],
+      "segments": [
+        { "type": "copy", "start": 17, "end": 35 },
+        { "type": "copy", "start": 154, "end": 163 },
+        { "type": "copy", "start": 183, "end": 184 },
+        { "type": "copy", "start": 177, "end": 178 },
+        { "type": "copy", "start": 176, "end": 177 },
+        { "type": "copy", "start": 220, "end": 308 }
+      ]
     }
   ]
 }

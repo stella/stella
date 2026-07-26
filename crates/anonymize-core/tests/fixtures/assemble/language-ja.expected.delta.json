@@ -1182,6 +1182,11 @@
       "type": "set",
       "path": ["slices", "triggers", "end"],
       "value": 1421
+    },
+    {
+      "type": "array",
+      "path": ["address_seed_data", "boundary_words"],
+      "segments": [{ "type": "copy", "start": 154, "end": 163 }]
     }
   ]
 }

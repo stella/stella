@@ -95,6 +95,37 @@ fn caller_detections_use_the_shared_resolution_and_redaction_pipeline() {
 }
 
 #[test]
+fn address_only_selection_keeps_same_span_address_evidence() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      "Merritt, FL 32953",
+    ))],
+    custom_regex_patterns: vec![SearchPattern::Regex(String::from(
+      "Merritt, FL 32953",
+    ))],
+    regex_meta: vec![RegexMatchMeta::new("person", 0.9)],
+    custom_regex_meta: vec![RegexMatchMeta::new("address", 0.9)],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      custom_regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    allowed_labels: vec![String::from("address")],
+    threshold: 0.3,
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities("Merritt, FL 32953", &OperatorConfig::default())
+    .unwrap();
+
+  assert_eq!(result.resolved_entities.len(), 1);
+  assert_eq!(result.resolved_entities[0].label, "address");
+  assert_eq!(result.redaction.redacted_text, "[ADDRESS_1]");
+}
+
+#[test]
 fn caller_detections_reuse_session_placeholders_across_documents() {
   let prepared = PreparedEngine::new(prepared_config! {
     threshold: 0.5,

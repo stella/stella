@@ -16,6 +16,9 @@
  *   given names missing from the scoped English first-name corpus.
  * - Kingfish Holding employment agreement (2026-07-24): job-description
  *   heading person FP and Independence Day city-list address FP.
+ * - Sidus Space employment agreement (2026-07-24): soft-wrapped `/s/`
+ *   surname, mid-name issuer wrap before Inc., and soft-wrapped city
+ *   headword labeled as a person.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -24,7 +27,7 @@ setDefaultTimeout(60_000);
 import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { NativePipelineEntity } from "../native";
 import type { PipelineConfig } from "../types";
-import { detectNative } from "./native-detect";
+import { detectNative, redactNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
@@ -46,12 +49,15 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   nameCorpusLanguages: ["en"],
 };
 
-const detect = async (text: string): Promise<NativePipelineEntity[]> => {
+const detect = async (
+  text: string,
+  overrides: Partial<Omit<PipelineConfig, "dictionaries">> = {},
+): Promise<NativePipelineEntity[]> => {
   const dictionaries = await loadTestDictionaries({
     denyListCountries: ["US"],
     nameCorpusLanguages: ["en"],
   });
-  return detectNative({ ...baseConfig, dictionaries }, text);
+  return detectNative({ ...baseConfig, ...overrides, dictionaries }, text);
 };
 
 describe("EDGAR notice-block and securities-clause regressions", () => {
@@ -578,5 +584,201 @@ Manage daily operations of the scrap yard.`;
         (entity) => entity.label === "person" && entity.text === "Dorothy Day",
       ),
     ).toBe(true);
+  });
+
+  test("soft-wrapped slash-s surname stays one person", async () => {
+    // Sidus Space EX-10.1 (2026-07-24): `/s/ Alan\nKhalili` left Khalili.
+    const text = `EXECUTIVE
+
+/s/ Alan
+Khalili
+`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" &&
+          entity.text.replaceAll(/\s+/g, " ") === "Alan Khalili",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Alan",
+      ),
+    ).toBe(false);
+  });
+
+  test("soft-wrapped title-case issuer before Inc is an organization", async () => {
+    // Sidus Space EX-10.1 (2026-07-24): `Sidus\nSpace, Inc.` left Sidus.
+    const text = `If to the Company:
+
+Sidus
+Space, Inc.
+
+150 N Example Ave`;
+    const entities = await detect(text, { labels: ["organization"] });
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text.replaceAll(/\s+/g, " ") === "Sidus Space, Inc.",
+      ),
+    ).toBe(true);
+  });
+
+  test("field label is not absorbed into a wrapped organization", async () => {
+    for (const enableTriggerPhrases of [true, false]) {
+      const entities = await detect(
+        `Attention
+Acme Inc.`,
+        { enableTriggerPhrases },
+      );
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" && entity.text === "Acme Inc.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text.includes("Attention"),
+        ),
+      ).toBe(false);
+    }
+  });
+
+  test("organization wrap boundaries follow the configured language", async () => {
+    const entities = await detect(
+      `If to the Company:
+
+Bank
+America, Inc.`,
+      { enableTriggerPhrases: false },
+    );
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text === "Bank America, Inc.",
+      ),
+    ).toBe(true);
+  });
+
+  test("only configured person fields authorize a name wrap", async () => {
+    for (const [label, expected] of [
+      ["Name", true],
+      ["Invoice", false],
+    ] as const) {
+      const entities = await detect(`${label}:
+Alice
+Zephyr`);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text === "Alice Zephyr",
+        ),
+      ).toBe(expected);
+    }
+  });
+
+  test("soft-wrapped US city headword is an address not a person", async () => {
+    // Sidus Space EX-10.1 (2026-07-24): `Merritt\nIsland, FL 32953`.
+    const text = `Merritt
+Island, FL 32953`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Merritt",
+      ),
+    ).toBe(false);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" &&
+          entity.text.replaceAll(/\s+/g, " ").includes("Merritt Island"),
+      ),
+    ).toBe(true);
+  });
+
+  test("soft-wrapped US city address variants resolve as one span", async () => {
+    const dictionaries = await loadTestDictionaries({
+      denyListCountries: ["AS", "US"],
+      nameCorpusLanguages: [],
+    });
+    const texts = ["\n", "\r", "\r\n", "\u2028"].map(
+      (separator) => `Merritt${separator}Island, FL 32953-1234`,
+    );
+    texts.push(`Bonita
+Springs, CO 80903`);
+    texts.push(`Fair
+Oaks, CA 95628`);
+    texts.push(`Coeur
+d'Alene, ID 83814`);
+    texts.push(`Pago
+Pago, AS 96799`);
+    texts.push(`Merritt
+Island, FL 32953—Attention:`);
+    const unscopedConfig = { ...baseConfig };
+    delete unscopedConfig.languages;
+    delete unscopedConfig.nameCorpusLanguages;
+    for (const text of texts) {
+      const expectedEnd = text.indexOf("—");
+      const { redaction, resolvedEntities } = await redactNative(
+        {
+          ...unscopedConfig,
+          dictionaries,
+          denyListCountries: ["AS", "US"],
+          labels: ["address"],
+          threshold: 0.7,
+        },
+        text,
+      );
+      expect(redaction.redactedText).toBe(
+        expectedEnd === -1 ? "[ADDRESS_1]" : "[ADDRESS_1]—Attention:",
+      );
+      expect(resolvedEntities).toHaveLength(1);
+      expect(resolvedEntities[0]?.start).toBe(0);
+      expect(resolvedEntities[0]?.end).toBe(
+        expectedEnd === -1 ? text.length : expectedEnd,
+      );
+    }
+  });
+
+  test("person boundaries survive person-only selection", async () => {
+    const dictionaries = await loadTestDictionaries({
+      denyListCountries: ["US"],
+      nameCorpusLanguages: ["en"],
+    });
+    for (const [text, expected] of [
+      [
+        `Alice
+Boston, MA 02110`,
+        "Alice",
+      ],
+      [
+        `Name:
+Alice Smith
+Boston, MA 02110`,
+        "Alice Smith",
+      ],
+    ]) {
+      const entities = await detectNative(
+        { ...baseConfig, dictionaries, labels: ["person"] },
+        text,
+      );
+      expect(
+        entities.some(
+          (entity) => entity.label === "person" && entity.text === expected,
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text.includes("Boston"),
+        ),
+      ).toBe(false);
+    }
   });
 });

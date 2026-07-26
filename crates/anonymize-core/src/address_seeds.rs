@@ -17,6 +17,165 @@ const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
 const US_ZIP_CONTEXT_WINDOW: usize = 120;
 
+pub(crate) fn us_state_zip_prefix_len(
+  text: &str,
+  state_abbreviations: &BTreeSet<String>,
+) -> Option<usize> {
+  let mut cursor = usize::from(text.starts_with(','));
+  let gap = text
+    .get(cursor..)?
+    .chars()
+    .take_while(|ch| matches!(*ch, ' ' | '\t'))
+    .map(char::len_utf8)
+    .sum::<usize>();
+  if cursor == 0 && gap == 0 {
+    return None;
+  }
+  cursor = cursor.saturating_add(gap);
+
+  let state_len = text
+    .get(cursor..)?
+    .chars()
+    .take_while(char::is_ascii_uppercase)
+    .map(char::len_utf8)
+    .sum::<usize>();
+  let state = text.get(cursor..cursor.saturating_add(state_len))?;
+  if state_len != 2 || !state_abbreviations.contains(state) {
+    return None;
+  }
+  cursor = cursor.saturating_add(state_len);
+
+  let state_gap = text
+    .get(cursor..)?
+    .chars()
+    .take_while(|ch| matches!(*ch, ' ' | '\t'))
+    .map(char::len_utf8)
+    .sum::<usize>();
+  if state_gap == 0 {
+    return None;
+  }
+  cursor = cursor.saturating_add(state_gap);
+
+  let zip_len = text
+    .get(cursor..)?
+    .chars()
+    .take_while(char::is_ascii_digit)
+    .map(char::len_utf8)
+    .sum::<usize>();
+  if zip_len != 5 {
+    return None;
+  }
+  cursor = cursor.saturating_add(zip_len);
+  if let Some(separator) =
+    text.get(cursor..)?.chars().next().filter(|ch| is_dash(*ch))
+  {
+    let extension_start = cursor.saturating_add(separator.len_utf8());
+    let extension_len = text
+      .get(extension_start..)?
+      .chars()
+      .take_while(char::is_ascii_digit)
+      .map(char::len_utf8)
+      .sum::<usize>();
+    let extension_end = extension_start.saturating_add(extension_len);
+    let has_complete_extension = extension_len == 4
+      && text
+        .get(extension_end..)?
+        .chars()
+        .next()
+        .is_none_or(|ch| !ch.is_ascii_alphanumeric());
+    if has_complete_extension {
+      cursor = extension_end;
+    }
+  }
+  if text
+    .get(cursor..)?
+    .chars()
+    .next()
+    .is_some_and(|ch| ch.is_ascii_alphanumeric())
+  {
+    return None;
+  }
+  Some(cursor)
+}
+
+pub(crate) fn soft_wrapped_us_city_tail<'a>(
+  after: &'a str,
+  state_abbreviations: &BTreeSet<String>,
+) -> Option<(usize, &'a str)> {
+  let mut byte = 0_usize;
+  let mut line_breaks = 0_usize;
+  let mut whitespace = 0_usize;
+  let mut previous_was_carriage_return = false;
+  for ch in after.chars() {
+    if !ch.is_whitespace() {
+      break;
+    }
+    if ch == '\u{2029}' {
+      return None;
+    }
+    match ch {
+      '\r' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = true;
+      }
+      '\n' if previous_was_carriage_return => {
+        previous_was_carriage_return = false;
+      }
+      '\n' | '\u{2028}' => {
+        line_breaks = line_breaks.saturating_add(1);
+        previous_was_carriage_return = false;
+      }
+      _ => {
+        previous_was_carriage_return = false;
+      }
+    }
+    whitespace = whitespace.saturating_add(1);
+    byte = byte.saturating_add(ch.len_utf8());
+    if whitespace == 4 {
+      break;
+    }
+  }
+  if line_breaks != 1 || !(1..=4).contains(&whitespace) {
+    return None;
+  }
+  let rest = after.get(byte..)?;
+  let mut cursor = 0_usize;
+  let mut words = 0_usize;
+  let city_end = loop {
+    let token_source = rest.get(cursor..)?;
+    let token = token_source
+      .chars()
+      .take_while(|ch| ch.is_alphabetic() || matches!(*ch, '-' | '\'' | '’'))
+      .collect::<String>();
+    if token.is_empty() {
+      return None;
+    }
+    words = words.saturating_add(1);
+    if words > 4 {
+      return None;
+    }
+    cursor = cursor.saturating_add(token.len());
+    let after_token = rest.get(cursor..)?;
+    if after_token.starts_with(',') {
+      let city_end = cursor;
+      cursor = cursor.saturating_add(','.len_utf8());
+      break city_end;
+    }
+    let ch = after_token.chars().next()?;
+    if ch == ' ' || ch == '\t' {
+      cursor = cursor.saturating_add(ch.len_utf8());
+      continue;
+    }
+    return None;
+  };
+  let city_tail = rest.get(..city_end)?;
+  cursor = cursor.saturating_add(us_state_zip_prefix_len(
+    rest.get(cursor..)?,
+    state_abbreviations,
+  )?);
+  Some((byte.saturating_add(cursor), city_tail))
+}
+
 /// Lowercase connective particles that commonly sit inside street names
 /// ("rue de la Paix", "van der Hoopstraat", "calle de los Reyes").
 /// Deliberately a closed set: the delayed-house-number bridge in
@@ -47,7 +206,7 @@ pub(crate) struct PreparedAddressSeedData {
   postal_code_re: Regex,
   br_cep_shape_re: Regex,
   us_zip_plus_four_shape_re: Regex,
-  us_state_before_zip_re: Regex,
+  us_state_before_zip_re: Option<Regex>,
   house_number_before_street_re: Regex,
   house_number_after_street_re: Regex,
 }
@@ -81,9 +240,21 @@ pub(crate) struct AddressSeedDetection {
 }
 
 impl PreparedAddressSeedData {
+  #[cfg(test)]
   pub(crate) fn new(data: AddressSeedData) -> Result<Self> {
+    Self::new_with_state_abbreviations(data, Vec::new())
+  }
+
+  pub(crate) fn new_with_state_abbreviations(
+    data: AddressSeedData,
+    state_abbreviations: Vec<String>,
+  ) -> Result<Self> {
     let (boundary_search, boundary_phrase_re) =
       boundary_searches(data.boundary_words)?;
+    let us_state_abbreviations =
+      state_abbreviations.into_iter().collect::<BTreeSet<_>>();
+    let us_state_before_zip_re =
+      us_state_before_zip_regex(&us_state_abbreviations)?;
     Ok(Self {
       boundary_search,
       boundary_phrase_re,
@@ -94,9 +265,7 @@ impl PreparedAddressSeedData {
       )?,
       br_cep_shape_re: compile_regex(r"(?u)^\d{5}[-‐‑‒–—―]\d{3}$")?,
       us_zip_plus_four_shape_re: compile_regex(r"(?u)^\d{5}[-‐‑‒–—―]\d{4}$")?,
-      us_state_before_zip_re: compile_regex(
-        r"(?u)(?:^|[^A-Za-z0-9])(?P<state>A[KLRZ]|C[AOT]|D[CE]|F[LM]|G[AU]|HI|I[ADLN]|K[SY]|LA|M[ADEHINOPST]|N[CDEHJMVY]|O[HKR]|P[AR]|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])\s*,?\s*$",
-      )?,
+      us_state_before_zip_re,
       house_number_before_street_re: compile_regex(
         r"(?u)\b\d{1,6}(?:[-/]\d{1,6})?\s+(?:\p{Lu}\p{L}+[^\S\n\t]+){0,4}$",
       )?,
@@ -485,7 +654,7 @@ impl PreparedAddressSeedData {
   ) -> Option<Seed> {
     let window_start = floor_char_boundary(full_text, start.saturating_sub(24));
     let window = full_text.get(window_start..start)?;
-    let captures = self.us_state_before_zip_re.captures(window)?;
+    let captures = self.us_state_before_zip_re.as_ref()?.captures(window)?;
     let state = captures.name("state")?;
     Some(Seed {
       kind: SeedType::State,
@@ -838,6 +1007,23 @@ fn compile_regex(pattern: &str) -> Result<Regex> {
     engine: SearchEngine::Regex,
     reason: error.to_string(),
   })
+}
+
+fn us_state_before_zip_regex(
+  state_abbreviations: &BTreeSet<String>,
+) -> Result<Option<Regex>> {
+  if state_abbreviations.is_empty() {
+    return Ok(None);
+  }
+  let alternation = state_abbreviations
+    .iter()
+    .map(|state| regex::escape(state))
+    .collect::<Vec<_>>()
+    .join("|");
+  compile_regex(&format!(
+    r"(?u)(?:^|[^A-Za-z0-9])(?P<state>{alternation})\s*,?\s*$"
+  ))
+  .map(Some)
 }
 
 fn elapsed_us(start: Instant) -> u64 {
@@ -1248,6 +1434,7 @@ fn cluster_seeds(
       full_text,
       current.end,
       seed.start,
+      &current,
       entity_index,
     );
     if gap_ok {
@@ -1407,12 +1594,30 @@ fn has_cluster_barrier(
   full_text: &str,
   gap_start: usize,
   gap_end: usize,
+  cluster: &SeedCluster,
   entity_index: &NonAddressEntityIndex,
 ) -> bool {
-  full_text
-    .get(gap_start..gap_end)
-    .is_some_and(has_paragraph_break)
-    || entity_index.has_barrier(gap_start, gap_end)
+  full_text.get(gap_start..gap_end).is_some_and(|gap| {
+    has_paragraph_break(gap) || has_prose_wrap_after_weak_cluster(gap, cluster)
+  }) || entity_index.has_barrier(gap_start, gap_end)
+}
+
+fn has_prose_wrap_after_weak_cluster(
+  text: &str,
+  cluster: &SeedCluster,
+) -> bool {
+  if cluster.has_expandable_address_context()
+    || !text
+      .chars()
+      .any(|ch| matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}'))
+  {
+    return false;
+  }
+  text
+    .split(|ch: char| !ch.is_alphabetic())
+    .filter(|word| !word.is_empty())
+    .nth(4)
+    .is_some()
 }
 
 fn has_paragraph_break(text: &str) -> bool {
@@ -1789,6 +1994,28 @@ mod tests {
 
   use super::*;
 
+  #[test]
+  fn us_state_zip_prefix_includes_optional_four_digit_extension() {
+    let states = ["AS", "FL", "MP"].into_iter().map(String::from).collect();
+    assert_eq!(us_state_zip_prefix_len(", FL 32953", &states), Some(10));
+    assert_eq!(
+      us_state_zip_prefix_len(", FL 32953-1234", &states),
+      Some(15)
+    );
+    assert_eq!(
+      us_state_zip_prefix_len(", FL 32953‑1234", &states),
+      Some(17)
+    );
+    assert_eq!(us_state_zip_prefix_len(", FL 32953-123", &states), Some(10));
+    assert_eq!(
+      us_state_zip_prefix_len(", FL 32953—Attention:", &states),
+      Some(10)
+    );
+    assert_eq!(us_state_zip_prefix_len(", AS 96799", &states), Some(10));
+    assert_eq!(us_state_zip_prefix_len(", MP 96950", &states), Some(10));
+    assert_eq!(us_state_zip_prefix_len(", DE 61348", &states), None);
+  }
+
   proptest! {
     #[test]
     fn bounded_text_window_matches_full_utf16_count(
@@ -2097,7 +2324,10 @@ mod tests {
   #[ignore = "release-mode postal context scaling regression check"]
   fn postal_context_collection_scales_for_dynamic_states_and_zip_plus_four()
   -> Result<()> {
-    let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
+    let data = PreparedAddressSeedData::new_with_state_abbreviations(
+      AddressSeedData::default(),
+      vec![String::from("MA")],
+    )?;
     assert_postal_collection_scales(&data, PostalScalingCase::StateBacked);
     assert_postal_collection_scales(
       &data,
@@ -2414,6 +2644,37 @@ mod tests {
         .any(|entity| entity.text == "Bismarckring 18, 65183 Wiesbaden"),
       "address seed entities: {result:?}",
     );
+
+    for separator in ["\n", "\r", "\r\n", "\u{2028}"] {
+      let wrapped_text = format!(
+        "123 Avenue of the Americas, Floor Thirty Seven{separator}New York, NY 10020"
+      );
+      let wrapped_existing = vec![entity(
+        &wrapped_text,
+        "New York",
+        "address",
+        DetectionSource::DenyList,
+      )?];
+      let wrapped_result = data
+        .process_profiled(
+          &[SearchMatch::Literal {
+            pattern: 0,
+            start: 4,
+            end: 10,
+          }],
+          PatternSlice { start: 0, end: 1 },
+          &wrapped_text,
+          &wrapped_existing,
+        )?
+        .entities;
+
+      assert!(
+        wrapped_result
+          .iter()
+          .any(|entity| entity.text == wrapped_text),
+        "address seed entities for {separator:?}: {wrapped_result:?}",
+      );
+    }
     Ok(())
   }
 

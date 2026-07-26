@@ -1954,6 +1954,32 @@
       "type": "set",
       "path": ["slices", "hotwords", "end"],
       "value": 6614
+    },
+    {
+      "type": "array",
+      "path": ["address_seed_data", "boundary_words"],
+      "segments": [
+        { "type": "copy", "start": 12, "end": 17 },
+        { "type": "copy", "start": 52, "end": 72 },
+        { "type": "copy", "start": 87, "end": 114 },
+        { "type": "copy", "start": 154, "end": 163 },
+        { "type": "copy", "start": 175, "end": 183 },
+        { "type": "copy", "start": 184, "end": 188 },
+        { "type": "copy", "start": 172, "end": 173 },
+        { "type": "copy", "start": 188, "end": 195 },
+        { "type": "copy", "start": 183, "end": 184 },
+        { "type": "copy", "start": 195, "end": 198 }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["deny_list_data", "filters", "us_state_abbreviations"],
+      "value": []
+    },
+    {
+      "type": "set",
+      "path": ["false_positive_filters", "us_state_abbreviations"],
+      "value": []
     }
   ]
 }

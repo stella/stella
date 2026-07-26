@@ -28,6 +28,8 @@ pub(super) struct SupportDataInput {
   triggers: Option<TriggerData>,
   legal_forms: Option<LegalFormData>,
   address_seed: Option<AddressSeedData>,
+  document_heading_words: Vec<String>,
+  state_abbreviations: Vec<String>,
   zones: Option<ZoneData>,
   address_context: Option<AddressContextData>,
   coreference: Option<CoreferenceData>,
@@ -52,6 +54,16 @@ pub(super) fn take_support_input(
   config: &mut PreparedEngineDetectorConfig,
 ) -> SupportDataInput {
   let legal_forms = config.legal_form_data.take();
+  let state_abbreviations = config
+    .false_positive_filters
+    .as_ref()
+    .map(|filters| filters.us_state_abbreviations.iter().cloned().collect())
+    .unwrap_or_default();
+  let document_heading_words = config
+    .false_positive_filters
+    .as_ref()
+    .map(|filters| filters.document_heading_words.iter().cloned().collect())
+    .unwrap_or_default();
   let mut signature = config.signature_data.take();
   if let (Some(legal_forms), Some(signature)) =
     (legal_forms.as_ref(), signature.as_mut())
@@ -68,6 +80,8 @@ pub(super) fn take_support_input(
     triggers: config.trigger_data.take(),
     legal_forms,
     address_seed: config.address_seed_data.take(),
+    document_heading_words,
+    state_abbreviations,
     zones: config.zone_data.take(),
     address_context: config.address_context_data.take(),
     coreference: config.coreference_data.take(),
@@ -80,13 +94,29 @@ pub(super) fn prepare_support_data(
   input: SupportDataInput,
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<PreparedSupportData> {
+  // Reuse detector-independent address and heading vocabulary as legal-form
+  // soft-wrap boundaries even when trigger detection is disabled.
+  let mut legal_form_soft_wrap_boundary_labels = input
+    .address_seed
+    .as_ref()
+    .map(|data| data.boundary_words.clone())
+    .unwrap_or_default();
+  legal_form_soft_wrap_boundary_labels.extend(input.document_heading_words);
   let prepared = crate::exec::scope(|scope| {
     let hotwords = scope.spawn(|| prepare_timed_hotword_data(input.hotwords));
     let triggers = scope.spawn(|| prepare_timed_trigger_data(input.triggers));
-    let legal_forms =
-      scope.spawn(|| Ok(prepare_timed_legal_form_data(input.legal_forms)));
-    let address_seed =
-      scope.spawn(|| prepare_timed_address_seed_data(input.address_seed));
+    let legal_forms = scope.spawn(|| {
+      Ok(prepare_timed_legal_form_data(
+        input.legal_forms,
+        legal_form_soft_wrap_boundary_labels,
+      ))
+    });
+    let address_seed = scope.spawn(|| {
+      prepare_timed_address_seed_data(
+        input.address_seed,
+        input.state_abbreviations,
+      )
+    });
     let zones = scope.spawn(|| prepare_timed_zone_data(input.zones.as_ref()));
     let address_context =
       scope.spawn(|| prepare_timed_address_context_data(input.address_context));

@@ -49,10 +49,16 @@ pub(super) fn prepare_timed_trigger_data(
 
 pub(super) fn prepare_timed_legal_form_data(
   data: Option<LegalFormData>,
+  soft_wrap_boundary_labels: Vec<String>,
 ) -> TimedSupportData<Option<PreparedLegalFormData>> {
   let len = legal_form_data_len(data.as_ref());
   let start = Instant::now();
-  let data = data.map(PreparedLegalFormData::new);
+  let data = data.map(|data| {
+    PreparedLegalFormData::new_with_soft_wrap_boundary_labels(
+      data,
+      soft_wrap_boundary_labels,
+    )
+  });
   TimedSupportData {
     data,
     len,
@@ -62,10 +68,11 @@ pub(super) fn prepare_timed_legal_form_data(
 
 pub(super) fn prepare_timed_address_seed_data(
   data: Option<AddressSeedData>,
+  state_abbreviations: Vec<String>,
 ) -> Result<TimedSupportData<Option<PreparedAddressSeedData>>> {
   let len = address_seed_data_len(data.as_ref());
   let start = Instant::now();
-  let data = prepare_address_seed_data(data)?;
+  let data = prepare_address_seed_data(data, state_abbreviations)?;
   Ok(TimedSupportData {
     data,
     len,
@@ -272,8 +279,16 @@ fn signature_data_len(data: Option<&SignatureData>) -> usize {
 
 fn prepare_address_seed_data(
   data: Option<AddressSeedData>,
+  state_abbreviations: Vec<String>,
 ) -> Result<Option<PreparedAddressSeedData>> {
-  data.map(PreparedAddressSeedData::new).transpose()
+  data
+    .map(|data| {
+      PreparedAddressSeedData::new_with_state_abbreviations(
+        data,
+        state_abbreviations,
+      )
+    })
+    .transpose()
 }
 
 fn prepare_hotword_data(

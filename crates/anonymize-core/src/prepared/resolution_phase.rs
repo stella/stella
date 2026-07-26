@@ -1,6 +1,13 @@
+use std::borrow::Cow;
+use std::collections::BTreeSet;
+
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
-use crate::false_positives::filter_entity_false_positives;
+use crate::false_positives::{
+  filter_entity_false_positives, soft_wrapped_city_person_candidate,
+};
 use crate::hotwords::apply_hotword_rules;
+use crate::labels::{ADDRESS_LABEL, PERSON_LABEL};
+use crate::normalize::normalize_for_search;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
   PipelineEntity, ResolutionDocument,
@@ -13,13 +20,15 @@ use crate::types::{Result, SearchMatch};
 use super::PreparedEngine;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::entity_filter::{
-  clear_internal_source_details, filter_entities_for_config,
-  filter_entities_for_labels, filter_entities_for_redaction, label_is_allowed,
+  RedactionFilterOptions, clear_internal_source_details,
+  filter_entities_for_config, filter_entities_for_labels,
+  filter_entities_for_redaction, label_is_allowed,
 };
 use super::phase::{
   PhaseTimer, ResolverStep, observe_diagnostic_stream, record_count_stage,
   record_entities, record_resolver_entities,
 };
+use super::prepared_document::PreparedDocument;
 use super::results::StaticDetectionResult;
 
 impl PreparedEngine {
@@ -27,24 +36,32 @@ impl PreparedEngine {
     &self,
     detections: &StaticDetectionResult,
     caller_entities: &[PipelineEntity],
-    full_text: &str,
+    document: &PreparedDocument<'_>,
     diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
     event_stream: &mut DiagnosticEventStream<'_>,
   ) -> Result<Vec<PipelineEntity>> {
-    let document = ResolutionDocument::new(full_text);
+    let full_text = document.resolution().text();
+    let resolution_document = document.resolution();
     let pre_threshold_entities = self.prepare_pre_threshold_entities(
       detections,
       caller_entities,
       full_text,
       diagnostics.as_deref_mut(),
     )?;
+    let pre_threshold_entities = self.reclassify_soft_wrapped_city_people(
+      pre_threshold_entities,
+      resolution_document,
+    )?;
     observe_diagnostic_stream(diagnostics, event_stream)?;
     let mut raw_entities = filter_entities_for_redaction(
       pre_threshold_entities,
-      full_text,
-      self.policy.threshold,
-      self.policy.confidence_boost,
-      &self.policy.allowed_labels,
+      RedactionFilterOptions {
+        full_text,
+        threshold: self.policy.threshold,
+        confidence_boost: self.policy.confidence_boost,
+        allowed_labels: &self.policy.allowed_labels,
+        boost_anchor_labels: &self.policy.allowed_labels,
+      },
     )?;
     let address_context_timer = PhaseTimer::start();
     let address_context_entities =
@@ -72,7 +89,7 @@ impl PreparedEngine {
     let boundary_timer = PhaseTimer::start();
     let consistent = enforce_boundary_consistency_with_document(
       merged,
-      &document,
+      resolution_document,
       self.person_span_terminators(),
     )?;
     record_resolver_entities(
@@ -85,7 +102,7 @@ impl PreparedEngine {
     )?;
     let sanitize_timer = PhaseTimer::start();
     let sanitized_entities =
-      sanitize_entities_with_document(consistent, &document)?;
+      sanitize_entities_with_document(consistent, resolution_document)?;
     let false_positive_filters =
       self.data.false_positive_filters.as_ref().or_else(|| {
         self
@@ -95,9 +112,9 @@ impl PreparedEngine {
           .and_then(|data| data.filters.as_ref())
       });
     let mut resolved_entities = filter_entities_for_config(
-      filter_entity_false_positives(
+      Self::filter_false_positives(
         sanitized_entities,
-        &document,
+        resolution_document,
         false_positive_filters,
       )?,
       self.policy.threshold,
@@ -105,7 +122,7 @@ impl PreparedEngine {
     );
     resolved_entities = self.process_coreference_entities(
       full_text,
-      &document,
+      resolution_document,
       resolved_entities,
       false_positive_filters,
       diagnostics.as_deref_mut(),
@@ -129,6 +146,19 @@ impl PreparedEngine {
       .as_ref()
       .map(PreparedSignatureData::person_span_terminators)
       .unwrap_or_default()
+  }
+
+  fn resolution_labels(&self) -> Cow<'_, [String]> {
+    let labels = &self.policy.allowed_labels;
+    if labels.is_empty()
+      || !label_is_allowed(ADDRESS_LABEL, labels)
+      || label_is_allowed(PERSON_LABEL, labels)
+    {
+      return Cow::Borrowed(labels);
+    }
+    let mut expanded = labels.clone();
+    expanded.push(String::from(PERSON_LABEL));
+    Cow::Owned(expanded)
   }
 
   fn prepare_pre_threshold_entities(
@@ -164,11 +194,12 @@ impl PreparedEngine {
       return Ok(entities);
     };
     let timer = PhaseTimer::start();
+    let resolution_labels = self.resolution_labels();
     let adjusted = apply_hotword_rules(
       entities,
       full_text,
       data,
-      &self.policy.allowed_labels,
+      resolution_labels.as_ref(),
     )?;
     record_count_stage(
       &mut diagnostics,
@@ -251,7 +282,7 @@ impl PreparedEngine {
       self.person_span_terminators(),
     )?;
     let sanitized = sanitize_entities_with_document(consistent, document)?;
-    let filtered = filter_entity_false_positives(
+    let filtered = Self::filter_false_positives(
       sanitized,
       document,
       false_positive_filters,
@@ -260,6 +291,79 @@ impl PreparedEngine {
       filtered,
       &self.policy.allowed_labels,
     ))
+  }
+
+  fn filter_false_positives(
+    entities: Vec<PipelineEntity>,
+    document: &ResolutionDocument<'_>,
+    filters: Option<&DenyListFilterData>,
+  ) -> Result<Vec<PipelineEntity>> {
+    filter_entity_false_positives(entities, document, filters)
+  }
+
+  fn reclassify_soft_wrapped_city_people(
+    &self,
+    entities: Vec<PipelineEntity>,
+    document: &ResolutionDocument<'_>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let offsets = document.offsets();
+    let empty_states = BTreeSet::default();
+    let state_abbreviations = self
+      .data
+      .false_positive_filters
+      .as_ref()
+      .or_else(|| {
+        self
+          .data
+          .deny_list
+          .as_ref()
+          .and_then(|data| data.filters.as_ref())
+      })
+      .map_or(&empty_states, |filters| &filters.us_state_abbreviations);
+    let mut reclassified = Vec::with_capacity(entities.len());
+    for mut entity in entities {
+      let Some(candidate) = soft_wrapped_city_person_candidate(
+        &entity,
+        document.text(),
+        &offsets,
+        state_abbreviations,
+      )?
+      else {
+        reclassified.push(entity);
+        continue;
+      };
+      if !self.deny_list_contains_city(&candidate.city_name)? {
+        reclassified.push(entity);
+        continue;
+      }
+      entity.label = String::from(ADDRESS_LABEL);
+      entity.end = candidate.end;
+      entity.text = offsets.slice(entity.start, candidate.end)?;
+      entity.score = entity.score.max(0.9);
+      reclassified.push(entity);
+    }
+    Ok(reclassified)
+  }
+
+  fn deny_list_contains_city(&self, city_name: &str) -> Result<bool> {
+    let Some(data) = &self.data.deny_list else {
+      return Ok(false);
+    };
+    let normalized = normalize_for_search(city_name);
+    let Ok(expected_end) = u32::try_from(normalized.len()) else {
+      return Ok(false);
+    };
+    let matches = self.indexes.literals.find_iter(&normalized)?;
+    Ok(matches.into_iter().any(|found| {
+      found.start() == 0
+        && found.end() == expected_end
+        && self
+          .policy
+          .slices
+          .deny_list
+          .local_index(found.pattern())
+          .is_some_and(|index| data.pattern_has_city_source(index))
+    }))
   }
 
   fn extend_monetary_entities(

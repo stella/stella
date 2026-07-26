@@ -57,32 +57,63 @@ impl<'a> ResolutionDocument<'a> {
     if start > end || end > self.text.len() {
       return None;
     }
-    let starts = self.line_starts.get_or_init(|| {
+    let starts = self.line_starts();
+    let line_index = self.line_index_at(start)?;
+    let line_start = *starts.get(line_index)?;
+    let line_end = starts
+      .get(line_index.saturating_add(1))
+      .and_then(|next_start| self.delimiter_start_before(*next_start))
+      .unwrap_or(self.text.len());
+    (end <= line_end).then_some(line_start..line_end)
+  }
+
+  pub(crate) fn line_prefix_and_previous(
+    &self,
+    offset: usize,
+  ) -> Option<(&'a str, Option<&'a str>)> {
+    if offset > self.text.len() {
+      return None;
+    }
+    let starts = self.line_starts();
+    let line_index = self.line_index_at(offset)?;
+    let line_start = *starts.get(line_index)?;
+    let current = self.text.get(line_start..offset)?;
+    let Some(previous_index) = line_index.checked_sub(1) else {
+      return Some((current, None));
+    };
+    let previous_start = *starts.get(previous_index)?;
+    let previous_end = self.delimiter_start_before(line_start)?;
+    let separator = self.text.get(previous_end..line_start)?;
+    if separator.starts_with('\u{2029}') {
+      return Some((current, None));
+    }
+    Some((current, self.text.get(previous_start..previous_end)))
+  }
+
+  fn line_starts(&self) -> &[usize] {
+    self.line_starts.get_or_init(|| {
       let mut starts = vec![0];
       let bytes = self.text.as_bytes();
       let mut index = 0_usize;
-      while let Some(byte) = bytes.get(index) {
+      while index < bytes.len() {
         #[cfg(test)]
         self
           .line_operations
           .set(self.line_operations.get().saturating_add(1));
-        let delimiter_len = match byte {
-          b'\r'
-            if bytes.get(index.saturating_add(1)).copied() == Some(b'\n') =>
-          {
-            2
-          }
-          b'\r' | b'\n' => 1,
-          _ => {
-            index = index.saturating_add(1);
-            continue;
-          }
-        };
+        let delimiter_len = line_delimiter_len(bytes, index);
+        if delimiter_len == 0 {
+          index = index.saturating_add(1);
+          continue;
+        }
         index = index.saturating_add(delimiter_len);
         starts.push(index);
       }
       starts
-    });
+    })
+  }
+
+  fn line_index_at(&self, offset: usize) -> Option<usize> {
+    let starts = self.line_starts();
     let mut left = 0_usize;
     let mut right = starts.len();
     while left < right {
@@ -91,30 +122,25 @@ impl<'a> ResolutionDocument<'a> {
         .line_operations
         .set(self.line_operations.get().saturating_add(1));
       let middle = left.midpoint(right);
-      if *starts.get(middle)? <= start {
+      if *starts.get(middle)? <= offset {
         left = middle.saturating_add(1);
       } else {
         right = middle;
       }
     }
-    let line_index = left.checked_sub(1)?;
-    let line_start = *starts.get(line_index)?;
-    let line_end = starts.get(line_index.saturating_add(1)).map_or(
-      self.text.len(),
-      |next_start| {
-        let delimiter_len =
-          if next_start.checked_sub(2).and_then(|delimiter_start| {
-            self.text.as_bytes().get(delimiter_start..*next_start)
-          }) == Some(b"\r\n".as_slice())
-          {
-            2
-          } else {
-            1
-          };
-        next_start.saturating_sub(delimiter_len)
-      },
-    );
-    (end <= line_end).then_some(line_start..line_end)
+    left.checked_sub(1)
+  }
+
+  fn delimiter_start_before(&self, line_start: usize) -> Option<usize> {
+    let before = self.text.get(..line_start)?;
+    let (last_start, last) = before.char_indices().next_back()?;
+    if last == '\n'
+      && let Some((carriage_start, '\r')) =
+        before.get(..last_start)?.char_indices().next_back()
+    {
+      return Some(carriage_start);
+    }
+    is_line_delimiter(last).then_some(last_start)
   }
 
   pub(super) fn word_analysis(&self) -> &WordAnalysis {
@@ -124,6 +150,19 @@ impl<'a> ResolutionDocument<'a> {
       WordAnalysis { spans, boundaries }
     })
   }
+}
+
+fn line_delimiter_len(bytes: &[u8], index: usize) -> usize {
+  match bytes.get(index..) {
+    Some([b'\r', b'\n', ..]) => 2,
+    Some([b'\r' | b'\n', ..]) => 1,
+    Some([0xe2, 0x80, 0xa8 | 0xa9, ..]) => 3,
+    _ => 0,
+  }
+}
+
+const fn is_line_delimiter(ch: char) -> bool {
+  matches!(ch, '\r' | '\n' | '\u{2028}' | '\u{2029}')
 }
 
 fn char_spans(text: &str) -> Vec<CharSpan> {
@@ -216,16 +255,10 @@ mod tests {
 
   use super::ResolutionDocument;
 
-  fn generated_lines(
-    segments: &[String],
-    ending_codes: &[u8],
-  ) -> (String, Vec<std::ops::Range<usize>>) {
+  fn generated_text(segments: &[String], ending_codes: &[u8]) -> String {
     let mut text = String::new();
-    let mut ranges = Vec::with_capacity(segments.len());
     for (index, segment) in segments.iter().enumerate() {
-      let start = text.len();
       text.push_str(segment);
-      ranges.push(start..text.len());
       if index.saturating_add(1) == segments.len() {
         continue;
       }
@@ -233,13 +266,36 @@ mod tests {
         .get(index.checked_rem(ending_codes.len()).unwrap_or_default())
         .copied()
         .unwrap_or_default();
-      text.push_str(match ending % 3 {
+      text.push_str(match ending % 5 {
         0 => "\n",
         1 => "\r\n",
-        _ => "\r",
+        2 => "\r",
+        3 => "\u{2028}",
+        _ => "\u{2029}",
       });
     }
-    (text, ranges)
+    text
+  }
+
+  fn reference_line_ranges(text: &str) -> Vec<std::ops::Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut line_start = 0_usize;
+    let mut chars = text.char_indices().peekable();
+    while let Some((offset, ch)) = chars.next() {
+      let delimiter_len = match ch {
+        '\r' if chars.peek().is_some_and(|(_, next)| *next == '\n') => {
+          chars.next();
+          2
+        }
+        '\r' | '\n' => 1,
+        '\u{2028}' | '\u{2029}' => ch.len_utf8(),
+        _ => continue,
+      };
+      ranges.push(line_start..offset);
+      line_start = offset.saturating_add(delimiter_len);
+    }
+    ranges.push(line_start..text.len());
+    ranges
   }
 
   proptest! {
@@ -249,7 +305,8 @@ mod tests {
       ending_codes in proptest::collection::vec(any::<u8>(), 0..32),
       queries in proptest::collection::vec((any::<usize>(), any::<usize>()), 0..64),
     ) {
-      let (text, ranges) = generated_lines(&segments, &ending_codes);
+      let text = generated_text(&segments, &ending_codes);
+      let ranges = reference_line_ranges(&text);
       let document = ResolutionDocument::new(&text);
       for (first, second) in queries {
         let divisor = text.len().saturating_add(1);
@@ -296,9 +353,29 @@ mod tests {
       ("first\nsecond", 6..12),
       ("first\r\nsecond", 7..13),
       ("first\rsecond", 6..12),
+      ("first\u{2028}second", 8..14),
+      ("first\u{2029}second", 8..14),
     ] {
       let document = ResolutionDocument::new(text);
       assert_eq!(document.line_range(range.start, range.end), Some(range));
+    }
+  }
+
+  #[test]
+  fn line_prefix_returns_adjacent_previous_line() {
+    for (text, expected_previous) in [
+      ("Name:\nAlice", Some("Name:")),
+      ("Name:\r\nAlice", Some("Name:")),
+      ("Name:\u{2028}Alice", Some("Name:")),
+      ("Name:\u{2029}Alice", None),
+      ("Name:\n\nAlice", Some("")),
+    ] {
+      let document = ResolutionDocument::new(text);
+      let offset = text.len().saturating_sub("Alice".len());
+      assert_eq!(
+        document.line_prefix_and_previous(offset),
+        Some(("", expected_previous))
+      );
     }
   }
 

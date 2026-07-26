@@ -1447,6 +1447,28 @@
       "type": "set",
       "path": ["slices", "hotwords", "end"],
       "value": 6614
+    },
+    {
+      "type": "array",
+      "path": ["address_seed_data", "boundary_words"],
+      "segments": [
+        { "type": "copy", "start": 0, "end": 12 },
+        { "type": "copy", "start": 154, "end": 163 },
+        { "type": "copy", "start": 135, "end": 136 },
+        { "type": "copy", "start": 163, "end": 174 },
+        { "type": "values", "values": ["dič", "ičo"] },
+        { "type": "copy", "start": 174, "end": 175 }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["deny_list_data", "filters", "us_state_abbreviations"],
+      "value": []
+    },
+    {
+      "type": "set",
+      "path": ["false_positive_filters", "us_state_abbreviations"],
+      "value": []
     }
   ]
 }

@@ -1,3 +1,4 @@
+use crate::resolution::ResolutionDocument;
 use crate::types::Result;
 
 use super::detector_contract::{StaticDetectorInput, StaticDetectorSpec};
@@ -7,20 +8,26 @@ use super::detector_contract::{StaticDetectorInput, StaticDetectorSpec};
 /// Text remains private so a rule can only obtain it through a declared input
 /// capability. Additional prepared document views can follow the same gate.
 pub(super) struct PreparedDocument<'a> {
-  text: &'a str,
+  resolution: ResolutionDocument<'a>,
 }
 
 impl<'a> PreparedDocument<'a> {
   pub(super) const fn new(text: &'a str) -> Self {
-    Self { text }
+    Self {
+      resolution: ResolutionDocument::new(text),
+    }
   }
 
   pub(super) fn text(&self, spec: &StaticDetectorSpec) -> Result<&'a str> {
     spec.require_input(StaticDetectorInput::FullText)?;
-    Ok(self.text)
+    Ok(self.resolution.text())
+  }
+
+  pub(super) const fn resolution(&self) -> &ResolutionDocument<'a> {
+    &self.resolution
   }
 
   pub(super) const fn len(&self) -> usize {
-    self.text.len()
+    self.resolution.text().len()
   }
 }

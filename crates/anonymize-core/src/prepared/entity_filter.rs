@@ -18,18 +18,29 @@ pub(super) fn filter_entities_for_config(
   )
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct RedactionFilterOptions<'a> {
+  pub(super) full_text: &'a str,
+  pub(super) threshold: f64,
+  pub(super) confidence_boost: bool,
+  pub(super) allowed_labels: &'a [String],
+  pub(super) boost_anchor_labels: &'a [String],
+}
+
 pub(super) fn filter_entities_for_redaction(
   entities: Vec<PipelineEntity>,
-  full_text: &str,
-  threshold: f64,
-  confidence_boost: bool,
-  allowed_labels: &[String],
+  options: RedactionFilterOptions<'_>,
 ) -> Result<Vec<PipelineEntity>> {
-  let entities = filter_entities_for_labels(entities, allowed_labels);
-  if confidence_boost {
-    return boost_near_miss_entities(entities, full_text, threshold);
+  let entities = filter_entities_for_labels(entities, options.allowed_labels);
+  if options.confidence_boost {
+    return boost_near_miss_entities(
+      entities,
+      options.full_text,
+      options.threshold,
+      options.boost_anchor_labels,
+    );
   }
-  Ok(filter_entities_for_threshold(entities, threshold))
+  Ok(filter_entities_for_threshold(entities, options.threshold))
 }
 
 pub(super) fn filter_entities_for_labels(
@@ -75,13 +86,17 @@ fn boost_near_miss_entities(
   entities: Vec<PipelineEntity>,
   full_text: &str,
   threshold: f64,
+  anchor_labels: &[String],
 ) -> Result<Vec<PipelineEntity>> {
   let near_miss_floor = f64::max(0.0, threshold - NEAR_MISS_BAND);
   let byte_offsets = ByteOffsets::new(full_text);
   let text_offsets = TextOffsetMap::new(full_text);
   let anchors = entities
     .iter()
-    .filter(|entity| entity.score >= HIGH_CONFIDENCE_FLOOR)
+    .filter(|entity| {
+      entity.score >= HIGH_CONFIDENCE_FLOOR
+        && label_is_allowed(&entity.label, anchor_labels)
+    })
     .map(|entity| entity_midpoint(entity, &byte_offsets, &text_offsets))
     .collect::<Result<Vec<_>>>()?;
 
@@ -222,7 +237,7 @@ mod tests {
       ),
     ];
 
-    let boosted = boost_near_miss_entities(entities, &full_text, 0.85);
+    let boosted = boost_near_miss_entities(entities, &full_text, 0.85, &[]);
     assert!(boosted.is_ok(), "boost should not error on valid offsets");
 
     // UTF-16 (TS parity): the near-miss is outside the window, gets no boost,
@@ -236,6 +251,42 @@ mod tests {
       texts,
       vec!["AAAA"],
       "near-miss must be dropped in UTF-16 space"
+    );
+  }
+
+  #[test]
+  fn excluded_labels_do_not_anchor_confidence_boosts() {
+    let entities = vec![
+      PipelineEntity::detected(
+        0,
+        4,
+        "person",
+        "AAAA",
+        0.95,
+        DetectionSource::Ner,
+      ),
+      PipelineEntity::detected(
+        5,
+        9,
+        "address",
+        "BBBB",
+        0.82,
+        DetectionSource::Regex,
+      ),
+    ];
+    let boosted = boost_near_miss_entities(
+      entities,
+      "AAAA BBBB",
+      0.85,
+      &[String::from("address")],
+    );
+
+    assert!(boosted.is_ok(), "boost should not error on valid offsets");
+    let boosted = boosted.unwrap_or_default();
+    assert_eq!(boosted.len(), 1);
+    assert_eq!(
+      boosted.first().map(|entity| entity.label.as_str()),
+      Some("person")
     );
   }
 }
