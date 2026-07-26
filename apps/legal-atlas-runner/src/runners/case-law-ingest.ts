@@ -317,7 +317,8 @@ const startEventLoopWatchdog = (): void => {
       // suspect: nothing else was running. Without this the log shows
       // only the lag, and the adapters whose timers fired late on
       // recovery look like the cause rather than the casualties.
-      const inFlight = [...inFlightCycles];
+      // Joined rather than an array: log attributes are scalars.
+      const inFlight = [...inFlightCycles].join(",");
       logger.error("case_law.ingestion.event_loop_starved", {
         lagMs: Math.round(lag),
         starvedTicks,
@@ -326,7 +327,7 @@ const startEventLoopWatchdog = (): void => {
       logError(
         `[watchdog] event loop starved: lag=${Math.round(lag)}ms ` +
           `(${starvedTicks}/${WATCHDOG_MAX_STARVED_TICKS}) ` +
-          `in-flight: ${inFlight.join(", ") || "none"}`,
+          `in-flight: ${inFlight || "none"}`,
       );
       if (lag > WATCHDOG_FATAL_LAG_MS) {
         logError(

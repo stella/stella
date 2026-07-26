@@ -219,7 +219,7 @@ const DIRECTIVE_NAMES: readonly string[] = Object.freeze([
   "recitals",
 ]);
 const DIRECTIVE_NAME_CHAR_RE = /[a-z_]/iu;
-const PLACEHOLDER_RE = /\[\[(?<inner>[^\[\]]+?)\]\]/gu;
+const PLACEHOLDER_RE = /\[\[(?<inner>[^[\]]+?)\]\]/gu;
 const CLAUSE_HEADING_RE = /^@clause +\d+ *"(?<title>[^"]*)" *$/iu;
 const stripDirectivePrefix = (line: string): string => {
   const trimmed = line.trimStart();

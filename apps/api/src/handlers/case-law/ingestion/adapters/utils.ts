@@ -62,13 +62,44 @@ export const toOptionalValue = <T>(
 ): T | undefined => value ?? undefined;
 
 /**
+ * Remove every `<`…`>` span, taking each `<` to the next `>` exactly as
+ * `/<[^>]*>/g` does, and leaving a trailing unterminated `<` in place.
+ *
+ * Written as a scan rather than a pattern because both regex spellings
+ * are wrong in their own way on the multi-megabyte pages this runs over.
+ * `[^>]*` re-walks the remainder of the input from every `<` when no `>`
+ * follows, which is quadratic; narrowing it to `[^<>]*` is linear but
+ * silently weakens the strip, leaving `<script` behind on input like
+ * `<script <x>`. Indexed scanning is linear and keeps the original
+ * meaning.
+ */
+const stripTags = (html: string): string => {
+  let out = "";
+  let cursor = 0;
+
+  while (cursor < html.length) {
+    const open = html.indexOf("<", cursor);
+    if (open === -1) {
+      return out + html.slice(cursor);
+    }
+    const close = html.indexOf(">", open + 1);
+    if (close === -1) {
+      // No closing bracket: `/<[^>]*>/` would not match here either.
+      return out + html.slice(cursor);
+    }
+    out += html.slice(cursor, open);
+    cursor = close + 1;
+  }
+
+  return out;
+};
+
+/**
  * Strip HTML tags, decode common entities (including numeric
  * &#xNN; and &#NNNN; forms), and collapse excessive newlines.
  */
 export const stripHtml = (html: string): string =>
-  html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^<>]*>/g, "")
+  stripTags(html.replace(/<br\s*\/?>/gi, "\n"))
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")

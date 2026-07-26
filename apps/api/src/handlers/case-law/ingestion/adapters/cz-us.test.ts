@@ -57,7 +57,8 @@ const makeViewStatePage = (
 ): string =>
   makeTextPage(caseNumber, date).replace(
     "<html><body>",
-    `<html><body><input type="hidden" name="__VIEWSTATE" value="${"P".repeat(viewStateChars)}" />`,
+    () =>
+      `<html><body><input type="hidden" name="__VIEWSTATE" value="${"P".repeat(viewStateChars)}" />`,
   );
 
 // ── Tests ────────────────────────────────────────────────
@@ -453,7 +454,7 @@ describe("czUsAdapter.fetchPage", () => {
       return elapsedMs;
     };
 
-    const small = await parseWith(1_000);
+    const small = await parseWith(1000);
     const large = await parseWith(64_000);
 
     // A super-linear scan over the blob turns a 64x size increase into

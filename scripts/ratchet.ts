@@ -1263,7 +1263,7 @@ const SUPER_LINEAR_REGEX_FIXTURE_LINES = [
   String.raw`// const commented = /(?:a+)+b/u;`,
   // Not counted: inside string and template literals.
   String.raw`const inString = "/(?:a+)+b/u";`,
-  String.raw`const inTemplate = ` + "`/(?:a+)+b/u`;",
+  "const inTemplate = `/(?:a+)+b/u`;",
   // Not counted: division, not a regex literal.
   String.raw`const ratio = (total) / (count + 1) / 2;`,
 ];
