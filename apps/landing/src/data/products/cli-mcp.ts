@@ -13,6 +13,10 @@ export const cliMcp: Product = {
     type: "story",
     sceneId: "cli",
     showCompanions: true,
+    // Slim to CLI terminal + main stella window (drop the Teams + Editor side
+    // windows) so this page's hero reads as a clean CLI -> stella pair; the
+    // homepage opening story keeps the full four-window scene.
+    sideWindows: false,
     aspect: "2.03",
   },
   // Frame rhythm down the page: bloom, wash, bloom.

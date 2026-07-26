@@ -228,10 +228,12 @@ const faqJsonLd = {
           <section class="px-6 py-8 lg:py-10">
             <div
               class:list={[
-                "mx-auto grid max-w-5xl gap-8 border-t pt-8",
-                product.slug === "cli-mcp"
-                  ? "md:gap-10"
-                  : "md:grid-cols-[minmax(0,.72fr)_minmax(0,1.28fr)] md:items-center md:gap-12",
+                "mx-auto grid gap-8 border-t pt-8",
+                !section.media
+                  ? "max-w-3xl md:gap-10"
+                  : product.slug === "cli-mcp"
+                    ? "max-w-5xl md:gap-10"
+                    : "max-w-5xl md:grid-cols-[minmax(0,.72fr)_minmax(0,1.28fr)] md:items-center md:gap-12",
               ]}
               style="border-color: var(--border)"
             >
@@ -258,14 +260,16 @@ const faqJsonLd = {
                   ))}
                 </ul>
               </div>
-              <div data-reveal style={`--reveal-delay: ${80 + index * 30}ms`}>
-                <ProductMediaFrame
-                  media={section.media}
-                  compact
-                  variant={section.frameVariant}
-                  accent={product.frameAccent}
-                />
-              </div>
+              {section.media && (
+                <div data-reveal style={`--reveal-delay: ${80 + index * 30}ms`}>
+                  <ProductMediaFrame
+                    media={section.media}
+                    compact
+                    variant={section.frameVariant}
+                    accent={product.frameAccent}
+                  />
+                </div>
+              )}
             </div>
           </section>
         ))

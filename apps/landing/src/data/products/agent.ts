@@ -15,7 +15,7 @@ export const agent: Product = {
     sceneId: "agent",
     aspect: "16 / 10",
   },
-  // Frame rhythm down the page: bloom, ripple, bloom, wash.
+  // Only the hero carries a scene; the deep-dive sections below are text-only.
   heroFrameVariant: "bloom",
   frameAccent: frameAccents.ember,
   quickAnswer: {
@@ -57,12 +57,6 @@ export const agent: Product = {
         "Pull company and registry data into the same thread",
         "Hand a tabular review to the agent for follow-up questions",
       ],
-      media: {
-        type: "story",
-        sceneId: "review",
-        aspect: "16 / 10",
-      },
-      frameVariant: "ripple",
     },
     {
       heading: "You stay in control",
@@ -71,11 +65,6 @@ export const agent: Product = {
         "A source preview shows what the agent read for every step",
         "Citations open the source document at the exact passage",
       ],
-      media: {
-        type: "preview",
-        key: "agent-answer",
-      },
-      frameVariant: "bloom",
     },
     {
       heading: "Extend it with skills and connectors",
@@ -84,12 +73,6 @@ export const agent: Product = {
         "External connectors are MCP-compatible, so the agent reaches more tools",
         "Add capabilities without changing how the chat works",
       ],
-      media: {
-        type: "story",
-        sceneId: "cli",
-        aspect: "16 / 10",
-      },
-      frameVariant: "wash",
     },
   ],
   faqs: [

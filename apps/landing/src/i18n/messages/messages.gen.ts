@@ -82,7 +82,7 @@ type Messages = {
     "security": "Security";
   };
   "story": {
-    "agentBody": "The agent searches the matter, reads the relevant text, and answers with citations that open the source at the exact passage. Use it in stella, Microsoft Teams, or through MCP and the CLI; the same permissions and sources follow the request.";
+    "agentBody": "The agent searches the matter, reads the relevant text, and answers with citations that open the source at the exact passage. Use it in stella or through MCP and the CLI; the same permissions and sources follow the request.";
     "agentEyebrow": "Agent workflows";
     "agentTitle": "Ask once. Every answer cites its source.";
     "controlBody": "stella is open-source legal software you can self-host: inspect the code, run it your way, and export everything in standard formats; no lock-in.";

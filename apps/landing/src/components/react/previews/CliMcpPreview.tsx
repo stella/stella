@@ -28,6 +28,7 @@ export const CliMcpPreview = ({
   revealSideWindowsOnScroll = false,
   sceneId,
   showCompanions = true,
+  sideWindows = true,
 }: CliMcpPreviewProps) => {
   const [activeWindow, setActiveWindow] = useState(getInitialActiveWindow);
   const [hasManualWindowFocus, setHasManualWindowFocus] = useState(false);
@@ -279,6 +280,7 @@ export const CliMcpPreview = ({
         isAutoPlaying && "cli-story-auto",
         revealSideWindowsOnScroll && "cli-story-with-scroll-reveal",
         !showCompanions && "cli-story-scene-only",
+        showCompanions && !sideWindows && "cli-story-two-window",
       )}
       dir="ltr"
     >
@@ -295,7 +297,7 @@ export const CliMcpPreview = ({
           pure scene percentages. Widths are clamp(rem floor, scene %, rem
           cap); the Teams card has no recording aspect to preserve, so its
           height is content-driven and can never clip the exchange. */}
-      {showCompanions && (
+      {showCompanions && sideWindows && (
         <div
           className={cn(
             "cli-client mac-window group bg-card absolute start-[2.5%] top-[8%] hidden w-[clamp(11rem,15.5%,18.5rem)] min-w-0 overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] sm:block",
@@ -397,7 +399,7 @@ export const CliMcpPreview = ({
           height is derived from that width: content height = width / 0.869,
           plus the titlebar. This keeps the recording aspect exact at every
           scene size instead of only at the % geometry's design width. */}
-      {showCompanions && (
+      {showCompanions && sideWindows && (
         <div
           aria-label="Bring stella Editor to front"
           aria-pressed={focusedWindow === "source"}
@@ -828,6 +830,13 @@ type CliMcpPreviewProps = {
   revealSideWindowsOnScroll?: boolean;
   sceneId?: ProductStorySceneId;
   showCompanions?: boolean;
+  /**
+   * The Teams and Editor side companions. Default true (the homepage opening
+   * story's full four-window scene). Set false to slim to just the CLI
+   * terminal + the main stella window — a clean "CLI → stella" two-window
+   * scene for the cli-mcp page.
+   */
+  sideWindows?: boolean;
 };
 
 type CliScenarioId = "search" | "template" | "case-law";
@@ -1435,6 +1444,25 @@ const CLI_STYLES = `
      the container edge. (The hero keeps its clip for drag bounds.) */
   .cli-story.cli-story-scene-only {
     overflow: visible;
+  }
+  /* Two-window mode (sideWindows=false): with the Teams and Editor companions
+     gone, widen and recentre the main window into the space they vacated and
+     enlarge the terminal a touch, so the CLI -> stella scene reads as an
+     intentional pair rather than a 63% window with empty flanks. Desktop only;
+     the mobile layout below already stacks main + terminal. */
+  @media (min-width: 640px) {
+    .cli-story-two-window .cli-main-window {
+      inset-inline-start: 15%;
+      top: 7%;
+      width: 71%;
+      height: 83%;
+    }
+    .cli-story-two-window .cli-window {
+      inset-inline-start: 6%;
+      bottom: 11%;
+      height: 34%;
+      width: clamp(13rem, 17%, 20rem);
+    }
   }
   @media (max-width: 639px) {
     .cli-main-window {

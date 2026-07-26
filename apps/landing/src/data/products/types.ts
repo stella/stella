@@ -15,6 +15,9 @@ export type ProductMedia =
       type: "story";
       sceneId: ProductStorySceneId;
       showCompanions?: boolean;
+      /** With companions shown, set false to drop the Teams + Editor side
+       *  windows and keep just the CLI terminal + main stella window. */
+      sideWindows?: boolean;
       /** "portrait" renders the full-page document capture (editor only)
        *  as a centred portrait window instead of the wide app scene. */
       variant?: "portrait";
@@ -89,7 +92,8 @@ export type ProductCapability = { title: string; body: string };
 export type ProductSection = {
   heading: string;
   bullets: readonly string[];
-  media: ProductMedia;
+  /** Optional: omit for a text-only section (heading + bullets, no screen). */
+  media?: ProductMedia;
   /** Frame recipe for this section's media frame; dormant, see `FrameVariant`. */
   frameVariant?: FrameVariant;
 };
