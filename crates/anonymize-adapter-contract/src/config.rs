@@ -462,6 +462,7 @@ fn deny_list_filters_from_binding(
     allow_list: lower_set(filters.allow_list),
     person_stopwords: lower_set(filters.person_stopwords),
     person_trailing_nouns: lower_set(filters.person_trailing_nouns),
+    address_trailing_nouns: lower_set(filters.address_trailing_nouns),
     address_stopwords: lower_set(filters.address_stopwords),
     address_jurisdiction_prefixes: lower_set(
       filters.address_jurisdiction_prefixes,

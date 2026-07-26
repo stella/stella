@@ -1,0 +1,63 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "remove",
+      "path": ["deny_list_data"]
+    },
+    {
+      "type": "remove",
+      "path": ["name_corpus_data"]
+    },
+    {
+      "type": "set",
+      "path": ["literal_patterns_from_deny_list_data"],
+      "value": false
+    },
+    {
+      "type": "set",
+      "path": ["slices", "deny_list", "end"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "start"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "end"],
+      "value": 174
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "start"],
+      "value": 174
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "end"],
+      "value": 174
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "start"],
+      "value": 174
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "end"],
+      "value": 3435
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "start"],
+      "value": 3435
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "end"],
+      "value": 3435
+    }
+  ]
+}

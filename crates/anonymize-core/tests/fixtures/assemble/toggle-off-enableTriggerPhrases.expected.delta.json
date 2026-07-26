@@ -1,0 +1,77 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "remove",
+      "path": ["trigger_data"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "cs"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "de"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "en"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "fr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "es"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "hu"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "ro"]
+    },
+    {
+      "type": "array",
+      "path": ["regex_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1407
+        }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 1407
+    }
+  ]
+}

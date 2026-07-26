@@ -78560,7 +78560,14 @@
         "voie",
         "waiver"
       ],
-      "person_trailing_nouns": ["association", "period", "reform"],
+      "person_trailing_nouns": [
+        "association",
+        "award",
+        "awards",
+        "description",
+        "period",
+        "reform"
+      ],
       "address_stopwords": [
         "agenda",
         "agent",
@@ -80481,7 +80488,8 @@
           "prefix_phrases": ["en", "firmado en"],
           "suffix_phrases": ["a", "el"]
         }
-      ]
+      ],
+      "address_trailing_nouns": ["day"]
     }
   },
   "false_positive_filters": {
@@ -90978,7 +90986,14 @@
       "voie",
       "waiver"
     ],
-    "person_trailing_nouns": ["association", "period", "reform"],
+    "person_trailing_nouns": [
+      "association",
+      "award",
+      "awards",
+      "description",
+      "period",
+      "reform"
+    ],
     "address_stopwords": [
       "agenda",
       "agent",
@@ -92899,7 +92914,8 @@
         "prefix_phrases": ["en", "firmado en"],
         "suffix_phrases": ["a", "el"]
       }
-    ]
+    ],
+    "address_trailing_nouns": ["day"]
   },
   "name_corpus_data": {
     "first_names": [

@@ -705,6 +705,7 @@ pub struct DenyListFilterData {
   pub allow_list: BTreeSet<String>,
   pub person_stopwords: BTreeSet<String>,
   pub person_trailing_nouns: BTreeSet<String>,
+  pub address_trailing_nouns: BTreeSet<String>,
   pub address_stopwords: BTreeSet<String>,
   pub address_jurisdiction_prefixes: BTreeSet<String>,
   pub street_types: BTreeSet<String>,

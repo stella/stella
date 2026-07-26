@@ -1,0 +1,10 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "set",
+      "path": ["confidence_boost"],
+      "value": false
+    }
+  ]
+}

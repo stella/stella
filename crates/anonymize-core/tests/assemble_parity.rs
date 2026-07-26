@@ -2,13 +2,15 @@
 //! `buildNativeStaticSearchBundle` output for every field of the native static
 //! config.
 //!
-//! Each `<name>.input.json` holds the `{ config, gazetteer }` inputs; each
-//! `<name>.expected.json` holds the full native static config in stable key
-//! order. This test compares every field (large arrays via a targeted
-//! first-difference report); the companion `assemble_digest` test then proves
-//! the assembled config is byte-identical end to end. Deliberate behavior
-//! changes require an independent source and explicit manual review, as
-//! documented alongside the fixtures.
+//! Each `<name>.input.json` holds the `{ config, gazetteer }` inputs. One full
+//! baseline plus per-fixture structural deltas reconstructs every frozen native
+//! static config. This test still compares every field (large arrays via a
+//! targeted first-difference report); the companion `assemble_digest` test then
+//! proves the assembled config is byte-identical end to end. Deliberate
+//! behavior changes require an independent source and explicit manual review,
+//! as documented alongside the fixtures.
+
+pub mod assemble_support;
 
 use std::collections::HashSet;
 use std::fs;
@@ -20,6 +22,8 @@ use stella_anonymize_adapter_contract::{
   BindingPreparedSearchConfig, assemble_static_search_config,
 };
 use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
+
+use assemble_support::read_expected_value;
 
 #[derive(Deserialize)]
 struct FixtureInput {
@@ -48,17 +52,6 @@ fn collect_input_paths(dir: &Path) -> Result<Vec<PathBuf>, String> {
   }
   paths.sort();
   Ok(paths)
-}
-
-fn expected_path_for(input_path: &Path) -> Result<PathBuf, String> {
-  let file_name = input_path
-    .file_name()
-    .and_then(|name| name.to_str())
-    .ok_or_else(|| "non-utf8 fixture name".to_string())?;
-  let base = file_name
-    .strip_suffix(".input.json")
-    .ok_or_else(|| format!("unexpected fixture name {file_name}"))?;
-  Ok(input_path.with_file_name(format!("{base}.expected.json")))
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
@@ -401,7 +394,7 @@ fn compare_filters(
   match (got, want) {
     (None, None) => Ok(()),
     (Some(got), Some(want)) => {
-      let fields: [(&str, &Vec<String>, &Vec<String>); 17] = [
+      let fields: [(&str, &Vec<String>, &Vec<String>); 18] = [
         ("stopwords", &got.stopwords, &want.stopwords),
         ("allow_list", &got.allow_list, &want.allow_list),
         (
@@ -413,6 +406,11 @@ fn compare_filters(
           "person_trailing_nouns",
           &got.person_trailing_nouns,
           &want.person_trailing_nouns,
+        ),
+        (
+          "address_trailing_nouns",
+          &got.address_trailing_nouns,
+          &want.address_trailing_nouns,
         ),
         (
           "address_stopwords",
@@ -712,7 +710,10 @@ fn check_fixture(input_path: &Path) -> Result<(), String> {
     .unwrap_or("<unknown>");
   let input: FixtureInput = read_json(input_path)?;
   let expected: BindingPreparedSearchConfig =
-    read_json(&expected_path_for(input_path)?)?;
+    serde_json::from_value(read_expected_value(&fixtures_dir(), name)?)
+      .map_err(|error| {
+        format!("{name}: parse reconstructed config: {error}")
+      })?;
   let actual = assemble_static_search_config(
     &input.config,
     input.config.dictionaries.as_ref(),

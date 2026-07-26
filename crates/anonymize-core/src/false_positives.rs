@@ -186,7 +186,10 @@ fn should_reject_entity(
       return Ok(true);
     }
     if entity.label == PERSON_LABEL
-      && ends_in_person_trailing_noun(entity, filters)
+      && ends_in_configured_trailing_noun(
+        entity,
+        &filters.person_trailing_nouns,
+      )
     {
       return Ok(true);
     }
@@ -219,6 +222,13 @@ fn should_reject_address(
 ) -> bool {
   let text = entity.text.trim();
   if filters.is_some_and(|filters| is_signing_place_address(text, filters)) {
+    return true;
+  }
+  if entity.source == DetectionSource::DenyList
+    && filters.is_some_and(|filters| {
+      ends_in_configured_trailing_noun(entity, &filters.address_trailing_nouns)
+    })
+  {
     return true;
   }
   // Street-type words inside statute titles (e.g. Dodd-Frank Wall Street
@@ -410,9 +420,9 @@ fn is_single_rejected_token(text: &str, rejected: &BTreeSet<String>) -> bool {
     && rejected.contains(&token.to_lowercase())
 }
 
-fn ends_in_person_trailing_noun(
+fn ends_in_configured_trailing_noun(
   entity: &PipelineEntity,
-  filters: &DenyListFilterData,
+  trailing_nouns: &BTreeSet<String>,
 ) -> bool {
   if matches!(
     entity.source_detail,
@@ -431,7 +441,7 @@ fn ends_in_person_trailing_noun(
   let Some(last) = words.next_back() else {
     return false;
   };
-  filters.person_trailing_nouns.contains(&last.to_lowercase())
+  trailing_nouns.contains(&last.to_lowercase())
 }
 
 fn role_exact_match(
@@ -1729,6 +1739,47 @@ mod tests {
   }
 
   #[test]
+  fn deny_list_addresses_respect_address_only_trailing_nouns() {
+    let text = "Independence Day";
+    let filters = DenyListFilterData {
+      address_trailing_nouns: set(["day"]),
+      ..DenyListFilterData::default()
+    };
+    let rejected = filter_entity_false_positives(
+      vec![entity(text, text, ADDRESS_LABEL, DetectionSource::DenyList)],
+      text,
+      Some(&filters),
+    )
+    .unwrap();
+    let kept_without_english_terms = filter_entity_false_positives(
+      vec![entity(text, text, ADDRESS_LABEL, DetectionSource::DenyList)],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(rejected.is_empty());
+    assert_eq!(kept_without_english_terms.len(), 1);
+  }
+
+  #[test]
+  fn keeps_people_who_share_an_address_trailing_noun() {
+    let text = "Dorothy Day";
+    let filters = DenyListFilterData {
+      address_trailing_nouns: set(["day"]),
+      ..DenyListFilterData::default()
+    };
+    let entities = filter_entity_false_positives(
+      vec![entity(text, text, PERSON_LABEL, DetectionSource::DenyList)],
+      text,
+      Some(&filters),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+  }
+
+  #[test]
   fn keeps_trigger_address_with_street_component() {
     let filters = DenyListFilterData {
       street_types: set(["street"]),
@@ -1784,6 +1835,23 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_person_spans_ending_in_defined_term_heads() {
+    let filters = DenyListFilterData {
+      person_trailing_nouns: set(["description", "award", "awards"]),
+      ..DenyListFilterData::default()
+    };
+    for text in ["Job Description", "Sales Award", "Sales Awards"] {
+      let entities = filter_entity_false_positives(
+        vec![entity(text, text, PERSON_LABEL, DetectionSource::DenyList)],
+        text,
+        Some(&filters),
+      )
+      .unwrap();
+      assert!(entities.is_empty(), "{text}");
+    }
   }
 
   #[test]

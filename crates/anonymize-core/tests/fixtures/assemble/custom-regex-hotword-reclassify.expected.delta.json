@@ -1,0 +1,165 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "remove",
+      "path": ["address_context_data"]
+    },
+    {
+      "type": "remove",
+      "path": ["address_seed_data"]
+    },
+    {
+      "type": "remove",
+      "path": ["country_data"]
+    },
+    {
+      "type": "array",
+      "path": ["custom_regex_patterns"],
+      "segments": [
+        {
+          "type": "values",
+          "values": [
+            {
+              "kind": "regex",
+              "pattern": "DOB-\\d+"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["allowed_labels"],
+      "segments": [
+        {
+          "type": "values",
+          "values": ["date of birth"]
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["custom_regex_meta"],
+      "segments": [
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "date",
+              "score": 0.9,
+              "source_detail": "custom-regex"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["regex_meta"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 13,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 46,
+          "end": 47
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["regex_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 13,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 46,
+          "end": 47
+        },
+        {
+          "type": "copy",
+          "start": 118,
+          "end": 3176
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["literal_patterns"],
+      "segments": []
+    },
+    {
+      "type": "set",
+      "path": ["slices", "regex", "end"],
+      "value": 3
+    },
+    {
+      "type": "set",
+      "path": ["slices", "custom_regex", "end"],
+      "value": 1
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "start"],
+      "value": 3
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "end"],
+      "value": 1292
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 1292
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 3061
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "end"],
+      "value": 3244
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "start"],
+      "value": 3244
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "end"],
+      "value": 3244
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "start"],
+      "value": 3244
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "end"],
+      "value": 3244
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "start"],
+      "value": 3244
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "end"],
+      "value": 3244
+    }
+  ]
+}

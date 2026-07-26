@@ -1,0 +1,50 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "remove",
+      "path": ["date_data"]
+    },
+    {
+      "type": "array",
+      "path": ["regex_meta"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["regex_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 118,
+          "end": 3176
+        }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["slices", "regex", "end"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "start"],
+      "value": 0
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "end"],
+      "value": 1289
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 1289
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 3058
+    }
+  ]
+}

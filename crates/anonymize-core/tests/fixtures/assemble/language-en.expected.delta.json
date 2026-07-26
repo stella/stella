@@ -1,0 +1,1300 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "array",
+      "path": ["signature_data", "form_field_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 14
+        }
+      ]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "cs"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "da"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "de"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "es"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "et"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "fr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "hr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "hu"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "id"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "lt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "lv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "nb"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "nn"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "pl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "pt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "ro"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "sv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "tr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "da"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "de"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "es"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "et"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "fr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "hr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "hu"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "id"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "nb"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "nn"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "pl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "pt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "ro"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "sv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "tr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "cs"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "de"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "fr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "es"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "hu"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "ro"]
+    },
+    {
+      "type": "array",
+      "path": ["zone_data", "signing_clauses"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 4,
+          "end": 5
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "non_ascii_name_short_suffixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 8,
+          "end": 9
+        },
+        {
+          "type": "copy",
+          "start": 17,
+          "end": 18
+        },
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 8
+        },
+        {
+          "type": "copy",
+          "start": 3,
+          "end": 4
+        },
+        {
+          "type": "copy",
+          "start": 39,
+          "end": 43
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "role_heads"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 59,
+          "end": 84
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["regex_meta"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 111
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["regex_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 110
+        },
+        {
+          "type": "copy",
+          "start": 114,
+          "end": 115
+        },
+        {
+          "type": "copy",
+          "start": 118,
+          "end": 1407
+        },
+        {
+          "type": "copy",
+          "start": 1815,
+          "end": 1907
+        },
+        {
+          "type": "copy",
+          "start": 3109,
+          "end": 3150
+        },
+        {
+          "type": "copy",
+          "start": 3161,
+          "end": 3162
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "rules"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 408,
+          "end": 449
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "trigger": "registered number",
+              "label": "registration number",
+              "strategy": {
+                "type": "company-id-value"
+              },
+              "validations": [
+                {
+                  "type": "matches-pattern",
+                  "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$"
+                }
+              ],
+              "include_trigger": false
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 450,
+          "end": 457
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "trigger": "registered number:",
+              "label": "registration number",
+              "strategy": {
+                "type": "company-id-value"
+              },
+              "validations": [
+                {
+                  "type": "matches-pattern",
+                  "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$"
+                }
+              ],
+              "include_trigger": false
+            },
+            {
+              "trigger": "registered number: ",
+              "label": "registration number",
+              "strategy": {
+                "type": "company-id-value"
+              },
+              "validations": [
+                {
+                  "type": "matches-pattern",
+                  "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$"
+                }
+              ],
+              "include_trigger": false
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 459,
+          "end": 500
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "trigger": "SWIFT code",
+              "label": "bank account number",
+              "strategy": {
+                "type": "n-words",
+                "count": 1
+              },
+              "validations": [
+                {
+                  "type": "matches-pattern",
+                  "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$"
+                }
+              ],
+              "include_trigger": false
+            },
+            {
+              "trigger": "BIC code",
+              "label": "bank account number",
+              "strategy": {
+                "type": "n-words",
+                "count": 1
+              },
+              "validations": [
+                {
+                  "type": "matches-pattern",
+                  "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$"
+                }
+              ],
+              "include_trigger": false
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 1704,
+          "end": 1706
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "trigger": "SWIFT code:",
+              "label": "bank account number",
+              "strategy": {
+                "type": "n-words",
+                "count": 1
+              },
+              "validations": [
+                {
+                  "type": "matches-pattern",
+                  "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$"
+                }
+              ],
+              "include_trigger": false
+            },
+            {
+              "trigger": "BIC code:",
+              "label": "bank account number",
+              "strategy": {
+                "type": "n-words",
+                "count": 1
+              },
+              "validations": [
+                {
+                  "type": "matches-pattern",
+                  "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$"
+                }
+              ],
+              "include_trigger": false
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 1708,
+          "end": 1743
+        },
+        {
+          "type": "copy",
+          "start": 1754,
+          "end": 1755
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "party_position_terms"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 59,
+          "end": 84
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "number_markers"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 5
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "number_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 7
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "person_field_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 14
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["coreference_data", "definition_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 4,
+          "end": 6
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["coreference_data", "organization_determiners"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 6,
+          "end": 7
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "label_indices"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3179
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "originals"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3179
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "source_indices"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3179
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "title_tokens"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 28
+        },
+        {
+          "type": "copy",
+          "start": 6,
+          "end": 7
+        },
+        {
+          "type": "copy",
+          "start": 13,
+          "end": 14
+        },
+        {
+          "type": "copy",
+          "start": 95,
+          "end": 185
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "generic_roles"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 227
+        },
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 94,
+          "end": 95
+        },
+        {
+          "type": "copy",
+          "start": 104,
+          "end": 105
+        },
+        {
+          "type": "copy",
+          "start": 289,
+          "end": 311
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "trailing_address_word_exclusions"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 8,
+          "end": 12
+        },
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 19
+        },
+        {
+          "type": "copy",
+          "start": 20,
+          "end": 21
+        },
+        {
+          "type": "copy",
+          "start": 22,
+          "end": 31
+        },
+        {
+          "type": "copy",
+          "start": 34,
+          "end": 38
+        },
+        {
+          "type": "copy",
+          "start": 46,
+          "end": 48
+        },
+        {
+          "type": "copy",
+          "start": 51,
+          "end": 52
+        },
+        {
+          "type": "copy",
+          "start": 56,
+          "end": 58
+        },
+        {
+          "type": "copy",
+          "start": 67,
+          "end": 68
+        },
+        {
+          "type": "copy",
+          "start": 69,
+          "end": 71
+        },
+        {
+          "type": "copy",
+          "start": 89,
+          "end": 92
+        },
+        {
+          "type": "copy",
+          "start": 96,
+          "end": 100
+        },
+        {
+          "type": "copy",
+          "start": 103,
+          "end": 104
+        },
+        {
+          "type": "copy",
+          "start": 116,
+          "end": 117
+        },
+        {
+          "type": "copy",
+          "start": 123,
+          "end": 126
+        },
+        {
+          "type": "copy",
+          "start": 132,
+          "end": 136
+        },
+        {
+          "type": "copy",
+          "start": 145,
+          "end": 147
+        },
+        {
+          "type": "copy",
+          "start": 162,
+          "end": 163
+        },
+        {
+          "type": "copy",
+          "start": 172,
+          "end": 173
+        },
+        {
+          "type": "copy",
+          "start": 177,
+          "end": 178
+        },
+        {
+          "type": "copy",
+          "start": 181,
+          "end": 182
+        },
+        {
+          "type": "copy",
+          "start": 183,
+          "end": 184
+        },
+        {
+          "type": "copy",
+          "start": 196,
+          "end": 197
+        },
+        {
+          "type": "copy",
+          "start": 199,
+          "end": 210
+        },
+        {
+          "type": "copy",
+          "start": 215,
+          "end": 216
+        },
+        {
+          "type": "copy",
+          "start": 234,
+          "end": 237
+        },
+        {
+          "type": "copy",
+          "start": 248,
+          "end": 250
+        },
+        {
+          "type": "copy",
+          "start": 270,
+          "end": 271
+        },
+        {
+          "type": "copy",
+          "start": 273,
+          "end": 274
+        },
+        {
+          "type": "copy",
+          "start": 281,
+          "end": 282
+        },
+        {
+          "type": "copy",
+          "start": 286,
+          "end": 288
+        },
+        {
+          "type": "copy",
+          "start": 289,
+          "end": 290
+        },
+        {
+          "type": "copy",
+          "start": 344,
+          "end": 345
+        },
+        {
+          "type": "copy",
+          "start": 346,
+          "end": 348
+        },
+        {
+          "type": "copy",
+          "start": 349,
+          "end": 353
+        },
+        {
+          "type": "copy",
+          "start": 356,
+          "end": 358
+        },
+        {
+          "type": "copy",
+          "start": 359,
+          "end": 362
+        },
+        {
+          "type": "copy",
+          "start": 363,
+          "end": 367
+        },
+        {
+          "type": "copy",
+          "start": 379,
+          "end": 380
+        },
+        {
+          "type": "copy",
+          "start": 392,
+          "end": 403
+        },
+        {
+          "type": "copy",
+          "start": 405,
+          "end": 406
+        },
+        {
+          "type": "copy",
+          "start": 418,
+          "end": 419
+        },
+        {
+          "type": "copy",
+          "start": 426,
+          "end": 429
+        },
+        {
+          "type": "copy",
+          "start": 437,
+          "end": 439
+        },
+        {
+          "type": "copy",
+          "start": 472,
+          "end": 473
+        },
+        {
+          "type": "copy",
+          "start": 489,
+          "end": 491
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "title_tokens"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 28
+        },
+        {
+          "type": "copy",
+          "start": 6,
+          "end": 7
+        },
+        {
+          "type": "copy",
+          "start": 13,
+          "end": 14
+        },
+        {
+          "type": "copy",
+          "start": 95,
+          "end": 185
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "generic_roles"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 227
+        },
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 94,
+          "end": 95
+        },
+        {
+          "type": "copy",
+          "start": 104,
+          "end": 105
+        },
+        {
+          "type": "copy",
+          "start": 289,
+          "end": 311
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "trailing_address_word_exclusions"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 8,
+          "end": 12
+        },
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 19
+        },
+        {
+          "type": "copy",
+          "start": 20,
+          "end": 21
+        },
+        {
+          "type": "copy",
+          "start": 22,
+          "end": 31
+        },
+        {
+          "type": "copy",
+          "start": 34,
+          "end": 38
+        },
+        {
+          "type": "copy",
+          "start": 46,
+          "end": 48
+        },
+        {
+          "type": "copy",
+          "start": 51,
+          "end": 52
+        },
+        {
+          "type": "copy",
+          "start": 56,
+          "end": 58
+        },
+        {
+          "type": "copy",
+          "start": 67,
+          "end": 68
+        },
+        {
+          "type": "copy",
+          "start": 69,
+          "end": 71
+        },
+        {
+          "type": "copy",
+          "start": 89,
+          "end": 92
+        },
+        {
+          "type": "copy",
+          "start": 96,
+          "end": 100
+        },
+        {
+          "type": "copy",
+          "start": 103,
+          "end": 104
+        },
+        {
+          "type": "copy",
+          "start": 116,
+          "end": 117
+        },
+        {
+          "type": "copy",
+          "start": 123,
+          "end": 126
+        },
+        {
+          "type": "copy",
+          "start": 132,
+          "end": 136
+        },
+        {
+          "type": "copy",
+          "start": 145,
+          "end": 147
+        },
+        {
+          "type": "copy",
+          "start": 162,
+          "end": 163
+        },
+        {
+          "type": "copy",
+          "start": 172,
+          "end": 173
+        },
+        {
+          "type": "copy",
+          "start": 177,
+          "end": 178
+        },
+        {
+          "type": "copy",
+          "start": 181,
+          "end": 182
+        },
+        {
+          "type": "copy",
+          "start": 183,
+          "end": 184
+        },
+        {
+          "type": "copy",
+          "start": 196,
+          "end": 197
+        },
+        {
+          "type": "copy",
+          "start": 199,
+          "end": 210
+        },
+        {
+          "type": "copy",
+          "start": 215,
+          "end": 216
+        },
+        {
+          "type": "copy",
+          "start": 234,
+          "end": 237
+        },
+        {
+          "type": "copy",
+          "start": 248,
+          "end": 250
+        },
+        {
+          "type": "copy",
+          "start": 270,
+          "end": 271
+        },
+        {
+          "type": "copy",
+          "start": 273,
+          "end": 274
+        },
+        {
+          "type": "copy",
+          "start": 281,
+          "end": 282
+        },
+        {
+          "type": "copy",
+          "start": 286,
+          "end": 288
+        },
+        {
+          "type": "copy",
+          "start": 289,
+          "end": 290
+        },
+        {
+          "type": "copy",
+          "start": 344,
+          "end": 345
+        },
+        {
+          "type": "copy",
+          "start": 346,
+          "end": 348
+        },
+        {
+          "type": "copy",
+          "start": 349,
+          "end": 353
+        },
+        {
+          "type": "copy",
+          "start": 356,
+          "end": 358
+        },
+        {
+          "type": "copy",
+          "start": 359,
+          "end": 362
+        },
+        {
+          "type": "copy",
+          "start": 363,
+          "end": 367
+        },
+        {
+          "type": "copy",
+          "start": 379,
+          "end": 380
+        },
+        {
+          "type": "copy",
+          "start": 392,
+          "end": 403
+        },
+        {
+          "type": "copy",
+          "start": 405,
+          "end": 406
+        },
+        {
+          "type": "copy",
+          "start": 418,
+          "end": 419
+        },
+        {
+          "type": "copy",
+          "start": 426,
+          "end": 429
+        },
+        {
+          "type": "copy",
+          "start": 437,
+          "end": 439
+        },
+        {
+          "type": "copy",
+          "start": 472,
+          "end": 473
+        },
+        {
+          "type": "copy",
+          "start": 489,
+          "end": 491
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "title_tokens"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 28
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "title_abbreviations"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 92
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "non_western_names"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "ja_suffixes"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "arabic_connectors"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "relation_connectors"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "hyphenated_prefixes"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "cjk_non_person_terms"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "cjk_surname_starters"],
+      "segments": []
+    },
+    {
+      "type": "set",
+      "path": ["slices", "regex", "end"],
+      "value": 111
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "start"],
+      "value": 111
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "end"],
+      "value": 1400
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 1400
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 1534
+    },
+    {
+      "type": "set",
+      "path": ["slices", "deny_list", "end"],
+      "value": 3179
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "start"],
+      "value": 3179
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "end"],
+      "value": 3353
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "start"],
+      "value": 3353
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "end"],
+      "value": 3353
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "start"],
+      "value": 3353
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "end"],
+      "value": 6614
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "start"],
+      "value": 6614
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "end"],
+      "value": 6614
+    }
+  ]
+}

@@ -18,6 +18,7 @@ use stella_anonymize_core::assemble::{
 };
 
 use super::js::{js_lowercase, lower_sorted_unique, normalize_for_search};
+use super::language::{normalize_language_key, selected_language_keys};
 use super::names::{NameCorpus, expand_name_declensions};
 use super::{address, legal_forms};
 use crate::{
@@ -58,6 +59,33 @@ fn collect_language_word_values(data: &OrderedMap<Value>) -> Vec<String> {
 fn language_word_file(name: &str) -> Result<Vec<String>, AssembleError> {
   let data: OrderedMap<Value> = parse_ordered_data_file(name)?;
   Ok(collect_language_word_values(&data))
+}
+
+fn scoped_language_word_file(
+  name: &str,
+  languages: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let data: OrderedMap<Value> = parse_ordered_data_file(name)?;
+  let Some(selected) = selected_language_keys(languages) else {
+    return Ok(collect_language_word_values(&data));
+  };
+
+  let mut words = Vec::new();
+  append_word_array(
+    &mut words,
+    data
+      .iter()
+      .find(|(key, _)| key == "words")
+      .map(|(_, value)| value),
+  );
+  for (key, value) in &data {
+    if key.starts_with('_') || !selected.contains(&normalize_language_key(key))
+    {
+      continue;
+    }
+    append_word_array(&mut words, Some(value));
+  }
+  Ok(lower_sorted_unique(words))
 }
 
 /// `languageWordValues(record)`: `collectLanguageWordValues` of a sub-record,
@@ -159,8 +187,14 @@ pub(super) fn build_deny_list_filter_data(
 
   let person_stopwords =
     set_ordered(language_word_file("person-stopwords.json")?);
-  let person_trailing_nouns =
-    set_ordered(language_word_file("defined-term-heads.json")?);
+  let person_trailing_nouns = set_ordered(scoped_language_word_file(
+    "defined-term-heads.json",
+    content_languages,
+  )?);
+  let address_trailing_nouns = set_ordered(scoped_language_word_file(
+    "address-trailing-nouns.json",
+    content_languages,
+  )?);
 
   let address_stopwords_file: WordsFile =
     parse_data_file("address-stopwords.json")?;
@@ -200,6 +234,7 @@ pub(super) fn build_deny_list_filter_data(
     allow_list,
     person_stopwords,
     person_trailing_nouns,
+    address_trailing_nouns,
     address_stopwords,
     address_jurisdiction_prefixes,
     street_types: street_type_filter_values()?,
@@ -1284,6 +1319,33 @@ mod tests {
     assert!(
       filters.title_tokens.contains(&String::from("m")),
       "title abbreviations should be unioned into the quote filter"
+    );
+  }
+
+  #[test]
+  fn defined_term_heads_follow_content_language_scope() {
+    let corpus = test_corpus();
+    let english =
+      build_deny_list_filter_data(&corpus, Some(&[String::from("en-US")]))
+        .expect("English deny-list filter data should assemble");
+    let japanese =
+      build_deny_list_filter_data(&corpus, Some(&[String::from("ja")]))
+        .expect("Japanese deny-list filter data should assemble");
+
+    assert!(
+      english
+        .person_trailing_nouns
+        .contains(&String::from("award"))
+    );
+    assert!(
+      english
+        .address_trailing_nouns
+        .contains(&String::from("day"))
+    );
+    assert!(
+      japanese.person_trailing_nouns.is_empty()
+        && japanese.address_trailing_nouns.is_empty(),
+      "English trailing nouns must not leak into Japanese packages"
     );
   }
 

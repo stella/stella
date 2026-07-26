@@ -67,6 +67,7 @@ export type NativeDenyListFilterData = {
   allow_list: string[];
   person_stopwords: string[];
   person_trailing_nouns: string[];
+  address_trailing_nouns: string[];
   address_stopwords: string[];
   address_jurisdiction_prefixes: string[];
   street_types: string[];

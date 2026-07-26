@@ -1,0 +1,41 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "array",
+      "path": ["custom_regex_patterns"],
+      "segments": [
+        {
+          "type": "values",
+          "values": [
+            {
+              "kind": "regex",
+              "pattern": "\\bACME-\\d+\\b"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["custom_regex_meta"],
+      "segments": [
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "case number",
+              "score": 0.9,
+              "source_detail": "custom-regex"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["slices", "custom_regex", "end"],
+      "value": 1
+    }
+  ]
+}

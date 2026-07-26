@@ -1,0 +1,9 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "remove",
+      "path": ["hotword_data"]
+    }
+  ]
+}

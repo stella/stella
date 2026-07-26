@@ -1,0 +1,223 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "remove",
+      "path": ["country_data"]
+    },
+    {
+      "type": "remove",
+      "path": ["trigger_data"]
+    },
+    {
+      "type": "array",
+      "path": ["allowed_labels"],
+      "segments": [
+        {
+          "type": "values",
+          "values": ["date", "address", "monetary amount"]
+        }
+      ]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "cs"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "de"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "en"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "fr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "es"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "hu"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "ro"]
+    },
+    {
+      "type": "array",
+      "path": ["regex_meta"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 13,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 18,
+          "end": 20
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        },
+        {
+          "type": "copy",
+          "start": 46,
+          "end": 49
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["regex_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 13,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 18,
+          "end": 20
+        },
+        {
+          "type": "copy",
+          "start": 44,
+          "end": 45
+        },
+        {
+          "type": "copy",
+          "start": 46,
+          "end": 49
+        },
+        {
+          "type": "copy",
+          "start": 110,
+          "end": 1407
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["literal_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 174
+        }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["slices", "regex", "end"],
+      "value": 16
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "start"],
+      "value": 16
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "end"],
+      "value": 1305
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 1305
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 1305
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "end"],
+      "value": 3418
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "start"],
+      "value": 3418
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "end"],
+      "value": 3418
+    }
+  ]
+}

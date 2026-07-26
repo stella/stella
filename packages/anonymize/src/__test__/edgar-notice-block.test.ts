@@ -14,6 +14,8 @@
  *   Skadden (UK) LLP counsel block.
  * - Utz Brands voting agreement (2026-07-22): notice-block counsel
  *   given names missing from the scoped English first-name corpus.
+ * - Kingfish Holding employment agreement (2026-07-24): job-description
+ *   heading person FP and Independence Day city-list address FP.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -538,6 +540,42 @@ Denise Haeggberg before the close of business.`;
         (entity) =>
           entity.text ===
           "123 Main Street, Boston, Massachusetts 02110, Suite A or B",
+      ),
+    ).toBe(true);
+  });
+
+  test("job description exhibit heading is not a person", async () => {
+    const text = `Exhibit B
+
+Chief Operating Officer Job Description
+
+Manage daily operations of the scrap yard.`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Job Description",
+      ),
+    ).toBe(false);
+  });
+
+  test("independence day holiday is not an address", async () => {
+    const text =
+      "Company-observed holidays consist of New Years Day, Memorial Day, Independence Day, Labor Day, Thanksgiving Day, Christmas Eve, and Christmas Day.";
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" && entity.text === "Independence Day",
+      ),
+    ).toBe(false);
+  });
+
+  test("day surname remains a person", async () => {
+    const entities = await detect("Dorothy Day signed the agreement.");
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Dorothy Day",
       ),
     ).toBe(true);
   });

@@ -1,12 +1,15 @@
 # Assemble parity fixtures (frozen oracles)
 
 These fixtures are the permanent specification for the Rust static-search config
-assembler (`crates/anonymize-adapter-contract/src/assemble`). Each case is a
-triple:
+assembler (`crates/anonymize-adapter-contract/src/assemble`). Each case has:
 
 - `<name>.input.json` — the `{ config, gazetteer }` inputs.
-- `<name>.expected.json` — the assembled `BindingPreparedSearchConfig` the Rust
-  assembler must reproduce (checked by `tests/assemble_parity.rs`).
+- `baseline-all-on.expected.json` — the one complete assembled
+  `BindingPreparedSearchConfig` oracle.
+- `<name>.expected.delta.json` — the structural delta from the baseline for
+  every other fixture. Object changes set or remove individual fields; array
+  changes copy unchanged baseline ranges and carry only new values. Tests
+  reconstruct and compare the complete config.
 - `manifest.json` — a per-fixture `packageDigest` (sha256 of the prepared
   package bytes), checked by `tests/assemble_digest.rs`.
 

@@ -1,14 +1,16 @@
-//! End-to-end digest gate: the Rust assembler, fed through the same
-//! prepare/package path the native binding uses, must reproduce the SHA-256
-//! package digest committed in `manifest.json`.
+//! End-to-end digest gate: each reconstructed frozen config, fed through the
+//! same prepare/package path the native binding uses, must reproduce the
+//! SHA-256 package digest committed in `manifest.json`.
 //!
-//! For each fixture the test assembles a [`BindingPreparedSearchConfig`] from
-//! the committed inputs, converts it to a core `PreparedEngineConfig`, prepares
-//! the artifacts, serializes the uncompressed core package, and hashes the
-//! bytes. A digest match proves the assembled config is byte-identical end to
-//! end, not just field-wise. Deliberate behavior changes are refreshed through
-//! the independently reviewed frozen manifest documented alongside the
-//! fixtures.
+//! `assemble_parity` independently proves that the assembler reproduces every
+//! reconstructed [`BindingPreparedSearchConfig`]. This companion test converts
+//! that oracle to a core `PreparedEngineConfig`, prepares the artifacts,
+//! serializes the uncompressed core package, and hashes the bytes. Together the
+//! tests prove byte identity without preparing every package twice. Deliberate
+//! behavior changes are refreshed through the independently reviewed frozen
+//! manifest documented alongside the fixtures.
+
+pub mod assemble_support;
 
 use std::fmt::Write as _;
 use std::fs;
@@ -17,18 +19,12 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use stella_anonymize_adapter_contract::{
-  BindingPreparedSearchConfig, assemble_static_search_config,
-  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
+  BindingPreparedSearchConfig, prepared_search_config_from_binding,
+  prepared_search_core_package_to_bytes,
 };
 use stella_anonymize_core::PreparedEngine;
-use stella_anonymize_core::assemble::{GazetteerEntry, PipelineConfig};
 
-#[derive(Deserialize)]
-struct FixtureInput {
-  config: PipelineConfig,
-  #[serde(default)]
-  gazetteer: Vec<GazetteerEntry>,
-}
+use assemble_support::read_expected_value;
 
 #[derive(Deserialize)]
 struct Manifest {
@@ -53,16 +49,9 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
     .map_err(|error| format!("parse {}: {error}", path.display()))
 }
 
-/// Assembles the config and returns the SHA-256 hex digest of the uncompressed
-/// core package bytes.
-fn package_digest(input: &FixtureInput) -> Result<String, String> {
-  let binding: BindingPreparedSearchConfig = assemble_static_search_config(
-    &input.config,
-    input.config.dictionaries.as_ref(),
-    &input.gazetteer,
-  )
-  .map_err(|error| format!("assemble failed: {error}"))?;
-
+fn frozen_package_digest(
+  binding: BindingPreparedSearchConfig,
+) -> Result<String, String> {
   let core_config = prepared_search_config_from_binding(binding)
     .map_err(|error| format!("config_from_binding failed: {error}"))?;
   let artifacts = PreparedEngine::prepare_artifacts(core_config.clone())
@@ -96,19 +85,28 @@ fn assemble_package_digests_match_manifest() -> Result<(), String> {
       failures.push(format!("{}: manifest digest is null", fixture.name));
       continue;
     };
-    let input: FixtureInput =
-      match read_json(&dir.join(format!("{}.input.json", fixture.name))) {
-        Ok(input) => input,
+    let expected_binding: BindingPreparedSearchConfig =
+      match read_expected_value(&dir, &fixture.name).and_then(|value| {
+        serde_json::from_value(value)
+          .map_err(|error| format!("parse reconstructed config: {error}"))
+      }) {
+        Ok(binding) => binding,
         Err(error) => {
           failures.push(format!("{}: {error}", fixture.name));
           continue;
         }
       };
-    match package_digest(&input) {
-      Ok(actual) if &actual == expected => checked += 1,
-      Ok(actual) => failures
-        .push(format!("{}: digest {actual} != {expected}", fixture.name)),
-      Err(error) => failures.push(format!("{}: {error}", fixture.name)),
+    match frozen_package_digest(expected_binding) {
+      Ok(oracle_digest) if &oracle_digest == expected => checked += 1,
+      Ok(oracle_digest) => {
+        failures.push(format!(
+          "{}: frozen oracle digest {oracle_digest} != {expected}",
+          fixture.name
+        ));
+      }
+      Err(error) => {
+        failures.push(format!("{}: frozen oracle: {error}", fixture.name));
+      }
     }
   }
 

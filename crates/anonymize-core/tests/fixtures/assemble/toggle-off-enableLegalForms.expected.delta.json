@@ -1,0 +1,105 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "array",
+      "path": ["regex_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 7
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "kind": "regex",
+              "pattern": "\\b(?:[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}|0\\d{2,4}(?:[^\\S\\n]|[./\\-])\\d{5,8})(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b",
+              "case_insensitive": null,
+              "lazy": null,
+              "prefilter_any": null,
+              "prefilter_case_insensitive": null,
+              "prefilter_window_bytes": null,
+              "prepared_artifact_policy": null
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 8,
+          "end": 107
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "kind": "regex",
+              "pattern": "\\bECLI:[A-Z]{2}:[A-Za-z0-9.]+:\\d{4}:[A-Za-z0-9._]+\\b",
+              "case_insensitive": null,
+              "lazy": true,
+              "prefilter_any": ["ECLI:"],
+              "prefilter_case_insensitive": false,
+              "prefilter_window_bytes": null,
+              "prepared_artifact_policy": null
+            },
+            {
+              "kind": "regex",
+              "pattern": "\\[\\d{4}\\][^\\S\\n]+(?:UKSC|UKPC|EWCA|EWHC|UKUT|UKFTT|EWFC|EWCOP)(?:[^\\S\\n]+(?:Civ|Crim|Ch|Fam|Pat|QB|KB|TCC|Comm))?[^\\S\\n]+\\d+\\b",
+              "case_insensitive": null,
+              "lazy": true,
+              "prefilter_any": [
+                "UKSC",
+                "UKPC",
+                "EWCA",
+                "EWHC",
+                "UKUT",
+                "UKFTT",
+                "EWFC",
+                "EWCOP"
+              ],
+              "prefilter_case_insensitive": false,
+              "prefilter_window_bytes": null,
+              "prepared_artifact_policy": null
+            },
+            {
+              "kind": "regex",
+              "pattern": "\\b\\d{1,2}:\\d{2}-(?:[cC][vV]|[cC][rR]|[mM][dD]|[mM][cC]|[mM][jJ])-\\d{1,6}\\b",
+              "case_insensitive": null,
+              "lazy": null,
+              "prefilter_any": null,
+              "prefilter_case_insensitive": null,
+              "prefilter_window_bytes": null,
+              "prepared_artifact_policy": null
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 110,
+          "end": 118
+        },
+        {
+          "type": "copy",
+          "start": 1407,
+          "end": 3176
+        }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "end"],
+      "value": 118
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 118
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 1887
+    }
+  ]
+}

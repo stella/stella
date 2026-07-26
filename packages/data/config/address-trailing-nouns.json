@@ -1,0 +1,4 @@
+{
+  "_comment": "Head nouns that identify capitalized non-address phrases emitted by address deny lists. Lowercased and organized per language so one language cannot change another language's behavior.",
+  "en": ["day"]
+}

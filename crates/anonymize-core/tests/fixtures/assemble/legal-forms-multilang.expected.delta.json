@@ -1,0 +1,1897 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "array",
+      "path": ["signature_data", "form_field_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "type": "copy",
+          "start": 24,
+          "end": 25
+        },
+        {
+          "type": "copy",
+          "start": 18,
+          "end": 19
+        },
+        {
+          "type": "copy",
+          "start": 25,
+          "end": 35
+        },
+        {
+          "type": "copy",
+          "start": 39,
+          "end": 41
+        },
+        {
+          "type": "copy",
+          "start": 3,
+          "end": 5
+        },
+        {
+          "type": "copy",
+          "start": 47,
+          "end": 50
+        },
+        {
+          "type": "copy",
+          "start": 43,
+          "end": 44
+        },
+        {
+          "type": "copy",
+          "start": 19,
+          "end": 20
+        }
+      ]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "cs"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "da"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "en"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "es"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "et"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "hr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "hu"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "id"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "lt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "lv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "nb"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "nn"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "pt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "ro"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "sv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "month_names_by_language", "tr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "da"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "en"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "es"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "et"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "hr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "hu"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "id"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "nb"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "nn"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "pt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "ro"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "sv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "lowercase_month_ambiguities", "tr"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "cs"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sk"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "en"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "es"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "it"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "pt"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "sv"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "nl"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "hu"]
+    },
+    {
+      "type": "remove",
+      "path": ["date_data", "year_words_by_language", "ro"]
+    },
+    {
+      "type": "array",
+      "path": ["zone_data", "signing_clauses"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "type": "copy",
+          "start": 5,
+          "end": 6
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["address_seed_data", "boundary_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 220
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "suffixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 620
+        },
+        {
+          "type": "copy",
+          "start": 621,
+          "end": 661
+        },
+        {
+          "type": "copy",
+          "start": 665,
+          "end": 700
+        },
+        {
+          "type": "copy",
+          "start": 703,
+          "end": 757
+        },
+        {
+          "type": "copy",
+          "start": 762,
+          "end": 790
+        },
+        {
+          "type": "copy",
+          "start": 791,
+          "end": 874
+        },
+        {
+          "type": "copy",
+          "start": 876,
+          "end": 919
+        },
+        {
+          "type": "copy",
+          "start": 921,
+          "end": 1289
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "non_ascii_name_short_suffixes"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 4,
+          "end": 8
+        },
+        {
+          "type": "copy",
+          "start": 9,
+          "end": 11
+        },
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "type": "copy",
+          "start": 17,
+          "end": 19
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "detection_only_suffixes"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_heads"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "normalized_in_name_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 63
+        },
+        {
+          "type": "copy",
+          "start": 64,
+          "end": 88
+        },
+        {
+          "type": "copy",
+          "start": 92,
+          "end": 115
+        },
+        {
+          "type": "copy",
+          "start": 118,
+          "end": 142
+        },
+        {
+          "type": "copy",
+          "start": 147,
+          "end": 160
+        },
+        {
+          "type": "copy",
+          "start": 161,
+          "end": 175
+        },
+        {
+          "type": "copy",
+          "start": 177,
+          "end": 188
+        },
+        {
+          "type": "copy",
+          "start": 190,
+          "end": 230
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "normalized_suffix_words"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 620
+        },
+        {
+          "type": "copy",
+          "start": 621,
+          "end": 661
+        },
+        {
+          "type": "copy",
+          "start": 665,
+          "end": 700
+        },
+        {
+          "type": "copy",
+          "start": 703,
+          "end": 757
+        },
+        {
+          "type": "copy",
+          "start": 762,
+          "end": 790
+        },
+        {
+          "type": "copy",
+          "start": 791,
+          "end": 874
+        },
+        {
+          "type": "copy",
+          "start": 876,
+          "end": 919
+        },
+        {
+          "type": "copy",
+          "start": 921,
+          "end": 1289
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "role_heads"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 38,
+          "end": 59
+        },
+        {
+          "type": "copy",
+          "start": 160,
+          "end": 174
+        },
+        {
+          "type": "copy",
+          "start": 69,
+          "end": 70
+        },
+        {
+          "type": "copy",
+          "start": 111,
+          "end": 112
+        },
+        {
+          "type": "copy",
+          "start": 174,
+          "end": 201
+        },
+        {
+          "type": "copy",
+          "start": 78,
+          "end": 79
+        },
+        {
+          "type": "copy",
+          "start": 201,
+          "end": 217
+        },
+        {
+          "type": "copy",
+          "start": 263,
+          "end": 335
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_complement_heads"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_complement_starters"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_complement_connectors"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_generic_words"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["legal_form_data", "institutional_prefix_generic_words"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["regex_meta"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 5
+        },
+        {
+          "type": "copy",
+          "start": 6,
+          "end": 113
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["regex_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 5
+        },
+        {
+          "type": "copy",
+          "start": 6,
+          "end": 7
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "kind": "regex",
+              "pattern": "\\b(?:[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}|0\\d{2,4}(?:[^\\S\\n]|[./\\-])\\d{5,8})(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b",
+              "case_insensitive": null,
+              "lazy": null,
+              "prefilter_any": null,
+              "prefilter_case_insensitive": null,
+              "prefilter_window_bytes": null,
+              "prepared_artifact_policy": null
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 8,
+          "end": 107
+        },
+        {
+          "type": "values",
+          "values": [
+            {
+              "kind": "regex",
+              "pattern": "\\bECLI:[A-Z]{2}:[A-Za-z0-9.]+:\\d{4}:[A-Za-z0-9._]+\\b",
+              "case_insensitive": null,
+              "lazy": true,
+              "prefilter_any": ["ECLI:"],
+              "prefilter_case_insensitive": false,
+              "prefilter_window_bytes": null,
+              "prepared_artifact_policy": null
+            },
+            {
+              "kind": "regex",
+              "pattern": "\\[\\d{4}\\][^\\S\\n]+(?:UKSC|UKPC|EWCA|EWHC|UKUT|UKFTT|EWFC|EWCOP)(?:[^\\S\\n]+(?:Civ|Crim|Ch|Fam|Pat|QB|KB|TCC|Comm))?[^\\S\\n]+\\d+\\b",
+              "case_insensitive": null,
+              "lazy": true,
+              "prefilter_any": [
+                "UKSC",
+                "UKPC",
+                "EWCA",
+                "EWHC",
+                "UKUT",
+                "UKFTT",
+                "EWFC",
+                "EWCOP"
+              ],
+              "prefilter_case_insensitive": false,
+              "prefilter_window_bytes": null,
+              "prepared_artifact_policy": null
+            },
+            {
+              "kind": "regex",
+              "pattern": "\\b\\d{1,2}:\\d{2}-(?:[cC][vV]|[cC][rR]|[mM][dD]|[mM][cC]|[mM][jJ])-\\d{1,6}\\b",
+              "case_insensitive": null,
+              "lazy": null,
+              "prefilter_any": null,
+              "prefilter_case_insensitive": null,
+              "prefilter_window_bytes": null,
+              "prepared_artifact_policy": null
+            }
+          ]
+        },
+        {
+          "type": "copy",
+          "start": 112,
+          "end": 114
+        },
+        {
+          "type": "copy",
+          "start": 115,
+          "end": 116
+        },
+        {
+          "type": "copy",
+          "start": 118,
+          "end": 738
+        },
+        {
+          "type": "copy",
+          "start": 739,
+          "end": 779
+        },
+        {
+          "type": "copy",
+          "start": 783,
+          "end": 818
+        },
+        {
+          "type": "copy",
+          "start": 821,
+          "end": 875
+        },
+        {
+          "type": "copy",
+          "start": 880,
+          "end": 908
+        },
+        {
+          "type": "copy",
+          "start": 909,
+          "end": 992
+        },
+        {
+          "type": "copy",
+          "start": 994,
+          "end": 1037
+        },
+        {
+          "type": "copy",
+          "start": 1039,
+          "end": 1407
+        },
+        {
+          "type": "copy",
+          "start": 1729,
+          "end": 1815
+        },
+        {
+          "type": "copy",
+          "start": 2154,
+          "end": 2416
+        },
+        {
+          "type": "copy",
+          "start": 1767,
+          "end": 1768
+        },
+        {
+          "type": "copy",
+          "start": 2500,
+          "end": 2686
+        },
+        {
+          "type": "copy",
+          "start": 3109,
+          "end": 3150
+        },
+        {
+          "type": "copy",
+          "start": 3157,
+          "end": 3161
+        },
+        {
+          "type": "copy",
+          "start": 3162,
+          "end": 3164
+        },
+        {
+          "type": "copy",
+          "start": 3150,
+          "end": 3153
+        },
+        {
+          "type": "copy",
+          "start": 3167,
+          "end": 3169
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "rules"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 322,
+          "end": 408
+        },
+        {
+          "type": "copy",
+          "start": 747,
+          "end": 1009
+        },
+        {
+          "type": "copy",
+          "start": 360,
+          "end": 361
+        },
+        {
+          "type": "copy",
+          "start": 1093,
+          "end": 1279
+        },
+        {
+          "type": "copy",
+          "start": 1702,
+          "end": 1743
+        },
+        {
+          "type": "copy",
+          "start": 1750,
+          "end": 1754
+        },
+        {
+          "type": "copy",
+          "start": 1755,
+          "end": 1757
+        },
+        {
+          "type": "copy",
+          "start": 1743,
+          "end": 1746
+        },
+        {
+          "type": "copy",
+          "start": 1760,
+          "end": 1762
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "party_position_terms"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 38,
+          "end": 59
+        },
+        {
+          "type": "copy",
+          "start": 160,
+          "end": 174
+        },
+        {
+          "type": "copy",
+          "start": 69,
+          "end": 70
+        },
+        {
+          "type": "copy",
+          "start": 111,
+          "end": 112
+        },
+        {
+          "type": "copy",
+          "start": 174,
+          "end": 201
+        },
+        {
+          "type": "copy",
+          "start": 78,
+          "end": 79
+        },
+        {
+          "type": "copy",
+          "start": 201,
+          "end": 217
+        },
+        {
+          "type": "copy",
+          "start": 263,
+          "end": 335
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "phone_extension_labels"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "number_markers"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "type": "copy",
+          "start": 5,
+          "end": 8
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "number_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "type": "copy",
+          "start": 7,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["trigger_data", "person_field_labels"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "type": "copy",
+          "start": 24,
+          "end": 25
+        },
+        {
+          "type": "copy",
+          "start": 18,
+          "end": 19
+        },
+        {
+          "type": "copy",
+          "start": 25,
+          "end": 35
+        },
+        {
+          "type": "copy",
+          "start": 39,
+          "end": 41
+        },
+        {
+          "type": "copy",
+          "start": 3,
+          "end": 5
+        },
+        {
+          "type": "copy",
+          "start": 47,
+          "end": 50
+        },
+        {
+          "type": "copy",
+          "start": 43,
+          "end": 44
+        },
+        {
+          "type": "copy",
+          "start": 19,
+          "end": 20
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["coreference_data", "definition_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "type": "copy",
+          "start": 11,
+          "end": 16
+        },
+        {
+          "type": "copy",
+          "start": 20,
+          "end": 24
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["coreference_data", "organization_determiners"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 1
+        },
+        {
+          "type": "copy",
+          "start": 3,
+          "end": 4
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "label_indices"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3179
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "originals"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3179
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "source_indices"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3179
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "title_tokens"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 28
+        },
+        {
+          "type": "copy",
+          "start": 6,
+          "end": 7
+        },
+        {
+          "type": "copy",
+          "start": 13,
+          "end": 14
+        },
+        {
+          "type": "copy",
+          "start": 95,
+          "end": 185
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "person_trailing_nouns"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "generic_roles"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 227
+        },
+        {
+          "type": "copy",
+          "start": 106,
+          "end": 107
+        },
+        {
+          "type": "copy",
+          "start": 266,
+          "end": 286
+        },
+        {
+          "type": "copy",
+          "start": 192,
+          "end": 196
+        },
+        {
+          "type": "copy",
+          "start": 391,
+          "end": 401
+        },
+        {
+          "type": "copy",
+          "start": 20,
+          "end": 22
+        },
+        {
+          "type": "copy",
+          "start": 401,
+          "end": 428
+        },
+        {
+          "type": "copy",
+          "start": 78,
+          "end": 79
+        },
+        {
+          "type": "copy",
+          "start": 217,
+          "end": 220
+        },
+        {
+          "type": "copy",
+          "start": 431,
+          "end": 444
+        },
+        {
+          "type": "copy",
+          "start": 176,
+          "end": 180
+        },
+        {
+          "type": "copy",
+          "start": 494,
+          "end": 562
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "trailing_address_word_exclusions"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "type": "copy",
+          "start": 4,
+          "end": 6
+        },
+        {
+          "type": "copy",
+          "start": 8,
+          "end": 12
+        },
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 19
+        },
+        {
+          "type": "copy",
+          "start": 20,
+          "end": 21
+        },
+        {
+          "type": "copy",
+          "start": 22,
+          "end": 31
+        },
+        {
+          "type": "copy",
+          "start": 34,
+          "end": 40
+        },
+        {
+          "type": "copy",
+          "start": 48,
+          "end": 56
+        },
+        {
+          "type": "copy",
+          "start": 58,
+          "end": 59
+        },
+        {
+          "type": "copy",
+          "start": 64,
+          "end": 65
+        },
+        {
+          "type": "copy",
+          "start": 67,
+          "end": 73
+        },
+        {
+          "type": "copy",
+          "start": 78,
+          "end": 79
+        },
+        {
+          "type": "copy",
+          "start": 82,
+          "end": 85
+        },
+        {
+          "type": "copy",
+          "start": 87,
+          "end": 90
+        },
+        {
+          "type": "copy",
+          "start": 91,
+          "end": 92
+        },
+        {
+          "type": "copy",
+          "start": 96,
+          "end": 100
+        },
+        {
+          "type": "copy",
+          "start": 104,
+          "end": 108
+        },
+        {
+          "type": "copy",
+          "start": 123,
+          "end": 126
+        },
+        {
+          "type": "copy",
+          "start": 132,
+          "end": 141
+        },
+        {
+          "type": "copy",
+          "start": 147,
+          "end": 151
+        },
+        {
+          "type": "copy",
+          "start": 158,
+          "end": 163
+        },
+        {
+          "type": "copy",
+          "start": 170,
+          "end": 177
+        },
+        {
+          "type": "copy",
+          "start": 181,
+          "end": 184
+        },
+        {
+          "type": "copy",
+          "start": 191,
+          "end": 196
+        },
+        {
+          "type": "copy",
+          "start": 199,
+          "end": 200
+        },
+        {
+          "type": "copy",
+          "start": 203,
+          "end": 208
+        },
+        {
+          "type": "copy",
+          "start": 215,
+          "end": 218
+        },
+        {
+          "type": "copy",
+          "start": 220,
+          "end": 221
+        },
+        {
+          "type": "copy",
+          "start": 227,
+          "end": 232
+        },
+        {
+          "type": "copy",
+          "start": 234,
+          "end": 238
+        },
+        {
+          "type": "copy",
+          "start": 244,
+          "end": 250
+        },
+        {
+          "type": "copy",
+          "start": 266,
+          "end": 271
+        },
+        {
+          "type": "copy",
+          "start": 273,
+          "end": 274
+        },
+        {
+          "type": "copy",
+          "start": 281,
+          "end": 282
+        },
+        {
+          "type": "copy",
+          "start": 285,
+          "end": 287
+        },
+        {
+          "type": "copy",
+          "start": 289,
+          "end": 290
+        },
+        {
+          "type": "copy",
+          "start": 296,
+          "end": 312
+        },
+        {
+          "type": "copy",
+          "start": 320,
+          "end": 322
+        },
+        {
+          "type": "copy",
+          "start": 324,
+          "end": 325
+        },
+        {
+          "type": "copy",
+          "start": 327,
+          "end": 328
+        },
+        {
+          "type": "copy",
+          "start": 336,
+          "end": 337
+        },
+        {
+          "type": "copy",
+          "start": 342,
+          "end": 345
+        },
+        {
+          "type": "copy",
+          "start": 347,
+          "end": 348
+        },
+        {
+          "type": "copy",
+          "start": 349,
+          "end": 352
+        },
+        {
+          "type": "copy",
+          "start": 354,
+          "end": 361
+        },
+        {
+          "type": "copy",
+          "start": 363,
+          "end": 367
+        },
+        {
+          "type": "copy",
+          "start": 368,
+          "end": 380
+        },
+        {
+          "type": "copy",
+          "start": 385,
+          "end": 391
+        },
+        {
+          "type": "copy",
+          "start": 393,
+          "end": 402
+        },
+        {
+          "type": "copy",
+          "start": 405,
+          "end": 410
+        },
+        {
+          "type": "copy",
+          "start": 418,
+          "end": 419
+        },
+        {
+          "type": "copy",
+          "start": 421,
+          "end": 424
+        },
+        {
+          "type": "copy",
+          "start": 427,
+          "end": 429
+        },
+        {
+          "type": "copy",
+          "start": 433,
+          "end": 441
+        },
+        {
+          "type": "copy",
+          "start": 443,
+          "end": 454
+        },
+        {
+          "type": "copy",
+          "start": 456,
+          "end": 460
+        },
+        {
+          "type": "copy",
+          "start": 472,
+          "end": 473
+        },
+        {
+          "type": "copy",
+          "start": 479,
+          "end": 487
+        },
+        {
+          "type": "copy",
+          "start": 489,
+          "end": 491
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["deny_list_data", "filters", "address_trailing_nouns"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "title_tokens"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 28
+        },
+        {
+          "type": "copy",
+          "start": 6,
+          "end": 7
+        },
+        {
+          "type": "copy",
+          "start": 13,
+          "end": 14
+        },
+        {
+          "type": "copy",
+          "start": 95,
+          "end": 185
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "person_trailing_nouns"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "generic_roles"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 227
+        },
+        {
+          "type": "copy",
+          "start": 106,
+          "end": 107
+        },
+        {
+          "type": "copy",
+          "start": 266,
+          "end": 286
+        },
+        {
+          "type": "copy",
+          "start": 192,
+          "end": 196
+        },
+        {
+          "type": "copy",
+          "start": 391,
+          "end": 401
+        },
+        {
+          "type": "copy",
+          "start": 20,
+          "end": 22
+        },
+        {
+          "type": "copy",
+          "start": 401,
+          "end": 428
+        },
+        {
+          "type": "copy",
+          "start": 78,
+          "end": 79
+        },
+        {
+          "type": "copy",
+          "start": 217,
+          "end": 220
+        },
+        {
+          "type": "copy",
+          "start": 431,
+          "end": 444
+        },
+        {
+          "type": "copy",
+          "start": 176,
+          "end": 180
+        },
+        {
+          "type": "copy",
+          "start": 494,
+          "end": 562
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "trailing_address_word_exclusions"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 3
+        },
+        {
+          "type": "copy",
+          "start": 4,
+          "end": 6
+        },
+        {
+          "type": "copy",
+          "start": 8,
+          "end": 12
+        },
+        {
+          "type": "copy",
+          "start": 14,
+          "end": 15
+        },
+        {
+          "type": "copy",
+          "start": 16,
+          "end": 19
+        },
+        {
+          "type": "copy",
+          "start": 20,
+          "end": 21
+        },
+        {
+          "type": "copy",
+          "start": 22,
+          "end": 31
+        },
+        {
+          "type": "copy",
+          "start": 34,
+          "end": 40
+        },
+        {
+          "type": "copy",
+          "start": 48,
+          "end": 56
+        },
+        {
+          "type": "copy",
+          "start": 58,
+          "end": 59
+        },
+        {
+          "type": "copy",
+          "start": 64,
+          "end": 65
+        },
+        {
+          "type": "copy",
+          "start": 67,
+          "end": 73
+        },
+        {
+          "type": "copy",
+          "start": 78,
+          "end": 79
+        },
+        {
+          "type": "copy",
+          "start": 82,
+          "end": 85
+        },
+        {
+          "type": "copy",
+          "start": 87,
+          "end": 90
+        },
+        {
+          "type": "copy",
+          "start": 91,
+          "end": 92
+        },
+        {
+          "type": "copy",
+          "start": 96,
+          "end": 100
+        },
+        {
+          "type": "copy",
+          "start": 104,
+          "end": 108
+        },
+        {
+          "type": "copy",
+          "start": 123,
+          "end": 126
+        },
+        {
+          "type": "copy",
+          "start": 132,
+          "end": 141
+        },
+        {
+          "type": "copy",
+          "start": 147,
+          "end": 151
+        },
+        {
+          "type": "copy",
+          "start": 158,
+          "end": 163
+        },
+        {
+          "type": "copy",
+          "start": 170,
+          "end": 177
+        },
+        {
+          "type": "copy",
+          "start": 181,
+          "end": 184
+        },
+        {
+          "type": "copy",
+          "start": 191,
+          "end": 196
+        },
+        {
+          "type": "copy",
+          "start": 199,
+          "end": 200
+        },
+        {
+          "type": "copy",
+          "start": 203,
+          "end": 208
+        },
+        {
+          "type": "copy",
+          "start": 215,
+          "end": 218
+        },
+        {
+          "type": "copy",
+          "start": 220,
+          "end": 221
+        },
+        {
+          "type": "copy",
+          "start": 227,
+          "end": 232
+        },
+        {
+          "type": "copy",
+          "start": 234,
+          "end": 238
+        },
+        {
+          "type": "copy",
+          "start": 244,
+          "end": 250
+        },
+        {
+          "type": "copy",
+          "start": 266,
+          "end": 271
+        },
+        {
+          "type": "copy",
+          "start": 273,
+          "end": 274
+        },
+        {
+          "type": "copy",
+          "start": 281,
+          "end": 282
+        },
+        {
+          "type": "copy",
+          "start": 285,
+          "end": 287
+        },
+        {
+          "type": "copy",
+          "start": 289,
+          "end": 290
+        },
+        {
+          "type": "copy",
+          "start": 296,
+          "end": 312
+        },
+        {
+          "type": "copy",
+          "start": 320,
+          "end": 322
+        },
+        {
+          "type": "copy",
+          "start": 324,
+          "end": 325
+        },
+        {
+          "type": "copy",
+          "start": 327,
+          "end": 328
+        },
+        {
+          "type": "copy",
+          "start": 336,
+          "end": 337
+        },
+        {
+          "type": "copy",
+          "start": 342,
+          "end": 345
+        },
+        {
+          "type": "copy",
+          "start": 347,
+          "end": 348
+        },
+        {
+          "type": "copy",
+          "start": 349,
+          "end": 352
+        },
+        {
+          "type": "copy",
+          "start": 354,
+          "end": 361
+        },
+        {
+          "type": "copy",
+          "start": 363,
+          "end": 367
+        },
+        {
+          "type": "copy",
+          "start": 368,
+          "end": 380
+        },
+        {
+          "type": "copy",
+          "start": 385,
+          "end": 391
+        },
+        {
+          "type": "copy",
+          "start": 393,
+          "end": 402
+        },
+        {
+          "type": "copy",
+          "start": 405,
+          "end": 410
+        },
+        {
+          "type": "copy",
+          "start": 418,
+          "end": 419
+        },
+        {
+          "type": "copy",
+          "start": 421,
+          "end": 424
+        },
+        {
+          "type": "copy",
+          "start": 427,
+          "end": 429
+        },
+        {
+          "type": "copy",
+          "start": 433,
+          "end": 441
+        },
+        {
+          "type": "copy",
+          "start": 443,
+          "end": 454
+        },
+        {
+          "type": "copy",
+          "start": 456,
+          "end": 460
+        },
+        {
+          "type": "copy",
+          "start": 472,
+          "end": 473
+        },
+        {
+          "type": "copy",
+          "start": 479,
+          "end": 487
+        },
+        {
+          "type": "copy",
+          "start": 489,
+          "end": 491
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "address_trailing_nouns"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "title_tokens"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 28
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "title_abbreviations"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 92
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "non_western_names"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "ja_suffixes"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "arabic_connectors"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "relation_connectors"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "hyphenated_prefixes"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "cjk_non_person_terms"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["name_corpus_data", "cjk_surname_starters"],
+      "segments": []
+    },
+    {
+      "type": "set",
+      "path": ["slices", "regex", "end"],
+      "value": 112
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "start"],
+      "value": 112
+    },
+    {
+      "type": "set",
+      "path": ["slices", "legal_forms", "end"],
+      "value": 1383
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "start"],
+      "value": 1383
+    },
+    {
+      "type": "set",
+      "path": ["slices", "triggers", "end"],
+      "value": 1970
+    },
+    {
+      "type": "set",
+      "path": ["slices", "deny_list", "end"],
+      "value": 3179
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "start"],
+      "value": 3179
+    },
+    {
+      "type": "set",
+      "path": ["slices", "street_types", "end"],
+      "value": 3353
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "start"],
+      "value": 3353
+    },
+    {
+      "type": "set",
+      "path": ["slices", "gazetteer", "end"],
+      "value": 3353
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "start"],
+      "value": 3353
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "end"],
+      "value": 6614
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "start"],
+      "value": 6614
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "end"],
+      "value": 6614
+    }
+  ]
+}

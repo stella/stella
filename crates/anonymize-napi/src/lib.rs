@@ -417,6 +417,7 @@ pub struct JsDenyListFilterData {
   pub allow_list: Vec<String>,
   pub person_stopwords: Vec<String>,
   pub person_trailing_nouns: Vec<String>,
+  pub address_trailing_nouns: Vec<String>,
   pub address_stopwords: Vec<String>,
   pub address_jurisdiction_prefixes: Vec<String>,
   pub street_types: Vec<String>,

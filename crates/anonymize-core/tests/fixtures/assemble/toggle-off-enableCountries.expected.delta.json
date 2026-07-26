@@ -1,0 +1,35 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "remove",
+      "path": ["country_data"]
+    },
+    {
+      "type": "array",
+      "path": ["literal_patterns"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 0,
+          "end": 174
+        }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["slices", "countries", "end"],
+      "value": 3418
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "start"],
+      "value": 3418
+    },
+    {
+      "type": "set",
+      "path": ["slices", "hotwords", "end"],
+      "value": 3418
+    }
+  ]
+}

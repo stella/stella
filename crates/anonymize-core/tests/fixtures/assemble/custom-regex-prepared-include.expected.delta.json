@@ -1,0 +1,42 @@
+{
+  "base": "baseline-all-on",
+  "changes": [
+    {
+      "type": "array",
+      "path": ["custom_regex_patterns"],
+      "segments": [
+        {
+          "type": "values",
+          "values": [
+            {
+              "kind": "regex",
+              "pattern": "token-\\w+",
+              "prepared_artifact_policy": "include"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "array",
+      "path": ["custom_regex_meta"],
+      "segments": [
+        {
+          "type": "values",
+          "values": [
+            {
+              "label": "custom",
+              "score": 0.9,
+              "source_detail": "custom-regex"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "set",
+      "path": ["slices", "custom_regex", "end"],
+      "value": 1
+    }
+  ]
+}

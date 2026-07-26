@@ -735,12 +735,13 @@ mod tests {
 
   #[test]
   fn prepared_package_schema_versions_track_the_current_payload_shape() {
-    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 4);
-    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 4);
+    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 5);
+    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 5);
   }
 
   #[test]
-  fn prepared_package_readers_reject_v1_payloads() {
+  fn prepared_package_readers_reject_previous_schema_payloads() {
+    const PREVIOUS_SCHEMA_VERSION: u32 = 4;
     let binding_payload = prepared_search_package_payload_to_bytes(
       &package_test_config(),
       b"artifacts",
@@ -748,7 +749,7 @@ mod tests {
     .unwrap();
     let binding = prepared_search_package_raw_payload_to_bytes(
       PREPARED_SEARCH_PACKAGE_HEADER,
-      1,
+      PREVIOUS_SCHEMA_VERSION,
       &binding_payload,
     );
     assert_invalid_package_reason(
@@ -763,7 +764,7 @@ mod tests {
         .unwrap();
     let core_package = prepared_search_package_raw_payload_to_bytes(
       PREPARED_SEARCH_CORE_PACKAGE_HEADER,
-      1,
+      PREVIOUS_SCHEMA_VERSION,
       &core_payload,
     );
     assert_invalid_package_reason(
@@ -774,7 +775,10 @@ mod tests {
 
   #[test]
   fn prepared_search_package_roundtrips_config_and_artifacts() {
-    let config = package_test_config();
+    let config = BindingPreparedSearchConfig {
+      false_positive_filters: Some(BindingDenyListFilterData::default()),
+      ..package_test_config()
+    };
     let artifacts = b"prepared-artifacts";
 
     let bytes = prepared_search_package_to_bytes(&config, artifacts).unwrap();

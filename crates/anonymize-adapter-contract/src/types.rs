@@ -482,6 +482,8 @@ pub struct BindingDenyListFilterData {
   pub person_stopwords: Vec<String>,
   #[serde(default)]
   pub person_trailing_nouns: Vec<String>,
+  #[serde(default)]
+  pub address_trailing_nouns: Vec<String>,
   pub address_stopwords: Vec<String>,
   #[serde(default)]
   pub address_jurisdiction_prefixes: Vec<String>,

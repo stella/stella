@@ -1,4 +1,4 @@
 {
-  "_comment": "Common head nouns for capitalized defined/legal concepts. These are not person names by themselves; detector-specific filters assemble this vocabulary where needed. Lowercased and organized per language.",
-  "en": ["association", "period", "reform"]
+  "_comment": "Common head nouns for capitalized defined/legal concepts. These are not person names by themselves; detector-specific filters assemble this vocabulary where needed. Lowercased and organized per language. The current additions are intentionally English-scoped because they describe English EDGAR agreement concepts; other languages remain unchanged until independently supported.",
+  "en": ["association", "award", "awards", "description", "period", "reform"]
 }
