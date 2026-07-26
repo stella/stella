@@ -157,6 +157,20 @@ const WATCHDOG_TICK_MS = 10_000;
 const WATCHDOG_LAG_THRESHOLD_MS = 90_000;
 const WATCHDOG_MAX_STARVED_TICKS = 3;
 
+/**
+ * A single tick this far behind is conclusive on its own.
+ *
+ * Consecutive starved ticks only detect a loop that stays blocked
+ * across several tick intervals. One long synchronous block does the
+ * opposite: it delivers no tick at all while it runs, then exactly one
+ * very late tick, after which the loop is idle and the next tick is
+ * punctual — so the streak resets and never reaches the limit. A
+ * runaway that freezes the daemon for half an hour at a time is
+ * therefore invisible to the streak, which is the shape this ceiling
+ * catches.
+ */
+const WATCHDOG_FATAL_LAG_MS = 300_000;
+
 // Hard wall-clock ceiling on a single held cycle. The lag watchdog catches a
 // CPU-starved loop, but a cycle wedged on an await that ignores the per-cycle
 // signal (e.g. a DB call before/after the pipeline's AbortSignal) leaves the
@@ -275,6 +289,9 @@ const cycleSemaphore = createSemaphore(
   MAX_CONCURRENT_ADAPTER_CYCLES,
 );
 
+/** Adapter keys holding a cycle slot right now; read by the watchdog. */
+const inFlightCycles = new Set<string>();
+
 const writeHeartbeat = () => {
   void Bun.write(HEARTBEAT_PATH, new Date().toISOString()).catch(() => {
     // Non-fatal; health check will notice staleness
@@ -296,10 +313,28 @@ const startEventLoopWatchdog = (): void => {
     const lag = performance.now() - expectedAt;
     if (lag > WATCHDOG_LAG_THRESHOLD_MS) {
       starvedTicks++;
+      // Whatever held a cycle slot across the stall is the prime
+      // suspect: nothing else was running. Without this the log shows
+      // only the lag, and the adapters whose timers fired late on
+      // recovery look like the cause rather than the casualties.
+      const inFlight = [...inFlightCycles];
+      logger.error("case_law.ingestion.event_loop_starved", {
+        lagMs: Math.round(lag),
+        starvedTicks,
+        inFlightCycles: inFlight,
+      });
       logError(
         `[watchdog] event loop starved: lag=${Math.round(lag)}ms ` +
-          `(${starvedTicks}/${WATCHDOG_MAX_STARVED_TICKS})`,
+          `(${starvedTicks}/${WATCHDOG_MAX_STARVED_TICKS}) ` +
+          `in-flight: ${inFlight.join(", ") || "none"}`,
       );
+      if (lag > WATCHDOG_FATAL_LAG_MS) {
+        logError(
+          `[watchdog] single block exceeded ${WATCHDOG_FATAL_LAG_MS}ms; ` +
+            "exiting for ECS restart",
+        );
+        process.exit(1);
+      }
       if (starvedTicks >= WATCHDOG_MAX_STARVED_TICKS) {
         logError(
           "[watchdog] sustained event-loop starvation; exiting for ECS restart",
@@ -586,6 +621,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       // other adapter. The lag watchdog can't see an I/O-wait hang (the loop
       // stays responsive), so bound it here: if a cycle outlives the ceiling,
       // exit so ECS relaunches a healthy task.
+      inFlightCycles.add(adapterKey);
       try {
         // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
         cycle = await runWithHardDeadline(
@@ -594,6 +630,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
           async () => await runOneCycle(adapterKey, name),
         );
       } finally {
+        inFlightCycles.delete(adapterKey);
         cycleSemaphore.release();
       }
       const { outcome, inserted, pagesProcessed } = cycle;

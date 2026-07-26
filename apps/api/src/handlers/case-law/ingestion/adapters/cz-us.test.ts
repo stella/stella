@@ -45,6 +45,21 @@ const resolveUrl = (input: string | URL | Request): string => {
   return input.url;
 };
 
+/**
+ * NALUS wraps every page in an ASP.NET form whose `__VIEWSTATE` is one
+ * unbroken run of thousands of non-space characters. Real pages carry
+ * 12-18 KB of it.
+ */
+const makeViewStatePage = (
+  caseNumber: string,
+  date: string,
+  viewStateChars: number,
+): string =>
+  makeTextPage(caseNumber, date).replace(
+    "<html><body>",
+    `<html><body><input type="hidden" name="__VIEWSTATE" value="${"P".repeat(viewStateChars)}" />`,
+  );
+
 // ── Tests ────────────────────────────────────────────────
 
 describe("czUsAdapter.fetchPage", () => {
@@ -403,5 +418,48 @@ describe("czUsAdapter.fetchPage", () => {
     expect(decision?.metadata["judge"]).toContain("Pavel Rychetský");
     expect(decision?.fulltext).toBeDefined();
     expect(decision?.rawHash).toBeDefined();
+  });
+
+  test("parse cost does not grow with the size of the __VIEWSTATE blob", async () => {
+    const parseWith = async (viewStateChars: number): Promise<number> => {
+      globalThis.fetch = asFetchMock(
+        mock((input: string | URL | Request) => {
+          const url = resolveUrl(input);
+          if (url.includes("GetAbstract")) {
+            return Promise.resolve(new Response(makeEmptyPage()));
+          }
+          if (url.includes("sz=I-1-10_1")) {
+            return Promise.resolve(
+              new Response(
+                makeViewStatePage("I.ÚS 1/10", "1. 1. 2010", viewStateChars),
+              ),
+            );
+          }
+          return Promise.resolve(new Response(makeEmptyPage()));
+        }),
+      );
+
+      const startedAt = performance.now();
+      const result = await czUsAdapter.fetchPage("1:2010", {});
+      const elapsedMs = performance.now() - startedAt;
+
+      expect(Result.isOk(result)).toBe(true);
+      if (Result.isOk(result)) {
+        // The blob must not cost the parse its output either.
+        expect(result.value.decisions[0]?.metadata["judge"]).toContain(
+          "Jan Novák",
+        );
+      }
+      return elapsedMs;
+    };
+
+    const small = await parseWith(1_000);
+    const large = await parseWith(64_000);
+
+    // A super-linear scan over the blob turns a 64x size increase into
+    // minutes. Linear extraction leaves the two runs in the same order
+    // of magnitude, so a generous multiple still catches a regression
+    // without depending on how fast the machine is.
+    expect(large).toBeLessThan(Math.max(small, 50) * 8);
   });
 });

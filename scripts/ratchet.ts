@@ -34,6 +34,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { analyse } from "scslre";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -272,6 +273,70 @@ const countNullishArrayFallback = (content: string): number => {
       continue;
     }
     total += (code.match(NULLISH_ARRAY) ?? []).length;
+  }
+  return total;
+};
+
+// A regex literal: an unescaped `/`, a body, a closing `/`, flags. The
+// lookbehind rejects the division operator, whose left operand ends in an
+// identifier character, `)` or `]`; the leading `*`/`/` rejection keeps
+// comment openers out. Character classes are consumed whole so a `/` inside
+// one does not end the literal early.
+const REGEX_LITERAL =
+  /(?<![A-Za-z0-9_$)\]])\/(?![/*])(?<body>(?:\\.|\[(?:\\.|[^\]])*\]|[^/\n\\[])+)\/(?<flags>[dgimsuvy]*)/gu;
+
+/**
+ * Regex literals whose worst case backtracks super-linearly in the length of
+ * the subject — the shape that turns one oversized input into minutes of
+ * blocking CPU on a single-threaded runtime.
+ *
+ * `scslre` is the analyser behind eslint-plugin-regexp's super-linear rules.
+ * It reports both flavours, and both matter here: `Trade` (the pattern
+ * re-splits the same text against itself) and `Move` (each retry of the whole
+ * pattern re-walks what the previous one consumed). The second reads as
+ * harmless and is not — it is the shape that stalled an ingestion worker for
+ * half an hour per document.
+ */
+const countSuperLinearRegexes = (content: string): number => {
+  let total = 0;
+  let inBlockComment = false;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code: lineCode, state } = stripLine(raw, literalState);
+    literalState = state;
+    const blockResult = stripBlockComments(lineCode, inBlockComment);
+    const code = blockResult.code;
+    inBlockComment = blockResult.inBlockComment;
+    if (COMMENT_LINE.test(code)) {
+      continue;
+    }
+
+    for (const match of code
+      .replace(LINE_COMMENT_TAIL, "")
+      .matchAll(REGEX_LITERAL)) {
+      const { body, flags } = match.groups ?? {};
+      if (body === undefined || flags === undefined) {
+        continue;
+      }
+      let expression: RegExp;
+      try {
+        expression = new RegExp(body, flags);
+      } catch {
+        // Not a regex literal after all (a stray pair of slashes), or one
+        // this runtime cannot compile. Either way there is nothing to score.
+        continue;
+      }
+      try {
+        if (analyse(expression).reports.length > 0) {
+          total += 1;
+        }
+      } catch {
+        // The analyser bails on constructs it does not model; an
+        // unanalysable pattern is not evidence of a finding.
+        continue;
+      }
+    }
   }
   return total;
 };
@@ -750,6 +815,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countAsCasts,
   },
   {
+    id: "super-linear-regexes",
+    description:
+      "regex literals in app source with super-linear worst-case backtracking (one oversized input blocks the event loop)",
+    include: APP_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countSuperLinearRegexes,
+  },
+  {
     id: "nullish-array-fallback",
     description:
       "`?? []` fallbacks in app source (structural invariants should panic() instead)",
@@ -1161,6 +1234,32 @@ const SELF_TEST_AS_CASTS = `${AS_CAST_FIXTURE_LINES.join("\n")}\n`;
 // excluded.
 const EXPECTED_AS_CASTS = 7;
 
+const SUPER_LINEAR_REGEX_FIXTURE_LINES = [
+  // Counted: the shape that stalled the ingestion worker — the leading
+  // token run makes every start offset re-walk the rest of the input.
+  String.raw`const judge = /(?<judge>\S+(?:\s+\S+){0,2})\s+\(soudce\)/iu;`,
+  // Counted: `[\d\s]*` overlaps the `\s+` that follows it.
+  String.raw`const count = /(?<count>\d[\d\s]*)\s+výsledk/iu;`,
+  // Counted: two of them on one line.
+  String.raw`const pair = [/^[A-Z]\s+[A-Z\s]+$/u, /(?:a+)+b/u];`,
+  // Not counted: linear, anchored on a literal.
+  String.raw`const safe = /Id="rId(?<num>\d+)"/gu;`,
+  // Not counted: linear alternation of literals.
+  String.raw`const alt = /^(?:alpha|beta|gamma)$/u;`,
+  // Not counted: a comment.
+  String.raw`// const commented = /(?:a+)+b/u;`,
+  // Not counted: inside string and template literals.
+  String.raw`const inString = "/(?:a+)+b/u";`,
+  String.raw`const inTemplate = ` + "`/(?:a+)+b/u`;",
+  // Not counted: division, not a regex literal.
+  String.raw`const ratio = (total) / (count + 1) / 2;`,
+];
+const SELF_TEST_SUPER_LINEAR_REGEXES = `${SUPER_LINEAR_REGEX_FIXTURE_LINES.join("\n")}\n`;
+// Expected: judge(1) + count(1) + the two on the `pair` line(2) = 4. The
+// anchored/alternation patterns, the comment, the string and template
+// literals, and the division expression are all excluded.
+const EXPECTED_SUPER_LINEAR_REGEXES = 4;
+
 const NULLISH_FIXTURE_LINES = [
   "const a = list ?? [];",
   "const b = other ??[];",
@@ -1429,6 +1528,11 @@ const runSelfTest = (): number => {
     writeFixture(root, "apps/web/src/nullish.ts", SELF_TEST_NULLISH);
     writeFixture(
       root,
+      "apps/api/src/super-linear-regexes.ts",
+      SELF_TEST_SUPER_LINEAR_REGEXES,
+    );
+    writeFixture(
+      root,
       "apps/web/src/error-display.tsx",
       SELF_TEST_DIRECT_ERROR,
     );
@@ -1528,6 +1632,13 @@ const runSelfTest = (): number => {
     if (nullishMetric.count !== EXPECTED_NULLISH) {
       failures.push(
         `nullish-array-fallback counted ${nullishMetric.count}, expected ${EXPECTED_NULLISH}`,
+      );
+    }
+
+    const superLinearMetric = requireSnapshot(snapshot, "super-linear-regexes");
+    if (superLinearMetric.count !== EXPECTED_SUPER_LINEAR_REGEXES) {
+      failures.push(
+        `super-linear-regexes counted ${superLinearMetric.count}, expected ${EXPECTED_SUPER_LINEAR_REGEXES}`,
       );
     }
 

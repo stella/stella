@@ -72,7 +72,26 @@ const toYearSuffix = (year: number): string =>
 
 const REGISTRY_SIGN_PATTERN = /^(?<caseNumber>.+?)\s+ze\s+dne\s+(?<date>.+)$/u;
 const DOC_CONTENT_PATTERN = /class="DocContent">(?<body>[\s\S]*?)<\/table>/u;
-const JUDGE_PATTERN = /(?<judge>\S+(?:\s+\S+){0,2})\s+\(soudce\s+zpravodaj\)/iu;
+
+/**
+ * The rapporteur is named immediately before this annotation. Matching
+ * the annotation first keeps the scan linear: a pattern that instead
+ * leads with the name (`\S+(?:\s+\S+){0,2}` and the like) has to retry
+ * every offset in the document, and each retry walks the rest of the
+ * current run of non-space characters, so the cost grows with the
+ * square of the input.
+ */
+const JUDGE_ANNOTATION_PATTERN = /\(\s*soudce\s+zpravodaj\s*\)/iu;
+
+/** Name tokens to keep ahead of the annotation. */
+const JUDGE_TOKEN_LIMIT = 3;
+
+/**
+ * How far back to read for those tokens. A name plus its separators
+ * never fills this, and bounding the window keeps extraction
+ * independent of document size.
+ */
+const JUDGE_LOOKBACK_CHARS = 200;
 
 /** Extract text from a labeled span. */
 const extractLabel = (html: string, labelId: string): string | undefined => {
@@ -161,21 +180,44 @@ const extractEcliCounter = (html: string): number | undefined => {
   return counter ? Number.parseInt(counter, 10) : undefined;
 };
 
-/** Extract fulltext body from DocContent table. */
-const extractFulltext = (html: string): string | undefined => {
+/** Plain text of the DocContent table, the decision body. */
+const extractDocContentText = (html: string): string | undefined => {
   const body = DOC_CONTENT_PATTERN.exec(html)?.groups?.["body"];
   if (!body) {
     return undefined;
   }
 
-  const text = stripHtml(body);
-  return text.length > 50 ? text : undefined;
+  return stripHtml(body);
 };
 
-/** Extract the rapporteur judge name from the body. */
-const extractJudge = (html: string): string | undefined => {
-  const judge = JUDGE_PATTERN.exec(html)?.groups?.["judge"];
-  return judge ? stripHtml(judge) : undefined;
+/** Extract fulltext body from DocContent table. */
+const extractFulltext = (bodyText: string | undefined): string | undefined =>
+  bodyText !== undefined && bodyText.length > 50 ? bodyText : undefined;
+
+/**
+ * Extract the rapporteur judge name from the decision body.
+ *
+ * Takes the body text rather than the page: the surrounding HTML
+ * carries an ASP.NET `__VIEWSTATE` field, a single run of thousands of
+ * non-space characters that costs far more to scan than the decision
+ * itself and holds no name.
+ */
+const extractJudge = (bodyText: string): string | undefined => {
+  const annotation = JUDGE_ANNOTATION_PATTERN.exec(bodyText);
+  if (!annotation) {
+    return undefined;
+  }
+
+  const tokens = bodyText
+    .slice(
+      Math.max(0, annotation.index - JUDGE_LOOKBACK_CHARS),
+      annotation.index,
+    )
+    .split(/\s+/u)
+    .filter(Boolean)
+    .slice(-JUDGE_TOKEN_LIMIT);
+
+  return tokens.length > 0 ? tokens.join(" ") : undefined;
 };
 
 /** Extract abstract and legal sentence from GetAbstract.aspx. */
@@ -217,8 +259,9 @@ const parseDecisionPage = (
   const decisionForm = extractLabel(html, "lblDecisionForm");
   const parallelQuotation = extractLabel(html, "lblParallelQuotation");
   const popularName = extractLabel(html, "lblPopularName");
-  const fulltext = extractFulltext(html);
-  const judge = extractJudge(html);
+  const bodyText = extractDocContentText(html);
+  const fulltext = extractFulltext(bodyText);
+  const judge = bodyText === undefined ? undefined : extractJudge(bodyText);
 
   const sourceUrl = `${BASE_URL}?sz=I-${number}-${toYearSuffix(year)}_1`;
 

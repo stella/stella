@@ -139,15 +139,44 @@ const LABEL_PATTERNS: Record<string, RegExp> = {
  * We capture the name on the line immediately before the
  * "předseda/předsedkyně senátu" label.
  */
-const JUDGE_RE =
-  /(?:JUDr\.|Mgr\.|doc\.|prof\.)\s+[\p{L}\s,.-]+?(?=\s*předsed[ay]\s+senátu)/iu;
+/**
+ * Anchor on the label, then read backwards. Leading with the title
+ * instead makes the cost quadratic in the length of the decision:
+ * every `JUDr.` in the text starts a scan that expands
+ * `[\p{L}\s,.-]+?` one character at a time looking for a label that,
+ * for a decision signed by a `předsedkyně`, is never there.
+ */
+const PRESIDING_LABEL_RE = /předsed[ay]\s+senátu/iu;
+const JUDGE_TITLE_RE = /(?:JUDr|Mgr|doc|prof)\./giu;
+
+/** A signature block sits directly above the label. */
+const JUDGE_LOOKBACK_CHARS = 200;
+
+/** Guards the window against picking up unrelated preceding text. */
+const JUDGE_NAME_RE = /^(?:JUDr|Mgr|doc|prof)\.[\p{L}\s,.-]{1,80}$/u;
 
 const extractJudge = (text: string): string | undefined => {
-  const match = JUDGE_RE.exec(text);
-  if (!match) {
+  const label = PRESIDING_LABEL_RE.exec(text);
+  if (!label) {
     return undefined;
   }
-  return match[0].trim() || undefined;
+
+  const window = text.slice(
+    Math.max(0, label.index - JUDGE_LOOKBACK_CHARS),
+    label.index,
+  );
+
+  // Earliest title first, so a stacked one ("doc. JUDr. …") is kept
+  // whole. A candidate that fails the name check is skipped rather
+  // than returned: the text between it and the label is not a name.
+  for (const title of window.matchAll(JUDGE_TITLE_RE)) {
+    const name = window.slice(title.index).trim();
+    if (JUDGE_NAME_RE.test(name)) {
+      return name;
+    }
+  }
+
+  return undefined;
 };
 
 /** Body text markers. */
