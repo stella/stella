@@ -264,6 +264,17 @@ jobs:
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         run: bun scripts/check-resolution-ranges.ts
 
+      - name: First-party quarantine-exclude guard
+        # The 5-day release-age quarantine is excluded per package for
+        # first-party @stll/* code, and bun matches those entries EXACTLY (a
+        # `@stll/*` glob is accepted and ignored). List a napi package without
+        # its platform subpackages and the parent installs while its binaries
+        # stay quarantined — and a quarantined optionalDependency is skipped
+        # SILENTLY, so the package imports fine and throws on first use. This
+        # fails when the exclude list stops covering everything in the lock.
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        run: bun scripts/check-stll-quarantine-excludes.ts
+
       - name: Policy evidence
         run: bun run policies:check
 

@@ -93,7 +93,13 @@ describe("markdownToStellaDocx", () => {
     const numberingXml = inspection.xmlParts.find(
       (part) => part.path === "word/numbering.xml",
     );
-    expect(documentXml?.text).toContain('<w:pgSz w:w="11906" w:h="16838"/>');
+    // Assert the A4 dimensions, not the exact tag: the generator is free to
+    // add attributes (0.5.2 started emitting an explicit w:orient), and this
+    // check is about the page geometry, not the serializer's attribute set.
+    const pageSize =
+      /<w:pgSz[^>]*\/>/u.exec(documentXml?.text ?? "")?.[0] ?? "";
+    expect(pageSize).toContain('w:w="11906"');
+    expect(pageSize).toContain('w:h="16838"');
     expect(stylesXml?.text).toContain('w:styleId="BodyText"');
 
     // Stella's own reserved numId 1-5 definitions are untouched (still
