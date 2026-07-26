@@ -18,7 +18,18 @@ minimumReleaseAgeExcludes = [
   "@stll/folio-react",
   "@stll/fuzzy-search-wasm",
   "@stll/regex-set-wasm",
+  # A napi package must be listed WITH its platform subpackages. They publish
+  # in the same minute, but they are optionalDependencies: quarantine one and
+  # bun skips it silently, leaving the parent installed with no native binding
+  # and every call failing at runtime. Bun matches these names exactly — a
+  # `@stll/*` glob is accepted and then ignored.
   "@stll/stdnum",
+  "@stll/stdnum-darwin-arm64",
+  "@stll/stdnum-darwin-x64",
+  "@stll/stdnum-linux-arm64-gnu",
+  "@stll/stdnum-linux-x64-gnu",
+  "@stll/stdnum-wasm",
+  "@stll/stdnum-win32-x64-msvc",
   "@stll/text-search-wasm",
   # Security fix for GHSA-v2hh-gcrm-f6hx. The patched release has not yet
   # cleared quarantine, so opt in to this package only; keep all others gated.
