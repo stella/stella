@@ -78,7 +78,7 @@ jobs:
       # The pinned-SHA checkout further down then re-checks out
       # the release commit for everything else.
       - name: Checkout workflow scripts
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           sparse-checkout: scripts
@@ -178,7 +178,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Pin to the resolved commit SHA to eliminate tag/branch
           # ref ambiguity. The tag name is preserved in
@@ -241,7 +241,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Pinned to the SHA resolved by the resolve job; never to
           # the bare tag name. See resolve job for rationale.
@@ -576,7 +576,7 @@ jobs:
       id-token: write # OIDC for AWS S3 + CloudFront
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Pinned to the SHA resolved by the resolve job; never to
           # the bare tag name. See resolve job for rationale.
