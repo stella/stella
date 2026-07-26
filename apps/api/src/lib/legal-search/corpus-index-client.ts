@@ -70,7 +70,7 @@ const baseUrl = (): string => {
       "CORPUS_INDEX_ENDPOINT is required when the corpus index search provider is selected",
     );
   }
-  return value.replace(/\/+$/u, "");
+  return value.replace(/(?<!\/)\/+$/u, "");
 };
 
 const toCorpusIndexError = (error: unknown): CorpusIndexError =>

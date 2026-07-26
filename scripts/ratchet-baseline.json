@@ -8,6 +8,10 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions.ts": 1
     }
   },
+  "super-linear-regexes": {
+    "count": 0,
+    "files": {}
+  },
   "nullish-array-fallback": {
     "count": 4,
     "files": {
@@ -41,7 +45,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 598,
+    "count": 593,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -182,7 +186,7 @@
       "apps/api/src/lib/mcp-upstream/connections.ts": 5,
       "apps/api/src/lib/redis-client.ts": 2,
       "apps/api/src/lib/sanitize-filename.ts": 1,
-      "apps/api/src/lib/scheduler/runner.ts": 4,
+      "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry-notifications.ts": 3,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts": 5,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 9,
@@ -215,7 +219,7 @@
       "apps/web/src/app-providers.tsx": 1,
       "apps/web/src/client.tsx": 1,
       "apps/web/src/components/ai-config-providers-editor.tsx": 2,
-      "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 3,
+      "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 1,
       "apps/web/src/components/ai-suggestions/host.tsx": 1,
       "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 1,
@@ -223,7 +227,7 @@
       "apps/web/src/components/chat-editor-provider.tsx": 10,
       "apps/web/src/components/chat-mention-list.tsx": 2,
       "apps/web/src/components/chat/chat-anon-decorations-plugin.ts": 2,
-      "apps/web/src/components/chat/chat-thread-messages.tsx": 8,
+      "apps/web/src/components/chat/chat-thread-messages.tsx": 7,
       "apps/web/src/components/chat/tool-approval-card.tsx": 2,
       "apps/web/src/components/chat/web-search-sources.tsx": 1,
       "apps/web/src/components/conditions/condition-builder.tsx": 2,
@@ -246,7 +250,7 @@
       "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx": 1,
       "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
       "apps/web/src/hooks/external-file-drop.logic.ts": 5,
-      "apps/web/src/hooks/use-effect.ts": 2,
+      "apps/web/src/hooks/use-effect.ts": 4,
       "apps/web/src/lib/analytics/posthog.ts": 1,
       "apps/web/src/lib/anonymize/anonymize-chat-worker-client.ts": 2,
       "apps/web/src/lib/anonymize/use-overlay-rects.ts": 1,
@@ -267,13 +271,13 @@
       "apps/web/src/routes/_protected.chat/index.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/clause-body.tsx": 2,
       "apps/web/src/routes/_protected.knowledge/-components/clause-diff-view.tsx": 2,
-      "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx": 2,
+      "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx": 2,
       "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-slash-menu.tsx": 3,
-      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 4,
+      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-queries.ts": 2,
       "apps/web/src/routes/_protected.knowledge/clauses.tsx": 1,
@@ -289,7 +293,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-year-grid.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx": 7,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-edit-mode.logic.ts": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts": 1,
@@ -299,9 +303,9 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic.ts": 4,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx": 6,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx": 7,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx": 2,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx": 3,

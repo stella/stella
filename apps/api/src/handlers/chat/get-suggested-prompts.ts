@@ -52,7 +52,7 @@ const SUGGEST_CLEANUP_STEPS = [
   /^\d+[.\-)]\s*/u, // Numbered list: "1. " or "2) " at start (optional trailing space)
   /^[-*•]\s*/u, // Bullet point at start
   /^["'([[]+/u, // Opening quotes, parens, brackets at start
-  /[\])"'\s]+$/u, // Closing quotes, parens, brackets, whitespace at end
+  /(?<![\])"'\s])[\])"'\s]+$/u, // Closing quotes, parens, brackets, whitespace at end
 ] as const;
 
 const cleanLine = (line: string): string => {

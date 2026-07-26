@@ -28,7 +28,7 @@ const readOptionalEnv = (name: string) => {
   return value;
 };
 
-const stripTrailingSlash = (value: string) => value.replace(/\/+$/u, "");
+const stripTrailingSlash = (value: string) => value.replace(/(?<!\/)\/+$/u, "");
 
 const appendPath = (baseUrl: string, path: string) =>
   new URL(path, `${baseUrl}/`).toString();

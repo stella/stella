@@ -235,7 +235,7 @@ const parseResultRows = (html: string): ParsedRow[] => {
     // č may appear as literal or HTML entity (&#x10D; &#x10d; &#269;)
     // Stop at comma to exclude publication reference (e.g. ", č. 421/2004 Sb. NSS")
     const citMatch =
-      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<caseNumber>[^",]+?)(?:-\d+)?[",]/iu.exec(
+      /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<caseNumber>[^",\s][^",]*?)(?:-\d+)?[",]/iu.exec(
         block,
       );
     const caseNumber = citMatch?.groups?.["caseNumber"]?.trim();
@@ -818,10 +818,15 @@ export const czNssAdapter: SourceAdapter = {
 
       const html = await response.text();
 
+      // The count is grouped ("1 234"), so digit runs may be separated
+      // by spaces. `(?:\s\d+)*` keeps the separator and the digits
+      // disjoint; a `[\d\s]*` class would overlap the `\s+` that
+      // follows, letting the engine re-split every trailing space and
+      // costing time quadratic in the length of the page.
       const countPatterns = [
-        /Nalezeno\s+(?<count>\d[\d\s]*)\s+záznam/iu,
-        /Celkem\s+(?<count>\d[\d\s]*)\s+záznam/iu,
-        /(?<count>\d[\d\s]*)\s+výsledk/iu,
+        /Nalezeno\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
+        /Celkem\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
+        /(?<!\d)(?<count>\d+(?:\s\d+)*)\s+výsledk/iu,
         /resCount[^>]*>(?<count>\d[\d\s]*)</iu,
         /myResCount[^>]*>(?<count>\d[\d\s]*)</iu,
         /pocetZaznamu[^>]*>(?<count>\d[\d\s]*)</iu,

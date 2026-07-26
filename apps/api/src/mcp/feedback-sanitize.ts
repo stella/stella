@@ -76,7 +76,7 @@ const BASE64_SECRET_REGEX = /\b[A-Za-z0-9_-]{40,}={0,2}/gu;
 // intentionally included; unmatched closing wrappers and sentence punctuation
 // are trimmed in the replacer.
 const URL_REGEX = /\bhttps?:\/\/[^\s<>"'`]+/giu;
-const URL_TRAILING_PUNCTUATION_REGEX = /[.,;:!?]+$/u;
+const URL_TRAILING_PUNCTUATION_REGEX = /(?<![.,;:!?])[.,;:!?]+$/u;
 
 const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gu;
 

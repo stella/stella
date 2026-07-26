@@ -334,15 +334,15 @@ const SKIP_RE = /^\[OBRÁZEK\]|^pokračování$|^ČESKÁ REPUBLIKA$/u;
 const TITLE_RE = /^(?:ROZSUDEK|USNESENÍ|JMÉNEM REPUBLIKY)$/u;
 
 /** "takto:" separator. */
-const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*:?\s*$/iu;
+const TAKTO_RE = /^t\s*a\s*k\s*t\s*o\s*(?::\s*)?$/iu;
 
 /** "Odůvodnění:" separator. */
 const ODUVODNENI_RE =
-  /^(?:O\s*d\s*ů\s*v\s*o\s*d\s*n\s*ě\s*n\s*í|Odůvodnění)\s*:?\s*$/iu;
+  /^(?:O\s*d\s*ů\s*v\s*o\s*d\s*n\s*ě\s*n\s*í|Odůvodnění)\s*(?::\s*)?$/iu;
 
 /** "Poučení:" as standalone or inline prefix. */
 const POUCENI_STANDALONE_RE =
-  /^(?:P\s*o\s*u\s*č\s*e\s*n\s*í|Poučení)\s*:?\s*$/iu;
+  /^(?:P\s*o\s*u\s*č\s*e\s*n\s*í|Poučení)\s*(?::\s*)?$/iu;
 const POUCENI_INLINE_RE = /^(?:P\s*o\s*u\s*č\s*e\s*n\s*í|Poučení)\s*:\s*/iu;
 
 /**

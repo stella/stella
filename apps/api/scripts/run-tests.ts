@@ -41,7 +41,7 @@ const DB_TEST_PATH_RE = /\.(?:integration|db)\.test\.tsx?$/u;
 // Spans multi-line type imports (formatters wrap long ones), up to and
 // including the module specifier so it cannot leak into marker matching.
 const TYPE_ONLY_IMPORT_RE =
-  /^\s*import\s+type\b[\s\S]*?from\s+["'][^"']+["']/gmu;
+  /^[ \t]*import\s+type\b[\s\S]*?from\s+["'][^"']+["']/gmu;
 // Hard per-batch peak-RSS budget. A batch that outgrows it fails the run
 // even when every test passes, so memory growth surfaces here as a readable
 // error instead of an opaque exit-137 kill when the hosted runner's memory
