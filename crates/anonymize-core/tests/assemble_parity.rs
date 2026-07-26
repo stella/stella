@@ -394,7 +394,7 @@ fn compare_filters(
   match (got, want) {
     (None, None) => Ok(()),
     (Some(got), Some(want)) => {
-      let fields: [(&str, &Vec<String>, &Vec<String>); 18] = [
+      let fields: [(&str, &Vec<String>, &Vec<String>); 19] = [
         ("stopwords", &got.stopwords, &want.stopwords),
         ("allow_list", &got.allow_list, &want.allow_list),
         (
@@ -435,6 +435,11 @@ fn compare_filters(
         ),
         ("first_names", &got.first_names, &want.first_names),
         ("generic_roles", &got.generic_roles, &want.generic_roles),
+        (
+          "page_footer_markers",
+          &got.page_footer_markers,
+          &want.page_footer_markers,
+        ),
         (
           "number_abbrev_prefixes",
           &got.number_abbrev_prefixes,

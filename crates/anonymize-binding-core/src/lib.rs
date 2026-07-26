@@ -100,28 +100,36 @@ impl PreparedBinding {
     verification: PackageVerification,
   ) -> Result<Self> {
     if prepared_search_package_has_core_payload(bytes) {
-      let (package, _) = match verification {
-        PackageVerification::Trusted => {
-          prepared_search_core_package_view_trusted_from_bytes_with_timings(
-            bytes,
-          )
-        }
-        PackageVerification::Verified => {
-          prepared_search_core_package_view_from_bytes_with_timings(bytes)
-        }
-      }?;
-      let artifacts =
-        PreparedEngineArtifactsView::from_bytes(package.artifacts.as_bytes())?;
-      let prepared = PreparedEngine::new_with_artifact_view_diagnostics(
-        package.config,
-        &artifacts,
-      )?;
-      return Ok(Self {
-        engine: prepared.prepared,
-        diagnostics: prepared.diagnostics,
-      });
+      return Self::from_core_package_bytes(bytes, verification);
     }
+    Self::from_binding_package_bytes(bytes)
+  }
 
+  fn from_core_package_bytes(
+    bytes: &[u8],
+    verification: PackageVerification,
+  ) -> Result<Self> {
+    let (package, _) = match verification {
+      PackageVerification::Trusted => {
+        prepared_search_core_package_view_trusted_from_bytes_with_timings(bytes)
+      }
+      PackageVerification::Verified => {
+        prepared_search_core_package_view_from_bytes_with_timings(bytes)
+      }
+    }?;
+    let artifacts =
+      PreparedEngineArtifactsView::from_bytes(package.artifacts.as_bytes())?;
+    let prepared = PreparedEngine::new_with_artifact_view_diagnostics(
+      package.config,
+      &artifacts,
+    )?;
+    Ok(Self {
+      engine: prepared.prepared,
+      diagnostics: prepared.diagnostics,
+    })
+  }
+
+  fn from_binding_package_bytes(bytes: &[u8]) -> Result<Self> {
     let package = prepared_search_package_from_bytes(bytes)?;
     let config = prepared_search_config_from_binding(package.config)?;
     let artifacts =

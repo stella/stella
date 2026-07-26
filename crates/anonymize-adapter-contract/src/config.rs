@@ -472,6 +472,7 @@ fn deny_list_filters_from_binding(
     ambiguous_street_type_terms: lower_set(filters.ambiguous_street_type_terms),
     first_names: lower_set(filters.first_names),
     generic_roles: lower_set(filters.generic_roles),
+    page_footer_markers: lower_set(filters.page_footer_markers),
     number_abbrev_prefixes: lower_set(filters.number_abbrev_prefixes),
     sentence_starters: lower_set(filters.sentence_starters),
     trailing_address_word_exclusions: lower_set(

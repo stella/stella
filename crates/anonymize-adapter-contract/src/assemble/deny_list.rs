@@ -88,6 +88,39 @@ fn scoped_language_word_file(
   Ok(lower_sorted_unique(words))
 }
 
+fn scoped_page_footer_markers(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let data: OrderedMap<Value> =
+    parse_ordered_data_file("page-footer-markers.json")?;
+  let mut markers = Vec::new();
+  for (language, value) in &data {
+    if language.starts_with('_')
+      || !super::language::language_config_matches(language, selected)
+    {
+      continue;
+    }
+    let Some(group) = value.as_object() else {
+      continue;
+    };
+    let mut page_words = Vec::new();
+    append_word_array(&mut page_words, group.get("pageWords"));
+    let mut count_words = Vec::new();
+    append_word_array(&mut count_words, group.get("countWords"));
+    for page_word in &page_words {
+      markers.push(page_word.to_lowercase());
+      for count_word in &count_words {
+        markers.push(format!(
+          "{} {}",
+          page_word.to_lowercase(),
+          count_word.to_lowercase()
+        ));
+      }
+    }
+  }
+  Ok(lower_sorted_unique(markers.iter().map(String::as_str)))
+}
+
 /// `languageWordValues(record)`: `collectLanguageWordValues` of a sub-record,
 /// or empty when the value is not a record.
 fn language_word_values(value: Option<&Value>) -> Vec<String> {
@@ -210,6 +243,7 @@ pub(super) fn build_deny_list_filter_data(
   let generic_roles_file: GenericRoles = parse_data_file("generic-roles.json")?;
   let mut generic_roles = set_ordered(generic_roles_file.roles);
   generic_roles.extend(legal_forms::role_heads(content_languages)?);
+  let page_footer_markers = scoped_page_footer_markers(content_languages)?;
 
   // trailingAddressWordExclusions: lowerSortedUnique union, then Set (no-op).
   let mut trailing_union: Vec<String> = Vec::new();
@@ -242,6 +276,7 @@ pub(super) fn build_deny_list_filter_data(
     ambiguous_street_type_terms: shape("ambiguousStreetTypeTerms"),
     first_names: corpus.first_names_list.clone(),
     generic_roles,
+    page_footer_markers,
     number_abbrev_prefixes: shape("numberAbbrevPrefixes"),
     sentence_starters: deny_list_filter_static("sentenceStarters")?,
     trailing_address_word_exclusions,
@@ -1347,6 +1382,65 @@ mod tests {
         && japanese.address_trailing_nouns.is_empty(),
       "English trailing nouns must not leak into Japanese packages"
     );
+  }
+
+  #[test]
+  fn page_footer_markers_follow_content_language_scope() {
+    let coverage = [
+      ("cs", "strana", "stran celkem"),
+      ("de", "seite", "seiten insgesamt"),
+      ("en", "page", "pages of"),
+      ("pt-br", "página", "páginas de"),
+      ("es", "página", "páginas de"),
+      ("fr", "page", "pages sur"),
+      ("hu", "oldal", "oldalak összesen"),
+      ("it", "pagina", "pagine di"),
+      ("lv", "lapa", "lappuses no"),
+      ("pl", "strona", "stron łącznie"),
+      ("ro", "pagina", "pagini din"),
+      ("sk", "strana", "strán celkom"),
+      ("sv", "sida", "sidor av"),
+    ];
+    let scope_data: Value = parse_data_file("language-scopes.json")
+      .expect("language scopes should parse");
+    let scope_languages: HashSet<String> = scope_data
+      .get("languages")
+      .and_then(Value::as_object)
+      .expect("language scopes should contain a language map")
+      .keys()
+      .cloned()
+      .collect();
+    let covered_languages: HashSet<String> = coverage
+      .iter()
+      .map(|(language, _, _)| String::from(*language))
+      .collect();
+    assert_eq!(
+      covered_languages, scope_languages,
+      "every supported content language needs reviewed page-footer vocabulary"
+    );
+
+    for (language, standalone, paired) in coverage {
+      let selected = [String::from(language)];
+      let filters =
+        build_deny_list_filter_data(&test_corpus(), Some(&selected))
+          .expect("language-scoped deny-list filters should assemble");
+      for expected in [standalone, paired] {
+        assert!(
+          filters
+            .page_footer_markers
+            .contains(&String::from(expected)),
+          "{language} should include {expected}"
+        );
+      }
+      if language != "en" {
+        assert!(
+          !filters
+            .page_footer_markers
+            .contains(&String::from("page of")),
+          "{language} should not import English page markers"
+        );
+      }
+    }
   }
 
   /// The assemble-time exemption is only effective while the exempted word

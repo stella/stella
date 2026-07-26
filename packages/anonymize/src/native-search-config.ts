@@ -75,6 +75,7 @@ export type NativeDenyListFilterData = {
   ambiguous_street_type_terms: string[];
   first_names: string[];
   generic_roles: string[];
+  page_footer_markers?: string[];
   number_abbrev_prefixes: string[];
   sentence_starters: string[];
   trailing_address_word_exclusions: string[];

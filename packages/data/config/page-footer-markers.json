@@ -1,0 +1,55 @@
+{
+  "_comment": "Language-scoped page/footer vocabulary. The assembler creates standalone page-word markers and page-word/count-word pairs; the false-positive filter only rejects structurally numbered footers whose marker belongs to an enabled language. Keep this matrix aligned with every language in language-scopes.json.",
+  "cs": {
+    "pageWords": ["strana", "strany", "stran"],
+    "countWords": ["celkem", "z"]
+  },
+  "de": {
+    "pageWords": ["seite", "seiten"],
+    "countWords": ["gesamt", "insgesamt", "von"]
+  },
+  "en": {
+    "pageWords": ["page", "pages"],
+    "countWords": ["of", "total"]
+  },
+  "pt-br": {
+    "pageWords": ["página", "páginas"],
+    "countWords": ["de", "total"]
+  },
+  "es": {
+    "pageWords": ["página", "páginas"],
+    "countWords": ["de", "total"]
+  },
+  "fr": {
+    "pageWords": ["page", "pages"],
+    "countWords": ["sur", "total"]
+  },
+  "hu": {
+    "pageWords": ["oldal", "oldalak"],
+    "countWords": ["/", "összesen"]
+  },
+  "it": {
+    "pageWords": ["pagina", "pagine"],
+    "countWords": ["di", "totale"]
+  },
+  "lv": {
+    "pageWords": ["lapa", "lapas", "lappuse", "lappuses"],
+    "countWords": ["kopā", "no"]
+  },
+  "pl": {
+    "pageWords": ["strona", "strony", "stron"],
+    "countWords": ["łącznie", "z"]
+  },
+  "ro": {
+    "pageWords": ["pagina", "pagini"],
+    "countWords": ["din", "total"]
+  },
+  "sk": {
+    "pageWords": ["strana", "strany", "strán"],
+    "countWords": ["celkom", "z"]
+  },
+  "sv": {
+    "pageWords": ["sida", "sidor"],
+    "countWords": ["av", "totalt"]
+  }
+}

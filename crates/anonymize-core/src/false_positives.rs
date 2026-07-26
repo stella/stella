@@ -1,11 +1,14 @@
 use std::collections::BTreeSet;
+use std::ops::Range;
 use std::sync::LazyLock;
 
 use regex::Regex;
 
 use crate::byte_offsets::ByteOffsets;
 use crate::processors::DenyListFilterData;
-use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
+use crate::resolution::{
+  DetectionSource, PipelineEntity, ResolutionDocument, SourceDetail,
+};
 use crate::types::{Error, Result};
 
 use crate::labels::{
@@ -19,18 +22,67 @@ const ALL_CAPS_LINE_LETTER_THRESHOLD: usize = 5;
 const ALL_CAPS_LINE_RATIO: f64 = 0.95;
 const ALL_CAPS_LINE_PROSE_EXTRA_LETTERS: usize = 20;
 const ALL_CAPS_LINE_HEADING_WORD_LIMIT: usize = 5;
+const MAX_PAGE_FOOTER_TOTAL: u32 = 1_000;
 
 static POSTAL_CODE_RE: LazyLock<Option<Regex>> =
   LazyLock::new(|| Regex::new(r"\d{3}\s?\d{2}").ok());
 static SECTION_NUMBER_RE: LazyLock<Option<Regex>> =
   LazyLock::new(|| Regex::new(r"^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?$").ok());
 
+struct LineContext<'a> {
+  line: &'a str,
+  before: &'a str,
+  after: &'a str,
+  entity: Range<usize>,
+}
+
+fn line_context<'a>(
+  document: &'a ResolutionDocument<'a>,
+  offsets: &ByteOffsets<'_>,
+  entity: &PipelineEntity,
+) -> Result<Option<LineContext<'a>>> {
+  let full_text = document.text();
+  let start = offsets.validate_offset(entity.start)?;
+  let end = offsets.validate_offset(entity.end)?;
+  if start > end {
+    return Err(Error::InvalidSpan {
+      start: entity.start,
+      end: entity.end,
+    });
+  }
+  let Some(line_range) = document.line_range(start, end) else {
+    return Ok(None);
+  };
+  let line = full_text
+    .get(line_range.clone())
+    .ok_or(Error::InvalidSpan {
+      start: entity.start,
+      end: entity.end,
+    })?;
+  let relative_start = start.saturating_sub(line_range.start);
+  let relative_end = end.saturating_sub(line_range.start);
+  let before = line.get(..relative_start).ok_or(Error::InvalidSpan {
+    start: entity.start,
+    end: entity.end,
+  })?;
+  let after = line.get(relative_end..).ok_or(Error::InvalidSpan {
+    start: entity.start,
+    end: entity.end,
+  })?;
+  Ok(Some(LineContext {
+    line,
+    before,
+    after,
+    entity: relative_start..relative_end,
+  }))
+}
+
 pub(crate) fn filter_entity_false_positives(
   entities: Vec<PipelineEntity>,
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
   filters: Option<&DenyListFilterData>,
 ) -> Result<Vec<PipelineEntity>> {
-  let offsets = ByteOffsets::new(full_text);
+  let offsets = document.offsets();
   let mut filtered = Vec::with_capacity(entities.len());
   for entity in entities {
     if is_caller_owned(&entity) {
@@ -41,7 +93,7 @@ pub(crate) fn filter_entity_false_positives(
     let Some(normalized) = normalize_entity(entity, &offsets, filters)? else {
       continue;
     };
-    if should_reject_entity(&normalized, full_text, &offsets, filters)? {
+    if should_reject_entity(&normalized, document, &offsets, filters)? {
       continue;
     }
     filtered.push(normalized);
@@ -132,10 +184,11 @@ fn normalize_entity(
 
 fn should_reject_entity(
   entity: &PipelineEntity,
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
   offsets: &ByteOffsets<'_>,
   filters: Option<&DenyListFilterData>,
 ) -> Result<bool> {
+  let full_text = document.text();
   let text = entity.text.trim();
   if is_template_placeholder(text) {
     return Ok(true);
@@ -146,7 +199,17 @@ fn should_reject_entity(
   if exceeds_open_ended_word_count(entity) {
     return Ok(true);
   }
+  // Explicit section markers (`§ 6`, `6.1`, `3.2.4`) are never addresses,
+  // including when a place-of-performance cue extracts them as trigger values.
+  // A single dotted number needs heading context because the same shape is
+  // valid for sentence-final house numbers and postal codes.
+  if entity.label == ADDRESS_LABEL
+    && is_explicit_address_section(document, offsets, entity)?
+  {
+    return Ok(true);
+  }
   if entity.label != IP_ADDRESS_LABEL
+    && entity.label != ADDRESS_LABEL
     && is_section_number(text)
     && entity.source != DetectionSource::Trigger
   {
@@ -199,13 +262,19 @@ fn should_reject_entity(
   }
   if entity.label == ORGANIZATION_LABEL
     && is_all_caps_candidate(text)
-    && is_all_caps_boilerplate_line(full_text, offsets, entity)?
+    && is_all_caps_boilerplate_line(document, offsets, entity)?
   {
     return Ok(true);
   }
   if entity.label == ORGANIZATION_LABEL
     && filters
       .is_some_and(|filters| is_document_structure_heading(text, filters))
+  {
+    return Ok(true);
+  }
+  if entity.label == ORGANIZATION_LABEL
+    && let Some(filters) = filters
+    && is_numbered_page_footer(document, offsets, entity, filters)?
   {
     return Ok(true);
   }
@@ -319,6 +388,41 @@ fn bracketed_inner(text: &str, open: char, close: char) -> Option<&str> {
 
 fn is_section_number(text: &str) -> bool {
   regex_is_match(&SECTION_NUMBER_RE, text.trim())
+}
+
+fn is_explicit_address_section(
+  document: &ResolutionDocument<'_>,
+  offsets: &ByteOffsets<'_>,
+  entity: &PipelineEntity,
+) -> Result<bool> {
+  let trimmed = entity.text.trim();
+  if let Some(section) = trimmed.strip_prefix('§') {
+    return Ok(
+      !section.trim().is_empty()
+        && section
+          .trim()
+          .chars()
+          .all(|ch| ch.is_ascii_digit() || ch == '.'),
+    );
+  }
+  if !is_section_number(trimmed) {
+    return Ok(false);
+  }
+  let without_terminal = trimmed.trim_end_matches('.');
+  if without_terminal.contains('.') {
+    return Ok(true);
+  }
+  if !trimmed.ends_with('.') {
+    return Ok(false);
+  }
+
+  let Some(context) = line_context(document, offsets, entity)? else {
+    return Ok(false);
+  };
+  if !context.before.trim().is_empty() {
+    return Ok(false);
+  }
+  Ok(starts_with_section_heading_prefix(context.line))
 }
 
 fn is_standalone_year(text: &str) -> bool {
@@ -454,6 +558,67 @@ fn role_exact_match(
       .contains(&entity.text.trim().to_lowercase())
 }
 
+fn is_numbered_page_footer(
+  document: &ResolutionDocument<'_>,
+  offsets: &ByteOffsets<'_>,
+  entity: &PipelineEntity,
+  filters: &DenyListFilterData,
+) -> Result<bool> {
+  if entity.source != DetectionSource::Trigger {
+    return Ok(false);
+  }
+  let Some((head, page)) = words_and_number(&entity.text) else {
+    return Ok(false);
+  };
+  let head = head.to_lowercase();
+
+  let Some(context) = line_context(document, offsets, entity)? else {
+    return Ok(false);
+  };
+  if !context.before.trim().is_empty() {
+    return Ok(false);
+  }
+
+  let line_remainder = context.after.trim();
+  if line_remainder.is_empty() {
+    return Ok(
+      filters.page_footer_markers.contains(&head)
+        && page <= MAX_PAGE_FOOTER_TOTAL,
+    );
+  }
+  let counter =
+    bracketed_inner(line_remainder, '(', ')').unwrap_or(line_remainder);
+  let Some((counter_head, total)) = words_and_number(counter) else {
+    return Ok(false);
+  };
+  let marker = format!("{head} {}", counter_head.to_lowercase());
+  if !filters.page_footer_markers.contains(&marker) {
+    return Ok(false);
+  }
+  Ok(page <= total && total <= MAX_PAGE_FOOTER_TOTAL)
+}
+
+fn words_and_number(text: &str) -> Option<(&str, u32)> {
+  let trimmed = text.trim().trim_start_matches(',').trim_start();
+  let split = trimmed.rfind(char::is_whitespace)?;
+  let words = trimmed
+    .get(..split)?
+    .trim_end()
+    .trim_end_matches(':')
+    .trim_end();
+  let number = trimmed.get(split..)?.trim();
+  if words.is_empty()
+    || (words != "/"
+      && !words
+        .split_whitespace()
+        .all(|word| word.chars().all(char::is_alphabetic)))
+    || !number.chars().all(|ch| ch.is_ascii_digit())
+  {
+    return None;
+  }
+  Some((words, number.parse().ok()?))
+}
+
 fn is_all_caps_candidate(text: &str) -> bool {
   let mut has_upper = false;
   for ch in text.chars().filter(|ch| ch.is_alphabetic()) {
@@ -466,39 +631,18 @@ fn is_all_caps_candidate(text: &str) -> bool {
 }
 
 fn is_all_caps_boilerplate_line(
-  full_text: &str,
+  document: &ResolutionDocument<'_>,
   offsets: &ByteOffsets<'_>,
   entity: &PipelineEntity,
 ) -> Result<bool> {
-  let start = offsets.validate_offset(entity.start)?;
-  let end = offsets.validate_offset(entity.end)?;
-  let before = full_text.get(..start).ok_or(Error::InvalidSpan {
-    start: entity.start,
-    end: entity.end,
-  })?;
-  let line_start = before
-    .rfind('\n')
-    .map_or(0usize, |index| index.saturating_add('\n'.len_utf8()));
-  let after = full_text.get(end..).ok_or(Error::InvalidSpan {
-    start: entity.start,
-    end: entity.end,
-  })?;
-  let line_end = after
-    .find('\n')
-    .map_or(full_text.len(), |index| end.saturating_add(index));
-  let line = full_text
-    .get(line_start..line_end)
-    .ok_or(Error::InvalidSpan {
-      start: entity.start,
-      end: entity.end,
-    })?;
-  let entity_rel_start = start.saturating_sub(line_start);
-  let entity_rel_end = end.saturating_sub(line_start);
+  let Some(context) = line_context(document, offsets, entity)? else {
+    return Ok(false);
+  };
 
   let mut letter_count = 0usize;
   let mut upper_count = 0usize;
   let mut outside_entity_letters = 0usize;
-  for (index, ch) in line.char_indices() {
+  for (index, ch) in context.line.char_indices() {
     if !ch.is_alphabetic() {
       continue;
     }
@@ -506,7 +650,7 @@ fn is_all_caps_boilerplate_line(
     if ch.is_uppercase() {
       upper_count = upper_count.saturating_add(1);
     }
-    if index < entity_rel_start || index >= entity_rel_end {
+    if index < context.entity.start || index >= context.entity.end {
       outside_entity_letters = outside_entity_letters.saturating_add(1);
     }
   }
@@ -517,7 +661,7 @@ fn is_all_caps_boilerplate_line(
   if !uppercase_ratio_at_least(upper_count, letter_count) {
     return Ok(false);
   }
-  if starts_with_section_heading_prefix(line) {
+  if starts_with_section_heading_prefix(context.line) {
     return Ok(true);
   }
   if outside_entity_letters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS {
@@ -1224,6 +1368,18 @@ mod tests {
 
   use super::*;
 
+  fn filter_entity_false_positives(
+    entities: Vec<PipelineEntity>,
+    full_text: &str,
+    filters: Option<&DenyListFilterData>,
+  ) -> Result<Vec<PipelineEntity>> {
+    super::filter_entity_false_positives(
+      entities,
+      &ResolutionDocument::new(full_text),
+      filters,
+    )
+  }
+
   #[test]
   fn normalization_reuses_unchanged_text_allocation() -> Result<()> {
     let full_text = "Alice";
@@ -1898,6 +2054,148 @@ mod tests {
   }
 
   #[test]
+  fn keeps_multiline_all_caps_organizations() {
+    let text = "ACME\nCORP";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        text,
+        ORGANIZATION_LABEL,
+        DetectionSource::Regex,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "ACME CORP");
+  }
+
+  #[test]
+  fn rejects_explicit_address_sections_but_keeps_address_numbers() {
+    for (full_text, marker) in [
+      ("6. Heading", "6."),
+      ("6.1", "6.1"),
+      ("3.2.4", "3.2.4"),
+      ("§ 1983", "§ 1983"),
+    ] {
+      let section = filter_entity_false_positives(
+        vec![entity(
+          full_text,
+          marker,
+          ADDRESS_LABEL,
+          DetectionSource::Trigger,
+        )],
+        full_text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+      assert!(section.is_empty(), "{marker}");
+    }
+
+    for (full_text, value) in
+      [("123", "123"), ("č.p. 6.", "6."), ("C.P. 28001.", "28001.")]
+    {
+      let address_number = filter_entity_false_positives(
+        vec![entity(
+          full_text,
+          value,
+          ADDRESS_LABEL,
+          DetectionSource::Trigger,
+        )],
+        full_text,
+        Some(&DenyListFilterData::default()),
+      )
+      .unwrap();
+
+      assert_eq!(address_number.len(), 1, "{full_text}");
+    }
+  }
+
+  #[test]
+  fn rejects_numbered_page_footers_without_hiding_numbered_names() {
+    let filters = DenyListFilterData {
+      page_footer_markers: set([
+        "oldal /",
+        "oldal összesen",
+        "strana",
+        "stran celkem",
+        "strana celkem",
+        "strany celkem",
+        "strona łącznie",
+      ]),
+      ..DenyListFilterData::default()
+    };
+    let text = "Strana 7 (celkem 7)\rStrany 4 (celkem 9)\r\nStran celkem 9\nStrana 8\nStrona 4 (łącznie 9)\nOldal 1 / 2\nOldal: 1 (összesen: 7)\nStudio 54 (Group 100)\nAcme Industries";
+    let entities = filter_entity_false_positives(
+      vec![
+        entity(
+          text,
+          "Strana 7",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Strany 4",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Stran celkem 9",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Strana 8",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Strona 4",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Oldal 1",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Oldal: 1",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Studio 54",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+        entity(
+          text,
+          "Acme Industries",
+          ORGANIZATION_LABEL,
+          DetectionSource::Trigger,
+        ),
+      ],
+      text,
+      Some(&filters),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 2);
+    assert_eq!(entities[0].text, "Studio 54");
+    assert_eq!(entities[1].text, "Acme Industries");
+  }
+
+  #[test]
   fn keeps_ipv4_addresses_that_resemble_section_numbers() {
     let text = "192.0.2.1";
     let entities = filter_entity_false_positives(
@@ -1917,9 +2215,11 @@ mod tests {
     label: &str,
     source: DetectionSource,
   ) -> PipelineEntity {
+    let start = full_text.find(text).expect("entity text is in fixture");
+    let end = start.saturating_add(text.len());
     PipelineEntity::detected(
-      0,
-      u32::try_from(full_text.len()).expect("fixture length fits u32"),
+      u32::try_from(start).expect("fixture offset fits u32"),
+      u32::try_from(end).expect("fixture offset fits u32"),
       label,
       text,
       0.8,

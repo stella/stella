@@ -495,6 +495,8 @@ pub struct BindingDenyListFilterData {
   pub first_names: Vec<String>,
   pub generic_roles: Vec<String>,
   #[serde(default)]
+  pub page_footer_markers: Vec<String>,
+  #[serde(default)]
   pub number_abbrev_prefixes: Vec<String>,
   pub sentence_starters: Vec<String>,
   pub trailing_address_word_exclusions: Vec<String>,

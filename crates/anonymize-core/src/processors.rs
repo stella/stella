@@ -713,6 +713,7 @@ pub struct DenyListFilterData {
   pub ambiguous_street_type_terms: BTreeSet<String>,
   pub first_names: BTreeSet<String>,
   pub generic_roles: BTreeSet<String>,
+  pub page_footer_markers: BTreeSet<String>,
   pub number_abbrev_prefixes: BTreeSet<String>,
   pub sentence_starters: BTreeSet<String>,
   pub trailing_address_word_exclusions: BTreeSet<String>,

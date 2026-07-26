@@ -423,6 +423,7 @@ pub struct JsDenyListFilterData {
   pub street_types: Vec<String>,
   pub first_names: Vec<String>,
   pub generic_roles: Vec<String>,
+  pub page_footer_markers: Vec<String>,
   pub sentence_starters: Vec<String>,
   pub trailing_address_word_exclusions: Vec<String>,
   pub defined_term_cues: Vec<String>,

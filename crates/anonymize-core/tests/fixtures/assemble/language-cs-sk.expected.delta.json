@@ -1011,6 +1011,22 @@
     },
     {
       "type": "array",
+      "path": ["deny_list_data", "filters", "page_footer_markers"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 57,
+          "end": 68
+        },
+        {
+          "type": "copy",
+          "start": 77,
+          "end": 80
+        }
+      ]
+    },
+    {
+      "type": "array",
       "path": ["false_positive_filters", "title_tokens"],
       "segments": [
         {
@@ -1291,6 +1307,22 @@
       "type": "array",
       "path": ["false_positive_filters", "address_trailing_nouns"],
       "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "page_footer_markers"],
+      "segments": [
+        {
+          "type": "copy",
+          "start": 57,
+          "end": 68
+        },
+        {
+          "type": "copy",
+          "start": 77,
+          "end": 80
+        }
+      ]
     },
     {
       "type": "array",

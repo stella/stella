@@ -97,7 +97,7 @@ impl PreparedEngine {
     let mut resolved_entities = filter_entities_for_config(
       filter_entity_false_positives(
         sanitized_entities,
-        full_text,
+        &document,
         false_positive_filters,
       )?,
       self.policy.threshold,
@@ -253,7 +253,7 @@ impl PreparedEngine {
     let sanitized = sanitize_entities_with_document(consistent, document)?;
     let filtered = filter_entity_false_positives(
       sanitized,
-      full_text,
+      document,
       false_positive_filters,
     )?;
     Ok(filter_entities_for_labels(

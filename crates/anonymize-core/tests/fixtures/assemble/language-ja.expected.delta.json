@@ -923,6 +923,11 @@
     },
     {
       "type": "array",
+      "path": ["deny_list_data", "filters", "page_footer_markers"],
+      "segments": []
+    },
+    {
+      "type": "array",
       "path": ["false_positive_filters", "person_trailing_nouns"],
       "segments": []
     },
@@ -1146,6 +1151,11 @@
     {
       "type": "array",
       "path": ["false_positive_filters", "address_trailing_nouns"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["false_positive_filters", "page_footer_markers"],
       "segments": []
     },
     {
