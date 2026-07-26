@@ -305,6 +305,14 @@ const parseDocument = async (
 
 // ── Search helper ───────────────────────────────────────
 
+/** HTTP statuses that mean "authenticate", which this adapter cannot. */
+const AUTH_FAILURE_STATUSES = new Set([401, 403]);
+
+const isAuthFailure = (error: unknown): boolean =>
+  error instanceof FetchBoundaryError &&
+  error.status !== undefined &&
+  AUTH_FAILURE_STATUSES.has(error.status);
+
 const executeSearch = async (
   year: number,
   offset: number,
@@ -392,6 +400,13 @@ export const skUsAdapter: SourceAdapter = {
           data = await executeSearch(year, offset, signal);
         } catch (error) {
           if (error instanceof DOMException) {
+            throw error;
+          }
+          // A 401/403 is the court putting the endpoint back behind
+          // authentication, not a flaky request. There is no credential
+          // to refresh, so an identical second attempt can only fail the
+          // same way: surface it instead of doubling the traffic.
+          if (isAuthFailure(error)) {
             throw error;
           }
           // One retry: the DMS search is intermittently flaky under
