@@ -148,6 +148,11 @@ const CORPUS_INDEX_INTERVAL_MS = 15_000;
 // quickly after boot from adding a whole-corpus recompute to every start.
 const CITATION_AUTHORITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const CITATION_AUTHORITY_STARTUP_DELAY_MS = 5 * 60 * 1000;
+// After a skipped (lock held elsewhere) or failed recompute, retry on a
+// short delay instead of waiting a full interval: the holder may have
+// exited before committing, and its replacement should not inherit a
+// six-hour gap.
+const CITATION_AUTHORITY_RETRY_DELAY_MS = 10 * 60 * 1000;
 
 // Idle backoff: once an adapter is caught up (no new decisions
 // for IDLE_THRESHOLD consecutive cycles), poll once a day instead
@@ -884,6 +889,7 @@ export const runCaseLawIngest = async (
   const citationAuthorityLoop = (async () => {
     await Bun.sleep(CITATION_AUTHORITY_STARTUP_DELAY_MS);
     while (true) {
+      let recomputed = false;
       try {
         // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
         const courtWeightEntries = await loadCourtWeightEntries();
@@ -899,6 +905,7 @@ export const runCaseLawIngest = async (
             "[citation-authority] Skipped (recompute already running in another process)",
           );
         } else {
+          recomputed = true;
           logInfo(
             `[citation-authority] Recomputed (${updated} cited decisions)`,
           );
@@ -913,8 +920,12 @@ export const runCaseLawIngest = async (
           logError("[citation-authority] Recompute error:", error);
         }
       }
-      // oxlint-disable-next-line no-await-in-loop -- fixed-interval recompute poll; the loop must wait CITATION_AUTHORITY_INTERVAL_MS between recomputes, so this await is intentionally sequential
-      await Bun.sleep(CITATION_AUTHORITY_INTERVAL_MS);
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval recompute poll; the loop must wait between recomputes, so this await is intentionally sequential
+      await Bun.sleep(
+        recomputed
+          ? CITATION_AUTHORITY_INTERVAL_MS
+          : CITATION_AUTHORITY_RETRY_DELAY_MS,
+      );
     }
   })();
 
