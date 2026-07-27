@@ -64,8 +64,18 @@ const isReachable = async (url: string): Promise<boolean> => {
   }
 };
 
+// Strip trailing slashes with a linear scan rather than `/\/+$/`, whose
+// worst case backtracks super-linearly (the repo's ratchet guards against it).
+const withoutTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
 const apiHealthUrl = (apiUrl: string) =>
-  new URL("health", `${apiUrl.replace(/\/+$/u, "")}/`).toString();
+  new URL("health", `${withoutTrailingSlashes(apiUrl)}/`).toString();
 
 const printStartStackInstructions = () => {
   process.stdout.write(
