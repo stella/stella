@@ -5,7 +5,7 @@ import { Buffer } from "buffer";
 
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonResult, ChatAnonRuntime } from "@stll/anonymize-chat";
-import { loadNameDictionaries } from "@stll/anonymize-data";
+import { loadCityDictionary, loadNameDictionaries } from "@stll/anonymize-data";
 import * as anonymizeRuntime from "@stll/anonymize-wasm";
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 
@@ -57,39 +57,6 @@ const DEMO_DENYLIST_COUNTRIES = [
   "NL",
 ] as const;
 
-type DemoDenylistCountry = (typeof DEMO_DENYLIST_COUNTRIES)[number];
-
-// @stll/anonymize-data's own `loadCityDictionary` builds its specifier from a
-// variable (`../dictionaries/cities/${code}.json`), which no bundler can
-// rewrite: in a bundled worker that relative path resolves against the emitted
-// chunk instead of the package, 404s, and the loader's internal try/catch
-// turns the failure into an empty list. Detection then silently loses every
-// city — and with it every street address, because the engine only emits an
-// address span when a known city anchors it. Literal specifiers keep the JSON
-// bundler-visible (one lazy chunk per country). `satisfies` keeps the map and
-// DEMO_DENYLIST_COUNTRIES from drifting apart.
-const CITY_DICTIONARY_LOADERS = {
-  US: async () =>
-    await import("@stll/anonymize-data/dictionaries/cities/US.json"),
-  GB: async () =>
-    await import("@stll/anonymize-data/dictionaries/cities/GB.json"),
-  FR: async () =>
-    await import("@stll/anonymize-data/dictionaries/cities/FR.json"),
-  DE: async () =>
-    await import("@stll/anonymize-data/dictionaries/cities/DE.json"),
-  CZ: async () =>
-    await import("@stll/anonymize-data/dictionaries/cities/CZ.json"),
-  IT: async () =>
-    await import("@stll/anonymize-data/dictionaries/cities/IT.json"),
-  ES: async () =>
-    await import("@stll/anonymize-data/dictionaries/cities/ES.json"),
-  NL: async () =>
-    await import("@stll/anonymize-data/dictionaries/cities/NL.json"),
-} satisfies Record<
-  DemoDenylistCountry,
-  () => Promise<{ default: readonly string[] }>
->;
-
 let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
@@ -119,7 +86,10 @@ const getDictionaries = (): Promise<
 
 // Names (for the person corpus) plus per-country city lists (for the deny-list
 // "Places" layer). `citiesByCountry` drives detection; `cities` is the flat
-// merge the pipeline also expects.
+// merge the pipeline also expects. `loadCityDictionary` (0.0.8+) resolves each
+// country through a literal-specifier loader map, so the city JSON stays
+// bundler-visible (one lazy chunk per country) and a load failure throws
+// instead of silently yielding an empty list.
 const loadDemoDictionaries = async (): Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > => {
@@ -128,10 +98,7 @@ const loadDemoDictionaries = async (): Promise<
     Promise.all(
       DEMO_DENYLIST_COUNTRIES.map(
         async (country) =>
-          [
-            country,
-            (await CITY_DICTIONARY_LOADERS[country]()).default,
-          ] as const,
+          [country, await loadCityDictionary(country)] as const,
       ),
     ),
   ]);
@@ -162,6 +129,9 @@ const handle = async (request: DemoRequest): Promise<DemoResponse> => {
         gazetteerEntries: [],
         enableDenyList: true,
         denyListCountries: DEMO_DENYLIST_COUNTRIES,
+        // Showcase: also catch a numbered street with no recognized city
+        // ("14 Rue de la Paix"), scoped to the demo countries' street types.
+        standaloneStreetDetection: "houseNumberAnchored",
         context,
       });
     });
