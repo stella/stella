@@ -68,7 +68,9 @@ type ExistingEntitlement = {
  * The neutral schema already validates ISO shape; the NaN check is a
  * boundary guard only.
  */
-const parseOccurredAt = (payload: { occurred_at?: string }): Date | null => {
+const parseOccurredAt = (payload: {
+  occurred_at?: string | undefined;
+}): Date | null => {
   if (payload.occurred_at === undefined) {
     return null;
   }
