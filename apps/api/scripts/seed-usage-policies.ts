@@ -92,29 +92,19 @@ const seed = async (): Promise<void> => {
     return;
   }
 
-  for (const seedPolicy of seeds) {
-    // Upsert by policyKey so edits to the config (display name, units,
-    // or a newly created hostedPolicyRef) propagate to the existing row
-    // instead of being skipped.
-    // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves upsert order across policies
-    await rootDb
-      .insert(usagePolicies)
-      .values({
-        policyKey: seedPolicy.key,
-        displayName: seedPolicy.displayName,
-        description: seedPolicy.description,
-        kind: seedPolicy.kind,
-        monthlyUsageUnits: seedPolicy.monthlyUsageUnits,
-        hostedPolicyRef: seedPolicy.hostedPolicyRef,
-        priceAmountCents: seedPolicy.priceAmountCents,
-        priceCurrency: seedPolicy.priceCurrency,
-        billingInterval: seedPolicy.billingInterval,
-        visibility: seedPolicy.visibility,
-        sortOrder: seedPolicy.sortOrder,
-      })
-      .onConflictDoUpdate({
-        target: usagePolicies.policyKey,
-        set: {
+  // One transaction for upserts + retirement: a mid-run failure (e.g.
+  // two seeds colliding on the unique hosted-provider reference) must
+  // not leave the catalog as a partial mix of new and stale entries.
+  await rootDb.transaction(async (tx) => {
+    for (const seedPolicy of seeds) {
+      // Upsert by policyKey so edits to the config (display name, units,
+      // or a newly created hostedPolicyRef) propagate to the existing row
+      // instead of being skipped.
+      // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves upsert order across policies
+      await tx
+        .insert(usagePolicies)
+        .values({
+          policyKey: seedPolicy.key,
           displayName: seedPolicy.displayName,
           description: seedPolicy.description,
           kind: seedPolicy.kind,
@@ -125,37 +115,52 @@ const seed = async (): Promise<void> => {
           billingInterval: seedPolicy.billingInterval,
           visibility: seedPolicy.visibility,
           sortOrder: seedPolicy.sortOrder,
-        },
-      });
-    console.log(
-      `seeded ${seedPolicy.key}: ${seedPolicy.monthlyUsageUnits} units/seat${
-        seedPolicy.hostedPolicyRef
-          ? " (hosted policy reference configured)"
-          : ""
-      }`,
-    );
-  }
+        })
+        .onConflictDoUpdate({
+          target: usagePolicies.policyKey,
+          set: {
+            displayName: seedPolicy.displayName,
+            description: seedPolicy.description,
+            kind: seedPolicy.kind,
+            monthlyUsageUnits: seedPolicy.monthlyUsageUnits,
+            hostedPolicyRef: seedPolicy.hostedPolicyRef,
+            priceAmountCents: seedPolicy.priceAmountCents,
+            priceCurrency: seedPolicy.priceCurrency,
+            billingInterval: seedPolicy.billingInterval,
+            visibility: seedPolicy.visibility,
+            sortOrder: seedPolicy.sortOrder,
+          },
+        });
+      console.log(
+        `seeded ${seedPolicy.key}: ${seedPolicy.monthlyUsageUnits} units/seat${
+          seedPolicy.hostedPolicyRef
+            ? " (hosted policy reference configured)"
+            : ""
+        }`,
+      );
+    }
 
-  // The seed config is the single source of the PUBLIC catalog: rows
-  // whose key left the config are hidden (not deleted or deactivated —
-  // existing entitlements keep referencing them), so repeated
-  // reconfiguration cannot grow the visible catalog past the seed
-  // bound. The empty-config early return above deliberately leaves
-  // everything untouched.
-  const seededKeys = seeds.map((seedPolicy) => seedPolicy.key);
-  const hidden = await rootDb
-    .update(usagePolicies)
-    .set({ visibility: "hidden" })
-    .where(
-      and(
-        notInArray(usagePolicies.policyKey, seededKeys),
-        eq(usagePolicies.visibility, "public"),
-      ),
-    )
-    .returning({ policyKey: usagePolicies.policyKey });
-  for (const row of hidden) {
-    console.log(`hid retired policy ${row.policyKey} (absent from seeds)`);
-  }
+    // The seed config is the single source of the PUBLIC catalog: rows
+    // whose key left the config are hidden (not deleted or deactivated —
+    // existing entitlements keep referencing them), so repeated
+    // reconfiguration cannot grow the visible catalog past the seed
+    // bound. The empty-config early return above deliberately leaves
+    // everything untouched.
+    const seededKeys = seeds.map((seedPolicy) => seedPolicy.key);
+    const hidden = await tx
+      .update(usagePolicies)
+      .set({ visibility: "hidden" })
+      .where(
+        and(
+          notInArray(usagePolicies.policyKey, seededKeys),
+          eq(usagePolicies.visibility, "public"),
+        ),
+      )
+      .returning({ policyKey: usagePolicies.policyKey });
+    for (const row of hidden) {
+      console.log(`hid retired policy ${row.policyKey} (absent from seeds)`);
+    }
+  });
 };
 
 await seed();

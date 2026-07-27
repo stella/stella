@@ -66,6 +66,8 @@ const createHostedSetup = createSafeRootHandler(
           .select({
             source: usageEntitlements.source,
             hostedAccountRef: usageEntitlements.hostedAccountRef,
+            status: usageEntitlements.status,
+            currentPeriodEnd: usageEntitlements.currentPeriodEnd,
           })
           .from(usageEntitlements)
           .where(
@@ -82,11 +84,20 @@ const createHostedSetup = createSafeRootHandler(
           return { kind: "manual_entitlement_present" as const };
         }
         // An add-on allocation is resolved against the buyer's hosted
-        // entitlement period at webhook time; without a mapped hosted
-        // account the paid allocation would be unattributable. Refuse
-        // up front rather than accepting money we cannot apply.
-        if (policy.kind === "addon" && !entitlement?.hostedAccountRef) {
-          return { kind: "addon_requires_subscription" as const };
+        // entitlement's CURRENT period at webhook time; without a mapped
+        // hosted account the paid allocation would be unattributable,
+        // and against a cancelled/paused/expired entitlement it would
+        // land in a period the organisation cannot consume. Refuse up
+        // front rather than accepting money we cannot apply.
+        if (policy.kind === "addon") {
+          const consumable =
+            entitlement?.hostedAccountRef &&
+            entitlement.status !== "cancelled" &&
+            entitlement.status !== "paused" &&
+            entitlement.currentPeriodEnd > new Date();
+          if (!consumable) {
+            return { kind: "addon_requires_subscription" as const };
+          }
         }
 
         return {
