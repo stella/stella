@@ -103,13 +103,22 @@ export const verifyWebhookSignature = ({
 
 type HmacKey = string | Buffer;
 
+// Some providers hand out Standard-Webhooks secrets under a vendor
+// prefix (e.g. `polar_whs_<base64>`) instead of the spec's `whsec_`.
+// Both wrap the same base64 key bytes; decode either.
+const VENDOR_WEBHOOK_SECRET_PREFIXES = ["polar_whs_"] as const;
+
 const parseWebhookSecret = (secret: string): HmacKey | null => {
   const trimmed = secret.trim();
-  if (!trimmed.startsWith(STANDARD_WEBHOOK_SECRET_PREFIX)) {
+  const prefix = [
+    STANDARD_WEBHOOK_SECRET_PREFIX,
+    ...VENDOR_WEBHOOK_SECRET_PREFIXES,
+  ].find((candidate) => trimmed.startsWith(candidate));
+  if (prefix === undefined) {
     return secret;
   }
 
-  const encoded = trimmed.slice(STANDARD_WEBHOOK_SECRET_PREFIX.length);
+  const encoded = trimmed.slice(prefix.length);
   if (!isBase64Secret(encoded)) {
     return null;
   }

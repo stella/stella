@@ -341,6 +341,17 @@ const envApi = createEnv({
       v.pipe(v.string(), v.minLength(8)),
     ),
     HOSTED_USAGE_PROVIDER_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
+    /**
+     * Selects how hosted usage provider API calls and webhook events are
+     * shaped. `neutral` (default) speaks the provider-agnostic contract
+     * directly. `polar` translates Polar's native checkout /
+     * customer-session API and `subscription.*` / `order.*` webhook events
+     * to and from that contract (see lib/hosted-usage-provider/polar).
+     */
+    HOSTED_USAGE_PROVIDER: v.optional(
+      v.picklist(["neutral", "polar"]),
+      "neutral",
+    ),
 
     /** Enables pre-flight usage-limit enforcement when true. */
     USAGE_ENFORCEMENT_ENABLED: featureFlagSchema,

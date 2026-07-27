@@ -700,3 +700,97 @@ describe("dispatch — handleHostedAllocation", () => {
     });
   });
 });
+
+describe("dispatch — out-of-order provider events", () => {
+  test("a stale retry cannot resurrect a newer revocation", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+
+      const first = await handleHostedEntitlementUpsert({
+        tx,
+        eventId: "evt_active_t1",
+        payload: buildEntitlementPayload(fx, {
+          occurred_at: "2026-07-01T10:00:00.000Z",
+        }),
+      });
+      expect(first.kind).toBe("applied");
+
+      const revoked = await handleUsageEntitlementStatusChange({
+        tx,
+        eventId: "evt_revoked_t3",
+        eventKind: "revoked",
+        payload: buildEntitlementPayload(fx, {
+          occurred_at: "2026-07-03T10:00:00.000Z",
+        }),
+      });
+      expect(revoked.kind).toBe("applied");
+
+      const stale = await handleHostedEntitlementUpsert({
+        tx,
+        eventId: "evt_update_t2_retry",
+        payload: buildEntitlementPayload(fx, {
+          occurred_at: "2026-07-02T10:00:00.000Z",
+        }),
+      });
+      expect(stale.kind).toBe("ignored");
+
+      const rows = await tx
+        .select({ status: usageEntitlements.status })
+        .from(usageEntitlements)
+        .where(eq(usageEntitlements.organizationId, fx.organizationId));
+      expect(rows.at(0)?.status).toBe("cancelled");
+    });
+  });
+
+  test("a stale revocation retry does not regress a newer state", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+
+      const first = await handleHostedEntitlementUpsert({
+        tx,
+        eventId: "evt_active_t2",
+        payload: buildEntitlementPayload(fx, {
+          occurred_at: "2026-07-02T10:00:00.000Z",
+        }),
+      });
+      expect(first.kind).toBe("applied");
+
+      const staleRevoke = await handleUsageEntitlementStatusChange({
+        tx,
+        eventId: "evt_revoked_t1_retry",
+        eventKind: "revoked",
+        payload: buildEntitlementPayload(fx, {
+          occurred_at: "2026-07-01T10:00:00.000Z",
+        }),
+      });
+      expect(staleRevoke.kind).toBe("ignored");
+
+      const rows = await tx
+        .select({ status: usageEntitlements.status })
+        .from(usageEntitlements)
+        .where(eq(usageEntitlements.organizationId, fx.organizationId));
+      expect(rows.at(0)?.status).toBe("active");
+    });
+  });
+
+  test("events without timestamps keep delivery-order semantics", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+
+      const first = await handleHostedEntitlementUpsert({
+        tx,
+        eventId: "evt_no_ts_1",
+        payload: buildEntitlementPayload(fx),
+      });
+      expect(first.kind).toBe("applied");
+
+      const second = await handleUsageEntitlementStatusChange({
+        tx,
+        eventId: "evt_no_ts_2",
+        eventKind: "revoked",
+        payload: buildEntitlementPayload(fx),
+      });
+      expect(second.kind).toBe("applied");
+    });
+  });
+});

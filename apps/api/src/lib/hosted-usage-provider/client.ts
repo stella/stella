@@ -3,7 +3,10 @@
 import { Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@/api/lib/fetch";
-import type { HostedUsageProviderApiCredentials } from "@/api/lib/hosted-usage-provider/config";
+import {
+  getHostedUsageProviderKind,
+  type HostedUsageProviderApiCredentials,
+} from "@/api/lib/hosted-usage-provider/config";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -66,7 +69,7 @@ const readStringField = (
   });
 };
 
-export const createHostedSetupSession = async ({
+const createNeutralSetupSession = async ({
   credentials,
   policyRef,
   accountRef,
@@ -121,6 +124,68 @@ export const createHostedSetupSession = async ({
     },
   });
 
+export const createPolarSetupSession = async ({
+  credentials,
+  policyRef,
+  externalAccountRef,
+  returnUrl,
+  successUrl,
+  metadata,
+}: CreateHostedSetupInput): Promise<
+  Result<CreateHostedSetupResult, HostedUsageProviderApiError>
+> =>
+  await Result.tryPromise({
+    try: async () => {
+      const response = await fetchWithTimeout(
+        `${credentials.baseUrl}/v1/checkouts/`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${credentials.apiKey}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            products: [policyRef],
+            // Polar links the resulting customer by external id, so the
+            // org-scoped ref keeps repeat checkouts attached to one customer.
+            external_customer_id: externalAccountRef,
+            success_url: successUrl,
+            return_url: returnUrl,
+            metadata,
+          }),
+          timeoutMs: REQUEST_TIMEOUT_MS,
+        },
+      );
+      if (!response.ok) {
+        throw new HostedUsageProviderApiError({
+          message: `Hosted setup session returned ${response.status}`,
+          status: response.status,
+        });
+      }
+      const json = await readJsonRecord(response, "Hosted setup session");
+      return {
+        id: readStringField(json, "id", "Hosted setup session"),
+        url: readStringField(json, "url", "Hosted setup session"),
+      };
+    },
+    catch: (cause) => {
+      if (cause instanceof HostedUsageProviderApiError) {
+        return cause;
+      }
+      return new HostedUsageProviderApiError({
+        message: "Hosted setup session failed",
+        cause,
+      });
+    },
+  });
+
+export const createHostedSetupSession = async (
+  input: CreateHostedSetupInput,
+): Promise<Result<CreateHostedSetupResult, HostedUsageProviderApiError>> =>
+  getHostedUsageProviderKind() === "polar"
+    ? await createPolarSetupSession(input)
+    : await createNeutralSetupSession(input);
+
 type CreateHostedManagementInput = {
   credentials: HostedUsageProviderApiCredentials;
   accountRef: string;
@@ -131,7 +196,7 @@ type CreateHostedManagementResult = {
   url: string;
 };
 
-export const createHostedManagementSession = async ({
+const createNeutralManagementSession = async ({
   credentials,
   accountRef,
   returnUrl,
@@ -183,3 +248,65 @@ export const createHostedManagementSession = async ({
       });
     },
   });
+
+export const createPolarManagementSession = async ({
+  credentials,
+  accountRef,
+  returnUrl,
+}: CreateHostedManagementInput): Promise<
+  Result<CreateHostedManagementResult, HostedUsageProviderApiError>
+> =>
+  await Result.tryPromise({
+    try: async () => {
+      const response = await fetchWithTimeout(
+        `${credentials.baseUrl}/v1/customer-sessions/`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${credentials.apiKey}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            customer_id: accountRef,
+            return_url: returnUrl,
+          }),
+          timeoutMs: REQUEST_TIMEOUT_MS,
+        },
+      );
+      if (!response.ok) {
+        throw new HostedUsageProviderApiError({
+          message: `Hosted usage management session returned ${response.status}`,
+          status: response.status,
+        });
+      }
+      const json = await readJsonRecord(
+        response,
+        "Hosted usage management session",
+      );
+      return {
+        url: readStringField(
+          json,
+          "customer_portal_url",
+          "Hosted usage management session",
+        ),
+      };
+    },
+    catch: (cause) => {
+      if (cause instanceof HostedUsageProviderApiError) {
+        return cause;
+      }
+      return new HostedUsageProviderApiError({
+        message: "Hosted usage management session failed",
+        cause,
+      });
+    },
+  });
+
+export const createHostedManagementSession = async (
+  input: CreateHostedManagementInput,
+): Promise<
+  Result<CreateHostedManagementResult, HostedUsageProviderApiError>
+> =>
+  getHostedUsageProviderKind() === "polar"
+    ? await createPolarManagementSession(input)
+    : await createNeutralManagementSession(input);

@@ -67,6 +67,31 @@ describe("verifyWebhookSignature", () => {
     expect(result.ok).toBe(true);
   });
 
+  test("accepts a vendor-prefixed (polar_whs_) serialized secret", () => {
+    const secretBytes = Buffer.from(
+      "vendor-prefixed-webhook-secret-32-b",
+      "utf-8",
+    );
+    const serializedSecret = `polar_whs_${secretBytes.toString("base64")}`;
+    const id = "evt_vendor_secret_001";
+    const timestamp = "1717400000";
+    const body = `{"type":"entitlement.created","id":"sub_vendor"}`;
+    const signature = signWithKey(secretBytes, id, timestamp, body);
+
+    const result = verifyWebhookSignature({
+      secrets: [serializedSecret],
+      rawBody: body,
+      headers: {
+        id,
+        timestamp,
+        signature: `v1,${signature}`,
+      },
+      nowSeconds: 1_717_400_000,
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
   test("rejects request missing webhook-id header", () => {
     const headers = validHeaders();
     const result = verifyWebhookSignature({

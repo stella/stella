@@ -119,9 +119,13 @@ const createHostedSetup = createSafeRootHandler(
     // client-supplied success URL would turn the trusted hosted-setup
     // flow into an open redirect toward an arbitrary origin.
     const usageSettingsUrl = `${baseUrl}/settings/organization/usage`;
-    const externalAccountRef = dbResult.accountRef
-      ? undefined
-      : hostedExternalAccountRef(session.activeOrganizationId);
+    // Always send the org-derived external customer ref. Polar's checkout
+    // API links the resulting customer by external id, so it is required
+    // there; the neutral provider still receives the existing account_ref
+    // alongside it and can prefer that when present.
+    const externalAccountRef = hostedExternalAccountRef(
+      session.activeOrganizationId,
+    );
 
     const sessionResult = await createHostedSetupSession({
       credentials,
