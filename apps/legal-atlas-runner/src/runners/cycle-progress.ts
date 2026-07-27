@@ -48,3 +48,15 @@ export const cycleMadeProgress = ({
   pagesProcessed,
 }: CycleResult): boolean =>
   outcome === CYCLE_OUTCOME.COMPLETED || pagesProcessed > 0;
+
+/**
+ * Whether a cycle is evidence the source is caught up, which drives the idle
+ * (daily) polling cadence.
+ *
+ * Only a clean cycle that found nothing qualifies. A halt or a timeout means
+ * the cycle stopped partway through a source that still has work, so it must
+ * not read as quiet: an adapter already on the idle cadence would otherwise
+ * stay there, taking a day per page.
+ */
+export const cycleWasIdle = ({ outcome, inserted }: CycleResult): boolean =>
+  outcome === CYCLE_OUTCOME.COMPLETED && inserted === 0;

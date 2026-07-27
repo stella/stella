@@ -54,6 +54,7 @@ import {
   type CycleOutcome,
   type CycleResult,
   cycleMadeProgress,
+  cycleWasIdle,
 } from "./cycle-progress";
 
 const formatLogDetail = (detail: unknown): string => {
@@ -652,7 +653,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         inFlightCycles.delete(adapterKey);
         cycleSemaphore.release();
       }
-      const { outcome, inserted } = cycle;
+      const { outcome } = cycle;
 
       // A stall is a cycle that advanced no page, whatever its outcome; a halt
       // or a timeout that still walked pages moved the cursor.
@@ -663,23 +664,24 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         backoffFailures++;
       } else {
         backoffFailures = 0;
-        // Only "completed" outcomes count toward idle. A "timeout"
-        // means the cycle hit MAX_CYCLE_MS mid-work; the adapter is
-        // slow, not caught up, so leave idleCycles unchanged.
-        if (outcome === CYCLE_OUTCOME.COMPLETED) {
-          if (inserted > 0) {
-            if (idleCycles >= IDLE_THRESHOLD) {
-              logInfo(
-                `[${adapterKey}] New decisions found; resuming fast cadence`,
-              );
-            }
-            idleCycles = 0;
-          } else {
-            idleCycles++;
-            if (idleCycles === IDLE_THRESHOLD) {
-              logInfo(`[${adapterKey}] Caught up; switching to daily polling`);
-            }
+        // Idle means caught up with nothing to do, so only a clean cycle that
+        // found nothing counts toward it. Every other cycle reaching here
+        // moved through the source, and a halt or a timeout partway in is a
+        // source with work left rather than a quiet one: it has to clear the
+        // idle state, or the delay below parks a working adapter on the daily
+        // cadence for a day at a time.
+        if (cycleWasIdle(cycle)) {
+          idleCycles++;
+          if (idleCycles === IDLE_THRESHOLD) {
+            logInfo(`[${adapterKey}] Caught up; switching to daily polling`);
           }
+        } else {
+          if (idleCycles >= IDLE_THRESHOLD) {
+            logInfo(
+              `[${adapterKey}] New decisions found; resuming fast cadence`,
+            );
+          }
+          idleCycles = 0;
         }
       }
     } catch (error) {

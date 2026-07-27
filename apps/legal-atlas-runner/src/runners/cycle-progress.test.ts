@@ -4,6 +4,7 @@ import {
   CYCLE_OUTCOME,
   type CycleOutcome,
   cycleMadeProgress,
+  cycleWasIdle,
 } from "./cycle-progress";
 
 const OUTCOMES = Object.values(CYCLE_OUTCOME) satisfies readonly CycleOutcome[];
@@ -64,5 +65,44 @@ describe("cycleMadeProgress", () => {
         pagesProcessed: 0,
       }),
     ).toBe(true);
+  });
+});
+
+describe("cycleWasIdle", () => {
+  test("a cycle that halted or timed out is never idle", () => {
+    // Such a cycle stopped partway through a source that still has work.
+    // Reading it as quiet would hold an adapter on the daily cadence.
+    const idle = OUTCOMES.filter(
+      (outcome) => outcome !== CYCLE_OUTCOME.COMPLETED,
+    )
+      .flatMap((outcome) =>
+        INSERTED.flatMap((inserted) =>
+          [0, 1].map((pagesProcessed) => ({
+            outcome,
+            inserted,
+            pagesProcessed,
+          })),
+        ),
+      )
+      .filter(cycleWasIdle);
+
+    expect(idle).toEqual([]);
+  });
+
+  test("only a completed cycle that found nothing is idle", () => {
+    expect(
+      cycleWasIdle({
+        outcome: CYCLE_OUTCOME.COMPLETED,
+        inserted: 0,
+        pagesProcessed: 4,
+      }),
+    ).toBe(true);
+    expect(
+      cycleWasIdle({
+        outcome: CYCLE_OUTCOME.COMPLETED,
+        inserted: 1,
+        pagesProcessed: 4,
+      }),
+    ).toBe(false);
   });
 });
