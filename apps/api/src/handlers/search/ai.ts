@@ -940,12 +940,17 @@ const loadSearchHitContent = async ({
   if (hit.type === "case-law") {
     // The pg-fts projection is the only body source here, and that is
     // consistent: `searchGlobal` selects case-law hits FROM
-    // case_law_search_documents, so a decision without a projection row is
-    // never a hit in the first place. Serving canonically stored decisions
-    // is the corpus-index provider's job, not this join's. Do not reach for
-    // the corpus objects as a fallback — importing that read into a route
-    // module costs ~1.5M type instantiations (see the typecheck-cost
-    // baseline) for a branch this query cannot produce.
+    // case_law_search_documents whatever LEGAL_SEARCH_PROVIDER says, so a
+    // decision without a projection row is never a hit in the first place.
+    // Do not reach for the corpus objects as a fallback — importing that
+    // read into a route module costs ~1.5M type instantiations (see the
+    // typecheck-cost baseline) for a branch this query cannot produce.
+    //
+    // The limitation this leaves is global search's, not this handler's:
+    // under canonical storage new decisions get no projection row, so
+    // `searchGlobal`'s case-law section stops seeing them entirely and both
+    // the UI and this summariser lose them together. That section needs a
+    // corpus-aware path before any database goes canonical.
     const rows = await scopedDb((tx) =>
       tx
         .select({ searchableText: caseLawSearchDocuments.searchableText })

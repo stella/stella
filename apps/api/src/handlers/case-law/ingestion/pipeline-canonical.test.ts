@@ -85,6 +85,8 @@ let persistedCursor: string | null | undefined;
  * cancels the statement and so proves nothing about whether it committed.
  */
 let rowWrite: "ok" | "fault" | "timeout" = "ok";
+/** The row the dedup lookup finds; undefined makes this a new decision. */
+let existingDecision: Record<string, unknown> | undefined;
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
@@ -93,6 +95,7 @@ afterEach(() => {
   deletedKeys.length = 0;
   persistedCursor = undefined;
   rowWrite = "ok";
+  existingDecision = undefined;
   writeCorpusDocumentMock.mockClear();
   deleteCorpusDocumentMock.mockClear();
 });
@@ -118,7 +121,7 @@ const scopedDb: ScopedDb = async (callback) => {
     query: {
       // drizzle's relational API returns undefined for a miss.
       caseLawDecisions: {
-        findFirst: async () => await Promise.resolve(undefined),
+        findFirst: async () => await Promise.resolve(existingDecision),
       },
     },
     select: () => ({
@@ -235,6 +238,34 @@ describe("processDecision — canonical storage mode", () => {
     expect(discarded?.astKey).toContain("/ast.json.zst");
     expect(discarded?.textKey).toContain("jurisdiction=SVK");
     expect(insertedRows).toHaveLength(0);
+  });
+
+  test("keeps the objects when the failed write was a refresh", async () => {
+    // A refresh derives the same content-addressed keys from the existing
+    // id, so when only metadata or the raw source moved they are the
+    // objects the live row already points at — and its payload columns are
+    // NULL. Deleting them would empty a served decision.
+    existingDecision = {
+      id: createSafeId<"caseLawDecision">(),
+      metadata: {},
+      sourceHash: "older-hash",
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+    writeCorpusDocumentMock.mockImplementationOnce(async () => {
+      events.push("corpus-write-failed");
+      return await Promise.reject(new Error("bucket unreachable"));
+    });
+
+    const outcome = await processDecision(
+      decision,
+      createSafeId<"caseLawSource">(),
+      scopedDb,
+    );
+
+    expect(outcome.s3UploadFailed).toBe(true);
+    expect(events).toEqual(["corpus-write-failed"]);
+    expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
   });
 
   // bun-types declares `.rejects.toBe` as void, so awaiting it trips

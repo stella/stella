@@ -336,19 +336,27 @@ type CorpusWritePayload = {
   ast: IngestionResult["documentAst"];
 };
 
-type PlanCorpusWriteInput = CorpusWritePayload & { mode: CorpusStorageMode };
+type PlanCorpusWriteInput = CorpusWritePayload & {
+  mode: CorpusStorageMode;
+  /** Whether a row for this decision already existed before this run. */
+  hadExistingRow: boolean;
+};
 
 /**
  * `writeCorpusDocument` issues its three PUTs in parallel, so a rejection
- * can still leave one or two objects behind. A new decision's retry mints a
- * different id and keys its objects under that, stranding these for good.
- * Delete them best-effort; the keys are content-addressed, so they are
- * derivable from the payload without the write having returned.
+ * can still leave one or two objects behind. For a decision that had no
+ * row, the retry mints a different id and keys its objects under that,
+ * stranding these for good. Delete them best-effort; the keys are
+ * content-addressed, so they are derivable from the payload without the
+ * write having returned.
  *
- * Unlike the post-transaction cleanup this is unconditionally safe, even
- * for a refresh and even when the failure is an abandonment-shaped timeout
- * whose PUTs may still land: no row carries these keys yet, so no delete
- * here can produce a dangling reference.
+ * New decisions only, for the same reason `canDiscardCorpusObjects` scopes
+ * the post-transaction compensation: a refresh derives these keys from the
+ * existing id and the payload hash, so whenever the text, sections, and AST
+ * are unchanged (only metadata or the raw source moved) they are the very
+ * objects the live row already references — and under canonical storage
+ * that row's payload columns are NULL, so deleting them empties the
+ * decision. An orphaned object is harmless; that is not.
  */
 const discardPartialCorpusWrite = async (
   payload: CorpusWritePayload,
@@ -376,6 +384,7 @@ const discardPartialCorpusWrite = async (
 
 const planCorpusWrite = async ({
   mode,
+  hadExistingRow,
   ...payload
 }: PlanCorpusWriteInput): Promise<CorpusWritePlan> => {
   switch (mode) {
@@ -395,7 +404,9 @@ const planCorpusWrite = async ({
           decisionId: payload.documentId,
           step: "processDecision.canonicalCorpusWrite",
         });
-        await discardPartialCorpusWrite(payload);
+        if (!hadExistingRow) {
+          await discardPartialCorpusWrite(payload);
+        }
         return { type: "write-failed" };
       }
       return { type: "object-storage", written: written.value };
@@ -599,6 +610,7 @@ export const processDecision = async (
 
   const corpusPlan = await planCorpusWrite({
     mode: corpusStorageMode,
+    hadExistingRow: Boolean(existing),
     documentId: decisionId,
     jurisdiction: result.country,
     text: result.fulltext ?? null,

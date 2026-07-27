@@ -20,7 +20,7 @@
 import { panic } from "better-result";
 
 import { caseLawIngestionEvents } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode, envBase } from "@/api/env-base";
 import { tryRecomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
@@ -861,10 +861,13 @@ export const runCaseLawIngest = async (
   // semaphore with bounded concurrency and a generous statement
   // timeout so long texts don't block other work.
   const searchIndexLoop = (async () => {
-    // tsvector upkeep only ever serves the pg-fts provider. Under any other
-    // provider the rows created meanwhile stay pending, and the backfill
-    // catches them up if pg-fts is ever made the serving provider again.
-    if (envBase.LEGAL_SEARCH_PROVIDER !== "pg-fts") {
+    // Gated on storage, not on the legal-search provider: global search
+    // reads case_law_search_documents directly whatever LEGAL_SEARCH_PROVIDER
+    // is set to, so this projection has consumers under every provider. What
+    // ends it is canonical storage, where a new row carries no Postgres text
+    // to project. Rows created meanwhile stay pending, and the backfill
+    // catches them up if the mode is ever rolled back.
+    if (corpusStorageMode === "canonical") {
       return;
     }
     while (true) {
@@ -981,10 +984,9 @@ export const runCaseLawIngest = async (
   // Legislation pg-fts projection loop (mirrors searchIndexLoop). The
   // corpus daemon maintains both families' search projections.
   const legislationSearchIndexLoop = (async () => {
-    // Same invariant as searchIndexLoop: tsvector upkeep only serves pg-fts.
-    if (envBase.LEGAL_SEARCH_PROVIDER !== "pg-fts") {
-      return;
-    }
+    // Ungated, unlike its case-law sibling: legislation stays dual-write by
+    // scope decision, so its rows always carry the text this projection
+    // needs and it must always keep building.
     while (true) {
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
