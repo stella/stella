@@ -194,10 +194,16 @@ export type NativeMonetaryData = {
   };
 };
 
+export type NativeStandaloneStreetData = {
+  street_type_words: string[];
+};
+
 export type NativeAddressSeedData = {
   boundary_words: string[];
   br_cep_cue_words: string[];
   unit_abbreviations: string[];
+  /** Present only when `standaloneStreetDetection` is enabled. */
+  standalone_street?: NativeStandaloneStreetData;
 };
 
 export type NativeAddressContextData = {

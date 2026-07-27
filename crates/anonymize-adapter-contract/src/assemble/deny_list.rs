@@ -1157,6 +1157,8 @@ mod tests {
       enable_coreference: false,
       enable_zone_classification: None,
       enable_hotword_rules: None,
+      standalone_street_detection:
+        stella_anonymize_core::assemble::StandaloneStreetDetection::default(),
       labels: Vec::new(),
       workspace_id: String::from("test-workspace"),
       dictionaries: None,

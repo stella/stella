@@ -343,6 +343,13 @@ pub struct BindingShareQuantityTermData {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct BindingStandaloneStreetData {
+  #[serde(default)]
+  pub street_type_words: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingAddressSeedData {
   #[serde(default)]
   pub boundary_words: Vec<String>,
@@ -350,6 +357,9 @@ pub struct BindingAddressSeedData {
   pub br_cep_cue_words: Vec<String>,
   #[serde(default)]
   pub unit_abbreviations: Vec<String>,
+  /// Present only when the caller opts into standalone street detection.
+  #[serde(default)]
+  pub standalone_street: Option<BindingStandaloneStreetData>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

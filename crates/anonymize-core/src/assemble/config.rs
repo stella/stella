@@ -35,6 +35,24 @@ pub enum PreparedArtifactPolicy {
   Omit,
 }
 
+/// Street-address detection without a known-city anchor.
+///
+/// Mirrors `StandaloneStreetDetection` in `types.ts`. Off by default: a
+/// street-type word plus a nearby number is a much weaker signal than a
+/// city-anchored address and fires on contract prose ("in place 30 days",
+/// "District Court 2019"), so callers opt in per workspace.
+#[derive(
+  Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum StandaloneStreetDetection {
+  #[default]
+  Off,
+  /// Detect a street-type word only when a house number sits directly beside
+  /// it, in either order ("14 Rue de la Paix", "Hauptstraße 5").
+  HouseNumberAnchored,
+}
+
 /// Metadata for a single deny-list dictionary entry.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DictionaryMeta {
@@ -94,6 +112,10 @@ pub struct PipelineConfig {
   pub enable_coreference: bool,
   pub enable_zone_classification: Option<bool>,
   pub enable_hotword_rules: Option<bool>,
+  /// Legacy callers omit this field; absence means [`
+  /// StandaloneStreetDetection::Off`].
+  #[serde(default)]
+  pub standalone_street_detection: StandaloneStreetDetection,
   pub labels: Vec<String>,
   pub workspace_id: String,
   pub dictionaries: Option<Dictionaries>,

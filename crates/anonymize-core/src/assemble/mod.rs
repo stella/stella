@@ -18,7 +18,7 @@ pub mod gazetteer;
 
 pub use config::{
   CustomDenyListEntry, CustomRegexPattern, DenyListCategory, DictionaryMeta,
-  PipelineConfig, PreparedArtifactPolicy,
+  PipelineConfig, PreparedArtifactPolicy, StandaloneStreetDetection,
 };
 pub use data::{
   OrderedMap, data_file, parse_data_file, parse_ordered_data_file,

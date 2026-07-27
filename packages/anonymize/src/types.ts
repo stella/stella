@@ -378,6 +378,11 @@ export type Dictionaries = {
   citiesByCountry?: Readonly<Record<string, readonly string[]>>;
 };
 
+/**
+ * Street-address detection without a known-city anchor.
+ */
+export type StandaloneStreetDetection = "off" | "houseNumberAnchored";
+
 export type PipelineConfig = {
   threshold: number;
   enableTriggerPhrases: boolean;
@@ -443,6 +448,22 @@ export type PipelineConfig = {
   enableCoreference: boolean;
   enableZoneClassification?: boolean;
   enableHotwordRules?: boolean;
+  /**
+   * Detect a street address that carries no known-city
+   * anchor. Defaults to `"off"`.
+   *
+   * `"houseNumberAnchored"` accepts a street-type word
+   * with a house number directly beside it, in either
+   * order ("14 Rue de la Paix", "Hauptstraße 5",
+   * "123 Main Street"). A bare street name with no
+   * number never fires.
+   *
+   * A street-type word plus a nearby number is a much
+   * weaker signal than a city-anchored address and does
+   * fire on contract prose ("District Court 2019"), so
+   * this stays opt-in per workspace.
+   */
+  standaloneStreetDetection?: StandaloneStreetDetection;
   /**
    * Requested output labels. An empty array means
    * "do not filter by label" for deterministic detectors.

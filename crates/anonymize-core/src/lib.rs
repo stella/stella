@@ -40,7 +40,7 @@ mod validators;
 mod zones;
 
 pub use address_context::AddressContextData;
-pub use address_seeds::AddressSeedData;
+pub use address_seeds::{AddressSeedData, StandaloneStreetData};
 pub use coreference::{CoreferenceData, CoreferencePatternData};
 pub use dates::DateData;
 pub use diagnostics::{

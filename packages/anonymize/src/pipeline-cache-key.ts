@@ -83,6 +83,7 @@ export const pipelineConfigKey = (
     `${customDenyFingerprint}:` +
     `${customRegexFingerprint}:` +
     `${config.enableGazetteer}:${gazFingerprint}:` +
-    `${config.enableCountries !== false}`
+    `${config.enableCountries !== false}:` +
+    `${config.standaloneStreetDetection ?? "off"}`
   );
 };

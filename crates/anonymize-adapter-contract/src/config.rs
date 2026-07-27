@@ -15,18 +15,18 @@ use stella_anonymize_core::{
   PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
   RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchOptions,
   SearchPattern, ShareQuantityTermData, SignatureData, SigningPlaceGuardData,
-  SourceDetail, StringGroups, TriggerData, TriggerRule, TriggerStrategy,
-  TriggerValidation, WrittenAmountPatternData, ZoneData, ZonePatternData,
-  ZoneSigningClauseData,
+  SourceDetail, StandaloneStreetData, StringGroups, TriggerData, TriggerRule,
+  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
+  ZonePatternData, ZoneSigningClauseData,
 };
 
 use crate::error::{ContractError, Result};
 use crate::types::{
-  BindingCoreferenceData, BindingCountryMatchData, BindingCountryVariant,
-  BindingDenyListFilterData, BindingDenyListMatchData, BindingHotwordRuleData,
-  BindingLegalFormData, BindingMonetaryData, BindingNameCorpusData,
-  BindingNameCorpusMode, BindingOperator, BindingOperatorConfig,
-  BindingPatternSlice, BindingPreparedArtifactPolicy,
+  BindingAddressSeedData, BindingCoreferenceData, BindingCountryMatchData,
+  BindingCountryVariant, BindingDenyListFilterData, BindingDenyListMatchData,
+  BindingHotwordRuleData, BindingLegalFormData, BindingMonetaryData,
+  BindingNameCorpusData, BindingNameCorpusMode, BindingOperator,
+  BindingOperatorConfig, BindingPatternSlice, BindingPreparedArtifactPolicy,
   BindingPreparedSearchConfig, BindingPreparedSearchSlices,
   BindingRegexArtifactPolicy, BindingRegexMatchMeta, BindingSearchOptions,
   BindingSearchPattern, BindingSignatureData, BindingTaggedOperator,
@@ -110,11 +110,9 @@ pub fn prepared_search_config_from_binding(
         })
       }),
       legal_form_data,
-      address_seed_data: config.address_seed_data.map(|data| AddressSeedData {
-        boundary_words: data.boundary_words,
-        br_cep_cue_words: data.br_cep_cue_words,
-        unit_abbreviations: data.unit_abbreviations,
-      }),
+      address_seed_data: config
+        .address_seed_data
+        .map(address_seed_data_from_binding),
       zone_data: config.zone_data.map(zone_data_from_binding),
       address_context_data: config.address_context_data.map(|data| {
         AddressContextData {
@@ -135,6 +133,21 @@ pub fn prepared_search_config_from_binding(
       monetary_data: config.monetary_data.map(monetary_data_from_binding),
     },
   })
+}
+
+fn address_seed_data_from_binding(
+  data: BindingAddressSeedData,
+) -> AddressSeedData {
+  AddressSeedData {
+    boundary_words: data.boundary_words,
+    br_cep_cue_words: data.br_cep_cue_words,
+    unit_abbreviations: data.unit_abbreviations,
+    standalone_street: data.standalone_street.map(|data| {
+      StandaloneStreetData {
+        street_type_words: data.street_type_words,
+      }
+    }),
+  }
 }
 
 fn country_data_from_binding(

@@ -14,6 +14,7 @@ export const DEFAULT_NATIVE_PIPELINE_CONFIG: PipelineConfig = {
   enableCoreference: true,
   enableHotwordRules: true,
   enableZoneClassification: true,
+  standaloneStreetDetection: "off",
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "native-pipeline-default",
 };

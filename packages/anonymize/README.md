@@ -357,6 +357,17 @@ export default {
   deterministic custom rules today and use the caller-detection API for
   model-produced spans.
 - `enableNameCorpus` also controls whether first names, surnames, and titles are injected into deny-list matching when `enableDenyList` is enabled.
+- `standaloneStreetDetection` defaults to `"off"`: an address span normally needs
+  two kinds of evidence (a street, a postal code, a city, a state, or an address
+  trigger). Set it to `"houseNumberAnchored"` to also accept a street-type word
+  with a house number directly beside it in either order (`14 Rue de la Paix`,
+  `Hauptstraße 5`, `123 Main Street`). A bare street name with no number never
+  fires, and only the street types of the languages in `languages` / `language`
+  are recognized, so an English-scoped pipeline does not detect `Hauptstraße 5`.
+  The mode trades precision for recall: a street-type word next to a number also
+  occurs in contract prose (`District Court 2019`), so enable it per workspace
+  rather than globally. It changes the prepared package, so rebuild the package
+  after changing it.
 - The optional `@stll/anonymize-data` package carries the published dictionary and trigger data used when building prepared packages.
 - `customDenyList` and `customRegexes` are part of the prepared package input and should be regenerated when they change.
 

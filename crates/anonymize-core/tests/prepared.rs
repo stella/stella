@@ -3650,6 +3650,7 @@ fn prepared_engine_stops_address_before_notice_copy_instruction() {
       boundary_words: vec![String::from("with a copy")],
       br_cep_cue_words: Vec::new(),
       unit_abbreviations: Vec::new(),
+      ..AddressSeedData::default()
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -3756,6 +3757,7 @@ fn prepared_engine_stops_address_seed_expansion_at_legal_prose() {
       boundary_words: vec![String::from("pokud")],
       br_cep_cue_words: Vec::new(),
       unit_abbreviations: Vec::new(),
+      ..AddressSeedData::default()
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -3823,6 +3825,7 @@ fn prepared_engine_does_not_cluster_address_seed_inside_register_span() {
       boundary_words: vec![String::from("eingetragen")],
       br_cep_cue_words: Vec::new(),
       unit_abbreviations: Vec::new(),
+      ..AddressSeedData::default()
     }),
     ..empty_config(PreparedEngineSlices::default())
   })

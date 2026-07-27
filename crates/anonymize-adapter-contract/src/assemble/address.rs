@@ -15,12 +15,16 @@ use std::collections::HashSet;
 use serde::Deserialize;
 use serde_json::Value;
 use stella_anonymize_core::assemble::{
-  AssembleError, OrderedMap, parse_data_file, parse_ordered_data_file,
+  AssembleError, OrderedMap, StandaloneStreetDetection, parse_data_file,
+  parse_ordered_data_file,
 };
 
 use super::AssembleContext;
 use super::language::language_config_matches;
-use crate::{BindingAddressContextData, BindingAddressSeedData};
+use crate::{
+  BindingAddressContextData, BindingAddressSeedData,
+  BindingStandaloneStreetData,
+};
 
 #[derive(Deserialize)]
 struct AddressPrepositions {
@@ -248,7 +252,57 @@ pub(super) fn build_address_seed_data(
     boundary_words: shared.boundary_words.clone(),
     br_cep_cue_words: shared.br_cep_cue_words.clone(),
     unit_abbreviations: flatten_dictionaries(&[&unit_abbreviations]),
+    standalone_street: build_standalone_street_data(ctx)?,
   }))
+}
+
+/// Standalone street detection needs the street-type vocabulary at detection
+/// time: a compound street name ("Hauptstraße") never reaches the whole-word
+/// street-type automaton, so the detector matches those tails itself.
+///
+/// The whole-word automaton is assembled across every language, so the payload
+/// carries only the selected languages' words and the detector scores nothing
+/// outside them: an English-only pipeline must not detect "Hauptstraße 5".
+/// Emitting the field only for opting-in callers keeps every other prepared
+/// package unchanged.
+fn build_standalone_street_data(
+  ctx: &AssembleContext<'_>,
+) -> Result<Option<BindingStandaloneStreetData>, AssembleError> {
+  if !ctx.label_allowed("address")
+    || ctx.config.standalone_street_detection
+      != StandaloneStreetDetection::HouseNumberAnchored
+  {
+    return Ok(None);
+  }
+  let street_type_words = scoped_street_type_words(ctx)?;
+  if street_type_words.is_empty() {
+    return Ok(None);
+  }
+  Ok(Some(BindingStandaloneStreetData { street_type_words }))
+}
+
+/// Mirrors `street_type_patterns`, restricted to the languages this pipeline
+/// is scoped to. An unscoped pipeline keeps every language.
+fn scoped_street_type_words(
+  ctx: &AssembleContext<'_>,
+) -> Result<Vec<String>, AssembleError> {
+  let street_types: OrderedMap<Value> =
+    parse_ordered_data_file("address-street-types.json")?;
+  let mut words = Vec::new();
+  for (language, value) in &street_types {
+    if language.starts_with('_')
+      || !language_config_matches(language, ctx.content_languages.as_deref())
+    {
+      continue;
+    }
+    let Some(items) = value.as_array() else {
+      continue;
+    };
+    for word in items.iter().filter_map(Value::as_str) {
+      words.push(word.to_string());
+    }
+  }
+  Ok(words)
 }
 
 fn scoped_country_words(
@@ -405,12 +459,12 @@ fn build_br_cue_words(
 #[cfg(test)]
 mod tests {
   use stella_anonymize_core::assemble::{
-    AssembleError, PipelineConfig, parse_data_file,
+    AssembleError, PipelineConfig, StandaloneStreetDetection, parse_data_file,
   };
 
   use super::{
     AssembleContext, Conjunctions, build_address_shared_data,
-    flatten_dictionaries,
+    build_standalone_street_data, flatten_dictionaries,
   };
 
   fn config(languages: Vec<String>) -> PipelineConfig {
@@ -435,10 +489,74 @@ mod tests {
       enable_coreference: false,
       enable_zone_classification: Some(false),
       enable_hotword_rules: Some(false),
+      standalone_street_detection: StandaloneStreetDetection::default(),
       labels: vec![String::from("address")],
       workspace_id: String::from("address-language-test"),
       dictionaries: None,
     }
+  }
+
+  fn standalone_street_words(
+    languages: &[&str],
+  ) -> Result<Vec<String>, AssembleError> {
+    let mut config = config(
+      languages
+        .iter()
+        .map(|language| (*language).to_owned())
+        .collect(),
+    );
+    config.standalone_street_detection =
+      StandaloneStreetDetection::HouseNumberAnchored;
+    let context = AssembleContext {
+      config: &config,
+      dictionaries: None,
+      content_languages: config.languages.clone(),
+      allowed_labels: None,
+    };
+    Ok(
+      build_standalone_street_data(&context)?
+        .map(|data| data.street_type_words)
+        .unwrap_or_default(),
+    )
+  }
+
+  #[test]
+  fn standalone_street_vocabulary_follows_language_scope()
+  -> Result<(), AssembleError> {
+    let english = standalone_street_words(&["en"])?;
+    assert!(english.iter().any(|word| word == "Street"));
+    assert!(!english.iter().any(|word| word == "Stra\u{df}e"));
+    assert!(!english.iter().any(|word| word == "rue"));
+
+    let german = standalone_street_words(&["de"])?;
+    assert!(german.iter().any(|word| word == "Stra\u{df}e"));
+    assert!(!german.iter().any(|word| word == "Street"));
+
+    let both = standalone_street_words(&["de", "en"])?;
+    assert!(both.iter().any(|word| word == "Street"));
+    assert!(both.iter().any(|word| word == "Stra\u{df}e"));
+    Ok(())
+  }
+
+  #[test]
+  fn standalone_street_data_is_absent_without_scoped_street_types()
+  -> Result<(), AssembleError> {
+    assert!(standalone_street_words(&["ja"])?.is_empty());
+    Ok(())
+  }
+
+  #[test]
+  fn standalone_street_data_is_absent_unless_the_caller_opts_in()
+  -> Result<(), AssembleError> {
+    let config = config(vec![String::from("de")]);
+    let context = AssembleContext {
+      config: &config,
+      dictionaries: None,
+      content_languages: config.languages.clone(),
+      allowed_labels: None,
+    };
+    assert_eq!(build_standalone_street_data(&context)?, None);
+    Ok(())
   }
 
   fn boundary_words(languages: &[&str]) -> Result<Vec<String>, AssembleError> {
