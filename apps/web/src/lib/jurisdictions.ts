@@ -110,7 +110,7 @@ export const suggestedCountryCodes = ({
    * Ranked above the locale and email heuristics because it reflects
    * where the person actually registered from.
    */
-  detectedCountry?: string | null;
+  detectedCountry?: string | null | undefined;
 }): CountryCode[] => {
   const suggestions: string[] = [];
   const regionFromLocale =

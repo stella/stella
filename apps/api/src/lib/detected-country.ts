@@ -9,8 +9,8 @@ import { type CountryCode, isCountryCode } from "@stll/country-codes";
 export const VIEWER_COUNTRY_HEADER = "cloudfront-viewer-country";
 
 type RequestContextLike = {
-  request?: Request;
-  headers?: Headers;
+  request?: Request | undefined;
+  headers?: Headers | undefined;
 };
 
 /**
@@ -20,7 +20,7 @@ type RequestContextLike = {
  * emits pseudo-codes such as "ZZ" for unknown locations).
  */
 export const detectedCountryFromRequestContext = (
-  ctx: RequestContextLike | undefined,
+  ctx: RequestContextLike | null | undefined,
 ): CountryCode | undefined => {
   const raw =
     ctx?.request?.headers.get(VIEWER_COUNTRY_HEADER) ??
