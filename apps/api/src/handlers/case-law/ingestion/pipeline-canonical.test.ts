@@ -8,7 +8,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { WriteCorpusResult } from "@/api/handlers/case-law/corpus-storage";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
@@ -63,15 +63,19 @@ const { processDecision, runIngestionPipeline } =
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
 
 let persistedCursor: string | null | undefined;
-/** Arms the decision insert to reject, standing in for a failed row write. */
-let failRowWrite = false;
+/**
+ * How the decision insert behaves. `fault` is an unambiguous failure;
+ * `timeout` is the transaction bound firing, which abandons rather than
+ * cancels the statement and so proves nothing about whether it committed.
+ */
+let rowWrite: "ok" | "fault" | "timeout" = "ok";
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
   events.length = 0;
   insertedRows.length = 0;
   persistedCursor = undefined;
-  failRowWrite = false;
+  rowWrite = "ok";
   writeCorpusDocumentMock.mockClear();
   deleteCorpusDocumentMock.mockClear();
 });
@@ -95,31 +99,41 @@ const decision: IngestionResult = {
 const scopedDb: ScopedDb = async (callback) => {
   const tx = {
     query: {
-      caseLawDecisions: { findFirst: async () => await Promise.resolve(null) },
+      // drizzle's relational API returns undefined for a miss.
+      caseLawDecisions: {
+        findFirst: async () => await Promise.resolve(undefined),
+      },
     },
     select: () => ({
       from: () => ({ where: () => ({ limit: async () => [] }) }),
     }),
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => {
-        const rejects = failRowWrite && table === caseLawDecisions;
-        if (!rejects) {
+        const outcome = table === caseLawDecisions ? rowWrite : "ok";
+        if (outcome === "ok") {
           events.push("row-insert");
           if (table === caseLawDecisions) {
             insertedRows.push(values);
           }
         }
         return {
-          returning: async () =>
-            rejects
-              ? await Promise.reject(
-                  new TimeoutError({
-                    message: "decision write exceeded deadline",
-                    label: "ingestion-db-transaction",
-                    timeoutMs: 10,
-                  }),
-                )
-              : await Promise.resolve([{ id: values["id"] }]),
+          returning: async () => {
+            if (outcome === "timeout") {
+              return await Promise.reject(
+                new TimeoutError({
+                  message: "decision write exceeded deadline",
+                  label: "ingestion-db-transaction",
+                  timeoutMs: 10,
+                }),
+              );
+            }
+            if (outcome === "fault") {
+              return await Promise.reject(
+                new DatabaseError({ message: "decision insert rejected" }),
+              );
+            }
+            return await Promise.resolve([{ id: values["id"] }]);
+          },
         };
       },
     }),
@@ -193,12 +207,10 @@ describe("processDecision — canonical storage mode", () => {
     expect(insertedRows).toHaveLength(0);
   });
 
-  test("discards the objects and rethrows when the row write fails", async () => {
-    failRowWrite = true;
-
-    // bun-types declares `.rejects.toBe` as void, so awaiting it trips
-    // type-aware lint; capture the rejection explicitly instead.
-    const rejection: unknown = await processDecision(
+  // bun-types declares `.rejects.toBe` as void, so awaiting it trips
+  // type-aware lint; capture the rejection explicitly instead.
+  const rejectionFrom = async (): Promise<unknown> =>
+    await processDecision(
       decision,
       createSafeId<"caseLawSource">(),
       scopedDb,
@@ -207,13 +219,29 @@ describe("processDecision — canonical storage mode", () => {
       (error: unknown) => error,
     );
 
+  test("discards the objects and rethrows when the row write fails", async () => {
+    rowWrite = "fault";
+
+    const rejection = await rejectionFrom();
+
     // The pipeline's halt logic branches on the error's own type, so the
     // rethrow must surface the driver error, not a Result wrapper.
-    expect(rejection).toBeInstanceOf(TimeoutError);
+    expect(rejection).toBeInstanceOf(DatabaseError);
     // Nothing references the objects the canonical write left behind: a
     // retry mints a new decision id, so they have to go.
     expect(deleteCorpusDocumentMock).toHaveBeenCalledWith({ ...CORPUS_KEYS });
     expect(insertedRows).toHaveLength(0);
+  });
+
+  test("keeps the objects when the row write only timed out", async () => {
+    rowWrite = "timeout";
+
+    const rejection = await rejectionFrom();
+
+    // The transaction bound abandons rather than cancels, so the write may
+    // still commit. Deleting would leave that row pointing at nothing.
+    expect(rejection).toBeInstanceOf(TimeoutError);
+    expect(deleteCorpusDocumentMock).not.toHaveBeenCalled();
   });
 });
 

@@ -28,7 +28,6 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
-import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
@@ -939,23 +938,27 @@ const loadSearchHitContent = async ({
   scopedDb,
 }: LoadSearchHitContentOptions): Promise<string> => {
   if (hit.type === "case-law") {
-    const decisionId = brandPersistedCaseLawDecisionId(hit.decisionId);
+    // The pg-fts projection is the only body source here, and that is
+    // consistent: `searchGlobal` selects case-law hits FROM
+    // case_law_search_documents, so a decision without a projection row is
+    // never a hit in the first place. Serving canonically stored decisions
+    // is the corpus-index provider's job, not this join's. Do not reach for
+    // the corpus objects as a fallback — importing that read into a route
+    // module costs ~1.5M type instantiations (see the typecheck-cost
+    // baseline) for a branch this query cannot produce.
     const rows = await scopedDb((tx) =>
       tx
         .select({ searchableText: caseLawSearchDocuments.searchableText })
         .from(caseLawSearchDocuments)
-        .where(eq(caseLawSearchDocuments.decisionId, decisionId))
+        .where(
+          eq(
+            caseLawSearchDocuments.decisionId,
+            brandPersistedCaseLawDecisionId(hit.decisionId),
+          ),
+        )
         .limit(1),
     );
-    const projected = compactContent(rows.at(0)?.searchableText);
-    if (projected) {
-      return projected;
-    }
-    // The pg-fts projection is not the canonical body: a canonically stored
-    // decision never gets one, and a column trim deletes it. Fall through to
-    // the corpus-aware read so the citation still carries its text.
-    const context = await loadDocumentContext(decisionId);
-    return compactContent(context?.fulltext ?? undefined);
+    return compactContent(rows.at(0)?.searchableText);
   }
 
   if (hit.type === "contact") {

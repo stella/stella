@@ -364,18 +364,41 @@ const planCorpusWrite = async ({
   }
 };
 
+type CanDiscardCorpusObjectsInput = {
+  /** Whether a row for this decision already existed before this run. */
+  hadExistingRow: boolean;
+  /** What the row write failed with. */
+  error: unknown;
+};
+
+/**
+ * Whether the objects a canonical write just placed in the bucket may be
+ * deleted now that the row write has failed. Two things have to hold.
+ *
+ * The decision must have had no row yet. On a refresh the keys derive from
+ * the existing id and the payload hash, so the stored row may already point
+ * at these exact objects (a re-parse that reproduces the payload rewrites
+ * identical bytes) and deleting them would empty a live decision.
+ *
+ * And the failure must be unambiguous. The transaction's wall-clock bound
+ * abandons the statement instead of cancelling it, so a TimeoutError does
+ * not prove the write did not land: it may still commit after the timer
+ * fires. An orphaned object is harmless — content-addressed, unreachable,
+ * and reclaimed by a later sweep — while a committed row pointing at
+ * deleted payloads is not recoverable.
+ */
+const canDiscardCorpusObjects = ({
+  hadExistingRow,
+  error,
+}: CanDiscardCorpusObjectsInput): boolean =>
+  !hadExistingRow && !(error instanceof TimeoutError);
+
 /**
  * A canonical write puts the objects in the bucket before the row exists, so
- * a failed row write leaves them unreferenced: the retry mints a new decision
- * id and keys its objects under that instead, and nothing ever points at
- * these again. Delete them best-effort; a failure here is telemetry only,
- * because the caller still has to surface the original row-write error.
- *
- * Only sound for a decision that had no row yet. On a refresh the keys are
- * derived from the existing id and the payload hash, so the row on disk may
- * already reference these exact objects (a re-parse that reproduces the same
- * payload rewrites the identical bytes) and deleting them would empty a live
- * decision.
+ * a failed row write can leave them unreferenced: the retry mints a new
+ * decision id and keys its objects under that instead. Delete them
+ * best-effort; a failure here is telemetry only, because the caller still
+ * has to surface the original row-write error.
  */
 const discardOrphanedCorpusObjects = async (
   written: WriteCorpusResult,
@@ -681,7 +704,13 @@ export const processDecision = async (
   });
 
   if (Result.isError(rowWrite)) {
-    if (corpusPlan.type === "object-storage" && !existing) {
+    if (
+      corpusPlan.type === "object-storage" &&
+      canDiscardCorpusObjects({
+        hadExistingRow: Boolean(existing),
+        error: rowWrite.error,
+      })
+    ) {
       await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
     }
     throw rowWrite.error;
