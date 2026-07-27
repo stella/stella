@@ -5,9 +5,19 @@ import {
   caseLawIndexJobs,
   caseLawSources,
 } from "@/api/db/schema";
-import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
+import {
+  readCorpusAst,
+  readCorpusText,
+} from "@/api/handlers/case-law/corpus-storage";
+import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CorpusChunk } from "@/api/lib/corpus-index/chunking";
+import {
+  chunkDocument,
+  formatHeadingPath,
+} from "@/api/lib/corpus-index/chunking";
+import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import { createCorpusIndexer } from "@/api/lib/corpus-index/core";
 
 /**
@@ -18,6 +28,12 @@ import { createCorpusIndexer } from "@/api/lib/corpus-index/core";
  * trail (case_law_index_jobs). Per-jurisdiction indexes (`case_law_v1_<country>`)
  * with the license gate in SQL so non-redistributable sources never enter the
  * scan.
+ *
+ * Case law is indexed at passage granularity: a decision projects to one
+ * search document per passage of its AST, all carrying the same doc-level
+ * fields so every existing filter (court, date, language, source, authority)
+ * still applies. Legislation stays document-granular — see
+ * `CorpusIndexGranularity` for why the families differ.
  */
 
 type IndexableRow = {
@@ -67,8 +83,18 @@ const SELECT_COLUMNS = {
 // A row is indexable once its canonical payload is in object storage.
 const hasContent = sql`${caseLawDecisions.contentHash} IS NOT NULL`;
 
-/** Build the corpus index search document, omitting empty optional fields. */
-const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
+/**
+ * Doc-level fields, shared by every passage of a decision. Duplicating them
+ * per passage is what keeps the filters working: the engine prunes and filters
+ * on the document it scores, and a passage that carried only its text could
+ * not be constrained by court or date.
+ *
+ * Every field here is either raw-tokenized (a filter or facet key) or numeric,
+ * so none of them can be hit by a free-text term. That is deliberate — see
+ * `title` below, which is the one searchable document-level field and is
+ * therefore NOT part of this set.
+ */
+const buildSharedFields = (row: IndexableRow): Record<string, unknown> => {
   // eslint-disable-next-line no-untyped-updates/no-untyped-updates -- corpus index ingest document, not a DB update
   const doc: Record<string, unknown> = {
     document_id: row.id,
@@ -76,8 +102,6 @@ const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
     source: row.sourceId,
     court: row.court,
     language: row.language,
-    title: `${row.caseNumber} — ${row.court}`,
-    text,
     citation_authority: row.citationAuthority,
     citation_count: row.citationCount,
   };
@@ -100,11 +124,72 @@ const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
   return doc;
 };
 
+type ChunkDocInput = {
+  shared: Record<string, unknown>;
+  documentId: string;
+  /** Case number and court, indexed on the opening passage only. */
+  title: string;
+  chunk: CorpusChunk;
+};
+
+/**
+ * One passage's search document: the decision's shared fields plus what makes
+ * this passage addressable.
+ *
+ * `chunk_id` is deterministic (`<decisionId>:<seq>`) so the same input always
+ * produces the same document identities; it is what an operator greps for when
+ * reconciling a decision against the index. Replacement, though, is by
+ * `document_id` — see the shared core's `remove`.
+ *
+ * `title` is searchable (case-number and court-name lookups run through it),
+ * which makes it the one field whose fan-out matters: copied onto every
+ * passage, a query for a court's name would match all of them, and a single
+ * long judgment could fill an entire scan window with hundreds of
+ * identically-scoring hits before the reader ever saw a second decision. It
+ * goes on the opening passage alone, so a title match contributes exactly one
+ * hit per document — the same fan-out the document-granular layout had — and
+ * groups to the top of the decision, which is where a case-number match should
+ * land anyway.
+ */
+const buildChunkDoc = ({
+  shared,
+  documentId,
+  title,
+  chunk,
+}: ChunkDocInput): Record<string, unknown> => ({
+  ...shared,
+  chunk_id: `${documentId}:${chunk.seq}`,
+  seq: chunk.seq,
+  text: chunk.text,
+  ...(chunk.seq === 0 ? { title } : {}),
+  ...(chunk.anchorId === null ? {} : { anchor_id: chunk.anchorId }),
+  ...(chunk.headingPath.length === 0
+    ? {}
+    : { heading_path: formatHeadingPath(chunk.headingPath) }),
+});
+
+/** Build one search document per passage, omitting empty optional fields. */
+const buildDocs = (
+  row: IndexableRow,
+  { text, ast }: CorpusDocumentPayload,
+): Record<string, unknown>[] => {
+  const shared = buildSharedFields(row);
+  const title = `${row.caseNumber} — ${row.court}`;
+  return chunkDocument({
+    ast: hasUsableAst(ast) ? ast : null,
+    fallbackText: text,
+  }).map((chunk) =>
+    buildChunkDoc({ shared, documentId: row.id, title, chunk }),
+  );
+};
+
 const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>({
   family: "case_law",
   captureStep: "backfillCorpusIndex.loadText",
-  buildDoc,
+  granularity: "passage",
+  buildDocs,
   readCorpusText,
+  readCorpusAst,
   // The scans deliberately carry no ORDER BY. Any pick order makes
   // progress (indexed rows leave the pending set), while ordering by
   // created_at steers the planner onto the created_at index and

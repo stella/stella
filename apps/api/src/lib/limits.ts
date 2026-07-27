@@ -251,6 +251,13 @@ export const LIMITS = {
   corpusIndexSearchScanLimit: 10_000,
   // Decisions pushed to corpus index per indexer batch.
   corpusIndexBatchSize: 50,
+  /** Max UTF-8 bytes in one corpus-index NDJSON ingest request. A batch is
+   *  sized in rows, but a passage-granular family turns one row into as many
+   *  documents as it has passages, so the serialized body is not bounded by
+   *  the row count; this bounds the string held in memory and sent as one
+   *  request. Split only at row boundaries, so one very long document can
+   *  exceed it (see splitIngestRequests). */
+  corpusIndexIngestMaxBytes: 8 * 1024 * 1024,
   /** Wall-clock ceiling (ms) for a single corpus object read/write/delete.
    *  Corpus payloads are individual court decisions or statute texts (a few
    *  MB at most), so an operation that outlives this is a stalled socket, not

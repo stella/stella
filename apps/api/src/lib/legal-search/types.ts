@@ -44,6 +44,17 @@ export type LegalSearchHit = {
   sourceUrl: string | null;
   /** Escaped + <mark>-highlighted snippet HTML. */
   headline: string | null;
+  /**
+   * AST block anchor of the passage the snippet came from, for a deep link
+   * into the reader. Null when the provider scores whole documents, or when
+   * the matching passage came from unstructured text with no block to anchor.
+   */
+  anchorId: string | null;
+  /**
+   * Passages of this document that matched. A breadth signal alongside the
+   * best-passage score; 1 from a document-scoring provider.
+   */
+  matchingPassages: number;
   citationCount: number;
   citationAuthority: number;
   /** Internal blended ranking score; also the cursor sort key. */

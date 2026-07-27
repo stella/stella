@@ -39,25 +39,27 @@ describe("legislation loadDocsForBatch read-failure isolation", () => {
     const okRow = makeRow({ id: "leg_ok", contentHash: "hash_ok" });
     const badRow = makeRow({ id: "leg_bad", contentHash: "hash_bad" });
 
-    const { docs, readFailures } = await loadDocsForBatch([okRow, badRow], {
+    const { built, readFailures } = await loadDocsForBatch([okRow, badRow], {
       generation,
       fetchFulltext: async () => null,
-      readText: async (row) => {
+      readPayload: async (row) => {
         if (row.id === badRow.id) {
           throw new TimeoutError({
             message: "corpus-read-text exceeded 60000ms",
             label: "corpus-read-text",
           });
         }
-        return `text for ${row.id}`;
+        return { text: `text for ${row.id}`, ast: null };
       },
     });
 
     // The healthy document still builds and stays in the batch.
-    expect(docs).toHaveLength(1);
-    const built = docs.at(0);
-    expect(built?.row.id).toBe(okRow.id);
-    expect(built?.doc["text"]).toBe(`text for ${okRow.id}`);
+    expect(built).toHaveLength(1);
+    const entry = built.at(0);
+    expect(entry?.row.id).toBe(okRow.id);
+    // Legislation stays document-granular: one row, exactly one document.
+    expect(entry?.docs).toHaveLength(1);
+    expect(entry?.docs.at(0)?.["text"]).toBe(`text for ${okRow.id}`);
 
     // The failed read is isolated as a failed index job for its jurisdiction.
     expect(readFailures).toHaveLength(1);
@@ -82,7 +84,7 @@ describe("legislation loadDocsForBatch read-failure isolation", () => {
     });
     const fetchedIds: string[] = [];
 
-    const { docs, readFailures } = await loadDocsForBatch([legacyRow], {
+    const { built, readFailures } = await loadDocsForBatch([legacyRow], {
       generation,
       fetchFulltext: async (id) => {
         fetchedIds.push(id);
@@ -91,8 +93,9 @@ describe("legislation loadDocsForBatch read-failure isolation", () => {
     });
 
     expect(readFailures).toHaveLength(0);
-    expect(docs).toHaveLength(1);
-    expect(docs.at(0)?.doc["text"]).toBe("stored fulltext");
+    expect(built).toHaveLength(1);
+    expect(built.at(0)?.docs).toHaveLength(1);
+    expect(built.at(0)?.docs.at(0)?.["text"]).toBe("stored fulltext");
     // The lazy fallback runs only for the S3-less row, keyed by its id.
     expect(fetchedIds).toEqual([legacyRow.id]);
   });
