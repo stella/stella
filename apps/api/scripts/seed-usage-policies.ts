@@ -30,7 +30,9 @@ const usagePolicySeedSchema = v.pipe(
       null,
     ),
     priceCurrency: v.optional(
-      v.nullable(v.pipe(v.string(), v.trim(), v.length(3))),
+      // Strict ISO 4217 alpha code: a malformed value would make the
+      // picker's Intl.NumberFormat throw at render time.
+      v.nullable(v.pipe(v.string(), v.trim(), v.regex(/^[A-Z]{3}$/u))),
       null,
     ),
     billingInterval: v.optional(
@@ -43,12 +45,18 @@ const usagePolicySeedSchema = v.pipe(
   v.check(
     (seed) =>
       (seed.priceAmountCents === null) === (seed.priceCurrency === null) &&
-      (seed.priceAmountCents === null || seed.billingInterval !== null),
+      (seed.priceAmountCents === null) === (seed.billingInterval === null),
     "price fields must be set together (amount + currency + interval)",
   ),
 );
 
-const usagePolicySeedsSchema = v.array(usagePolicySeedSchema);
+// Bounded to the catalog read ceiling (MAX_CATALOG_ROWS): an oversized
+// operator config fails loudly at seed time instead of silently
+// truncating the checkout picker.
+const usagePolicySeedsSchema = v.pipe(
+  v.array(usagePolicySeedSchema),
+  v.maxLength(100),
+);
 
 type UsagePolicySeed = v.InferOutput<typeof usagePolicySeedSchema>;
 

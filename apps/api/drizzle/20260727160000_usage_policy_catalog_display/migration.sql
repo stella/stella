@@ -13,4 +13,10 @@ ALTER TABLE "usage_policies" ADD COLUMN "sort_order" integer DEFAULT 0 NOT NULL;
 -- squawk-ignore constraint-missing-not-valid
 ALTER TABLE "usage_policies" ADD CONSTRAINT "usage_policies_price_amount_nonneg" CHECK (price_amount_cents IS NULL OR price_amount_cents >= 0);--> statement-breakpoint
 -- squawk-ignore constraint-missing-not-valid
-ALTER TABLE "usage_policies" ADD CONSTRAINT "usage_policies_price_fields_consistent" CHECK ((price_amount_cents IS NULL) = (price_currency IS NULL) AND (price_amount_cents IS NULL OR billing_interval IS NOT NULL));
+ALTER TABLE "usage_policies" ADD CONSTRAINT "usage_policies_price_fields_consistent" CHECK ((price_amount_cents IS NULL) = (price_currency IS NULL) AND (price_amount_cents IS NULL) = (billing_interval IS NULL));--> statement-breakpoint
+-- squawk-ignore constraint-missing-not-valid
+ALTER TABLE "usage_policies" ADD CONSTRAINT "usage_policies_kind_domain" CHECK (kind IN ('subscription', 'addon'));--> statement-breakpoint
+-- squawk-ignore constraint-missing-not-valid
+ALTER TABLE "usage_policies" ADD CONSTRAINT "usage_policies_billing_interval_domain" CHECK (billing_interval IS NULL OR billing_interval IN ('month', 'year', 'one_time'));--> statement-breakpoint
+-- squawk-ignore constraint-missing-not-valid
+ALTER TABLE "usage_policies" ADD CONSTRAINT "usage_policies_visibility_domain" CHECK (visibility IN ('public', 'hidden'));

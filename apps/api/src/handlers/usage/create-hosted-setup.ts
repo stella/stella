@@ -48,6 +48,7 @@ const createHostedSetup = createSafeRootHandler(
           .select({
             id: usagePolicies.id,
             active: usagePolicies.active,
+            kind: usagePolicies.kind,
             hostedPolicyRef: usagePolicies.hostedPolicyRef,
           })
           .from(usagePolicies)
@@ -80,6 +81,13 @@ const createHostedSetup = createSafeRootHandler(
         if (entitlement && entitlement.source === "manual") {
           return { kind: "manual_entitlement_present" as const };
         }
+        // An add-on allocation is resolved against the buyer's hosted
+        // entitlement period at webhook time; without a mapped hosted
+        // account the paid allocation would be unattributable. Refuse
+        // up front rather than accepting money we cannot apply.
+        if (policy.kind === "addon" && !entitlement?.hostedAccountRef) {
+          return { kind: "addon_requires_subscription" as const };
+        }
 
         return {
           kind: "ok" as const,
@@ -108,6 +116,15 @@ const createHostedSetup = createSafeRootHandler(
           status: 409,
           message:
             "This organisation has a manually managed usage entitlement. Contact an operator to switch management.",
+        }),
+      );
+    }
+    if (dbResult.kind === "addon_requires_subscription") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message:
+            "An active subscription is required before purchasing add-on packs",
         }),
       );
     }

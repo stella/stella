@@ -78,9 +78,27 @@ export const usagePolicies = p.pgTable(
       "usage_policies_price_amount_nonneg",
       sql`price_amount_cents IS NULL OR price_amount_cents >= 0`,
     ),
+    // All three price display fields travel together: a partial price
+    // (interval without amount, amount without currency) cannot render
+    // in the checkout picker and would compromise the billing catalog.
     p.check(
       "usage_policies_price_fields_consistent",
-      sql`(price_amount_cents IS NULL) = (price_currency IS NULL) AND (price_amount_cents IS NULL OR billing_interval IS NOT NULL)`,
+      sql`(price_amount_cents IS NULL) = (price_currency IS NULL) AND (price_amount_cents IS NULL) = (billing_interval IS NULL)`,
+    ),
+    // Drizzle's text-enum option narrows TypeScript only; these are
+    // billing-relevant domains, so invalid values are rejected by the
+    // database as well (root/manual writes included).
+    p.check(
+      "usage_policies_kind_domain",
+      sql`kind IN ('subscription', 'addon')`,
+    ),
+    p.check(
+      "usage_policies_billing_interval_domain",
+      sql`billing_interval IS NULL OR billing_interval IN ('month', 'year', 'one_time')`,
+    ),
+    p.check(
+      "usage_policies_visibility_domain",
+      sql`visibility IN ('public', 'hidden')`,
     ),
     p
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
