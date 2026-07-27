@@ -334,6 +334,58 @@ const writeHeartbeat = () => {
 };
 
 /**
+ * Pages walked by any adapter since this process started.
+ *
+ * Counts `pagesProcessed`, not `inserted`, for the reason `cycleMadeProgress`
+ * documents: a page parked on a persistent corpus-write failure breaks out
+ * before the page counter increments, but reports rows written on every retry.
+ * Counting inserts would make this rise fastest in exactly the stall it exists
+ * to expose.
+ *
+ * It counts pages walked, not distance travelled: the pipeline increments
+ * before its stagnation check, and a caught-up adapter that re-returns its
+ * current cursor (cz-nss yields `${today}:0` once it reaches today) walks one
+ * page per poll without the persisted cursor moving. That is deliberate here.
+ * Being caught up is healthy — `cycleMadeProgress` treats a completed cycle as
+ * progress even with nothing to show for it — so this is an activity counter
+ * to read beside uptime, not a measure of new ground covered. Do not build a
+ * stall alarm on it without first distinguishing the two.
+ */
+let pagesSinceStart = 0;
+
+/**
+ * Record that the daemon is running, and how far it has got.
+ *
+ * The file heartbeat above is overwritten in place, so it carries only the
+ * latest timestamp and no history. This line is the durable counterpart.
+ *
+ * Written through `logInfo` rather than the OTel logger: that pipeline
+ * deliberately configures no external exporter and mirrors only ERROR records
+ * to stderr, so an INFO record there reaches nothing. A liveness signal that
+ * is silently discarded is worse than none, because the absence looks
+ * identical to a dead daemon.
+ *
+ * It belongs to the health loop rather than to any single unit of work: a
+ * line emitted by a periodic job only appears if the process outlives that
+ * job's period, so tying the record to the shortest loop keeps it independent
+ * of how long any individual piece of work takes.
+ *
+ * Uptime comes from `process.uptime()`, not a wall-clock difference: an NTP
+ * correction would make a `Date.now()` delta jump or run backwards, and this
+ * value exists to be read when diagnosing restarts, which is exactly when a
+ * fabricated lifetime would mislead. It also measures from process start
+ * rather than from any point this module chooses.
+ */
+const logHeartbeat = (): void => {
+  logInfo(
+    `[health] case_law.ingestion.heartbeat ` +
+      `uptimeSec=${Math.round(process.uptime())} ` +
+      `pagesSinceStart=${pagesSinceStart} ` +
+      `activeCycles=${inFlightCycles.size}`,
+  );
+};
+
+/**
  * Start the event-loop liveness watchdog (daemon mode only). Self-schedules
  * every WATCHDOG_TICK_MS and compares actual delay to the expected interval;
  * each tick whose lag exceeds WATCHDOG_LAG_THRESHOLD_MS counts as starved,
@@ -553,6 +605,10 @@ const runOneCycle = async (
         maxDecisions: bounds.maxDecisions,
       }),
     });
+    // Before the halt-reason handling and the ingestion-event write below:
+    // pages already completed are durable regardless of how this cycle ends,
+    // and a stalled event write must not hide them from the heartbeat.
+    pagesSinceStart += result.pagesProcessed;
     if (result.haltReason?.startsWith("Decision cap")) {
       // A requested sample bound is a successful outcome, not a failure.
       logInfo(`[${adapterKey}] ${result.haltReason}`);
@@ -840,6 +896,7 @@ export const runCaseLawIngest = async (
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval health poll; the loop must wait HEALTH_INTERVAL_MS between heartbeats, so this await is intentionally sequential
       await Bun.sleep(HEALTH_INTERVAL_MS);
       writeHeartbeat();
+      logHeartbeat();
       try {
         if (isS3Stale()) {
           // oxlint-disable-next-line no-await-in-loop -- credential refresh per poll cycle; must complete before the loop sleeps and re-checks staleness
