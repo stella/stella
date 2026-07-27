@@ -160,7 +160,12 @@ const scopedDb: ScopedDb = async (callback) => {
         if (table === caseLawSources) {
           persistedCursor = values.syncCursor;
         }
-        return { where: async () => undefined };
+        // The checkpoint helper reads back the compare-and-set winner.
+        return {
+          where: () => ({
+            returning: async () => [{ cursor: values.syncCursor ?? null }],
+          }),
+        };
       },
     }),
     delete: () => ({ where: async () => undefined }),
