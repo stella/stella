@@ -248,7 +248,29 @@ export const readDecisionHandler = async (
     });
   }
 
+  // Nothing readable resolved, and there is a document to fetch. Which
+  // of the two that is decides everything downstream: a decision nobody
+  // has fetched yet is worth fetching for this reader
+  // (`get-deferred-document.ts` turns `documentPending` into that
+  // fetch), while one the source had nothing for is terminal, and
+  // re-entering the fetch path on every view would cost a claim that can
+  // never succeed. Kept as derived booleans rather than a call so this
+  // module stays a read.
+  const { documentPending, documentUnavailable } = await resolveDocumentState({
+    hasReadableDocument: hasUsableAst(documentAst) || Boolean(fulltext),
+    documentUrl: decision.documentUrl,
+    corpusServed:
+      corpusReadEnabled() &&
+      decision.textS3Key !== null &&
+      decision.contentHash !== null,
+    resolvedFulltext: fulltext,
+    decisionId,
+    caseLawDb,
+  });
+
   return {
+    documentPending,
+    documentUnavailable,
     id: decision.id,
     caseNumber: decision.caseNumber,
     slug: decision.slug,
@@ -336,6 +358,69 @@ const resolveAst = async ({
     read: async () => await readCorpusAst(astS3Key),
     fallback: () => pgAst,
   });
+};
+
+type ResolveDocumentStateInput = {
+  /** Whether the read resolved something a reader can actually read. */
+  hasReadableDocument: boolean;
+  documentUrl: string | null;
+  /** Whether the payload above came from object storage. */
+  corpusServed: boolean;
+  resolvedFulltext: string | null;
+  decisionId: SafeId<"caseLawDecision">;
+  caseLawDb: CaseLawPublicReadDb;
+};
+
+type DocumentState = {
+  documentPending: boolean;
+  documentUnavailable: boolean;
+};
+
+/**
+ * Whether this decision's document is still to come, or is not coming.
+ *
+ * The row says which: a NULL `fulltext` has never been fetched, an empty
+ * one was fetched and the source had nothing. Where the payload came
+ * from the Postgres column that distinction is already in hand. Where
+ * object storage served it, it is not — a metadata-first ingest writes
+ * an empty payload, and an empty payload reads back as an empty string
+ * whichever of the two states wrote it — so the column is re-read as a
+ * boolean, without the document itself, and only for a decision that
+ * resolved to nothing at all.
+ */
+const resolveDocumentState = async ({
+  hasReadableDocument,
+  documentUrl,
+  corpusServed,
+  resolvedFulltext,
+  decisionId,
+  caseLawDb,
+}: ResolveDocumentStateInput): Promise<DocumentState> => {
+  if (hasReadableDocument || documentUrl === null) {
+    return { documentPending: false, documentUnavailable: false };
+  }
+
+  if (!corpusServed) {
+    return {
+      documentPending: resolvedFulltext === null,
+      documentUnavailable: resolvedFulltext === "",
+    };
+  }
+
+  const [row] = await caseLawDb((tx) =>
+    tx
+      .select({
+        fetched: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId))
+      .limit(1),
+  );
+
+  return {
+    documentPending: row?.fetched === false,
+    documentUnavailable: row?.fetched === true,
+  };
 };
 
 type ResolveFulltextInput = {

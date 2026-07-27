@@ -1,4 +1,15 @@
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 /**
@@ -9,13 +20,28 @@ import type { SQL } from "drizzle-orm";
  *
  *   CORPUS_STORAGE_MODE=dual-write LEGAL_CORPUS_S3_BUCKET=... \
  *     bun run src/scripts/backfill-corpus-storage.ts
+ *
+ * With `--include-stale-empty` it also repairs rows whose objects were
+ * written by a metadata-first ingest and never rewritten when the
+ * document arrived: their columns hold the document, their keys still
+ * point at the empty payload, and `text_s3_key IS NOT NULL` hides them
+ * from the pass above. The empty payload's content hash identifies
+ * them. Count them first with the same predicate:
+ *
+ *   SELECT count(*) FROM case_law_decisions
+ *   WHERE text_s3_key IS NOT NULL
+ *     AND fulltext IS NOT NULL AND fulltext <> ''
+ *     AND content_hash IN (<EMPTY_CORPUS_CONTENT_HASHES>);
  */
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
-import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
+import {
+  EMPTY_CORPUS_CONTENT_HASHES,
+  writeCorpusDocument,
+} from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -25,21 +51,45 @@ import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 const BATCH_SIZE = 50;
 const CONCURRENCY = 4;
 
+const includeStaleEmpty = process.argv.includes("--include-stale-empty");
+
 type BackfillRow = {
   id: SafeId<"caseLawDecision">;
   country: string;
   fulltext: string | null;
   sections: DecisionSection[] | null;
   documentAst: DocumentAst | EmptyAst | null;
+  contentHash: string | null;
   updatedAt: Date;
 };
+
+/** Never written to object storage. */
+const missingCorpusObjects = isNull(caseLawDecisions.textS3Key);
+
+/**
+ * Written by a metadata-first ingest and never rewritten: the columns
+ * hold a document, the keys still point at the empty payload the ingest
+ * wrote before the document existed.
+ */
+const staleEmptyCorpusObjects = and(
+  isNotNull(caseLawDecisions.textS3Key),
+  isNotNull(caseLawDecisions.fulltext),
+  ne(caseLawDecisions.fulltext, ""),
+  inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
+);
+
+const rowsToBackfill: SQL | undefined = includeStaleEmpty
+  ? or(missingCorpusObjects, staleEmptyCorpusObjects)
+  : missingCorpusObjects;
 
 const ingestionDb = createIngestionDb(rlsDb);
 
 await refreshS3();
 await refreshCorpusS3();
 
-console.log("=== BACKFILL CORPUS STORAGE ===");
+console.log(
+  `=== BACKFILL CORPUS STORAGE ===${includeStaleEmpty ? " (including stale empty payloads)" : ""}`,
+);
 
 let lastId: SafeId<"caseLawDecision"> | null = null;
 let written = 0;
@@ -66,11 +116,13 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
         // Compare-and-set on the selected row state: a concurrent
         // ingestion refresh may have written newer keys, and an
         // unconditional update would point the row back at the stale
-        // backfill payload.
+        // backfill payload. The hash pins which payload this run read —
+        // for a repaired row the keys are already set, so their absence
+        // no longer proves the row is untouched.
         .where(
           and(
             eq(caseLawDecisions.id, row.id),
-            isNull(caseLawDecisions.textS3Key),
+            sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
             sql`${caseLawDecisions.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
           ),
         ),
@@ -87,9 +139,7 @@ while (true) {
   // the scan; re-run the script later to retry the stragglers.
   const idFilter: SQL | undefined =
     lastId === null ? undefined : gt(caseLawDecisions.id, lastId);
-  const where = idFilter
-    ? and(isNull(caseLawDecisions.textS3Key), idFilter)
-    : isNull(caseLawDecisions.textS3Key);
+  const where = idFilter ? and(rowsToBackfill, idFilter) : rowsToBackfill;
 
   // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: next page cursor (lastId) depends on this query
   const rows: BackfillRow[] = await ingestionDb((tx) =>
@@ -100,6 +150,7 @@ while (true) {
         fulltext: caseLawDecisions.fulltext,
         sections: caseLawDecisions.sections,
         documentAst: caseLawDecisions.documentAst,
+        contentHash: caseLawDecisions.contentHash,
         updatedAt: caseLawDecisions.updatedAt,
       })
       .from(caseLawDecisions)

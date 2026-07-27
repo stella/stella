@@ -4,9 +4,9 @@ import Elysia, { t } from "elysia";
 import { env } from "@/api/env";
 import { listDecisionFacetsHandler } from "@/api/handlers/case-law/decisions/facets";
 import {
-  readDecisionBySlugHandler,
-  readDecisionHandler,
-} from "@/api/handlers/case-law/decisions/get";
+  readDecisionBySlugWithDocumentHandler,
+  readDecisionWithDocumentHandler,
+} from "@/api/handlers/case-law/decisions/get-deferred-document";
 import {
   listDecisionsHandler,
   listDecisionsQuerySchema,
@@ -59,7 +59,14 @@ const readDecision = createSafePublicHandler(
   async function* ({ params: { decisionId } }) {
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await readDecisionHandler(decisionId, caseLawPublicReadDb),
+        async () =>
+          await readDecisionWithDocumentHandler({
+            decisionId,
+            caseLawDb: caseLawPublicReadDb,
+            // Unauthenticated: hydrates when a slot is free, but never
+            // persists demand — see `recordDemand`.
+            caller: "anonymous",
+          }),
       ),
     );
 
@@ -79,7 +86,12 @@ const readDecisionBySlug = createSafePublicHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await readDecisionBySlugHandler(slug, caseLawPublicReadDb, language),
+          await readDecisionBySlugWithDocumentHandler({
+            slug,
+            caseLawDb: caseLawPublicReadDb,
+            language,
+            caller: "anonymous",
+          }),
       ),
     );
 

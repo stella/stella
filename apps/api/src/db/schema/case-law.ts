@@ -93,6 +93,25 @@ export const caseLawDecisions = p.pgTable(
     sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),
     sourceUrl: p.varchar("source_url", { length: 2048 }),
     documentUrl: p.varchar("document_url", { length: 2048 }),
+    /**
+     * Bookkeeping for sources that ingest metadata first and fetch the
+     * document later (see `ingestion/sk-document-backfill.ts`).
+     * `documentFetchRequestedAt` is the first read that asked for the
+     * document and orders the queue's priority tier; it is set once, so
+     * repeat readers do not push a decision back. `documentFetchAttempts`
+     * counts fetch attempts from either path, so a document that keeps
+     * failing stops holding the front of the queue.
+     * `documentFetchAttemptedAt` is when the current attempt started: it
+     * is the durable claim that keeps a scheduler run and a read on
+     * another replica from downloading the same document at once, and it
+     * expires so a worker that died mid-fetch does not strand the row.
+     */
+    documentFetchRequestedAt: p.timestamp("document_fetch_requested_at"),
+    documentFetchAttemptedAt: p.timestamp("document_fetch_attempted_at"),
+    documentFetchAttempts: p
+      .integer("document_fetch_attempts")
+      .default(0)
+      .notNull(),
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
     /**
@@ -164,6 +183,28 @@ export const caseLawDecisions = p.pgTable(
     // (mirrors backfillSearchIndex): rows whose indexedHash differs
     // from contentHash, or were never indexed.
     p.index("case_law_decisions_indexed_idx").on(t.indexedHash, t.contentHash),
+    // Deferred-document queue, priority tier: decisions a reader asked
+    // for, oldest request first. Partial on the pending predicate, so
+    // the index stays proportional to the queue, not to the corpus.
+    p
+      .index("case_law_decisions_document_demand_idx")
+      .on(t.documentFetchRequestedAt, t.id)
+      .where(
+        sql`${t.fulltext} is null and ${t.documentUrl} is not null and ${t.documentFetchRequestedAt} is not null`,
+      ),
+    // Deferred-document queue, remaining tier: least-tried first, then
+    // newest decisions, per source. Matches the loader's ORDER BY so the
+    // head of the queue is a bounded index range scan rather than a sort
+    // over the backlog.
+    p
+      .index("case_law_decisions_document_pending_idx")
+      .on(
+        t.sourceId,
+        t.documentFetchAttempts,
+        t.decisionDate.desc().nullsLast(),
+        t.id,
+      )
+      .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
     ...globalCaseLawPolicies(),
   ],
 );

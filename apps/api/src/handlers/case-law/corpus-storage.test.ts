@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  corpusContentHash,
+  EMPTY_CORPUS_CONTENT_HASHES,
   readCorpusPayloadOrFallback,
   readCorpusText,
 } from "@/api/handlers/case-law/corpus-storage";
+import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import { zstdCompress } from "@/api/lib/compression";
 import {
   CorpusPayloadUnavailableError,
@@ -118,5 +121,51 @@ describe("readCorpusPayloadOrFallback", () => {
     });
 
     expect(payload).toBeNull();
+  });
+});
+
+describe("empty corpus payload hashes", () => {
+  /**
+   * These identify the objects a metadata-first ingest writes before the
+   * document exists, and an operator counts and repairs rows by them
+   * (`backfill-corpus-storage.ts --include-stale-empty`). Pinning the
+   * values means a change to the hash function or to the empty shapes
+   * shows up as a failing test rather than as a repair run that silently
+   * matches nothing.
+   */
+  test("cover the empty shapes a metadata-first ingest writes", () => {
+    expect([...EMPTY_CORPUS_CONTENT_HASHES]).toEqual([
+      "38c18e8567ab7eb43737fbcb0b460cc715edc003359f072526757949857ba315",
+      "c21295bcba9c492b8fa6894ee2fcd6ca93b825ea61fc4965d00f41ea611071e2",
+    ]);
+  });
+
+  test("a payload carrying a document hashes to none of them", () => {
+    const real = corpusContentHash({
+      text: "Rozsudok",
+      sections: null,
+      ast: EMPTY_AST,
+    });
+
+    expect([...EMPTY_CORPUS_CONTENT_HASHES]).not.toContain(real);
+  });
+
+  test("an empty text and a null text are the same payload", () => {
+    expect(
+      corpusContentHash({ text: "", sections: null, ast: EMPTY_AST }),
+    ).toBe(corpusContentHash({ text: null, sections: null, ast: EMPTY_AST }));
+  });
+
+  test("a stored document keeps the hash it was written with", () => {
+    // Every corpus key and every indexedHash comparison in the corpus
+    // derives from this value, so the hash of a known payload is part of
+    // the storage format, not an implementation detail.
+    expect(
+      corpusContentHash({
+        text: "Rozsudok",
+        sections: [{ index: 0, type: "header", title: null, text: "Rozsudok" }],
+        ast: EMPTY_AST,
+      }),
+    ).toBe("9d69e9cdfe9a15179939cc74ac6af324d03b6dc049bf4fe010971b56767bab2b");
   });
 });

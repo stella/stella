@@ -218,10 +218,15 @@ void mock.module("@/api/handlers/case-law/decisions/search", () => ({
   searchDecisionsHandler: searchDecisionsHandlerMock,
 }));
 
-void mock.module("@/api/handlers/case-law/decisions/get", () => ({
-  readDecisionBySlugHandler: mock(),
-  readDecisionHandler: readDecisionHandlerMock,
-}));
+// The tool reads through the hydrating wrapper, so that is the module
+// the double replaces.
+void mock.module(
+  "@/api/handlers/case-law/decisions/get-deferred-document",
+  () => ({
+    readDecisionBySlugWithDocumentHandler: mock(),
+    readDecisionWithDocumentHandler: readDecisionHandlerMock,
+  }),
+);
 
 void mock.module("@/api/handlers/workspaces/get", () => ({
   readWorkspaceHandler: mock(),
@@ -1262,10 +1267,13 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "read_case_law_decision",
     });
 
-    expect(readDecisionHandlerMock).toHaveBeenCalledWith(
-      "dec_123",
-      caseLawPublicReadDb,
-    );
+    // An agent read is attributable, so it may queue demand for a
+    // decision whose document has not been fetched yet.
+    expect(readDecisionHandlerMock).toHaveBeenCalledWith({
+      decisionId: "dec_123",
+      caseLawDb: caseLawPublicReadDb,
+      caller: "attributed",
+    });
 
     expect(parseToolPayload(result)).toEqual({
       nextCursor: null,

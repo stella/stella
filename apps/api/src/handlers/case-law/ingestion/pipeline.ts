@@ -20,6 +20,7 @@ import {
   corpusContentHash,
   corpusKeys,
   deleteCorpusDocument,
+  EMPTY_CORPUS_CONTENT_HASHES,
   writeCorpusDocument,
 } from "@/api/handlers/case-law/corpus-storage";
 import {
@@ -326,6 +327,7 @@ type CorpusWritePlan =
   | { type: "postgres-only" }
   | { type: "postgres-mirrored" }
   | { type: "object-storage"; written: WriteCorpusResult }
+  | { type: "preserve-stored" }
   | { type: "write-failed" };
 
 type CorpusWritePayload = {
@@ -380,6 +382,44 @@ const discardPartialCorpusWrite = async (
       step: "processDecision.canonicalCorpusWriteCleanup",
     });
   }
+};
+
+/**
+ * Whether this decision already holds a document.
+ *
+ * Asked only when the incoming result carries none, and answered as
+ * booleans rather than by pulling the payload across: the text can be
+ * megabytes and this runs inside the crawl. Three places can hold it —
+ * the text column, the AST column, and, for a row whose canonical
+ * payload lives in object storage, a content hash that is not one of
+ * the empty-payload hashes.
+ */
+const hasStoredDocument = async (
+  decisionId: SafeId<"caseLawDecision">,
+  scopedDb: ScopedDb,
+): Promise<boolean> => {
+  const [row] = await scopedDb((tx) =>
+    tx
+      .select({
+        hasText: sql<boolean>`coalesce(${caseLawDecisions.fulltext}, '') <> ''`,
+        hasAst: sql<boolean>`coalesce(jsonb_array_length(case when jsonb_typeof(${caseLawDecisions.documentAst} -> 'blocks') = 'array' then ${caseLawDecisions.documentAst} -> 'blocks' else '[]'::jsonb end), 0) > 0`,
+        contentHash: caseLawDecisions.contentHash,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, decisionId))
+      .limit(1),
+  );
+
+  if (!row) {
+    return false;
+  }
+
+  return (
+    row.hasText ||
+    row.hasAst ||
+    (row.contentHash !== null &&
+      !EMPTY_CORPUS_CONTENT_HASHES.includes(row.contentHash))
+  );
 };
 
 const planCorpusWrite = async ({
@@ -564,18 +604,38 @@ export const processDecision = async (
     result.sections ??
     (result.fulltext ? segmentDecision(result.fulltext) : []);
 
+  // A metadata-first source keeps refreshing a decision it has no
+  // document for: the list endpoint's fields change, the hash moves, and
+  // the adapter returns the same empty AST it returned at first sight.
+  // Applying that over a decision whose document has since arrived — by
+  // hydration or backfill — would put the empty AST back, and under
+  // corpus storage would rewrite the objects empty and move the row's
+  // keys onto them, which is precisely the state the repair pass exists
+  // to undo. Nothing the refresh carries is a document, so nothing it
+  // carries may replace one: the metadata is updated and the payload,
+  // its object-storage pointers and the citations drawn from it are left
+  // as they are.
+  const preserveStoredDocument =
+    existing !== undefined &&
+    !(result.fulltext || hasUsableAst(result.documentAst)) &&
+    (await hasStoredDocument(existing.id, scopedDb));
+
   // Parsers report their own quality through `validateAndLog`, but a
   // source whose parser never runs reports nothing at all. Emit the
   // same signal here so every stored decision is accounted for, and
   // split the severity the same way: no text is an error, text without
-  // structure is a warning.
+  // structure is a warning. A refresh that preserves the stored document
+  // reports nothing: it did not store an empty decision, it left a full
+  // one alone, and these errors are what an operator sweeps for.
   const astBlocks = hasUsableAst(result.documentAst)
     ? result.documentAst.blocks.length
     : 0;
-  const signal = storedDecisionSignal({
-    hasFulltext: Boolean(result.fulltext),
-    astBlocks,
-  });
+  const signal = preserveStoredDocument
+    ? undefined
+    : storedDecisionSignal({
+        hasFulltext: Boolean(result.fulltext),
+        astBlocks,
+      });
   if (signal) {
     const subject = {
       sourceId,
@@ -608,15 +668,17 @@ export const processDecision = async (
   // default (`pUuid`) would do at insert time anyway.
   const decisionId = existing?.id ?? createSafeId<"caseLawDecision">();
 
-  const corpusPlan = await planCorpusWrite({
-    mode: corpusStorageMode,
-    hadExistingRow: Boolean(existing),
-    documentId: decisionId,
-    jurisdiction: result.country,
-    text: result.fulltext ?? null,
-    sections: sections.length > 0 ? sections : null,
-    ast: result.documentAst,
-  });
+  const corpusPlan: CorpusWritePlan = preserveStoredDocument
+    ? { type: "preserve-stored" }
+    : await planCorpusWrite({
+        mode: corpusStorageMode,
+        hadExistingRow: Boolean(existing),
+        documentId: decisionId,
+        jurisdiction: result.country,
+        text: result.fulltext ?? null,
+        sections: sections.length > 0 ? sections : null,
+        ast: result.documentAst,
+      });
 
   if (corpusPlan.type === "write-failed") {
     // Persist nothing: a row would advance sourceHash and the next cycle
@@ -648,6 +710,11 @@ export const processDecision = async (
       case "postgres-mirrored":
         // The post-commit write refreshes the pointers under a CAS.
         return postgresPayload;
+      case "preserve-stored":
+        // Every payload column, and every pointer into object storage,
+        // stays exactly as stored. Leaving them out of the update is
+        // what preserves them.
+        return {};
       case "object-storage":
         return {
           fulltext: null,
@@ -698,6 +765,12 @@ export const processDecision = async (
             updatedAt: new Date(),
           })
           .where(eq(caseLawDecisions.id, existing.id));
+
+        // Citations are read out of the document, so a refresh that
+        // carries no document has nothing to say about them either.
+        if (preserveStoredDocument) {
+          return;
+        }
 
         await tx
           .delete(caseLawCitations)
@@ -799,8 +872,10 @@ export const processDecision = async (
   // transaction open). A failure leaves the row fully readable from its
   // Postgres columns and preserves the source-hash mismatch so normal
   // ingestion can retry the corpus write. `canonical` has already written
-  // its objects above, before the row.
-  if (corpusStorageMode === "dual-write") {
+  // its objects above, before the row. Keyed off the plan rather than the
+  // mode, so a refresh preserving a stored document does not mirror the
+  // nothing it arrived with over the objects that hold it.
+  if (corpusPlan.type === "postgres-mirrored") {
     // The sourceHash this call just persisted: corpus-key and retry
     // updates below only apply while the row still carries it, so a
     // slower run cannot overwrite a concurrent newer refresh.
