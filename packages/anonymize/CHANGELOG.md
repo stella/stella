@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.7.1
+
+### Patch Changes
+
+- [#427](https://github.com/stella/anonymize/pull/427) [`a4ac8c5`](https://github.com/stella/anonymize/commit/a4ac8c57d606c55a79951147772e4fafb39071f9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require `@stll/anonymize-data` 0.0.9, which moves the city API to a `./cities`
+  subpath. The city loader map holds one literal `import()` per covered country,
+  so bundling anything from the data package root emitted all 237 city chunks
+  (~815 KiB) even for a consumer that only loaded name dictionaries.
+
+- [#428](https://github.com/stella/anonymize/pull/428) [`32da9d3`](https://github.com/stella/anonymize/commit/32da9d38100aef12f9eb7fb105644dd7731376cb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Stop an address span absorbing the sentence that precedes it. A city name that is also an ordinary word (`Send`, `Post`) seeded an address, and the seed cluster bridged the prose between it and a nearby street word, so `Send it to 14 Rue de la Paix.` produced the whole sentence as one address. Two ordinary words between two address seeds now end the cluster, but only while the cluster has not yet reached a street word: once it has, everything up to the destination is street-name material, so lowercase names and non-English connectives (`10 rue de la paix et de la liberté, Paris`) still join. Standalone street spans also bound their left edge the way they already bound the right: the walk only crosses street-name words and only when it reaches the house number that opens the address. House numbers now accept a unit letter (`221B Baker Street`).
+
 ## 2.7.0
 
 ### Minor Changes

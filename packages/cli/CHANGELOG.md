@@ -1,5 +1,18 @@
 # @stll/anonymize-cli
 
+## 2.7.1
+
+### Patch Changes
+
+- [#427](https://github.com/stella/anonymize/pull/427) [`a4ac8c5`](https://github.com/stella/anonymize/commit/a4ac8c57d606c55a79951147772e4fafb39071f9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require `@stll/anonymize-data` 0.0.9, which moves the city API to a `./cities`
+  subpath. The city loader map holds one literal `import()` per covered country,
+  so bundling anything from the data package root emitted all 237 city chunks
+  (~815 KiB) even for a consumer that only loaded name dictionaries.
+- Updated dependencies [[`a4ac8c5`](https://github.com/stella/anonymize/commit/a4ac8c57d606c55a79951147772e4fafb39071f9), [`32da9d3`](https://github.com/stella/anonymize/commit/32da9d38100aef12f9eb7fb105644dd7731376cb)]:
+  - @stll/anonymize@2.7.1
+  - @stll/anonymize-pdf@2.7.1
+  - @stll/anonymize-docx@2.7.1
+
 ## 2.7.0
 
 ### Patch Changes

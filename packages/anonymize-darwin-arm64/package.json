@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-darwin-arm64",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "description": "macOS arm64 native binding for @stll/anonymize",
   "keywords": [
     "anonymization",

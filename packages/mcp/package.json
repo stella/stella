@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-mcp",
-  "version": "2.7.0",
+  "version": "2.7.1",
   "description": "Path-only local MCP server for stella PII anonymization",
   "type": "module",
   "bin": {
@@ -39,9 +39,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@stll/anonymize": "2.7.0",
-    "@stll/anonymize-docx": "^2.7.0",
-    "@stll/anonymize-pdf": "2.7.0",
+    "@stll/anonymize": "2.7.1",
+    "@stll/anonymize-docx": "^2.7.1",
+    "@stll/anonymize-pdf": "2.7.1",
     "fs-native-extensions": "^1.5.0",
     "zod": "^4.4.3"
   },
