@@ -134,6 +134,7 @@ export const corpusStorageMode = resolveCorpusStorageMode({
 const corpusStorageViolation = corpusStorageInvariantViolation({
   mode: corpusStorageMode,
   searchProvider: envBase.LEGAL_SEARCH_PROVIDER,
+  corpusIndexingEnabled: envBase.CORPUS_INDEXING_ENABLED,
   corpusBucket: envBase.LEGAL_CORPUS_S3_BUCKET,
   isDev: envBase.isDev,
 });

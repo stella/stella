@@ -38,6 +38,7 @@ type CorpusStorageInvariantInput = {
    * silently.
    */
   searchProvider: "pg-fts" | "corpus-index";
+  corpusIndexingEnabled: boolean;
   corpusBucket: string | undefined;
   isDev: boolean;
 };
@@ -50,6 +51,7 @@ type CorpusStorageInvariantInput = {
 export const corpusStorageInvariantViolation = ({
   mode,
   searchProvider,
+  corpusIndexingEnabled,
   corpusBucket,
   isDev,
 }: CorpusStorageInvariantInput): string | null => {
@@ -64,6 +66,16 @@ export const corpusStorageInvariantViolation = ({
     return (
       "CORPUS_STORAGE_MODE=canonical requires LEGAL_SEARCH_PROVIDER=corpus-index: " +
       "canonical rows carry no Postgres tsvector for pg-fts to serve"
+    );
+  }
+
+  // The corpus index is the only projection a canonical row can appear in,
+  // and the indexer loop is what fills it. Without that loop running, a
+  // newly ingested decision reaches no search projection at all.
+  if (mode === "canonical" && !corpusIndexingEnabled) {
+    return (
+      "CORPUS_STORAGE_MODE=canonical requires CORPUS_INDEXING_ENABLED=true: " +
+      "nothing else indexes a canonical row, so it would never become searchable"
     );
   }
 

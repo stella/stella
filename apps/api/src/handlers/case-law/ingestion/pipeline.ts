@@ -17,6 +17,8 @@ import {
 } from "@/api/handlers/case-law/consts";
 import type { WriteCorpusResult } from "@/api/handlers/case-law/corpus-storage";
 import {
+  corpusContentHash,
+  corpusKeys,
   deleteCorpusDocument,
   writeCorpusDocument,
 } from "@/api/handlers/case-law/corpus-storage";
@@ -311,26 +313,65 @@ const preserveCorpusWriteRetry = async ({
 /**
  * Where this decision's canonical payload ends up.
  *
- * - `postgres-columns` the row carries text/sections/AST itself. Used by
- *   `off`, and by `dual-write`, which mirrors the payload to object
- *   storage once the row has landed.
+ * - `postgres-only` the row carries text/sections/AST and nothing mirrors
+ *   it, so any corpus pointers left over from an earlier mode are stale.
+ * - `postgres-mirrored` the row carries the payload and the post-commit
+ *   write refreshes the corpus pointers under a compare-and-set.
  * - `object-storage` the payload is already in the corpus bucket, so the
  *   row stores the keys and leaves the columns NULL.
  * - `write-failed` the canonical write did not land, so no row may be
  *   written: the stale source hash is what makes the next cycle retry.
  */
 type CorpusWritePlan =
-  | { type: "postgres-columns" }
+  | { type: "postgres-only" }
+  | { type: "postgres-mirrored" }
   | { type: "object-storage"; written: WriteCorpusResult }
   | { type: "write-failed" };
 
-type PlanCorpusWriteInput = {
-  mode: CorpusStorageMode;
+type CorpusWritePayload = {
   documentId: SafeId<"caseLawDecision">;
   jurisdiction: string;
   text: string | null;
   sections: DecisionSection[] | null;
   ast: IngestionResult["documentAst"];
+};
+
+type PlanCorpusWriteInput = CorpusWritePayload & { mode: CorpusStorageMode };
+
+/**
+ * `writeCorpusDocument` issues its three PUTs in parallel, so a rejection
+ * can still leave one or two objects behind. A new decision's retry mints a
+ * different id and keys its objects under that, stranding these for good.
+ * Delete them best-effort; the keys are content-addressed, so they are
+ * derivable from the payload without the write having returned.
+ *
+ * Unlike the post-transaction cleanup this is unconditionally safe, even
+ * for a refresh and even when the failure is an abandonment-shaped timeout
+ * whose PUTs may still land: no row carries these keys yet, so no delete
+ * here can produce a dangling reference.
+ */
+const discardPartialCorpusWrite = async (
+  payload: CorpusWritePayload,
+): Promise<void> => {
+  const keys = corpusKeys({
+    documentId: payload.documentId,
+    jurisdiction: payload.jurisdiction,
+    contentHash: corpusContentHash(payload),
+  });
+  const discarded = await Result.tryPromise(
+    async () =>
+      await deleteCorpusDocument({
+        textKey: keys.textKey,
+        sectionsKey: keys.sectionsKey,
+        astKey: keys.astKey,
+      }),
+  );
+  if (Result.isError(discarded)) {
+    captureError(discarded.error, {
+      decisionId: payload.documentId,
+      step: "processDecision.canonicalCorpusWriteCleanup",
+    });
+  }
 };
 
 const planCorpusWrite = async ({
@@ -339,8 +380,9 @@ const planCorpusWrite = async ({
 }: PlanCorpusWriteInput): Promise<CorpusWritePlan> => {
   switch (mode) {
     case "off":
+      return { type: "postgres-only" };
     case "dual-write":
-      return { type: "postgres-columns" };
+      return { type: "postgres-mirrored" };
     case "canonical": {
       // Object storage first. It keeps the S3 round-trip out of the
       // transaction (the same reason `dual-write` writes after commit)
@@ -353,6 +395,7 @@ const planCorpusWrite = async ({
           decisionId: payload.documentId,
           step: "processDecision.canonicalCorpusWrite",
         });
+        await discardPartialCorpusWrite(payload);
         return { type: "write-failed" };
       }
       return { type: "object-storage", written: written.value };
@@ -570,9 +613,31 @@ export const processDecision = async (
     return { inserted: false, searchVectorFailed: false, s3UploadFailed: true };
   }
 
-  const payloadColumns =
-    corpusPlan.type === "object-storage"
-      ? {
+  const postgresPayload = {
+    fulltext: result.fulltext,
+    sections: sections.length > 0 ? sections : null,
+    documentAst: result.documentAst,
+  };
+
+  const payloadColumns = (() => {
+    switch (corpusPlan.type) {
+      case "postgres-only":
+        // This refresh supersedes whatever the corpus holds and nothing
+        // will follow to rewrite the pointers, so a row carrying keys from
+        // an earlier canonical/dual-write period would point at objects
+        // that no longer match its columns. Clear them.
+        return {
+          ...postgresPayload,
+          textS3Key: null,
+          normalizedS3Key: null,
+          astS3Key: null,
+          contentHash: null,
+        };
+      case "postgres-mirrored":
+        // The post-commit write refreshes the pointers under a CAS.
+        return postgresPayload;
+      case "object-storage":
+        return {
           fulltext: null,
           sections: null,
           documentAst: null,
@@ -580,12 +645,13 @@ export const processDecision = async (
           normalizedS3Key: corpusPlan.written.sectionsKey,
           astS3Key: corpusPlan.written.astKey,
           contentHash: corpusPlan.written.contentHash,
-        }
-      : {
-          fulltext: result.fulltext,
-          sections: sections.length > 0 ? sections : null,
-          documentAst: result.documentAst,
         };
+      default: {
+        const unhandled: never = corpusPlan;
+        return panic(`Unhandled corpus write plan: ${String(unhandled)}`);
+      }
+    }
+  })();
 
   const writeDecisionRow = async (): Promise<void> => {
     await scopedDb(async (tx) => {

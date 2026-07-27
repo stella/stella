@@ -258,6 +258,12 @@ export const processLegislationDocument = async (
   });
 
   let corpusWriteFailed = false;
+  // Legislation mirrors the payload whenever corpus storage is on and never
+  // takes the `canonical` branch: that migration is deliberately case-law
+  // first. Legislation's payload volume does not justify moving off the
+  // Postgres columns, and its readers key off row state, which stays correct
+  // either way. Treating `canonical` as `dual-write` here is the scope
+  // decision, not an oversight.
   if (corpusStorageMode !== "off") {
     try {
       const written = await writeCorpusDocument({

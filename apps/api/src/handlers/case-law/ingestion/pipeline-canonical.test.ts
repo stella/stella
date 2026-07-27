@@ -19,6 +19,8 @@ import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
  */
 
 const realEnvBase = await import("@/api/env-base");
+const realCorpusStorage =
+  await import("@/api/handlers/case-law/corpus-storage");
 
 /** Ordered log of the side effects under test, across S3 and the DB. */
 const events: string[] = [];
@@ -40,17 +42,31 @@ const writeCorpusDocumentMock = mock(
   },
 );
 
-const deleteCorpusDocumentMock = mock(async (): Promise<void> => {
-  events.push("corpus-delete");
-  await Promise.resolve();
-});
+type CorpusDocumentKeys = {
+  textKey: string | null;
+  sectionsKey: string | null;
+  astKey: string | null;
+};
+
+const deletedKeys: CorpusDocumentKeys[] = [];
+
+const deleteCorpusDocumentMock = mock(
+  async (keys: CorpusDocumentKeys): Promise<void> => {
+    events.push("corpus-delete");
+    deletedKeys.push(keys);
+    await Promise.resolve();
+  },
+);
 
 void mock.module("@/api/env-base", () => ({
   ...realEnvBase,
   corpusStorageMode: "canonical",
 }));
 
+// Only the two I/O entry points are faked; the key derivation stays real so
+// the partial-write cleanup is exercised against the actual key layout.
 void mock.module("@/api/handlers/case-law/corpus-storage", () => ({
+  ...realCorpusStorage,
   writeCorpusDocument: writeCorpusDocumentMock,
   deleteCorpusDocument: deleteCorpusDocumentMock,
 }));
@@ -74,6 +90,7 @@ afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
   events.length = 0;
   insertedRows.length = 0;
+  deletedKeys.length = 0;
   persistedCursor = undefined;
   rowWrite = "ok";
   writeCorpusDocumentMock.mockClear();
@@ -203,7 +220,15 @@ describe("processDecision — canonical storage mode", () => {
       searchVectorFailed: false,
       s3UploadFailed: true,
     });
-    expect(events).toEqual(["corpus-write-failed"]);
+    // The three PUTs run in parallel, so a rejection can leave one or two
+    // objects behind under keys no row will ever reference. They go, at the
+    // real content-addressed keys derived from the payload.
+    expect(events).toEqual(["corpus-write-failed", "corpus-delete"]);
+    const discarded = deletedKeys.at(0);
+    expect(discarded?.textKey).toContain("/text.zst");
+    expect(discarded?.sectionsKey).toContain("/sections.json.zst");
+    expect(discarded?.astKey).toContain("/ast.json.zst");
+    expect(discarded?.textKey).toContain("jurisdiction=SVK");
     expect(insertedRows).toHaveLength(0);
   });
 

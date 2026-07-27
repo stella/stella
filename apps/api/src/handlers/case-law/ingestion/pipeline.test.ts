@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawSources } from "@/api/db/schema";
+import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst, Inline } from "@/api/handlers/case-law/document-ast";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
@@ -11,6 +11,7 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
   corpusWriteErrorDetail,
+  processDecision,
   runIngestionPipeline,
   sanitizeResult,
 } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -438,5 +439,70 @@ describe("corpusWriteErrorDetail", () => {
 
   test("stringifies non-Error values", () => {
     expect(corpusWriteErrorDetail("boom")).toBe("boom");
+  });
+});
+
+describe("processDecision — corpus storage off", () => {
+  test("clears corpus pointers left behind by an earlier mode", async () => {
+    // Rolling back to `off` makes the Postgres columns canonical again, and
+    // no corpus write follows this refresh to rewrite the keys. Left alone,
+    // the row would keep pointing at objects that no longer match its text.
+    const existing = {
+      id: createSafeId<"caseLawDecision">(),
+      metadata: {},
+      sourceHash: "old-hash",
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+
+    let updated: Record<string, unknown> | undefined;
+    const scopedDb: ScopedDb = async (callback) => {
+      const tx = {
+        query: {
+          caseLawDecisions: {
+            findFirst: async () => await Promise.resolve(existing),
+          },
+        },
+        update: (table: unknown) => ({
+          set: (values: Record<string, unknown>) => {
+            if (table === caseLawDecisions) {
+              updated = values;
+            }
+            return { where: async () => undefined };
+          },
+        }),
+        delete: () => ({ where: async () => undefined }),
+        insert: () => ({ values: async () => undefined }),
+      };
+
+      // SAFETY: the refresh path walks only these chains; anything else
+      // would throw and fail the test loudly.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      return await callback(tx as unknown as Transaction);
+    };
+
+    const outcome = await processDecision(
+      {
+        caseNumber: "X/1/2026",
+        court: "Test Court",
+        country: "SVK",
+        language: "sk",
+        fulltext: "Rozhodnutie o veci samej.",
+        metadata: {},
+        rawHash: "new-hash",
+        documentAst: EMPTY_AST,
+      },
+      createSafeId<"caseLawSource">(),
+      scopedDb,
+    );
+
+    expect(outcome.inserted).toBe(true);
+    expect(updated).toMatchObject({
+      fulltext: "Rozhodnutie o veci samej.",
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+    });
   });
 });

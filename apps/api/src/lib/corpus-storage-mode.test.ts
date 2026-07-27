@@ -26,7 +26,11 @@ describe("resolveCorpusStorageMode", () => {
 });
 
 describe("corpusStorageInvariantViolation", () => {
-  const deployed = { corpusBucket: "corpus", isDev: false } as const;
+  const deployed = {
+    corpusBucket: "corpus",
+    corpusIndexingEnabled: true,
+    isDev: false,
+  } as const;
 
   test("canonical without the corpus-index provider is rejected", () => {
     expect(
@@ -56,20 +60,46 @@ describe("corpusStorageInvariantViolation", () => {
     ).toBeNull();
   });
 
+  test("canonical without the corpus indexer is rejected", () => {
+    // The corpus index is the only projection a canonical row can reach,
+    // and the indexer loop is what fills it.
+    expect(
+      corpusStorageInvariantViolation({
+        ...deployed,
+        mode: "canonical",
+        searchProvider: "corpus-index",
+        corpusIndexingEnabled: false,
+      }),
+    ).toContain("CORPUS_INDEXING_ENABLED=true");
+  });
+
+  test("dual-write does not need the corpus indexer", () => {
+    // Its rows keep their tsvector, so pg-fts still serves them.
+    expect(
+      corpusStorageInvariantViolation({
+        ...deployed,
+        mode: "dual-write",
+        searchProvider: "pg-fts",
+        corpusIndexingEnabled: false,
+      }),
+    ).toBeNull();
+  });
+
   test("canonical needs the corpus bucket exactly as dual-write does", () => {
     for (const mode of ["dual-write", "canonical"] as const) {
       expect(
         corpusStorageInvariantViolation({
+          ...deployed,
           mode,
           searchProvider: "corpus-index",
           corpusBucket: undefined,
-          isDev: false,
         }),
       ).toContain("LEGAL_CORPUS_S3_BUCKET");
 
       // Dev falls back to the default document bucket.
       expect(
         corpusStorageInvariantViolation({
+          ...deployed,
           mode,
           searchProvider: "corpus-index",
           corpusBucket: undefined,
@@ -84,6 +114,7 @@ describe("corpusStorageInvariantViolation", () => {
       corpusStorageInvariantViolation({
         mode: "off",
         searchProvider: "pg-fts",
+        corpusIndexingEnabled: false,
         corpusBucket: undefined,
         isDev: false,
       }),
