@@ -63,7 +63,12 @@ const formatLogDetail = (detail: unknown): string => {
   }
 
   if (detail instanceof Error) {
-    return detail.stack ?? detail.message;
+    const base = detail.stack ?? detail.message;
+    // Wrapped driver errors (e.g. DrizzleQueryError) carry the actual
+    // failure in `cause`; without it the log shows only the query text.
+    return detail.cause instanceof Error
+      ? `${base}\n[cause] ${detail.cause.stack ?? detail.cause.message}`
+      : base;
   }
 
   if (typeof detail === "string") {

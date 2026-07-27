@@ -93,6 +93,22 @@ type PipelineResult = {
 const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
 
+/**
+ * Bound the outer message and the cause separately: a wrapped driver
+ * error carries the full failed query in its outer message, which would
+ * otherwise consume the whole budget and truncate the cause — the part
+ * that says why the write failed.
+ */
+export const corpusWriteErrorDetail = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return String(error).slice(0, 512);
+  }
+  const outer = error.message.slice(0, 200);
+  return error.cause instanceof Error
+    ? `${outer} (cause: ${error.cause.message.slice(0, 300)})`
+    : outer;
+};
+
 type ProcessResult = {
   inserted: boolean;
   searchVectorFailed: boolean;
@@ -561,6 +577,15 @@ export const processDecision = async (
       });
     } catch (error) {
       s3UploadFailed = true;
+      // The halt reason only carries a failure count; without this line the
+      // cause of a held cursor is invisible to an operator reading the log.
+      logger.error("case_law.ingestion.corpus_write_failed", {
+        decisionId,
+        caseNumber: result.caseNumber,
+        country: result.country,
+        "error.type": errorTag(error),
+        "error.detail": corpusWriteErrorDetail(error),
+      });
       captureError(error, { decisionId, step: "processDecision.corpusWrite" });
       await preserveCorpusWriteRetry({
         decisionId,
