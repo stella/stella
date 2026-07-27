@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-pdf",
-  "version": "2.7.1",
+  "version": "2.7.2",
   "description": "Fail-closed PDF coverage and risk inspection contracts for stella anonymization",
   "type": "module",
   "exports": {
@@ -31,7 +31,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stll/anonymize": "2.7.1"
+    "@stll/anonymize": "2.7.2"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

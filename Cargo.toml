@@ -13,7 +13,7 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "2.7.1"
+version = "2.7.2"
 edition = "2024"
 # Minimum supported Rust version, matching the pinned toolchain
 # (rust-toolchain.toml). With resolver "3" this also makes dependency

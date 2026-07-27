@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.7.2
+
+### Patch Changes
+
+- [#430](https://github.com/stella/anonymize/pull/430) [`158416a`](https://github.com/stella/anonymize/commit/158416a22f787f157e02976548c0dbbfef2b66b4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use the shared namespace-aware WordprocessingML scanner for bounded DOCX
+  extraction while preserving structural locations, contexts, and UTF-16 offsets.
+
 ## 2.7.1
 
 ### Patch Changes
