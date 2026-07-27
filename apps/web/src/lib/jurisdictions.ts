@@ -101,14 +101,25 @@ export const countryName = (
 export const suggestedCountryCodes = ({
   email,
   locale,
+  detectedCountry,
 }: {
   email: string;
   locale: string;
+  /**
+   * Country recorded server-side at signup from the edge's geo header.
+   * Ranked above the locale and email heuristics because it reflects
+   * where the person actually registered from.
+   */
+  detectedCountry?: string | null;
 }): CountryCode[] => {
   const suggestions: string[] = [];
   const regionFromLocale =
     LOCALE_REGION_PATTERN.exec(locale)?.groups?.["region"];
   const emailTld = email.split(".").at(-1)?.toLowerCase();
+
+  if (detectedCountry) {
+    suggestions.push(detectedCountry.toUpperCase());
+  }
 
   if (regionFromLocale) {
     suggestions.push(regionFromLocale.toUpperCase());

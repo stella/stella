@@ -22,6 +22,7 @@ type MockRow = {
   id: string;
   email: string;
   name: string;
+  detectedCountry: string | null;
   createdAt: Date;
   createdAtCursor: string;
 };
@@ -30,6 +31,7 @@ const mockRow = (id: string): MockRow => ({
   id,
   email: `${id}@example.test`,
   name: `User ${id}`,
+  detectedCountry: null,
   createdAt: daysAgo(2),
   createdAtCursor: "2026-07-10T12:00:00.000000",
 });
@@ -160,7 +162,7 @@ describe("GET /operator/registrations", () => {
     expect(response.status).toBe(400);
   });
 
-  test("200 with the Page envelope and exactly four item fields on a correct token", async () => {
+  test("200 with the Page envelope and exactly five item fields on a correct token", async () => {
     const app = buildApp({
       configuredToken: TOKEN,
       rows: [mockRow("op-route-a"), mockRow("op-route-b")],
@@ -184,6 +186,7 @@ describe("GET /operator/registrations", () => {
     for (const item of page.items) {
       expect(Object.keys(item).sort()).toEqual([
         "createdAt",
+        "detectedCountry",
         "email",
         "id",
         "name",

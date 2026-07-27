@@ -188,6 +188,7 @@ export const queryRegistrationsPage = async function* ({
             id: user.id,
             email: user.email,
             name: user.name,
+            detectedCountry: user.detectedCountry,
             createdAt: user.createdAt,
             createdAtCursor:
               registrationCursor.cursorValue.as("created_at_cursor"),
