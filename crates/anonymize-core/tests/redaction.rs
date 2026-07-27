@@ -478,6 +478,31 @@ fn detected_placeholder_identity_uses_sanitized_text() {
 }
 
 #[test]
+fn merged_placeholder_restores_every_occurrence_to_its_first_original() {
+  // Two spans whose display texts share a placeholder identity are merged onto
+  // one placeholder, and the redaction map keeps a single original for it, so
+  // `deanonymise` restores both occurrences to the first span's source slice.
+  // The soft-wrap merge above relies on this; the round-trip cost is the
+  // reason `generated_entity_spans_fail_or_round_trip` only asserts exact
+  // restoration while no placeholder stands for two different slices.
+  let text = "Dates: 21.\nMärz 1968 and 21. März 1968.";
+  let normalized = "21. März 1968";
+  let entities = vec![
+    entity_with_display_text(text, "date", "21.\nMärz 1968", normalized),
+    entity(text, "date", normalized),
+  ];
+
+  let result =
+    redact_text(text, &entities, &OperatorConfig::default()).unwrap();
+
+  assert_eq!(result.redaction_map.len(), 1);
+  assert_eq!(
+    deanonymise(&result.redacted_text, &result.redaction_map),
+    "Dates: 21.\nMärz 1968 and 21.\nMärz 1968."
+  );
+}
+
+#[test]
 fn invalid_byte_boundary_is_rejected() {
   let text = "A 🦀 Bob";
   let entities = vec![Entity::detected(3, 5, "person", " Bob")];

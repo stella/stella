@@ -6,15 +6,17 @@
   clippy::unwrap_used
 )]
 
+use std::collections::BTreeMap;
+
 use proptest::prelude::{Just, ProptestConfig, Strategy, any};
 use proptest::{
   collection, prop_assert, prop_assert_eq, prop_assume, proptest, sample,
 };
 use stella_anonymize_core::{
   DetectionSource, Entity, Error, LiteralSearchOptions, OperatorConfig,
-  PipelineEntity, RegexSearchOptions, SearchIndex, SearchIndexArtifacts,
-  SearchMatch, SearchOptions, SearchPattern, deanonymise, merge_and_dedup,
-  normalize_for_search, redact_text, sanitize_entities,
+  PipelineEntity, RedactionReplacement, RegexSearchOptions, SearchIndex,
+  SearchIndexArtifacts, SearchMatch, SearchOptions, SearchPattern, deanonymise,
+  merge_and_dedup, normalize_for_search, redact_text, sanitize_entities,
 };
 
 const PROPERTY_CASES: u32 = 128;
@@ -449,6 +451,43 @@ fn plain_text() -> impl Strategy<Value = String> {
   .prop_map(|chars| chars.into_iter().collect())
 }
 
+/// Source slice for a generated span, or a marker when the offsets do not
+/// address a valid slice. `redact_text` rejects those spans, so the marker is
+/// never redacted.
+fn display_text_for_span(text: &str, start: u32, end: u32) -> String {
+  slice_at(text, start, end)
+    .map_or_else(|| String::from("invalid-span"), ToOwned::to_owned)
+}
+
+fn slice_at(text: &str, start: u32, end: u32) -> Option<&str> {
+  let start = usize::try_from(start).ok()?;
+  let end = usize::try_from(end).ok()?;
+  text.get(start..end)
+}
+
+/// Whether one placeholder replaced two different source slices. The redaction
+/// map keeps a single original per placeholder, so `deanonymise` cannot restore
+/// both. `detected_placeholder_identity_uses_sanitized_text` in `redaction.rs`
+/// pins the merge this detects.
+fn merges_distinct_originals(
+  text: &str,
+  replacements: &[RedactionReplacement],
+) -> bool {
+  let mut originals = BTreeMap::<&str, &str>::new();
+  for replacement in replacements {
+    let Some(slice) = slice_at(text, replacement.start, replacement.end) else {
+      continue;
+    };
+    if originals
+      .insert(replacement.replacement.as_str(), slice)
+      .is_some_and(|previous| previous != slice)
+    {
+      return true;
+    }
+  }
+  false
+}
+
 fn person_placeholder_number(placeholder: &str) -> Option<u32> {
   placeholder
     .strip_prefix("[PERSON_")?
@@ -543,17 +582,29 @@ proptest! {
     let entities = spans
       .into_iter()
       .map(|(start, end, label)| {
-        Entity::detected(start, end, label, String::from("generated"))
+        // Carry each entity's own source slice, the way a detector or an
+        // external caller does. A shared constant would give every entity the
+        // same placeholder identity, so one placeholder would stand for
+        // unrelated spans and the spans under test would never be exercised.
+        let display = display_text_for_span(&text, start, end);
+        Entity::detected(start, end, label, display)
       })
       .collect::<Vec<_>>();
 
     let result = redact_text(&text, &entities, &OperatorConfig::default());
     if let Ok(redacted) = result {
-      let restored =
-        deanonymise(&redacted.redacted_text, &redacted.redaction_map);
-      prop_assert_eq!(restored.as_str(), text.as_str());
       for entry in &redacted.redaction_map {
         prop_assert!(!text.contains(&entry.placeholder));
+      }
+      // Entities that share a placeholder identity intentionally share a
+      // placeholder, and the map stores one original per placeholder, so
+      // `deanonymise` restores every occurrence to that original. Exact
+      // restoration is therefore only guaranteed while no placeholder stands
+      // for two different source slices.
+      if !merges_distinct_originals(&text, &redacted.replacements) {
+        let restored =
+          deanonymise(&redacted.redacted_text, &redacted.redaction_map);
+        prop_assert_eq!(restored.as_str(), text.as_str());
       }
     }
   }
