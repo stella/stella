@@ -199,6 +199,44 @@ describe("case-law passage projection", () => {
     }
   });
 
+  test("the searchable title is indexed once per decision, not per passage", async () => {
+    const row = makeRow({ id: "dec_title", contentHash: "hash_title" });
+    const { built } = await loadDocsForBatch([row], {
+      generation: "case_law_v2",
+      fetchFulltext: async () => null,
+      readPayload: async () => ({
+        text: "",
+        ast: astOf([
+          heading(0, "Odůvodnění"),
+          paragraph(1, 200),
+          paragraph(2, 200),
+          paragraph(3, 200),
+        ]),
+      }),
+    });
+
+    const docs = built.at(0)?.docs ?? [];
+    expect(docs.length).toBeGreaterThan(1);
+
+    // `title` is the only document-level field a free-text term can reach.
+    // Copied onto every passage, a court-name query would let one judgment
+    // return as many equally-scoring hits as it has passages and crowd every
+    // other decision out of the capped scan window.
+    const titled = docs.filter((doc) => doc["title"] !== undefined);
+    expect(titled).toHaveLength(1);
+    expect(titled.at(0)?.["seq"]).toBe(0);
+    expect(titled.at(0)?.["title"]).toBe(`case-${row.id} — Test Court`);
+
+    // The filter and facet fields stay on every passage: they are
+    // raw-tokenized or numeric, so they carry no free-text fan-out, and the
+    // engine filters on the document it scores.
+    for (const doc of docs) {
+      expect(doc["court"]).toBe("Test Court");
+      expect(doc["language"]).toBe("cs");
+      expect(doc["citation_authority"]).toBe(0);
+    }
+  });
+
   test("the delete-previous-copies query selects every passage a row emitted", async () => {
     const row = makeRow({ id: "dec_replace", contentHash: "hash_4" });
     const { built } = await loadDocsForBatch([row], {

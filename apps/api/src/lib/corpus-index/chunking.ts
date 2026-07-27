@@ -23,7 +23,10 @@ import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
  *   single oversized block therefore becomes an oversized passage rather than
  *   being cut mid-sentence.
  * - A heading is never a passage of its own; it opens the passage that carries
- *   the section it introduces. Continuation passages of a long section do not
+ *   the section it introduces, and a trailing heading with nothing under it
+ *   joins the passage before it (the sole exception is a document that is
+ *   nothing but headings, where they are the only content there is).
+ *   Continuation passages of a long section do not
  *   repeat the heading text — repeating it would index the same words N times
  *   and skew their document frequency. They carry `headingPath` instead, which
  *   the index maps as a searchable field, so section context is queryable for
@@ -151,7 +154,24 @@ const createChunkAccumulator = () => {
     open.hasBody ||= !isHeading;
   };
 
+  /**
+   * Close the document. A trailing run of headings (a section header with
+   * nothing under it, or a document that is nothing but headings) would
+   * otherwise flush as a body-less passage: a result that matches a query and
+   * then shows the reader no content.
+   *
+   * It cannot simply be dropped either — that would lose text. So it joins the
+   * previous passage, which is where a reader would look for it anyway. A
+   * document with no body at all has no previous passage to join, and its
+   * headings are the only content it has; that one is emitted, because the
+   * alternative is indexing nothing.
+   */
   const finish = (): CorpusChunk[] => {
+    const previous = chunks.at(-1);
+    if (open.texts.length > 0 && !open.hasBody && previous !== undefined) {
+      previous.text = [previous.text, ...open.texts].join(BLOCK_SEPARATOR);
+      open = emptyChunk();
+    }
     flush();
     return chunks;
   };
@@ -164,7 +184,11 @@ const createHeadingStack = () => {
   const stack: { level: number; text: string }[] = [];
 
   const push = (level: number, text: string): void => {
-    while ((stack.at(-1)?.level ?? 0) >= level) {
+    // Terminate on the stack, not on the level: `isDocumentAst` only checks the
+    // envelope, so a malformed block can carry level <= 0, and comparing
+    // against the empty-stack default of 0 would then pop forever. Each
+    // iteration removes an entry, so bounding on length cannot spin.
+    while (stack.length > 0 && (stack.at(-1)?.level ?? 0) >= level) {
       stack.pop();
     }
     stack.push({ level, text });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
   chunkDocument,
@@ -139,6 +140,32 @@ describe("chunkDocument preserves the document", () => {
     }
   });
 
+  test("no passage is headings only, for any shape", () => {
+    for (let seed = 1; seed <= 60; seed += 1) {
+      const blocks = generateBlocks(seed);
+      const chunks = chunkDocument({
+        ast: astOf(blocks),
+        fallbackText: "unused",
+      });
+      // Generated paragraphs start with their block marker; generated headings
+      // do not, so a passage's segments say whether it carries body text.
+      const hasBody = (text: string): boolean =>
+        text.split(SEPARATOR).some((segment) => /^b\d+ /u.test(segment));
+
+      if (blocks.every((block) => block.type === "heading")) {
+        // A document that is nothing but headings has no body to attach them
+        // to; indexing them is better than indexing nothing.
+        expect(chunks).toHaveLength(1);
+        continue;
+      }
+      for (const chunk of chunks) {
+        // A heading-only passage would match a query and then show the reader
+        // no content.
+        expect(hasBody(chunk.text)).toBe(true);
+      }
+    }
+  });
+
   test("blank blocks are dropped rather than emitted as empty passages", () => {
     const chunks = chunkDocument({
       ast: astOf([
@@ -217,6 +244,100 @@ describe("chunkDocument boundaries", () => {
       ["I > I.A", "I > I.B", "II"],
     );
   });
+});
+
+describe("chunkDocument never emits a body-less passage", () => {
+  test("a heading trailing a full passage joins it instead of standing alone", () => {
+    const body = "para ".repeat(400).trim();
+    const chunks = chunkDocument({
+      ast: astOf([
+        heading(0, 1, "Odůvodnění"),
+        paragraph(1, body),
+        paragraph(2, body),
+        heading(3, 1, "Poučení"),
+      ]),
+      fallbackText: "unused",
+    });
+
+    // The trailing heading has no section under it, so it cannot open a
+    // passage; dropping it would lose text, so it joins the previous one.
+    expect(chunks.at(-1)?.text.endsWith("Poučení")).toBe(true);
+    expect(chunks.filter((chunk) => chunk.text === "Poučení")).toHaveLength(0);
+    // Still lossless.
+    expect(chunks.map((chunk) => chunk.text).join(SEPARATOR)).toBe(
+      ["Odůvodnění", body, body, "Poučení"].join(SEPARATOR),
+    );
+  });
+
+  test("a document of nothing but headings is emitted as one passage", () => {
+    const chunks = chunkDocument({
+      ast: astOf([
+        heading(0, 1, "Rozsudek"),
+        heading(1, 2, "Odůvodnění"),
+        heading(2, 2, "Poučení"),
+      ]),
+      fallbackText: "",
+    });
+
+    // There is no body to attach them to, and the headings are the only text
+    // the document has — indexing nothing would drop it from search entirely.
+    expect(chunks).toHaveLength(1);
+    expect(chunks.at(0)?.text).toBe(
+      ["Rozsudek", "Odůvodnění", "Poučení"].join(SEPARATOR),
+    );
+  });
+
+  test("a non-positive heading level cannot spin the ancestry stack", () => {
+    // `isDocumentAst` validates the envelope only, so a source that emits a
+    // level of 0 reaches the chunker exactly like this. Parsed through the
+    // production guard rather than cast, so the test proves the real path.
+    const ast = parseDocumentAst(
+      JSON.stringify({
+        version: 1,
+        source: { system: "t", documentId: "d", webUrl: "", printUrl: "" },
+        metadata: {
+          caseNumber: null,
+          ecli: null,
+          court: null,
+          decisionDate: null,
+          decisionType: null,
+          keywords: [],
+          statutes: [],
+        },
+        blocks: [
+          {
+            id: "h0",
+            anchorId: "h0",
+            type: "heading",
+            level: 0,
+            inlines: [],
+            plainText: "Zero",
+          },
+          {
+            id: "h1",
+            anchorId: "h1",
+            type: "heading",
+            level: -3,
+            inlines: [],
+            plainText: "Negative",
+          },
+          {
+            id: "p0",
+            anchorId: "p0",
+            type: "paragraph",
+            inlines: [],
+            plainText: "body",
+          },
+        ],
+      }),
+    );
+
+    const chunks = chunkDocument({ ast, fallbackText: "unused" });
+    expect(chunks.map((chunk) => chunk.text)).toEqual([
+      ["Zero", "Negative", "body"].join(SEPARATOR),
+    ]);
+  }, // into a readable failure. // A regression here hangs rather than fails; the deadline turns it back
+  2000);
 });
 
 describe("chunkDocument fallbacks", () => {

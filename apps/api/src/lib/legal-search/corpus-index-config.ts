@@ -61,6 +61,14 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   { name: "source", type: "text", tokenizer: "raw", fast: true },
   { name: "language", type: "text", tokenizer: "raw", fast: true },
   { name: "year", type: "u64", fast: true },
+  // Searchable, and therefore fan-out sensitive. Under a passage layout a
+  // document-level field copied onto every passage lets one document answer a
+  // broad query with as many hits as it has passages, crowding every other
+  // document out of the capped scan window. `title` is the only field here a
+  // free-text term can reach (everything else document-level is raw-tokenized
+  // or numeric), so a passage family sets it on the document's opening passage
+  // only — one hit per document, as before. Any future searchable
+  // document-level field has to make the same choice.
   {
     name: "title",
     type: "text",

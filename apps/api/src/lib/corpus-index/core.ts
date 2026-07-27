@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { Buffer } from "node:buffer";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -11,6 +12,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import { LIMITS } from "@/api/lib/limits";
 
 /**
  * Shared corpus-index search-projection core for the corpus document families
@@ -35,6 +37,68 @@ const INDEX_CONCURRENCY = 4;
  */
 export const corpusDocumentDeleteQuery = (entityId: string): string =>
   `document_id:"${entityId}"`;
+
+/** One row and every search document it projects to. */
+type BuiltRow<TRow> = { row: TRow; docs: Record<string, unknown>[] };
+
+/** One ingest request: the rows it covers and the NDJSON body carrying them. */
+export type IngestRequest<TRow> = {
+  entries: BuiltRow<TRow>[];
+  ndjson: string;
+};
+
+/**
+ * Split an index group into byte-bounded ingest requests.
+ *
+ * A batch is sized in rows, but a passage family turns one row into as many
+ * documents as the document has passages, so the serialized body is no longer
+ * bounded by the row count: a batch of long judgments can be two orders of
+ * magnitude larger than the same batch of short ones. The whole body is held
+ * in memory and sent as one request, so the bound has to be bytes.
+ *
+ * Splits only at row boundaries. Ingest appends per document with no
+ * cross-document transaction, so splitting is safe for the engine — but the
+ * caller commits a row's `indexedHash` after its documents land, and a row cut
+ * across two requests could be marked indexed while half its passages are
+ * missing. A single row that exceeds the budget on its own therefore still
+ * goes in one request: sending it whole is the only shape that keeps that mark
+ * honest, and it is bounded by the size of one court decision.
+ */
+export const splitIngestRequests = <TRow>(
+  group: readonly BuiltRow<TRow>[],
+  maxBytes: number,
+): IngestRequest<TRow>[] => {
+  const requests: IngestRequest<TRow>[] = [];
+  let entries: BuiltRow<TRow>[] = [];
+  let lines: string[] = [];
+  let bytes = 0;
+
+  for (const entry of group) {
+    const rowLines = entry.docs.map((doc) => JSON.stringify(doc));
+    // Measured in UTF-8 bytes, not code units: legal text is mostly non-ASCII
+    // outside English, where `.length` under-counts the wire size by up to 3x.
+    const rowBytes = rowLines.reduce(
+      (total, line) => total + Buffer.byteLength(line, "utf-8") + 1,
+      0,
+    );
+    if (entries.length > 0 && bytes + rowBytes > maxBytes) {
+      requests.push({ entries, ndjson: lines.join("\n") });
+      entries = [];
+      lines = [];
+      bytes = 0;
+    }
+    entries.push(entry);
+    for (const line of rowLines) {
+      lines.push(line);
+    }
+    bytes += rowBytes;
+  }
+
+  if (entries.length > 0) {
+    requests.push({ entries, ndjson: lines.join("\n") });
+  }
+  return requests;
+};
 
 /**
  * The row fields the shared core reads directly. Each family's own row type
@@ -196,6 +260,49 @@ export type LoadDocsForBatchOptions<TBrand extends SafeIdType, TRow> = {
   readPayload?: (row: TRow) => Promise<CorpusDocumentPayload>;
 };
 
+/** Failed index-job audit rows for the rows an ingest attempt did not land. */
+const failedIndexJobs = <
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+>(
+  entries: readonly BuiltRow<TRow>[],
+  error: CorpusIndexError,
+): CorpusJobInput<TBrand>[] =>
+  entries.map(({ row }) => ({
+    entityId: row.id,
+    contentHash: row.contentHash,
+    operation: "index",
+    status: "failed",
+    errorMessage: error.message.slice(0, 2048),
+  }));
+
+/**
+ * `Promise.all` for two operations whose side effects must be finished before
+ * the caller moves on. It rejects as soon as one input does, leaving the other
+ * running unobserved; this waits for both, then surfaces the first failure in
+ * argument order. Use it wherever an abandoned in-flight request would escape a
+ * concurrency bound rather than merely be wasted.
+ */
+export const settleBoth = async <TFirst, TSecond>(
+  first: Promise<TFirst>,
+  second: Promise<TSecond>,
+): Promise<[TFirst, TSecond]> => {
+  const [firstOutcome, secondOutcome] = await Promise.allSettled([
+    first,
+    second,
+  ]);
+  // Rethrow the original rejection, tagged error and all: the caller's
+  // isolation path reads its message into the failed index job, and wrapping
+  // it here would bury the cause the operator needs.
+  if (firstOutcome.status === "rejected") {
+    throw firstOutcome.reason;
+  }
+  if (secondOutcome.status === "rejected") {
+    throw secondOutcome.reason;
+  }
+  return [firstOutcome.value, secondOutcome.value];
+};
+
 const loadText = async <TBrand extends SafeIdType>(
   row: CorpusIndexRow<TBrand>,
   fetchFulltext: FetchFulltext<TBrand>,
@@ -274,15 +381,19 @@ export const createCorpusIndexer = <
       (async (row: TRow): Promise<CorpusDocumentPayload> => {
         // Passage families need the block structure the AST carries; document
         // families never touch it, so the second object read is skipped
-        // entirely rather than issued and discarded. Both reads are bounded by
-        // the corpus IO ceiling and fail the row together, so racing them
-        // costs nothing and halves the per-row latency.
-        const [text, ast] = await Promise.all([
+        // entirely rather than issued and discarded. The two reads run
+        // together, but both must settle before either failure surfaces: a
+        // fast rejection that abandoned its sibling would let this row leave
+        // the slice while its other request still holds an S3 connection, so
+        // the next slice would start on top of it and the concurrency bound
+        // this loop exists to enforce would drift upward. Waiting is bounded
+        // because every corpus read carries the corpus IO ceiling.
+        const [text, ast] = await settleBoth(
           loadText(row, fetchFulltext, adapter.readCorpusText),
           adapter.granularity === "passage" && row.astS3Key !== null
             ? adapter.readCorpusAst(row.astS3Key)
-            : null,
-        ]);
+            : Promise.resolve(null),
+        );
         return { text, ast };
       });
     const built: LoadedBatch<TBrand, TRow>["built"] = [];
@@ -472,6 +583,23 @@ export const createCorpusIndexer = <
     const now = new Date();
     let indexed = 0;
     let firstError: CorpusIndexError | null = null;
+    // Failed index-job rows accumulate per index and are written once below,
+    // the same shape recordReadFailures uses: an ingest failure now happens at
+    // two levels (the index could not be ensured, or one request of several was
+    // rejected), and collecting them keeps a single audit write per index
+    // instead of one per failure site.
+    const failedByIndex = new Map<string, CorpusJobInput<TBrand>[]>();
+    const recordFailed = (
+      indexId: string,
+      jobs: readonly CorpusJobInput<TBrand>[],
+    ): void => {
+      const existing = failedByIndex.get(indexId);
+      if (existing) {
+        existing.push(...jobs);
+      } else {
+        failedByIndex.set(indexId, [...jobs]);
+      }
+    };
 
     for (const [indexId, group] of groups) {
       // Ingest appends; it never replaces. Before re-ingesting, delete the
@@ -505,68 +633,81 @@ export const createCorpusIndexer = <
 
       // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
       const ensured = await ensureIndex(indexId);
-      const ingest = ensured.isErr()
-        ? ensured
-        : // oxlint-disable-next-line no-await-in-loop -- sequential per-group ingest paces NDJSON pushes to the search backend
-          await getCorpusIndexClient().ingestBatch(
-            indexId,
-            group
-              .flatMap(({ docs }) => docs.map((doc) => JSON.stringify(doc)))
-              .join("\n"),
-          );
-
-      if (ingest.isErr()) {
-        firstError ??= ingest.error;
-        // oxlint-disable-next-line no-await-in-loop -- sequential per-group audit write preserves job ordering
-        await adapter.recordJobs(
-          scopedDb,
-          group.map(({ row }) => ({
-            entityId: row.id,
-            contentHash: row.contentHash,
-            operation: "index" as const,
-            status: "failed" as const,
-            errorMessage: ingest.error.message.slice(0, 2048),
-          })),
-          indexId,
-        );
+      if (ensured.isErr()) {
+        firstError ??= ensured.error;
+        recordFailed(indexId, failedIndexJobs(group, ensured.error));
         continue;
       }
 
-      const casMissed = new Set<SafeId<TBrand>>();
-      // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per group; sequential to keep index writes and audit rows consistent
-      await scopedDb(async (tx) => {
-        // audit: skip — search index maintenance; rebuilds derived state
-        for (const { row } of group) {
-          // Compare-and-set on the selected row state: a concurrent
-          // re-ingest clears indexedHash (possibly leaving it null-to-null
-          // when the row was already pending) and bumps updatedAt, and an
-          // unconditional write would mask that refresh so the stale index
-          // document would never be retried.
-          // oxlint-disable-next-line no-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
-          const marked = await adapter.markIndexed(tx, { row, indexId, now });
-          if (!marked) {
-            casMissed.add(row.id);
+      // One group can exceed a single request's byte budget once rows project
+      // to many documents, so it goes out as a sequence of requests. Each is
+      // committed on its own: a later request failing must not un-commit the
+      // rows an earlier one already landed, because those documents are in the
+      // index and re-ingesting them next cycle would append a second copy that
+      // nothing points at.
+      for (const { entries, ndjson } of splitIngestRequests(
+        group,
+        LIMITS.corpusIndexIngestMaxBytes,
+      )) {
+        // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
+        const ingest = await getCorpusIndexClient().ingestBatch(
+          indexId,
+          ndjson,
+        );
+
+        if (ingest.isErr()) {
+          firstError ??= ingest.error;
+          // Only the rows actually attempted are recorded failed; the rest of
+          // the group is left for the next cycle rather than audited as a
+          // failure that never happened.
+          recordFailed(indexId, failedIndexJobs(entries, ingest.error));
+          break;
+        }
+
+        const casMissed = new Set<SafeId<TBrand>>();
+        // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per ingest request; sequential to keep index writes and audit rows consistent
+        await scopedDb(async (tx) => {
+          // audit: skip — search index maintenance; rebuilds derived state
+          for (const { row } of entries) {
+            // Compare-and-set on the selected row state: a concurrent
+            // re-ingest clears indexedHash (possibly leaving it null-to-null
+            // when the row was already pending) and bumps updatedAt, and an
+            // unconditional write would mask that refresh so the stale index
+            // document would never be retried.
+            // oxlint-disable-next-line no-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
+            const marked = await adapter.markIndexed(tx, { row, indexId, now });
+            if (!marked) {
+              casMissed.add(row.id);
+            }
+          }
+          const markedRows = entries
+            .filter(({ row }) => !casMissed.has(row.id))
+            .map(({ row }) => row);
+          if (markedRows.length > 0) {
+            await adapter.insertSucceededJobs(tx, {
+              rows: markedRows,
+              indexId,
+            });
+          }
+        });
+        // A missed CAS means a refresh outpaced this batch after the ingest
+        // appended its documents: the row carries no generation pointer to
+        // them, so delete the unrecorded copies now; the refreshed row is
+        // re-indexed by a later cycle.
+        for (const missedId of casMissed) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
+          const removed = await remove(missedId, scopedDb, indexId);
+          if (removed.isErr()) {
+            firstError ??= removed.error;
           }
         }
-        const markedRows = group
-          .filter(({ row }) => !casMissed.has(row.id))
-          .map(({ row }) => row);
-        if (markedRows.length > 0) {
-          await adapter.insertSucceededJobs(tx, { rows: markedRows, indexId });
-        }
-      });
-      // A missed CAS means a refresh outpaced this batch after the ingest
-      // appended its document: the row carries no generation pointer to it,
-      // so delete the unrecorded copy now; the refreshed row is re-indexed
-      // by a later cycle.
-      for (const missedId of casMissed) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
-        const removed = await remove(missedId, scopedDb, indexId);
-        if (removed.isErr()) {
-          firstError ??= removed.error;
-        }
+        indexed += entries.length - casMissed.size;
       }
-      indexed += group.length - casMissed.size;
+    }
+
+    for (const [failedIndexId, jobs] of failedByIndex) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-index audit writes preserve job ordering
+      await adapter.recordJobs(scopedDb, jobs, failedIndexId);
     }
 
     // Surface a failure so the daemon retries the un-indexed groups.

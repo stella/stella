@@ -14,11 +14,40 @@ import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-p
 
 const originalFetch = globalThis.fetch;
 let responseBody: unknown;
+/**
+ * Whole hit list the fake engine holds. When set, the stub honours
+ * `start_offset`/`max_hits` so a scan that needs several windows behaves the
+ * way it would against the real engine; `responseBody` stays available for the
+ * single-window cases.
+ */
+let engineHits: { document_id: string; anchor_id?: string }[] | null;
+let requestCount: number;
 
 beforeEach(() => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
-  const stub = async (): Promise<Response> =>
-    new Response(JSON.stringify(responseBody), { status: 200 });
+  engineHits = null;
+  requestCount = 0;
+  const stub = async (
+    _input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ): Promise<Response> => {
+    requestCount += 1;
+    if (engineHits === null) {
+      return new Response(JSON.stringify(responseBody), { status: 200 });
+    }
+    const body: Record<string, unknown> =
+      typeof init?.body === "string" ? JSON.parse(init.body) : {};
+    const offset = Number(body["start_offset"] ?? 0);
+    const window = engineHits.slice(offset, offset + Number(body["max_hits"]));
+    return new Response(
+      JSON.stringify({
+        num_hits: engineHits.length,
+        hits: window,
+        snippets: window.map((hit) => ({ text: [`snip ${hit.document_id}`] })),
+      }),
+      { status: 200 },
+    );
+  };
   globalThis.fetch = Object.assign(stub, {
     preconnect: originalFetch.preconnect,
   });
@@ -124,6 +153,41 @@ describe("document-granular responses are unaffected", () => {
     // Nothing to deep-link to when the whole document is the unit.
     expect(page.anchorIdById.size).toBe(0);
     expect(page.snippetById.get("doc-a")).toBe("whole doc-a");
+  });
+});
+
+describe("a single document cannot monopolise the scan", () => {
+  test("a passage flood from one document still yields a full page of others", async () => {
+    // The shape a broad title or court-name query used to produce: one long
+    // judgment answering with a hit per passage, ahead of everything else.
+    // Document-level searchable fields now sit on the opening passage only, so
+    // the engine should not emit this — the read path must survive it anyway,
+    // because body text can legitimately match many passages of one decision.
+    const flood = Array.from({ length: 400 }, (_, seq) => ({
+      document_id: "doc-flood",
+      anchor_id: `flood-p${seq}`,
+    }));
+    const others = Array.from({ length: 40 }, (_, index) => ({
+      document_id: `doc-${index}`,
+      anchor_id: `other-${index}`,
+    }));
+    engineHits = [...flood, ...others];
+
+    const page = await readPage(5);
+
+    // The flooding document takes one slot, not the page.
+    expect(page.pageRanked.at(0)?.id).toBe("doc-flood");
+    expect(
+      page.pageRanked.filter((hit) => hit.id === "doc-flood"),
+    ).toHaveLength(1);
+    expect(page.pageRanked).toHaveLength(5);
+    expect(new Set(page.pageRanked.map((hit) => hit.id)).size).toBe(5);
+    // The scan walked past the flood to reach the other decisions.
+    expect(requestCount).toBeGreaterThan(1);
+    expect(page.passageCountById.get("doc-flood")).toBe(400);
+    for (const hit of page.pageRanked.slice(1)) {
+      expect(page.passageCountById.get(hit.id)).toBe(1);
+    }
   });
 });
 
