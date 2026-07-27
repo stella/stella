@@ -160,6 +160,25 @@ test("ingest fails when the engine reports rejected documents", async () => {
   }
 });
 
+test("delete-by-query posts one document-scoped delete task", async () => {
+  responseBody = {};
+
+  const result = await getCorpusIndexClient().deleteByQuery(
+    "legal_corpus_v1_cze",
+    'document_id:"dec-1"',
+  );
+
+  expect(result.isOk()).toBe(true);
+  // One task per document, whatever the index layout: a passage-split
+  // document is removed by the same single query as a whole one, so the
+  // indexer never has to know how many documents a row previously emitted.
+  expect(requests).toHaveLength(1);
+  const request = requests.at(0);
+  expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/delete-tasks");
+  const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
+  expect(body["query"]).toBe('document_id:"dec-1"');
+});
+
 test("ingest succeeds when every document is accepted", async () => {
   responseBody = { num_docs_for_processing: 2 };
 

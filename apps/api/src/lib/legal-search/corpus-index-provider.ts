@@ -31,6 +31,14 @@ import { encodeCursor, decodeCursor } from "@/api/lib/search/cursor";
  * for split pruning); the API re-joins them to the precomputed
  * citation_authority in Postgres and blends via RRF — corpus index has no
  * in-engine function scoring, so the legal-domain ranking stays here.
+ *
+ * Case-law generations built at passage granularity return one hit per
+ * matching passage. Grouping to documents happens in
+ * `readCorpusIndexSearchPage`, keyed on `document_id`: a document ranks by its
+ * best passage, and that passage supplies the snippet and the deep-link
+ * anchor. Both index layouts flow through unchanged — a document-granular
+ * generation is just the case where every document has exactly one passage —
+ * so the rerank, the cursor, and the Postgres rehydration below are untouched.
  */
 
 const toNullableString = (x: unknown): string | null =>
@@ -171,9 +179,11 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   });
 
   const {
+    anchorIdById,
     context: { displayById },
     hasMore,
     pageRanked,
+    passageCountById,
     snippetById,
   } = searchPage;
 
@@ -197,6 +207,8 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
         decisionType: toNullableString(row.decisionType),
         sourceUrl: toNullableString(row.sourceUrl),
         headline: snippetById.get(hit.id) ?? null,
+        anchorId: anchorIdById.get(hit.id) ?? null,
+        matchingPassages: passageCountById.get(hit.id) ?? 1,
         citationCount: row.citationCount,
         citationAuthority: hit.citationAuthority,
         score: hit.score,

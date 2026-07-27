@@ -81,6 +81,32 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   { name: "citation_count", type: "u64", fast: true },
   { name: "canonical_text_key", type: "text", tokenizer: "raw", stored: true },
   { name: "canonical_ast_key", type: "text", tokenizer: "raw", stored: true },
+  // Passage fields. A passage-granular family emits one document per passage,
+  // all sharing `document_id`; a document-granular family simply never sets
+  // them and, in lenient mode, the index carries them empty. The read path is
+  // written against the union of both layouts (see corpus-index-pagination),
+  // so a generation built either way serves the same API.
+  //
+  // `<document_id>:<seq>`. A deterministic, greppable identity for one
+  // passage; not a primary key — the engine appends and replaces by
+  // delete-by-query on `document_id`.
+  { name: "chunk_id", type: "text", tokenizer: "raw", stored: true },
+  { name: "seq", type: "u64", fast: true, stored: true },
+  // The AST block anchor the reader deep-links to, so a hit can open the
+  // document scrolled to the passage that matched.
+  { name: "anchor_id", type: "text", tokenizer: "raw", stored: true },
+  // Heading ancestry of the passage's section. Searchable rather than raw:
+  // a passage in the middle of a long section does not repeat the heading in
+  // its body (that would inflate those terms' document frequency), so this is
+  // where its section context lives.
+  {
+    name: "heading_path",
+    type: "text",
+    tokenizer: "default",
+    record: "position",
+    fieldnorms: true,
+    stored: true,
+  },
 ];
 
 const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
@@ -126,7 +152,7 @@ export const corpusIndexConfig = (
     store_source: false,
   },
   search_settings: {
-    default_search_fields: ["title", "text"],
+    default_search_fields: ["title", "text", "heading_path"],
   },
 });
 

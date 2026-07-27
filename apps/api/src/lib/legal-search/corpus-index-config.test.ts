@@ -34,10 +34,28 @@ test("index_id is the generation; citation_authority is a fast f64", () => {
   expect(authority?.fast).toBe(true);
 });
 
-test("default search fields are title + text", () => {
+test("default search fields are title + text + heading_path", () => {
   expect(
     caseLawIndexConfig("case_law_v1").search_settings.default_search_fields,
-  ).toEqual(["title", "text"]);
+  ).toEqual(["title", "text", "heading_path"]);
+});
+
+test("passage fields are mapped for every family, heading_path searchable", () => {
+  for (const family of ["case_law", "legislation"] as const) {
+    const fields = new Map(
+      corpusIndexConfig(
+        family,
+        `${family}_v2_svk`,
+      ).doc_mapping.field_mappings.map((f) => [f.name, f]),
+    );
+    // A passage hit must be able to name its document, its position, and the
+    // anchor the reader deep-links to.
+    expect(fields.get("chunk_id")?.tokenizer).toBe("raw");
+    expect(fields.get("anchor_id")?.tokenizer).toBe("raw");
+    expect(fields.get("seq")?.type).toBe("u64");
+    // Section context is scored, not just stored.
+    expect(fields.get("heading_path")?.fieldnorms).toBe(true);
+  }
 });
 
 test("the legislation family gets its own fields + status tag, sharing the core", () => {

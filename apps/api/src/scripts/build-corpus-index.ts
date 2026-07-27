@@ -10,6 +10,11 @@ import { rlsDb } from "@/api/db/root";
  * Idempotent and re-runnable — already-indexed rows are skipped, so a
  * transient failure just means re-run.
  *
+ * A doc mapping is fixed when an index is created, so a layout change (case
+ * law now emits one document per passage) only takes effect in indexes built
+ * fresh: pass a new generation prefix rather than re-running into the current
+ * one, where the passage fields would be dropped on ingest.
+ *
  *   CORPUS_INDEX_ENDPOINT=... CORPUS_STORAGE_MODE=dual-write \
  *     bun run src/scripts/build-corpus-index.ts [generation]
  */

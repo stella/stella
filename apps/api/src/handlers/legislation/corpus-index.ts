@@ -8,6 +8,7 @@ import {
 import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
 import { createCorpusIndexer } from "@/api/lib/corpus-index/core";
 
 /**
@@ -16,6 +17,13 @@ import { createCorpusIndexer } from "@/api/lib/corpus-index/core";
  * queries, and per-document shape. Per-jurisdiction indexes
  * (`legislation_v1_<country>`), license gate in SQL, batch ingest with a
  * per-group commit, audit trail in legislation_index_jobs.
+ *
+ * Indexed at document granularity, unlike case law: a legislation row is
+ * already one provision or article version, so it is the passage. Splitting it
+ * further would fragment a rule across search documents that are only
+ * meaningful together. If a jurisdiction starts delivering whole codes as one
+ * row, revisit this by switching the granularity here — the shared core, the
+ * chunker, and the read path already handle both layouts.
  */
 
 type IndexableRow = {
@@ -65,7 +73,10 @@ const SELECT_COLUMNS = {
 
 const hasContent = sql`${legislationDocuments.contentHash} IS NOT NULL`;
 
-const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
+const buildDoc = (
+  row: IndexableRow,
+  { text }: CorpusDocumentPayload,
+): Record<string, unknown> => {
   // eslint-disable-next-line no-untyped-updates/no-untyped-updates -- corpus index ingest document, not a DB update
   const doc: Record<string, unknown> = {
     document_id: row.id,
@@ -101,7 +112,8 @@ const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
 const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
   family: "legislation",
   captureStep: "backfillLegislationCorpusIndex.loadText",
-  buildDoc,
+  granularity: "document",
+  buildDocs: (row, payload) => [buildDoc(row, payload)],
   readCorpusText,
   // The scans deliberately carry no ORDER BY. Any pick order makes
   // progress (indexed rows leave the pending set), while ordering by

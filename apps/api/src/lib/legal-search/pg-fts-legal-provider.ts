@@ -171,6 +171,10 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       typeof row["headline"] === "string" && row["headline"].length > 0
         ? escapeAndHighlight(JSON.stringify(row["headline"]))
         : null,
+    // Postgres FTS scores whole decisions: the headline is cut from the
+    // document, not from an anchored block.
+    anchorId: null,
+    matchingPassages: 1,
     citationCount: Number(row["citation_count"]) || 0,
     citationAuthority: Number(row["citation_authority"]) || 0,
     score: Number(row["score"]) || 0,

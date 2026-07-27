@@ -28,6 +28,15 @@ import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 const INDEX_CONCURRENCY = 4;
 
 /**
+ * Delete-task query selecting every search document a row projects to. Keyed
+ * on the stable Postgres id, which every one of the row's documents carries,
+ * so it is exactly as correct for a passage-split row as for a whole one — and
+ * it needs no record of how many documents the previous version emitted.
+ */
+export const corpusDocumentDeleteQuery = (entityId: string): string =>
+  `document_id:"${entityId}"`;
+
+/**
  * The row fields the shared core reads directly. Each family's own row type
  * extends this with its document-shaped columns, which only its
  * {@link CorpusIndexAdapter.buildDoc} touches.
@@ -36,11 +45,51 @@ export type CorpusIndexRow<TBrand extends SafeIdType> = {
   id: SafeId<TBrand>;
   country: string;
   textS3Key: string | null;
+  astS3Key: string | null;
   contentHash: string | null;
   indexedHash: string | null;
   indexedGeneration: string | null;
   updatedAt: Date;
 };
+
+/**
+ * Canonical payload one row contributes to the index. `ast` is loaded only by
+ * passage-granularity families (see {@link CorpusIndexGranularity}) and is
+ * `null` everywhere else, so a family that indexes whole documents never pays
+ * for a second object read.
+ */
+export type CorpusDocumentPayload = {
+  text: string;
+  ast: unknown;
+};
+
+/**
+ * How many search documents one row projects to.
+ *
+ * - `document`: one, over the row's whole text. The original layout.
+ * - `passage`: one per passage of the row's AST, so BM25 scores a paragraph
+ *   rather than a whole judgment and every hit carries a deep-link anchor.
+ *
+ * The families deliberately differ here: case law is long-form argument where
+ * the relevant holding is a paragraph, while a legislation row is already a
+ * single provision or article and gains nothing from being cut further.
+ */
+export const CORPUS_INDEX_GRANULARITIES = ["document", "passage"] as const;
+export type CorpusIndexGranularity =
+  (typeof CORPUS_INDEX_GRANULARITIES)[number];
+
+/**
+ * Granularity-dependent half of the adapter. A union rather than an optional
+ * hook: a passage family cannot compile without the AST read it needs, and a
+ * document family cannot accidentally declare one it never uses.
+ */
+type CorpusIndexPayloadSurface =
+  | { granularity: "document" }
+  | {
+      granularity: "passage";
+      /** Read the canonical AST object for a row's `astS3Key`. */
+      readCorpusAst: (key: string) => Promise<unknown>;
+    };
 
 /** One audit-trail entry for a corpus index-jobs row. */
 export type CorpusJobInput<TBrand extends SafeIdType> = {
@@ -67,13 +116,22 @@ type SelectBatchArgs = { generation: string; limit: number };
 export type CorpusIndexAdapter<
   TBrand extends SafeIdType,
   TRow extends CorpusIndexRow<TBrand>,
-> = {
+> = CorpusIndexPayloadSurface & {
   /** Selects the index field mapping / config version for this family. */
   family: CorpusFamily;
   /** Telemetry step label for isolated read failures. */
   captureStep: string;
-  /** Build the corpus index search document, omitting empty optional fields. */
-  buildDoc: (row: TRow, text: string) => Record<string, unknown>;
+  /**
+   * Build the row's corpus index search documents, omitting empty optional
+   * fields. Returns one document at `document` granularity and one per passage
+   * at `passage` granularity; either way the row stays a single unit for the
+   * commit below, so it carries one `indexedHash`/`indexedGeneration` mark and
+   * one audit row no matter how many documents it emitted.
+   */
+  buildDocs: (
+    row: TRow,
+    payload: CorpusDocumentPayload,
+  ) => Record<string, unknown>[];
   /**
    * Read the canonical corpus text object for a row's `textS3Key`. Supplied
    * by the family adapter (not imported directly) so the shared core stays
@@ -118,7 +176,12 @@ export type CorpusIndexAdapter<
 };
 
 export type LoadedBatch<TBrand extends SafeIdType, TRow> = {
-  docs: { row: TRow; doc: Record<string, unknown> }[];
+  /**
+   * One entry per row, each holding every search document that row projects
+   * to. Keeping the row as the unit (rather than flattening to documents) is
+   * what lets a passage-split row still take exactly one CAS mark.
+   */
+  built: { row: TRow; docs: Record<string, unknown>[] }[];
   readFailures: {
     indexId: string;
     job: CorpusJobInput<TBrand>;
@@ -129,8 +192,8 @@ export type LoadedBatch<TBrand extends SafeIdType, TRow> = {
 export type LoadDocsForBatchOptions<TBrand extends SafeIdType, TRow> = {
   generation: string;
   fetchFulltext: FetchFulltext<TBrand>;
-  /** Override the per-row text load (test seam). */
-  readText?: (row: TRow) => Promise<string>;
+  /** Override the per-row canonical payload load (test seam). */
+  readPayload?: (row: TRow) => Promise<CorpusDocumentPayload>;
 };
 
 const loadText = async <TBrand extends SafeIdType>(
@@ -203,34 +266,46 @@ export const createCorpusIndexer = <
     {
       generation,
       fetchFulltext,
-      readText,
+      readPayload,
     }: LoadDocsForBatchOptions<TBrand, TRow>,
   ): Promise<LoadedBatch<TBrand, TRow>> => {
-    const loadRowText =
-      readText ??
-      (async (row: TRow) =>
-        await loadText(row, fetchFulltext, adapter.readCorpusText));
-    const docs: LoadedBatch<TBrand, TRow>["docs"] = [];
+    const loadRowPayload =
+      readPayload ??
+      (async (row: TRow): Promise<CorpusDocumentPayload> => {
+        // Passage families need the block structure the AST carries; document
+        // families never touch it, so the second object read is skipped
+        // entirely rather than issued and discarded. Both reads are bounded by
+        // the corpus IO ceiling and fail the row together, so racing them
+        // costs nothing and halves the per-row latency.
+        const [text, ast] = await Promise.all([
+          loadText(row, fetchFulltext, adapter.readCorpusText),
+          adapter.granularity === "passage" && row.astS3Key !== null
+            ? adapter.readCorpusAst(row.astS3Key)
+            : null,
+        ]);
+        return { text, ast };
+      });
+    const built: LoadedBatch<TBrand, TRow>["built"] = [];
     const readFailures: LoadedBatch<TBrand, TRow>["readFailures"] = [];
     for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
-      const chunk = rows.slice(i, i + INDEX_CONCURRENCY);
+      const slice = rows.slice(i, i + INDEX_CONCURRENCY);
       // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
-      const built = await Promise.all(
-        chunk.map(async (row) => {
+      const loaded = await Promise.all(
+        slice.map(async (row) => {
           try {
             return {
               ok: true as const,
               row,
-              doc: adapter.buildDoc(row, await loadRowText(row)),
+              docs: adapter.buildDocs(row, await loadRowPayload(row)),
             };
           } catch (error) {
             return { ok: false as const, row, error };
           }
         }),
       );
-      for (const entry of built) {
+      for (const entry of loaded) {
         if (entry.ok) {
-          docs.push({ row: entry.row, doc: entry.doc });
+          built.push({ row: entry.row, docs: entry.docs });
           continue;
         }
         readFailures.push({
@@ -249,7 +324,7 @@ export const createCorpusIndexer = <
         });
       }
     }
-    return { docs, readFailures };
+    return { built, readFailures };
   };
 
   /**
@@ -292,6 +367,17 @@ export const createCorpusIndexer = <
   /**
    * Remove a document from a corpus index generation (GDPR/takedown). Uses a
    * delete-task (corpus index's async delete path) and records the operation.
+   *
+   * The delete is scoped by `document_id`, not by the id of an individual
+   * search document, so it removes every search document the row projects to:
+   * one at `document` granularity, all N passages at `passage` granularity.
+   * That is the only mechanism the client exposes that can do this — the
+   * engine appends on ingest and has no primary key to replace by, so a
+   * per-document-id delete would need the indexer to know how many passages
+   * the *previous* version emitted, which it does not (the previous version's
+   * AST is gone once the row's canonical keys move). Scoping the query to the
+   * stable Postgres id keeps erasure and re-index correct without that
+   * bookkeeping.
    */
   const remove = async (
     entityId: SafeId<TBrand>,
@@ -301,7 +387,7 @@ export const createCorpusIndexer = <
   ): Promise<Result<void, CorpusIndexError>> => {
     const result = await getCorpusIndexClient().deleteByQuery(
       indexId,
-      `document_id:"${entityId}"`,
+      corpusDocumentDeleteQuery(entityId),
     );
     await adapter.recordJobs(
       scopedDb,
@@ -360,18 +446,20 @@ export const createCorpusIndexer = <
     // the rest still commit.
     const fetchFulltext: FetchFulltext<TBrand> = async (id) =>
       await adapter.fetchFulltext(scopedDb, id);
-    const { docs, readFailures } = await loadDocsForBatch(rows, {
+    const { built, readFailures } = await loadDocsForBatch(rows, {
       generation,
       fetchFulltext,
     });
     await recordReadFailures(scopedDb, readFailures, generation);
 
-    // Route each doc to its jurisdiction's index (<family>_v1_<country>),
-    // grouping so each index gets one NDJSON ingest. A group that fails to
-    // ensure/ingest is recorded and retried next cycle; other groups still
-    // commit.
-    const groups = new Map<string, typeof docs>();
-    for (const entry of docs) {
+    // Route each row's documents to its jurisdiction's index
+    // (<family>_v1_<country>), grouping so each index gets one NDJSON ingest.
+    // A group that fails to ensure/ingest is recorded and retried next cycle;
+    // other groups still commit. The group's unit stays the row, so counting,
+    // marking, and auditing below are unaffected by how many documents a row
+    // projects to.
+    const groups = new Map<string, typeof built>();
+    for (const entry of built) {
       const indexId = corpusIndexId(generation, entry.row.country);
       const group = groups.get(indexId);
       if (group) {
@@ -387,12 +475,14 @@ export const createCorpusIndexer = <
 
     for (const [indexId, group] of groups) {
       // Ingest appends; it never replaces. Before re-ingesting, delete the
-      // previously indexed copy from wherever it lives (the same index for
+      // previously indexed copies from wherever they live (the same index for
       // a content refresh, another jurisdiction index for a corrected
-      // country), or stale copies keep matching old text. Same generation
-      // only: generation rebuilds replace whole indexes. Engine delete
-      // tasks only affect splits that already exist, so the copy ingested
-      // below is not at risk.
+      // country), or stale copies keep matching old text. `remove` deletes by
+      // `document_id`, so a row whose previous version split into a different
+      // number of passages leaves nothing behind. Same generation only:
+      // generation rebuilds replace whole indexes. Engine delete tasks only
+      // affect splits that already exist, so the copies ingested below are not
+      // at risk.
       const moved = group.flatMap(({ row }) =>
         row.indexedGeneration !== null &&
         row.indexedGeneration.startsWith(`${generation}_`)
@@ -420,7 +510,9 @@ export const createCorpusIndexer = <
         : // oxlint-disable-next-line no-await-in-loop -- sequential per-group ingest paces NDJSON pushes to the search backend
           await getCorpusIndexClient().ingestBatch(
             indexId,
-            group.map(({ doc }) => JSON.stringify(doc)).join("\n"),
+            group
+              .flatMap(({ docs }) => docs.map((doc) => JSON.stringify(doc)))
+              .join("\n"),
           );
 
       if (ingest.isErr()) {

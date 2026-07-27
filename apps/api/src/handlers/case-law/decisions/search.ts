@@ -383,6 +383,10 @@ const searchPostgresDecisions = async (
       decisionType: toNullableString(row["decision_type"]),
       sourceUrl: toNullableString(row["source_url"]),
       headline: headline ? escapeAndHighlight(headline) : null,
+      // Postgres FTS scores whole decisions, so there is no passage to anchor
+      // the hit to. Kept on both paths so the response shape does not depend
+      // on which provider served it.
+      anchorId: null,
       citationCount: Number(row["citation_count"]) || 0,
       createdAt:
         row["created_at"] instanceof Date
@@ -599,6 +603,7 @@ const searchCorpusIndexDecisions = async (
   });
 
   const {
+    anchorIdById,
     context: { byId },
     hasMore,
     pageRanked,
@@ -674,6 +679,10 @@ const searchCorpusIndexDecisions = async (
         decisionType: row.decisionType,
         sourceUrl: row.sourceUrl,
         headline: snippetById.get(hit.id) ?? null,
+        // Additive: the anchor of the passage the snippet came from, so a
+        // result can open the decision scrolled to what matched. Null on a
+        // document-granular generation and on unanchored fallback passages.
+        anchorId: anchorIdById.get(hit.id) ?? null,
         citationCount: row.citationCount,
         createdAt: row.createdAt.toISOString(),
       },
