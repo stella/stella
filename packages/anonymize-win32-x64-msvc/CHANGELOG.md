@@ -1,5 +1,7 @@
 # @stll/anonymize-win32-x64-msvc
 
+## 2.7.0
+
 ## 2.6.3
 
 ## 2.6.2

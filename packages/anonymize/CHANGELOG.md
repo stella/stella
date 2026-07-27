@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.7.0
+
+### Minor Changes
+
+- [#424](https://github.com/stella/anonymize/pull/424) [`6e0d1e1`](https://github.com/stella/anonymize/commit/6e0d1e16f678af15f61d708eee0a2465ff8199fd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add opt-in standalone street detection. `PipelineConfig.standaloneStreetDetection` defaults to `"off"`; `"houseNumberAnchored"` accepts a street-type word with a house number directly beside it in either order (`14 Rue de la Paix`, `Hauptstraße 5`, `123 Main Street`) with no known-city anchor. A bare street name with no number never fires, the mode only recognizes the street types of the pipeline's selected languages, and it carries that vocabulary so compound names (`Hauptstraße`) the whole-word street-type automaton cannot see are matched by their tail.
+
+  `addressSeedData` gains one optional field, so the prepared-package schema version moves from 7 to 8: a package built by an earlier version is now rejected rather than decoded against an incompatible layout, and persisted `.stlanonpkg` artifacts must be rebuilt. The frozen assemble oracle digests are regenerated for the same reason; no other assembled field changes.
+
+### Patch Changes
+
+- [#424](https://github.com/stella/anonymize/pull/424) [`6e0d1e1`](https://github.com/stella/anonymize/commit/6e0d1e16f678af15f61d708eee0a2465ff8199fd) Thanks [@jan-kubica](https://github.com/jan-kubica)! - End an address span at the city that completes its destination. Right-expansion kept walking past the city to the next unrelated boundary, so a return address absorbed the prose after it ("14 Rue de la Paix, Paris, and Meridian Capital", "..., Paris last year" now both end at "Paris"). A postal code following the city is itself an address seed, so it still joins the span.
+
+- [#423](https://github.com/stella/anonymize/pull/423) [`def8bc9`](https://github.com/stella/anonymize/commit/def8bc901a659426df257079f987ccc2f75ef4b4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require `@stll/anonymize-data` 0.0.8, whose city dictionaries load through
+  literal `import()` specifiers. The previous computed specifier was invisible
+  to bundlers, so bundled consumers silently received empty city lists and
+  under-redacted places.
+
 ## 2.6.3
 
 ### Patch Changes

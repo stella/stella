@@ -1,5 +1,18 @@
 # @stll/anonymize-cli
 
+## 2.7.0
+
+### Patch Changes
+
+- [#423](https://github.com/stella/anonymize/pull/423) [`def8bc9`](https://github.com/stella/anonymize/commit/def8bc901a659426df257079f987ccc2f75ef4b4) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Require `@stll/anonymize-data` 0.0.8, whose city dictionaries load through
+  literal `import()` specifiers. The previous computed specifier was invisible
+  to bundlers, so bundled consumers silently received empty city lists and
+  under-redacted places.
+- Updated dependencies [[`6e0d1e1`](https://github.com/stella/anonymize/commit/6e0d1e16f678af15f61d708eee0a2465ff8199fd), [`def8bc9`](https://github.com/stella/anonymize/commit/def8bc901a659426df257079f987ccc2f75ef4b4), [`6e0d1e1`](https://github.com/stella/anonymize/commit/6e0d1e16f678af15f61d708eee0a2465ff8199fd)]:
+  - @stll/anonymize@2.7.0
+  - @stll/anonymize-pdf@2.7.0
+  - @stll/anonymize-docx@2.7.0
+
 ## 2.6.3
 
 ### Patch Changes
