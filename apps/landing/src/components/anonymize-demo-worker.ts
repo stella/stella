@@ -5,7 +5,8 @@ import { Buffer } from "buffer";
 
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonResult, ChatAnonRuntime } from "@stll/anonymize-chat";
-import { loadCityDictionary, loadNameDictionaries } from "@stll/anonymize-data";
+import { loadNameDictionaries } from "@stll/anonymize-data";
+import { loadCityDictionary } from "@stll/anonymize-data/cities";
 import * as anonymizeRuntime from "@stll/anonymize-wasm";
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 

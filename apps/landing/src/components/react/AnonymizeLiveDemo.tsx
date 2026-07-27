@@ -20,7 +20,7 @@ import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
  */
 
 const INITIAL_TEXT =
-  "This engagement letter is entered into between Angela Merkel, of 14 Rue de la Paix, Paris, and Meridian Capital Partners LLC, represented by its counsel at Barclays Bank plc. Angela Merkel can be reached at +33 1 42 61 53 00 or angela.merkel@meridiancapital.example, tax identification number FR12 345678901, in connection with facility agreement reference BC-2024-88291.";
+  "This engagement letter is entered into between Angela Merkel, of 14 Rue de la Paix, Paris, and Meridian Capital Partners LLC, represented by its counsel at Barclays Bank plc. Angela Merkel can be reached at +33 1 42 61 53 00 or angela.merkel@meridiancapital.example, tax identification number FR12 345678901.";
 
 const DEBOUNCE_MS = 300;
 
