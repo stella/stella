@@ -5,7 +5,13 @@
  * exercised on its own.
  */
 
-export type CycleOutcome = "completed" | "failed" | "timeout";
+export const CYCLE_OUTCOME = {
+  COMPLETED: "completed",
+  FAILED: "failed",
+  TIMEOUT: "timeout",
+} as const;
+
+export type CycleOutcome = (typeof CYCLE_OUTCOME)[keyof typeof CYCLE_OUTCOME];
 
 export type CycleResult = {
   outcome: CycleOutcome;
@@ -14,8 +20,8 @@ export type CycleResult = {
 };
 
 /**
- * Forward progress is a property of the work a cycle did, not of how it
- * ended.
+ * Forward progress is durable movement through the source, not how the cycle
+ * ended and not how much it wrote.
  *
  * A cycle ends early whenever the pipeline sets a halt reason, and some halts
  * follow real work: a page whose corpus writes partly failed holds its cursor
@@ -25,12 +31,20 @@ export type CycleResult = {
  * adapter to the failure backoff, throttling the very source that is keeping
  * up.
  *
+ * `pagesProcessed` is the durable marker because the pipeline increments it
+ * only after a page completes without halting, in the same step that advances
+ * the cursor. `inserted` deliberately does NOT count: a corpus-write failure
+ * preserves the row's previous source hash so the decision is reprocessed, so
+ * a page parked on a persistent failure reports rows written on every retry
+ * while the cursor never moves. Reading that as progress would reset the
+ * streak and the backoff forever, silencing the alert on the one case it
+ * exists to catch and hot-looping the adapter over a page it cannot pass.
+ *
  * A "completed" cycle counts even with nothing to show for it: an adapter that
  * is caught up legitimately walks no pages and inserts nothing.
  */
 export const cycleMadeProgress = ({
   outcome,
-  inserted,
   pagesProcessed,
 }: CycleResult): boolean =>
-  outcome === "completed" || pagesProcessed > 0 || inserted > 0;
+  outcome === CYCLE_OUTCOME.COMPLETED || pagesProcessed > 0;

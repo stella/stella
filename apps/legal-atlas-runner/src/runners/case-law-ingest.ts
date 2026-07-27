@@ -50,6 +50,7 @@ import {
 } from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
 import {
+  CYCLE_OUTCOME,
   type CycleOutcome,
   type CycleResult,
   cycleMadeProgress,
@@ -518,7 +519,7 @@ const runOneCycle = async (
   const startedAt = new Date();
   const t0 = performance.now();
 
-  let outcome: CycleOutcome = "completed";
+  let outcome: CycleOutcome = CYCLE_OUTCOME.COMPLETED;
   let errorMessage: string | null = null;
   let result: Awaited<ReturnType<typeof runIngestionPipeline>> | null = null;
 
@@ -541,11 +542,13 @@ const runOneCycle = async (
       logInfo(`[${adapterKey}] ${result.haltReason}`);
     } else if (result.haltReason) {
       outcome =
-        result.haltReason === "Cycle timeout exceeded" ? "timeout" : "failed";
+        result.haltReason === "Cycle timeout exceeded"
+          ? CYCLE_OUTCOME.TIMEOUT
+          : CYCLE_OUTCOME.FAILED;
       errorMessage = result.haltReason.slice(0, 2048);
     }
   } catch (error) {
-    outcome = "failed";
+    outcome = CYCLE_OUTCOME.FAILED;
     errorMessage =
       `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`.slice(
         0,
@@ -557,7 +560,7 @@ const runOneCycle = async (
 
   // DB status column only supports "completed" | "failed";
   // timeouts are recorded as "completed" (progress was made).
-  const dbStatus = outcome === "failed" ? "failed" : "completed";
+  const dbStatus = outcome === CYCLE_OUTCOME.FAILED ? "failed" : "completed";
 
   try {
     await ingestionDb(async (tx) => {
@@ -579,14 +582,14 @@ const runOneCycle = async (
     logError(`[${adapterKey}] Failed to write ingestion event:`, eventError);
   }
 
-  if (outcome === "completed") {
+  if (outcome === CYCLE_OUTCOME.COMPLETED) {
     logInfo(
       `[${adapterKey}] Inserted: ${result?.inserted ?? 0}, ` +
         `Skipped: ${result?.skipped ?? 0}, ` +
         `Pages: ${result?.pagesProcessed ?? 0}, ` +
         `Duration: ${durationMs}ms`,
     );
-  } else if (outcome === "timeout") {
+  } else if (outcome === CYCLE_OUTCOME.TIMEOUT) {
     logInfo(
       `[${adapterKey}] Timed out after ${durationMs}ms ` +
         `(inserted: ${result?.inserted ?? 0}, pages: ${result?.pagesProcessed ?? 0})`,
@@ -609,9 +612,9 @@ const runOneCycle = async (
 
 const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   /**
-   * Consecutive cycles with no forward progress — a hard failure OR a timeout
-   * that completed zero pages. A single streak so an adapter that alternates
-   * between the two (each of which would otherwise reset the other's counter)
+   * Consecutive cycles that advanced no page, whatever their outcome (see
+   * `cycleMadeProgress`). A single streak so an adapter alternating between
+   * stall shapes, each of which would otherwise reset the other's counter,
    * still reaches the sustained-failure alert.
    */
   let noProgressStreak = 0;
@@ -651,21 +654,19 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
       const { outcome, inserted } = cycle;
 
-      // A stall is a cycle that moved nothing, whatever its outcome; a halt or
-      // a timeout that still walked pages advanced the cursor. Both stall
-      // shapes grow the one streak, so an adapter alternating between them
-      // still reaches the alert.
+      // A stall is a cycle that advanced no page, whatever its outcome; a halt
+      // or a timeout that still walked pages moved the cursor.
       const madeProgress = cycleMadeProgress(cycle);
       noProgressStreak = madeProgress ? 0 : noProgressStreak + 1;
 
-      if (outcome === "failed" && !madeProgress) {
+      if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
         backoffFailures++;
       } else {
         backoffFailures = 0;
         // Only "completed" outcomes count toward idle. A "timeout"
         // means the cycle hit MAX_CYCLE_MS mid-work; the adapter is
         // slow, not caught up, so leave idleCycles unchanged.
-        if (outcome === "completed") {
+        if (outcome === CYCLE_OUTCOME.COMPLETED) {
           if (inserted > 0) {
             if (idleCycles >= IDLE_THRESHOLD) {
               logInfo(
@@ -693,8 +694,8 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
     }
 
-    // A run of no-progress cycles (failures and/or zero-page timeouts) means
-    // the source is stalled; surface it on the sustained-failure metric.
+    // A run of cycles that advanced no page means the source is stalled;
+    // surface it on the sustained-failure metric.
     if (noProgressStreak >= SUSTAINED_FAILURE_THRESHOLD) {
       logger.error("case_law.ingestion.sustained_failure", {
         adapterKey,
