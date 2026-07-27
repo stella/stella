@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { usagePolicies } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -31,12 +32,40 @@ const config = {
   mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;
 
-const listPolicies = createSafeRootHandler(
-  config,
-  async function* ({ safeDb }) {
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+type UsagePolicyRow = typeof usagePolicies.$inferSelect;
+
+type CatalogQueryRow = Pick<
+  UsagePolicyRow,
+  | "id"
+  | "displayName"
+  | "description"
+  | "kind"
+  | "monthlyUsageUnits"
+  | "priceAmountCents"
+  | "priceCurrency"
+  | "billingInterval"
+  | "sortOrder"
+  | "hostedPolicyRef"
+> & { key: UsagePolicyRow["policyKey"] };
+
+type UsagePolicyCatalogEntry = Omit<CatalogQueryRow, "hostedPolicyRef"> & {
+  hostedCheckoutAvailable: boolean;
+};
+
+type ListPoliciesResult = { policies: UsagePolicyCatalogEntry[] };
+
+// Hoisted read with a sealed result type: the route mount consumes
+// `ListPoliciesResult` instead of re-instantiating the query-builder
+// projection generics (measured against the typecheck baseline).
+export const readUsagePolicyCatalog = async function* ({
+  safeDb,
+}: {
+  safeDb: SafeDb;
+}) {
+  const rows = yield* Result.await(
+    safeDb(
+      async (tx): Promise<CatalogQueryRow[]> =>
+        await tx
           .select({
             id: usagePolicies.id,
             key: usagePolicies.policyKey,
@@ -59,17 +88,26 @@ const listPolicies = createSafeRootHandler(
           )
           .orderBy(asc(usagePolicies.sortOrder), asc(usagePolicies.id))
           .limit(MAX_CATALOG_ROWS),
-      ),
-    );
+    ),
+  );
 
-    return Result.ok({
-      policies: rows.map(({ hostedPolicyRef, ...policy }) => ({
-        ...policy,
-        // The provider reference itself stays server-side; the picker
-        // only needs to know whether checkout can be started.
+  // The provider reference itself stays server-side; the picker
+  // only needs to know whether checkout can be started.
+  const policies: UsagePolicyCatalogEntry[] = rows.map(
+    ({ hostedPolicyRef, ...policy }) =>
+      Object.assign(policy, {
         hostedCheckoutAvailable: hostedPolicyRef !== null,
-      })),
-    });
+      }),
+  );
+
+  const result: ListPoliciesResult = { policies };
+  return Result.ok(result);
+};
+
+const listPolicies = createSafeRootHandler(
+  config,
+  async function* ({ safeDb }) {
+    return yield* readUsagePolicyCatalog({ safeDb });
   },
 );
 
