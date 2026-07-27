@@ -132,6 +132,34 @@ process.on("unhandledRejection", (reason) => {
   process.exit(1);
 });
 
+/**
+ * Orchestrator-driven task replacement (a deployment, a rescheduled task)
+ * delivers SIGTERM with a bounded kill deadline. Draining finishes the
+ * work already in flight but starts nothing new: every write path is
+ * checkpointed or content-addressed, so abandoned work is safe, but
+ * finishing it avoids redoing the same page on the next start. The
+ * force-exit timer ends the process ahead of the orchestrator's SIGKILL
+ * even when a loop is mid-sleep on a long interval.
+ */
+let draining = false;
+/** Read via a call so per-site flow analysis cannot misjudge the flag. */
+const isDraining = (): boolean => draining;
+const DRAIN_FORCE_EXIT_MS = 90_000;
+
+const drainOnSigterm = (): void => {
+  process.on("SIGTERM", () => {
+    if (isDraining()) {
+      return;
+    }
+    draining = true;
+    logInfo("[daemon] SIGTERM received; draining (no new work will start)");
+    setTimeout(() => {
+      logInfo("[daemon] Drain window elapsed; exiting");
+      process.exit(0);
+    }, DRAIN_FORCE_EXIT_MS).unref();
+  });
+};
+
 type SourceDef = {
   adapterKey: string;
   name: string;
@@ -640,6 +668,9 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   let idleCycles = 0;
 
   while (true) {
+    if (isDraining()) {
+      return;
+    }
     try {
       // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
       // the DB-write slot, so without this every source crawls its backlog
@@ -647,6 +678,12 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       // released before the inter-cycle delay, so idle adapters free the slot.
       // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
       await cycleSemaphore.acquire();
+      // A loop that queued on acquire() passed the drain check before the
+      // signal arrived; hand the slot back instead of starting a new cycle.
+      if (isDraining()) {
+        cycleSemaphore.release();
+        return;
+      }
       let cycle: CycleResult;
       // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
       // ignore the per-cycle abort signal (the source lookup before it is
@@ -823,6 +860,7 @@ export const runCaseLawIngest = async (
 
   // All adapters: independent concurrent loops.
   daemonMode = true;
+  drainOnSigterm();
   logInfo("Ingestion daemon started.");
   startEventLoopWatchdog();
   await refreshS3();
@@ -837,8 +875,14 @@ export const runCaseLawIngest = async (
   // Health loop: heartbeat + S3 credential refresh.
   const healthLoop = (async () => {
     while (true) {
+      if (isDraining()) {
+        return;
+      }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval health poll; the loop must wait HEALTH_INTERVAL_MS between heartbeats, so this await is intentionally sequential
       await Bun.sleep(HEALTH_INTERVAL_MS);
+      if (isDraining()) {
+        return;
+      }
       writeHeartbeat();
       try {
         if (isS3Stale()) {
@@ -862,8 +906,14 @@ export const runCaseLawIngest = async (
   // timeout so long texts don't block other work.
   const searchIndexLoop = (async () => {
     while (true) {
+      if (isDraining()) {
+        return;
+      }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
+      if (isDraining()) {
+        return;
+      }
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await runWithHardDeadline(
@@ -894,6 +944,9 @@ export const runCaseLawIngest = async (
   const citationAuthorityLoop = (async () => {
     await Bun.sleep(CITATION_AUTHORITY_STARTUP_DELAY_MS);
     while (true) {
+      if (isDraining()) {
+        return;
+      }
       let recomputed = false;
       try {
         // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
@@ -944,8 +997,14 @@ export const runCaseLawIngest = async (
     const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
     logInfo(`[corpus-index] Enabled for generation ${generation}`);
     while (true) {
+      if (isDraining()) {
+        return;
+      }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
+      if (isDraining()) {
+        return;
+      }
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await runWithHardDeadline(
@@ -976,8 +1035,14 @@ export const runCaseLawIngest = async (
   // corpus daemon maintains both families' search projections.
   const legislationSearchIndexLoop = (async () => {
     while (true) {
+      if (isDraining()) {
+        return;
+      }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
+      if (isDraining()) {
+        return;
+      }
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await runWithHardDeadline(
@@ -1013,8 +1078,14 @@ export const runCaseLawIngest = async (
     const generation = corpusGeneration("legislation");
     logInfo(`[legislation-corpus-index] Enabled for generation ${generation}`);
     while (true) {
+      if (isDraining()) {
+        return;
+      }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
+      if (isDraining()) {
+        return;
+      }
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await runWithHardDeadline(
