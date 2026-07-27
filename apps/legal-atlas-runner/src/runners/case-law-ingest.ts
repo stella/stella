@@ -49,6 +49,11 @@ import {
   loadCourtWeightEntries,
 } from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
+import {
+  type CycleOutcome,
+  type CycleResult,
+  cycleMadeProgress,
+} from "./cycle-progress";
 
 const formatLogDetail = (detail: unknown): string => {
   if (detail === undefined) {
@@ -487,14 +492,6 @@ const daysAgoCursor = (n: number): string => {
   return date;
 };
 
-type CycleOutcome = "completed" | "failed" | "timeout";
-
-type CycleResult = {
-  outcome: CycleOutcome;
-  inserted: number;
-  pagesProcessed: number;
-};
-
 /**
  * Run a single ingestion cycle for one adapter.
  * "timeout" means the cycle hit MAX_CYCLE_MS but progress
@@ -652,18 +649,16 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         inFlightCycles.delete(adapterKey);
         cycleSemaphore.release();
       }
-      const { outcome, inserted, pagesProcessed } = cycle;
+      const { outcome, inserted } = cycle;
 
-      // Forward progress = a clean cycle, or a timeout that still advanced at
-      // least one page. A "failed" or a zero-page "timeout" is a stall; both
-      // grow the one streak, so an adapter alternating between them still
-      // reaches the alert.
-      const madeProgress =
-        outcome === "completed" ||
-        (outcome === "timeout" && pagesProcessed > 0);
+      // A stall is a cycle that moved nothing, whatever its outcome; a halt or
+      // a timeout that still walked pages advanced the cursor. Both stall
+      // shapes grow the one streak, so an adapter alternating between them
+      // still reaches the alert.
+      const madeProgress = cycleMadeProgress(cycle);
       noProgressStreak = madeProgress ? 0 : noProgressStreak + 1;
 
-      if (outcome === "failed") {
+      if (outcome === "failed" && !madeProgress) {
         backoffFailures++;
       } else {
         backoffFailures = 0;
