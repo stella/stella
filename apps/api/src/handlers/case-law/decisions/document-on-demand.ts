@@ -154,23 +154,32 @@ export const readThroughDeferredDocument = async (
   decision: PendingDocument,
   deps: OnDemandDocumentDeps,
 ): Promise<BackfilledDocument | null> => {
-  // Recorded before anything can turn the fetch down, so a reader who
-  // arrives with the slots full, or whose wait runs out, still moves
-  // this decision to the front of the queue.
-  const recorded = await Result.tryPromise(
-    async () => await deps.recordRequest(decision.id),
-  );
-  if (Result.isError(recorded)) {
-    captureError(recorded.error, {
-      source: CAPTURE_SOURCE,
-      decisionId: decision.id,
-    });
-  }
+  // The whole read-through — including the request recording — runs
+  // inside the read budget: a stalled ingestion pool or a locked row
+  // must never hold a public read. The recording write is idempotent
+  // (first request wins), so if the budget expires mid-write and the
+  // write lands afterwards anyway, the queue still learns of the demand.
+  const attempt = async (): Promise<BackfilledDocument | null> => {
+    // Recorded before anything can turn the fetch down, so a reader who
+    // arrives with the slots full, or whose wait runs out, still moves
+    // this decision to the front of the queue.
+    const recorded = await Result.tryPromise(
+      async () => await deps.recordRequest(decision.id),
+    );
+    if (Result.isError(recorded)) {
+      captureError(recorded.error, {
+        source: CAPTURE_SOURCE,
+        decisionId: decision.id,
+      });
+    }
 
-  const existing = inFlight.get(decision.id);
-  if (!existing && inFlight.size >= CONCURRENT_FETCH_LIMIT) {
-    return null;
-  }
+    const existing = inFlight.get(decision.id);
+    if (!existing && inFlight.size >= CONCURRENT_FETCH_LIMIT) {
+      return null;
+    }
 
-  return await withReadBudget(existing ?? startFetch(decision, deps));
+    return await (existing ?? startFetch(decision, deps));
+  };
+
+  return await withReadBudget(attempt());
 };
