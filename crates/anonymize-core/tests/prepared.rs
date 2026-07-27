@@ -3362,9 +3362,15 @@ fn address_seed_collection_and_clustering_scale_with_input_size() {
         .unwrap();
       best_cluster_us = best_cluster_us.min(cluster_us);
       if target_bytes == 100 * 1024 {
+        // Refreshed when the cluster gap stopped bridging running prose.
+        // The fixture's docket header carries a bare five-digit number, so
+        // "Notice 12345" used to seed a postal code that clustered with the
+        // street address 25 characters later and pulled the sentence opening
+        // into the span. The span is now the address alone:
+        // "100 Main Street, Boston, MA 02101-1234".
         assert_eq!(
           static_redaction_digest(&result.result),
-          "d7f492eb350006be0f06501a38e091017a9f6d6a3f372f586f2bcb1a03adfd76",
+          "4cd5071a3ef1e6cc7f296b4f4e172d6fd68a733b3e023e4950bf42a63cdc9878",
         );
       }
       std::hint::black_box(result);

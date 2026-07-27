@@ -131,4 +131,45 @@ describe("standalone street detection", () => {
       englishStreet.some((entity) => entity.text === "123 Main Street"),
     ).toBe(true);
   });
+
+  test("a leading sentence is not pulled into a standalone street span", async () => {
+    // "Send" is a real place name carried by the city dictionaries, so it
+    // seeds an address four words left of the street word. The sentence
+    // between them must keep the two spans apart.
+    const found = await addresses(
+      standaloneConfig,
+      "Send it to 14 Rue de la Paix.",
+    );
+    expect(found.some((entity) => entity.text === "14 Rue de la Paix")).toBe(
+      true,
+    );
+    expect(found.some((entity) => entity.text.includes("it to"))).toBe(false);
+  });
+
+  test("a leading German sentence is not pulled into the span", async () => {
+    const found = await addresses(
+      standaloneConfig,
+      "Bitte an Hauptstraße 5 senden.",
+    );
+    expect(found.some((entity) => entity.text === "Hauptstraße 5")).toBe(true);
+    expect(found.some((entity) => entity.text.includes("Bitte"))).toBe(false);
+  });
+
+  test("a house number with a unit letter keeps the whole street name", async () => {
+    const found = await addresses(standaloneConfig, "221B Baker Street");
+    expect(found.some((entity) => entity.text === "221B Baker Street")).toBe(
+      true,
+    );
+  });
+
+  test("a city-anchored span still excludes the leading sentence", async () => {
+    const found = await addresses(
+      standaloneConfig,
+      "Send it to 14 Rue de la Paix, Paris.",
+    );
+    expect(
+      found.some((entity) => entity.text === "14 Rue de la Paix, Paris"),
+    ).toBe(true);
+    expect(found.some((entity) => entity.text.includes("it to"))).toBe(false);
+  });
 });

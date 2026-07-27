@@ -22,6 +22,10 @@ const COMPOUND_STREET_SUFFIX_MIN_CHARS: usize = 5;
 /// Cap on street-name words joined to the right of a standalone street seed.
 const STANDALONE_STREET_MAX_TAIL_WORDS: usize = 6;
 const ADDRESS_CLUSTER_MAX_GAP: usize = 150;
+/// Ordinary words tolerated between two address seeds before the gap reads as
+/// prose rather than as a separator.
+const MAX_PROSE_WORDS_BETWEEN_SEEDS: usize = 1;
+const IN_NAME_CONNECTORS: &str = "of|the|and";
 const ADDRESS_RIGHT_EXPAND_LIMIT: usize = 200;
 const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
@@ -309,8 +313,10 @@ impl PreparedAddressSeedData {
       br_cep_shape_re: compile_regex(r"(?u)^\d{5}[-‐‑‒–—―]\d{3}$")?,
       us_zip_plus_four_shape_re: compile_regex(r"(?u)^\d{5}[-‐‑‒–—―]\d{4}$")?,
       us_state_before_zip_re,
+      // The optional single letter carries a unit suffix ("221B Baker
+      // Street", "5a"); more than one letter would start a new word.
       house_number_before_street_re: compile_regex(
-        r"(?u)\b\d{1,6}(?:[-/]\d{1,6})?\s+(?:\p{Lu}\p{L}+[^\S\n\t]+){0,4}$",
+        r"(?u)\b\d{1,6}\p{L}?(?:[-/]\d{1,6})?\s+(?:\p{Lu}\p{L}+[^\S\n\t]+){0,4}$",
       )?,
       // Mirrors `house_number_before_street_re`'s tolerance for a short run
       // of intervening words (e.g. "rue de la Paix 10", where the house
@@ -322,7 +328,7 @@ impl PreparedAddressSeedData {
       // ordinary prose ("rue is a French word 12345", "Road docket
       // 94304-1050") cannot supply house-number evidence.
       house_number_after_street_re: compile_regex(&format!(
-        r"(?u)^[^\S\n\t]+(?:(?i:{STREET_PARTICLE_ALTERNATION})[^\S\n\t]+){{0,3}}(?:\p{{Lu}}\p{{L}}+[^\S\n\t]+)?\d{{1,6}}(?:[-/]\d{{1,6}})?\b"
+        r"(?u)^[^\S\n\t]+(?:(?i:{STREET_PARTICLE_ALTERNATION})[^\S\n\t]+){{0,3}}(?:\p{{Lu}}\p{{L}}+[^\S\n\t]+)?\d{{1,6}}\p{{L}}?(?:[-/]\d{{1,6}})?\b"
       ))?,
     })
   }
@@ -806,7 +812,14 @@ impl PreparedAddressSeedData {
       entity_index,
       cluster_starts_with_street_type_word(cluster),
     );
-    let left_pos = expand_left(full_text, cluster.start, left_bound);
+    let left_pos = match growth {
+      SpanGrowth::StreetNameOnly => {
+        expand_standalone_street_left(full_text, cluster.start, left_bound)
+      }
+      SpanGrowth::None | SpanGrowth::ToAddressBoundary => {
+        expand_left(full_text, cluster.start, left_bound)
+      }
+    };
     let end = match growth {
       SpanGrowth::None => cluster.end,
       SpanGrowth::StreetNameOnly => {
@@ -1659,6 +1672,51 @@ fn compound_street_seed(full_text: &str, found: &SearchMatch) -> Option<Seed> {
   })
 }
 
+/// Mirror of `expand_standalone_street_right` for the left edge. A standalone
+/// street has no destination to bound it, so the span may only reach back over
+/// street-name material and the house number that opens the address; a house
+/// number ends the walk because nothing further left belongs to the street.
+/// Without this the generic expansion crosses any run of capitalized words.
+fn expand_standalone_street_left(
+  full_text: &str,
+  start: usize,
+  left_bound: usize,
+) -> usize {
+  let mut candidate = start;
+  for _ in 0..STANDALONE_STREET_MAX_TAIL_WORDS {
+    let Some((word_start, _, word)) =
+      word_before_for_address(full_text, candidate, left_bound)
+    else {
+      break;
+    };
+    if full_text
+      .get(word_start..candidate)
+      .is_some_and(|slice| slice.contains('\n'))
+    {
+      break;
+    }
+    // The house number opens the address, so the walk is only address
+    // material once it reaches one. Everything crossed on the way is a
+    // street-name word held tentatively.
+    if starts_with_house_number(word) {
+      return word_start;
+    }
+    if !is_street_name_word(word) {
+      break;
+    }
+    candidate = word_start;
+  }
+  start
+}
+
+/// A house number opens the address ("14 Rue de la Paix", "221B Baker
+/// Street"), so it may carry a unit letter.
+fn starts_with_house_number(word: &str) -> bool {
+  let mut chars = word.chars();
+  chars.next().is_some_and(|ch| ch.is_ascii_digit())
+    && chars.all(|ch| ch.is_alphanumeric() || matches!(ch, '-' | '/'))
+}
+
 /// Standalone street spans have no destination to fix their right edge, so
 /// they may only grow over street-name material: connective particles,
 /// capitalized name words, and a closing house number. Anything else
@@ -1745,9 +1803,17 @@ fn skip_unit_separators(full_text: &str, offset: usize) -> usize {
 fn is_house_number_word(word: &str) -> bool {
   !word.is_empty()
     && word.len() <= 13
-    && word.split(['-', '/']).all(|part| {
-      !part.is_empty() && part.chars().all(|ch| ch.is_ascii_digit())
-    })
+    && word.split(['-', '/']).all(is_house_number_part)
+}
+
+/// Digits with at most one trailing unit letter ("18", "221B", "5a", "5Ä").
+/// The suffix is counted in characters: a non-ASCII letter is one letter, not
+/// the two bytes it encodes to.
+fn is_house_number_part(part: &str) -> bool {
+  let digits = part.trim_end_matches(char::is_alphabetic);
+  !digits.is_empty()
+    && digits.chars().all(|ch| ch.is_ascii_digit())
+    && part.chars().count().saturating_sub(digits.chars().count()) <= 1
 }
 
 fn is_street_name_word(word: &str) -> bool {
@@ -1755,9 +1821,7 @@ fn is_street_name_word(word: &str) -> bool {
     return false;
   }
   word.chars().next().is_some_and(char::is_uppercase)
-    || STREET_PARTICLE_ALTERNATION
-      .split('|')
-      .any(|particle| particle.eq_ignore_ascii_case(word))
+    || is_street_particle(word)
 }
 
 fn seed_covered(seeds: &[Seed], start: usize, end: usize) -> bool {
@@ -1812,7 +1876,10 @@ fn cluster_seeds(
       full_text,
       current.end,
       seed.start,
-      &current,
+      ClusterJoin {
+        cluster: &current,
+        seed,
+      },
       entity_index,
     );
     if gap_ok {
@@ -1968,16 +2035,87 @@ fn offset_after_text_units(
   full_text.len()
 }
 
+/// The two seeds a gap sits between.
+#[derive(Clone, Copy)]
+struct ClusterJoin<'a> {
+  cluster: &'a SeedCluster,
+  seed: &'a Seed,
+}
+
+impl ClusterJoin<'_> {
+  /// Once a street word is in the cluster, everything up to the destination
+  /// is street-name material: "10 rue de la paix et de la liberté, Paris"
+  /// carries lowercase name words and a non-English connective that no
+  /// particle list can enumerate. Before a street word is found, a gap of
+  /// running prose means the seeds belong to different sentences.
+  fn guards_against_prose(self) -> bool {
+    let cluster_has_street = self
+      .cluster
+      .seeds
+      .iter()
+      .any(|seed| seed.kind == SeedType::StreetWord);
+    let seed_completes_address = matches!(
+      self.seed.kind,
+      SeedType::City | SeedType::PostalCode | SeedType::State
+    );
+    !(cluster_has_street && seed_completes_address)
+  }
+}
+
 fn has_cluster_barrier(
   full_text: &str,
   gap_start: usize,
   gap_end: usize,
-  cluster: &SeedCluster,
+  join: ClusterJoin<'_>,
   entity_index: &NonAddressEntityIndex,
 ) -> bool {
   full_text.get(gap_start..gap_end).is_some_and(|gap| {
-    has_paragraph_break(gap) || has_prose_wrap_after_weak_cluster(gap, cluster)
+    has_paragraph_break(gap)
+      || has_prose_wrap_after_weak_cluster(gap, join.cluster)
+      || (join.guards_against_prose() && has_prose_run(gap))
   }) || entity_index.has_barrier(gap_start, gap_end)
+}
+
+/// Two ordinary words in the gap mean the seeds sit in a sentence rather than
+/// in one address, so a city name that is also an ordinary word ("Send it to
+/// 14 Rue de la Paix") cannot pull the sentence into the span. One word is
+/// tolerated so a connective still joins components ("10 Main Street in
+/// Springfield"). Only applied before a street word opens the address; see
+/// `ClusterJoin::guards_against_prose`.
+fn has_prose_run(gap: &str) -> bool {
+  gap
+    .split(|ch: char| !ch.is_alphanumeric() && !matches!(ch, '-' | '\'' | '’'))
+    .filter(|word| is_prose_word(word))
+    .nth(MAX_PROSE_WORDS_BETWEEN_SEEDS)
+    .is_some()
+}
+
+/// House numbers, postal codes, capitalized name words, and the connectives
+/// that sit inside a street or place name are all address material.
+fn is_prose_word(word: &str) -> bool {
+  let Some(first) = word.chars().next() else {
+    return false;
+  };
+  !first.is_uppercase()
+    && !first.is_ascii_digit()
+    && !is_street_particle(word)
+    && !is_in_name_connector(word)
+}
+
+/// Lowercase words that join the parts of a street or place name
+/// ("Avenue of the Americas"). Kept separate from
+/// `STREET_PARTICLE_ALTERNATION`, whose closed set also bounds the
+/// house-number bridge regex and must not grow for this.
+fn is_in_name_connector(word: &str) -> bool {
+  IN_NAME_CONNECTORS
+    .split('|')
+    .any(|connector| connector.eq_ignore_ascii_case(word))
+}
+
+fn is_street_particle(word: &str) -> bool {
+  STREET_PARTICLE_ALTERNATION
+    .split('|')
+    .any(|particle| particle.eq_ignore_ascii_case(word))
 }
 
 fn has_prose_wrap_after_weak_cluster(
