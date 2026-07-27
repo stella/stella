@@ -11,6 +11,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createHostedSetupSession } from "@/api/lib/hosted-usage-provider/client";
 import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
+import { CONSUMABLE_STATUSES } from "@/api/lib/usage/usage-ledger";
 
 /** Create a hosted setup session for an active usage policy. */
 
@@ -98,11 +99,13 @@ const createHostedSetup = createSafeRootHandler(
         // land in a period the organisation cannot consume. Refuse up
         // front rather than accepting money we cannot apply.
         if (policy.kind === "addon") {
+          // Mirror the ledger's own consumability rule so this gate
+          // cannot drift from what allocated units can actually be
+          // spent on (past_due blocks consumption too).
           const consumable =
             entitlement !== undefined &&
             entitlement.hostedAccountRef !== null &&
-            entitlement.status !== "cancelled" &&
-            entitlement.status !== "paused" &&
+            CONSUMABLE_STATUSES.has(entitlement.status) &&
             entitlement.currentPeriodEnd > new Date();
           if (!consumable) {
             return { kind: "addon_requires_subscription" as const };

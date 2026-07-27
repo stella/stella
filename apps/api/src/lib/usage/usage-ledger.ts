@@ -53,10 +53,9 @@ import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
  * even if the unit balance is positive: leftover units survive
  * until the period naturally expires, but no new spend.
  */
-const CONSUMABLE_STATUSES: ReadonlySet<UsageEntitlementStatus> = new Set([
-  "active",
-  "trialing",
-]);
+export const CONSUMABLE_STATUSES: ReadonlySet<UsageEntitlementStatus> = new Set(
+  ["active", "trialing"],
+);
 
 type EntitlementForCheck = {
   status: UsageEntitlementStatus;
