@@ -158,3 +158,20 @@ export const tryRecomputeCitationAuthorityForAll = async (
   }
   return await recomputeCitationAuthorityForAll(tx, options);
 };
+
+/**
+ * Blocking variant for callers that have just changed the citation graph
+ * (the citation-resolution script): an in-flight recompute may hold a
+ * snapshot from before those changes, so skipping would leave them
+ * unreflected until the next scheduled pass. Waiting for the lock and
+ * recomputing afterwards guarantees the caller's changes are covered.
+ */
+export const recomputeCitationAuthorityForAllExclusive = async (
+  tx: CitationAuthorityTx,
+  options: RecomputeCitationAuthorityOptions = {},
+): Promise<number> => {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext('case_law_citation_authority_recompute'))`,
+  );
+  return await recomputeCitationAuthorityForAll(tx, options);
+};
