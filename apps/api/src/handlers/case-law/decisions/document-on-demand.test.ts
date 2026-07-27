@@ -26,6 +26,7 @@ const pending = (): PendingDocument => ({
   caseNumber: "1T/1/2026",
   ecli: null,
   court: "Okresný súd",
+  country: "SVK",
   decisionDate: "2026-07-01",
   decisionType: "rozsudok",
   documentUrl: "https://example.test/decision.pdf",

@@ -37,6 +37,22 @@ import type { SafeId } from "@/api/lib/branded-types";
 const QUEUE_READ_LIMIT = 500;
 
 /**
+ * The queue row a store call would have come from. Only the id and the
+ * jurisdiction are read, and this suite runs with corpus storage off,
+ * so the rest is filler.
+ */
+const pendingFor = (id: SafeId<"caseLawDecision">): PendingDocument => ({
+  id,
+  caseNumber: "stored",
+  ecli: null,
+  court: "Okresný súd",
+  country: "SVK",
+  decisionDate: null,
+  decisionType: null,
+  documentUrl: null,
+});
+
+/**
  * Keep only the decisions a test created, in the order the queue
  * returned them, so rows left by neighbouring tests cannot change the
  * assertion.
@@ -215,9 +231,9 @@ if (!databaseUrl || !runPostgresTests) {
         documentUrl: "https://example.test/store.pdf",
       });
 
-      await storeBackfilledDocument(
-        id,
-        {
+      await storeBackfilledDocument({
+        decision: pendingFor(id),
+        document: {
           fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
           documentAst: parsedAst,
           sections: [
@@ -225,7 +241,7 @@ if (!databaseUrl || !runPostgresTests) {
           ],
         },
         scopedDb,
-      );
+      });
 
       const row = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -286,14 +302,18 @@ if (!databaseUrl || !runPostgresTests) {
         sections: [],
       };
 
-      await storeBackfilledDocument(id, stored, scopedDb);
+      await storeBackfilledDocument({
+        decision: pendingFor(id),
+        document: stored,
+        scopedDb,
+      });
       // A second fetch of the same decision — the queue and a reader can
       // both reach it — must converge rather than replace what is there.
-      await storeBackfilledDocument(
-        id,
-        { ...stored, fulltext: "Stale re-parse." },
+      await storeBackfilledDocument({
+        decision: pendingFor(id),
+        document: { ...stored, fulltext: "Stale re-parse." },
         scopedDb,
-      );
+      });
 
       const row = await db.query.caseLawDecisions.findFirst({
         where: { id: { eq: id } },
@@ -310,15 +330,15 @@ if (!databaseUrl || !runPostgresTests) {
         documentUrl: "https://example.test/no-erase.pdf",
       });
 
-      await storeBackfilledDocument(
-        id,
-        {
+      await storeBackfilledDocument({
+        decision: pendingFor(id),
+        document: {
           fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
           documentAst: parsedAst,
           sections: [],
         },
         scopedDb,
-      );
+      });
       await markDocumentUnavailable(id, scopedDb);
 
       const row = await db.query.caseLawDecisions.findFirst({
@@ -385,6 +405,63 @@ if (!databaseUrl || !runPostgresTests) {
       });
 
       expect(await claimDocumentFetch(id, scopedDb)).toBe(false);
+    });
+
+    test("a run just attempted is left alone until its cooldown passes", async () => {
+      const cooling = await insertDecision({
+        caseNumber: `cooldown-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/cooldown.pdf",
+        decisionDate: "2026-03-02",
+        documentFetchAttemptedAt: new Date(),
+        documentFetchAttempts: 1,
+      });
+      // Same decision date range, but attempted long enough ago.
+      const cooled = await insertDecision({
+        caseNumber: `cooled-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/cooled.pdf",
+        decisionDate: "2026-03-01",
+        documentFetchAttemptedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        documentFetchAttempts: 1,
+      });
+
+      const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+
+      expect(onlyThese(queue, [cooling, cooled])).toEqual([cooled]);
+    });
+
+    test("decisions the source keeps refusing sink below untried ones", async () => {
+      // The livelock this prevents: a source answering 403 for the
+      // newest page would otherwise hand back the same rows every run,
+      // because they are the newest, and nothing behind them would ever
+      // be reached.
+      const refusedIds = await Promise.all(
+        [1, 2, 3].map(
+          async (n) =>
+            await insertDecision({
+              caseNumber: `livelock-refused-${n}-${suffix}`,
+              fulltext: null,
+              documentUrl: `https://example.test/refused-${n}.pdf`,
+              // Newest decisions, so date order alone would put them first.
+              decisionDate: `2026-08-0${n}`,
+              documentFetchAttempts: MAX_PRIORITY_FETCH_ATTEMPTS,
+              documentFetchAttemptedAt: new Date(
+                Date.now() - 24 * 60 * 60 * 1000,
+              ),
+            }),
+        ),
+      );
+      const untried = await insertDecision({
+        caseNumber: `livelock-untried-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/untried.pdf",
+        decisionDate: "2026-01-01",
+      });
+
+      const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+
+      expect(onlyThese(queue, [...refusedIds, untried]).at(0)).toBe(untried);
     });
 
     test("requested decisions come first, then the newest of the rest", async () => {
@@ -454,7 +531,7 @@ if (!databaseUrl || !runPostgresTests) {
         scopedDb,
         sourceId,
         limit: QUEUE_READ_LIMIT,
-        after: { decisionDate: "2026-04-02", id: first },
+        after: { attempts: 0, decisionDate: "2026-04-02", id: first },
       });
 
       expect(onlyThese(page, [first, second])).toEqual([second]);

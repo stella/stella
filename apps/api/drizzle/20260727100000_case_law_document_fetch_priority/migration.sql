@@ -40,10 +40,16 @@ CREATE INDEX "case_law_decisions_document_demand_idx"
     AND "document_url" is not null
     AND "document_fetch_requested_at" is not null;
 --> statement-breakpoint
--- Remaining tier: newest decisions first, per source. Matches the
--- loader's ORDER BY so the head of the queue is a bounded index range
--- scan.
+-- Remaining tier: least-tried first, then newest decisions, per source.
+-- Matches the loader's ORDER BY so the head of the queue is a bounded
+-- index range scan, and a document the source keeps refusing sinks
+-- instead of holding the head.
 -- squawk-ignore require-concurrent-index-creation
 CREATE INDEX "case_law_decisions_document_pending_idx"
-  ON "case_law_decisions" ("source_id", "decision_date" DESC NULLS LAST, "id")
+  ON "case_law_decisions" (
+    "source_id",
+    "document_fetch_attempts",
+    "decision_date" DESC NULLS LAST,
+    "id"
+  )
   WHERE "fulltext" is null AND "document_url" is not null;

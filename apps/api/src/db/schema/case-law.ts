@@ -192,12 +192,18 @@ export const caseLawDecisions = p.pgTable(
       .where(
         sql`${t.fulltext} is null and ${t.documentUrl} is not null and ${t.documentFetchRequestedAt} is not null`,
       ),
-    // Deferred-document queue, remaining tier: newest decisions first,
-    // per source. Matches the loader's ORDER BY so the head of the queue
-    // is a bounded index range scan rather than a sort over the backlog.
+    // Deferred-document queue, remaining tier: least-tried first, then
+    // newest decisions, per source. Matches the loader's ORDER BY so the
+    // head of the queue is a bounded index range scan rather than a sort
+    // over the backlog.
     p
       .index("case_law_decisions_document_pending_idx")
-      .on(t.sourceId, t.decisionDate.desc().nullsLast(), t.id)
+      .on(
+        t.sourceId,
+        t.documentFetchAttempts,
+        t.decisionDate.desc().nullsLast(),
+        t.id,
+      )
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
     ...globalCaseLawPolicies(),
   ],

@@ -248,16 +248,21 @@ export const readDecisionHandler = async (
     });
   }
 
-  // Nothing readable is stored for this decision yet, and there is a
-  // document to fetch. Sources that ingest metadata first leave that to
-  // the ingestion queue; `get-deferred-document.ts` turns this flag into
-  // a fetch for the reader who arrives before the queue does. Kept as a
+  // Nothing readable resolved for this decision, and there is a document
+  // to fetch. Sources that ingest metadata first leave that to the
+  // ingestion queue; `get-deferred-document.ts` turns this flag into a
+  // fetch for the reader who arrives before the queue does. Kept as a
   // derived boolean rather than a call so this module stays a read.
+  //
+  // An empty string counts as nothing: a metadata-first ingest under
+  // corpus storage writes an empty payload, which reads back as "" and
+  // not as a missing object. That makes this flag unable to tell a
+  // decision nobody has fetched from one the source had nothing for —
+  // the fetch path's claim does that, since it only claims rows whose
+  // text is still NULL.
   const documentPending =
-    fulltext === null &&
     !hasUsableAst(documentAst) &&
-    decision.astS3Key === null &&
-    decision.textS3Key === null &&
+    (fulltext === null || fulltext === "") &&
     decision.documentUrl !== null;
 
   return {

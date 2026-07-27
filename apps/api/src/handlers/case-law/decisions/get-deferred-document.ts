@@ -45,6 +45,7 @@ const hydrate = async (
       caseNumber: decision.caseNumber,
       ecli: decision.ecli,
       court: decision.court,
+      country: decision.country,
       decisionDate: decision.decisionDate,
       decisionType: decision.decisionType,
       documentUrl: decision.documentUrl,

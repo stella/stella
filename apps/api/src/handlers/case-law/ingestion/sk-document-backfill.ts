@@ -36,7 +36,9 @@ import {
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
+import { corpusStorageMode } from "@/api/env-base";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
+import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import {
   type DocumentAst,
   isDocumentAst,
@@ -46,6 +48,7 @@ import { sanitizeResult } from "@/api/handlers/case-law/ingestion/pipeline";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -56,6 +59,8 @@ export type PendingDocument = {
   caseNumber: string;
   ecli: string | null;
   court: string;
+  /** Jurisdiction, which partitions the decision's corpus objects. */
+  country: string;
   decisionDate: string | null;
   decisionType: string | null;
   documentUrl: string | null;
@@ -85,7 +90,12 @@ export const fetchPdfBytes = async (
   if (response.status === 404 || response.status === 410) {
     return undefined;
   }
-  throw new Error(`document fetch returned ${response.status}`);
+  throw new AdapterFetchError({
+    message: `Document fetch returned ${response.status}`,
+    adapterKey: ADAPTER_KEYS.SK_COURTS,
+    cursor: null,
+    httpStatus: response.status,
+  });
 };
 
 export type BackfilledDocument = {
@@ -155,10 +165,32 @@ const PENDING_DOCUMENT_COLUMNS = {
   caseNumber: caseLawDecisions.caseNumber,
   ecli: caseLawDecisions.ecli,
   court: caseLawDecisions.court,
+  country: caseLawDecisions.country,
   decisionDate: caseLawDecisions.decisionDate,
   decisionType: caseLawDecisions.decisionType,
   documentUrl: caseLawDecisions.documentUrl,
 };
+
+/**
+ * How long the queue leaves a decision alone after an attempt.
+ *
+ * Failures here are usually the source's, not this decision's: a court
+ * site that answers 403 for one document answers it for the next forty
+ * too. Without a cooldown the head of the queue would be re-attempted
+ * every run and nothing behind it would ever be reached. Far longer
+ * than the claim's own TTL, which only guards one fetch in flight; a
+ * reader who opens the decision again is not held by this, because the
+ * read-through claims directly.
+ */
+const FETCH_COOLDOWN_HOURS = 6;
+
+const outsideFetchCooldown = or(
+  isNull(caseLawDecisions.documentFetchAttemptedAt),
+  lt(
+    caseLawDecisions.documentFetchAttemptedAt,
+    sql`now() - ${`${FETCH_COOLDOWN_HOURS} hours`}::interval`,
+  ),
+);
 
 /**
  * A decision whose document has not been fetched yet: no text, and
@@ -173,6 +205,7 @@ export const pendingDocumentPredicate = and(
 /** Pending, asked for by a reader, and still within its retry budget. */
 export const requestedDocumentPredicate = and(
   pendingDocumentPredicate,
+  outsideFetchCooldown,
   isNotNull(caseLawDecisions.documentFetchRequestedAt),
   lt(caseLawDecisions.documentFetchAttempts, MAX_PRIORITY_FETCH_ATTEMPTS),
 );
@@ -180,6 +213,7 @@ export const requestedDocumentPredicate = and(
 /** Everything else: never asked for, or asked for and out of retries. */
 export const remainingDocumentPredicate = and(
   pendingDocumentPredicate,
+  outsideFetchCooldown,
   or(
     isNull(caseLawDecisions.documentFetchRequestedAt),
     gte(caseLawDecisions.documentFetchAttempts, MAX_PRIORITY_FETCH_ATTEMPTS),
@@ -193,11 +227,15 @@ export const requestedDocumentOrder = [
 ] as const;
 
 /**
- * Newest decision first. NULLS LAST matches the index and puts undated
- * decisions after every dated one, rather than at the head of a DESC
- * scan.
+ * Least-tried first, then newest decision. Attempts lead so a document
+ * the source keeps refusing sinks below everything still untried rather
+ * than holding the newest end of the range; within one attempt count the
+ * newest decision is the one a reader is most likely to open next.
+ * NULLS LAST matches the index and puts undated decisions after every
+ * dated one, rather than at the head of a DESC scan.
  */
 export const remainingDocumentOrder = [
+  asc(caseLawDecisions.documentFetchAttempts),
   sql`${caseLawDecisions.decisionDate} desc nulls last`,
   asc(caseLawDecisions.id),
 ] as const;
@@ -208,8 +246,9 @@ export type RequestedDocumentCursor = {
   id: SafeId<"caseLawDecision">;
 };
 
-/** Keyset position in the remaining tier (decisionDate, id). */
+/** Keyset position in the remaining tier (attempts, decisionDate, id). */
 export type RemainingDocumentCursor = {
+  attempts: number;
   decisionDate: string | null;
   id: SafeId<"caseLawDecision">;
 };
@@ -291,12 +330,12 @@ export const loadRequestedDocuments = async ({
   });
 
 /**
- * Keyset boundary for `decision_date DESC NULLS LAST, id ASC`. A NULL
- * date sorts after every date, so a cursor on a dated row also has to
- * admit the undated tail, and a cursor already in that tail is ordered
- * by id alone.
+ * Keyset boundary within one attempt count, for `decision_date DESC
+ * NULLS LAST, id ASC`. A NULL date sorts after every date, so a cursor
+ * on a dated row also has to admit the undated tail, and a cursor
+ * already in that tail is ordered by id alone.
  */
-const remainingCursorPredicate = ({
+const remainingDateCursorPredicate = ({
   decisionDate,
   id,
 }: RemainingDocumentCursor) =>
@@ -310,6 +349,20 @@ const remainingCursorPredicate = ({
           gt(caseLawDecisions.id, id),
         ),
       );
+
+/**
+ * Keyset boundary for `attempts ASC, decision_date DESC NULLS LAST, id
+ * ASC`: everything in a later attempt count, plus what follows the
+ * cursor inside its own.
+ */
+const remainingCursorPredicate = (cursor: RemainingDocumentCursor) =>
+  or(
+    gt(caseLawDecisions.documentFetchAttempts, cursor.attempts),
+    and(
+      eq(caseLawDecisions.documentFetchAttempts, cursor.attempts),
+      remainingDateCursorPredicate(cursor),
+    ),
+  );
 
 /**
  * Remaining tier: newest decision first. A fresh decision is the one a
@@ -366,22 +419,56 @@ export const loadPendingDocuments = async (
   return [...requested, ...remaining];
 };
 
+export type StoreBackfilledDocumentOptions = {
+  decision: PendingDocument;
+  document: BackfilledDocument;
+  scopedDb: ScopedDb;
+};
+
 /**
  * Write a parsed document onto its decision and re-index it. Without
  * the re-index the row gains fulltext that search cannot see, which is
  * indistinguishable from the state this is fixing.
  *
- * The write is conditional on the row still having no text, so two
+ * Where corpus storage is on, the document is written there too, and
+ * the row's keys and content hash move to the new objects in the same
+ * statement as the columns. A metadata-first ingest has already written
+ * an empty payload and pointed the row at it, so filling only the
+ * columns would leave every corpus-preferring reader — and the corpus
+ * indexer, which compares hashes — looking at the empty one. The keys
+ * are content-addressed, so the real document lands at new keys and the
+ * empty objects become unreachable orphans.
+ *
+ * Object storage goes first: no row may point at an object that is not
+ * there yet. A corpus failure therefore leaves the decision exactly as
+ * it was — still queued, no text — rather than storing text that
+ * readers of the canonical payload cannot see.
+ *
+ * The row write is conditional on the row still having no text, so two
  * fetches of the same decision converge on one stored document instead
- * of the later writer overwriting the earlier one. The re-index runs
- * either way: it reads the stored row, so it is idempotent and it also
- * repairs a decision whose text landed but whose index write did not.
+ * of the later writer overwriting the earlier one. Both write identical
+ * bytes to identical keys, so the loser's objects are the winner's. The
+ * re-index runs either way: it reads the stored row, so it is
+ * idempotent and it also repairs a decision whose text landed but whose
+ * index write did not.
  */
-export const storeBackfilledDocument = async (
-  decisionId: SafeId<"caseLawDecision">,
-  document: BackfilledDocument,
-  scopedDb: ScopedDb,
-): Promise<void> => {
+export const storeBackfilledDocument = async ({
+  decision,
+  document,
+  scopedDb,
+}: StoreBackfilledDocumentOptions): Promise<void> => {
+  const sections = document.sections.length > 0 ? document.sections : null;
+  const corpus =
+    corpusStorageMode === "off"
+      ? null
+      : await writeCorpusDocument({
+          documentId: decision.id,
+          jurisdiction: decision.country,
+          text: document.fulltext,
+          sections,
+          ast: document.documentAst,
+        });
+
   await scopedDb(async (tx) => {
     // audit: skip — scheduler backfill of public case-law text; no user action
     await tx
@@ -389,18 +476,26 @@ export const storeBackfilledDocument = async (
       .set({
         fulltext: document.fulltext,
         documentAst: document.documentAst,
-        sections: document.sections.length > 0 ? document.sections : null,
+        sections,
         parserVersion: PARSER_VERSION,
+        ...(corpus === null
+          ? {}
+          : {
+              textS3Key: corpus.textKey,
+              normalizedS3Key: corpus.sectionsKey,
+              astS3Key: corpus.astKey,
+              contentHash: corpus.contentHash,
+            }),
       })
       .where(
         and(
-          eq(caseLawDecisions.id, decisionId),
+          eq(caseLawDecisions.id, decision.id),
           sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
         ),
       );
   });
 
-  await indexDecision(decisionId, scopedDb);
+  await indexDecision(decision.id, scopedDb);
 };
 
 /**
@@ -559,7 +654,7 @@ const runDecisionDocumentFetch = async ({
     return { status: "unavailable" };
   }
 
-  await storeBackfilledDocument(decision.id, document, scopedDb);
+  await storeBackfilledDocument({ decision, document, scopedDb });
   return { status: "filled", document };
 };
 

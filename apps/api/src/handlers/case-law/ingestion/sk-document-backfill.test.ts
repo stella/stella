@@ -60,15 +60,29 @@ describe("deferred document queue shape", () => {
     expect(sql).toContain(" or ");
   });
 
+  test("both tiers leave a just-attempted decision alone", () => {
+    // Without this the head of the queue is re-attempted every run and
+    // a source refusing those documents starves everything behind them.
+    for (const predicate of [
+      requestedDocumentPredicate,
+      remainingDocumentPredicate,
+    ]) {
+      const { sql } = compileCondition(predicate);
+
+      expect(sql).toContain(`"document_fetch_attempted_at" is null`);
+      expect(sql).toContain(`"document_fetch_attempted_at" < now()`);
+    }
+  });
+
   test("requested decisions drain oldest request first", () => {
     expect(compileOrder(requestedDocumentOrder)).toBe(
       `"case_law_decisions"."document_fetch_requested_at" asc, "case_law_decisions"."id" asc`,
     );
   });
 
-  test("the rest drain newest first, undated decisions last", () => {
+  test("the rest drain least-tried first, then newest, undated last", () => {
     expect(compileOrder(remainingDocumentOrder)).toBe(
-      `"case_law_decisions"."decision_date" desc nulls last, "case_law_decisions"."id" asc`,
+      `"case_law_decisions"."document_fetch_attempts" asc, "case_law_decisions"."decision_date" desc nulls last, "case_law_decisions"."id" asc`,
     );
   });
 });
