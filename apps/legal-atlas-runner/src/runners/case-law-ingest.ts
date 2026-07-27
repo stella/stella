@@ -142,11 +142,13 @@ process.on("unhandledRejection", (reason) => {
  * even when a loop is mid-sleep on a long interval.
  */
 let draining = false;
+/** Read via a call so per-site flow analysis cannot misjudge the flag. */
+const isDraining = (): boolean => draining;
 const DRAIN_FORCE_EXIT_MS = 90_000;
 
 const drainOnSigterm = (): void => {
   process.on("SIGTERM", () => {
-    if (draining) {
+    if (isDraining()) {
       return;
     }
     draining = true;
@@ -666,7 +668,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   let idleCycles = 0;
 
   while (true) {
-    if (draining) {
+    if (isDraining()) {
       return;
     }
     try {
@@ -676,6 +678,12 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       // released before the inter-cycle delay, so idle adapters free the slot.
       // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
       await cycleSemaphore.acquire();
+      // A loop that queued on acquire() passed the drain check before the
+      // signal arrived; hand the slot back instead of starting a new cycle.
+      if (isDraining()) {
+        cycleSemaphore.release();
+        return;
+      }
       let cycle: CycleResult;
       // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
       // ignore the per-cycle abort signal (the source lookup before it is
@@ -867,12 +875,12 @@ export const runCaseLawIngest = async (
   // Health loop: heartbeat + S3 credential refresh.
   const healthLoop = (async () => {
     while (true) {
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval health poll; the loop must wait HEALTH_INTERVAL_MS between heartbeats, so this await is intentionally sequential
       await Bun.sleep(HEALTH_INTERVAL_MS);
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       writeHeartbeat();
@@ -898,12 +906,12 @@ export const runCaseLawIngest = async (
   // timeout so long texts don't block other work.
   const searchIndexLoop = (async () => {
     while (true) {
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       try {
@@ -936,7 +944,7 @@ export const runCaseLawIngest = async (
   const citationAuthorityLoop = (async () => {
     await Bun.sleep(CITATION_AUTHORITY_STARTUP_DELAY_MS);
     while (true) {
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       let recomputed = false;
@@ -989,12 +997,12 @@ export const runCaseLawIngest = async (
     const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
     logInfo(`[corpus-index] Enabled for generation ${generation}`);
     while (true) {
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       try {
@@ -1027,12 +1035,12 @@ export const runCaseLawIngest = async (
   // corpus daemon maintains both families' search projections.
   const legislationSearchIndexLoop = (async () => {
     while (true) {
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       try {
@@ -1070,12 +1078,12 @@ export const runCaseLawIngest = async (
     const generation = corpusGeneration("legislation");
     logInfo(`[legislation-corpus-index] Enabled for generation ${generation}`);
     while (true) {
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
-      if (draining) {
+      if (isDraining()) {
         return;
       }
       try {
