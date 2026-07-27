@@ -21,7 +21,7 @@ import { panic } from "better-result";
 
 import { caseLawIngestionEvents } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
+import { tryRecomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -141,8 +141,13 @@ const SEARCH_INDEX_BATCH_SIZE = 20;
 const SEARCH_INDEX_DRAIN_CONCURRENCY = 4;
 const CORPUS_INDEX_INTERVAL_MS = 15_000;
 // Citation authority decays slowly; a periodic full recompute keeps the
-// materialized ranking signal fresh without per-cycle cost.
+// materialized ranking signal fresh without per-cycle cost. The first
+// recompute runs shortly after startup rather than a full interval in: a
+// process whose lifetime is shorter than the interval would otherwise
+// never recompute at all. The startup delay keeps a process that exits
+// quickly after boot from adding a whole-corpus recompute to every start.
 const CITATION_AUTHORITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const CITATION_AUTHORITY_STARTUP_DELAY_MS = 5 * 60 * 1000;
 
 // Idle backoff: once an adapter is caught up (no new decisions
 // for IDLE_THRESHOLD consecutive cycles), poll once a day instead
@@ -874,21 +879,30 @@ export const runCaseLawIngest = async (
   // Citation-authority refresh loop: keeps the materialized ranking
   // signal current (also runs in the post-citation pass; this covers the
   // continuous daemon). Runs via the ingestion role outside the DB slot.
-  // The first recompute runs at startup: a process whose lifetime is
-  // shorter than the interval would otherwise never recompute at all.
+  // The try-locked recompute makes overlapping processes (a rolling
+  // deployment) skip instead of queueing duplicate whole-corpus updates.
   const citationAuthorityLoop = (async () => {
+    await Bun.sleep(CITATION_AUTHORITY_STARTUP_DELAY_MS);
     while (true) {
       try {
         // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
         const courtWeightEntries = await loadCourtWeightEntries();
         // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
         const updated = await ingestionDb(async (tx) => {
-          const count = await recomputeCitationAuthorityForAll(tx, {
+          const count = await tryRecomputeCitationAuthorityForAll(tx, {
             courtWeightEntries,
           });
           return count;
         });
-        logInfo(`[citation-authority] Recomputed (${updated} cited decisions)`);
+        if (updated === null) {
+          logInfo(
+            "[citation-authority] Skipped (recompute already running in another process)",
+          );
+        } else {
+          logInfo(
+            `[citation-authority] Recomputed (${updated} cited decisions)`,
+          );
+        }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         if (isTransientConnectionError(error)) {

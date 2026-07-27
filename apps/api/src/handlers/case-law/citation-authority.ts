@@ -45,14 +45,16 @@ type CitationAuthorityTx = {
   execute: (query: SQL) => Promise<unknown>;
 };
 
+type RecomputeCitationAuthorityOptions = {
+  now?: Date;
+  courtWeightEntries?: CourtWeightEntry[] | undefined;
+};
+
 const SECONDS_PER_YEAR = 365.25 * 86_400;
 
 export const recomputeCitationAuthorityForAll = async (
   tx: CitationAuthorityTx,
-  options: {
-    now?: Date;
-    courtWeightEntries?: CourtWeightEntry[] | undefined;
-  } = {},
+  options: RecomputeCitationAuthorityOptions = {},
 ): Promise<number> => {
   const nowExpr = options.now
     ? sql`${options.now.toISOString()}::timestamptz`
@@ -131,4 +133,28 @@ export const recomputeCitationAuthorityForAll = async (
     return 0;
   }
   return firstRow["n"];
+};
+
+/**
+ * Try-locked variant for periodic daemon recomputes. Overlapping
+ * processes (a rolling deployment, a restart racing a still-draining
+ * task) would otherwise queue duplicate whole-corpus updates behind each
+ * other's row locks; the advisory try-lock lets exactly one proceed and
+ * the rest return null ("another process is recomputing") instead of
+ * blocking. The lock is transaction-scoped, so it releases with the tx.
+ */
+export const tryRecomputeCitationAuthorityForAll = async (
+  tx: CitationAuthorityTx,
+  options: RecomputeCitationAuthorityOptions = {},
+): Promise<number | null> => {
+  const lockResult: unknown = await tx.execute(
+    sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law_citation_authority_recompute')) AS locked`,
+  );
+  const lockRow: unknown = Array.isArray(lockResult)
+    ? lockResult.at(0)
+    : undefined;
+  if (!isRecord(lockRow) || lockRow["locked"] !== true) {
+    return null;
+  }
+  return await recomputeCitationAuthorityForAll(tx, options);
 };
