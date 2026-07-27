@@ -1200,7 +1200,17 @@ jobs:
 
       - name: Check landing product screenshots
         if: steps.changed.outputs.run == 'true'
-        run: bun --filter @stll/web test:e2e:marketing
+        # TEMPORARY: regenerate the product-image baselines on Linux/CI so they
+        # match the deterministic seed world. Revert to test:e2e:marketing.
+        run: bun --filter @stll/web test:e2e:marketing:update
+
+      - name: Upload regenerated product screenshots
+        if: always() && steps.changed.outputs.run == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: product-screenshots
+          path: apps/landing/public/media/products/
+          retention-days: 7
 
       # Flake guard: the dev server's dependency optimizer must finish during
       # the cold pass. A second pass mid-session prints "optimized dependencies
