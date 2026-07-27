@@ -133,6 +133,77 @@ descriptors (existing `footer.*` keys). Follow whichever pattern the
 surface already uses; do not translate a product name in one menu and not
 another.
 
+## Shared chrome is UI copy, not decoration
+
+The header, the mobile menu, and the footer render on every localized page,
+so their labels are catalog keys like any other string: `appearance.*` (the
+theme switcher), `nav.openMenu`, `nav.github`, `footer.navLabel`. An ARIA
+label counts: a screen-reader user reading the Czech page must not hear
+"Toggle theme".
+
+Chrome labels are also the strings most likely to grow in translation. The
+switcher sizes to its content (`min-w-11` keeps the tap target, the width is
+not fixed), because "Dark" at 44px becomes "Világos" or "Ciemny".
+
+### Light / Dark: the app's renderings, verbatim
+
+The switcher reuses the web app's `appearance.light` / `appearance.dark`
+values unchanged. Same concept, same key path, same string on both surfaces;
+a landing that says one thing and the app another is the failure this
+document exists to prevent.
+
+Every locale uses the platform-conventional **adjective** naming the mode
+— the form the Windows and macOS "choose your mode" pickers use — never the
+abstract noun for light or darkness. cs "Světlo", de "Licht", fr "Lumière",
+ar "ضوء" are the classic machine-translation reading of a bare "Light"; they,
+and their dark counterparts, are `forbidden` in `glossary.json`
+(`theme-light` / `theme-dark`), so `i18n-lint` rejects them in both catalogs.
+
+| Locale | Light   | Dark   |
+| ------ | ------- | ------ |
+| ar     | فاتح    | داكن   |
+| cs     | Světlý  | Tmavý  |
+| de     | Hell    | Dunkel |
+| es     | Claro   | Oscuro |
+| et     | Hele    | Tume   |
+| fr     | Clair   | Sombre |
+| hu     | Világos | Sötét  |
+| lt     | Šviesus | Tamsus |
+| lv     | Gaišs   | Tumšs  |
+| pl     | Jasny   | Ciemny |
+| pt-BR  | Claro   | Escuro |
+| sk     | Svetlý  | Tmavý  |
+
+The adjective agrees with the noun the locale implies for the concept
+(cs/sk _režim_, pl _motyw_, lv _režīms_, lt _režimas_). That is why Lithuanian
+keeps masculine "Šviesus"/"Tamsus" even though _tema_ is feminine: the picker
+option describes the mode, not the theme object. Latvian uses the indefinite
+"Gaišs"/"Tumšs" for the standalone option; the definite "gaišais/tumšais
+režīms" belongs in running prose, not on a button.
+
+### Verb labels follow the glossary's register
+
+`appearance.toggle` and `nav.openMenu` are actions, so they take the same
+per-locale verb form the glossary uses for Save/Close: infinitive (cs, sk, de,
+lt, lv, es, fr, pt-BR), imperative (pl, et), verbal noun (hu, ar). The noun
+is whatever the app calls the theme in `appearance.theme` (cs Vzhled, de
+Design, lv Motīvs, ar السمة), not a second synonym coined here.
+
+| Locale | Toggle theme     |
+| ------ | ---------------- |
+| ar     | تبديل السمة      |
+| cs     | Přepnout vzhled  |
+| de     | Design wechseln  |
+| es     | Cambiar tema     |
+| et     | Vaheta teemat    |
+| fr     | Changer de thème |
+| hu     | Téma váltása     |
+| lt     | Keisti temą      |
+| lv     | Mainīt motīvu    |
+| pl     | Zmień motyw      |
+| pt-BR  | Alternar tema    |
+| sk     | Prepnúť vzhľad   |
+
 ## Arabic specifics
 
 Use native punctuation (، ؛) in running prose. Direction is handled by the

@@ -903,6 +903,72 @@
         "fr": "Chargement",
         "pt-BR": "Carregando"
       }
+    },
+    {
+      "id": "theme-dark",
+      "en": "Dark",
+      "note": "Standalone dark-theme label (app `appearance.dark`, landing `appearance.dark`). It names a mode, so every locale uses the platform-conventional ADJECTIVE that agrees with that locale's word for mode/theme, matching Windows and macOS. The abstract noun (`Tma`, `Ciemność`, `Dunkelheit`, `ظلام`) is the wrong reading and is forbidden. Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "forbidden": {
+        "ar": ["ظلام", "مظلم"],
+        "cs": ["Tma", "Temný"],
+        "sk": ["Tma", "Temný"],
+        "pl": ["Ciemność"],
+        "de": ["Dunkelheit"],
+        "et": ["Pimedus"],
+        "hu": ["Sötétség"],
+        "lt": ["Tamsa"],
+        "lv": ["Tumsa"],
+        "es": ["Oscuridad"],
+        "fr": ["Obscurité"],
+        "pt-BR": ["Escuridão"]
+      },
+      "translations": {
+        "ar": "داكن",
+        "cs": "Tmavý",
+        "sk": "Tmavý",
+        "pl": "Ciemny",
+        "de": "Dunkel",
+        "et": "Tume",
+        "hu": "Sötét",
+        "lt": "Tamsus",
+        "lv": "Tumšs",
+        "es": "Oscuro",
+        "fr": "Sombre",
+        "pt-BR": "Escuro"
+      }
+    },
+    {
+      "id": "theme-light",
+      "en": "Light",
+      "note": "Standalone light-theme label (app `appearance.light`, landing `appearance.light`). Same rule as `theme-dark`: the platform-conventional adjective, never the noun for illumination (`Světlo`, `Licht`, `Lumière`, `ضوء`). Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "forbidden": {
+        "ar": ["ضوء"],
+        "cs": ["Světlo"],
+        "sk": ["Svetlo"],
+        "pl": ["Światło"],
+        "de": ["Licht"],
+        "et": ["Valgus"],
+        "hu": ["Fény"],
+        "lt": ["Šviesa"],
+        "lv": ["Gaisma"],
+        "es": ["Luz"],
+        "fr": ["Lumière"],
+        "pt-BR": ["Luz"]
+      },
+      "translations": {
+        "ar": "فاتح",
+        "cs": "Světlý",
+        "sk": "Svetlý",
+        "pl": "Jasny",
+        "de": "Hell",
+        "et": "Hele",
+        "hu": "Világos",
+        "lt": "Šviesus",
+        "lv": "Gaišs",
+        "es": "Claro",
+        "fr": "Clair",
+        "pt-BR": "Claro"
+      }
     }
   ]
 }

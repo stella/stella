@@ -1,4 +1,9 @@
 {
+  "appearance": {
+    "dark": "Tume",
+    "light": "Hele",
+    "toggle": "Vaheta teemat"
+  },
   "askAi": {
     "copied": "Kopeeritud",
     "copy": "Kopeeri viip",
@@ -43,6 +48,7 @@
     "editor": "Redaktor",
     "imprint": "Impressum",
     "legal": "Õigusteave",
+    "navLabel": "Jalus",
     "press": "Press",
     "publicData": "Avalikud andmed",
     "resources": "Ressursid",
@@ -75,6 +81,8 @@
     "beta": "Beeta",
     "blog": "Blogi",
     "changelog": "Muudatuste logi",
+    "github": "stella GitHubis",
+    "openMenu": "Ava navigatsioon",
     "product": "Toode",
     "security": "Turvalisus"
   },

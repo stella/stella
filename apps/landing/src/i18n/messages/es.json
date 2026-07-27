@@ -1,4 +1,9 @@
 {
+  "appearance": {
+    "dark": "Oscuro",
+    "light": "Claro",
+    "toggle": "Cambiar tema"
+  },
   "askAi": {
     "copied": "Copiado",
     "copy": "Copiar instrucción",
@@ -43,6 +48,7 @@
     "editor": "Editor",
     "imprint": "Aviso legal",
     "legal": "Legal",
+    "navLabel": "Pie de página",
     "press": "Prensa",
     "publicData": "Datos públicos",
     "resources": "Recursos",
@@ -75,6 +81,8 @@
     "beta": "Beta",
     "blog": "Blog",
     "changelog": "Novedades",
+    "github": "stella en GitHub",
+    "openMenu": "Abrir navegación",
     "product": "Producto",
     "security": "Seguridad"
   },

@@ -1,4 +1,9 @@
 {
+  "appearance": {
+    "dark": "Sötét",
+    "light": "Világos",
+    "toggle": "Téma váltása"
+  },
   "askAi": {
     "copied": "Másolva",
     "copy": "Prompt másolása",
@@ -43,6 +48,7 @@
     "editor": "Szerkesztő",
     "imprint": "Impresszum",
     "legal": "Jogi információk",
+    "navLabel": "Lábléc",
     "press": "Sajtó",
     "publicData": "Nyilvános adatok",
     "resources": "Források",
@@ -75,6 +81,8 @@
     "beta": "Béta",
     "blog": "Blog",
     "changelog": "Változásnapló",
+    "github": "stella a GitHubon",
+    "openMenu": "Navigáció megnyitása",
     "product": "Termék",
     "security": "Biztonság"
   },

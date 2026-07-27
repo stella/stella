@@ -1,4 +1,9 @@
 {
+  "appearance": {
+    "dark": "Tumšs",
+    "light": "Gaišs",
+    "toggle": "Mainīt motīvu"
+  },
   "askAi": {
     "copied": "Nokopēts",
     "copy": "Kopēt uzvedni",
@@ -43,6 +48,7 @@
     "editor": "Redaktors",
     "imprint": "Rekvizīti",
     "legal": "Juridiskā informācija",
+    "navLabel": "Kājene",
     "press": "Presei",
     "publicData": "Publiskie dati",
     "resources": "Resursi",
@@ -75,6 +81,8 @@
     "beta": "Beta",
     "blog": "Blogs",
     "changelog": "Izmaiņu žurnāls",
+    "github": "stella vietnē GitHub",
+    "openMenu": "Atvērt navigāciju",
     "product": "Produkts",
     "security": "Drošība"
   },

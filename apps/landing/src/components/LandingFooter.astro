@@ -66,7 +66,7 @@ const legalLinks = [
 
       </div>
 
-      <nav class="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 lg:col-span-8" aria-label="Footer">
+      <nav class="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 lg:col-span-8" aria-label={t("footer.navLabel")}>
         {columns.map((column) => (
           <section>
             <h2 class="footer-heading text-sm font-semibold" style="color: var(--foreground)">{column.heading}</h2>

@@ -2,6 +2,11 @@
 // Do not edit manually.
 
 type Messages = {
+  "appearance": {
+    "dark": "Dark";
+    "light": "Light";
+    "toggle": "Toggle theme";
+  };
   "askAi": {
     "copied": "Copied";
     "copy": "Copy prompt";
@@ -46,6 +51,7 @@ type Messages = {
     "editor": "Editor";
     "imprint": "Imprint";
     "legal": "Legal";
+    "navLabel": "Footer";
     "press": "Press";
     "publicData": "Public data";
     "resources": "Resources";
@@ -78,6 +84,8 @@ type Messages = {
     "beta": "Beta";
     "blog": "Blog";
     "changelog": "Changelog";
+    "github": "stella on GitHub";
+    "openMenu": "Open navigation";
     "product": "Product";
     "security": "Security";
   };

@@ -1,4 +1,9 @@
 {
+  "appearance": {
+    "dark": "Escuro",
+    "light": "Claro",
+    "toggle": "Alternar tema"
+  },
   "askAi": {
     "copied": "Copiado",
     "copy": "Copiar prompt",
@@ -43,6 +48,7 @@
     "editor": "Editor",
     "imprint": "Informações legais",
     "legal": "Jurídico",
+    "navLabel": "Rodapé",
     "press": "Imprensa",
     "publicData": "Dados públicos",
     "resources": "Recursos",
@@ -75,6 +81,8 @@
     "beta": "Beta",
     "blog": "Blog",
     "changelog": "Novidades",
+    "github": "stella no GitHub",
+    "openMenu": "Abrir navegação",
     "product": "Produto",
     "security": "Segurança"
   },

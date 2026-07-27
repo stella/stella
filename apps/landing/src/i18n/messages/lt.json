@@ -1,4 +1,9 @@
 {
+  "appearance": {
+    "dark": "Tamsus",
+    "light": "Šviesus",
+    "toggle": "Keisti temą"
+  },
   "askAi": {
     "copied": "Nukopijuota",
     "copy": "Kopijuoti užklausą",
@@ -43,6 +48,7 @@
     "editor": "Redaktorius",
     "imprint": "Rekvizitai",
     "legal": "Teisinė informacija",
+    "navLabel": "Poraštė",
     "press": "Žiniasklaidai",
     "publicData": "Viešieji duomenys",
     "resources": "Ištekliai",
@@ -75,6 +81,8 @@
     "beta": "Beta",
     "blog": "Tinklaraštis",
     "changelog": "Pakeitimų žurnalas",
+    "github": "stella platformoje GitHub",
+    "openMenu": "Atidaryti naršymo meniu",
     "product": "Produktas",
     "security": "Saugumas"
   },

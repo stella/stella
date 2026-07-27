@@ -1,4 +1,9 @@
 {
+  "appearance": {
+    "dark": "داكن",
+    "light": "فاتح",
+    "toggle": "تبديل السمة"
+  },
   "askAi": {
     "copied": "تم النسخ",
     "copy": "نسخ التوجيه",
@@ -43,6 +48,7 @@
     "editor": "المحرر",
     "imprint": "البيانات القانونية",
     "legal": "قانوني",
+    "navLabel": "تذييل الصفحة",
     "press": "الصحافة",
     "publicData": "البيانات العامة",
     "resources": "الموارد",
@@ -75,6 +81,8 @@
     "beta": "تجريبي",
     "blog": "المدونة",
     "changelog": "آخر التحديثات",
+    "github": "stella على GitHub",
+    "openMenu": "فتح قائمة التنقل",
     "product": "المنتج",
     "security": "الأمان"
   },

@@ -1,18 +1,27 @@
-{/*
-  Theme toggle button with dark/light label swap.
-  Safe to include more than once per page (e.g. header + footer): the
-  button is marked with a data attribute, not a unique id, and a single
-  delegated click listener handles every instance.
-*/}
+---
+// Theme toggle button with dark/light label swap. The visible label names the
+// theme the click switches TO, so both renderings ship in the markup and CSS
+// picks one; no client-side translation lookup is involved.
+// Safe to include more than once per page (e.g. header + footer): the
+// button is marked with a data attribute, not a unique id, and a single
+// delegated click listener handles every instance.
+import { defaultLocale, isLocale } from "../i18n/config";
+import { getTranslations } from "../i18n/utils";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+---
+
 <button
   type="button"
   data-theme-toggle
-  class="inline-flex min-h-11 w-11 cursor-pointer items-center justify-center text-sm transition-colors"
+  class="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center px-2 text-sm whitespace-nowrap transition-colors"
   style="color: var(--muted-foreground)"
-  aria-label="Toggle theme"
+  aria-label={t("appearance.toggle")}
 >
-  <span class="dark-hidden">Dark</span>
-  <span class="light-hidden">Light</span>
+  <span class="dark-hidden">{t("appearance.dark")}</span>
+  <span class="light-hidden">{t("appearance.light")}</span>
 </button>
 
 <style>

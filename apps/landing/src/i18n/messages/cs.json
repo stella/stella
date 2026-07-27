@@ -1,4 +1,9 @@
 {
+  "appearance": {
+    "dark": "Tmavý",
+    "light": "Světlý",
+    "toggle": "Přepnout vzhled"
+  },
   "askAi": {
     "copied": "Zkopírováno",
     "copy": "Kopírovat prompt",
@@ -43,6 +48,7 @@
     "editor": "Editor",
     "imprint": "Tiráž",
     "legal": "Právní informace",
+    "navLabel": "Patička",
     "press": "Pro média",
     "publicData": "Veřejná data",
     "resources": "Zdroje",
@@ -75,6 +81,8 @@
     "beta": "Beta",
     "blog": "Blog",
     "changelog": "Seznam změn",
+    "github": "stella na GitHubu",
+    "openMenu": "Otevřít navigaci",
     "product": "Produkt",
     "security": "Zabezpečení"
   },
