@@ -60,7 +60,47 @@ type ExistingEntitlement = {
   organizationId: SafeId<"organization">;
   source: "hosted" | "manual";
   usagePolicyId: SafeId<"usagePolicy">;
+  hostedLastEventAt: Date | null;
 };
+
+/**
+ * Provider-reported occurrence time, or null when absent/unparseable.
+ * The neutral schema already validates ISO shape; the NaN check is a
+ * boundary guard only.
+ */
+const parseOccurredAt = (payload: { occurred_at?: string }): Date | null => {
+  if (payload.occurred_at === undefined) {
+    return null;
+  }
+  const parsed = new Date(payload.occurred_at);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+/**
+ * A delivery is stale when it is strictly older than the last applied
+ * event. Retries invert ordering (each event backs off independently),
+ * and applying an old `active` after a newer `revoked` would resurrect
+ * a terminated entitlement. Equal or missing timestamps apply as
+ * before: idempotent updates are harmless and providers without the
+ * field keep delivery-order semantics.
+ */
+const isStaleProviderEvent = (
+  existing: ExistingEntitlement,
+  occurredAt: Date | null,
+): boolean =>
+  occurredAt !== null &&
+  existing.hostedLastEventAt !== null &&
+  occurredAt < existing.hostedLastEventAt;
+
+const lastEventPatch = (
+  existing: ExistingEntitlement,
+  occurredAt: Date | null,
+): { hostedLastEventAt?: Date } =>
+  occurredAt !== null &&
+  (existing.hostedLastEventAt === null ||
+    occurredAt > existing.hostedLastEventAt)
+    ? { hostedLastEventAt: occurredAt }
+    : {};
 
 const findEntitlementByHostedExternalId = async (
   tx: Transaction,
@@ -72,6 +112,7 @@ const findEntitlementByHostedExternalId = async (
       organizationId: usageEntitlements.organizationId,
       source: usageEntitlements.source,
       usagePolicyId: usageEntitlements.usagePolicyId,
+      hostedLastEventAt: usageEntitlements.hostedLastEventAt,
     })
     .from(usageEntitlements)
     .where(
@@ -115,6 +156,7 @@ const findEntitlementByHostedAccountRef = async (
       organizationId: usageEntitlements.organizationId,
       source: usageEntitlements.source,
       usagePolicyId: usageEntitlements.usagePolicyId,
+      hostedLastEventAt: usageEntitlements.hostedLastEventAt,
     })
     .from(usageEntitlements)
     .where(eq(usageEntitlements.hostedAccountRef, hostedAccountRef))
@@ -176,6 +218,7 @@ export const handleHostedEntitlementUpsert = async ({
   }
 
   const seats = payload.quantity ?? 1;
+  const occurredAt = parseOccurredAt(payload);
   const existingByProvider = await findEntitlementByHostedExternalId(
     tx,
     payload.id,
@@ -195,6 +238,12 @@ export const handleHostedEntitlementUpsert = async ({
       return {
         kind: "ignored",
         reason: "matching entitlement is manually managed",
+      };
+    }
+    if (isStaleProviderEvent(existingByProvider, occurredAt)) {
+      return {
+        kind: "ignored",
+        reason: "stale provider event (older than last applied event)",
       };
     }
     if (
@@ -236,6 +285,7 @@ export const handleHostedEntitlementUpsert = async ({
         hostedAccountRef: payload.account_ref,
         hostedEntitlementExternalId: payload.id,
         cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
+        ...lastEventPatch(existingByProvider, occurredAt),
       })
       .where(eq(usageEntitlements.id, existingByProvider.id));
     await recordWebhookAuditEvent({
@@ -271,6 +321,12 @@ export const handleHostedEntitlementUpsert = async ({
           reason: "metadata organization_id mismatches local account mapping",
         };
       }
+      if (isStaleProviderEvent(existingByAccountRef, occurredAt)) {
+        return {
+          kind: "ignored",
+          reason: "stale provider event (older than last applied event)",
+        };
+      }
       ownerOrganizationId = existingByAccountRef.organizationId;
       await tx
         .update(usageEntitlements)
@@ -283,6 +339,7 @@ export const handleHostedEntitlementUpsert = async ({
           hostedAccountRef: payload.account_ref,
           hostedEntitlementExternalId: payload.id,
           cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
+          ...lastEventPatch(existingByAccountRef, occurredAt),
         })
         .where(eq(usageEntitlements.id, existingByAccountRef.id));
       await recordWebhookAuditEvent({
@@ -320,6 +377,7 @@ export const handleHostedEntitlementUpsert = async ({
           hostedAccountRef: payload.account_ref,
           hostedEntitlementExternalId: payload.id,
           cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
+          hostedLastEventAt: occurredAt,
           source: "hosted",
         })
         .returning({ id: usageEntitlements.id });
@@ -409,6 +467,13 @@ export const handleUsageEntitlementStatusChange = async ({
       reason: "entitlement is manually managed",
     };
   }
+  const occurredAt = parseOccurredAt(payload);
+  if (isStaleProviderEvent(existing, occurredAt)) {
+    return {
+      kind: "ignored",
+      reason: "stale provider event (older than last applied event)",
+    };
+  }
   const update =
     eventKind === "canceled"
       ? {
@@ -418,7 +483,7 @@ export const handleUsageEntitlementStatusChange = async ({
       : { status: "cancelled" as const, cancelAtPeriodEnd: false };
   await tx
     .update(usageEntitlements)
-    .set(update)
+    .set({ ...update, ...lastEventPatch(existing, occurredAt) })
     .where(eq(usageEntitlements.id, existing.id));
   await recordWebhookAuditEvent({
     tx,

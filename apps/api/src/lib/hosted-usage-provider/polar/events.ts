@@ -68,6 +68,14 @@ const handledEntitlement = (
       // neutral schema/dispatch default of one seat applies. Seat-based
       // subscriptions carry a positive integer.
       quantity: typeof data["seats"] === "number" ? data["seats"] : undefined,
+      // Ordering signal for out-of-order retries. `modified_at` is null
+      // on a fresh subscription; fall back to `created_at`.
+      occurred_at:
+        typeof data["modified_at"] === "string"
+          ? data["modified_at"]
+          : typeof data["created_at"] === "string"
+            ? data["created_at"]
+            : undefined,
     },
   },
   handled: true,
@@ -101,6 +109,16 @@ const isOneTimePurchase = (data: Record<string, unknown>): boolean =>
   data["billing_reason"] === "purchase" &&
   (data["subscription_id"] === null || data["subscription_id"] === undefined);
 
+// Only a structurally valid renewal order may be ignored: the matching
+// subscription.* event owns the period, so acknowledging the order is
+// safe. Anything else that is neither a valid purchase nor a valid
+// renewal must FAIL LOUD (stay handled so strict parsing produces
+// 400/retry) instead of silently acknowledging a paid event.
+const isSubscriptionRenewalOrder = (data: Record<string, unknown>): boolean =>
+  typeof data["billing_reason"] === "string" &&
+  data["billing_reason"].startsWith("subscription_") &&
+  typeof data["subscription_id"] === "string";
+
 export const normalizePolarEvent = (
   raw: unknown,
   nativeType: string,
@@ -124,10 +142,22 @@ export const normalizePolarEvent = (
       return handledEntitlement("entitlement.canceled", data ?? {});
     case "subscription.revoked":
       return handledEntitlement("entitlement.revoked", data ?? {});
-    case "order.paid":
-      return data && isOneTimePurchase(data)
-        ? handledAllocation(data)
-        : ignored(raw);
+    case "order.paid": {
+      if (data === null) {
+        // Cannot distinguish a purchase from a renewal without `data`;
+        // stay handled so the strict neutral schema rejects it and the
+        // provider retries, rather than silently dropping a paid add-on.
+        return { candidate: raw, handled: true };
+      }
+      if (isOneTimePurchase(data)) {
+        return handledAllocation(data);
+      }
+      if (isSubscriptionRenewalOrder(data)) {
+        return ignored(raw);
+      }
+      // Unrecognized billing shape on a paid order: fail loud.
+      return { candidate: raw, handled: true };
+    }
     default:
       return ignored(raw);
   }

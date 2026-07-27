@@ -74,6 +74,13 @@ const providerEntitlementSchema = v.object({
   cancel_at_period_end: v.optional(v.boolean()),
   metadata: v.optional(providerMetadataSchema),
   quantity: v.optional(positiveIntSchema),
+  /**
+   * Provider-reported occurrence time of this lifecycle event
+   * (ISO 8601). Optional: providers without it keep delivery-order
+   * semantics. When present, dispatch uses it to reject stale
+   * out-of-order retries (see `usage_entitlements.hosted_last_event_at`).
+   */
+  occurred_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
 });
 
 const providerAllocationSchema = v.object({

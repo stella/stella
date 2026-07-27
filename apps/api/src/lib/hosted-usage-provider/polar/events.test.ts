@@ -189,3 +189,80 @@ describe("normalizeProviderEvent — kind selection", () => {
     expect(expectRecord(result.candidate)["type"]).toBe("entitlement.revoked");
   });
 });
+
+describe("normalizePolarEvent — order.paid fail-loud branches", () => {
+  test("missing data stays handled so strict parsing rejects (retry)", () => {
+    const raw = { type: "order.paid" };
+    const result = normalizePolarEvent(raw, "order.paid");
+    expect(result.handled).toBe(true);
+    expect(
+      v.safeParse(hostedUsageWebhookEventSchema, result.candidate).success,
+    ).toBe(false);
+  });
+
+  test("unrecognized billing shape stays handled (fail loud)", () => {
+    const result = normalizePolarEvent(
+      {
+        type: "order.paid",
+        data: polarOrder({ billing_reason: 42, subscription_id: "sub_1" }),
+      },
+      "order.paid",
+    );
+    expect(result.handled).toBe(true);
+    expect(
+      v.safeParse(hostedUsageWebhookEventSchema, result.candidate).success,
+    ).toBe(false);
+  });
+
+  test("renewal without a subscription id is not silently ignored", () => {
+    const result = normalizePolarEvent(
+      {
+        type: "order.paid",
+        data: polarOrder({
+          billing_reason: "subscription_cycle",
+          subscription_id: null,
+        }),
+      },
+      "order.paid",
+    );
+    expect(result.handled).toBe(true);
+  });
+});
+
+describe("normalizePolarEvent — occurred_at ordering signal", () => {
+  const mappedData = (overrides: Record<string, unknown>) => {
+    const result = normalizePolarEvent(
+      {
+        type: "subscription.updated",
+        data: polarSubscription(overrides),
+      },
+      "subscription.updated",
+    );
+    expect(result.handled).toBe(true);
+    expect(
+      v.safeParse(hostedUsageWebhookEventSchema, result.candidate).success,
+    ).toBe(true);
+    return expectRecord(expectRecord(result.candidate)["data"]);
+  };
+
+  test("modified_at maps to occurred_at", () => {
+    const mapped = mappedData({
+      created_at: "2026-06-01T00:00:00Z",
+      modified_at: "2026-06-15T12:00:00Z",
+    });
+    expect(mapped["occurred_at"]).toBe("2026-06-15T12:00:00Z");
+  });
+
+  test("falls back to created_at when modified_at is null", () => {
+    const mapped = mappedData({
+      created_at: "2026-06-01T00:00:00Z",
+      modified_at: null,
+    });
+    expect(mapped["occurred_at"]).toBe("2026-06-01T00:00:00Z");
+  });
+
+  test("omitted when the provider sends no usable timestamp", () => {
+    const mapped = mappedData({ modified_at: null });
+    expect(mapped["occurred_at"]).toBeUndefined();
+  });
+});
