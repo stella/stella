@@ -46,7 +46,7 @@ const readDemoState = (selectors: typeof DEMO_SELECTORS): DemoState => {
   if (!root) {
     return { status: "demo island not mounted", highlighted: [], legend: [] };
   }
-  const readText = (node: Element | null) => node?.textContent?.trim() ?? "";
+  const readText = (node: Element | null) => node?.textContent.trim() ?? "";
   return {
     status: readText(root.querySelector(selectors.status)),
     highlighted: [...root.querySelectorAll(selectors.entitySpan)].map(readText),
