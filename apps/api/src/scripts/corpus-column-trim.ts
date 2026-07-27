@@ -36,6 +36,7 @@ const CONCURRENCY = 4;
 type TrimRow = {
   id: SafeId<"caseLawDecision">;
   textS3Key: string | null;
+  normalizedS3Key: string | null;
   astS3Key: string | null;
   contentHash: string | null;
   updatedAt: Date;
@@ -93,13 +94,23 @@ const corpusObjectExists = async (key: string): Promise<boolean> =>
 
 const trimRow = async (row: TrimRow): Promise<void> => {
   try {
-    const [textExists, astExists] = await Promise.all([
+    // Every object whose column this run nulls has to be checked, sections
+    // included: `writeCorpusDocument` always writes a sections object, so
+    // its absence means the row is not actually backed by object storage.
+    const [textExists, sectionsExists, astExists] = await Promise.all([
       row.textS3Key === null ? false : corpusObjectExists(row.textS3Key),
+      row.normalizedS3Key === null
+        ? false
+        : corpusObjectExists(row.normalizedS3Key),
       row.astS3Key === null ? false : corpusObjectExists(row.astS3Key),
     ]);
 
     const decision = planColumnTrim({
       text: corpusObjectState({ key: row.textS3Key, exists: textExists }),
+      sections: corpusObjectState({
+        key: row.normalizedS3Key,
+        exists: sectionsExists,
+      }),
       ast: corpusObjectState({ key: row.astS3Key, exists: astExists }),
     });
 
@@ -171,6 +182,7 @@ while (true) {
       .select({
         id: caseLawDecisions.id,
         textS3Key: caseLawDecisions.textS3Key,
+        normalizedS3Key: caseLawDecisions.normalizedS3Key,
         astS3Key: caseLawDecisions.astS3Key,
         contentHash: caseLawDecisions.contentHash,
         updatedAt: caseLawDecisions.updatedAt,

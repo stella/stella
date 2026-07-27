@@ -21,21 +21,41 @@ describe("corpusObjectState", () => {
 });
 
 describe("planColumnTrim", () => {
-  test("trims only when both objects are verified", () => {
-    expect(planColumnTrim({ text: "verified", ast: "verified" })).toEqual({
-      type: "trim",
-    });
+  test("trims only when all three objects are verified", () => {
+    expect(
+      planColumnTrim({
+        text: "verified",
+        sections: "verified",
+        ast: "verified",
+      }),
+    ).toEqual({ type: "trim" });
   });
 
   test("one unverified object blocks the trim", () => {
-    for (const [text, ast] of [
-      ["verified", "object-missing"],
-      ["object-missing", "verified"],
-      ["verified", "key-missing"],
-      ["key-missing", "key-missing"],
+    for (const [text, sections, ast] of [
+      ["object-missing", "verified", "verified"],
+      ["verified", "object-missing", "verified"],
+      ["verified", "verified", "object-missing"],
+      ["verified", "key-missing", "verified"],
+      ["verified", "verified", "key-missing"],
+      ["key-missing", "key-missing", "key-missing"],
     ] as const) {
-      expect(planColumnTrim({ text, ast }).type).toBe("skip");
+      expect(planColumnTrim({ text, sections, ast }).type).toBe("skip");
     }
+  });
+
+  test("the skip reason names every object's state", () => {
+    const decision = planColumnTrim({
+      text: "verified",
+      sections: "object-missing",
+      ast: "verified",
+    });
+    if (decision.type !== "skip") {
+      throw new Error("expected a skip");
+    }
+    expect(decision.reason).toBe(
+      "text=verified sections=object-missing ast=verified",
+    );
   });
 });
 

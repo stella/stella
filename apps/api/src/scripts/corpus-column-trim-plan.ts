@@ -40,22 +40,32 @@ export type ColumnTrimDecision =
 
 type ColumnTrimInput = {
   text: CorpusObjectState;
+  sections: CorpusObjectState;
   ast: CorpusObjectState;
 };
 
 /**
- * Nulling the Postgres columns destroys the only other copy, so both
- * objects must be proven present first. Keys are content-addressed, which
- * makes an existence check a sufficient verification.
+ * Nulling the Postgres columns destroys the only other copy, so every
+ * object the trim relies on must be proven present first — sections
+ * included, since `sections` is nulled alongside `fulltext` and
+ * `document_ast`. `writeCorpusDocument` always writes all three objects
+ * (a null payload is stored as the JSON literal `null`), so a row backed
+ * by object storage carries all three keys; a missing one means the row
+ * was never written by the corpus writer. Keys are content-addressed,
+ * which makes an existence check a sufficient verification.
  */
 export const planColumnTrim = ({
   text,
+  sections,
   ast,
 }: ColumnTrimInput): ColumnTrimDecision => {
-  if (text === "verified" && ast === "verified") {
+  if (text === "verified" && sections === "verified" && ast === "verified") {
     return { type: "trim" };
   }
-  return { type: "skip", reason: `text=${text} ast=${ast}` };
+  return {
+    type: "skip",
+    reason: `text=${text} sections=${sections} ast=${ast}`,
+  };
 };
 
 export type ColumnTrimGate =

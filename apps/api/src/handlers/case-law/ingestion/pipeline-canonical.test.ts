@@ -8,12 +8,14 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { WriteCorpusResult } from "@/api/handlers/case-law/corpus-storage";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 
 /**
- * `canonical` storage mode moves the payload out of Postgres, so the two
- * things a type can't check are the ordering (objects must exist before
- * any row points at them) and the failure shape (no row at all, and a held
- * cursor so the next cycle retries).
+ * `canonical` storage mode moves the payload out of Postgres, so what a
+ * type cannot check is the ordering (objects must exist before any row
+ * points at them), the failure shape (no row at all, and a held cursor so
+ * the next cycle retries), and the compensation when the row write is the
+ * half that fails.
  */
 
 const realEnvBase = await import("@/api/env-base");
@@ -22,17 +24,26 @@ const realEnvBase = await import("@/api/env-base");
 const events: string[] = [];
 const insertedRows: Record<string, unknown>[] = [];
 
+const CORPUS_KEYS = {
+  textKey: "corpus/text.zst",
+  sectionsKey: "corpus/sections.json.zst",
+  astKey: "corpus/ast.json.zst",
+} as const;
+
 const writeCorpusDocumentMock = mock(
   async (input: { documentId: string }): Promise<WriteCorpusResult> => {
     events.push(`corpus-write:${input.documentId}`);
     return await Promise.resolve({
-      textKey: "corpus/text.zst",
-      sectionsKey: "corpus/sections.json.zst",
-      astKey: "corpus/ast.json.zst",
+      ...CORPUS_KEYS,
       contentHash: "content-hash",
     });
   },
 );
+
+const deleteCorpusDocumentMock = mock(async (): Promise<void> => {
+  events.push("corpus-delete");
+  await Promise.resolve();
+});
 
 void mock.module("@/api/env-base", () => ({
   ...realEnvBase,
@@ -41,6 +52,7 @@ void mock.module("@/api/env-base", () => ({
 
 void mock.module("@/api/handlers/case-law/corpus-storage", () => ({
   writeCorpusDocument: writeCorpusDocumentMock,
+  deleteCorpusDocument: deleteCorpusDocumentMock,
 }));
 
 const { czNsAdapter } =
@@ -51,13 +63,17 @@ const { processDecision, runIngestionPipeline } =
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
 
 let persistedCursor: string | null | undefined;
+/** Arms the decision insert to reject, standing in for a failed row write. */
+let failRowWrite = false;
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
   events.length = 0;
   insertedRows.length = 0;
   persistedCursor = undefined;
+  failRowWrite = false;
   writeCorpusDocumentMock.mockClear();
+  deleteCorpusDocumentMock.mockClear();
 });
 
 const decision: IngestionResult = {
@@ -86,12 +102,24 @@ const scopedDb: ScopedDb = async (callback) => {
     }),
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => {
-        events.push("row-insert");
-        if (table === caseLawDecisions) {
-          insertedRows.push(values);
+        const rejects = failRowWrite && table === caseLawDecisions;
+        if (!rejects) {
+          events.push("row-insert");
+          if (table === caseLawDecisions) {
+            insertedRows.push(values);
+          }
         }
         return {
-          returning: async () => await Promise.resolve([{ id: values["id"] }]),
+          returning: async () =>
+            rejects
+              ? await Promise.reject(
+                  new TimeoutError({
+                    message: "decision write exceeded deadline",
+                    label: "ingestion-db-transaction",
+                    timeoutMs: 10,
+                  }),
+                )
+              : await Promise.resolve([{ id: values["id"] }]),
         };
       },
     }),
@@ -162,6 +190,29 @@ describe("processDecision — canonical storage mode", () => {
       s3UploadFailed: true,
     });
     expect(events).toEqual(["corpus-write-failed"]);
+    expect(insertedRows).toHaveLength(0);
+  });
+
+  test("discards the objects and rethrows when the row write fails", async () => {
+    failRowWrite = true;
+
+    // bun-types declares `.rejects.toBe` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection: unknown = await processDecision(
+      decision,
+      createSafeId<"caseLawSource">(),
+      scopedDb,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    // The pipeline's halt logic branches on the error's own type, so the
+    // rethrow must surface the driver error, not a Result wrapper.
+    expect(rejection).toBeInstanceOf(TimeoutError);
+    // Nothing references the objects the canonical write left behind: a
+    // retry mints a new decision id, so they have to go.
+    expect(deleteCorpusDocumentMock).toHaveBeenCalledWith({ ...CORPUS_KEYS });
     expect(insertedRows).toHaveLength(0);
   });
 });

@@ -163,6 +163,21 @@ export class HealthCheckError extends TaggedError("HealthCheckError")<{
   cause?: unknown;
 }>() {}
 
+/**
+ * A legal-corpus object could not be read and the row carries no Postgres
+ * copy to serve instead. Under canonical corpus storage (or after a column
+ * trim) the object *is* the document, so an object-storage outage has to
+ * surface as a failure rather than an empty body.
+ */
+export class CorpusPayloadUnavailableError extends TaggedError(
+  "CorpusPayloadUnavailableError",
+)<{
+  message: string;
+  documentId: string;
+  key: string;
+  cause?: unknown;
+}>() {}
+
 /** Validation/domain-layer errors: no valid inputs, invalid config. */
 export class WorkflowValidationError extends TaggedError(
   "WorkflowValidationError",

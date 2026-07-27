@@ -16,7 +16,10 @@ import {
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
 import type { WriteCorpusResult } from "@/api/handlers/case-law/corpus-storage";
-import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
+import {
+  deleteCorpusDocument,
+  writeCorpusDocument,
+} from "@/api/handlers/case-law/corpus-storage";
 import {
   caseLawDecisionSlugCollisionFilter,
   createAvailableCaseLawDecisionSlug,
@@ -362,6 +365,39 @@ const planCorpusWrite = async ({
 };
 
 /**
+ * A canonical write puts the objects in the bucket before the row exists, so
+ * a failed row write leaves them unreferenced: the retry mints a new decision
+ * id and keys its objects under that instead, and nothing ever points at
+ * these again. Delete them best-effort; a failure here is telemetry only,
+ * because the caller still has to surface the original row-write error.
+ *
+ * Only sound for a decision that had no row yet. On a refresh the keys are
+ * derived from the existing id and the payload hash, so the row on disk may
+ * already reference these exact objects (a re-parse that reproduces the same
+ * payload rewrites the identical bytes) and deleting them would empty a live
+ * decision.
+ */
+const discardOrphanedCorpusObjects = async (
+  written: WriteCorpusResult,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<void> => {
+  const discarded = await Result.tryPromise(
+    async () =>
+      await deleteCorpusDocument({
+        textKey: written.textKey,
+        sectionsKey: written.sectionsKey,
+        astKey: written.astKey,
+      }),
+  );
+  if (Result.isError(discarded)) {
+    captureError(discarded.error, {
+      decisionId,
+      step: "processDecision.canonicalCorpusCleanup",
+    });
+  }
+};
+
+/**
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
  */
@@ -528,12 +564,80 @@ export const processDecision = async (
           documentAst: result.documentAst,
         };
 
-  await scopedDb(async (tx) => {
-    // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-    if (existing) {
-      await tx
-        .update(caseLawDecisions)
-        .set({
+  const writeDecisionRow = async (): Promise<void> => {
+    await scopedDb(async (tx) => {
+      // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
+      if (existing) {
+        await tx
+          .update(caseLawDecisions)
+          .set({
+            ecli: result.ecli,
+            court: result.court,
+            country: result.country,
+            language: result.language,
+            languageGroupKey,
+            decisionDate: result.decisionDate,
+            decisionType: result.decisionType,
+            ...payloadColumns,
+            sourceUrl: result.sourceUrl,
+            documentUrl: result.documentUrl,
+            metadata: result.metadata,
+            sourceRaw: null,
+            sourceRawS3Key,
+            sourceRawContentType,
+            parserVersion: result.parserVersion ?? 0,
+            // When S3 upload failed, keep the old sourceHash so the
+            // next ingestion cycle sees a hash mismatch and retries
+            // the upload instead of permanently skipping the decision.
+            sourceHash: s3UploadFailed ? existing.sourceHash : result.rawHash,
+            // Clear indexedHash so the corpus indexer re-picks this row even
+            // when only metadata changed (its staleness check compares
+            // indexedHash to contentHash, which only tracks the payload).
+            indexedHash: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(caseLawDecisions.id, existing.id));
+
+        await tx
+          .delete(caseLawCitations)
+          .where(eq(caseLawCitations.citingDecisionId, existing.id));
+
+        if (citations.length > 0) {
+          await tx.insert(caseLawCitations).values(
+            citations.map((c) => ({
+              citingDecisionId: existing.id,
+              citationText: c.citationText,
+              sectionIndex: c.sectionIndex,
+            })),
+          );
+        }
+
+        return;
+      }
+
+      const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
+      const existingSlugRows = await tx
+        .select({ slug: caseLawDecisions.slug })
+        .from(caseLawDecisions)
+        .where(
+          caseLawDecisionSlugCollisionFilter({
+            baseSlug,
+            maxSuffix: LIMITS.caseLawSlugCollisionScanLimit + 1,
+          }),
+        )
+        .limit(LIMITS.caseLawSlugCollisionScanLimit);
+      const slug = createAvailableCaseLawDecisionSlug(
+        baseSlug,
+        existingSlugRows.map((row) => row.slug),
+      );
+
+      const [decisionRow] = await tx
+        .insert(caseLawDecisions)
+        .values({
+          id: decisionId,
+          sourceId,
+          caseNumber: result.caseNumber,
+          slug,
           ecli: result.ecli,
           court: result.court,
           country: result.country,
@@ -545,95 +649,43 @@ export const processDecision = async (
           sourceUrl: result.sourceUrl,
           documentUrl: result.documentUrl,
           metadata: result.metadata,
+          parserVersion: result.parserVersion ?? 0,
           sourceRaw: null,
           sourceRawS3Key,
           sourceRawContentType,
-          parserVersion: result.parserVersion ?? 0,
-          // When S3 upload failed, keep the old sourceHash so the
-          // next ingestion cycle sees a hash mismatch and retries
-          // the upload instead of permanently skipping the decision.
-          sourceHash: s3UploadFailed ? existing.sourceHash : result.rawHash,
-          // Clear indexedHash so the corpus indexer re-picks this row even
-          // when only metadata changed (its staleness check compares
-          // indexedHash to contentHash, which only tracks the payload).
-          indexedHash: null,
-          updatedAt: new Date(),
+          sourceHash: result.rawHash,
         })
-        .where(eq(caseLawDecisions.id, existing.id));
+        .returning({ id: caseLawDecisions.id });
 
-      await tx
-        .delete(caseLawCitations)
-        .where(eq(caseLawCitations.citingDecisionId, existing.id));
+      if (!decisionRow) {
+        panic("Failed to insert decision: no row returned");
+      }
 
       if (citations.length > 0) {
         await tx.insert(caseLawCitations).values(
           citations.map((c) => ({
-            citingDecisionId: existing.id,
+            citingDecisionId: decisionRow.id,
             citationText: c.citationText,
             sectionIndex: c.sectionIndex,
           })),
         );
       }
+    });
+  };
 
-      return;
-    }
-
-    const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
-    const existingSlugRows = await tx
-      .select({ slug: caseLawDecisions.slug })
-      .from(caseLawDecisions)
-      .where(
-        caseLawDecisionSlugCollisionFilter({
-          baseSlug,
-          maxSuffix: LIMITS.caseLawSlugCollisionScanLimit + 1,
-        }),
-      )
-      .limit(LIMITS.caseLawSlugCollisionScanLimit);
-    const slug = createAvailableCaseLawDecisionSlug(
-      baseSlug,
-      existingSlugRows.map((row) => row.slug),
-    );
-
-    const [decisionRow] = await tx
-      .insert(caseLawDecisions)
-      .values({
-        id: decisionId,
-        sourceId,
-        caseNumber: result.caseNumber,
-        slug,
-        ecli: result.ecli,
-        court: result.court,
-        country: result.country,
-        language: result.language,
-        languageGroupKey,
-        decisionDate: result.decisionDate,
-        decisionType: result.decisionType,
-        ...payloadColumns,
-        sourceUrl: result.sourceUrl,
-        documentUrl: result.documentUrl,
-        metadata: result.metadata,
-        parserVersion: result.parserVersion ?? 0,
-        sourceRaw: null,
-        sourceRawS3Key,
-        sourceRawContentType,
-        sourceHash: result.rawHash,
-      })
-      .returning({ id: caseLawDecisions.id });
-
-    if (!decisionRow) {
-      panic("Failed to insert decision: no row returned");
-    }
-
-    if (citations.length > 0) {
-      await tx.insert(caseLawCitations).values(
-        citations.map((c) => ({
-          citingDecisionId: decisionRow.id,
-          citationText: c.citationText,
-          sectionIndex: c.sectionIndex,
-        })),
-      );
-    }
+  // Pass the original error through: the pipeline's halt semantics inspect
+  // its type (a TimeoutError holds the cursor), which a wrapper would hide.
+  const rowWrite = await Result.tryPromise({
+    try: writeDecisionRow,
+    catch: (cause: unknown) => cause,
   });
+
+  if (Result.isError(rowWrite)) {
+    if (corpusPlan.type === "object-storage" && !existing) {
+      await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
+    }
+    throw rowWrite.error;
+  }
 
   // Mirror text/sections/AST to object storage, then record the keys +
   // content hash. Done outside the DB transaction (S3 I/O must not hold a

@@ -1,5 +1,3 @@
-import type { LegalSearchEngine } from "@/api/lib/legal-search/types";
-
 /**
  * Where a legal-corpus document's canonical payload (text, sections, AST)
  * lives.
@@ -31,7 +29,15 @@ export const resolveCorpusStorageMode = ({
 
 type CorpusStorageInvariantInput = {
   mode: CorpusStorageMode;
-  searchProvider: LegalSearchEngine;
+  /**
+   * Mirrors LEGAL_SEARCH_ENGINES. Spelled out rather than imported so this
+   * module stays a leaf: `env-base` imports it, and pulling in the
+   * legal-search types from here would drag the whole search/db graph into
+   * every project that typechecks `env-base`. A new engine widens
+   * LEGAL_SEARCH_PROVIDER and fails at the call site, so it cannot drift
+   * silently.
+   */
+  searchProvider: "pg-fts" | "corpus-index";
   corpusBucket: string | undefined;
   isDev: boolean;
 };

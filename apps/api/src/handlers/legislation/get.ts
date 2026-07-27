@@ -9,11 +9,11 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
   readCorpusAst,
+  readCorpusPayloadOrFallback,
   readCorpusText,
 } from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -80,23 +80,27 @@ export const readLegislationHandler = async (
 
   const corpus = corpusStorageMode !== "off";
 
-  let documentAst: DocumentAst | EmptyAst | null = pgAst;
-  if (corpus && astS3Key !== null) {
-    try {
-      documentAst = await readCorpusAst(astS3Key);
-    } catch (error) {
-      captureError(error, { documentId, step: "readLegislation.corpusAst" });
-    }
-  }
+  const documentAst: DocumentAst | EmptyAst | null =
+    corpus && astS3Key !== null
+      ? await readCorpusPayloadOrFallback({
+          documentId,
+          key: astS3Key,
+          step: "readLegislation.corpusAst",
+          read: async () => await readCorpusAst(astS3Key),
+          fallback: () => pgAst,
+        })
+      : pgAst;
 
-  let fulltext = pgText;
-  if (corpus && textS3Key !== null) {
-    try {
-      fulltext = await readCorpusText(textS3Key);
-    } catch (error) {
-      captureError(error, { documentId, step: "readLegislation.corpusText" });
-    }
-  }
+  const fulltext =
+    corpus && textS3Key !== null
+      ? await readCorpusPayloadOrFallback({
+          documentId,
+          key: textS3Key,
+          step: "readLegislation.corpusText",
+          read: async () => await readCorpusText(textS3Key),
+          fallback: () => pgText,
+        })
+      : pgText;
 
   return { ...rest, documentAst, fulltext };
 };

@@ -28,6 +28,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedCaseLawDecisionId,
@@ -938,19 +939,23 @@ const loadSearchHitContent = async ({
   scopedDb,
 }: LoadSearchHitContentOptions): Promise<string> => {
   if (hit.type === "case-law") {
+    const decisionId = brandPersistedCaseLawDecisionId(hit.decisionId);
     const rows = await scopedDb((tx) =>
       tx
         .select({ searchableText: caseLawSearchDocuments.searchableText })
         .from(caseLawSearchDocuments)
-        .where(
-          eq(
-            caseLawSearchDocuments.decisionId,
-            brandPersistedCaseLawDecisionId(hit.decisionId),
-          ),
-        )
+        .where(eq(caseLawSearchDocuments.decisionId, decisionId))
         .limit(1),
     );
-    return compactContent(rows.at(0)?.searchableText);
+    const projected = compactContent(rows.at(0)?.searchableText);
+    if (projected) {
+      return projected;
+    }
+    // The pg-fts projection is not the canonical body: a canonically stored
+    // decision never gets one, and a column trim deletes it. Fall through to
+    // the corpus-aware read so the citation still carries its text.
+    const context = await loadDocumentContext(decisionId);
+    return compactContent(context?.fulltext ?? undefined);
   }
 
   if (hit.type === "contact") {
