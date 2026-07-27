@@ -1011,7 +1011,9 @@ jobs:
   # dev server, then runs the E2E specs under
   # apps/web/e2e/. Catches integration regressions that
   # lint/typecheck/unit tests miss (auth, routing, upload flow,
-  # document rendering).
+  # document rendering). Finishes with the landing suite against a
+  # built `astro preview`, which is the only place bundler-only
+  # island regressions are visible.
   e2e:
     needs: trust-check
     if: >-
@@ -1043,7 +1045,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/web/*|apps/api/*|apps/landing/src/data/products/*|apps/landing/public/media/products/*|packages/*|patches/*|docker-compose.yml|bun.lock|package.json|.github/workflows/ci.yml)
+              apps/web/*|apps/api/*|apps/landing/*|packages/*|patches/*|docker-compose.yml|bun.lock|package.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -1202,6 +1204,42 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/web test:e2e:marketing
 
+      - name: Build landing
+        if: steps.changed.outputs.run == 'true'
+        # The landing specs must run against the built bundle, not `astro dev`.
+        # The live anonymization demo's failure mode is a dictionary import
+        # that only a bundler can get wrong: unbundled dev serves the same
+        # specifier straight off disk and passes either way.
+        run: bun --filter @stll/landing build
+
+      - name: Start landing preview server
+        if: steps.changed.outputs.run == 'true'
+        # `astro preview` serves dist/ with astro.config.mjs's COOP/COEP
+        # headers, which the demo's wasm runtime needs (SharedArrayBuffer is
+        # only exposed to a cross-origin-isolated page).
+        run: |
+          cd apps/landing
+          nohup bun --bun astro preview --port 4321 > /tmp/landing.log 2>&1 &
+          echo $! > /tmp/landing.pid
+
+      - name: Wait for landing
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          for i in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:4321 > /dev/null 2>&1; then
+              echo "Landing up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Landing preview never came up"
+          tail -200 /tmp/landing.log || true
+          exit 1
+
+      - name: Check landing islands
+        if: steps.changed.outputs.run == 'true'
+        run: E2E_LANDING_URL=http://localhost:4321 bun --filter @stll/web test:e2e:landing
+
       # Flake guard: the dev server's dependency optimizer must finish during
       # the cold pass. A second pass mid-session prints "optimized dependencies
       # changed. reloading" and forces a full-page reload that can tear the page
@@ -1234,6 +1272,7 @@ jobs:
           path: |
             /tmp/api.log
             /tmp/web.log
+            /tmp/landing.log
           retention-days: 7
 
   # Image dependency guard. The API and legal-atlas-runner Dockerfiles use

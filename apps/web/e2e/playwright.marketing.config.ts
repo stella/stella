@@ -24,8 +24,10 @@ export default defineConfig({
   },
   // Two targets share this suite: the app (screenshot captures of product
   // surfaces) and the landing site itself (island/navigation guards). The
-  // package scripts select a project explicitly; CI's marketing job runs
-  // only the app project.
+  // package scripts select a project explicitly; CI's e2e job runs the app
+  // project against the web dev server, then the landing project against a
+  // built `astro preview` (bundler-only island regressions are invisible to
+  // `astro dev`).
   projects: [
     {
       name: "app",
