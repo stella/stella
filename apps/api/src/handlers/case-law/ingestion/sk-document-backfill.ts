@@ -419,10 +419,23 @@ export const loadPendingDocuments = async (
   return [...requested, ...remaining];
 };
 
+/**
+ * The corpus writer this store uses, or null where corpus storage is
+ * off and the Postgres columns are the whole of it.
+ */
+export const corpusDocumentWriter = (): typeof writeCorpusDocument | null =>
+  corpusStorageMode === "off" ? null : writeCorpusDocument;
+
 export type StoreBackfilledDocumentOptions = {
   decision: PendingDocument;
   document: BackfilledDocument;
   scopedDb: ScopedDb;
+  /**
+   * Seam for tests, which drive the corpus path without a bucket and
+   * without depending on which module happened to read the environment
+   * first. Production passes nothing.
+   */
+  writeCorpus?: typeof writeCorpusDocument | null;
 };
 
 /**
@@ -456,12 +469,13 @@ export const storeBackfilledDocument = async ({
   decision,
   document,
   scopedDb,
+  writeCorpus = corpusDocumentWriter(),
 }: StoreBackfilledDocumentOptions): Promise<void> => {
   const sections = document.sections.length > 0 ? document.sections : null;
   const corpus =
-    corpusStorageMode === "off"
+    writeCorpus === null
       ? null
-      : await writeCorpusDocument({
+      : await writeCorpus({
           documentId: decision.id,
           jurisdiction: decision.country,
           text: document.fulltext,
