@@ -27,20 +27,61 @@ import {
   USAGE_SERVICE_TIERS,
 } from "./skills";
 
+export const USAGE_POLICY_KINDS = ["subscription", "addon"] as const;
+export type UsagePolicyKind = (typeof USAGE_POLICY_KINDS)[number];
+
+export const USAGE_POLICY_BILLING_INTERVALS = [
+  "month",
+  "year",
+  "one_time",
+] as const;
+export type UsagePolicyBillingInterval =
+  (typeof USAGE_POLICY_BILLING_INTERVALS)[number];
+
+export const USAGE_POLICY_VISIBILITIES = ["public", "hidden"] as const;
+export type UsagePolicyVisibility = (typeof USAGE_POLICY_VISIBILITIES)[number];
+
 export const usagePolicies = p.pgTable(
   "usage_policies",
   {
     id: pUuid<"usagePolicy">().primaryKey(),
     policyKey: p.varchar("policy_key", { length: 64 }).notNull(),
     displayName: p.varchar("display_name", { length: 128 }).notNull(),
+    description: p.text(),
+    kind: p
+      .text({ enum: USAGE_POLICY_KINDS })
+      .notNull()
+      .default("subscription"),
     monthlyUsageUnits: p.integer("monthly_usage_units").notNull(),
     hostedPolicyRef: p.text("hosted_policy_ref"),
+    // Catalog display data is deployment-owned (seeded from operator
+    // config), so public source carries the mechanism, not a price list.
+    priceAmountCents: p.integer("price_amount_cents"),
+    priceCurrency: p.varchar("price_currency", { length: 3 }),
+    billingInterval: p.text("billing_interval", {
+      enum: USAGE_POLICY_BILLING_INTERVALS,
+    }),
+    // Hidden by default: a seeded policy only appears in the catalog
+    // endpoint once the operator explicitly marks it public.
+    visibility: p
+      .text({ enum: USAGE_POLICY_VISIBILITIES })
+      .notNull()
+      .default("hidden"),
+    sortOrder: p.integer("sort_order").notNull().default(0),
     active: p.boolean().notNull().default(true),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("usage_policies_key_active_idx").on(table.policyKey, table.active),
     p.uniqueIndex("usage_policies_policy_key_uidx").on(table.policyKey),
+    p.check(
+      "usage_policies_price_amount_nonneg",
+      sql`price_amount_cents IS NULL OR price_amount_cents >= 0`,
+    ),
+    p.check(
+      "usage_policies_price_fields_consistent",
+      sql`(price_amount_cents IS NULL) = (price_currency IS NULL) AND (price_amount_cents IS NULL OR billing_interval IS NOT NULL)`,
+    ),
     p
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
       .on(table.hostedPolicyRef)

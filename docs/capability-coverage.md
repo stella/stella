@@ -459,7 +459,7 @@ mechanics, and similar), not gaps in coverage.
 | deploy_mechanics       | 1     |
 | document_processing    | 9     |
 | health_infra           | 1     |
-| hosted_billing         | 2     |
+| hosted_billing         | 3     |
 | mcp_transport          | 11    |
 | native_tool_ui         | 3     |
 | provider_secret        | 14    |
@@ -469,4 +469,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 4     |
 | url_preview            | 2     |
 
-Total: 87
+Total: 88
