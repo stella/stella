@@ -49,6 +49,7 @@ const createHostedSetup = createSafeRootHandler(
             id: usagePolicies.id,
             active: usagePolicies.active,
             kind: usagePolicies.kind,
+            visibility: usagePolicies.visibility,
             hostedPolicyRef: usagePolicies.hostedPolicyRef,
           })
           .from(usagePolicies)
@@ -58,7 +59,14 @@ const createHostedSetup = createSafeRootHandler(
         if (!policy) {
           return { kind: "policy_not_found" as const };
         }
-        if (!policy.active || !policy.hostedPolicyRef) {
+        // Retired offers are hidden by the seeder, not deleted; a client
+        // holding a stale policy id must not be able to start checkout
+        // for something the catalog no longer advertises.
+        if (
+          !policy.active ||
+          !policy.hostedPolicyRef ||
+          policy.visibility !== "public"
+        ) {
           return { kind: "policy_not_hosted" as const };
         }
 
