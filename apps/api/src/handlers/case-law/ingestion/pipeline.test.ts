@@ -10,6 +10,7 @@ import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
+  corpusWriteErrorDetail,
   runIngestionPipeline,
   sanitizeResult,
 } from "@/api/handlers/case-law/ingestion/pipeline";
@@ -406,5 +407,28 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
     expect(result.pagesProcessed).toBe(1);
     expect(result.nextCursor).toBe("cursor-2");
     expect(persistedCursor).toBe("cursor-2");
+  });
+});
+
+describe("corpusWriteErrorDetail", () => {
+  test("keeps the cause when the outer message is long", () => {
+    const cause = new Error("connection reset by peer");
+    const outer = new Error(`Failed query: ${"select ".repeat(200)}`, {
+      cause,
+    });
+    const detail = corpusWriteErrorDetail(outer);
+    expect(detail).toContain("connection reset by peer");
+    expect(detail.length).toBeLessThanOrEqual(200 + 300 + 16);
+  });
+
+  test("bounds the cause independently of the outer message", () => {
+    const cause = new Error("x".repeat(1000));
+    const detail = corpusWriteErrorDetail(new Error("short", { cause }));
+    expect(detail.startsWith("short (cause: ")).toBe(true);
+    expect(detail.length).toBeLessThanOrEqual(200 + 300 + 16);
+  });
+
+  test("stringifies non-Error values", () => {
+    expect(corpusWriteErrorDetail("boom")).toBe("boom");
   });
 });

@@ -93,6 +93,22 @@ type PipelineResult = {
 const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
 
+/**
+ * Bound the outer message and the cause separately: a wrapped driver
+ * error carries the full failed query in its outer message, which would
+ * otherwise consume the whole budget and truncate the cause — the part
+ * that says why the write failed.
+ */
+export const corpusWriteErrorDetail = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return String(error).slice(0, 512);
+  }
+  const outer = error.message.slice(0, 200);
+  return error.cause instanceof Error
+    ? `${outer} (cause: ${error.cause.message.slice(0, 300)})`
+    : outer;
+};
+
 type ProcessResult = {
   inserted: boolean;
   searchVectorFailed: boolean;
@@ -568,10 +584,7 @@ export const processDecision = async (
         caseNumber: result.caseNumber,
         country: result.country,
         "error.type": errorTag(error),
-        "error.detail": (error instanceof Error
-          ? `${error.message}${error.cause instanceof Error ? ` (cause: ${error.cause.message})` : ""}`
-          : String(error)
-        ).slice(0, 512),
+        "error.detail": corpusWriteErrorDetail(error),
       });
       captureError(error, { decisionId, step: "processDecision.corpusWrite" });
       await preserveCorpusWriteRetry({
