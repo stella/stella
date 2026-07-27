@@ -91,7 +91,8 @@ const createHostedSetup = createSafeRootHandler(
         // front rather than accepting money we cannot apply.
         if (policy.kind === "addon") {
           const consumable =
-            entitlement?.hostedAccountRef &&
+            entitlement !== undefined &&
+            entitlement.hostedAccountRef !== null &&
             entitlement.status !== "cancelled" &&
             entitlement.status !== "paused" &&
             entitlement.currentPeriodEnd > new Date();
