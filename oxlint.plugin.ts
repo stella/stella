@@ -23,8 +23,8 @@ type RuleContext = {
  * a computed specifier survives bundling as a runtime-relative path
  * that does not exist in dist (the published artifact), failing only
  * at runtime for package consumers. Contexts that resolve imports at
- * runtime instead of bundling (tests, the data package, bench) opt
- * out via overrides in oxlint.config.ts.
+ * runtime instead of bundling (tests, bench) opt out via overrides in
+ * oxlint.config.ts.
  */
 const noDynamicImportSpecifier = {
   meta: {
@@ -37,8 +37,8 @@ const noDynamicImportSpecifier = {
       dynamicSpecifier:
         "Computed import() specifiers cannot be resolved by the bundler and break in dist. " +
         "Use a registry of literal import specifiers instead " +
-        "(see NONWESTERN_NAME_IMPORTS in packages/anonymize/src/detectors/names.ts " +
-        "or the language registries in packages/anonymize/src/util/lang-loader.ts).",
+        "(see LOADERS in packages/data/dictionaries/index.ts, or " +
+        "CITY_LOADERS in packages/data/dictionaries/city-loaders.ts for a generated one).",
     },
     schema: [],
   },

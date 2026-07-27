@@ -40,11 +40,11 @@
         "@stll/anonymize-darwin-x64": "2.6.3",
         "@stll/anonymize-linux-arm64-gnu": "2.6.3",
         "@stll/anonymize-linux-x64-gnu": "2.6.3",
-        "@stll/anonymize-wasm": "2.6.2",
+        "@stll/anonymize-wasm": "2.6.3",
         "@stll/anonymize-win32-x64-msvc": "2.6.3",
       },
       "peerDependencies": {
-        "@stll/anonymize-data": "^0.0.7",
+        "@stll/anonymize-data": "^0.0.8",
       },
       "optionalPeers": [
         "@stll/anonymize-data",
@@ -130,7 +130,7 @@
     },
     "packages/data": {
       "name": "@stll/anonymize-data",
-      "version": "0.0.7",
+      "version": "0.0.8",
       "devDependencies": {
         "stopwords-iso": "1.1.0",
         "tsdown": "0.22.12",

@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-data",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Deny list dictionaries and config data for @stll/anonymize",
   "keywords": [
     "anonymization",
@@ -55,10 +55,13 @@
   "scripts": {
     "build": "tsdown",
     "prepublishOnly": "bun run build",
+    "test": "bun test",
     "typecheck": "bun ../../scripts/tsc-native.ts --noEmit",
+    "generate:city-loaders": "bun run scripts/generate-city-loaders.ts",
     "validate:triggers": "bun run scripts/validate-triggers.ts",
     "check:mirror": "node scripts/check-mirror.mjs",
-    "lint": "bun run validate:triggers && bun run check:mirror",
+    "check:city-loaders": "bun run scripts/generate-city-loaders.ts --check",
+    "lint": "bun run validate:triggers && bun run check:mirror && bun run check:city-loaders",
     "format": "oxfmt ."
   },
   "devDependencies": {

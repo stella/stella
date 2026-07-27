@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.8 (2026-07-27)
+
+### Fixes
+
+- Load city dictionaries through literal `import()` specifiers. The previous
+  computed specifier could not be rewritten by any bundler, so every bundled
+  consumer silently received empty city lists and under-redacted places.
+- A covered country whose dictionary fails to load now throws instead of
+  returning an empty list; uncovered countries still return an explicit empty.
+  New `hasCityDictionary()` and `CITY_DICTIONARY_COUNTRIES` exports make the
+  distinction checkable.
+
 ## 0.0.7 (2026-07-24)
 
 ### Fixes

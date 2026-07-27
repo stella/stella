@@ -4,6 +4,9 @@
  * via dynamic imports and cached after first load.
  */
 
+import type { CityCountryCode } from "./city-loaders";
+import { CITY_LOADERS } from "./city-loaders";
+
 export type DenyListCategory =
   | "Names"
   | "Places"
@@ -155,10 +158,10 @@ export const DICTIONARY_META = {
   },
 
   // ── Cities ─────────────────────────────────────────
-  // City dictionaries are loaded dynamically via
+  // City dictionaries are loaded by country code via
   // loadCityDictionary() — not registered here.
-  // See generate-cities.ts for the GeoNames pipeline.
-  // 230 countries available in cities/*.json.
+  // See generate-cities.ts for the GeoNames pipeline
+  // and city-loaders.ts for the loader map.
 
   // ── Courts ─────────────────────────────────────────
   "courts/AT": {
@@ -816,19 +819,55 @@ export const ALL_DICTIONARY_IDS: readonly DictionaryId[] = Object.keys(
   DICTIONARY_META,
 ).filter((k): k is DictionaryId => k in DICTIONARY_META);
 
-// ── City dictionaries (dynamic loading) ───────────
+// ── City dictionaries (by country code) ───────────
 //
-// City dictionaries cover 230 countries from GeoNames
-// (CC BY 4.0, pop > 5,000). They are loaded
-// dynamically by country code rather than being
-// registered in DICTIONARY_META, because the number
-// of countries would bloat the static type system.
+// City dictionaries come from GeoNames (CC BY 4.0,
+// pop > 5,000). They are keyed by country code in
+// CITY_LOADERS rather than registered in
+// DICTIONARY_META, because the number of countries
+// would bloat the static type system.
 
 const cityCache = new Map<string, readonly string[]>();
 
+const NO_CITY_DICTIONARY: readonly string[] = [];
+
+/** Country codes with a bundled city dictionary. */
+export const CITY_DICTIONARY_COUNTRIES: readonly string[] =
+  Object.keys(CITY_LOADERS);
+
+const isCityCountryCode = (code: string): code is CityCountryCode =>
+  code in CITY_LOADERS;
+
 /**
- * Load city names for a country. Returns an empty
- * array if no dictionary exists for the country.
+ * True when a city dictionary is bundled for the
+ * country. Distinguishes "not covered" from a covered
+ * country whose dictionary failed to load.
+ *
+ * @param countryCode ISO 3166-1 alpha-2 (e.g., "HU")
+ */
+export const hasCityDictionary = (countryCode: string): boolean =>
+  isCityCountryCode(countryCode.toUpperCase());
+
+const loadCityEntries = async (
+  cc: CityCountryCode,
+): Promise<readonly string[]> => {
+  try {
+    const mod = await CITY_LOADERS[cc]();
+    return mod.default;
+  } catch (cause) {
+    throw new Error(`Failed to load the city dictionary for ${cc}`, { cause });
+  }
+};
+
+/**
+ * Load city names for a country.
+ *
+ * Returns an empty array when no dictionary is bundled
+ * for the country; check coverage up front with
+ * `hasCityDictionary`. A covered country whose
+ * dictionary fails to load throws, because silently
+ * degrading to zero city names under-redacts without
+ * any signal.
  *
  * @param countryCode ISO 3166-1 alpha-2 (e.g., "HU")
  */
@@ -841,23 +880,14 @@ export const loadCityDictionary = async (
     return cached;
   }
 
-  try {
-    // SAFETY: dynamic import of JSON. The country code
-    // is validated to be 2 uppercase letters only.
-    if (!/^[A-Z]{2}$/.test(cc)) {
-      return [];
-    }
-    const mod = (await import(`../dictionaries/cities/${cc}.json`, {
-      with: { type: "json" },
-    })) as JsonModule;
-    const entries = mod.default;
-    cityCache.set(cc, entries);
-    return entries;
-  } catch {
-    // Dictionary not found for this country
-    cityCache.set(cc, []);
-    return [];
+  if (!isCityCountryCode(cc)) {
+    cityCache.set(cc, NO_CITY_DICTIONARY);
+    return NO_CITY_DICTIONARY;
   }
+
+  const entries = await loadCityEntries(cc);
+  cityCache.set(cc, entries);
+  return entries;
 };
 
 /**

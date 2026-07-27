@@ -96,7 +96,7 @@
     "format": "oxfmt ."
   },
   "peerDependencies": {
-    "@stll/anonymize-data": "^0.0.7"
+    "@stll/anonymize-data": "^0.0.8"
   },
   "peerDependenciesMeta": {
     "@stll/anonymize-data": {

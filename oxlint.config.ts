@@ -45,11 +45,11 @@ export default library({
     },
     {
       // Computed import() is safe where imports resolve at runtime
-      // instead of being bundled: the data package ships its raw
-      // dictionary JSON in the tarball (paths pinned by
-      // check-packlist), and tests/bench resolve package subpaths
-      // from node_modules.
-      files: ["packages/data/**", "packages/bench/**", "**/__test__/**"],
+      // instead of being bundled: tests and bench resolve package
+      // subpaths from node_modules. The data package is not exempt;
+      // its dictionaries reach bundled consumers through literal
+      // specifier maps (LOADERS, CITY_LOADERS).
+      files: ["packages/bench/**", "**/__test__/**"],
       rules: {
         "stll/no-dynamic-import-specifier": "off",
       },
