@@ -179,12 +179,12 @@ export const createPolarSetupSession = async ({
     },
   });
 
-export const createHostedSetupSession = (
+export const createHostedSetupSession = async (
   input: CreateHostedSetupInput,
 ): Promise<Result<CreateHostedSetupResult, HostedUsageProviderApiError>> =>
   getHostedUsageProviderKind() === "polar"
-    ? createPolarSetupSession(input)
-    : createNeutralSetupSession(input);
+    ? await createPolarSetupSession(input)
+    : await createNeutralSetupSession(input);
 
 type CreateHostedManagementInput = {
   credentials: HostedUsageProviderApiCredentials;
@@ -302,11 +302,11 @@ export const createPolarManagementSession = async ({
     },
   });
 
-export const createHostedManagementSession = (
+export const createHostedManagementSession = async (
   input: CreateHostedManagementInput,
 ): Promise<
   Result<CreateHostedManagementResult, HostedUsageProviderApiError>
 > =>
   getHostedUsageProviderKind() === "polar"
-    ? createPolarManagementSession(input)
-    : createNeutralManagementSession(input);
+    ? await createPolarManagementSession(input)
+    : await createNeutralManagementSession(input);

@@ -98,7 +98,8 @@ const handledAllocation = (
 // subscription; renewal orders carry a subscription_id and a
 // subscription_* billing reason.
 const isOneTimePurchase = (data: Record<string, unknown>): boolean =>
-  data["billing_reason"] === "purchase" && data["subscription_id"] == null;
+  data["billing_reason"] === "purchase" &&
+  (data["subscription_id"] === null || data["subscription_id"] === undefined);
 
 export const normalizePolarEvent = (
   raw: unknown,
