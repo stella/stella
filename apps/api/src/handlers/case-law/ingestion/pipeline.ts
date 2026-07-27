@@ -561,6 +561,18 @@ export const processDecision = async (
       });
     } catch (error) {
       s3UploadFailed = true;
+      // The halt reason only carries a failure count; without this line the
+      // cause of a held cursor is invisible to an operator reading the log.
+      logger.error("case_law.ingestion.corpus_write_failed", {
+        decisionId,
+        caseNumber: result.caseNumber,
+        country: result.country,
+        "error.type": errorTag(error),
+        "error.detail": (error instanceof Error
+          ? `${error.message}${error.cause instanceof Error ? ` (cause: ${error.cause.message})` : ""}`
+          : String(error)
+        ).slice(0, 512),
+      });
       captureError(error, { decisionId, step: "processDecision.corpusWrite" });
       await preserveCorpusWriteRetry({
         decisionId,
