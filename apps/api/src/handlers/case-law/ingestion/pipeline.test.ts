@@ -315,7 +315,11 @@ describe("runIngestionPipeline — database timeouts", () => {
               persistedCursor = values.syncCursor;
             }
 
-            return { where: async () => undefined };
+            return {
+              where: () => ({
+                returning: async () => [{ cursor: values.syncCursor ?? null }],
+              }),
+            };
           },
         }),
       };
@@ -382,7 +386,11 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
               persistedCursor = values.syncCursor;
             }
 
-            return { where: async () => undefined };
+            return {
+              where: () => ({
+                returning: async () => [{ cursor: values.syncCursor ?? null }],
+              }),
+            };
           },
         }),
       };

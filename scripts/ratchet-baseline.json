@@ -45,7 +45,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 594,
+    "count": 592,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -70,7 +70,7 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/update-fixtures.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 11,
+      "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 10,
       "apps/api/src/handlers/case-law/ingestion/status.ts": 7,
       "apps/api/src/handlers/case-law/polarity/classifier.ts": 2,
       "apps/api/src/handlers/case-law/polarity/rule-engine.ts": 1,
@@ -120,7 +120,7 @@
       "apps/api/src/handlers/files/email-to-html.ts": 1,
       "apps/api/src/handlers/files/utils.ts": 1,
       "apps/api/src/handlers/legislation/corpus-index.ts": 2,
-      "apps/api/src/handlers/legislation/ingestion.ts": 5,
+      "apps/api/src/handlers/legislation/ingestion.ts": 4,
       "apps/api/src/handlers/legislation/search-index.ts": 2,
       "apps/api/src/handlers/legislation/search.ts": 1,
       "apps/api/src/handlers/mcp-connectors/connect.ts": 3,
