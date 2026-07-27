@@ -861,6 +861,12 @@ export const runCaseLawIngest = async (
   // semaphore with bounded concurrency and a generous statement
   // timeout so long texts don't block other work.
   const searchIndexLoop = (async () => {
+    // tsvector upkeep only ever serves the pg-fts provider. Under any other
+    // provider the rows created meanwhile stay pending, and the backfill
+    // catches them up if pg-fts is ever made the serving provider again.
+    if (envBase.LEGAL_SEARCH_PROVIDER !== "pg-fts") {
+      return;
+    }
     while (true) {
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
@@ -975,6 +981,10 @@ export const runCaseLawIngest = async (
   // Legislation pg-fts projection loop (mirrors searchIndexLoop). The
   // corpus daemon maintains both families' search projections.
   const legislationSearchIndexLoop = (async () => {
+    // Same invariant as searchIndexLoop: tsvector upkeep only serves pg-fts.
+    if (envBase.LEGAL_SEARCH_PROVIDER !== "pg-fts") {
+      return;
+    }
     while (true) {
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);

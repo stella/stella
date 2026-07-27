@@ -1,5 +1,5 @@
 import { rootDb } from "@/api/db/root";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import {
   readCorpusAst,
   readCorpusText,
@@ -34,7 +34,7 @@ export const loadDocumentContext = async (
     return null;
   }
 
-  const corpus = envBase.CORPUS_STORAGE_ENABLED;
+  const corpus = corpusStorageMode !== "off";
 
   let documentAst = decision.documentAst;
   if (corpus && decision.astS3Key !== null) {

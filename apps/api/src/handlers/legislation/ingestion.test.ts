@@ -16,7 +16,7 @@ import {
 } from "@/api/tests/pglite-schema";
 
 // Validates the legislation ingestion entry: store + upsert + source-hash
-// dedup. CORPUS_STORAGE_ENABLED is off in tests, so no S3 is touched.
+// dedup. The corpus storage mode is "off" in tests, so no S3 is touched.
 
 const allSchema = { ...schema, ...authSchema, ...rlsExports };
 

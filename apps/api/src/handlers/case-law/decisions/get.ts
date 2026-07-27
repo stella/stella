@@ -5,7 +5,7 @@ import { status } from "elysia";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import {
   allowsDerivedAi,
   isRedistributable,
@@ -113,7 +113,7 @@ const listPublicDecisionLanguageAlternates = async ({
   return dedupedAlternates.length > 1 ? dedupedAlternates : [];
 };
 
-const corpusReadEnabled = (): boolean => envBase.CORPUS_STORAGE_ENABLED;
+const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
 export const readDecisionHandler = async (
   decisionId: SafeId<"caseLawDecision">,

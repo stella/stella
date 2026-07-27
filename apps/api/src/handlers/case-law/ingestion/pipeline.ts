@@ -10,11 +10,12 @@ import {
   caseLawIngestionFailures,
   type caseLawSources,
 } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
+import type { WriteCorpusResult } from "@/api/handlers/case-law/corpus-storage";
 import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import {
   caseLawDecisionSlugCollisionFilter,
@@ -40,13 +41,16 @@ import {
   stripDangerousChars,
 } from "@/api/handlers/case-law/ingestion/sanitize";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
+import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
+import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -302,6 +306,62 @@ const preserveCorpusWriteRetry = async ({
 };
 
 /**
+ * Where this decision's canonical payload ends up.
+ *
+ * - `postgres-columns` the row carries text/sections/AST itself. Used by
+ *   `off`, and by `dual-write`, which mirrors the payload to object
+ *   storage once the row has landed.
+ * - `object-storage` the payload is already in the corpus bucket, so the
+ *   row stores the keys and leaves the columns NULL.
+ * - `write-failed` the canonical write did not land, so no row may be
+ *   written: the stale source hash is what makes the next cycle retry.
+ */
+type CorpusWritePlan =
+  | { type: "postgres-columns" }
+  | { type: "object-storage"; written: WriteCorpusResult }
+  | { type: "write-failed" };
+
+type PlanCorpusWriteInput = {
+  mode: CorpusStorageMode;
+  documentId: SafeId<"caseLawDecision">;
+  jurisdiction: string;
+  text: string | null;
+  sections: DecisionSection[] | null;
+  ast: IngestionResult["documentAst"];
+};
+
+const planCorpusWrite = async ({
+  mode,
+  ...payload
+}: PlanCorpusWriteInput): Promise<CorpusWritePlan> => {
+  switch (mode) {
+    case "off":
+    case "dual-write":
+      return { type: "postgres-columns" };
+    case "canonical": {
+      // Object storage first. It keeps the S3 round-trip out of the
+      // transaction (the same reason `dual-write` writes after commit)
+      // while guaranteeing no row can point at an object that is missing.
+      const written = await Result.tryPromise(
+        async () => await writeCorpusDocument(payload),
+      );
+      if (Result.isError(written)) {
+        captureError(written.error, {
+          decisionId: payload.documentId,
+          step: "processDecision.canonicalCorpusWrite",
+        });
+        return { type: "write-failed" };
+      }
+      return { type: "object-storage", written: written.value };
+    }
+    default: {
+      const unhandled: never = mode;
+      return panic(`Unhandled corpus storage mode: ${String(unhandled)}`);
+    }
+  }
+};
+
+/**
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
  */
@@ -430,7 +490,45 @@ export const processDecision = async (
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
-  const decisionId = await scopedDb(async (tx) => {
+  // Corpus objects are keyed on the decision id, so a canonical write needs
+  // that id before the row exists. Minting it here is what the column
+  // default (`pUuid`) would do at insert time anyway.
+  const decisionId = existing?.id ?? createSafeId<"caseLawDecision">();
+
+  const corpusPlan = await planCorpusWrite({
+    mode: corpusStorageMode,
+    documentId: decisionId,
+    jurisdiction: result.country,
+    text: result.fulltext ?? null,
+    sections: sections.length > 0 ? sections : null,
+    ast: result.documentAst,
+  });
+
+  if (corpusPlan.type === "write-failed") {
+    // Persist nothing: a row would advance sourceHash and the next cycle
+    // would dedup-skip the decision before it could retry the write. The
+    // caller counts this as an S3 failure, which holds the page cursor.
+    return { inserted: false, searchVectorFailed: false, s3UploadFailed: true };
+  }
+
+  const payloadColumns =
+    corpusPlan.type === "object-storage"
+      ? {
+          fulltext: null,
+          sections: null,
+          documentAst: null,
+          textS3Key: corpusPlan.written.textKey,
+          normalizedS3Key: corpusPlan.written.sectionsKey,
+          astS3Key: corpusPlan.written.astKey,
+          contentHash: corpusPlan.written.contentHash,
+        }
+      : {
+          fulltext: result.fulltext,
+          sections: sections.length > 0 ? sections : null,
+          documentAst: result.documentAst,
+        };
+
+  await scopedDb(async (tx) => {
     // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
     if (existing) {
       await tx
@@ -443,12 +541,10 @@ export const processDecision = async (
           languageGroupKey,
           decisionDate: result.decisionDate,
           decisionType: result.decisionType,
-          fulltext: result.fulltext,
-          sections: sections.length > 0 ? sections : null,
+          ...payloadColumns,
           sourceUrl: result.sourceUrl,
           documentUrl: result.documentUrl,
           metadata: result.metadata,
-          documentAst: result.documentAst,
           sourceRaw: null,
           sourceRawS3Key,
           sourceRawContentType,
@@ -479,7 +575,7 @@ export const processDecision = async (
         );
       }
 
-      return existing.id;
+      return;
     }
 
     const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
@@ -501,6 +597,7 @@ export const processDecision = async (
     const [decisionRow] = await tx
       .insert(caseLawDecisions)
       .values({
+        id: decisionId,
         sourceId,
         caseNumber: result.caseNumber,
         slug,
@@ -511,12 +608,10 @@ export const processDecision = async (
         languageGroupKey,
         decisionDate: result.decisionDate,
         decisionType: result.decisionType,
-        fulltext: result.fulltext,
-        sections: sections.length > 0 ? sections : null,
+        ...payloadColumns,
         sourceUrl: result.sourceUrl,
         documentUrl: result.documentUrl,
         metadata: result.metadata,
-        documentAst: result.documentAst,
         parserVersion: result.parserVersion ?? 0,
         sourceRaw: null,
         sourceRawS3Key,
@@ -538,16 +633,15 @@ export const processDecision = async (
         })),
       );
     }
-
-    return decisionRow.id;
   });
 
-  // Persist canonical text/sections/AST to object storage when enabled, then
-  // record the keys + content hash. Done outside the DB transaction (S3 I/O
-  // must not hold a transaction open). A failure leaves the row fully readable
-  // from its Postgres columns and preserves the source-hash mismatch so normal
-  // ingestion can retry the corpus write.
-  if (envBase.CORPUS_STORAGE_ENABLED) {
+  // Mirror text/sections/AST to object storage, then record the keys +
+  // content hash. Done outside the DB transaction (S3 I/O must not hold a
+  // transaction open). A failure leaves the row fully readable from its
+  // Postgres columns and preserves the source-hash mismatch so normal
+  // ingestion can retry the corpus write. `canonical` has already written
+  // its objects above, before the row.
+  if (corpusStorageMode === "dual-write") {
     // The sourceHash this call just persisted: corpus-key and retry
     // updates below only apply while the row still carries it, so a
     // slower run cannot overwrite a concurrent newer refresh.

@@ -111,9 +111,11 @@ export const caseLawDecisions = p.pgTable(
     citationAuthorityComputedAt: p.timestamp("citation_authority_computed_at"),
     /**
      * Object-storage keys for the canonical corpus payloads. Populated
-     * by the corpus-storage backfill / ingestion write when
-     * CORPUS_STORAGE_ENABLED. Null = canonical text still lives only in
-     * the `fulltext`/`sections`/`documentAst` columns (pre-migration).
+     * by the corpus-storage backfill / ingestion write whenever
+     * CORPUS_STORAGE_MODE is not "off". Null = canonical text still lives
+     * only in the `fulltext`/`sections`/`documentAst` columns
+     * (pre-migration). Under CORPUS_STORAGE_MODE=canonical the inverse
+     * holds: these are set and those columns are NULL.
      */
     textS3Key: p.varchar("text_s3_key", { length: 512 }),
     normalizedS3Key: p.varchar("normalized_s3_key", { length: 512 }),

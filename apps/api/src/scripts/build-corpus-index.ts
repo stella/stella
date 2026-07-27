@@ -10,7 +10,7 @@ import { rlsDb } from "@/api/db/root";
  * Idempotent and re-runnable — already-indexed rows are skipped, so a
  * transient failure just means re-run.
  *
- *   CORPUS_INDEX_ENDPOINT=... CORPUS_STORAGE_ENABLED=true \
+ *   CORPUS_INDEX_ENDPOINT=... CORPUS_STORAGE_MODE=dual-write \
  *     bun run src/scripts/build-corpus-index.ts [generation]
  */
 import { createIngestionDb } from "@/api/db/scoped";

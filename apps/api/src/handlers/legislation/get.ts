@@ -6,7 +6,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import {
   readCorpusAst,
   readCorpusText,
@@ -78,7 +78,7 @@ export const readLegislationHandler = async (
     ...rest
   } = document;
 
-  const corpus = envBase.CORPUS_STORAGE_ENABLED;
+  const corpus = corpusStorageMode !== "off";
 
   let documentAst: DocumentAst | EmptyAst | null = pgAst;
   if (corpus && astS3Key !== null) {

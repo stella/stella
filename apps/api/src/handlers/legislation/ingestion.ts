@@ -5,7 +5,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -170,7 +170,7 @@ const legislationSourceHash = (input: LegislationDocumentInput): string => {
 /**
  * Store + upsert one legislation document. Deduplicates by a source hash
  * over the corpus payload plus all persisted metadata: an unchanged
- * re-ingest is skipped. When CORPUS_STORAGE_ENABLED, the canonical
+ * re-ingest is skipped. When corpus storage is on, the canonical
  * payload is written to object storage (outside the tx) and the row's
  * S3 keys + content hash are recorded so the indexers pick it up. The
  * pg-fts and corpus index projections are maintained by the backfill
@@ -258,7 +258,7 @@ export const processLegislationDocument = async (
   });
 
   let corpusWriteFailed = false;
-  if (envBase.CORPUS_STORAGE_ENABLED) {
+  if (corpusStorageMode !== "off") {
     try {
       const written = await writeCorpusDocument({
         documentId: id,

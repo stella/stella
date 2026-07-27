@@ -7,7 +7,7 @@ import type { SQL } from "drizzle-orm";
  * once before flipping reads to corpus storage; safe to re-run (it only
  * processes rows whose `text_s3_key` is still null).
  *
- *   CORPUS_STORAGE_ENABLED=true LEGAL_CORPUS_S3_BUCKET=... \
+ *   CORPUS_STORAGE_MODE=dual-write LEGAL_CORPUS_S3_BUCKET=... \
  *     bun run src/scripts/backfill-corpus-storage.ts
  */
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
