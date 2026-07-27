@@ -82,7 +82,9 @@ export const productNavEntries: readonly ProductNavEntry[] = pillars.flatMap(
   (pillar) =>
     pillar.slugs.flatMap((slug) => {
       const product = productBySlug.get(slug);
-      if (!product) {return [];}
+      if (!product) {
+        return [];
+      }
       return [
         {
           slug: product.slug,

@@ -76,11 +76,11 @@ disk are double that, so retina screens play native-resolution video. The
 matrix lives in `apps/web/e2e/marketing/captures.ts`; capture ids are
 `<scene>` (wide), `<scene>-hero`, and `editor-portrait`:
 
-| Variant | Viewport (file = 2x) | Consumed by |
-| --- | --- | --- |
-| wide (`workspace`, `review`, `editor`, `agent`, `cli`, `templates`) | 1280x720 (16:9) | `productStoryMedia`: scene-only embeds (product pages via `ProductMediaFrame`, HomeProductStory chapters, nav thumbnails); `templates` is wide-only and plays on the templates product page |
-| hero (`workspace-hero`, `review-hero`, `editor-hero`, `agent-hero`, `cli-hero`) | 1280x764 (~1.674:1) | `productStoryHeroMedia`: the companion composition's main window (homepage hero, sections with `showCompanions`) |
-| portrait (`editor-portrait`) | 900x1036 (~0.869:1) | `productStoryEditorPortraitMedia`: the floating "stella Editor" side window. Films the `editor-doc` scene: the seeded Supplier Agreement in the document full view with the app sidebar collapsed and the inspector closed, so the Word page fills the frame rather than the whole app squeezed narrow |
+| Variant                                                                         | Viewport (file = 2x) | Consumed by                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| wide (`workspace`, `review`, `editor`, `agent`, `cli`, `templates`)             | 1280x720 (16:9)      | `productStoryMedia`: scene-only embeds (product pages via `ProductMediaFrame`, HomeProductStory chapters, nav thumbnails); `templates` is wide-only and plays on the templates product page                                                                                                            |
+| hero (`workspace-hero`, `review-hero`, `editor-hero`, `agent-hero`, `cli-hero`) | 1280x764 (~1.674:1)  | `productStoryHeroMedia`: the companion composition's main window (homepage hero, sections with `showCompanions`)                                                                                                                                                                                       |
+| portrait (`editor-portrait`)                                                    | 900x1036 (~0.869:1)  | `productStoryEditorPortraitMedia`: the floating "stella Editor" side window. Films the `editor-doc` scene: the seeded Supplier Agreement in the document full view with the app sidebar collapsed and the inspector closed, so the Word page fills the frame rather than the whole app squeezed narrow |
 
 The registry is `apps/landing/src/data/product-story.ts`;
 `RecordedStellaScene` picks the variant, and reduced-motion posters come from

@@ -1,9 +1,10 @@
-import { UI_LOCALES } from "@stll/locales";
 import react from "@astrojs/react";
 import sitemap from "@astrojs/sitemap";
-import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "astro/config";
+
+import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+import { UI_LOCALES } from "@stll/locales";
 
 // Derived from @stll/locales so routing + sitemap locales equal the app's UI
 // locales (mirrors src/i18n/config.ts). Default locale (en) sits at root; the

@@ -26,20 +26,20 @@ native triplet, not a literal gloss. When an English pun cannot carry over
 Each catalog has an established register. Stay consistent **within the
 file** — check the existing hero/footer strings before adding keys:
 
-| Locale | Register |
-| --- | --- |
-| ar | Modern Standard Arabic, direct address |
-| cs | vykání (formal you) |
-| de | Sie |
-| es | tú |
-| et | sina (informal) |
-| fr | vous |
-| hu | Ön |
-| lt | Jūs |
-| lv | Jūs |
-| pl | informal ty, capitalised Twoje/Twoja |
-| pt-BR | você |
-| sk | vykanie (formal you) |
+| Locale | Register                               |
+| ------ | -------------------------------------- |
+| ar     | Modern Standard Arabic, direct address |
+| cs     | vykání (formal you)                    |
+| de     | Sie                                    |
+| es     | tú                                     |
+| et     | sina (informal)                        |
+| fr     | vous                                   |
+| hu     | Ön                                     |
+| lt     | Jūs                                    |
+| lv     | Jūs                                    |
+| pl     | informal ty, capitalised Twoje/Twoja   |
+| pt-BR  | você                                   |
+| sk     | vykanie (formal you)                   |
 
 ## Legal terminology: the glossary is binding
 
@@ -57,7 +57,7 @@ translation; never introduce a new synonym on the landing.
 Special case: some languages ban the literal translation of "workspace" on
 matter-related strings (cs "pracovní prostor", fr "espace de travail",
 et standalone "tööruum") because the app uses the Matter term where its UI
-says workspace. On the landing, "workspace" as *product positioning* (the
+says workspace. On the landing, "workspace" as _product positioning_ (the
 category the product belongs to) may translate literally; the two
 grandfathered tagline entries in `i18n-lint-baseline.json` exist for exactly
 that distinction. Do not add new baseline entries without the same
@@ -78,20 +78,20 @@ technical audience dominantly uses — the English loanword where the
 loanword is the standard term, the native compound where the native term
 is. Fixed choices (use these, never a synonym):
 
-| Locale | Rendering |
-| --- | --- |
-| ar | مفتوح المصدر (agree in gender with the noun) |
-| cs | open source (loanword) |
-| de | Open Source / Open-Source- in compounds |
-| es | código abierto |
-| et | avatud lähtekoodiga |
-| fr | open source (loanword) |
-| hu | nyílt forráskódú |
-| lt | atvirojo kodo |
-| lv | atvērtā pirmkoda |
-| pl | open source (loanword) |
-| pt-BR | código aberto |
-| sk | open source (loanword) |
+| Locale | Rendering                                    |
+| ------ | -------------------------------------------- |
+| ar     | مفتوح المصدر (agree in gender with the noun) |
+| cs     | open source (loanword)                       |
+| de     | Open Source / Open-Source- in compounds      |
+| es     | código abierto                               |
+| et     | avatud lähtekoodiga                          |
+| fr     | open source (loanword)                       |
+| hu     | nyílt forráskódú                             |
+| lt     | atvirojo kodo                                |
+| lv     | atvērtā pirmkoda                             |
+| pl     | open source (loanword)                       |
+| pt-BR  | código aberto                                |
+| sk     | open source (loanword)                       |
 
 Why not one global rule: "Open Source" is the recognised standard in
 German and the Slavic tech vocabularies, while Spanish, Portuguese, and
@@ -118,7 +118,7 @@ Keep the brand verbatim and the identity phrase intact inside the budget.
 
 ## Cognates are allowed — deliberately
 
-When the natural term in a language *is* the English word (Status, Editor,
+When the natural term in a language _is_ the English word (Status, Editor,
 Blog, Beta), keep it. Do not invent a forced native alternative to avoid
 matching the source. Such entries are recorded in
 `i18n-check-baseline.json` so the untranslated-string check accepts them;

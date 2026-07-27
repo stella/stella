@@ -1,12 +1,13 @@
 /// <reference lib="webworker" />
 
+// eslint-disable-next-line unicorn/prefer-node-protocol -- this is the `buffer` browser-polyfill package (npm, no Node dependency), not Node's own `node:buffer` core module; `node:buffer` would not resolve the same way in a browser/worker bundle
+import { Buffer } from "buffer";
+
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonResult, ChatAnonRuntime } from "@stll/anonymize-chat";
 import { loadCityDictionary, loadNameDictionaries } from "@stll/anonymize-data";
 import * as anonymizeRuntime from "@stll/anonymize-wasm";
 import type { PipelineConfig } from "@stll/anonymize-wasm";
-// eslint-disable-next-line unicorn/prefer-node-protocol -- this is the `buffer` browser-polyfill package (npm, no Node dependency), not Node's own `node:buffer` core module; `node:buffer` would not resolve the same way in a browser/worker bundle
-import { Buffer } from "buffer";
 
 // The napi-rs/emnapi wasm binding (@stll/anonymize-wasm's native glue) checks
 // `globalThis.Buffer` for some Node-API operations; browsers/workers have no
@@ -64,7 +65,9 @@ let dictionariesPromise: Promise<
 // reenter concurrently, so overlapping requests (e.g. a stale debounce
 // firing alongside a fresh one) are queued rather than raced.
 let pipelineQueue: Promise<void> = Promise.resolve();
-const runWithPipelineContext = async <T>(task: () => Promise<T>): Promise<T> => {
+const runWithPipelineContext = async <T>(
+  task: () => Promise<T>,
+): Promise<T> => {
   const run = pipelineQueue.then(task, task);
   pipelineQueue = run.then(
     () => undefined,
@@ -91,7 +94,8 @@ const loadDemoDictionaries = async (): Promise<
     loadNameDictionaries(),
     Promise.all(
       DEMO_DENYLIST_COUNTRIES.map(
-        async (country) => [country, await loadCityDictionary(country)] as const,
+        async (country) =>
+          [country, await loadCityDictionary(country)] as const,
       ),
     ),
   ]);

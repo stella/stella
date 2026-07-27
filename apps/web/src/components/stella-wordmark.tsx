@@ -1,8 +1,8 @@
 import type { SVGProps } from "react";
 
-import { useLocale } from "@/i18n/formatting-context";
-
 import { StellaWordmarkLatin } from "@stll/ui/components/stella-wordmark";
+
+import { useLocale } from "@/i18n/formatting-context";
 
 export const StellaWordmark = (props: SVGProps<SVGSVGElement>) => {
   // Derive the base language from the active formatting locale. `useLocale()` is
