@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 
 import {
   legislationDocuments,
@@ -103,6 +103,11 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
   captureStep: "backfillLegislationCorpusIndex.loadText",
   buildDoc,
   readCorpusText,
+  // The scans deliberately carry no ORDER BY. Any pick order makes
+  // progress (indexed rows leave the pending set), while ordering by
+  // created_at steers the planner onto the created_at index and
+  // row-by-row heap filtering; the selective content-hash index is what
+  // these scans need.
   selectMissing: async (scopedDb, { generation, limit }) =>
     await scopedDb((tx) =>
       tx
@@ -122,7 +127,6 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
             ),
           ),
         )
-        .orderBy(asc(legislationDocuments.createdAt))
         .limit(limit),
     ),
   selectStale: async (scopedDb, { generation, limit }) =>
@@ -142,7 +146,6 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
             sql`${legislationDocuments.indexedHash} IS DISTINCT FROM ${legislationDocuments.contentHash}`,
           ),
         )
-        .orderBy(asc(legislationDocuments.createdAt))
         .limit(limit),
     ),
   fetchFulltext: async (scopedDb, id) => {
