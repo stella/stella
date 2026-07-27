@@ -5,19 +5,19 @@ import { status } from "elysia";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import {
   allowsDerivedAi,
   isRedistributable,
 } from "@/api/handlers/case-law/corpus-source";
 import {
   readCorpusAst,
+  readCorpusPayloadOrFallback,
   readCorpusText,
 } from "@/api/handlers/case-law/corpus-storage";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
@@ -113,7 +113,7 @@ const listPublicDecisionLanguageAlternates = async ({
   return dedupedAlternates.length > 1 ? dedupedAlternates : [];
 };
 
-const corpusReadEnabled = (): boolean => envBase.CORPUS_STORAGE_ENABLED;
+const corpusReadEnabled = (): boolean => corpusStorageMode !== "off";
 
 export const readDecisionHandler = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -329,12 +329,13 @@ const resolveAst = async ({
   if (!corpusReadEnabled() || astS3Key === null || contentHash === null) {
     return pgAst;
   }
-  try {
-    return await readCorpusAst(astS3Key);
-  } catch (error) {
-    captureError(error, { decisionId, step: "readDecision.corpusAst" });
-    return pgAst;
-  }
+  return await readCorpusPayloadOrFallback({
+    documentId: decisionId,
+    key: astS3Key,
+    step: "readDecision.corpusAst",
+    read: async () => await readCorpusAst(astS3Key),
+    fallback: () => pgAst,
+  });
 };
 
 type ResolveFulltextInput = {
@@ -350,18 +351,25 @@ const resolveFulltext = async ({
   decisionId,
   caseLawDb,
 }: ResolveFulltextInput): Promise<string | null> => {
+  const postgresFulltext = async (): Promise<string | null> => {
+    const fallback = await caseLawDb((tx) =>
+      tx.query.caseLawDecisions.findFirst({
+        where: { id: { eq: decisionId } },
+        columns: { fulltext: true },
+      }),
+    );
+    return fallback?.fulltext ?? null;
+  };
+
   if (corpusReadEnabled() && textS3Key !== null && contentHash !== null) {
-    try {
-      return await readCorpusText(textS3Key);
-    } catch (error) {
-      captureError(error, { decisionId, step: "readDecision.corpusText" });
-    }
+    return await readCorpusPayloadOrFallback({
+      documentId: decisionId,
+      key: textS3Key,
+      step: "readDecision.corpusText",
+      read: async () => await readCorpusText(textS3Key),
+      fallback: postgresFulltext,
+    });
   }
-  const fallback = await caseLawDb((tx) =>
-    tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
-      columns: { fulltext: true },
-    }),
-  );
-  return fallback?.fulltext ?? null;
+
+  return await postgresFulltext();
 };

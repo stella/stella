@@ -10,12 +10,18 @@ import {
   caseLawIngestionFailures,
   type caseLawSources,
 } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
-import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
+import type { WriteCorpusResult } from "@/api/handlers/case-law/corpus-storage";
+import {
+  corpusContentHash,
+  corpusKeys,
+  deleteCorpusDocument,
+  writeCorpusDocument,
+} from "@/api/handlers/case-law/corpus-storage";
 import {
   caseLawDecisionSlugCollisionFilter,
   createAvailableCaseLawDecisionSlug,
@@ -40,13 +46,16 @@ import {
   stripDangerousChars,
 } from "@/api/handlers/case-law/ingestion/sanitize";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
+import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
 } from "@/api/lib/corpus-ingestion-checkpoint";
+import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -302,6 +311,170 @@ const preserveCorpusWriteRetry = async ({
 };
 
 /**
+ * Where this decision's canonical payload ends up.
+ *
+ * - `postgres-only` the row carries text/sections/AST and nothing mirrors
+ *   it, so any corpus pointers left over from an earlier mode are stale.
+ * - `postgres-mirrored` the row carries the payload and the post-commit
+ *   write refreshes the corpus pointers under a compare-and-set.
+ * - `object-storage` the payload is already in the corpus bucket, so the
+ *   row stores the keys and leaves the columns NULL.
+ * - `write-failed` the canonical write did not land, so no row may be
+ *   written: the stale source hash is what makes the next cycle retry.
+ */
+type CorpusWritePlan =
+  | { type: "postgres-only" }
+  | { type: "postgres-mirrored" }
+  | { type: "object-storage"; written: WriteCorpusResult }
+  | { type: "write-failed" };
+
+type CorpusWritePayload = {
+  documentId: SafeId<"caseLawDecision">;
+  jurisdiction: string;
+  text: string | null;
+  sections: DecisionSection[] | null;
+  ast: IngestionResult["documentAst"];
+};
+
+type PlanCorpusWriteInput = CorpusWritePayload & {
+  mode: CorpusStorageMode;
+  /** Whether a row for this decision already existed before this run. */
+  hadExistingRow: boolean;
+};
+
+/**
+ * `writeCorpusDocument` issues its three PUTs in parallel, so a rejection
+ * can still leave one or two objects behind. For a decision that had no
+ * row, the retry mints a different id and keys its objects under that,
+ * stranding these for good. Delete them best-effort; the keys are
+ * content-addressed, so they are derivable from the payload without the
+ * write having returned.
+ *
+ * New decisions only, for the same reason `canDiscardCorpusObjects` scopes
+ * the post-transaction compensation: a refresh derives these keys from the
+ * existing id and the payload hash, so whenever the text, sections, and AST
+ * are unchanged (only metadata or the raw source moved) they are the very
+ * objects the live row already references — and under canonical storage
+ * that row's payload columns are NULL, so deleting them empties the
+ * decision. An orphaned object is harmless; that is not.
+ */
+const discardPartialCorpusWrite = async (
+  payload: CorpusWritePayload,
+): Promise<void> => {
+  const keys = corpusKeys({
+    documentId: payload.documentId,
+    jurisdiction: payload.jurisdiction,
+    contentHash: corpusContentHash(payload),
+  });
+  const discarded = await Result.tryPromise(
+    async () =>
+      await deleteCorpusDocument({
+        textKey: keys.textKey,
+        sectionsKey: keys.sectionsKey,
+        astKey: keys.astKey,
+      }),
+  );
+  if (Result.isError(discarded)) {
+    captureError(discarded.error, {
+      decisionId: payload.documentId,
+      step: "processDecision.canonicalCorpusWriteCleanup",
+    });
+  }
+};
+
+const planCorpusWrite = async ({
+  mode,
+  hadExistingRow,
+  ...payload
+}: PlanCorpusWriteInput): Promise<CorpusWritePlan> => {
+  switch (mode) {
+    case "off":
+      return { type: "postgres-only" };
+    case "dual-write":
+      return { type: "postgres-mirrored" };
+    case "canonical": {
+      // Object storage first. It keeps the S3 round-trip out of the
+      // transaction (the same reason `dual-write` writes after commit)
+      // while guaranteeing no row can point at an object that is missing.
+      const written = await Result.tryPromise(
+        async () => await writeCorpusDocument(payload),
+      );
+      if (Result.isError(written)) {
+        captureError(written.error, {
+          decisionId: payload.documentId,
+          step: "processDecision.canonicalCorpusWrite",
+        });
+        if (!hadExistingRow) {
+          await discardPartialCorpusWrite(payload);
+        }
+        return { type: "write-failed" };
+      }
+      return { type: "object-storage", written: written.value };
+    }
+    default: {
+      const unhandled: never = mode;
+      return panic(`Unhandled corpus storage mode: ${String(unhandled)}`);
+    }
+  }
+};
+
+type CanDiscardCorpusObjectsInput = {
+  /** Whether a row for this decision already existed before this run. */
+  hadExistingRow: boolean;
+  /** What the row write failed with. */
+  error: unknown;
+};
+
+/**
+ * Whether the objects a canonical write just placed in the bucket may be
+ * deleted now that the row write has failed. Two things have to hold.
+ *
+ * The decision must have had no row yet. On a refresh the keys derive from
+ * the existing id and the payload hash, so the stored row may already point
+ * at these exact objects (a re-parse that reproduces the payload rewrites
+ * identical bytes) and deleting them would empty a live decision.
+ *
+ * And the failure must be unambiguous. The transaction's wall-clock bound
+ * abandons the statement instead of cancelling it, so a TimeoutError does
+ * not prove the write did not land: it may still commit after the timer
+ * fires. An orphaned object is harmless — content-addressed, unreachable,
+ * and reclaimed by a later sweep — while a committed row pointing at
+ * deleted payloads is not recoverable.
+ */
+const canDiscardCorpusObjects = ({
+  hadExistingRow,
+  error,
+}: CanDiscardCorpusObjectsInput): boolean =>
+  !hadExistingRow && !(error instanceof TimeoutError);
+
+/**
+ * A canonical write puts the objects in the bucket before the row exists, so
+ * a failed row write can leave them unreferenced: the retry mints a new
+ * decision id and keys its objects under that instead. Delete them
+ * best-effort; a failure here is telemetry only, because the caller still
+ * has to surface the original row-write error.
+ */
+const discardOrphanedCorpusObjects = async (
+  written: WriteCorpusResult,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<void> => {
+  const discarded = await Result.tryPromise(
+    async () =>
+      await deleteCorpusDocument({
+        textKey: written.textKey,
+        sectionsKey: written.sectionsKey,
+        astKey: written.astKey,
+      }),
+  );
+  if (Result.isError(discarded)) {
+    captureError(discarded.error, {
+      decisionId,
+      step: "processDecision.canonicalCorpusCleanup",
+    });
+  }
+};
+
+/**
  * Insert a single decision and its citations into the database.
  * Skips duplicates based on sourceHash.
  */
@@ -430,12 +603,142 @@ export const processDecision = async (
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
-  const decisionId = await scopedDb(async (tx) => {
-    // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-    if (existing) {
-      await tx
-        .update(caseLawDecisions)
-        .set({
+  // Corpus objects are keyed on the decision id, so a canonical write needs
+  // that id before the row exists. Minting it here is what the column
+  // default (`pUuid`) would do at insert time anyway.
+  const decisionId = existing?.id ?? createSafeId<"caseLawDecision">();
+
+  const corpusPlan = await planCorpusWrite({
+    mode: corpusStorageMode,
+    hadExistingRow: Boolean(existing),
+    documentId: decisionId,
+    jurisdiction: result.country,
+    text: result.fulltext ?? null,
+    sections: sections.length > 0 ? sections : null,
+    ast: result.documentAst,
+  });
+
+  if (corpusPlan.type === "write-failed") {
+    // Persist nothing: a row would advance sourceHash and the next cycle
+    // would dedup-skip the decision before it could retry the write. The
+    // caller counts this as an S3 failure, which holds the page cursor.
+    return { inserted: false, searchVectorFailed: false, s3UploadFailed: true };
+  }
+
+  const postgresPayload = {
+    fulltext: result.fulltext,
+    sections: sections.length > 0 ? sections : null,
+    documentAst: result.documentAst,
+  };
+
+  const payloadColumns = (() => {
+    switch (corpusPlan.type) {
+      case "postgres-only":
+        // This refresh supersedes whatever the corpus holds and nothing
+        // will follow to rewrite the pointers, so a row carrying keys from
+        // an earlier canonical/dual-write period would point at objects
+        // that no longer match its columns. Clear them.
+        return {
+          ...postgresPayload,
+          textS3Key: null,
+          normalizedS3Key: null,
+          astS3Key: null,
+          contentHash: null,
+        };
+      case "postgres-mirrored":
+        // The post-commit write refreshes the pointers under a CAS.
+        return postgresPayload;
+      case "object-storage":
+        return {
+          fulltext: null,
+          sections: null,
+          documentAst: null,
+          textS3Key: corpusPlan.written.textKey,
+          normalizedS3Key: corpusPlan.written.sectionsKey,
+          astS3Key: corpusPlan.written.astKey,
+          contentHash: corpusPlan.written.contentHash,
+        };
+      default: {
+        const unhandled: never = corpusPlan;
+        return panic(`Unhandled corpus write plan: ${String(unhandled)}`);
+      }
+    }
+  })();
+
+  const writeDecisionRow = async (): Promise<void> => {
+    await scopedDb(async (tx) => {
+      // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
+      if (existing) {
+        await tx
+          .update(caseLawDecisions)
+          .set({
+            ecli: result.ecli,
+            court: result.court,
+            country: result.country,
+            language: result.language,
+            languageGroupKey,
+            decisionDate: result.decisionDate,
+            decisionType: result.decisionType,
+            ...payloadColumns,
+            sourceUrl: result.sourceUrl,
+            documentUrl: result.documentUrl,
+            metadata: result.metadata,
+            sourceRaw: null,
+            sourceRawS3Key,
+            sourceRawContentType,
+            parserVersion: result.parserVersion ?? 0,
+            // When S3 upload failed, keep the old sourceHash so the
+            // next ingestion cycle sees a hash mismatch and retries
+            // the upload instead of permanently skipping the decision.
+            sourceHash: s3UploadFailed ? existing.sourceHash : result.rawHash,
+            // Clear indexedHash so the corpus indexer re-picks this row even
+            // when only metadata changed (its staleness check compares
+            // indexedHash to contentHash, which only tracks the payload).
+            indexedHash: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(caseLawDecisions.id, existing.id));
+
+        await tx
+          .delete(caseLawCitations)
+          .where(eq(caseLawCitations.citingDecisionId, existing.id));
+
+        if (citations.length > 0) {
+          await tx.insert(caseLawCitations).values(
+            citations.map((c) => ({
+              citingDecisionId: existing.id,
+              citationText: c.citationText,
+              sectionIndex: c.sectionIndex,
+            })),
+          );
+        }
+
+        return;
+      }
+
+      const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
+      const existingSlugRows = await tx
+        .select({ slug: caseLawDecisions.slug })
+        .from(caseLawDecisions)
+        .where(
+          caseLawDecisionSlugCollisionFilter({
+            baseSlug,
+            maxSuffix: LIMITS.caseLawSlugCollisionScanLimit + 1,
+          }),
+        )
+        .limit(LIMITS.caseLawSlugCollisionScanLimit);
+      const slug = createAvailableCaseLawDecisionSlug(
+        baseSlug,
+        existingSlugRows.map((row) => row.slug),
+      );
+
+      const [decisionRow] = await tx
+        .insert(caseLawDecisions)
+        .values({
+          id: decisionId,
+          sourceId,
+          caseNumber: result.caseNumber,
+          slug,
           ecli: result.ecli,
           court: result.court,
           country: result.country,
@@ -443,111 +746,61 @@ export const processDecision = async (
           languageGroupKey,
           decisionDate: result.decisionDate,
           decisionType: result.decisionType,
-          fulltext: result.fulltext,
-          sections: sections.length > 0 ? sections : null,
+          ...payloadColumns,
           sourceUrl: result.sourceUrl,
           documentUrl: result.documentUrl,
           metadata: result.metadata,
-          documentAst: result.documentAst,
+          parserVersion: result.parserVersion ?? 0,
           sourceRaw: null,
           sourceRawS3Key,
           sourceRawContentType,
-          parserVersion: result.parserVersion ?? 0,
-          // When S3 upload failed, keep the old sourceHash so the
-          // next ingestion cycle sees a hash mismatch and retries
-          // the upload instead of permanently skipping the decision.
-          sourceHash: s3UploadFailed ? existing.sourceHash : result.rawHash,
-          // Clear indexedHash so the corpus indexer re-picks this row even
-          // when only metadata changed (its staleness check compares
-          // indexedHash to contentHash, which only tracks the payload).
-          indexedHash: null,
-          updatedAt: new Date(),
+          sourceHash: result.rawHash,
         })
-        .where(eq(caseLawDecisions.id, existing.id));
+        .returning({ id: caseLawDecisions.id });
 
-      await tx
-        .delete(caseLawCitations)
-        .where(eq(caseLawCitations.citingDecisionId, existing.id));
+      if (!decisionRow) {
+        panic("Failed to insert decision: no row returned");
+      }
 
       if (citations.length > 0) {
         await tx.insert(caseLawCitations).values(
           citations.map((c) => ({
-            citingDecisionId: existing.id,
+            citingDecisionId: decisionRow.id,
             citationText: c.citationText,
             sectionIndex: c.sectionIndex,
           })),
         );
       }
+    });
+  };
 
-      return existing.id;
-    }
-
-    const baseSlug = createCaseLawDecisionSlug(result.caseNumber);
-    const existingSlugRows = await tx
-      .select({ slug: caseLawDecisions.slug })
-      .from(caseLawDecisions)
-      .where(
-        caseLawDecisionSlugCollisionFilter({
-          baseSlug,
-          maxSuffix: LIMITS.caseLawSlugCollisionScanLimit + 1,
-        }),
-      )
-      .limit(LIMITS.caseLawSlugCollisionScanLimit);
-    const slug = createAvailableCaseLawDecisionSlug(
-      baseSlug,
-      existingSlugRows.map((row) => row.slug),
-    );
-
-    const [decisionRow] = await tx
-      .insert(caseLawDecisions)
-      .values({
-        sourceId,
-        caseNumber: result.caseNumber,
-        slug,
-        ecli: result.ecli,
-        court: result.court,
-        country: result.country,
-        language: result.language,
-        languageGroupKey,
-        decisionDate: result.decisionDate,
-        decisionType: result.decisionType,
-        fulltext: result.fulltext,
-        sections: sections.length > 0 ? sections : null,
-        sourceUrl: result.sourceUrl,
-        documentUrl: result.documentUrl,
-        metadata: result.metadata,
-        documentAst: result.documentAst,
-        parserVersion: result.parserVersion ?? 0,
-        sourceRaw: null,
-        sourceRawS3Key,
-        sourceRawContentType,
-        sourceHash: result.rawHash,
-      })
-      .returning({ id: caseLawDecisions.id });
-
-    if (!decisionRow) {
-      panic("Failed to insert decision: no row returned");
-    }
-
-    if (citations.length > 0) {
-      await tx.insert(caseLawCitations).values(
-        citations.map((c) => ({
-          citingDecisionId: decisionRow.id,
-          citationText: c.citationText,
-          sectionIndex: c.sectionIndex,
-        })),
-      );
-    }
-
-    return decisionRow.id;
+  // Pass the original error through: the pipeline's halt semantics inspect
+  // its type (a TimeoutError holds the cursor), which a wrapper would hide.
+  const rowWrite = await Result.tryPromise({
+    try: writeDecisionRow,
+    catch: (cause: unknown) => cause,
   });
 
-  // Persist canonical text/sections/AST to object storage when enabled, then
-  // record the keys + content hash. Done outside the DB transaction (S3 I/O
-  // must not hold a transaction open). A failure leaves the row fully readable
-  // from its Postgres columns and preserves the source-hash mismatch so normal
-  // ingestion can retry the corpus write.
-  if (envBase.CORPUS_STORAGE_ENABLED) {
+  if (Result.isError(rowWrite)) {
+    if (
+      corpusPlan.type === "object-storage" &&
+      canDiscardCorpusObjects({
+        hadExistingRow: Boolean(existing),
+        error: rowWrite.error,
+      })
+    ) {
+      await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
+    }
+    throw rowWrite.error;
+  }
+
+  // Mirror text/sections/AST to object storage, then record the keys +
+  // content hash. Done outside the DB transaction (S3 I/O must not hold a
+  // transaction open). A failure leaves the row fully readable from its
+  // Postgres columns and preserves the source-hash mismatch so normal
+  // ingestion can retry the corpus write. `canonical` has already written
+  // its objects above, before the row.
+  if (corpusStorageMode === "dual-write") {
     // The sourceHash this call just persisted: corpus-key and retry
     // updates below only apply while the row still carries it, so a
     // slower run cannot overwrite a concurrent newer refresh.

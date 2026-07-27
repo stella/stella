@@ -5,7 +5,7 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -170,7 +170,7 @@ const legislationSourceHash = (input: LegislationDocumentInput): string => {
 /**
  * Store + upsert one legislation document. Deduplicates by a source hash
  * over the corpus payload plus all persisted metadata: an unchanged
- * re-ingest is skipped. When CORPUS_STORAGE_ENABLED, the canonical
+ * re-ingest is skipped. When corpus storage is on, the canonical
  * payload is written to object storage (outside the tx) and the row's
  * S3 keys + content hash are recorded so the indexers pick it up. The
  * pg-fts and corpus index projections are maintained by the backfill
@@ -258,7 +258,13 @@ export const processLegislationDocument = async (
   });
 
   let corpusWriteFailed = false;
-  if (envBase.CORPUS_STORAGE_ENABLED) {
+  // Legislation mirrors the payload whenever corpus storage is on and never
+  // takes the `canonical` branch: that migration is deliberately case-law
+  // first. Legislation's payload volume does not justify moving off the
+  // Postgres columns, and its readers key off row state, which stays correct
+  // either way. Treating `canonical` as `dual-write` here is the scope
+  // decision, not an oversight.
+  if (corpusStorageMode !== "off") {
     try {
       const written = await writeCorpusDocument({
         documentId: id,

@@ -12,6 +12,11 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { resolveDatabaseUrl } from "@/api/db-url";
+import {
+  CORPUS_STORAGE_MODES,
+  corpusStorageInvariantViolation,
+  resolveCorpusStorageMode,
+} from "@/api/lib/corpus-storage-mode";
 
 /**
  * NODE_ENV values that identify a deployed (non-local) Stella
@@ -82,9 +87,14 @@ export const envBase = createEnv({
     LEGAL_SEARCH_INDEX_GENERATION: v.optional(v.string(), "case_law_v1"),
     CORPUS_INDEX_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
     CORPUS_INDEX_S3_BUCKET: v.optional(v.string()),
-    // Falls back to S3_BUCKET when unset (dev). Required when
-    // CORPUS_STORAGE_ENABLED is true (enforced post-validation).
+    // Falls back to S3_BUCKET when unset (dev). Required when corpus
+    // storage is on (enforced post-validation).
     LEGAL_CORPUS_S3_BUCKET: v.optional(v.string()),
+    // Where the canonical corpus payload lives. Unset derives the mode from
+    // the legacy CORPUS_STORAGE_ENABLED boolean below.
+    CORPUS_STORAGE_MODE: v.optional(v.picklist(CORPUS_STORAGE_MODES)),
+    // Superseded by CORPUS_STORAGE_MODE; still accepted, and true still
+    // means "dual-write". Read `corpusStorageMode`, never this field.
     CORPUS_STORAGE_ENABLED: v.optional(
       v.pipe(v.string(), v.parseBoolean()),
       "false",
@@ -112,14 +122,22 @@ if (
   );
 }
 
-// In deployed envs the corpus must use its own bucket, not the default
-// document bucket (it falls back to S3_BUCKET only for local dev).
-if (
-  envBase.CORPUS_STORAGE_ENABLED &&
-  !envBase.isDev &&
-  envBase.LEGAL_CORPUS_S3_BUCKET === undefined
-) {
-  panic(
-    "CORPUS_STORAGE_ENABLED requires LEGAL_CORPUS_S3_BUCKET in deployed environments",
-  );
+/**
+ * The single corpus-storage value consumed across the codebase. Derived
+ * from CORPUS_STORAGE_MODE, falling back to the legacy boolean.
+ */
+export const corpusStorageMode = resolveCorpusStorageMode({
+  mode: envBase.CORPUS_STORAGE_MODE,
+  legacyEnabled: envBase.CORPUS_STORAGE_ENABLED,
+});
+
+const corpusStorageViolation = corpusStorageInvariantViolation({
+  mode: corpusStorageMode,
+  searchProvider: envBase.LEGAL_SEARCH_PROVIDER,
+  corpusIndexingEnabled: envBase.CORPUS_INDEXING_ENABLED,
+  corpusBucket: envBase.LEGAL_CORPUS_S3_BUCKET,
+  isDev: envBase.isDev,
+});
+if (corpusStorageViolation !== null) {
+  panic(corpusStorageViolation);
 }

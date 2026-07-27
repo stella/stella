@@ -45,7 +45,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 592,
+    "count": 594,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -213,6 +213,7 @@
       "apps/api/src/scripts/backfill-fulltext.ts": 6,
       "apps/api/src/scripts/backfill-property-roles.ts": 1,
       "apps/api/src/scripts/build-corpus-index.ts": 1,
+      "apps/api/src/scripts/corpus-column-trim.ts": 2,
       "apps/api/src/scripts/post-deploy-smoke.ts": 3,
       "apps/api/src/scripts/redact-case-law-decision.ts": 1,
       "apps/api/src/scripts/repair-case-law-jsonb.ts": 1,

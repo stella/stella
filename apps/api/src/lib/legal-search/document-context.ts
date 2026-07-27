@@ -1,17 +1,18 @@
 import { rootDb } from "@/api/db/root";
-import { envBase } from "@/api/env-base";
+import { corpusStorageMode } from "@/api/env-base";
 import {
   readCorpusAst,
+  readCorpusPayloadOrFallback,
   readCorpusText,
 } from "@/api/handlers/case-law/corpus-storage";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { LegalDocumentContext } from "@/api/lib/legal-search/types";
 
 /**
  * Canonical text + AST for a decision, for the AI reader. Prefers object
- * storage when enabled, falling back to the Postgres columns (and on a
- * transient S3 failure) so a read is never harder than today. Global
+ * storage when enabled, degrading to the Postgres columns on a transient
+ * S3 failure so a read is never harder than today. A row with no Postgres
+ * copy has nothing to degrade to and surfaces the failure instead. Global
  * corpus data, so it reads via rootDb.
  */
 export const loadDocumentContext = async (
@@ -34,25 +35,30 @@ export const loadDocumentContext = async (
     return null;
   }
 
-  const corpus = envBase.CORPUS_STORAGE_ENABLED;
+  const corpus = corpusStorageMode !== "off";
+  const { astS3Key, textS3Key } = decision;
 
-  let documentAst = decision.documentAst;
-  if (corpus && decision.astS3Key !== null) {
-    try {
-      documentAst = await readCorpusAst(decision.astS3Key);
-    } catch (error) {
-      captureError(error, { decisionId, step: "documentContext.corpusAst" });
-    }
-  }
+  const documentAst =
+    corpus && astS3Key !== null
+      ? await readCorpusPayloadOrFallback({
+          documentId: decisionId,
+          key: astS3Key,
+          step: "documentContext.corpusAst",
+          read: async () => await readCorpusAst(astS3Key),
+          fallback: () => decision.documentAst,
+        })
+      : decision.documentAst;
 
-  let fulltext = decision.fulltext;
-  if (corpus && decision.textS3Key !== null) {
-    try {
-      fulltext = await readCorpusText(decision.textS3Key);
-    } catch (error) {
-      captureError(error, { decisionId, step: "documentContext.corpusText" });
-    }
-  }
+  const fulltext =
+    corpus && textS3Key !== null
+      ? await readCorpusPayloadOrFallback({
+          documentId: decisionId,
+          key: textS3Key,
+          step: "documentContext.corpusText",
+          read: async () => await readCorpusText(textS3Key),
+          fallback: () => decision.fulltext,
+        })
+      : decision.fulltext;
 
   return {
     decisionId: decision.id,
