@@ -146,14 +146,33 @@ const withReadBudget = async (
   }
 };
 
+export type ReadThroughDeferredDocumentOptions = {
+  decision: PendingDocument;
+  deps: OnDemandDocumentDeps;
+  /**
+   * Whether this reader's interest is persisted as demand.
+   *
+   * Demand is a durable row that steers the ingestion queue: a recorded
+   * decision jumps ahead of the whole backlog. That is right for a
+   * reader we can attribute — a workspace session, an agent holding a
+   * token — and wrong for an unauthenticated request, where anyone
+   * walking the public decision ids could mint priority rows without
+   * limit and decide what the crawler fetches next. Public reads still
+   * hydrate when a slot happens to be free; they just leave no trace in
+   * the queue.
+   */
+  recordDemand: boolean;
+};
+
 /**
  * Fetch this decision's document for the reader asking for it, or
  * return null and leave it to the queue.
  */
-export const readThroughDeferredDocument = async (
-  decision: PendingDocument,
-  deps: OnDemandDocumentDeps,
-): Promise<BackfilledDocument | null> => {
+export const readThroughDeferredDocument = async ({
+  decision,
+  deps,
+  recordDemand,
+}: ReadThroughDeferredDocumentOptions): Promise<BackfilledDocument | null> => {
   // The whole read-through — including the request recording — runs
   // inside the read budget: a stalled ingestion pool or a locked row
   // must never hold a public read. The recording write is idempotent
@@ -163,14 +182,16 @@ export const readThroughDeferredDocument = async (
     // Recorded before anything can turn the fetch down, so a reader who
     // arrives with the slots full, or whose wait runs out, still moves
     // this decision to the front of the queue.
-    const recorded = await Result.tryPromise(
-      async () => await deps.recordRequest(decision.id),
-    );
-    if (Result.isError(recorded)) {
-      captureError(recorded.error, {
-        source: CAPTURE_SOURCE,
-        decisionId: decision.id,
-      });
+    if (recordDemand) {
+      const recorded = await Result.tryPromise(
+        async () => await deps.recordRequest(decision.id),
+      );
+      if (Result.isError(recorded)) {
+        captureError(recorded.error, {
+          source: CAPTURE_SOURCE,
+          decisionId: decision.id,
+        });
+      }
     }
 
     const existing = inFlight.get(decision.id);

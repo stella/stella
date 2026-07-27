@@ -28,10 +28,15 @@ void mock.module("@/api/handlers/case-law/decisions/search", () => ({
   searchDecisionsHandler: searchDecisionsHandlerMock,
 }));
 
-void mock.module("@/api/handlers/case-law/decisions/get", () => ({
-  readDecisionBySlugHandler: mock(),
-  readDecisionHandler: readDecisionHandlerMock,
-}));
+// The tool reads through the hydrating wrapper, so that is the module
+// the double replaces.
+void mock.module(
+  "@/api/handlers/case-law/decisions/get-deferred-document",
+  () => ({
+    readDecisionBySlugWithDocumentHandler: mock(),
+    readDecisionWithDocumentHandler: readDecisionHandlerMock,
+  }),
+);
 
 void mock.module("@/api/handlers/workspaces/get", () => ({
   readWorkspaceHandler: mock(),

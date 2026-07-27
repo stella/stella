@@ -14,7 +14,7 @@ import type {
   ContactPhone,
   FieldContent,
 } from "@/api/db/schema-validators";
-import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
+import { readDecisionWithDocumentHandler } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
@@ -1156,12 +1156,12 @@ const isSearchCaseLawSuccess = (
   typeof value === "object" && "hits" in value && Array.isArray(value.hits);
 
 type ReadCaseLawDecisionSuccess = Extract<
-  Awaited<ReturnType<typeof readDecisionHandler>>,
+  Awaited<ReturnType<typeof readDecisionWithDocumentHandler>>,
   { caseNumber: string; citationsFrom: unknown[]; citationsTo: unknown[] }
 >;
 
 const isReadCaseLawDecisionSuccess = (
-  value: Awaited<ReturnType<typeof readDecisionHandler>>,
+  value: Awaited<ReturnType<typeof readDecisionWithDocumentHandler>>,
 ): value is ReadCaseLawDecisionSuccess =>
   typeof value === "object" &&
   "caseNumber" in value &&
@@ -1621,10 +1621,13 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
     });
   }
 
-  const result = await readDecisionHandler(
-    brandPersistedCaseLawDecisionId(decisionId),
-    caseLawPublicReadDb,
-  );
+  const result = await readDecisionWithDocumentHandler({
+    decisionId: brandPersistedCaseLawDecisionId(decisionId),
+    caseLawDb: caseLawPublicReadDb,
+    // An agent holding a token is a reader we can attribute, so its
+    // interest counts as demand.
+    caller: "attributed",
+  });
   const resultMessage = getResultMessage(result);
   if (resultMessage) {
     return errorResult(resultMessage);

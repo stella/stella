@@ -28,6 +28,7 @@ type ReadableDecision = Extract<DecisionRead, { documentPending: boolean }>;
 
 const hydrate = async (
   decision: ReadableDecision,
+  recordDemand: boolean,
 ): Promise<ReadableDecision> => {
   if (
     !isDeferredDocumentFetchable({
@@ -39,8 +40,8 @@ const hydrate = async (
     return decision;
   }
 
-  const document = await readThroughDeferredDocument(
-    {
+  const document = await readThroughDeferredDocument({
+    decision: {
       id: decision.id,
       caseNumber: decision.caseNumber,
       ecli: decision.ecli,
@@ -50,8 +51,9 @@ const hydrate = async (
       decisionType: decision.decisionType,
       documentUrl: decision.documentUrl,
     },
-    onDemandDocumentDeps,
-  );
+    deps: onDemandDocumentDeps,
+    recordDemand,
+  });
 
   // The fetch did not finish inside the read's budget, or the source
   // had nothing: the decision stays readable as metadata and stays
@@ -72,20 +74,47 @@ const hydrate = async (
 
 const withDeferredDocument = async (
   read: DecisionRead,
+  recordDemand: boolean,
 ): Promise<DecisionRead> =>
-  "documentPending" in read ? await hydrate(read) : read;
+  "documentPending" in read ? await hydrate(read, recordDemand) : read;
 
-export const readDecisionWithDocumentHandler = async (
-  decisionId: SafeId<"caseLawDecision">,
-  caseLawDb: CaseLawPublicReadDb,
-): Promise<DecisionRead> =>
-  await withDeferredDocument(await readDecisionHandler(decisionId, caseLawDb));
+/**
+ * Whether the caller's reads may persist demand. Only a caller we can
+ * attribute — a session, an agent token — may steer the ingestion
+ * queue; see `recordDemand` in `document-on-demand.ts`.
+ */
+export type DecisionReadCaller = "anonymous" | "attributed";
 
-export const readDecisionBySlugWithDocumentHandler = async (
-  slug: string,
-  caseLawDb: CaseLawPublicReadDb,
-  language?: string,
-): Promise<DecisionRead> =>
+export type ReadDecisionWithDocumentOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  caseLawDb: CaseLawPublicReadDb;
+  caller: DecisionReadCaller;
+};
+
+export type ReadDecisionBySlugWithDocumentOptions = {
+  slug: string;
+  caseLawDb: CaseLawPublicReadDb;
+  caller: DecisionReadCaller;
+  language: string | undefined;
+};
+
+export const readDecisionWithDocumentHandler = async ({
+  decisionId,
+  caseLawDb,
+  caller,
+}: ReadDecisionWithDocumentOptions): Promise<DecisionRead> =>
+  await withDeferredDocument(
+    await readDecisionHandler(decisionId, caseLawDb),
+    caller === "attributed",
+  );
+
+export const readDecisionBySlugWithDocumentHandler = async ({
+  slug,
+  caseLawDb,
+  caller,
+  language,
+}: ReadDecisionBySlugWithDocumentOptions): Promise<DecisionRead> =>
   await withDeferredDocument(
     await readDecisionBySlugHandler(slug, caseLawDb, language),
+    caller === "attributed",
   );

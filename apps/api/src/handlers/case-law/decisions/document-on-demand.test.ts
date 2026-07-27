@@ -123,9 +123,21 @@ describe("deferred document read-through", () => {
     const decision = pending();
 
     const readers = [
-      readThroughDeferredDocument(decision, deps),
-      readThroughDeferredDocument(decision, deps),
-      readThroughDeferredDocument(decision, deps),
+      readThroughDeferredDocument({
+        decision,
+        deps,
+        recordDemand: true,
+      }),
+      readThroughDeferredDocument({
+        decision,
+        deps,
+        recordDemand: true,
+      }),
+      readThroughDeferredDocument({
+        decision,
+        deps,
+        recordDemand: true,
+      }),
     ];
     release();
     const documents = await Promise.all(readers);
@@ -139,18 +151,44 @@ describe("deferred document read-through", () => {
     const { deps, requested, release } = recorder("throws");
     const decision = pending();
 
-    const reader = readThroughDeferredDocument(decision, deps);
+    const reader = readThroughDeferredDocument({
+      decision,
+      deps,
+      recordDemand: true,
+    });
     release();
 
     expect(await reader).toBeNull();
     expect(requested).toEqual([decision.id]);
   });
 
+  test("a reader we cannot attribute hydrates without queueing demand", async () => {
+    const { deps, requested, fetched, release } = recorder();
+    const decision = pending();
+
+    const reader = readThroughDeferredDocument({
+      decision,
+      deps,
+      recordDemand: false,
+    });
+    release();
+
+    // The document is still fetched with a free slot — what it must not
+    // do is mint a priority row that steers the crawler.
+    expect(await reader).toEqual(parsed);
+    expect(fetched).toEqual([decision.id]);
+    expect(requested).toEqual([]);
+  });
+
   test("a document the source cannot serve reads as metadata-only", async () => {
     const { deps, release } = recorder("unavailable");
     const decision = pending();
 
-    const reader = readThroughDeferredDocument(decision, deps);
+    const reader = readThroughDeferredDocument({
+      decision,
+      deps,
+      recordDemand: true,
+    });
     release();
 
     expect(await reader).toBeNull();
@@ -160,7 +198,11 @@ describe("deferred document read-through", () => {
     const { deps, release } = recorder("claimed");
     const decision = pending();
 
-    const reader = readThroughDeferredDocument(decision, deps);
+    const reader = readThroughDeferredDocument({
+      decision,
+      deps,
+      recordDemand: true,
+    });
     release();
 
     // The other worker's fetch will store the document; this reader
@@ -173,8 +215,16 @@ describe("deferred document read-through", () => {
     const decision = pending();
 
     release();
-    const first = await readThroughDeferredDocument(decision, deps);
-    const second = await readThroughDeferredDocument(decision, deps);
+    const first = await readThroughDeferredDocument({
+      decision,
+      deps,
+      recordDemand: true,
+    });
+    const second = await readThroughDeferredDocument({
+      decision,
+      deps,
+      recordDemand: true,
+    });
 
     // Nothing caches the outcome in memory: the second read runs the
     // same idempotent unit again and reaches the same document. In
@@ -187,9 +237,21 @@ describe("deferred document read-through", () => {
   test("readers past the concurrency cap fall back to the queue", async () => {
     const { deps, fetched, release } = recorder();
 
-    const first = readThroughDeferredDocument(pending(), deps);
-    const second = readThroughDeferredDocument(pending(), deps);
-    const third = readThroughDeferredDocument(pending(), deps);
+    const first = readThroughDeferredDocument({
+      decision: pending(),
+      deps,
+      recordDemand: true,
+    });
+    const second = readThroughDeferredDocument({
+      decision: pending(),
+      deps,
+      recordDemand: true,
+    });
+    const third = readThroughDeferredDocument({
+      decision: pending(),
+      deps,
+      recordDemand: true,
+    });
 
     // The third reader is turned away without waiting for the release.
     expect(await third).toBeNull();

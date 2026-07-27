@@ -60,10 +60,13 @@ const readDecision = createSafePublicHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await readDecisionWithDocumentHandler(
+          await readDecisionWithDocumentHandler({
             decisionId,
-            caseLawPublicReadDb,
-          ),
+            caseLawDb: caseLawPublicReadDb,
+            // Unauthenticated: hydrates when a slot is free, but never
+            // persists demand — see `recordDemand`.
+            caller: "anonymous",
+          }),
       ),
     );
 
@@ -83,11 +86,12 @@ const readDecisionBySlug = createSafePublicHandler(
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await readDecisionBySlugWithDocumentHandler(
+          await readDecisionBySlugWithDocumentHandler({
             slug,
-            caseLawPublicReadDb,
+            caseLawDb: caseLawPublicReadDb,
             language,
-          ),
+            caller: "anonymous",
+          }),
       ),
     );
 
