@@ -49,6 +49,17 @@ const ignored = (raw: unknown): NormalizedProviderEvent => ({
   handled: false,
 });
 
+// Ordering signal for out-of-order retries. `modified_at` is null on a
+// fresh subscription; fall back to `created_at`.
+const occurredAtOf = (data: Record<string, unknown>): string | undefined => {
+  if (typeof data["modified_at"] === "string") {
+    return data["modified_at"];
+  }
+  return typeof data["created_at"] === "string"
+    ? data["created_at"]
+    : undefined;
+};
+
 const handledEntitlement = (
   type: string,
   data: Record<string, unknown>,
@@ -68,14 +79,7 @@ const handledEntitlement = (
       // neutral schema/dispatch default of one seat applies. Seat-based
       // subscriptions carry a positive integer.
       quantity: typeof data["seats"] === "number" ? data["seats"] : undefined,
-      // Ordering signal for out-of-order retries. `modified_at` is null
-      // on a fresh subscription; fall back to `created_at`.
-      occurred_at:
-        typeof data["modified_at"] === "string"
-          ? data["modified_at"]
-          : typeof data["created_at"] === "string"
-            ? data["created_at"]
-            : undefined,
+      occurred_at: occurredAtOf(data),
     },
   },
   handled: true,
