@@ -148,7 +148,7 @@ export const tryRecomputeCitationAuthorityForAll = async (
   options: RecomputeCitationAuthorityOptions = {},
 ): Promise<number | null> => {
   const lockResult: unknown = await tx.execute(
-    sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law_citation_authority_recompute')) AS locked`,
+    sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law'), hashtext('citation_authority_recompute')) AS locked`,
   );
   const lockRow: unknown = Array.isArray(lockResult)
     ? lockResult.at(0)
@@ -171,7 +171,7 @@ export const recomputeCitationAuthorityForAllExclusive = async (
   options: RecomputeCitationAuthorityOptions = {},
 ): Promise<number> => {
   await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext('case_law_citation_authority_recompute'))`,
+    sql`SELECT pg_advisory_xact_lock(hashtext('case_law'), hashtext('citation_authority_recompute'))`,
   );
   return await recomputeCitationAuthorityForAll(tx, options);
 };
