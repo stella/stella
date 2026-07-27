@@ -133,8 +133,8 @@ export const tabularReview: Product = {
     },
   ],
   evidence: [
-    { type: "capability", id: "views.read" },
-    { type: "capability", id: "properties.read" },
+    { type: "capability", id: "views.list" },
+    { type: "capability", id: "properties.list" },
     { type: "capability", id: "fields.upsert-by-id" },
     { type: "capability", id: "reports.export-view" },
   ],

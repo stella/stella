@@ -112,7 +112,7 @@ export const anonymization: Product = {
     },
     {
       type: "capability",
-      id: "workspaces.anonymization-terms.read",
+      id: "workspaces.anonymization-terms.list",
     },
     {
       type: "source",

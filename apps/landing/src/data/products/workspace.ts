@@ -120,10 +120,10 @@ export const workspace: Product = {
     },
   ],
   evidence: [
-    { type: "capability", id: "workspaces.read" },
-    { type: "capability", id: "entities.read" },
+    { type: "capability", id: "workspaces.list" },
+    { type: "capability", id: "entities.list" },
     { type: "capability", id: "entities.upload" },
-    { type: "capability", id: "views.read" },
+    { type: "capability", id: "views.list" },
     { type: "capability", id: "entities.read-versions" },
     {
       type: "source",

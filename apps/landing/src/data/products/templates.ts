@@ -137,7 +137,7 @@ export const templates: Product = {
   evidence: [
     { type: "capability", id: "templates.fill" },
     { type: "capability", id: "templates.suggest-fields" },
-    { type: "capability", id: "clauses.read-list" },
+    { type: "capability", id: "clauses.list" },
     { type: "capability", id: "playbooks.run" },
   ],
   cta: {

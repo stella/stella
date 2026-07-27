@@ -131,7 +131,7 @@ export const cliMcp: Product = {
       path: "apps/api/src/mcp/server-core.ts",
       contains: ["export const createMcpHttpRequestHandler"],
     },
-    { type: "capability", id: "workspaces.read" },
+    { type: "capability", id: "workspaces.list" },
   ],
   cta: {
     heading: "Bring stella into the tools where you already work.",
