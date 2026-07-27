@@ -5,7 +5,7 @@ import { Buffer } from "buffer";
 
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonResult, ChatAnonRuntime } from "@stll/anonymize-chat";
-import { loadCityDictionary, loadNameDictionaries } from "@stll/anonymize-data";
+import { loadNameDictionaries } from "@stll/anonymize-data";
 import * as anonymizeRuntime from "@stll/anonymize-wasm";
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 
@@ -57,6 +57,31 @@ const DEMO_DENYLIST_COUNTRIES = [
   "NL",
 ] as const;
 
+type DemoDenylistCountry = (typeof DEMO_DENYLIST_COUNTRIES)[number];
+
+// @stll/anonymize-data's own `loadCityDictionary` builds its specifier from a
+// variable (`../dictionaries/cities/${code}.json`), which no bundler can
+// rewrite: in a bundled worker that relative path resolves against the emitted
+// chunk instead of the package, 404s, and the loader's internal try/catch
+// turns the failure into an empty list. Detection then silently loses every
+// city — and with it every street address, because the engine only emits an
+// address span when a known city anchors it. Literal specifiers keep the JSON
+// bundler-visible (one lazy chunk per country). `satisfies` keeps the map and
+// DEMO_DENYLIST_COUNTRIES from drifting apart.
+const CITY_DICTIONARY_LOADERS = {
+  US: () => import("@stll/anonymize-data/dictionaries/cities/US.json"),
+  GB: () => import("@stll/anonymize-data/dictionaries/cities/GB.json"),
+  FR: () => import("@stll/anonymize-data/dictionaries/cities/FR.json"),
+  DE: () => import("@stll/anonymize-data/dictionaries/cities/DE.json"),
+  CZ: () => import("@stll/anonymize-data/dictionaries/cities/CZ.json"),
+  IT: () => import("@stll/anonymize-data/dictionaries/cities/IT.json"),
+  ES: () => import("@stll/anonymize-data/dictionaries/cities/ES.json"),
+  NL: () => import("@stll/anonymize-data/dictionaries/cities/NL.json"),
+} satisfies Record<
+  DemoDenylistCountry,
+  () => Promise<{ default: readonly string[] }>
+>;
+
 let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
@@ -95,7 +120,10 @@ const loadDemoDictionaries = async (): Promise<
     Promise.all(
       DEMO_DENYLIST_COUNTRIES.map(
         async (country) =>
-          [country, await loadCityDictionary(country)] as const,
+          [
+            country,
+            (await CITY_DICTIONARY_LOADERS[country]()).default,
+          ] as const,
       ),
     ),
   ]);
