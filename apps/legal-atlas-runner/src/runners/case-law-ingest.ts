@@ -874,10 +874,10 @@ export const runCaseLawIngest = async (
   // Citation-authority refresh loop: keeps the materialized ranking
   // signal current (also runs in the post-citation pass; this covers the
   // continuous daemon). Runs via the ingestion role outside the DB slot.
+  // The first recompute runs at startup: a process whose lifetime is
+  // shorter than the interval would otherwise never recompute at all.
   const citationAuthorityLoop = (async () => {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop -- fixed-interval recompute poll; the loop must wait CITATION_AUTHORITY_INTERVAL_MS between recomputes, so this await is intentionally sequential
-      await Bun.sleep(CITATION_AUTHORITY_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
         const courtWeightEntries = await loadCourtWeightEntries();
@@ -899,6 +899,8 @@ export const runCaseLawIngest = async (
           logError("[citation-authority] Recompute error:", error);
         }
       }
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval recompute poll; the loop must wait CITATION_AUTHORITY_INTERVAL_MS between recomputes, so this await is intentionally sequential
+      await Bun.sleep(CITATION_AUTHORITY_INTERVAL_MS);
     }
   })();
 
