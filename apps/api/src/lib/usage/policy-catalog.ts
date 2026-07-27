@@ -40,7 +40,7 @@ type UsagePolicyCatalogEntry = Omit<CatalogQueryRow, "hostedPolicyRef"> & {
   hostedCheckoutAvailable: boolean;
 };
 
-export type ListPoliciesResult = { policies: UsagePolicyCatalogEntry[] };
+type ListPoliciesResult = { policies: UsagePolicyCatalogEntry[] };
 
 export const readUsagePolicyCatalog = async function* ({
   safeDb,
