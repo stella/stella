@@ -42,3 +42,13 @@ export const getApiCredentials =
       baseUrl: env.HOSTED_USAGE_PROVIDER_BASE_URL,
     };
   };
+
+export type HostedUsageProviderKind = "neutral" | "polar";
+
+/**
+ * Which concrete provider binding shapes outbound API calls and inbound
+ * webhook events. `neutral` keeps the provider-agnostic contract; `polar`
+ * routes through the Polar adapter in `lib/hosted-usage-provider/polar`.
+ */
+export const getHostedUsageProviderKind = (): HostedUsageProviderKind =>
+  env.HOSTED_USAGE_PROVIDER;

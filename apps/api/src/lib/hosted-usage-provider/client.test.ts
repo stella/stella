@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   createHostedManagementSession,
   createHostedSetupSession,
+  createPolarManagementSession,
+  createPolarSetupSession,
   HostedUsageProviderApiError,
 } from "@/api/lib/hosted-usage-provider/client";
 
@@ -246,5 +248,100 @@ describe("createHostedManagementSession", () => {
     if (Result.isError(result)) {
       expect(result.error.status).toBe(404);
     }
+  });
+});
+
+describe("createPolarSetupSession", () => {
+  test("POSTs to /v1/checkouts/ with products array and external_customer_id", async () => {
+    let calledUrl: string | URL | Request | undefined;
+    let calledInit: RequestInit | undefined;
+    installFetch(async (url, init) => {
+      calledUrl = url;
+      calledInit = init;
+      return okResponse({
+        id: "checkout_abc",
+        url: "https://buy.polar.test/abc",
+        client_secret: "cs_x",
+      });
+    });
+
+    const result = await createPolarSetupSession({
+      credentials,
+      policyRef: "prod_pro",
+      externalAccountRef: "stella_org_org_test_001",
+      successUrl: "https://app.stella.test/settings",
+      returnUrl: "https://app.stella.test/settings/organization/usage",
+      metadata: {
+        organization_id: "org_test_001",
+        usage_policy_id: "plan_test_001",
+      },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.id).toBe("checkout_abc");
+      expect(result.value.url).toBe("https://buy.polar.test/abc");
+    }
+    expect(urlToString(calledUrl)).toBe(
+      "https://sandbox.provider.test/v1/checkouts/",
+    );
+    const body = readJsonRequestBody(calledInit?.body);
+    expect(body["products"]).toEqual(["prod_pro"]);
+    expect(body["external_customer_id"]).toBe("stella_org_org_test_001");
+    expect(body["success_url"]).toBe("https://app.stella.test/settings");
+    // The Polar request body must not leak the neutral contract's field names.
+    expect("policy_refs" in body).toBe(false);
+    expect("account_ref" in body).toBe(false);
+  });
+
+  test("surfaces non-2xx as HostedUsageProviderApiError", async () => {
+    installFetch(async () => new Response("unprocessable", { status: 422 }));
+
+    const result = await createPolarSetupSession({
+      credentials,
+      policyRef: "prod_pro",
+      externalAccountRef: "stella_org_x",
+      successUrl: "https://app.stella.test/settings",
+      metadata: { organization_id: "org", usage_policy_id: "pol" },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.status).toBe(422);
+    }
+  });
+});
+
+describe("createPolarManagementSession", () => {
+  test("POSTs customer_id to /v1/customer-sessions/ and reads customer_portal_url", async () => {
+    let calledUrl: string | URL | Request | undefined;
+    let calledInit: RequestInit | undefined;
+    installFetch(async (url, init) => {
+      calledUrl = url;
+      calledInit = init;
+      return okResponse({
+        token: "tok_x",
+        customer_portal_url: "https://portal.polar.test/cus_abc",
+      });
+    });
+
+    const result = await createPolarManagementSession({
+      credentials,
+      accountRef: "cus_abc",
+      returnUrl: "https://app.stella.test/settings/organization/usage",
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.url).toBe("https://portal.polar.test/cus_abc");
+    }
+    expect(urlToString(calledUrl)).toBe(
+      "https://sandbox.provider.test/v1/customer-sessions/",
+    );
+    const body = readJsonRequestBody(calledInit?.body);
+    expect(body["customer_id"]).toBe("cus_abc");
+    expect(body["return_url"]).toBe(
+      "https://app.stella.test/settings/organization/usage",
+    );
   });
 });

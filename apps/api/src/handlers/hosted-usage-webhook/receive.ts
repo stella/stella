@@ -37,10 +37,13 @@ import type { DispatchOutcome } from "@/api/handlers/hosted-usage-webhook/dispat
 import {
   hostedUsageUnknownEventEnvelopeSchema,
   hostedUsageWebhookEventSchema,
-  isHostedUsageHandledEventType,
 } from "@/api/handlers/hosted-usage-webhook/event-schemas";
 import { captureError } from "@/api/lib/analytics/capture";
-import { getWebhookSecret } from "@/api/lib/hosted-usage-provider/config";
+import {
+  getHostedUsageProviderKind,
+  getWebhookSecret,
+} from "@/api/lib/hosted-usage-provider/config";
+import { normalizeProviderEvent } from "@/api/lib/hosted-usage-provider/provider-event-normalizer";
 import { verifyWebhookSignature } from "@/api/lib/hosted-usage-provider/verify-signature";
 import {
   insertWebhookEventInTx,
@@ -124,13 +127,27 @@ export const receiveHostedUsageWebhook = async (
   }
   const payload = parsedJson;
 
-  // Validate the strict schema for the events we actually handle
-  // BEFORE opening a transaction. Unknown event types are recorded
-  // in their own tiny transaction (insert with result="ignored")
-  // and acknowledged so the provider stops retrying.
-  const strict = v.safeParse(hostedUsageWebhookEventSchema, parsedJson);
+  // Translate the (already authenticated) body into the neutral event
+  // contract before validating it. For the neutral provider this is a
+  // pass-through; the Polar adapter renames `subscription.*` / `order.*`
+  // events into `entitlement.*` / `allocation.*`. We record the native
+  // event type and original payload for audit, and dispatch on the
+  // normalised event.
+  //
+  // Validation happens BEFORE opening a transaction. Unknown event types
+  // are recorded in their own tiny transaction (insert with
+  // result="ignored") and acknowledged so the provider stops retrying.
+  const normalized = normalizeProviderEvent(
+    parsedJson,
+    envelope.type,
+    getHostedUsageProviderKind(),
+  );
+  const strict = v.safeParse(
+    hostedUsageWebhookEventSchema,
+    normalized.candidate,
+  );
   if (!strict.success) {
-    if (isHostedUsageHandledEventType(envelope.type)) {
+    if (normalized.handled) {
       return respond(400, "Malformed payload for handled event type");
     }
     await persistUnknownEventType({
