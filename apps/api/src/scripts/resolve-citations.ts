@@ -24,7 +24,7 @@ import {
   caseLawDecisions,
   caseLawPolarityRules,
 } from "@/api/db/schema";
-import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
+import { recomputeCitationAuthorityForAllExclusive } from "@/api/handlers/case-law/citation-authority";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
@@ -699,9 +699,14 @@ if (!REPORT_ONLY) {
   if (!DRY_RUN) {
     console.log("\n=== RECOMPUTING CITATION AUTHORITY ===");
     const courtWeightEntries = await loadCourtWeightEntriesForSql();
+    // Blocking on purpose: the citations this script just resolved must be
+    // reflected before it exits, and a concurrent recompute may hold a
+    // snapshot from before those commits.
     const updated = await rootDb.transaction(
       async (tx) =>
-        await recomputeCitationAuthorityForAll(tx, { courtWeightEntries }),
+        await recomputeCitationAuthorityForAllExclusive(tx, {
+          courtWeightEntries,
+        }),
     );
     console.log(`Citation authority refreshed for ${updated} cited decisions.`);
   }
