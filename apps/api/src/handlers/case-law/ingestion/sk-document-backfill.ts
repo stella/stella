@@ -75,10 +75,17 @@ export const fetchPdfBytes = async (
     signal,
     timeoutMs: PDF_TIMEOUT_MS,
   });
-  if (!response.ok) {
+  if (response.ok) {
+    return new Uint8Array(await response.arrayBuffer());
+  }
+  // Only a response that says the document does not exist proves
+  // unavailability. Anything else (5xx, 429, auth hiccups) is transient:
+  // throw, so the row keeps a NULL fulltext and stays in the queue for a
+  // later attempt instead of being marked unavailable forever.
+  if (response.status === 404 || response.status === 410) {
     return undefined;
   }
-  return new Uint8Array(await response.arrayBuffer());
+  throw new Error(`document fetch returned ${response.status}`);
 };
 
 export type BackfilledDocument = {

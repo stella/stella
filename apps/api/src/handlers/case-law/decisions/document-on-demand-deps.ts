@@ -14,10 +14,17 @@ import {
   recordDocumentFetchRequest,
 } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
 import { getCaseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 export const onDemandDocumentDeps: OnDemandDocumentDeps = {
   recordRequest: async (decisionId) =>
-    await recordDocumentFetchRequest(decisionId, getCaseLawIngestionDb()),
+    // Bounded on its own: the read budget abandons rather than cancels,
+    // and an abandoned recording must not sit on a stalled pool forever.
+    await withTimeout(
+      async () =>
+        await recordDocumentFetchRequest(decisionId, getCaseLawIngestionDb()),
+      { label: "caseLaw.recordDocumentFetchRequest", timeoutMs: 15_000 },
+    ),
   fetchDocument: async (decision) =>
     await fetchDecisionDocument({
       decision,
