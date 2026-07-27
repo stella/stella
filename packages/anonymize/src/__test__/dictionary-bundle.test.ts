@@ -2,7 +2,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import { loadDictionaryBundle } from "../../../data/dictionaries/index";
+import { loadDictionaryBundle } from "../../../data/dictionaries/cities";
 
 describe("dictionary bundle scoping", () => {
   test("empty country scope keeps default city dictionaries", async () => {

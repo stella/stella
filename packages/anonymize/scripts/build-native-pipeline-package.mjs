@@ -188,7 +188,11 @@ function normalizeLanguageList(value) {
 async function loadDefaultDictionaries() {
   let loaded;
   try {
-    loaded = await import("@stll/anonymize-data/dictionaries");
+    // The bundle loads city dictionaries, so it ships in the data package's
+    // cities entry, not its root: the root entry stays free of the city
+    // loader map so bundled consumers do not carry every city chunk.
+    // The specifier stays literal for stll/no-dynamic-import-specifier.
+    loaded = await import("@stll/anonymize-data/cities");
   } catch (error) {
     throw new Error(
       `--default-dictionaries requires @stll/anonymize-data: ${formatError(error)}`,
@@ -196,7 +200,7 @@ async function loadDefaultDictionaries() {
   }
   if (typeof loaded.loadDictionaryBundle !== "function") {
     throw new TypeError(
-      "@stll/anonymize-data/dictionaries does not export loadDictionaryBundle",
+      "@stll/anonymize-data/cities does not export loadDictionaryBundle",
     );
   }
   return loaded.loadDictionaryBundle();

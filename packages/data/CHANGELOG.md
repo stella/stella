@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.9 (2026-07-27)
+
+### Breaking
+
+- Move the city API to the `@stll/anonymize-data/cities` subpath:
+  `loadCityDictionary`, `loadCityDictionaries`, `hasCityDictionary`,
+  `CITY_DICTIONARY_COUNTRIES`, `CITY_DICTIONARY_META`, `loadDictionaryBundle`,
+  and the `DictionaryBundle` / `LoadDictionaryBundleOptions` types. The root
+  entry no longer exports them.
+
+  The city loader map holds one literal `import()` per covered country, so a
+  bundler emitted all 237 city chunks (~815 KiB) for any consumer that touched
+  the root entry, even one that only loaded name dictionaries. The root entry's
+  module graph can no longer reach the loader map, and a test enforces it.
+
+  Update imports of the listed symbols to `@stll/anonymize-data/cities`; the
+  rest of the root surface is unchanged.
+
 ## 0.0.8 (2026-07-27)
 
 ### Fixes

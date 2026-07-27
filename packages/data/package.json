@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-data",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Deny list dictionaries and config data for @stll/anonymize",
   "keywords": [
     "anonymization",
@@ -23,6 +23,11 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "default": "./dist/index.mjs"
+    },
+    "./cities": {
+      "types": "./dist/cities.d.mts",
+      "import": "./dist/cities.mjs",
+      "default": "./dist/cities.mjs"
     },
     "./config/*": "./config/*",
     "./dictionaries/*": "./dictionaries/*"

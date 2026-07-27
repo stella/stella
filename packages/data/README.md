@@ -29,6 +29,20 @@ import cities from "@stll/anonymize-data/dictionaries/cities/CZ.json";
 import banks from "@stll/anonymize-data/dictionaries/banks/US.json";
 ```
 
+The lazy loaders are split across two module entries:
+
+```ts
+// Deny-list catalog, name dictionaries, single-dictionary loaders.
+import { loadDictionary, loadNameDictionaries } from "@stll/anonymize-data";
+// City dictionaries and the full bundle.
+import {
+  loadCityDictionary,
+  loadDictionaryBundle,
+} from "@stll/anonymize-data/cities";
+```
+
+The city API sits in its own entry because its loader map holds one literal `import()` per covered country. A bundler emits every city chunk for any module graph that reaches it, so the root entry stays free of that dependency.
+
 ## Maintenance
 
 - The package build checks trigger configs for schema mistakes and duplicate trigger collisions.

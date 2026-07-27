@@ -2,11 +2,11 @@ import type { Dictionaries, DictionaryMeta } from "@stll/anonymize";
 import {
   ALL_DICTIONARY_IDS,
   DICTIONARY_META,
-  loadCityDictionary,
   loadDictionary,
   loadNameDictionaries,
   type NameLanguage,
 } from "@stll/anonymize-data";
+import { loadCityDictionary } from "@stll/anonymize-data/cities";
 
 import { UsageError } from "./args";
 import type { DictionaryScope } from "./dictionary-scope";

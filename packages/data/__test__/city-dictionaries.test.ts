@@ -7,7 +7,7 @@ import {
   CITY_DICTIONARY_COUNTRIES,
   hasCityDictionary,
   loadCityDictionary,
-} from "../dictionaries/index";
+} from "../dictionaries/cities";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DICTIONARIES_DIR = join(__dirname, "..", "dictionaries");

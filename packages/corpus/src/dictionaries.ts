@@ -2,10 +2,10 @@ import type { Dictionaries, DictionaryMeta } from "@stll/anonymize";
 import {
   ALL_DICTIONARY_IDS,
   DICTIONARY_META,
-  loadCityDictionary,
   loadDictionary,
   loadNameDictionaries,
 } from "@stll/anonymize-data";
+import { loadCityDictionary } from "@stll/anonymize-data/cities";
 
 /** Countries with bundled city dictionaries (mirrors the CLI default). */
 const CITY_COUNTRIES = [

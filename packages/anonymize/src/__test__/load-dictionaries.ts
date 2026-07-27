@@ -27,7 +27,7 @@ export const loadTestDictionaries = async (
   const key = scopeKey(scope);
   const cached = cache.get(key);
   if (cached) return cached;
-  const dataModule = await import("../../../data/dictionaries/index");
+  const dataModule = await import("../../../data/dictionaries/cities");
   const bundleOptions: Parameters<typeof dataModule.loadDictionaryBundle>[0] =
     {};
   if (scope.denyListCountries !== undefined) {
