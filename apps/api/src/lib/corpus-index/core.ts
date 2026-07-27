@@ -260,12 +260,12 @@ export type LoadDocsForBatchOptions<TBrand extends SafeIdType, TRow> = {
   readPayload?: (row: TRow) => Promise<CorpusDocumentPayload>;
 };
 
-/** Failed index-job audit rows for the rows an ingest attempt did not land. */
-const failedIndexJobs = <
-  TBrand extends SafeIdType,
-  TRow extends CorpusIndexRow<TBrand>,
->(
-  entries: readonly BuiltRow<TRow>[],
+/**
+ * Failed index-job audit rows for the rows an ingest attempt did not land.
+ * The brand is inferred from the rows' own ids, so callers never spell it.
+ */
+const failedIndexJobs = <TBrand extends SafeIdType>(
+  entries: readonly BuiltRow<CorpusIndexRow<TBrand>>[],
   error: CorpusIndexError,
 ): CorpusJobInput<TBrand>[] =>
   entries.map(({ row }) => ({
@@ -583,131 +583,134 @@ export const createCorpusIndexer = <
     const now = new Date();
     let indexed = 0;
     let firstError: CorpusIndexError | null = null;
-    // Failed index-job rows accumulate per index and are written once below,
-    // the same shape recordReadFailures uses: an ingest failure now happens at
-    // two levels (the index could not be ensured, or one request of several was
-    // rejected), and collecting them keeps a single audit write per index
-    // instead of one per failure site.
-    const failedByIndex = new Map<string, CorpusJobInput<TBrand>[]>();
-    const recordFailed = (
-      indexId: string,
-      jobs: readonly CorpusJobInput<TBrand>[],
-    ): void => {
-      const existing = failedByIndex.get(indexId);
-      if (existing) {
-        existing.push(...jobs);
-      } else {
-        failedByIndex.set(indexId, [...jobs]);
-      }
-    };
 
     for (const [indexId, group] of groups) {
-      // Ingest appends; it never replaces. Before re-ingesting, delete the
-      // previously indexed copies from wherever they live (the same index for
-      // a content refresh, another jurisdiction index for a corrected
-      // country), or stale copies keep matching old text. `remove` deletes by
-      // `document_id`, so a row whose previous version split into a different
-      // number of passages leaves nothing behind. Same generation only:
-      // generation rebuilds replace whole indexes. Engine delete tasks only
-      // affect splits that already exist, so the copies ingested below are not
-      // at risk.
-      const moved = group.flatMap(({ row }) =>
-        row.indexedGeneration !== null &&
-        row.indexedGeneration.startsWith(`${generation}_`)
-          ? [{ id: row.id, oldIndexId: row.indexedGeneration }]
-          : [],
-      );
-      let staleError: CorpusIndexError | null = null;
-      for (const entry of moved) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential deletes that early-break on the first error
-        const removed = await remove(entry.id, scopedDb, entry.oldIndexId);
-        if (removed.isErr()) {
-          staleError = removed.error;
-          break;
-        }
-      }
-      if (staleError) {
-        firstError ??= staleError;
-        continue;
-      }
-
-      // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
-      const ensured = await ensureIndex(indexId);
-      if (ensured.isErr()) {
-        firstError ??= ensured.error;
-        recordFailed(indexId, failedIndexJobs(group, ensured.error));
-        continue;
-      }
-
-      // One group can exceed a single request's byte budget once rows project
-      // to many documents, so it goes out as a sequence of requests. Each is
-      // committed on its own: a later request failing must not un-commit the
-      // rows an earlier one already landed, because those documents are in the
-      // index and re-ingesting them next cycle would append a second copy that
-      // nothing points at.
-      for (const { entries, ndjson } of splitIngestRequests(
-        group,
-        LIMITS.corpusIndexIngestMaxBytes,
-      )) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
-        const ingest = await getCorpusIndexClient().ingestBatch(
-          indexId,
-          ndjson,
+      // Failed index-job rows for this group, written in the `finally` below.
+      // An ingest failure can now surface at two levels (the index could not
+      // be ensured, or one request of several was rejected), so they are
+      // collected rather than written at each site — but they must never
+      // outlive the group that produced them: buffering across groups meant a
+      // later group throwing (a DB error in a delete, CAS, or audit insert)
+      // skipped the write entirely and the earlier failure left no audit row
+      // at all. One group writes to exactly one index, so this needs no
+      // keying.
+      const groupFailures: CorpusJobInput<TBrand>[] = [];
+      try {
+        // Ingest appends; it never replaces. Before re-ingesting, delete the
+        // previously indexed copies from wherever they live (the same index for
+        // a content refresh, another jurisdiction index for a corrected
+        // country), or stale copies keep matching old text. `remove` deletes by
+        // `document_id`, so a row whose previous version split into a different
+        // number of passages leaves nothing behind. Same generation only:
+        // generation rebuilds replace whole indexes. Engine delete tasks only
+        // affect splits that already exist, so the copies ingested below are not
+        // at risk.
+        const moved = group.flatMap(({ row }) =>
+          row.indexedGeneration !== null &&
+          row.indexedGeneration.startsWith(`${generation}_`)
+            ? [{ id: row.id, oldIndexId: row.indexedGeneration }]
+            : [],
         );
-
-        if (ingest.isErr()) {
-          firstError ??= ingest.error;
-          // Only the rows actually attempted are recorded failed; the rest of
-          // the group is left for the next cycle rather than audited as a
-          // failure that never happened.
-          recordFailed(indexId, failedIndexJobs(entries, ingest.error));
-          break;
+        let staleError: CorpusIndexError | null = null;
+        for (const entry of moved) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential deletes that early-break on the first error
+          const removed = await remove(entry.id, scopedDb, entry.oldIndexId);
+          if (removed.isErr()) {
+            staleError = removed.error;
+            break;
+          }
+        }
+        if (staleError) {
+          firstError ??= staleError;
+          continue;
         }
 
-        const casMissed = new Set<SafeId<TBrand>>();
-        // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per ingest request; sequential to keep index writes and audit rows consistent
-        await scopedDb(async (tx) => {
-          // audit: skip — search index maintenance; rebuilds derived state
-          for (const { row } of entries) {
-            // Compare-and-set on the selected row state: a concurrent
-            // re-ingest clears indexedHash (possibly leaving it null-to-null
-            // when the row was already pending) and bumps updatedAt, and an
-            // unconditional write would mask that refresh so the stale index
-            // document would never be retried.
-            // oxlint-disable-next-line no-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
-            const marked = await adapter.markIndexed(tx, { row, indexId, now });
-            if (!marked) {
-              casMissed.add(row.id);
+        // oxlint-disable-next-line no-await-in-loop -- per-jurisdiction indexes are ensured/ingested sequentially to avoid overwhelming the search backend
+        const ensured = await ensureIndex(indexId);
+        if (ensured.isErr()) {
+          firstError ??= ensured.error;
+          groupFailures.push(...failedIndexJobs(group, ensured.error));
+          continue;
+        }
+
+        // One group can exceed a single request's byte budget once rows project
+        // to many documents, so it goes out as a sequence of requests. Each is
+        // committed on its own: a later request failing must not un-commit the
+        // rows an earlier one already landed, because those documents are in the
+        // index and re-ingesting them next cycle would append a second copy that
+        // nothing points at.
+        for (const { entries, ndjson } of splitIngestRequests(
+          group,
+          LIMITS.corpusIndexIngestMaxBytes,
+        )) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
+          const ingest = await getCorpusIndexClient().ingestBatch(
+            indexId,
+            ndjson,
+          );
+
+          if (ingest.isErr()) {
+            firstError ??= ingest.error;
+            // Only the rows actually attempted are recorded failed; the rest of
+            // the group is left for the next cycle rather than audited as a
+            // failure that never happened.
+            groupFailures.push(...failedIndexJobs(entries, ingest.error));
+            break;
+          }
+
+          const casMissed = new Set<SafeId<TBrand>>();
+          // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per ingest request; sequential to keep index writes and audit rows consistent
+          await scopedDb(async (tx) => {
+            // audit: skip — search index maintenance; rebuilds derived state
+            for (const { row } of entries) {
+              // Compare-and-set on the selected row state: a concurrent
+              // re-ingest clears indexedHash (possibly leaving it null-to-null
+              // when the row was already pending) and bumps updatedAt, and an
+              // unconditional write would mask that refresh so the stale index
+              // document would never be retried.
+              // oxlint-disable-next-line no-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
+              const marked = await adapter.markIndexed(tx, {
+                row,
+                indexId,
+                now,
+              });
+              if (!marked) {
+                casMissed.add(row.id);
+              }
+            }
+            const markedRows = entries
+              .filter(({ row }) => !casMissed.has(row.id))
+              .map(({ row }) => row);
+            if (markedRows.length > 0) {
+              await adapter.insertSucceededJobs(tx, {
+                rows: markedRows,
+                indexId,
+              });
+            }
+          });
+          // A missed CAS means a refresh outpaced this batch after the ingest
+          // appended its documents: the row carries no generation pointer to
+          // them, so delete the unrecorded copies now; the refreshed row is
+          // re-indexed by a later cycle.
+          for (const missedId of casMissed) {
+            // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
+            const removed = await remove(missedId, scopedDb, indexId);
+            if (removed.isErr()) {
+              firstError ??= removed.error;
             }
           }
-          const markedRows = entries
-            .filter(({ row }) => !casMissed.has(row.id))
-            .map(({ row }) => row);
-          if (markedRows.length > 0) {
-            await adapter.insertSucceededJobs(tx, {
-              rows: markedRows,
-              indexId,
-            });
-          }
-        });
-        // A missed CAS means a refresh outpaced this batch after the ingest
-        // appended its documents: the row carries no generation pointer to
-        // them, so delete the unrecorded copies now; the refreshed row is
-        // re-indexed by a later cycle.
-        for (const missedId of casMissed) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
-          const removed = await remove(missedId, scopedDb, indexId);
-          if (removed.isErr()) {
-            firstError ??= removed.error;
-          }
+          indexed += entries.length - casMissed.size;
         }
-        indexed += entries.length - casMissed.size;
+      } finally {
+        // Always lands, including when the code above threw. The audit
+        // trail is how an operator sees which rows the indexer could not
+        // place; a row that is neither indexed nor recorded failed is
+        // invisible.
+        if (groupFailures.length > 0) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential per-group audit write preserves job ordering
+          await adapter.recordJobs(scopedDb, groupFailures, indexId);
+        }
       }
-    }
-
-    for (const [failedIndexId, jobs] of failedByIndex) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential per-index audit writes preserve job ordering
-      await adapter.recordJobs(scopedDb, jobs, failedIndexId);
     }
 
     // Surface a failure so the daemon retries the un-indexed groups.

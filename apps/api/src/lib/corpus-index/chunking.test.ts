@@ -287,6 +287,8 @@ describe("chunkDocument never emits a body-less passage", () => {
     );
   });
 
+  // The 2s deadline matters: a regression here hangs instead of failing, and
+  // the deadline turns it back into a readable failure.
   test("a non-positive heading level cannot spin the ancestry stack", () => {
     // `isDocumentAst` validates the envelope only, so a source that emits a
     // level of 0 reaches the chunker exactly like this. Parsed through the
@@ -336,8 +338,7 @@ describe("chunkDocument never emits a body-less passage", () => {
     expect(chunks.map((chunk) => chunk.text)).toEqual([
       ["Zero", "Negative", "body"].join(SEPARATOR),
     ]);
-  }, // into a readable failure. // A regression here hangs rather than fails; the deadline turns it back
-  2000);
+  }, 2000);
 });
 
 describe("chunkDocument fallbacks", () => {
@@ -356,6 +357,75 @@ describe("chunkDocument fallbacks", () => {
       expect(chunk.anchorId).toBeNull();
       expect(chunk.headingPath).toEqual([]);
     }
+  });
+
+  test("junk blocks that pass the envelope guard degrade to the text", () => {
+    // Exactly what `hasUsableAst` admits: its own tests accept
+    // `{ version: 1, blocks: [{ a: 1 }] }`. Reading `.plainText` off any of
+    // these throws, and the indexer would record a failed job and retry
+    // forever for a document whose canonical text is fine.
+    const ast = parseDocumentAst(
+      JSON.stringify({
+        version: 1,
+        blocks: [{ junk: true }, 42, null],
+      }),
+    );
+    expect(ast).not.toBeNull();
+
+    const chunks = chunkDocument({
+      ast,
+      fallbackText: "the canonical text\n\nsecond paragraph",
+    });
+
+    expect(chunks.map((chunk) => chunk.text)).toEqual([
+      ["the canonical text", "second paragraph"].join(SEPARATOR),
+    ]);
+    for (const chunk of chunks) {
+      expect(chunk.anchorId).toBeNull();
+    }
+  });
+
+  test("one malformed block condemns the whole AST, not just itself", () => {
+    // Skipping the bad block would silently drop whatever it held; the
+    // canonical text is complete, so it is the safer source.
+    const ast = parseDocumentAst(
+      JSON.stringify({
+        version: 1,
+        blocks: [
+          {
+            id: "p0",
+            anchorId: "p0",
+            type: "paragraph",
+            inlines: [],
+            plainText: "a good block",
+          },
+          { id: "p1", anchorId: "p1", type: "paragraph", plainText: 7 },
+        ],
+      }),
+    );
+
+    const chunks = chunkDocument({ ast, fallbackText: "complete text" });
+
+    expect(chunks.map((chunk) => chunk.text)).toEqual(["complete text"]);
+  });
+
+  test("a heading missing its level is not chunkable", () => {
+    // The ancestry stack reads `level`; without it the heading cannot be
+    // placed, so the document takes the text path.
+    const ast = parseDocumentAst(
+      JSON.stringify({
+        version: 1,
+        blocks: [
+          { id: "h0", anchorId: "h0", type: "heading", plainText: "Nadpis" },
+        ],
+      }),
+    );
+
+    expect(
+      chunkDocument({ ast, fallbackText: "text instead" }).map(
+        (chunk) => chunk.text,
+      ),
+    ).toEqual(["text instead"]);
   });
 
   test("an AST that parsed but has no readable block degrades to the text", () => {

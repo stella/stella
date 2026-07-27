@@ -103,10 +103,14 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   // The AST block anchor the reader deep-links to, so a hit can open the
   // document scrolled to the passage that matched.
   { name: "anchor_id", type: "text", tokenizer: "raw", stored: true },
-  // Heading ancestry of the passage's section. Searchable rather than raw:
-  // a passage in the middle of a long section does not repeat the heading in
-  // its body (that would inflate those terms' document frequency), so this is
-  // where its section context lives.
+  // Heading ancestry of the passage's section. Tokenized so a query can target
+  // it explicitly (`heading_path:...`), but deliberately NOT a default search
+  // field: it repeats on every continuation passage of a section, so a
+  // free-text term matching a boilerplate heading ("Odůvodnění", "Facts")
+  // would match all of them at once. Nothing is lost by leaving it out — a
+  // heading opens the passage carrying its section, so its words are already
+  // in that passage's `text`, and matching there yields one hit per section
+  // instead of one per passage.
   {
     name: "heading_path",
     type: "text",
@@ -160,7 +164,15 @@ export const corpusIndexConfig = (
     store_source: false,
   },
   search_settings: {
-    default_search_fields: ["title", "text", "heading_path"],
+    // The rule under a passage layout: no field that repeats across a
+    // document's passages may be a default search field. One free-text term
+    // hitting such a field lets a single document answer with as many hits as
+    // it has passages and crowd everything else out of the capped scan window.
+    // `text` is the only per-passage field here, and it is per-passage
+    // *content* — each passage matches on its own words, which is the point.
+    // Everything else document-level is raw-tokenized, numeric, or (like
+    // `title`) written to one passage only.
+    default_search_fields: ["title", "text"],
   },
 });
 

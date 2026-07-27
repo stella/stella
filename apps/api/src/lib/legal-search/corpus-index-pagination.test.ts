@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import { LIMITS } from "@/api/lib/limits";
 
 /**
  * Grouping passage hits back into document hits. A passage-granular generation
@@ -157,13 +158,15 @@ describe("document-granular responses are unaffected", () => {
 });
 
 describe("a single document cannot monopolise the scan", () => {
-  test("a passage flood from one document still yields a full page of others", async () => {
-    // The shape a broad title or court-name query used to produce: one long
-    // judgment answering with a hit per passage, ahead of everything else.
-    // Document-level searchable fields now sit on the opening passage only, so
-    // the engine should not emit this — the read path must survive it anyway,
-    // because body text can legitimately match many passages of one decision.
-    const flood = Array.from({ length: 400 }, (_, seq) => ({
+  /**
+   * Two query shapes produce the same hazard, and both are now closed at
+   * indexing time — `title` is written to the opening passage only, and
+   * `heading_path` is not a default search field. The read path still has to
+   * survive the shape, because body text can legitimately match many passages
+   * of one long decision, so it is exercised here for each.
+   */
+  const expectFloodYieldsToOthers = async (floodSize: number) => {
+    const flood = Array.from({ length: floodSize }, (_, seq) => ({
       document_id: "doc-flood",
       anchor_id: `flood-p${seq}`,
     }));
@@ -182,12 +185,28 @@ describe("a single document cannot monopolise the scan", () => {
     ).toHaveLength(1);
     expect(page.pageRanked).toHaveLength(5);
     expect(new Set(page.pageRanked.map((hit) => hit.id)).size).toBe(5);
-    // The scan walked past the flood to reach the other decisions.
-    expect(requestCount).toBeGreaterThan(1);
-    expect(page.passageCountById.get("doc-flood")).toBe(400);
+    // Only a flood that overruns one window proves the scan kept walking to
+    // reach the other decisions; a smaller one is served in a single request.
+    if (floodSize > LIMITS.corpusIndexSearchCandidateLimit) {
+      expect(requestCount).toBeGreaterThan(1);
+    }
+    expect(page.passageCountById.get("doc-flood")).toBe(floodSize);
     for (const hit of page.pageRanked.slice(1)) {
       expect(page.passageCountById.get(hit.id)).toBe(1);
     }
+  };
+
+  test("a court-name query matching a document-level title", async () => {
+    // Every passage of one long judgment carrying the same title: what the
+    // index produced before `title` moved to the opening passage.
+    await expectFloodYieldsToOthers(400);
+  });
+
+  test("a query matching a boilerplate section heading", async () => {
+    // Every continuation passage of one section carrying the same
+    // `heading_path`: what a free-text term reached before the field left
+    // `default_search_fields`.
+    await expectFloodYieldsToOthers(250);
   });
 });
 

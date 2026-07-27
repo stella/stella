@@ -29,8 +29,10 @@ import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
  *   Continuation passages of a long section do not
  *   repeat the heading text — repeating it would index the same words N times
  *   and skew their document frequency. They carry `headingPath` instead, which
- *   the index maps as a searchable field, so section context is queryable for
- *   every passage without duplicating it into the body.
+ *   the index maps as an explicitly targetable field (not a default search
+ *   field: it repeats per passage, so a free-text match on a boilerplate
+ *   heading would return the whole section at once). A heading's own words
+ *   stay searchable through the `text` of the passage it opens.
  */
 
 /** One contiguous run of blocks, indexed as its own search document. */
@@ -199,6 +201,45 @@ const createHeadingStack = () => {
   return { push, path };
 };
 
+/**
+ * Runtime check that a persisted block carries what the chunker reads.
+ *
+ * `DocumentAst` is a compile-time shape over data that was written to object
+ * storage by an older parser and read back as JSON. Its guards
+ * (`isDocumentAst`, `hasUsableAst`) deliberately validate only the envelope —
+ * version and a blocks array — so `{ junk: true }`, `42` and `null` all arrive
+ * here typed as `Block`. Reading `.plainText` off one of those throws, and
+ * because the chunker runs inside the indexer's per-row try/catch that throw
+ * would be recorded as a failed index job and retried forever, for a document
+ * whose canonical text is perfectly good.
+ *
+ * Checked with `in` rather than a discriminator: there is no trusted
+ * discriminator to read until the shape itself is proven.
+ */
+const isChunkableBlock = (block: unknown): boolean => {
+  if (typeof block !== "object" || block === null) {
+    return false;
+  }
+  if (!("plainText" in block) || typeof block.plainText !== "string") {
+    return false;
+  }
+  if (!("anchorId" in block) || typeof block.anchorId !== "string") {
+    return false;
+  }
+  if (!("type" in block)) {
+    return false;
+  }
+  if (block.type === "paragraph" || block.type === "table") {
+    return true;
+  }
+  // A heading additionally drives the ancestry stack, which reads `level`.
+  return (
+    block.type === "heading" &&
+    "level" in block &&
+    typeof block.level === "number"
+  );
+};
+
 const chunkBlocks = (blocks: readonly Block[]): CorpusChunk[] => {
   const accumulator = createChunkAccumulator();
   const headings = createHeadingStack();
@@ -247,8 +288,9 @@ const chunkPlainText = (text: string): CorpusChunk[] => {
 
 export type ChunkDocumentInput = {
   /**
-   * Parsed AST when the document has one. `null` (or a blockless AST) falls
-   * through to the plain-text path.
+   * Parsed AST when the document has one. `null`, a blockless AST, or one
+   * whose blocks do not hold up at runtime all fall through to the plain-text
+   * path — the type is a claim about persisted JSON, not a guarantee.
    */
   ast: DocumentAst | null;
   /** Canonical plain text; the fallback source and the empty-document guard. */
@@ -267,7 +309,14 @@ export const chunkDocument = ({
   ast,
   fallbackText,
 }: ChunkDocumentInput): CorpusChunk[] => {
-  const fromAst = ast === null ? [] : chunkBlocks(ast.blocks);
+  // A single non-conforming block condemns the whole AST rather than being
+  // skipped: the canonical text is complete, so degrading to it keeps every
+  // word, while dropping bad blocks would silently lose whatever they held.
+  // The structure is what is untrustworthy here, not the content.
+  const fromAst =
+    ast !== null && ast.blocks.every(isChunkableBlock)
+      ? chunkBlocks(ast.blocks)
+      : [];
   if (fromAst.length > 0) {
     return fromAst;
   }
