@@ -341,6 +341,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
     "./.oxlint-plugins/require-query-limit.ts",
+    "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
@@ -986,6 +987,15 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-direct-ingestion-checkpoint-write.fixture.ts",
+      ],
+      rules: {
+        "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
+      },
+    },
+    {
       files: [".oxlint-plugins/__fixtures__/no-db-await-in-loop.fixture.ts"],
       rules: {
         "no-db-await-in-loop/no-db-await-in-loop": "error",
@@ -1353,6 +1363,18 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "require-query-limit/require-query-limit": "error",
+      },
+    },
+    {
+      // A cursor write is the irreversible boundary of a replay-safe
+      // ingestion page. Keep it inside the canonical helper so the ordering
+      // is visible and reviewable; schema constraints and fixed-point tests
+      // cover the properties static analysis cannot prove.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
       },
     },
     {

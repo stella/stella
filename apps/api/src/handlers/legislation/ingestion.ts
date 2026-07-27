@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import { legislationDocuments } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
@@ -15,6 +15,12 @@ import {
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  advanceCorpusIngestionCheckpoint,
+  CORPUS_SOURCE_TYPE,
+  INGESTION_CHECKPOINT_STATUS,
+} from "@/api/lib/corpus-ingestion-checkpoint";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Legislation ingestion. The canonical, source-agnostic entry is
@@ -358,14 +364,21 @@ export const runLegislationIngestion = async ({
     }
   }
 
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-  await scopedDb((tx) => {
-    // audit: skip — background legislation ingestion; sync-cursor advance
-    return tx
-      .update(legislationSources)
-      .set({ syncCursor: cursor, lastSyncAt: new Date() })
-      .where(eq(legislationSources.id, source.id));
+  const checkpoint = await advanceCorpusIngestionCheckpoint({
+    expectedCursor: source.syncCursor,
+    nextCursor: cursor,
+    scopedDb,
+    source: { id: source.id, type: CORPUS_SOURCE_TYPE.LEGISLATION },
   });
+  if (checkpoint.status === INGESTION_CHECKPOINT_STATUS.MISSING) {
+    return panic("Legislation ingestion source disappeared before checkpoint");
+  }
+  if (checkpoint.status === INGESTION_CHECKPOINT_STATUS.SUPERSEDED) {
+    logger.warn("legislation.ingestion.checkpoint_superseded", {
+      sourceId: source.id,
+    });
+  }
+  cursor = checkpoint.cursor;
 
   return { inserted, skipped, nextCursor: cursor };
 };

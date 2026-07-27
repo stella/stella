@@ -8,7 +8,7 @@ import {
   caseLawCitations,
   caseLawDecisions,
   caseLawIngestionFailures,
-  caseLawSources,
+  type caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import {
@@ -42,6 +42,11 @@ import {
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  advanceCorpusIngestionCheckpoint,
+  CORPUS_SOURCE_TYPE,
+  INGESTION_CHECKPOINT_STATUS,
+} from "@/api/lib/corpus-ingestion-checkpoint";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
@@ -858,15 +863,22 @@ export const runIngestionPipeline = async ({
     }
   }
 
-  // Persist sync cursor and timestamp
-  // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
-  await scopedDb((tx) => {
-    // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
-    return tx
-      .update(caseLawSources)
-      .set({ syncCursor: cursor, lastSyncAt: new Date() })
-      .where(eq(caseLawSources.id, source.id));
+  const checkpoint = await advanceCorpusIngestionCheckpoint({
+    expectedCursor: source.syncCursor,
+    nextCursor: cursor,
+    scopedDb,
+    source: { id: source.id, type: CORPUS_SOURCE_TYPE.CASE_LAW },
   });
+  if (checkpoint.status === INGESTION_CHECKPOINT_STATUS.MISSING) {
+    return panic("Case-law ingestion source disappeared before checkpoint");
+  }
+  if (checkpoint.status === INGESTION_CHECKPOINT_STATUS.SUPERSEDED) {
+    logger.warn("case_law.ingestion.checkpoint_superseded", {
+      adapterKey: source.adapterKey,
+      sourceId: source.id,
+    });
+  }
+  cursor = checkpoint.cursor;
 
   return {
     inserted,
