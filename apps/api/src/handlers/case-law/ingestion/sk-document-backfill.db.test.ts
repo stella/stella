@@ -18,11 +18,11 @@ import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  claimDocumentFetch,
   loadPendingDocuments,
   loadRemainingDocuments,
   markDocumentUnavailable,
   MAX_PRIORITY_FETCH_ATTEMPTS,
-  recordDocumentFetchAttempt,
   recordDocumentFetchRequest,
   storeBackfilledDocument,
 } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
@@ -107,6 +107,7 @@ if (!databaseUrl || !runPostgresTests) {
       documentUrl: string | null;
       decisionDate?: string;
       documentFetchRequestedAt?: Date;
+      documentFetchAttemptedAt?: Date;
       documentFetchAttempts?: number;
     }) => {
       const [row] = await db
@@ -121,6 +122,7 @@ if (!databaseUrl || !runPostgresTests) {
           documentUrl: values.documentUrl,
           decisionDate: values.decisionDate,
           documentFetchRequestedAt: values.documentFetchRequestedAt,
+          documentFetchAttemptedAt: values.documentFetchAttemptedAt,
           documentFetchAttempts: values.documentFetchAttempts,
         })
         .returning({ id: caseLawDecisions.id });
@@ -136,6 +138,7 @@ if (!databaseUrl || !runPostgresTests) {
         where: { id: { eq: id } },
         columns: {
           documentFetchRequestedAt: true,
+          documentFetchAttemptedAt: true,
           documentFetchAttempts: true,
         },
       });
@@ -326,7 +329,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(row?.fulltext).toContain("Odôvodnenie");
     });
 
-    test("only the first reader's request is kept, every attempt is counted", async () => {
+    test("only the first reader's request is kept", async () => {
       const id = await insertDecision({
         caseNumber: `request-${suffix}`,
         fulltext: null,
@@ -336,15 +339,52 @@ if (!databaseUrl || !runPostgresTests) {
       await recordDocumentFetchRequest(id, scopedDb);
       const firstRequest = await readFetchState(id);
       await recordDocumentFetchRequest(id, scopedDb);
-      await recordDocumentFetchAttempt(id, scopedDb);
-      await recordDocumentFetchAttempt(id, scopedDb);
       const afterRepeat = await readFetchState(id);
 
       // A second reader must not push the decision back down its tier.
       expect(afterRepeat?.documentFetchRequestedAt).toEqual(
         firstRequest?.documentFetchRequestedAt ?? null,
       );
-      expect(afterRepeat?.documentFetchAttempts).toBe(2);
+    });
+
+    test("one claim at a time; the loser skips instead of downloading", async () => {
+      const id = await insertDecision({
+        caseNumber: `claim-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/claim.pdf",
+      });
+
+      // A reader on one replica and the scheduler on another reach the
+      // same decision: exactly one may fetch it.
+      expect(await claimDocumentFetch(id, scopedDb)).toBe(true);
+      expect(await claimDocumentFetch(id, scopedDb)).toBe(false);
+
+      const afterClaims = await readFetchState(id);
+      expect(afterClaims?.documentFetchAttempts).toBe(1);
+      expect(afterClaims?.documentFetchAttemptedAt).not.toBeNull();
+    });
+
+    test("a claim from a worker that died is reclaimable", async () => {
+      const id = await insertDecision({
+        caseNumber: `claim-stale-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/claim-stale.pdf",
+        documentFetchAttemptedAt: new Date(Date.now() - 60 * 60 * 1000),
+        documentFetchAttempts: 1,
+      });
+
+      expect(await claimDocumentFetch(id, scopedDb)).toBe(true);
+      expect((await readFetchState(id))?.documentFetchAttempts).toBe(2);
+    });
+
+    test("a decision that already has its document cannot be claimed", async () => {
+      const id = await insertDecision({
+        caseNumber: `claim-filled-${suffix}`,
+        fulltext: "already parsed",
+        documentUrl: "https://example.test/claim-filled.pdf",
+      });
+
+      expect(await claimDocumentFetch(id, scopedDb)).toBe(false);
     });
 
     test("requested decisions come first, then the newest of the rest", async () => {

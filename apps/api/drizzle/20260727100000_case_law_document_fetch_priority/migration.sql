@@ -14,6 +14,12 @@ set statement_timeout = '10min';
 ALTER TABLE "case_law_decisions"
   ADD COLUMN "document_fetch_requested_at" timestamp;
 --> statement-breakpoint
+-- When the current fetch attempt started: the durable claim that keeps
+-- two workers off the same document. Expires, so a worker that died
+-- mid-fetch does not strand the row.
+ALTER TABLE "case_law_decisions"
+  ADD COLUMN "document_fetch_attempted_at" timestamp;
+--> statement-breakpoint
 -- Defaulted NOT NULL: PostgreSQL 11+ stores the default in the catalog,
 -- so this does not rewrite the table.
 ALTER TABLE "case_law_decisions"

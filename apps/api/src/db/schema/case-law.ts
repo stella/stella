@@ -101,8 +101,13 @@ export const caseLawDecisions = p.pgTable(
      * repeat readers do not push a decision back. `documentFetchAttempts`
      * counts fetch attempts from either path, so a document that keeps
      * failing stops holding the front of the queue.
+     * `documentFetchAttemptedAt` is when the current attempt started: it
+     * is the durable claim that keeps a scheduler run and a read on
+     * another replica from downloading the same document at once, and it
+     * expires so a worker that died mid-fetch does not strand the row.
      */
     documentFetchRequestedAt: p.timestamp("document_fetch_requested_at"),
+    documentFetchAttemptedAt: p.timestamp("document_fetch_attempted_at"),
     documentFetchAttempts: p
       .integer("document_fetch_attempts")
       .default(0)

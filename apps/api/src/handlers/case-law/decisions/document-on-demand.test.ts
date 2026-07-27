@@ -9,7 +9,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  isDeferredDocumentPending,
+  isDeferredDocumentFetchable,
   readThroughDeferredDocument,
 } from "@/api/handlers/case-law/decisions/document-on-demand";
 import type { OnDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document-on-demand";
@@ -78,7 +78,7 @@ type Recorder = {
  * handler at the same time the way they are in production.
  */
 const recorder = (
-  outcome: "filled" | "throws" | "unavailable" = "filled",
+  outcome: "claimed" | "filled" | "throws" | "unavailable" = "filled",
 ): Recorder => {
   const requested: SafeId<"caseLawDecision">[] = [];
   const fetched: SafeId<"caseLawDecision">[] = [];
@@ -104,8 +104,12 @@ const recorder = (
         if (outcome === "throws") {
           throw new Error("court site unreachable");
         }
-        return outcome === "filled"
-          ? { status: "filled", document: parsed }
+        if (outcome === "filled") {
+          return { status: "filled", document: parsed };
+        }
+
+        return outcome === "claimed"
+          ? { status: "claimed" }
           : { status: "unavailable" };
       },
     },
@@ -151,6 +155,18 @@ describe("deferred document read-through", () => {
     expect(await reader).toBeNull();
   });
 
+  test("a decision another worker is fetching reads as metadata-only", async () => {
+    const { deps, release } = recorder("claimed");
+    const decision = pending();
+
+    const reader = readThroughDeferredDocument(decision, deps);
+    release();
+
+    // The other worker's fetch will store the document; this reader
+    // does not wait for it and does not fetch it again.
+    expect(await reader).toBeNull();
+  });
+
   test("a re-read after the fetch finished fetches again and converges", async () => {
     const { deps, fetched, release } = recorder();
     const decision = pending();
@@ -183,33 +199,25 @@ describe("deferred document read-through", () => {
     expect(fetched).toHaveLength(2);
   });
 
-  test("only an un-fetched document from a deferred source is hydrated", () => {
+  test("only an un-fetched document from a deferred source is fetchable", () => {
     const state = {
       adapterKey: "sk-courts",
       documentUrl: "https://example.test/decision.pdf",
-      hasAst: false,
-      fulltext: null,
-      astS3Key: null,
-      textS3Key: null,
+      documentPending: true,
     };
 
-    expect(isDeferredDocumentPending(state)).toBe(true);
-    // An empty fulltext is the "already tried" marker, not a gap.
-    expect(isDeferredDocumentPending({ ...state, fulltext: "" })).toBe(false);
-    expect(isDeferredDocumentPending({ ...state, hasAst: true })).toBe(false);
-    expect(isDeferredDocumentPending({ ...state, documentUrl: null })).toBe(
+    expect(isDeferredDocumentFetchable(state)).toBe(true);
+    // The read already found something readable stored.
+    expect(
+      isDeferredDocumentFetchable({ ...state, documentPending: false }),
+    ).toBe(false);
+    // Nothing to fetch.
+    expect(isDeferredDocumentFetchable({ ...state, documentUrl: null })).toBe(
       false,
     );
-    // Canonical corpus payloads live in object storage; empty columns
-    // there are by design.
-    expect(isDeferredDocumentPending({ ...state, textS3Key: "text/a" })).toBe(
-      false,
-    );
-    expect(isDeferredDocumentPending({ ...state, astS3Key: "ast/a" })).toBe(
-      false,
-    );
-    // Other sources store the document during the crawl.
-    expect(isDeferredDocumentPending({ ...state, adapterKey: "cz-ns" })).toBe(
+    // Other sources store the document during the crawl, so an empty
+    // one of theirs is a gap this path cannot fill.
+    expect(isDeferredDocumentFetchable({ ...state, adapterKey: "cz-ns" })).toBe(
       false,
     );
   });

@@ -15,6 +15,13 @@
  * fetch continues; whoever opens the decision next finds it stored.
  * Nothing here can fail a read — a failure is recorded and the decision
  * stays queued.
+ *
+ * The bounds above are per process. The cross-process claim that keeps
+ * two replicas off one document lives in the fetch unit itself, which
+ * is also where the database access is: this module stays free of it,
+ * so importing it never opens a connection pool. `document-on-demand-
+ * deps.ts` holds the wiring, and `get-deferred-document.ts` puts the
+ * two together for the public read.
  */
 
 import { Result } from "better-result";
@@ -25,13 +32,8 @@ import type {
   DecisionDocumentOutcome,
   PendingDocument,
 } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
-import {
-  fetchDecisionDocument,
-  recordDocumentFetchRequest,
-} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { caseLawIngestionDb } from "@/api/lib/case-law-ingestion-db";
 
 /** Sources that ingest metadata first and the document later. */
 const DEFERRED_DOCUMENT_ADAPTER_KEYS: ReadonlySet<string> = new Set([
@@ -40,17 +42,10 @@ const DEFERRED_DOCUMENT_ADAPTER_KEYS: ReadonlySet<string> = new Set([
 
 /**
  * How long a read waits for a document. Deliberately shorter than the
- * fetch budget below: the reader gets an answer either way, and the
- * fetch it started keeps running for the next one.
+ * fetch unit's own budget: the reader gets an answer either way, and
+ * the fetch it started keeps running for the next one.
  */
 const READ_BUDGET_MS = 6000;
-
-/**
- * Cap on one fetch, independent of the reader who triggered it. A
- * download plus parse is measured in seconds, so this bounds a stuck
- * fetch rather than a slow one.
- */
-const FETCH_BUDGET_MS = 60_000;
 
 /** Concurrent read-through fetches allowed at a time. */
 const CONCURRENT_FETCH_LIMIT = 2;
@@ -70,51 +65,37 @@ const inFlight = new Map<
 export type DeferredDocumentState = {
   adapterKey: string;
   documentUrl: string | null;
-  hasAst: boolean;
-  fulltext: string | null;
-  astS3Key: string | null;
-  textS3Key: string | null;
+  documentPending: boolean;
 };
 
 /**
- * Whether this decision is one whose document has not been fetched yet.
+ * Whether a read may fetch this decision's document.
  *
- * An empty `fulltext` is the "fetched and there was nothing" marker, so
- * only NULL counts as pending; a corpus key means the canonical payload
- * lives in object storage and the columns are empty by design.
+ * `documentPending` is the read's own answer to "is anything readable
+ * stored for this decision" — no text, no AST, and no canonical payload
+ * in object storage. This adds the two conditions the read does not
+ * judge: the source has to be one that defers its documents, and there
+ * has to be something to fetch.
  */
-export const isDeferredDocumentPending = ({
+export const isDeferredDocumentFetchable = ({
   adapterKey,
   documentUrl,
-  hasAst,
-  fulltext,
-  astS3Key,
-  textS3Key,
+  documentPending,
 }: DeferredDocumentState): boolean =>
-  DEFERRED_DOCUMENT_ADAPTER_KEYS.has(adapterKey) &&
+  documentPending &&
   documentUrl !== null &&
-  !hasAst &&
-  fulltext === null &&
-  astS3Key === null &&
-  textS3Key === null;
+  DEFERRED_DOCUMENT_ADAPTER_KEYS.has(adapterKey);
 
+/**
+ * The two durable effects this path needs. Both are supplied by the
+ * caller: the tests drive them directly, and production passes the
+ * database-backed pair from `document-on-demand-deps.ts`.
+ */
 export type OnDemandDocumentDeps = {
   recordRequest: (decisionId: SafeId<"caseLawDecision">) => Promise<void>;
   fetchDocument: (
     decision: PendingDocument,
-    signal: AbortSignal,
   ) => Promise<DecisionDocumentOutcome>;
-};
-
-const persistentDeps: OnDemandDocumentDeps = {
-  recordRequest: async (decisionId) =>
-    await recordDocumentFetchRequest(decisionId, caseLawIngestionDb),
-  fetchDocument: async (decision, signal) =>
-    await fetchDecisionDocument({
-      decision,
-      scopedDb: caseLawIngestionDb,
-      signal,
-    }),
 };
 
 const runFetch = async (
@@ -122,8 +103,7 @@ const runFetch = async (
   deps: OnDemandDocumentDeps,
 ): Promise<BackfilledDocument | null> => {
   const outcome = await Result.tryPromise(
-    async () =>
-      await deps.fetchDocument(decision, AbortSignal.timeout(FETCH_BUDGET_MS)),
+    async () => await deps.fetchDocument(decision),
   );
 
   if (Result.isError(outcome)) {
@@ -137,7 +117,7 @@ const runFetch = async (
   return outcome.value.status === "filled" ? outcome.value.document : null;
 };
 
-const startFetch = (
+const startFetch = async (
   decision: PendingDocument,
   deps: OnDemandDocumentDeps,
 ): Promise<BackfilledDocument | null> => {
@@ -146,7 +126,7 @@ const startFetch = (
   });
   inFlight.set(decision.id, flight);
 
-  return flight;
+  return await flight;
 };
 
 const withReadBudget = async (
@@ -169,12 +149,10 @@ const withReadBudget = async (
 /**
  * Fetch this decision's document for the reader asking for it, or
  * return null and leave it to the queue.
- *
- * `deps` is the seam the tests drive; production passes nothing.
  */
 export const readThroughDeferredDocument = async (
   decision: PendingDocument,
-  deps: OnDemandDocumentDeps = persistentDeps,
+  deps: OnDemandDocumentDeps,
 ): Promise<BackfilledDocument | null> => {
   // Recorded before anything can turn the fetch down, so a reader who
   // arrives with the slots full, or whose wait runs out, still moves

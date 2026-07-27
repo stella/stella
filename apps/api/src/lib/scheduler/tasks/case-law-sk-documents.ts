@@ -19,7 +19,10 @@
 import { rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createIngestionDb } from "@/api/db/scoped";
-import type { PendingDocument } from "@/api/handlers/case-law/ingestion/sk-document-backfill";
+import type {
+  DecisionDocumentOutcome,
+  PendingDocument,
+} from "@/api/handlers/case-law/ingestion/sk-document-backfill";
 import {
   fetchDecisionDocument,
   loadPendingDocuments,
@@ -44,7 +47,7 @@ const processPending = async (
   decision: PendingDocument,
   scopedDb: ScopedDb,
   signal: AbortSignal,
-): Promise<"filled" | "unavailable"> => {
+): Promise<DecisionDocumentOutcome["status"]> => {
   const outcome = await fetchDecisionDocument({ decision, scopedDb, signal });
 
   if (outcome.status === "filled") {
@@ -68,7 +71,10 @@ export const backfillSkDocuments: SchedulerTask = async ({
     return;
   }
 
-  const counts = { filled: 0, unavailable: 0, failed: 0 };
+  // `claimed` is a decision another worker — a second scheduler run, or
+  // a reader on any replica — is already fetching, so this run moves on
+  // without downloading it again.
+  const counts = { filled: 0, unavailable: 0, claimed: 0, failed: 0 };
 
   for (const decision of pending) {
     if (signal.aborted) {

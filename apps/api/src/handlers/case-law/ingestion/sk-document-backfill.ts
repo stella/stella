@@ -20,6 +20,7 @@
  * may reach a decision first.
  */
 
+import type { SQL } from "drizzle-orm";
 import {
   and,
   asc,
@@ -46,6 +47,8 @@ import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
 import type { SafeId } from "@/api/lib/branded-types";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { isRecord } from "@/api/lib/type-guards";
+import { withTimeout } from "@/api/lib/with-timeout";
 
 /** A decision awaiting its document. */
 export type PendingDocument = {
@@ -148,7 +151,7 @@ const PENDING_DOCUMENT_COLUMNS = {
   decisionDate: caseLawDecisions.decisionDate,
   decisionType: caseLawDecisions.decisionType,
   documentUrl: caseLawDecisions.documentUrl,
-} as const;
+};
 
 /**
  * A decision whose document has not been fetched yet: no text, and
@@ -229,6 +232,31 @@ export const loadDeferredDocumentSourceId = async (
   return source?.id;
 };
 
+/**
+ * The one query shape both tiers use. They differ only in predicate and
+ * order, so they share the builder: a second chain would buy nothing
+ * but another few hundred thousand type instantiations.
+ */
+const loadTier = async ({
+  scopedDb,
+  where,
+  orderBy,
+  limit,
+}: {
+  scopedDb: ScopedDb;
+  where: SQL | undefined;
+  orderBy: readonly SQL[];
+  limit: number;
+}): Promise<PendingDocument[]> =>
+  await scopedDb((tx) =>
+    tx
+      .select(PENDING_DOCUMENT_COLUMNS)
+      .from(caseLawDecisions)
+      .where(where)
+      .orderBy(...orderBy)
+      .limit(limit),
+  );
+
 /** Requested tier: oldest request first, so a reader waits once. */
 export const loadRequestedDocuments = async ({
   scopedDb,
@@ -236,34 +264,24 @@ export const loadRequestedDocuments = async ({
   limit,
   after,
 }: LoadTierOptions<RequestedDocumentCursor>): Promise<PendingDocument[]> =>
-  await scopedDb((tx) =>
-    tx
-      .select(PENDING_DOCUMENT_COLUMNS)
-      .from(caseLawDecisions)
-      .where(
-        and(
-          eq(caseLawDecisions.sourceId, sourceId),
-          requestedDocumentPredicate,
-          after
-            ? or(
-                gt(
-                  caseLawDecisions.documentFetchRequestedAt,
-                  after.requestedAt,
-                ),
-                and(
-                  eq(
-                    caseLawDecisions.documentFetchRequestedAt,
-                    after.requestedAt,
-                  ),
-                  gt(caseLawDecisions.id, after.id),
-                ),
-              )
-            : undefined,
-        ),
-      )
-      .orderBy(...requestedDocumentOrder)
-      .limit(limit),
-  );
+  await loadTier({
+    scopedDb,
+    limit,
+    orderBy: requestedDocumentOrder,
+    where: and(
+      eq(caseLawDecisions.sourceId, sourceId),
+      requestedDocumentPredicate,
+      after
+        ? or(
+            gt(caseLawDecisions.documentFetchRequestedAt, after.requestedAt),
+            and(
+              eq(caseLawDecisions.documentFetchRequestedAt, after.requestedAt),
+              gt(caseLawDecisions.id, after.id),
+            ),
+          )
+        : undefined,
+    ),
+  });
 
 /**
  * Keyset boundary for `decision_date DESC NULLS LAST, id ASC`. A NULL
@@ -298,20 +316,16 @@ export const loadRemainingDocuments = async ({
   limit,
   after,
 }: LoadTierOptions<RemainingDocumentCursor>): Promise<PendingDocument[]> =>
-  await scopedDb((tx) =>
-    tx
-      .select(PENDING_DOCUMENT_COLUMNS)
-      .from(caseLawDecisions)
-      .where(
-        and(
-          eq(caseLawDecisions.sourceId, sourceId),
-          remainingDocumentPredicate,
-          after ? remainingCursorPredicate(after) : undefined,
-        ),
-      )
-      .orderBy(...remainingDocumentOrder)
-      .limit(limit),
-  );
+  await loadTier({
+    scopedDb,
+    limit,
+    orderBy: remainingDocumentOrder,
+    where: and(
+      eq(caseLawDecisions.sourceId, sourceId),
+      remainingDocumentPredicate,
+      after ? remainingCursorPredicate(after) : undefined,
+    ),
+  });
 
 /**
  * Load the head of the queue: decisions a reader asked for first, then
@@ -392,37 +406,77 @@ export const recordDocumentFetchRequest = async (
   scopedDb: ScopedDb,
 ): Promise<void> => {
   await scopedDb(async (tx) => {
+    // Raw statement for the same reason as the claim below: a request is
+    // not a change to the decision, so `updated_at` stays where it is.
     // audit: skip — public case-law read-through; no user action
-    await tx
-      .update(caseLawDecisions)
-      .set({ documentFetchRequestedAt: new Date() })
-      .where(
-        and(
-          eq(caseLawDecisions.id, decisionId),
-          isNull(caseLawDecisions.documentFetchRequestedAt),
-        ),
-      );
+    await tx.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET document_fetch_requested_at = now()
+      WHERE id = ${decisionId}
+        AND document_fetch_requested_at IS NULL
+    `);
   });
 };
 
 /**
- * Count one fetch attempt before the attempt is made, so a request that
- * dies mid-download still leaves a durable record of having been tried.
+ * How long a claim on a decision holds. Longer than the unit budget
+ * below, so a claim cannot lapse while its own fetch is still running,
+ * and short enough that a worker killed mid-download only strands the
+ * decision until the next queue pass.
  */
-export const recordDocumentFetchAttempt = async (
+const CLAIM_TTL_SECONDS = 120;
+
+/**
+ * Claim a decision for one fetch attempt, or report that another worker
+ * already holds it.
+ *
+ * The in-process single-flight map cannot see other API replicas or the
+ * scheduler, and every duplicate is a download the source did not need
+ * to serve. The claim is durable — `document_fetch_attempted_at`, read
+ * and written in one statement — and the transaction-scoped advisory
+ * try-lock keeps two claims from interleaving around that statement
+ * without either of them waiting on a row lock.
+ *
+ * Claiming also counts the attempt, before the attempt is made, so a
+ * worker that dies mid-download still leaves a record of having tried.
+ */
+export const claimDocumentFetch = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
-): Promise<void> => {
+): Promise<boolean> =>
   await scopedDb(async (tx) => {
+    const lockResult: unknown = await tx.execute(
+      sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law'), hashtext(${decisionId})) AS locked`,
+    );
+    const lockRow: unknown = Array.isArray(lockResult)
+      ? lockResult.at(0)
+      : undefined;
+    if (!isRecord(lockRow) || lockRow["locked"] !== true) {
+      return false;
+    }
+
+    // Raw statement rather than the query builder: the claim has to
+    // read and write `document_fetch_attempted_at` in one round trip,
+    // and it deliberately leaves `updated_at` alone — an attempt is not
+    // a change to the decision, and the public reads key their
+    // freshness off that column.
     // audit: skip — public case-law document fetch; no user action
-    await tx
-      .update(caseLawDecisions)
-      .set({
-        documentFetchAttempts: sql`${caseLawDecisions.documentFetchAttempts} + 1`,
-      })
-      .where(eq(caseLawDecisions.id, decisionId));
+    const claimed: unknown = await tx.execute(sql`
+      UPDATE ${caseLawDecisions}
+      SET document_fetch_attempted_at = now(),
+          document_fetch_attempts = document_fetch_attempts + 1
+      WHERE id = ${decisionId}
+        AND fulltext IS NULL
+        AND (
+          document_fetch_attempted_at IS NULL
+          OR document_fetch_attempted_at
+             < now() - ${`${CLAIM_TTL_SECONDS} seconds`}::interval
+        )
+      RETURNING id
+    `);
+
+    return Array.isArray(claimed) && claimed.length > 0;
   });
-};
 
 /**
  * Mark a decision whose PDF cannot be parsed, so the queue does not
@@ -451,10 +505,25 @@ export const markDocumentUnavailable = async (
   });
 };
 
-/** Terminal outcomes of one document fetch. */
+/**
+ * Outcomes of one document fetch: the document, a decision the source
+ * has nothing readable for, or a decision another worker is already
+ * fetching.
+ */
 export type DecisionDocumentOutcome =
   | { status: "filled"; document: BackfilledDocument }
-  | { status: "unavailable" };
+  | { status: "unavailable" }
+  | { status: "claimed" };
+
+/**
+ * Wall-clock budget for the whole unit. The download has its own
+ * timeout and honours the abort signal, but parsing a PDF does not: it
+ * is CPU-bound and cannot be cancelled, so a pathological document
+ * would otherwise run unbounded inside whichever path called this. The
+ * race abandons the work rather than aborting it — the unit is
+ * idempotent, so the abandoned attempt either lands or is retried.
+ */
+export const DOCUMENT_FETCH_BUDGET_MS = 60_000;
 
 export type FetchDecisionDocumentOptions = {
   decision: PendingDocument;
@@ -462,23 +531,14 @@ export type FetchDecisionDocumentOptions = {
   signal: AbortSignal;
 };
 
-/**
- * Fetch, parse and persist one decision's document.
- *
- * The single unit of work behind both the queue and the read-through
- * path, so a decision reaches the same durable state whichever one gets
- * to it: the attempt is counted first, the parse either produces the
- * document or marks it unavailable, and the store is conditional on the
- * row still being empty. Running it twice therefore converges. A
- * transient failure throws and leaves `fulltext` NULL, which keeps the
- * decision in the queue for a later attempt.
- */
-export const fetchDecisionDocument = async ({
+const runDecisionDocumentFetch = async ({
   decision,
   scopedDb,
   signal,
 }: FetchDecisionDocumentOptions): Promise<DecisionDocumentOutcome> => {
-  await recordDocumentFetchAttempt(decision.id, scopedDb);
+  if (!(await claimDocumentFetch(decision.id, scopedDb))) {
+    return { status: "claimed" };
+  }
 
   const pdfBytes = decision.documentUrl
     ? await fetchPdfBytes(decision.documentUrl, signal)
@@ -495,3 +555,22 @@ export const fetchDecisionDocument = async ({
   await storeBackfilledDocument(decision.id, document, scopedDb);
   return { status: "filled", document };
 };
+
+/**
+ * Fetch, parse and persist one decision's document.
+ *
+ * The single unit of work behind both the queue and the read-through
+ * path, so a decision reaches the same durable state whichever one gets
+ * to it: the claim counts the attempt first, the parse either produces
+ * the document or marks it unavailable, and the store is conditional on
+ * the row still being empty. Running it twice therefore converges. A
+ * transient failure throws and leaves `fulltext` NULL, which keeps the
+ * decision in the queue for a later attempt.
+ */
+export const fetchDecisionDocument = async (
+  options: FetchDecisionDocumentOptions,
+): Promise<DecisionDocumentOutcome> =>
+  await withTimeout(async () => await runDecisionDocumentFetch(options), {
+    label: "caseLaw.fetchDecisionDocument",
+    timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+  });

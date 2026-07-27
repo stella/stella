@@ -15,10 +15,6 @@ import {
   readCorpusPayloadOrFallback,
   readCorpusText,
 } from "@/api/handlers/case-law/corpus-storage";
-import {
-  isDeferredDocumentPending,
-  readThroughDeferredDocument,
-} from "@/api/handlers/case-law/decisions/document-on-demand";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
@@ -252,33 +248,20 @@ export const readDecisionHandler = async (
     });
   }
 
-  // Metadata-first sources leave the document to the ingestion queue.
-  // Fetch it here when a reader gets there first; a decision the fetch
-  // does not reach in time stays readable as metadata and stays queued.
-  const hydrated = isDeferredDocumentPending({
-    adapterKey: source.adapterKey,
-    documentUrl: decision.documentUrl,
-    hasAst: hasUsableAst(documentAst),
-    fulltext,
-    astS3Key: decision.astS3Key,
-    textS3Key: decision.textS3Key,
-  })
-    ? await readThroughDeferredDocument({
-        id: decision.id,
-        caseNumber: decision.caseNumber,
-        ecli: decision.ecli,
-        court: decision.court,
-        decisionDate: decision.decisionDate,
-        decisionType: decision.decisionType,
-        documentUrl: decision.documentUrl,
-      })
-    : null;
-  const readableAst = hydrated?.documentAst ?? documentAst;
-  const readableFulltext = hasUsableAst(readableAst)
-    ? null
-    : (hydrated?.fulltext ?? fulltext);
+  // Nothing readable is stored for this decision yet, and there is a
+  // document to fetch. Sources that ingest metadata first leave that to
+  // the ingestion queue; `get-deferred-document.ts` turns this flag into
+  // a fetch for the reader who arrives before the queue does. Kept as a
+  // derived boolean rather than a call so this module stays a read.
+  const documentPending =
+    fulltext === null &&
+    !hasUsableAst(documentAst) &&
+    decision.astS3Key === null &&
+    decision.textS3Key === null &&
+    decision.documentUrl !== null;
 
   return {
+    documentPending,
     id: decision.id,
     caseNumber: decision.caseNumber,
     slug: decision.slug,
@@ -289,7 +272,7 @@ export const readDecisionHandler = async (
     languageGroupKey: decision.languageGroupKey,
     decisionDate: decision.decisionDate,
     decisionType: decision.decisionType,
-    documentAst: readableAst,
+    documentAst,
     sourceUrl: decision.sourceUrl,
     documentUrl: decision.documentUrl,
     metadata: decision.metadata,
@@ -306,7 +289,7 @@ export const readDecisionHandler = async (
     citationsFrom,
     citationsTo,
     languageAlternates,
-    fulltext: readableFulltext,
+    fulltext,
   };
 };
 
