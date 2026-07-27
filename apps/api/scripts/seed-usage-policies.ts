@@ -17,6 +17,7 @@ import {
   usagePolicies,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { MAX_CATALOG_ROWS } from "@/api/lib/usage/policy-catalog";
 
 // PostgreSQL int4 ceiling: values beyond it would fail at write time
 // with an opaque driver error instead of a seed validation message.
@@ -75,7 +76,7 @@ const usagePolicySeedSchema = v.pipe(
 // truncating the checkout picker.
 const usagePolicySeedsSchema = v.pipe(
   v.array(usagePolicySeedSchema),
-  v.maxLength(100),
+  v.maxLength(MAX_CATALOG_ROWS),
 );
 
 type UsagePolicySeed = v.InferOutput<typeof usagePolicySeedSchema>;
