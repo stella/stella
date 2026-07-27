@@ -69,14 +69,22 @@ type DemoDenylistCountry = (typeof DEMO_DENYLIST_COUNTRIES)[number];
 // bundler-visible (one lazy chunk per country). `satisfies` keeps the map and
 // DEMO_DENYLIST_COUNTRIES from drifting apart.
 const CITY_DICTIONARY_LOADERS = {
-  US: () => import("@stll/anonymize-data/dictionaries/cities/US.json"),
-  GB: () => import("@stll/anonymize-data/dictionaries/cities/GB.json"),
-  FR: () => import("@stll/anonymize-data/dictionaries/cities/FR.json"),
-  DE: () => import("@stll/anonymize-data/dictionaries/cities/DE.json"),
-  CZ: () => import("@stll/anonymize-data/dictionaries/cities/CZ.json"),
-  IT: () => import("@stll/anonymize-data/dictionaries/cities/IT.json"),
-  ES: () => import("@stll/anonymize-data/dictionaries/cities/ES.json"),
-  NL: () => import("@stll/anonymize-data/dictionaries/cities/NL.json"),
+  US: async () =>
+    await import("@stll/anonymize-data/dictionaries/cities/US.json"),
+  GB: async () =>
+    await import("@stll/anonymize-data/dictionaries/cities/GB.json"),
+  FR: async () =>
+    await import("@stll/anonymize-data/dictionaries/cities/FR.json"),
+  DE: async () =>
+    await import("@stll/anonymize-data/dictionaries/cities/DE.json"),
+  CZ: async () =>
+    await import("@stll/anonymize-data/dictionaries/cities/CZ.json"),
+  IT: async () =>
+    await import("@stll/anonymize-data/dictionaries/cities/IT.json"),
+  ES: async () =>
+    await import("@stll/anonymize-data/dictionaries/cities/ES.json"),
+  NL: async () =>
+    await import("@stll/anonymize-data/dictionaries/cities/NL.json"),
 } satisfies Record<
   DemoDenylistCountry,
   () => Promise<{ default: readonly string[] }>
