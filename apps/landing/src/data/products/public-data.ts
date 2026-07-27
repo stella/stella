@@ -19,7 +19,6 @@ export const publicData: Product = {
     alt: "A court decision open in the stella case-law reader",
     aspect: "16 / 10",
   },
-  // Frame rhythm down the page: bloom, ripple, wash, bloom.
   heroFrameVariant: "bloom",
   frameAccent: frameAccents.tide,
   quickAnswer: {
@@ -61,11 +60,6 @@ export const publicData: Product = {
         "Structure-preserving parsers keep headings, paragraphs, and references",
         "Built on the open Legal Atlas ingestion stack",
       ],
-      media: {
-        type: "preview",
-        key: "case-law-reader",
-      },
-      frameVariant: "ripple",
     },
     {
       heading: "Company and commercial registries, queried from a matter",
@@ -74,11 +68,6 @@ export const publicData: Product = {
         "Pull official company data into a matter instead of copying it by hand",
         "Coverage expands as more official sources are added",
       ],
-      media: {
-        type: "preview",
-        key: "registry-lookup",
-      },
-      frameVariant: "wash",
     },
     {
       heading: "One grounded source for the agent",
@@ -87,11 +76,6 @@ export const publicData: Product = {
         "The agent cites the underlying source, not a paraphrase",
         "Search across sources, not just within one",
       ],
-      media: {
-        type: "preview",
-        key: "agent-answer",
-      },
-      frameVariant: "bloom",
     },
   ],
   faqs: [

@@ -15,7 +15,6 @@ export const tabularReview: Product = {
     sceneId: "review",
     aspect: "16 / 10",
   },
-  // Frame rhythm down the page: bloom, wash, ripple, bloom.
   heroFrameVariant: "bloom",
   frameAccent: frameAccents.ember,
   quickAnswer: {
@@ -57,12 +56,6 @@ export const tabularReview: Product = {
         "Reuse column sets across matters for repeatable review playbooks",
         "Mix extraction (dates, parties, amounts) with judgement questions",
       ],
-      media: {
-        type: "story",
-        sceneId: "review",
-        aspect: "16 / 10",
-      },
-      frameVariant: "wash",
     },
     {
       heading: "Every answer traces back to the text",
@@ -71,12 +64,6 @@ export const tabularReview: Product = {
         "Answers are grounded by citations, not free-floating summaries",
         "Spot disagreements across documents at a glance",
       ],
-      media: {
-        type: "story",
-        sceneId: "review-citation",
-        aspect: "16 / 10",
-      },
-      frameVariant: "ripple",
     },
     {
       heading: "It lives where the work lives",
@@ -85,12 +72,6 @@ export const tabularReview: Product = {
         "Hand a review to the AI agent for follow-up questions",
         "Export the table or keep refining it in place",
       ],
-      media: {
-        type: "story",
-        sceneId: "workspace",
-        aspect: "16 / 10",
-      },
-      frameVariant: "bloom",
     },
   ],
   faqs: [

@@ -16,7 +16,6 @@ export const anonymization: Product = {
     alt: "stella · Anonymization — live demo",
     aspect: "16 / 10",
   },
-  // Frame rhythm down the page: ripple, bloom, wash.
   heroFrameVariant: "ripple",
   frameAccent: frameAccents.tide,
   quickAnswer: {
@@ -50,11 +49,6 @@ export const anonymization: Product = {
         "Built for legal AI workflows rather than generic document masking",
         "Leaves a reviewable redacted document before the next step",
       ],
-      media: {
-        type: "preview",
-        key: "anonymization",
-      },
-      frameVariant: "bloom",
     },
     {
       heading: "Part of the workspace, not a separate tool",
@@ -63,12 +57,6 @@ export const anonymization: Product = {
         "No copy-pasting into an external redaction tool",
         "Built on stella's own open-source anonymization engine",
       ],
-      media: {
-        type: "story",
-        sceneId: "workspace",
-        aspect: "16 / 10",
-      },
-      frameVariant: "wash",
     },
   ],
   faqs: [

@@ -24,7 +24,6 @@
     "@stll/anonymize-chat": "workspace:*",
     "@stll/anonymize-data": "catalog:",
     "@stll/anonymize-wasm": "catalog:",
-    "@stll/catalogue": "workspace:*",
     "@stll/folio-react": "^0.13.0",
     "@stll/locales": "workspace:*",
     "@stll/ui": "workspace:*",

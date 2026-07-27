@@ -12,9 +12,8 @@ export const editor: Product = {
   hero: {
     type: "live-editor",
     alt: "stella · Editor — live demo",
-    aspect: "16 / 10",
+    aspect: "16 / 11",
   },
-  // Frame rhythm down the page: bloom, ripple, bloom.
   heroFrameVariant: "bloom",
   frameAccent: frameAccents.iris,
   quickAnswer: {
@@ -58,13 +57,6 @@ export const editor: Product = {
         "Keep the original Word file format",
         "Save changes into the document's version history",
       ],
-      media: {
-        type: "story",
-        sceneId: "editor",
-        variant: "portrait",
-        aspect: "16 / 10",
-      },
-      frameVariant: "ripple",
     },
     {
       heading: "Connected to the rest of the matter",
@@ -74,12 +66,6 @@ export const editor: Product = {
         "Open the same document through the desktop bridge when needed",
         "Use the document as context for matter-aware tools",
       ],
-      media: {
-        type: "story",
-        sceneId: "workspace",
-        aspect: "16 / 10",
-      },
-      frameVariant: "bloom",
     },
   ],
   faqs: [

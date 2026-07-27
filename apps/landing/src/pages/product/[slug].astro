@@ -2,7 +2,6 @@
 import Base from "../../layouts/Base.astro";
 import ProductMediaFrame from "../../components/ProductMediaFrame.astro";
 import McpProofSection from "../../components/McpProofSection.astro";
-import ConnectedSources from "../../components/ConnectedSources.astro";
 import LandingFooter from "../../components/LandingFooter.astro";
 import { products } from "../../data/products/registry";
 
@@ -74,7 +73,10 @@ const faqJsonLd = {
           <div
             data-reveal
             style="--reveal-delay: 240ms"
-            class="mx-auto mt-10 max-w-4xl"
+            class:list={[
+              "mx-auto mt-10",
+              product.slug === "editor" ? "max-w-5xl" : "max-w-4xl",
+            ]}
           >
             <ProductMediaFrame
               media={product.hero}
@@ -107,34 +109,6 @@ const faqJsonLd = {
           </div>
         </div>
       </section>
-
-      {
-        product.slug === "public-data" && (
-          <section class="px-6 py-10 lg:py-12">
-            <div class="mx-auto max-w-3xl">
-              <h2
-                class="mb-2 text-xs font-medium uppercase tracking-[0.2em]"
-                style="color: var(--muted-foreground)"
-              >
-                Connected sources by jurisdiction
-              </h2>
-              <p
-                class="mb-6 text-sm leading-[1.7]"
-                style="color: var(--muted-foreground)"
-              >
-                Official sources surface automatically for the jurisdictions you
-                work in, derived from the connector catalogue. Coverage grows as
-                adapters are added.
-              </p>
-              <div class="space-y-6">
-                <ConnectedSources locale="cs" country="Czechia" />
-                <ConnectedSources locale="es" country="Spain" />
-                <ConnectedSources locale="zh-TW" country="Taiwan" />
-              </div>
-            </div>
-          </section>
-        )
-      }
 
       {/* ——— Capabilities ——— */}
       <section class="px-6 py-10 lg:py-12">
