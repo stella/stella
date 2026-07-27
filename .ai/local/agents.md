@@ -130,6 +130,28 @@ support resource, but the rule metadata and behavior stay module-local.
   discovers and runs the complete ignored core set automatically; never add a
   manually maintained workflow allowlist.
 
+### DOCX / WordprocessingML Shape
+
+- Use the versioned `stella-docx-kernel` crate for namespace-aware semantic
+  scanning of WordprocessingML parts. DOCX consumers add a projection or
+  collector over that scan; do not introduce another XML text walker in a
+  binding or adapter.
+- Keep package access separate from semantic scanning. Lean readers may inflate
+  only the declared XML parts they need; inventory and rewrite consumers may
+  opt into the bounded full-package path. Never make a lean projection copy
+  media or every archive entry as a side effect.
+- Match elements and attributes by namespace URI plus local name, including
+  Strict and Transitional OOXML. Prefix literals such as `w:` and `w14:` are
+  fixture syntax, not parser semantics; generated prefix and rebinding tests
+  must guard this invariant.
+- Preserve package paths, UTF-16 offsets, inline revision and hyperlink
+  context, and structural locations as typed facts. Host navigation identities
+  are opaque runtime capabilities and must not be inferred from package
+  paragraph identifiers.
+- Keep the previous simple, independent extractor as a differential oracle
+  while replacing a scan. Require exact corpus output parity plus structural
+  scaling tests; wall-clock improvements alone do not justify a parser change.
+
 ## Cursor Cloud specific instructions
 
 The VM snapshot already provides Bun 1.3.14, Node 22 (via nvm, set as the

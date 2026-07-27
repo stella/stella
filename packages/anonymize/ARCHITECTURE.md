@@ -63,7 +63,12 @@ an invariant:
 - `local`: Node.js and Python filesystem behavior.
 - `document`: Node.js and Python structure-aware document adapters.
 
-DOCX ZIP/XML extraction is owned by `crates/anonymize-docx-core`. Both the NAPI
+Namespace-aware WordprocessingML scanning is owned by the versioned
+`stella-docx-kernel` crate. `crates/anonymize-docx-core` owns the bounded OPC
+inventory, anonymization coverage policy, stable rewrite locations, and
+surgical package rewrite built on that scan. This boundary lets lean consumers
+inflate selected XML parts without inheriting full-package or media ownership,
+while rewrite consumers retain the complete inventory they need. Both the NAPI
 and PyO3 adapters serialize the same Rust contract, including structural
 locations, UTF-16 segment offsets, resource bounds, and fail-closed coverage.
 The TypeScript extractor is retained only as a parity oracle while surgical

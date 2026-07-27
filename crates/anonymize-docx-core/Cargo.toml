@@ -12,6 +12,7 @@ repository.workspace = true
 roxmltree = "0.21"
 percent-encoding = "2.3"
 serde = { version = "1", features = ["derive"] }
+stella-docx-kernel = "0.7.0"
 thiserror = "2"
 zip = { version = "7.2", default-features = false, features = ["deflate"] }
 
