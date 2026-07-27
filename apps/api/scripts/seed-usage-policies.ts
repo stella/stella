@@ -6,6 +6,7 @@
  * empty so the public repo does not encode an operator policy.
  */
 
+import { and, eq, notInArray } from "drizzle-orm";
 import * as v from "valibot";
 
 import { rootDb } from "@/api/db/root";
@@ -17,16 +18,27 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 
+// PostgreSQL int4 ceiling: values beyond it would fail at write time
+// with an opaque driver error instead of a seed validation message.
+const PG_INT4_MAX = 2_147_483_647;
+
 const usagePolicySeedSchema = v.pipe(
   v.strictObject({
     key: v.pipe(v.string(), v.trim(), v.regex(/^[a-z0-9][a-z0-9_-]{0,63}$/u)),
     displayName: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(128)),
     description: v.optional(v.nullable(v.pipe(v.string(), v.trim())), null),
     kind: v.optional(v.picklist(USAGE_POLICY_KINDS), "subscription"),
-    monthlyUsageUnits: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    monthlyUsageUnits: v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(0),
+      v.maxValue(PG_INT4_MAX),
+    ),
     hostedPolicyRef: v.optional(v.nullable(v.string()), null),
     priceAmountCents: v.optional(
-      v.nullable(v.pipe(v.number(), v.integer(), v.minValue(0))),
+      v.nullable(
+        v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(PG_INT4_MAX)),
+      ),
       null,
     ),
     priceCurrency: v.optional(
@@ -40,7 +52,15 @@ const usagePolicySeedSchema = v.pipe(
       null,
     ),
     visibility: v.optional(v.picklist(USAGE_POLICY_VISIBILITIES), "hidden"),
-    sortOrder: v.optional(v.pipe(v.number(), v.integer()), 0),
+    sortOrder: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(-PG_INT4_MAX - 1),
+        v.maxValue(PG_INT4_MAX),
+      ),
+      0,
+    ),
   }),
   v.check(
     (seed) =>
@@ -114,6 +134,27 @@ const seed = async (): Promise<void> => {
           : ""
       }`,
     );
+  }
+
+  // The seed config is the single source of the PUBLIC catalog: rows
+  // whose key left the config are hidden (not deleted or deactivated —
+  // existing entitlements keep referencing them), so repeated
+  // reconfiguration cannot grow the visible catalog past the seed
+  // bound. The empty-config early return above deliberately leaves
+  // everything untouched.
+  const seededKeys = seeds.map((seedPolicy) => seedPolicy.key);
+  const hidden = await rootDb
+    .update(usagePolicies)
+    .set({ visibility: "hidden" })
+    .where(
+      and(
+        notInArray(usagePolicies.policyKey, seededKeys),
+        eq(usagePolicies.visibility, "public"),
+      ),
+    )
+    .returning({ policyKey: usagePolicies.policyKey });
+  for (const row of hidden) {
+    console.log(`hid retired policy ${row.policyKey} (absent from seeds)`);
   }
 };
 

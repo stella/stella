@@ -28,18 +28,14 @@ import {
 } from "./skills";
 
 export const USAGE_POLICY_KINDS = ["subscription", "addon"] as const;
-export type UsagePolicyKind = (typeof USAGE_POLICY_KINDS)[number];
 
 export const USAGE_POLICY_BILLING_INTERVALS = [
   "month",
   "year",
   "one_time",
 ] as const;
-export type UsagePolicyBillingInterval =
-  (typeof USAGE_POLICY_BILLING_INTERVALS)[number];
 
 export const USAGE_POLICY_VISIBILITIES = ["public", "hidden"] as const;
-export type UsagePolicyVisibility = (typeof USAGE_POLICY_VISIBILITIES)[number];
 
 export const usagePolicies = p.pgTable(
   "usage_policies",

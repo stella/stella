@@ -14,7 +14,10 @@ const config = {
     "List the plans and add-on packs available to this deployment: " +
     "display name, description, included monthly usage units, price " +
     "display fields, and whether hosted checkout can be started for " +
-    "the entry. Requires organization-settings management access.",
+    "the entry. The catalog is deployment-level: add-on packs " +
+    "additionally require the organization to hold an active hosted " +
+    "subscription (pair with GET /usage/entitlement). Requires " +
+    "organization-settings management access.",
   // Same gate as the other hosted-billing endpoints: the catalog is
   // only actionable by whoever can start a checkout.
   permissions: { organizationSettings: ["update"] },
