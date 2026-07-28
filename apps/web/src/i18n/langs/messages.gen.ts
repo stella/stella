@@ -860,6 +860,14 @@ type Messages = {
     "enterKey": "↵";
     "error": "Error";
     "expenses": "Expenses";
+    "export": {
+      "citations": "Citations";
+      "failed": "Couldn't export the message";
+      "footnotes": "Footnotes";
+      "formatDocx": "Word document (.docx)";
+      "inline": "Inline";
+      "title": "Export message";
+    };
     "filter": "Filter";
     "formula": "Formula";
     "goBack": "Go back";

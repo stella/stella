@@ -597,6 +597,7 @@ export const ChatThreadPage = ({
                       showThinkingIndicator
                       stickyUserMessages
                       streamdownComponents={streamdownComponents}
+                      threadRef={threadRef}
                       workspaceId={workspaceId}
                     />
                     <ChatThreadRecap

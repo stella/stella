@@ -857,6 +857,14 @@
     "enterKey": "↵",
     "error": "Chyba",
     "expenses": "Výdavky",
+    "export": {
+      "citations": "Citácie",
+      "failed": "Správu sa nepodarilo exportovať",
+      "footnotes": "Poznámky pod čiarou",
+      "formatDocx": "Dokument Word (.docx)",
+      "inline": "V texte",
+      "title": "Exportovať správu"
+    },
     "filter": "Filtrovať",
     "formula": "Vzorec",
     "goBack": "Späť",

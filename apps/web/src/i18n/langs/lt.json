@@ -857,6 +857,14 @@
     "enterKey": "↵",
     "error": "Klaida",
     "expenses": "Išlaidos",
+    "export": {
+      "citations": "Citatos",
+      "failed": "Nepavyko eksportuoti žinutės",
+      "footnotes": "Išnašos",
+      "formatDocx": "„Word“ dokumentas (.docx)",
+      "inline": "Tekste",
+      "title": "Eksportuoti žinutę"
+    },
     "filter": "Filtras",
     "formula": "Formulė",
     "goBack": "Grįžti atgal",
