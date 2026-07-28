@@ -10,7 +10,7 @@
   "scripts": {
     "build": "turbo build",
     "changeset": "changeset",
-    "changeset:version": "changeset version && rm -f bun.lock && bun install",
+    "changeset:version": "bun scripts/sync-lockfile-workspace-versions.ts --check-entries && changeset version && bun scripts/sync-lockfile-workspace-versions.ts",
     "dev": "bun packages/scripts/src/dev-runner.ts dev",
     "dev:all": "turbo dev",
     "dev:api": "bun packages/scripts/src/dev-runner.ts dev:api",
