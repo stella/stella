@@ -429,7 +429,7 @@
       "version": "0.2.0",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
-        "@stll/stdnum": "^2.1.5",
+        "@stll/stdnum": "^2.3.0",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
@@ -2129,19 +2129,19 @@
 
     "@stll/skills": ["@stll/skills@workspace:packages/skills"],
 
-    "@stll/stdnum": ["@stll/stdnum@2.1.5", "", { "optionalDependencies": { "@stll/stdnum-darwin-arm64": "2.1.5", "@stll/stdnum-darwin-x64": "2.1.5", "@stll/stdnum-linux-arm64-gnu": "2.1.5", "@stll/stdnum-linux-x64-gnu": "2.1.5", "@stll/stdnum-wasm": "2.1.5", "@stll/stdnum-win32-x64-msvc": "2.1.5" } }, "sha512-pBuYYInCkPRiR5Ye5vWfYZF7NS/2jszkq83EBFWMHXWNucirrdsYKELThX0GplQvZYSKO5L7WZXlBEWfuEJKig=="],
+    "@stll/stdnum": ["@stll/stdnum@2.3.0", "", { "optionalDependencies": { "@stll/stdnum-darwin-arm64": "2.3.0", "@stll/stdnum-darwin-x64": "2.3.0", "@stll/stdnum-linux-arm64-gnu": "2.3.0", "@stll/stdnum-linux-x64-gnu": "2.3.0", "@stll/stdnum-wasm": "2.3.0", "@stll/stdnum-win32-x64-msvc": "2.3.0" } }, "sha512-yI0gzhLj26RcYSmGSv0Z2wI4UT1Hpcnkmn8zbLwHaV17KDNPSxvuYdl9Ar+dF64cPO2Cs/22bbKAc9lUPGjx2w=="],
 
-    "@stll/stdnum-darwin-arm64": ["@stll/stdnum-darwin-arm64@2.1.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-rU4TtXszq8h1XS298QtnM45zkT34eFWJV84+MfZ8zJGYnFOM6ksrV9sAoLbau1PmAR1FdjrbIcHr04UxINadDQ=="],
+    "@stll/stdnum-darwin-arm64": ["@stll/stdnum-darwin-arm64@2.3.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-b7jNmjRuj+DYTTEZ2VPjl82vPX4esBDGBuYgurVl6i0QCjtDgIHZnbaejpGj1JWViVdqID0DGa/5oHwWoWL3Eg=="],
 
-    "@stll/stdnum-darwin-x64": ["@stll/stdnum-darwin-x64@2.1.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-FGIxWerh8E4ZF+8ion30NYKU7zd+ms5TdGy+OeeMUjMjpnFdghSWi1ROpBiYlPIEAfeN88SA2AKxKgRP86VRgA=="],
+    "@stll/stdnum-darwin-x64": ["@stll/stdnum-darwin-x64@2.3.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-Mqn3fzYTnt98VD1RtBmEqvQCGGv3AsU2FnZ2xfOQi279VUaC9VyqJRnJkM9o+iO4Se3Ld7/9fqkJ/9oQHIjIcA=="],
 
-    "@stll/stdnum-linux-arm64-gnu": ["@stll/stdnum-linux-arm64-gnu@2.1.5", "", { "os": "linux", "cpu": "arm64" }, "sha512-CWNohzM0ycikWekBPMzH5Dn/FtBMDOSHy0RClaVLhPY1BNmAqGzCW3Im71M15njPJW9eUj1dRqEiOBczKxLm3A=="],
+    "@stll/stdnum-linux-arm64-gnu": ["@stll/stdnum-linux-arm64-gnu@2.3.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-j1p2NoL+CTTf82d6L3oHIYcIumSL8hPPEOs06PwXBo8OrnO8watgHkM8YuhFRKlQUmYd5w3/VoF4HisnYGrl8w=="],
 
-    "@stll/stdnum-linux-x64-gnu": ["@stll/stdnum-linux-x64-gnu@2.1.5", "", { "os": "linux", "cpu": "x64" }, "sha512-TexVKL4Xwm3+pbFPqka1Df7dWcm8cr8TTipPTo0xFvS02M3I96BvfaOrQbNuoAeaKWciwYXMWtUxXqSmkcttrg=="],
+    "@stll/stdnum-linux-x64-gnu": ["@stll/stdnum-linux-x64-gnu@2.3.0", "", { "os": "linux", "cpu": "x64" }, "sha512-CZqTDm2r+Pp7s2kvUi7dlHr0qHsSd3KiGnQIiaGVEWlKJqB8O0loLmnv6ZfLYfWgiQWcCTs0qTLFTyfqUYIrfQ=="],
 
-    "@stll/stdnum-wasm": ["@stll/stdnum-wasm@2.1.5", "", {}, "sha512-ioEAn1hP3POIRmuNq723qvvrQOVbvfuRb9ydUFamnFB26QxJ/uGwmnHMzgfdvkhnzgTM7CRr7JoXdxWPVTXHKA=="],
+    "@stll/stdnum-wasm": ["@stll/stdnum-wasm@2.3.0", "", {}, "sha512-VyJ5yYJPyVBQmNLDNKtAK4WIiH4S9hY8AYZGlNTg9Zkg44KrQRbUi1edcWdhn2wq9iDXGnzofEIYHiIvcUdvng=="],
 
-    "@stll/stdnum-win32-x64-msvc": ["@stll/stdnum-win32-x64-msvc@2.1.5", "", { "os": "win32", "cpu": "x64" }, "sha512-Mr/TMdLr3amm3lDbN+kZk8onHhVr1G98mV5HwL3VD4/vGIPP8SjQ1R6NsPetZU/xGiZvsaMqc/JCKN36KbZL6g=="],
+    "@stll/stdnum-win32-x64-msvc": ["@stll/stdnum-win32-x64-msvc@2.3.0", "", { "os": "win32", "cpu": "x64" }, "sha512-q3cIeZlYzPlKZupDiqXCsvyJ8AouECQ9yD0iqNiVn4IE689GsWk5MJ521K89ZZA52m2eDKbz5BUBtlq3l05zlg=="],
 
     "@stll/template-conditions": ["@stll/template-conditions@workspace:packages/template-conditions"],
 

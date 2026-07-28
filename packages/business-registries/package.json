@@ -49,6 +49,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ares": "./src/ares/index.ts",
+    "./browser": "./src/browser.ts",
     "./brreg": "./src/brreg/index.ts",
     "./companies-house": "./src/companies-house/index.ts",
     "./denue": "./src/denue/index.ts",
@@ -79,7 +80,7 @@
   },
   "dependencies": {
     "@stll/country-codes": "workspace:*",
-    "@stll/stdnum": "^2.1.5"
+    "@stll/stdnum": "^2.3.0"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
