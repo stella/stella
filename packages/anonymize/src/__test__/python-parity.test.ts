@@ -177,6 +177,9 @@ type PythonParityOutput = {
     json_start: number;
     json_end: number;
   };
+  session_plan_result: {
+    second_commit_error: string;
+  };
   lifecycle_result: {
     active_status: string;
     expired_status: string;
@@ -547,6 +550,34 @@ session_restored_text = restored_session.restore_text(
     session_first.redaction.redaction_map[0].placeholder + " signed."
 )
 
+def caller_session_plan(session, full_text, detection_id):
+    return session._plan_docx_text_batch(
+        [{
+            "full_text": full_text,
+            "detections": [{
+                "start": 0, "end": len(full_text), "label": "person", "score": 0.99,
+                "provider_id": "parity-provider", "detection_id": detection_id,
+            }],
+        }],
+        None,
+        None,
+    )
+
+session_plan_session = prepared.create_redaction_session("parity_session_plan_1")
+committed_session_plan = caller_session_plan(
+    session_plan_session, "Alice", "session-plan-person-1"
+)
+committed_session_plan.commit()
+later_session_plan = caller_session_plan(
+    session_plan_session, "Bob", "session-plan-person-2"
+)
+later_session_plan.commit()
+try:
+    committed_session_plan.commit()
+    raise AssertionError("committed session plan was accepted twice")
+except ValueError as error:
+    session_plan_second_commit_error = str(error)
+
 def make_docx(text, external_target=None):
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -882,6 +913,9 @@ print(
                 "object_end": session_object_offsets.resolved_entities[0].end,
                 "json_start": session_json_offsets["resolved_entities"][0]["start"],
                 "json_end": session_json_offsets["resolved_entities"][0]["end"],
+            },
+            "session_plan_result": {
+                "second_commit_error": session_plan_second_commit_error,
             },
             "lifecycle_result": {
                 "active_status": lifecycle_active["status"],
@@ -1526,5 +1560,47 @@ describe("python binding parity", () => {
         .redactText("Jan Novak signed in Node.")
         .redaction.redactionMap.has("[PERSON_parity%5Fsession%5F1_1]"),
     ).toBe(true);
+
+    const nodeSession = native.createRedactionSession(
+      "parity_session_plan_node_1",
+    );
+    const nodePlan = (fullText: string, detectionId: string) =>
+      nodeSession.planTextBatchWithCallerDetections({
+        inputs: [
+          {
+            fullText,
+            detections: [
+              {
+                start: 0,
+                end: fullText.length,
+                label: "person",
+                score: 0.99,
+                providerId: "parity-provider",
+                detectionId,
+              },
+            ],
+          },
+        ],
+      });
+    const committedNodePlan = nodePlan("Alice", "session-plan-person-1");
+    committedNodePlan.commit();
+    nodePlan("Bob", "session-plan-person-2").commit();
+
+    let nodeSecondCommitError: string | undefined;
+    try {
+      committedNodePlan.commit();
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        throw error;
+      }
+      nodeSecondCommitError = error.message;
+    }
+    if (nodeSecondCommitError === undefined) {
+      throw new Error("committed Node session plan was accepted twice");
+    }
+    expect(nodeSecondCommitError).toContain("already been committed");
+    expect(python.session_plan_result.second_commit_error).toBe(
+      nodeSecondCommitError,
+    );
   });
 });

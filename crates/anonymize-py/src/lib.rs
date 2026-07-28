@@ -6,7 +6,6 @@ use std::{
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
-use serde::Deserialize;
 use stella_anonymize_adapter_contract::{
   BindingCallerDetectionRequest, BindingOperatorConfig, BindingOperatorEntry,
   BindingPipelineEntity, BindingPreparedSearchConfig, BindingRedactionEntry,
@@ -25,20 +24,22 @@ use stella_anonymize_adapter_contract::{
   prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_character_binding,
   static_redaction_diagnostic_result_to_utf16_binding,
-  static_redaction_diagnostics_to_binding,
-  static_redaction_plan_result_to_utf16_binding,
-  static_redaction_result_to_binding, static_redaction_result_to_utf16_binding,
+  static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
+  static_redaction_result_to_utf16_binding,
   static_redaction_stream_event_to_utf16_binding,
+};
+use stella_anonymize_binding_core::{
+  PreparedSessionPlan, SessionCallerInput,
+  plan_session_redactions as binding_plan_session_redactions,
 };
 use stella_anonymize_core::{
   CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
   Error as CoreError, OpenSessionArchiveOptions, OperatorConfig,
   PreparedEngine as CorePreparedEngine, PreparedEngineArtifactsView,
-  PreparedSessionCallerRedactionOptions, PreparedSessionRedactionOptions,
-  REDACTION_SESSION_ARCHIVE_KEY_BYTES, REDACTION_SESSION_ARCHIVE_MAX_BYTES,
-  RedactionSession, SessionArchiveKey, SessionId, SessionLifecycle,
-  SessionMetadata, SessionStatus, SessionTimestamp, StaticRedactionDiagnostics,
-  StaticRedactionResult,
+  PreparedSessionRedactionOptions, REDACTION_SESSION_ARCHIVE_KEY_BYTES,
+  REDACTION_SESSION_ARCHIVE_MAX_BYTES, RedactionSession, SessionArchiveKey,
+  SessionId, SessionLifecycle, SessionMetadata, SessionStatus,
+  SessionTimestamp, StaticRedactionDiagnostics, StaticRedactionResult,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 use stella_anonymize_docx_core::{
@@ -132,15 +133,8 @@ pub struct PyPreparedRedactionSession {
 #[pyclass(name = "PreparedSessionRedactionPlan")]
 pub struct PyPreparedSessionRedactionPlan {
   target: Arc<Mutex<RedactionSession>>,
-  base: RedactionSession,
-  planned: Mutex<Option<RedactionSession>>,
+  plan: Mutex<PreparedSessionPlan>,
   result_json: String,
-}
-
-#[derive(Deserialize)]
-struct PySessionCallerRedactionInput {
-  full_text: String,
-  request_json: String,
 }
 
 #[pymethods]
@@ -150,23 +144,15 @@ impl PyPreparedSessionRedactionPlan {
   }
 
   fn commit(&self) -> PyResult<()> {
-    let mut planned = self.planned.lock().map_err(|_| {
+    let mut plan = self.plan.lock().map_err(|_| {
       PyValueError::new_err("Redaction session plan lock is unavailable")
     })?;
     let mut target = self.target.lock().map_err(|_| {
       PyValueError::new_err("Redaction session state lock is unavailable")
     })?;
-    if *target != self.base {
-      return Err(PyValueError::new_err(
-        "Redaction session changed after the plan was created",
-      ));
-    }
-    let next = planned.take().ok_or_else(|| {
-      PyValueError::new_err("Redaction session plan has already been committed")
-    })?;
-    *target = next;
+    plan.commit(&mut target).map_err(to_py_facade_error)?;
     drop(target);
-    drop(planned);
+    drop(plan);
     Ok(())
   }
 }
@@ -282,54 +268,25 @@ impl PyPreparedRedactionSession {
     operators_json: Option<&str>,
     observed_at_epoch_seconds: Option<u32>,
   ) -> PyResult<PyPreparedSessionRedactionPlan> {
-    let inputs =
-      serde_json::from_str::<Vec<PySessionCallerRedactionInput>>(inputs_json)
-        .map_err(|error| to_py_serde_error(&error))?;
+    let inputs = serde_json::from_str::<Vec<SessionCallerInput>>(inputs_json)
+      .map_err(|error| to_py_serde_error(&error))?;
     let operators =
       operator_config_from_binding(parse_operator_config(operators_json)?)
         .map_err(|error| to_py_contract_error(&error))?;
-    let observed_at =
-      observed_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds);
-    let base = self.lock_session()?.clone();
-    let mut planned = base.clone();
-    let mut results = Vec::with_capacity(inputs.len());
-    for input in inputs {
-      let request = serde_json::from_str::<BindingCallerDetectionRequest>(
-        &input.request_json,
-      )
-      .map_err(|error| to_py_serde_error(&error))?;
-      let detections =
-        stella_anonymize_adapter_contract::caller_detections_from_utf16_binding(
-          request,
-          &input.full_text,
-        )
-        .map_err(|error| to_py_contract_error(&error))?;
-      let result = self
-        .inner
-        .redact_static_entities_with_caller_detections_and_session(
-          &input.full_text,
-          PreparedSessionCallerRedactionOptions {
-            operators: &operators,
-            detections: &detections,
-            session: &mut planned,
-            observed_at,
-          },
-        )
-        .map_err(|error| to_py_core_error(&error))?;
-      results.push(
-        static_redaction_plan_result_to_utf16_binding(
-          &result,
-          &input.full_text,
-        )
-        .map_err(|error| to_py_contract_error(&error))?,
-      );
-    }
-    let result_json = serde_json::to_string(&results)
-      .map_err(|error| to_py_serde_error(&error))?;
+    let session = self.lock_session()?;
+    let plan = binding_plan_session_redactions(
+      &self.inner,
+      &session,
+      inputs,
+      &operators,
+      observed_at_epoch_seconds,
+    )
+    .map_err(to_py_facade_error)?;
+    drop(session);
+    let result_json = plan.result_json().to_owned();
     Ok(PyPreparedSessionRedactionPlan {
       target: Arc::clone(&self.session),
-      base,
-      planned: Mutex::new(Some(planned)),
+      plan: Mutex::new(plan),
       result_json,
     })
   }
@@ -1452,6 +1409,13 @@ fn session_archive_bytes(bytes: &[u8]) -> PyResult<Vec<u8>> {
 }
 
 fn to_py_core_error(error: &stella_anonymize_core::Error) -> PyErr {
+  PyValueError::new_err(error.to_string())
+}
+
+#[allow(clippy::needless_pass_by_value)] // `Result::map_err` transfers ownership.
+fn to_py_facade_error(
+  error: stella_anonymize_binding_core::BindingFacadeError,
+) -> PyErr {
   PyValueError::new_err(error.to_string())
 }
 

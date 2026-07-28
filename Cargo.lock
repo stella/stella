@@ -1546,6 +1546,7 @@ dependencies = [
  "serde",
  "serde_json",
  "stella-anonymize-adapter-contract",
+ "stella-anonymize-binding-core",
  "stella-anonymize-core",
  "stella-anonymize-docx-core",
  "stella-anonymize-pdf-core",
