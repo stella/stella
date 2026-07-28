@@ -2705,7 +2705,7 @@
     "status": "Stav",
     "statusValues": {
       "cancelled": "Zrušená",
-      "done": "Hotovo",
+      "done": "Hotová",
       "in_progress": "Rozpracovaná",
       "in_review": "V revízii",
       "open": "Otvorená"
@@ -3620,7 +3620,7 @@
       "exportXlsx": "Exportovať XLSX",
       "fields": "Polia:",
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
-      "filter": "Filter",
+      "filter": "Filtrovať",
       "filterByPlaceholder": "Filter by…",
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Zoskupiť podľa:",
