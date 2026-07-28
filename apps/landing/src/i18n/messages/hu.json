@@ -10,7 +10,7 @@
     "label": "Kérdezze az AI-t a stella alkalmazásról"
   },
   "common": {
-    "getCli": "Get the CLI",
+    "getCli": "Töltse le a CLI-t",
     "startFree": "Kezdje el ingyen"
   },
   "demo": {
@@ -81,7 +81,7 @@
     "blog": "Blog",
     "changelog": "Változásnapló",
     "chooseLanguage": "Válasszon nyelvet",
-    "docxEditor": "Standalone DOCX editor",
+    "docxEditor": "Önálló DOCX-szerkesztő",
     "github": "stella a GitHubon",
     "openMenu": "Navigáció megnyitása",
     "pillars": {
@@ -138,705 +138,705 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött táblázattá, amelyet rendezhet, szűrhet és visszakövethet."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "Ügyek, dokumentumok, .docx-szerkesztés, ellenőrzés és csevegés egyetlen munkaterületen."
         },
         "2": {
-          "body": "Read and search official case law, legal sources, and company registries."
+          "body": "Olvassa és keresse a hivatalos ítélkezési gyakorlatot, a jogforrásokat és a cégnyilvántartásokat."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Ask questions over the matters, documents, and contacts you already have in stella. One conversation can reach every matter you have access to, with the same permissions that govern the rest of your workspace.",
-          "title": "Works across your matters"
+          "body": "Kérdezzen rá azokra az ügyekre, dokumentumokra és kapcsolatokra, amelyek már a stella alkalmazásban vannak. Egyetlen beszélgetés minden olyan ügyet elér, amelyhez hozzáférése van, ugyanazokkal a jogosultságokkal, amelyek mindenhol máshol is érvényesek.",
+          "title": "Átfogja az összes ügyét"
         },
         "1": {
-          "body": "Bring documents into the conversation and ask the agent to read, compare, or summarise them.",
-          "title": "Reads your files"
+          "body": "Vonjon be dokumentumokat a beszélgetésbe, és kérje meg az ügynököt, hogy olvassa el, hasonlítsa össze vagy foglalja össze őket.",
+          "title": "Elolvassa a fájljait"
         },
         "2": {
-          "body": "Reach company registries and other connected sources without leaving the chat.",
-          "title": "Connected tools"
+          "body": "Érje el a cégnyilvántartásokat és a többi csatlakoztatott forrást a csevegés elhagyása nélkül.",
+          "title": "Csatlakoztatott eszközök"
         },
         "3": {
-          "body": "The agent asks before it acts, so you stay in control of each step.",
-          "title": "Approvals before acting"
+          "body": "Az ügynök kérdez, mielőtt cselekszik, így minden lépés az Ön kezében marad.",
+          "title": "Jóváhagyás a művelet előtt"
         },
         "4": {
-          "body": "See what the agent is reading with a preview of the source behind each step.",
-          "title": "Source previews"
+          "body": "Minden lépésnél előnézetben látja, mit olvas éppen az ügynök.",
+          "title": "Forrás-előnézetek"
         },
         "5": {
-          "body": "Answers link back to the source, and a citation opens the document at the exact passage.",
-          "title": "Grounded by citations"
+          "body": "A válaszok visszamutatnak a forrásra, a hivatkozás pedig pontosan a megfelelő szövegrésznél nyitja meg a dokumentumot.",
+          "title": "Hivatkozásokkal alátámasztva"
         }
       },
       "cta": {
-        "heading": "Hand the agent a real matter."
+        "heading": "Bízzon az ügynökre egy valódi ügyet."
       },
       "faqs": {
         "0": {
-          "answer": "No. It asks for approval before it acts, and it shows a source preview for what it reads, so you can follow and confirm each step.",
-          "question": "Does the agent act on its own?"
+          "answer": "Nem. Jóváhagyást kér, mielőtt cselekszik, és forrás-előnézetet mutat arról, amit olvas, így minden lépést nyomon követhet és megerősíthet.",
+          "question": "Cselekszik az ügynök önállóan?"
         },
         "1": {
-          "answer": "Through skills (reusable prompts and tool definitions) and external connectors that are MCP-compatible. Both extend what the agent can reach without changing the chat itself.",
-          "question": "How do I add new capabilities?"
+          "answer": "Készségekkel (újrafelhasználható promptokkal és eszközdefiníciókkal), valamint MCP-kompatibilis külső csatlakozókkal. Mindkettő bővíti az ügynök hatókörét anélkül, hogy magát a csevegést megváltoztatná.",
+          "question": "Hogyan adhatok hozzá új képességeket?"
         },
         "2": {
-          "answer": "From your matters, files, registries, and connected tools. AI features are bring-your-own-key, and answers are grounded by citations back to the source.",
-          "question": "Where do its answers come from?"
+          "answer": "Az Ön ügyeiből, fájljaiból, a nyilvántartásokból és a csatlakoztatott eszközökből. Az AI-funkciók saját szolgáltatói kulccsal működnek, a válaszokat pedig a forrásra mutató hivatkozások támasztják alá.",
+          "question": "Honnan származnak a válaszai?"
         }
       },
-      "metaDescription": "Chat with your matters, documents, registries, and connected tools. The agent acts with approvals, grounds answers in citations, and extends via skills.",
-      "metaTitle": "AI agent for legal matters | stella",
+      "metaDescription": "Beszélgessen ügyeivel, dokumentumaival, a nyilvántartásokkal és a csatlakoztatott eszközökkel. Az ügynök jóváhagyással cselekszik, és hivatkozásokkal válaszol.",
+      "metaTitle": "AI-ügynök jogi ügyekhez | stella",
       "quickAnswer": {
-        "answer": "The agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
-        "question": "What can the AI agent do?"
+        "answer": "Az ügynök az Ön ügyeivel, fájljaival, a cégnyilvántartásokkal és a csatlakoztatott eszközökkel dolgozik. Jóváhagyást kér, mielőtt cselekszik, forrás-előnézetet mutat arról, amit olvas, és hivatkozásokkal támasztja alá a válaszait. Újrafelhasználható készségekkel és MCP-kompatibilis külső csatlakozókkal bővítheti.",
+        "question": "Mit tud az AI-ügynök?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Chat over matters, documents, and contacts in one conversation",
-            "1": "Pull company and registry data into the same thread",
-            "2": "Hand a tabular review to the agent for follow-up questions"
+            "0": "Csevegés az ügyekről, dokumentumokról és kapcsolatokról egy beszélgetésben",
+            "1": "Cég- és nyilvántartási adatok betöltése ugyanabba a szálba",
+            "2": "Adjon át egy táblázatos ellenőrzést az ügynöknek további kérdésekhez"
           },
-          "heading": "Ask once, across everything in the matter"
+          "heading": "Kérdezzen egyszer, az egész ügyre"
         },
         "1": {
           "bullets": {
-            "0": "Each action waits for your approval before it runs",
-            "1": "A source preview shows what the agent read for every step",
-            "2": "Citations open the source document at the exact passage"
+            "0": "Minden művelet megvárja az Ön jóváhagyását",
+            "1": "A forrás-előnézet minden lépésnél megmutatja, mit olvasott az ügynök",
+            "2": "A hivatkozások pontosan a megfelelő szövegrésznél nyitják meg a forrásdokumentumot"
           },
-          "heading": "You stay in control"
+          "heading": "Az irányítás az Öné"
         },
         "2": {
           "bullets": {
-            "0": "Skills are prompts and tool definitions you can reuse across matters",
-            "1": "External connectors are MCP-compatible, so the agent reaches more tools",
-            "2": "Add capabilities without changing how the chat works"
+            "0": "A készségek promptok és eszközdefiníciók, amelyeket több ügyben is felhasználhat",
+            "1": "A külső csatlakozók MCP-kompatibilisek, így az ügynök több eszközt ér el",
+            "2": "Új képességek anélkül, hogy a csevegés működése változna"
           },
-          "heading": "Extend it with skills and connectors"
+          "heading": "Bővítse készségekkel és csatlakozókkal"
         }
       }
     },
     "anonymization": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "Beszélgessen ügyeken, fájlokon és csatlakoztatott eszközökön át, jóváhagyással és forrás-előnézettel."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "Ügyek, dokumentumok, .docx-szerkesztés, ellenőrzés és csevegés egyetlen munkaterületen."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött táblázattá, amelyet rendezhet, szűrhet és visszakövethet."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Removes names, entities, and identifying details before material reaches an AI step.",
-          "title": "Keeps identifying details out"
+          "body": "Eltávolítja a neveket, az entitásokat és az azonosító adatokat, mielőtt az anyag AI-lépésbe kerülne.",
+          "title": "Az azonosító adatok kívül maradnak"
         },
         "1": {
-          "body": "Runs directly in the chat composer and in document review, not in a separate tool.",
-          "title": "Works in chat and review"
+          "body": "Közvetlenül a csevegés szerkesztőmezőjében és a dokumentumok ellenőrzésében fut, nem külön eszközben.",
+          "title": "Működik a csevegésben és az ellenőrzésben"
         },
         "2": {
-          "body": "Add your organisation's terms and blacklists so the names that matter to you are always caught.",
-          "title": "Your terms included"
+          "body": "Adja hozzá szervezete kifejezéseit és tiltólistáit, hogy az Önnek fontos nevek mindig fennakadjanak.",
+          "title": "A saját kifejezéseivel"
         },
         "3": {
-          "body": "Shows the redacted document in context, so you confirm what leaves the matter.",
-          "title": "Reviewable output"
+          "body": "A kitakart dokumentumot a saját kontextusában mutatja, így megerősítheti, mi hagyja el az ügyet.",
+          "title": "Ellenőrizhető eredmény"
         }
       },
       "cta": {
-        "heading": "Keep identifying details out of your AI workflows."
+        "heading": "Tartsa távol az azonosító adatokat az AI-munkafolyamataitól."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Anonymization is available today, integrated in chat and document review.",
-          "question": "Is anonymization available now?"
+          "answer": "Igen. Az anonimizálás már ma elérhető, beépítve a csevegésbe és a dokumentumok ellenőrzésébe.",
+          "question": "Elérhető már az anonimizálás?"
         },
         "1": {
-          "answer": "Preparing material for AI workflows without exposing names, entities, or identifying details, while keeping the redacted result available for review.",
-          "question": "What does it help with?"
+          "answer": "Az anyag előkészítésében az AI-munkafolyamatokhoz, nevek, entitások és azonosító adatok felfedése nélkül, miközben a kitakart eredmény ellenőrizhető marad.",
+          "question": "Miben segít?"
         }
       },
-      "metaDescription": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
-      "metaTitle": "Document anonymization for legal AI | stella",
+      "metaDescription": "Távolítsa el a neveket, az entitásokat és az azonosító adatokat, mielőtt az anyag az AI-hoz kerül, közvetlenül a csevegésből és a dokumentumok ellenőrzéséből.",
+      "metaTitle": "Dokumentumok anonimizálása a jogi AI-hoz | stella",
       "quickAnswer": {
-        "answer": "It removes names, entities, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
-        "question": "What is anonymization in stella?"
+        "answer": "Eltávolítja a neveket, az entitásokat és az azonosító adatokat, mielőtt az anyag AI-munkafolyamatba kerülne, és megmutatja a kitakart eredményt, hogy megerősíthesse, mi hagyja el az ügyet. Közvetlenül a csevegésbe és a dokumentumok ellenőrzésébe van beépítve.",
+        "question": "Mi az anonimizálás a stella alkalmazásban?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Keeps names, entities, and identifying details out of AI steps",
-            "1": "Built for legal AI workflows rather than generic document masking",
-            "2": "Leaves a reviewable redacted document before the next step"
+            "0": "A neveket, entitásokat és azonosító adatokat távol tartja az AI-lépésektől",
+            "1": "Jogi AI-munkafolyamatokra készült, nem általános dokumentummaszkolásra",
+            "2": "A következő lépés előtt ellenőrizhető, kitakart dokumentumot hagy maga után"
           },
-          "heading": "Prepare material before it reaches AI"
+          "heading": "Készítse elő az anyagot, mielőtt az AI-hoz ér"
         },
         "1": {
           "bullets": {
-            "0": "Available from chat and document review",
-            "1": "No copy-pasting into an external redaction tool",
-            "2": "Built on stella's own open-source anonymization engine"
+            "0": "Elérhető a csevegésből és a dokumentumok ellenőrzéséből",
+            "1": "Nincs másolgatás külső kitakaró eszközbe",
+            "2": "A stella saját nyílt forráskódú anonimizáló motorjára épül"
           },
-          "heading": "Part of the workspace, not a separate tool"
+          "heading": "A munkaterület része, nem külön eszköz"
         }
       }
     },
     "cli-mcp": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, review, and chat in one workspace."
+          "body": "Ügyek, dokumentumok, ellenőrzés és csevegés egyetlen munkaterületen."
         },
         "1": {
-          "body": "Work across matters and connected tools with approvals and citations."
+          "body": "Dolgozzon az ügyeken és a csatlakoztatott eszközökön át, jóváhagyással és hivatkozásokkal."
         },
         "2": {
-          "body": "Fill reusable legal documents through the app, CLI, or connected tools."
+          "body": "Töltsön ki újrafelhasználható jogi dokumentumokat az alkalmazásból, a CLI-ből vagy csatlakoztatott eszközökből."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Use generated commands such as stella search matters, document read, and template fill from scripts or your terminal.",
-          "title": "A real command line"
+          "body": "Használjon generált parancsokat, például a stella search matters, a document read és a template fill parancsot, szkriptekből vagy a terminálból.",
+          "title": "Igazi parancssor"
         },
         "1": {
-          "body": "Connect stella to MCP-compatible clients without building a separate integration for each one.",
-          "title": "MCP-compatible"
+          "body": "Csatlakoztassa a stella alkalmazást MCP-kompatibilis kliensekhez anélkül, hogy mindegyikhez külön integrációt építene.",
+          "title": "MCP-kompatibilis"
         },
         "2": {
-          "body": "The CLI command surface is generated from the MCP tool registry, so the two interfaces stay aligned as stella evolves.",
-          "title": "One capability registry"
+          "body": "A CLI parancskészlete az MCP-eszköznyilvántartásból generálódik, így a két felület a stella fejlődésével együtt marad összhangban.",
+          "title": "Egyetlen képességnyilvántartás"
         },
         "3": {
-          "body": "Authentication scopes and workspace permissions remain the boundary, whichever interface you use.",
-          "title": "Workspace permissions apply"
+          "body": "A hitelesítési hatókörök és a munkaterületi jogosultságok maradnak a határ, bármelyik felületet használja.",
+          "title": "A munkaterületi jogosultságok érvényesek"
         },
         "4": {
-          "body": "Commands return machine-readable JSON for scripts and agents as well as readable terminal output for people.",
-          "title": "Structured output"
+          "body": "A parancsok géppel olvasható JSON-t adnak vissza a szkripteknek és az ügynököknek, valamint olvasható terminálkimenetet az embereknek.",
+          "title": "Strukturált kimenet"
         },
         "5": {
-          "body": "Point the CLI and MCP clients at the stella server your organisation operates.",
-          "title": "Self-host friendly"
+          "body": "Irányítsa a CLI-t és az MCP-klienseket arra a stella szerverre, amelyet a szervezete üzemeltet.",
+          "title": "Saját üzemeltetésre készen"
         }
       },
       "cta": {
-        "heading": "Bring stella into the tools where you already work."
+        "heading": "Hozza be a stella alkalmazást azokba az eszközökbe, amelyekkel már dolgozik."
       },
       "faqs": {
         "0": {
-          "answer": "No. They are separate interfaces generated from the same capability registry and connected to the same stella server.",
-          "question": "Is the CLI a separate product from the MCP server?"
+          "answer": "Nem. Két külön felület, amely ugyanabból a képességnyilvántartásból generálódik, és ugyanahhoz a stella szerverhez kapcsolódik.",
+          "question": "A CLI külön termék az MCP-szervertől?"
         },
         "1": {
-          "answer": "Yes. The CLI supports structured JSON output, pagination, predictable exit codes, and non-interactive use suitable for automation.",
-          "question": "Can I use the CLI in scripts?"
+          "answer": "Igen. A CLI támogatja a strukturált JSON-kimenetet, a lapozást, a kiszámítható kilépési kódokat és az automatizálásra alkalmas, nem interaktív használatot.",
+          "question": "Használhatom a CLI-t szkriptekben?"
         },
         "2": {
-          "answer": "No. The server checks authentication scopes and stella permissions before a capability runs.",
-          "question": "Does connecting an MCP client bypass workspace permissions?"
+          "answer": "Nem. A szerver a képesség futtatása előtt ellenőrzi a hitelesítési hatóköröket és a stella jogosultságait.",
+          "question": "Egy MCP-kliens csatlakoztatása megkerüli a munkaterületi jogosultságokat?"
         }
       },
-      "metaDescription": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capabilities, permissions, and data.",
-      "metaTitle": "MCP server and CLI for your legal workspace | stella",
+      "metaDescription": "Keressen, olvasson és dolgozzon a stella alkalmazással a parancssorból vagy bármely MCP-kompatibilis kliensből. Ugyanazok a képességek és jogosultságok.",
+      "metaTitle": "MCP-szerver és CLI a jogi munkaterülethez | stella",
       "quickAnswer": {
-        "answer": "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
-        "question": "What are the stella CLI and MCP server?"
+        "answer": "Két felület ugyanazokhoz a képességekhez a stella alkalmazásban. A CLI parancsokként tükrözi az MCP-eszköznyilvántartást, az MCP-szerver pedig lehetővé teszi, hogy a kompatibilis ügynökök és eszközök ügyekkel, dokumentumokkal, sablonokkal és nyilvános jogi adatokkal dolgozzanak, ugyanazon hozzáférési szabályok mellett.",
+        "question": "Mi a stella CLI és az MCP-szerver?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Find passages across matter documents with stella search matters",
-            "1": "Read documents, list matters, and inspect templates without switching context",
-            "2": "Use paginated, structured results in scripts and automated workflows"
+            "0": "Szövegrészek keresése az ügy dokumentumaiban a stella search matters paranccsal",
+            "1": "Dokumentumok olvasása, ügyek listázása és sablonok megtekintése kontextusváltás nélkül",
+            "2": "Lapozható, strukturált eredmények szkriptekben és automatizált munkafolyamatokban"
           },
-          "heading": "Search the whole matter from your terminal"
+          "heading": "Keressen az egész ügyben a terminálból"
         },
         "1": {
           "bullets": {
-            "0": "Expose matters, documents, case law, templates, and other approved tools",
-            "1": "Keep the capability catalogue and CLI commands generated from one registry",
-            "2": "Connect compatible agents without copying legal data into another workspace"
+            "0": "Ügyek, dokumentumok, ítélkezési gyakorlat, sablonok és más jóváhagyott eszközök közzététele",
+            "1": "A képességkatalógus és a CLI-parancsok egyetlen nyilvántartásból generálódnak",
+            "2": "Kompatibilis ügynökök csatlakoztatása anélkül, hogy a jogi adatok másik munkaterületre kerülnének"
           },
-          "heading": "The same capabilities through MCP"
+          "heading": "Ugyanazok a képességek MCP-n keresztül"
         }
       }
     },
     "editor": {
       "adjacent": {
         "0": {
-          "body": "See where matters, documents, and tools live together."
+          "body": "Nézze meg, hol él együtt az ügy, a dokumentumok és az eszközök."
         },
         "1": {
-          "body": "Create reusable Word documents with fields and conditional clauses."
+          "body": "Hozzon létre újrafelhasználható Word-dokumentumokat mezőkkel és feltételes kikötésekkel."
         },
         "2": {
-          "body": "Try the same editor on its own: open and edit a .docx in the browser, no account needed."
+          "body": "Próbálja ki ugyanezt a szerkesztőt önmagában: nyisson meg és szerkesszen egy .docx fájlt a böngészőben, fiók nélkül."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Open and edit Word documents directly in stella's online editor: no install, and no converting the file into a separate proprietary format.",
-          "title": "Edit .docx files in the browser"
+          "body": "Nyisson meg és szerkesszen Word-dokumentumokat közvetlenül a stella online szerkesztőjében: telepítés nélkül, és anélkül, hogy a fájl külön, zárt formátumba kerülne.",
+          "title": ".docx fájlok szerkesztése a böngészőben"
         },
         "1": {
-          "body": "The document stays a .docx throughout, so fonts, styles, and layout render and save the way Word created them.",
-          "title": "Formatting stays intact"
+          "body": "A dokumentum végig .docx marad, így a betűtípusok, a stílusok és az elrendezés úgy jelennek meg és úgy mentődnek, ahogyan a Word létrehozta őket.",
+          "title": "A formázás érintetlen marad"
         },
         "2": {
-          "body": "Tracked insertions and deletions render in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
-          "title": "Track changes"
+          "body": "A követett beszúrások és törlések a helyükön jelennek meg, az AI által javasolt módosítások pedig követett változásként érkeznek, amelyeket a dokumentumban fogadhat el vagy utasíthat el.",
+          "title": "Változáskövetés"
         },
         "3": {
-          "body": "Saved edits become document revisions, so the current file and its full history stay together.",
-          "title": "Version history for every save"
+          "body": "A mentett módosítások dokumentumverziókká válnak, így az aktuális fájl és a teljes előzménye együtt marad.",
+          "title": "Minden mentés bekerül a verziótörténetbe"
         },
         "4": {
-          "body": "The document remains attached to its matter, alongside its files, properties, tasks, and conversations.",
-          "title": "Matter context stays visible"
+          "body": "A dokumentum az ügyéhez kötve marad, a fájljai, tulajdonságai, feladatai és beszélgetései mellett.",
+          "title": "Az ügy kontextusa végig látszik"
         },
         "5": {
-          "body": "Use the desktop bridge when a document needs Microsoft Word, then return the updated file to the same matter.",
-          "title": "Local Office bridge"
+          "body": "Használja az asztali hidat, ha egy dokumentumhoz Microsoft Word kell, majd küldje vissza a frissített fájlt ugyanabba az ügybe.",
+          "title": "Híd a helyi Office-hoz"
         }
       },
       "cta": {
-        "heading": "Edit a Word document in its matter."
+        "heading": "Szerkesszen Word-dokumentumot az ügyén belül."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The document is edited where it lives, alongside the matter's other files, properties, tasks, and conversations, so no local copy is downloaded and re-uploaded to make a change.",
-          "question": "Does the document stay attached to its matter while I edit?"
+          "answer": "Igen. A dokumentum ott szerkeszthető, ahol van, az ügy többi fájlja, tulajdonsága, feladata és beszélgetése mellett, így egyetlen módosításhoz sem kell helyi másolatot letölteni és újra feltölteni.",
+          "question": "A dokumentum a szerkesztés alatt is az ügyéhez kötve marad?"
         },
         "1": {
-          "answer": "Yes. Tracked insertions and deletions render in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
-          "question": "Does the editor keep track changes?"
+          "answer": "Igen. A követett beszúrások és törlések a helyükön jelennek meg, ahogyan a Word mutatja őket. A stella AI-ja által javasolt módosítások ugyanígy érkeznek, így a javítás előbb ellenőrzésre kerül, és csak elfogadás után válik a dokumentum részévé.",
+          "question": "Megőrzi a szerkesztő a változáskövetést?"
         },
         "2": {
-          "answer": "The saved file remains connected to the same matter and document, and the save becomes a revision in that document's version history.",
-          "question": "What happens when I save?"
+          "answer": "A mentett fájl ugyanahhoz az ügyhöz és dokumentumhoz kapcsolódik, a mentés pedig verzióként kerül be az adott dokumentum verziótörténetébe.",
+          "question": "Mi történik mentéskor?"
         },
         "3": {
-          "answer": "Yes. Saved revisions stay in the document's version history, so the current file and the ones it replaced remain together on the same document.",
-          "question": "Can I get back to an earlier revision?"
+          "answer": "Igen. A mentett verziók a dokumentum verziótörténetében maradnak, így az aktuális fájl és az általa felváltottak ugyanazon a dokumentumon maradnak együtt.",
+          "question": "Vissza tudok térni egy korábbi verzióhoz?"
         },
         "4": {
-          "answer": "Yes. The stella desktop bridge opens the document in local Office for Word-specific workflows and returns the edited file to the same matter.",
-          "question": "Can I open the same document in Microsoft Word?"
+          "answer": "Igen. A stella asztali hídja megnyitja a dokumentumot a helyi Office-ban a Wordhöz kötött munkafolyamatokhoz, majd a szerkesztett fájlt visszaküldi ugyanabba az ügybe.",
+          "question": "Megnyithatom ugyanazt a dokumentumot Microsoft Wordben?"
         },
         "5": {
-          "answer": "Yes. The document is part of its matter's context, so matter-aware tools can read it and propose edits as tracked changes in the same document.",
-          "question": "Can stella's AI work on the document I am editing?"
+          "answer": "Igen. A dokumentum az ügy kontextusának része, így az ügyet ismerő eszközök elolvashatják, és követett változásként javasolhatnak módosításokat ugyanabban a dokumentumban.",
+          "question": "Dolgozhat a stella AI-ja azon a dokumentumon, amelyet éppen szerkesztek?"
         }
       },
-      "metaDescription": "Edit a matter's Word documents inside stella: track changes reviewed in place, a revision in the version history for every save, and a bridge to local Word.",
-      "metaTitle": "Editing Word Documents in Your Legal Workspace | stella",
+      "metaDescription": "Szerkessze az ügy Word-dokumentumait a stella alkalmazásban: helyben ellenőrzött változáskövetés, verzió minden mentésnél, híd a helyi Wordhöz.",
+      "metaTitle": "Word-dokumentumok szerkesztése az ügyben | stella",
       "quickAnswer": {
-        "answer": "Yes. Open a .docx file from a matter and edit it in the browser. stella keeps the document in its original Word format and records saved revisions in the same document's version history.",
-        "question": "Can I edit Word documents in stella?"
+        "answer": "Igen. Nyisson meg egy .docx fájlt az ügyből, és szerkessze a böngészőben. A stella az eredeti Word-formátumban tartja a dokumentumot, a mentett verziókat pedig ugyanannak a dokumentumnak a verziótörténetébe rögzíti.",
+        "question": "Szerkeszthetek Word-dokumentumokat a stella alkalmazásban?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Open a .docx directly from a matter",
-            "1": "Edit the document with familiar page and formatting controls",
-            "2": "Review track changes in place, including edits proposed by AI",
-            "3": "Keep the original Word file format",
-            "4": "Save changes into the document's version history"
+            "0": ".docx megnyitása közvetlenül az ügyből",
+            "1": "Szerkesztés ismerős oldal- és formázási vezérlőkkel",
+            "2": "Változáskövetés helyben, az AI javaslataival együtt",
+            "3": "Az eredeti Word-fájlformátum megmarad",
+            "4": "A módosítások a dokumentum verziótörténetébe mentődnek"
           },
-          "heading": "The .docx stays a .docx"
+          "heading": "A .docx marad .docx"
         },
         "1": {
           "bullets": {
-            "0": "Move between the document and its matter without uploading copies",
-            "1": "Keep document properties and revisions with the file",
-            "2": "Open the same document through the desktop bridge when needed",
-            "3": "Use the document as context for matter-aware tools"
+            "0": "Váltás a dokumentum és az ügye között, másolatok feltöltése nélkül",
+            "1": "A dokumentum tulajdonságai és verziói a fájllal maradnak",
+            "2": "Szükség esetén ugyanaz a dokumentum megnyitható az asztali hídon át",
+            "3": "A dokumentum kontextusként szolgál az ügyet ismerő eszközöknek"
           },
-          "heading": "Connected to the rest of the matter"
+          "heading": "Összekötve az ügy többi részével"
         }
       }
     },
     "public-data": {
       "adjacent": {
         "0": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "Készítse elő az érzékeny anyagot az AI számára az azonosító adatok felfedése nélkül."
         },
         "1": {
-          "body": "Chat across matters, files, and sources with approvals and citations."
+          "body": "Beszélgessen ügyeken, fájlokon és forrásokon át, jóváhagyással és hivatkozásokkal."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött ellenőrzési táblázattá."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Decisions from official public legal sources, not scraped third-party summaries.",
-          "title": "Official case law"
+          "body": "Határozatok hivatalos nyilvános jogforrásokból, nem harmadik felektől begyűjtött összefoglalókból.",
+          "title": "Hivatalos ítélkezési gyakorlat"
         },
         "1": {
-          "body": "Legal Atlas parses each decision while keeping its original structure intact.",
-          "title": "Structure preserved"
+          "body": "A Legal Atlas úgy dolgozza fel a határozatokat, hogy az eredeti szerkezetük érintetlen marad.",
+          "title": "Megőrzött szerkezet"
         },
         "2": {
-          "body": "Typed clients for national company and commercial registries, queried from a matter.",
-          "title": "Company registries"
+          "body": "Típusos kliensek a nemzeti cég- és kereskedelmi nyilvántartásokhoz, közvetlenül az ügyből lekérdezve.",
+          "title": "Cégnyilvántartások"
         },
         "3": {
-          "body": "Move between a decision and the cases it cites without leaving the reader.",
-          "title": "Follow citations"
+          "body": "Lépjen a határozat és az általa hivatkozott döntések között anélkül, hogy kilépne az olvasóból.",
+          "title": "Hivatkozások követése"
         },
         "4": {
-          "body": "Browse and filter case law and registries scoped to the jurisdiction you work in.",
-          "title": "By jurisdiction"
+          "body": "Böngéssze és szűrje az ítélkezési gyakorlatot és a nyilvántartásokat abban a joghatóságban, amelyben dolgozik.",
+          "title": "Joghatóság szerint"
         },
         "5": {
-          "body": "Reference any source from a matter so the agent's answers stay traceable to it.",
-          "title": "Grounded for AI"
+          "body": "Hivatkozzon bármelyik forrásra az ügyből, hogy az ügynök válaszai visszakövethetők maradjanak.",
+          "title": "Megalapozott alap az AI-nak"
         }
       },
       "cta": {
-        "heading": "Bring official legal data into your matters."
+        "heading": "Hozza be a hivatalos jogi adatokat az ügyeibe."
       },
       "faqs": {
         "0": {
-          "answer": "Case law comes from official public legal sources, ingested and parsed by stella's Legal Atlas stack. Company data comes from national company and commercial registries through typed clients, not third-party copies.",
-          "question": "Where does the data come from?"
+          "answer": "Az ítélkezési gyakorlat hivatalos nyilvános jogforrásokból származik, amelyeket a stella Legal Atlas rendszere gyűjt be és dolgoz fel. A cégadatok a nemzeti cég- és kereskedelmi nyilvántartásokból érkeznek típusos klienseken keresztül, nem harmadik felek másolataiból.",
+          "question": "Honnan származnak az adatok?"
         },
         "1": {
-          "answer": "Two lists, both expanding. Typed registry clients already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources surface per jurisdiction from stella's connector catalogue; Czechia, Spain, and Taiwan, for example, already have connected sources, and the case-law reader is built to browse and filter by jurisdiction as more official sources are added.",
-          "question": "Which jurisdictions and registries are covered?"
+          "answer": "Két lista, mindkettő bővül. A típusos nyilvántartás-kliensek között már ott van az ARES (Csehország), a Companies House (Egyesült Királyság), a SEC EDGAR (Egyesült Államok), a KRS (Lengyelország), a PRH (Finnország) és a VIES (uniós áfa). A nyilvántartásokon túl a hivatalos források joghatóságonként jelennek meg a stella csatlakozókatalógusából; Csehországnak, Spanyolországnak és Tajvannak például már vannak összekapcsolt forrásai, az ítélkezési gyakorlat olvasója pedig úgy készült, hogy joghatóság szerint lehessen böngészni és szűrni, ahogy újabb hivatalos források kerülnek be.",
+          "question": "Mely joghatóságokra és nyilvántartásokra terjed ki?"
         },
         "2": {
-          "answer": "Yes. Public data referenced from a matter becomes a grounded source: the AI agent cites the underlying decision or record so its answers stay traceable.",
-          "question": "Can the AI use this data?"
+          "answer": "Igen. Az ügyből hivatkozott nyilvános adat megalapozott forrássá válik: az AI-ügynök az alapul szolgáló határozatra vagy bejegyzésre hivatkozik, így a válaszai visszakövethetők maradnak.",
+          "question": "Használhatja az AI ezeket az adatokat?"
         }
       },
-      "metaDescription": "Case law and company registries from official public sources. Read decisions, look up companies, follow citations, and pull it into a matter or the AI agent.",
-      "metaTitle": "Case law and company registry data | stella",
+      "metaDescription": "Ítélkezési gyakorlat és cégnyilvántartások hivatalos forrásokból. Olvasson határozatokat, keressen cégeket, kövesse a hivatkozásokat, és hozza az ügybe.",
+      "metaTitle": "Ítélkezési gyakorlat és cégadatok | stella",
       "quickAnswer": {
-        "answer": "Two kinds. Official public case law, ingested and structure-parsed so you can read and search decisions and follow their citations. And typed access to national company and commercial registries, so you can pull official company data straight into a matter. Both are grounded sources the AI agent can cite.",
-        "question": "What public data does stella bring in?"
+        "answer": "Kétfélét. Hivatalos nyilvános ítélkezési gyakorlatot, begyűjtve és a szerkezetét megőrizve feldolgozva, hogy határozatokat olvashasson, kereshessen bennük, és követhesse a hivatkozásaikat. És típusos hozzáférést a nemzeti cég- és kereskedelmi nyilvántartásokhoz, hogy a hivatalos cégadatokat egyenesen az ügybe hozhassa. Mindkettő megalapozott forrás, amelyre az AI-ügynök hivatkozni tud.",
+        "question": "Milyen nyilvános adatokat hoz be a stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Collected from official public legal sources",
-            "1": "Structure-preserving parsers keep headings, paragraphs, and references",
-            "2": "Built on the open Legal Atlas ingestion stack"
+            "0": "Hivatalos nyilvános jogforrásokból gyűjtve",
+            "1": "A szerkezetőrző feldolgozók megtartják a címeket, bekezdéseket és hivatkozásokat",
+            "2": "A nyílt Legal Atlas begyűjtő rendszerére épül"
           },
-          "heading": "Case law from official sources, parsed with structure intact"
+          "heading": "Ítélkezési gyakorlat hivatalos forrásból, megőrzött szerkezettel"
         },
         "1": {
           "bullets": {
-            "0": "Typed clients for national registries: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES, and more",
-            "1": "Pull official company data into a matter instead of copying it by hand",
-            "2": "Coverage expands as more official sources are added"
+            "0": "Típusos kliensek a nemzeti nyilvántartásokhoz: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES és további",
+            "1": "Hozza a hivatalos cégadatokat az ügybe kézi másolás helyett",
+            "2": "A lefedettség nő, ahogy újabb hivatalos források kerülnek be"
           },
-          "heading": "Company and commercial registries, queried from a matter"
+          "heading": "Cég- és kereskedelmi nyilvántartások, lekérdezve az ügyből"
         },
         "2": {
           "bullets": {
-            "0": "Reference a decision or company record from a matter",
-            "1": "The agent cites the underlying source, not a paraphrase",
-            "2": "Search across sources, not just within one"
+            "0": "Hivatkozzon határozatra vagy cégbejegyzésre az ügyből",
+            "1": "Az ügynök az alapul szolgáló forrásra hivatkozik, nem átfogalmazásra",
+            "2": "Keressen a források között, ne csak egyen belül"
           },
-          "heading": "One grounded source for the agent"
+          "heading": "Egyetlen megalapozott forrás az ügynöknek"
         }
       }
     },
     "tabular-review": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected sources with approvals and source previews."
+          "body": "Beszélgessen ügyeken, fájlokon és csatlakoztatott forrásokon át, jóváhagyással és forrás-előnézettel."
         },
         "1": {
-          "body": "Official case law and company registries, pulled into a matter."
+          "body": "Hivatalos ítélkezési gyakorlat és cégnyilvántartások, egyenesen az ügybe."
         },
         "2": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "Készítse elő az érzékeny anyagot az AI számára az azonosító adatok felfedése nélkül."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Define a column in plain language; stella answers it for every document in the set.",
-          "title": "Columns are questions"
+          "body": "Fogalmazza meg az oszlopot hétköznapi nyelven; a stella a halmaz minden dokumentumára megválaszolja.",
+          "title": "Az oszlopok kérdések"
         },
         "1": {
-          "body": "Each cell links to the exact passage it was extracted from, so you can verify in one click.",
-          "title": "Cited to the source"
+          "body": "Minden cella pontosan arra a szövegrészre mutat, amelyből származik, így egy kattintással ellenőrizheti.",
+          "title": "A forrásig hivatkozva"
         },
         "2": {
-          "body": "Reviews live inside a matter alongside the documents, contacts, and chat they relate to.",
-          "title": "Matter-scoped"
+          "body": "Az ellenőrzések az ügyön belül élnek, azon dokumentumok, kapcsolatok és beszélgetések mellett, amelyekhez tartoznak.",
+          "title": "Az ügyhöz kötve"
         },
         "3": {
-          "body": "Treat answers like data: sort by any column, filter to the rows that need attention.",
-          "title": "Sort and filter"
+          "body": "Kezelje a válaszokat adatként: rendezzen bármelyik oszlop szerint, és szűrjön a figyelmet igénylő sorokra.",
+          "title": "Rendezés és szűrés"
         },
         "4": {
-          "body": "Run the same questions across large document sets instead of opening files one by one.",
-          "title": "Built for scale"
+          "body": "Futtassa ugyanazokat a kérdéseket nagy dokumentumhalmazokon, ahelyett hogy egyesével nyitogatná a fájlokat.",
+          "title": "Nagy mennyiséghez készült"
         },
         "5": {
-          "body": "Take the table with you in standard formats — no lock-in on your own work product.",
-          "title": "Export anywhere"
+          "body": "Vigye magával a táblázatot szabványos formátumokban: a saját munkája nincs bezárva.",
+          "title": "Exportálás bárhová"
         }
       },
       "cta": {
-        "heading": "Review your next document set in stella."
+        "heading": "Ellenőrizze a következő dokumentumhalmazát a stella alkalmazásban."
       },
       "faqs": {
         "0": {
-          "answer": "Anything you would ask a person reviewing the document: factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
-          "question": "What kinds of questions can a column ask?"
+          "answer": "Bármit, amit egy dokumentumot ellenőrző kollégától kérdezne: tényadatok kinyerését, például dátumokat, feleket és összegeket, vagy mérlegelést igénylő kérdéseket, például hogy szerepel-e egy kikötés, és hogyan van megfogalmazva. A válaszokat a forrásszövegre mutató hivatkozások támasztják alá.",
+          "question": "Milyen kérdéseket tehet fel egy oszlop?"
         },
         "1": {
-          "answer": "From the documents in your matter. AI features are bring-your-own-key, so extraction runs through the AI provider you configure, and every answer links back to the passage it was drawn from.",
-          "question": "Where do the answers come from?"
+          "answer": "Az ügye dokumentumaiból. Az AI-funkciók saját szolgáltatói kulccsal működnek, így a kinyerés az Ön által beállított AI-szolgáltatón keresztül fut, és minden válasz visszamutat arra a szövegrészre, amelyből származik.",
+          "question": "Honnan származnak a válaszok?"
         },
         "2": {
-          "answer": "Yes. Tabular Review output is exportable in standard formats, so your work product stays portable with no lock-in.",
-          "question": "Can I export the review?"
+          "answer": "Igen. A Táblázatos ellenőrzés eredménye szabványos formátumokban exportálható, így a munkája hordozható marad, bezártság nélkül.",
+          "question": "Exportálhatom az ellenőrzést?"
         }
       },
-      "metaDescription": "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.",
-      "metaTitle": "Tabular document review for due diligence | stella",
+      "metaDescription": "Kérdezzen egy teljes dokumentumhalmazra, és kapjon strukturált válaszokat rendezhető, forrásig visszakövethető táblázatban. Átvilágításhoz és kutatáshoz.",
+      "metaTitle": "Táblázatos dokumentum-ellenőrzés átvilágításhoz | stella",
       "quickAnswer": {
-        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions — for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.",
-        "question": "How does Tabular Review work?"
+        "answer": "A Táblázatos ellenőrzést ráirányítja az ügy egy dokumentumhalmazára, és az oszlopokat kérdésként fogalmazza meg: például „irányadó jog”, „felmondási idő” vagy „irányításváltási kikötés”. A stella minden dokumentumra kinyer egy választ egy táblázatba, amelyet rendezhet, szűrhet és exportálhat, és minden cella visszamutat arra a szövegrészre, amelyből származik.",
+        "question": "Hogyan működik a Táblázatos ellenőrzés?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Add a column by writing the question you would ask a junior",
-            "1": "Reuse column sets across matters for repeatable review playbooks",
-            "2": "Mix extraction (dates, parties, amounts) with judgement questions"
+            "0": "Adjon hozzá oszlopot azzal a kérdéssel, amelyet a gyakornokának tenne fel",
+            "1": "Használjon újra oszlopkészleteket több ügyben, ismételhető ellenőrzési forgatókönyvekhez",
+            "2": "Keverje a kinyerést (dátumok, felek, összegek) a mérlegelést igénylő kérdésekkel"
           },
-          "heading": "Define the questions once, answer them everywhere"
+          "heading": "Egyszer megfogalmazott kérdések, válasz minden dokumentumra"
         },
         "1": {
           "bullets": {
-            "0": "Click a cell to open the source document at the cited passage",
-            "1": "Answers are grounded by citations, not free-floating summaries",
-            "2": "Spot disagreements across documents at a glance"
+            "0": "Kattintson egy cellára, és a forrásdokumentum a hivatkozott szövegrésznél nyílik meg",
+            "1": "A válaszokat hivatkozások támasztják alá, nem légből kapott összefoglalók",
+            "2": "Egy pillantással észreveheti a dokumentumok közti eltéréseket"
           },
-          "heading": "Every answer traces back to the text"
+          "heading": "Minden válasz visszavezet a szöveghez"
         },
         "2": {
           "bullets": {
-            "0": "Reviews are scoped to a matter, next to its files and chat",
-            "1": "Hand a review to the AI agent for follow-up questions",
-            "2": "Export the table or keep refining it in place"
+            "0": "Az ellenőrzések az ügyhöz tartoznak, a fájljai és a beszélgetései mellett",
+            "1": "Adjon át egy ellenőrzést az AI-ügynöknek további kérdésekhez",
+            "2": "Exportálja a táblázatot, vagy finomítsa tovább helyben"
           },
-          "heading": "It lives where the work lives"
+          "heading": "Ott van, ahol a munka"
         }
       }
     },
     "templates": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, and Word editing in one place."
+          "body": "Ügyek, dokumentumok és Word-szerkesztés egy helyen."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött ellenőrzési táblázattá."
         },
         "2": {
-          "body": "Chat across matters, files, and sources with citations."
+          "body": "Beszélgessen ügyeken, fájlokon és forrásokon át, hivatkozásokkal."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Start repeat documents from a known-good base instead of a copied file.",
-          "title": "Reusable templates"
+          "body": "Az ismétlődő dokumentumok bevált alapról induljanak, ne másolt fájlból.",
+          "title": "Újrafelhasználható sablonok"
         },
         "1": {
-          "body": "Define the values a document needs and fill them in when you assemble it.",
-          "title": "Fields and placeholders"
+          "body": "Határozza meg, milyen értékekre van szüksége a dokumentumnak, és töltse ki őket összeállításkor.",
+          "title": "Mezők és helyőrzők"
         },
         "2": {
-          "body": "Include or omit clauses based on the values you provide, so a template covers variants.",
-          "title": "Conditional clauses"
+          "body": "A megadott értékek alapján kerüljenek be vagy maradjanak ki a kikötések, így egy sablon több változatot is lefed.",
+          "title": "Feltételes kikötések"
         },
         "3": {
-          "body": "Let stella draft a filled document from a matter's data, then refine it.",
-          "title": "Fill with AI"
+          "body": "Hagyja, hogy a stella az ügy adataiból fogalmazzon meg egy kitöltött dokumentumot, majd finomítsa.",
+          "title": "Kitöltés AI-val"
         },
         "4": {
-          "body": "Author and adjust templates in the editor, then assemble from them.",
-          "title": "Edit in place"
+          "body": "Írja meg és igazítsa a sablonokat a szerkesztőben, majd állítson össze belőlük dokumentumot.",
+          "title": "Szerkesztés helyben"
         },
         "5": {
-          "body": "Produce a draft into a matter and keep editing it alongside the rest of the work.",
-          "title": "Into a matter"
+          "body": "Hozzon létre piszkozatot az ügyben, és szerkessze tovább a munka többi része mellett.",
+          "title": "Egyenesen az ügybe"
         }
       },
       "cta": {
-        "heading": "Start from a template, not a blank page."
+        "heading": "Induljon sablonból, ne üres lapról."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Templates are authored and adjusted in the editor, then you assemble documents from them.",
-          "question": "Can I edit a template?"
+          "answer": "Igen. A sablonokat a szerkesztőben írja meg és igazítja, majd dokumentumokat állít össze belőlük.",
+          "question": "Szerkeszthetek sablont?"
         },
         "1": {
-          "answer": "A reusable piece of a document. Clauses can be included across templates and added conditionally based on the values you provide when assembling.",
-          "question": "What is a clause?"
+          "answer": "A dokumentum újrafelhasználható darabja. A kikötések több sablonban is szerepelhetnek, és feltételesen kerülhetnek be az összeállításkor megadott értékek alapján.",
+          "question": "Mi az a kikötés?"
         },
         "2": {
-          "answer": "Into a matter, as a draft you can keep editing alongside the rest of the matter's documents.",
-          "question": "Where does the assembled document go?"
+          "answer": "Az ügybe, piszkozatként, amelyet az ügy többi dokumentuma mellett tovább szerkeszthet.",
+          "question": "Hová kerül az összeállított dokumentum?"
         }
       },
-      "metaDescription": "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. Produce a document into the matter.",
-      "metaTitle": "Legal document templates with AI drafting | stella",
+      "metaDescription": "Készítsen sablont mezőkkel és feltételes kikötésekkel, majd töltse ki kézzel, vagy hagyja, hogy a stella az ügy adataiból fogalmazza meg a dokumentumot.",
+      "metaTitle": "Jogi dokumentumsablonok AI-val kitöltve | stella",
       "quickAnswer": {
-        "answer": "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the conditional clauses resolve, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
-        "question": "How do templates work in stella?"
+        "answer": "A sablon olyan dokumentum, amelyben mezők vannak, és a kikötések feltételesen szerepelhetnek. A mezőket kézzel tölti ki, vagy hagyja, hogy a stella az ügy adataiból fogalmazza meg őket; a feltételes kikötések feloldódnak, és olyan dokumentumot kap, amelyen az ügyben dolgozhat tovább. A sablonok és a kikötések újrafelhasználhatók, így az ismétlődő dokumentumok bevált alapról indulnak.",
+        "question": "Hogyan működnek a sablonok a stella alkalmazásban?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Assemble a document from a template instead of starting blank",
-            "1": "Reuse clauses across templates",
-            "2": "Keep repeat documents consistent"
+            "0": "Állítson össze dokumentumot sablonból ahelyett, hogy üresen kezdene",
+            "1": "Használja újra a kikötéseket több sablonban",
+            "2": "Az ismétlődő dokumentumok maradjanak egységesek"
           },
-          "heading": "Build from templates and clauses"
+          "heading": "Építkezzen sablonokból és kikötésekből"
         },
         "1": {
           "bullets": {
-            "0": "Prefill fields from a document already stored in the matter",
-            "1": "Review and adjust every value before producing the draft",
-            "2": "Conditional clauses still resolve from the values you keep"
+            "0": "Előtöltés az ügyben már tárolt dokumentumból",
+            "1": "Minden értéket ellenőrizhet és módosíthat a piszkozat létrehozása előtt",
+            "2": "A feltételes kikötések a megtartott értékek alapján oldódnak fel"
           },
-          "heading": "Fill it from the matter's data"
+          "heading": "Töltse ki az ügy adataiból"
         },
         "2": {
           "bullets": {
-            "0": "Author and adjust templates in the editor",
-            "1": "Produce the draft into a matter",
-            "2": "Keep editing the result alongside the matter's files"
+            "0": "Sablonok írása és igazítása a szerkesztőben",
+            "1": "A piszkozat egyenesen az ügybe kerül",
+            "2": "Az eredmény az ügy fájljai mellett szerkeszthető tovább"
           },
-          "heading": "Edit and produce in place"
+          "heading": "Szerkesztés és létrehozás egy helyen"
         }
       }
     },
     "ui": {
-      "capabilities": "Capabilities",
-      "exploreMore": "Explore more",
-      "faq": "FAQ",
-      "inShort": "In short"
+      "capabilities": "Képességek",
+      "exploreMore": "Fedezzen fel többet",
+      "faq": "GYIK",
+      "inShort": "Röviden"
     },
     "workspace": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "Beszélgessen ügyeken, fájlokon és csatlakoztatott eszközökön át, jóváhagyással és forrás-előnézettel."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Alakítsa a dokumentumhalmazt az ügyhöz kötött táblázattá, amelyet rendezhet, szűrhet és visszakövethet."
         },
         "2": {
-          "body": "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools."
+          "body": "Érje el ugyanazokat az ügyeket, dokumentumokat és ítélkezési gyakorlatot a CLI-ből és MCP-kompatibilis eszközökből."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "A stella géppel olvasható formában, AI-keresőmotorok számára."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Organise documents, contacts, review, and chat around the matter they belong to. Everything added to a matter stays attached to it, searchable across the whole workspace, so the context is there when you come back.",
-          "title": "Matters"
+          "body": "Rendezze a dokumentumokat, kapcsolatokat, ellenőrzéseket és beszélgetéseket az ügy köré, amelyhez tartoznak. Minden, amit az ügyhöz ad, hozzá kötve marad, és az egész munkaterületen kereshető, így a kontextus ott van, amikor visszatér.",
+          "title": "Ügyek"
         },
         "1": {
-          "body": "Open, edit, and review Word .docx documents directly in the workspace.",
-          "title": "Documents and .docx editing"
+          "body": "Nyisson meg, szerkesszen és ellenőrizzen Word .docx dokumentumokat közvetlenül a munkaterületen.",
+          "title": "Dokumentumok és .docx-szerkesztés"
         },
         "2": {
-          "body": "Run tabular review and research alongside the documents they relate to.",
-          "title": "Review and research"
+          "body": "Futtasson táblázatos ellenőrzést és kutatást azon dokumentumok mellett, amelyekhez tartoznak.",
+          "title": "Ellenőrzés és kutatás"
         },
         "3": {
-          "body": "Bring the AI agent and knowledge tools into the same workspace as your files.",
-          "title": "Chat and knowledge tools"
+          "body": "Hozza az AI-ügynököt és a tudáseszközöket ugyanarra a munkaterületre, ahol a fájljai vannak.",
+          "title": "Csevegés és tudáseszközök"
         },
         "4": {
-          "body": "A desktop app acts as a local bridge for editing Office documents from stella.",
-          "title": "Desktop bridge"
+          "body": "Egy asztali alkalmazás helyi hídként szolgál az Office-dokumentumok szerkesztéséhez a stella alkalmazásból.",
+          "title": "Asztali híd"
         },
         "5": {
-          "body": "Saved edits and uploads become document revisions, so the current file and its history stay together.",
-          "title": "Version history"
+          "body": "A mentett módosítások és feltöltések dokumentumverziókká válnak, így az aktuális fájl és az előzménye együtt marad.",
+          "title": "Verziótörténet"
         }
       },
       "cta": {
-        "heading": "Bring your matters into one workspace."
+        "heading": "Hozza egy munkaterületre az ügyeit."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your machine.",
-          "question": "Can I edit Word documents in stella?"
+          "answer": "Igen. A webalkalmazás támogatja a Word .docx dokumentumok szerkesztését és ellenőrzését. A helyi Office-szerkesztéshez az asztali alkalmazás hídként működik: a dokumentumot a stella alkalmazásból nyithatja meg, és a saját gépén szerkesztheti.",
+          "question": "Szerkeszthetek Word-dokumentumokat a stella alkalmazásban?"
         },
         "1": {
-          "answer": "Documents, contacts, review tables, chat threads, and document history. Everything added to a matter stays attached to it, so the context is there when you return.",
-          "question": "What lives inside a matter?"
+          "answer": "Dokumentumok, kapcsolatok, ellenőrzési táblázatok, beszélgetésszálak és a dokumentumok előzményei. Minden, amit az ügyhöz ad, hozzá kötve marad, így a kontextus ott van, amikor visszatér.",
+          "question": "Mi található egy ügyön belül?"
         },
         "2": {
-          "answer": "Yes. The stella CLI and MCP server expose the same matters, documents, and case law to connected tools, under the same permissions. See CLI & MCP for details.",
-          "question": "Can other tools reach the workspace?"
+          "answer": "Igen. A stella CLI és MCP-szerver ugyanazokat az ügyeket, dokumentumokat és ítélkezési gyakorlatot teszi elérhetővé a csatlakoztatott eszközöknek, ugyanazokkal a jogosultságokkal. A részletekért lásd a CLI & MCP oldalt.",
+          "question": "Elérik más eszközök a munkaterületet?"
         }
       },
-      "metaDescription": "Matters, documents, Word .docx editing, review, research, and chat in one legal workspace. The work stays in context from source material to answer.",
-      "metaTitle": "Legal matter management workspace | stella",
+      "metaDescription": "Ügyek, dokumentumok, Word .docx szerkesztés, ellenőrzés, kutatás és csevegés egyetlen jogi munkaterületen. A munka végig a saját kontextusában marad.",
+      "metaTitle": "Jogi ügykezelő munkaterület | stella",
       "quickAnswer": {
-        "answer": "A web app that holds matters, documents, Word .docx editing, review, research, and chat in one place. Everything added to a matter stays attached to it, so the context is there when you return. A companion desktop app acts as a local bridge when a document needs Microsoft Word.",
-        "question": "What is the stella workspace?"
+        "answer": "Webalkalmazás, amely egy helyen tartja az ügyeket, a dokumentumokat, a Word .docx szerkesztést, az ellenőrzést, a kutatást és a csevegést. Minden, amit az ügyhöz ad, hozzá kötve marad, így a kontextus ott van, amikor visszatér. A kísérő asztali alkalmazás helyi hídként szolgál, ha egy dokumentumhoz Microsoft Word kell.",
+        "question": "Mi a stella munkaterület?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Documents, contacts, review, and chat live inside the matter",
-            "1": "Edit Word .docx documents without leaving the workspace",
-            "2": "Move between research, review, and chat without switching apps"
+            "0": "A dokumentumok, kapcsolatok, ellenőrzés és csevegés az ügyön belül él",
+            "1": "Word .docx dokumentumok szerkesztése a munkaterület elhagyása nélkül",
+            "2": "Váltás a kutatás, az ellenőrzés és a csevegés között alkalmazásváltás nélkül"
           },
-          "heading": "Everything for a matter, in one place"
+          "heading": "Minden, ami az ügyhöz kell, egy helyen"
         },
         "1": {
           "bullets": {
-            "0": "Open and edit Word .docx documents directly in the workspace",
-            "1": "The redline stays a Word file: no conversion, no copies",
-            "2": "Use the desktop bridge when a document needs Microsoft Word"
+            "0": "Word .docx dokumentumok megnyitása és szerkesztése közvetlenül a munkaterületen",
+            "1": "A javított változat Word-fájl marad: nincs átalakítás, nincsenek másolatok",
+            "2": "Használja az asztali hidat, ha egy dokumentumhoz Microsoft Word kell"
           },
-          "heading": "Word documents, edited where you need them"
+          "heading": "Word-dokumentumok ott, ahol szüksége van rájuk"
         }
       }
     }

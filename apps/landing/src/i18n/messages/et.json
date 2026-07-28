@@ -10,7 +10,7 @@
     "label": "Küsi tehisintellektilt stella kohta"
   },
   "common": {
-    "getCli": "Get the CLI",
+    "getCli": "Laadi CLI alla",
     "startFree": "Alusta tasuta"
   },
   "demo": {
@@ -81,7 +81,7 @@
     "blog": "Blogi",
     "changelog": "Muudatuste logi",
     "chooseLanguage": "Vali keel",
-    "docxEditor": "Standalone DOCX editor",
+    "docxEditor": "Eraldiseisev DOCX-redaktor",
     "github": "stella GitHubis",
     "openMenu": "Ava navigatsioon",
     "pillars": {
@@ -138,705 +138,705 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Muuda dokumendikogum toimikupõhiseks tabeliks, mida saab sortida, filtreerida ja jälgida."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "Toimikud, dokumendid, .docx-i muutmine, ülevaatus ja vestlus ühes kohas."
         },
         "2": {
-          "body": "Read and search official case law, legal sources, and company registries."
+          "body": "Loe ja otsi ametlikku kohtupraktikat, õigusallikaid ja ettevõtete registreid."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Ask questions over the matters, documents, and contacts you already have in stella. One conversation can reach every matter you have access to, with the same permissions that govern the rest of your workspace.",
-          "title": "Works across your matters"
+          "body": "Küsi küsimusi toimikute, dokumentide ja kontaktide kohta, mis sul rakenduses stella juba on. Üks vestlus ulatub igasse toimikusse, millele sul on juurdepääs, samade õigustega, mis kehtivad mujalgi.",
+          "title": "Töötab kõigi su toimikute lõikes"
         },
         "1": {
-          "body": "Bring documents into the conversation and ask the agent to read, compare, or summarise them.",
-          "title": "Reads your files"
+          "body": "Too dokumendid vestlusse ja palu agendil need läbi lugeda, võrrelda või kokku võtta.",
+          "title": "Loeb su faile"
         },
         "2": {
-          "body": "Reach company registries and other connected sources without leaving the chat.",
-          "title": "Connected tools"
+          "body": "Jõua ettevõtete registrite ja teiste ühendatud allikateni vestlusest lahkumata.",
+          "title": "Ühendatud tööriistad"
         },
         "3": {
-          "body": "The agent asks before it acts, so you stay in control of each step.",
-          "title": "Approvals before acting"
+          "body": "Agent küsib enne tegutsemist, nii et iga samm jääb sinu kontrolli alla.",
+          "title": "Kinnitus enne tegutsemist"
         },
         "4": {
-          "body": "See what the agent is reading with a preview of the source behind each step.",
-          "title": "Source previews"
+          "body": "Näed iga sammu juures eelvaates, mida agent parajasti loeb.",
+          "title": "Allika eelvaated"
         },
         "5": {
-          "body": "Answers link back to the source, and a citation opens the document at the exact passage.",
-          "title": "Grounded by citations"
+          "body": "Vastused viitavad tagasi allikale ja viide avab dokumendi täpselt õiges lõigus.",
+          "title": "Toetub allikaviidetele"
         }
       },
       "cta": {
-        "heading": "Hand the agent a real matter."
+        "heading": "Anna agendile päris toimik."
       },
       "faqs": {
         "0": {
-          "answer": "No. It asks for approval before it acts, and it shows a source preview for what it reads, so you can follow and confirm each step.",
-          "question": "Does the agent act on its own?"
+          "answer": "Ei. Ta küsib enne tegutsemist kinnitust ja näitab allika eelvaadet selle kohta, mida ta loeb, nii et saad iga sammu jälgida ja kinnitada.",
+          "question": "Kas agent tegutseb omal käel?"
         },
         "1": {
-          "answer": "Through skills (reusable prompts and tool definitions) and external connectors that are MCP-compatible. Both extend what the agent can reach without changing the chat itself.",
-          "question": "How do I add new capabilities?"
+          "answer": "Oskuste (korduskasutatavate viipade ja tööriistade määratluste) ning MCP-ga ühilduvate väliste konnektorite kaudu. Mõlemad laiendavad agendi ulatust, muutmata vestlust ennast.",
+          "question": "Kuidas lisada uusi võimalusi?"
         },
         "2": {
-          "answer": "From your matters, files, registries, and connected tools. AI features are bring-your-own-key, and answers are grounded by citations back to the source.",
-          "question": "Where do its answers come from?"
+          "answer": "Sinu toimikutest, failidest, registritest ja ühendatud tööriistadest. Tehisintellekti funktsioonid kasutavad sinu enda teenusepakkuja võtmeid ja vastused toetuvad allikaviidetele.",
+          "question": "Kust tema vastused pärinevad?"
         }
       },
-      "metaDescription": "Chat with your matters, documents, registries, and connected tools. The agent acts with approvals, grounds answers in citations, and extends via skills.",
-      "metaTitle": "AI agent for legal matters | stella",
+      "metaDescription": "Vestle oma toimikute, dokumentide, registrite ja ühendatud tööriistadega. Agent tegutseb kinnitustega, toetub allikaviidetele ja laieneb oskustega.",
+      "metaTitle": "Tehisintellekti agent toimikute jaoks | stella",
       "quickAnswer": {
-        "answer": "The agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
-        "question": "What can the AI agent do?"
+        "answer": "Agent vestleb sinu toimikute, failide, ettevõtete registrite ja ühendatud tööriistadega. Ta küsib enne tegutsemist kinnitust, näitab allika eelvaadet selle kohta, mida ta loeb, ja toetub vastustes allikaviidetele. Saad teda laiendada korduskasutatavate oskuste ja MCP-ga ühilduvate väliste konnektoritega.",
+        "question": "Mida tehisintellekti agent teha oskab?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Chat over matters, documents, and contacts in one conversation",
-            "1": "Pull company and registry data into the same thread",
-            "2": "Hand a tabular review to the agent for follow-up questions"
+            "0": "Vestle toimikutest, dokumentidest ja kontaktidest ühes vestluses",
+            "1": "Too ettevõtete ja registrite andmed samasse vestlusesse",
+            "2": "Anna tabelülevaatus agendile edasisteks küsimusteks"
           },
-          "heading": "Ask once, across everything in the matter"
+          "heading": "Küsi korra, kogu toimiku ulatuses"
         },
         "1": {
           "bullets": {
-            "0": "Each action waits for your approval before it runs",
-            "1": "A source preview shows what the agent read for every step",
-            "2": "Citations open the source document at the exact passage"
+            "0": "Iga toiming ootab enne käivitumist sinu kinnitust",
+            "1": "Allika eelvaade näitab iga sammu juures, mida agent luges",
+            "2": "Viited avavad allikdokumendi täpselt õiges lõigus"
           },
-          "heading": "You stay in control"
+          "heading": "Kontroll jääb sinule"
         },
         "2": {
           "bullets": {
-            "0": "Skills are prompts and tool definitions you can reuse across matters",
-            "1": "External connectors are MCP-compatible, so the agent reaches more tools",
-            "2": "Add capabilities without changing how the chat works"
+            "0": "Oskused on viibad ja tööriistade määratlused, mida saad eri toimikutes taaskasutada",
+            "1": "Välised konnektorid ühilduvad MCP-ga, nii ulatub agent rohkemate tööriistadeni",
+            "2": "Lisa võimalusi, muutmata seda, kuidas vestlus töötab"
           },
-          "heading": "Extend it with skills and connectors"
+          "heading": "Laienda seda oskuste ja konnektoritega"
         }
       }
     },
     "anonymization": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "Vestle toimikute, failide ja ühendatud tööriistade lõikes, kinnituste ja allika eelvaadetega."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "Toimikud, dokumendid, .docx-i muutmine, ülevaatus ja vestlus ühes kohas."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Muuda dokumendikogum toimikupõhiseks tabeliks, mida saab sortida, filtreerida ja jälgida."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Removes names, entities, and identifying details before material reaches an AI step.",
-          "title": "Keeps identifying details out"
+          "body": "Eemaldab nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellekti sammuni.",
+          "title": "Tuvastavad andmed jäävad välja"
         },
         "1": {
-          "body": "Runs directly in the chat composer and in document review, not in a separate tool.",
-          "title": "Works in chat and review"
+          "body": "Töötab otse vestluse sisestusväljal ja dokumentide ülevaatuses, mitte eraldi tööriistas.",
+          "title": "Töötab vestluses ja ülevaatuses"
         },
         "2": {
-          "body": "Add your organisation's terms and blacklists so the names that matter to you are always caught.",
-          "title": "Your terms included"
+          "body": "Lisa oma organisatsiooni terminid ja keeluloendid, et sulle olulised nimed alati kinni püütaks.",
+          "title": "Koos sinu enda terminitega"
         },
         "3": {
-          "body": "Shows the redacted document in context, so you confirm what leaves the matter.",
-          "title": "Reviewable output"
+          "body": "Näitab redigeeritud dokumenti kontekstis, nii et kinnitad, mis toimikust välja läheb.",
+          "title": "Ülevaadatav tulemus"
         }
       },
       "cta": {
-        "heading": "Keep identifying details out of your AI workflows."
+        "heading": "Hoia tuvastavad andmed oma tehisintellekti töövoogudest eemal."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Anonymization is available today, integrated in chat and document review.",
-          "question": "Is anonymization available now?"
+          "answer": "Jah. Anonüümimine on juba täna olemas, lõimitud vestlusesse ja dokumentide ülevaatusesse.",
+          "question": "Kas anonüümimine on juba saadaval?"
         },
         "1": {
-          "answer": "Preparing material for AI workflows without exposing names, entities, or identifying details, while keeping the redacted result available for review.",
-          "question": "What does it help with?"
+          "answer": "Materjali ettevalmistamisel tehisintellekti töövoogude jaoks, ilma nimesid, üksusi või tuvastavaid andmeid paljastamata, nii et redigeeritud tulemus jääb ülevaatamiseks alles.",
+          "question": "Millega see aitab?"
         }
       },
-      "metaDescription": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
-      "metaTitle": "Document anonymization for legal AI | stella",
+      "metaDescription": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja ülevaatusest, ning kontrolli tulemust.",
+      "metaTitle": "Dokumentide anonüümimine tehisintellekti jaoks | stella",
       "quickAnswer": {
-        "answer": "It removes names, entities, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
-        "question": "What is anonymization in stella?"
+        "answer": "See eemaldab nimed, üksused ja tuvastavad andmed enne, kui materjal siseneb tehisintellekti töövoogu, ja näitab sulle redigeeritud tulemust, et saaksid kinnitada, mis toimikust välja läheb. See on lõimitud otse vestlusesse ja dokumentide ülevaatusesse.",
+        "question": "Mis on anonüümimine rakenduses stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Keeps names, entities, and identifying details out of AI steps",
-            "1": "Built for legal AI workflows rather than generic document masking",
-            "2": "Leaves a reviewable redacted document before the next step"
+            "0": "Hoiab nimed, üksused ja tuvastavad andmed tehisintellekti sammudest eemal",
+            "1": "Loodud õigusvaldkonna tehisintellekti töövoogudele, mitte üldiseks dokumentide maskimiseks",
+            "2": "Jätab enne järgmist sammu alles ülevaadatava redigeeritud dokumendi"
           },
-          "heading": "Prepare material before it reaches AI"
+          "heading": "Valmista materjal ette, enne kui see tehisintellektini jõuab"
         },
         "1": {
           "bullets": {
-            "0": "Available from chat and document review",
-            "1": "No copy-pasting into an external redaction tool",
-            "2": "Built on stella's own open-source anonymization engine"
+            "0": "Saadaval vestlusest ja dokumentide ülevaatusest",
+            "1": "Pole vaja kopeerida välisesse redigeerimistööriista",
+            "2": "Põhineb rakenduse stella enda avatud lähtekoodiga anonüümimismootoril"
           },
-          "heading": "Part of the workspace, not a separate tool"
+          "heading": "Osa tööruumist, mitte eraldi tööriist"
         }
       }
     },
     "cli-mcp": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, review, and chat in one workspace."
+          "body": "Toimikud, dokumendid, ülevaatus ja vestlus ühes kohas."
         },
         "1": {
-          "body": "Work across matters and connected tools with approvals and citations."
+          "body": "Tööta toimikute ja ühendatud tööriistade lõikes, kinnituste ja allikaviidetega."
         },
         "2": {
-          "body": "Fill reusable legal documents through the app, CLI, or connected tools."
+          "body": "Täida korduskasutatavaid õigusdokumente rakendusest, käsurealt või ühendatud tööriistadest."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Use generated commands such as stella search matters, document read, and template fill from scripts or your terminal.",
-          "title": "A real command line"
+          "body": "Kasuta genereeritud käske, nagu stella search matters, document read ja template fill, skriptidest või terminalist.",
+          "title": "Päris käsurida"
         },
         "1": {
-          "body": "Connect stella to MCP-compatible clients without building a separate integration for each one.",
-          "title": "MCP-compatible"
+          "body": "Ühenda rakendus stella MCP-ga ühilduvate klientidega, ilma et peaksid igaühe jaoks eraldi liidest ehitama.",
+          "title": "MCP-ga ühilduv"
         },
         "2": {
-          "body": "The CLI command surface is generated from the MCP tool registry, so the two interfaces stay aligned as stella evolves.",
-          "title": "One capability registry"
+          "body": "CLI käsustik genereeritakse MCP tööriistaregistrist, nii et kaks liidest püsivad rakenduse stella arenedes kooskõlas.",
+          "title": "Üks võimekusregister"
         },
         "3": {
-          "body": "Authentication scopes and workspace permissions remain the boundary, whichever interface you use.",
-          "title": "Workspace permissions apply"
+          "body": "Autentimise ulatused ja tööruumi õigused jäävad piiriks, ükskõik millist liidest sa kasutad.",
+          "title": "Tööruumi õigused kehtivad"
         },
         "4": {
-          "body": "Commands return machine-readable JSON for scripts and agents as well as readable terminal output for people.",
-          "title": "Structured output"
+          "body": "Käsud tagastavad masinloetava JSON-i skriptidele ja agentidele ning loetava terminaliväljundi inimestele.",
+          "title": "Struktureeritud väljund"
         },
         "5": {
-          "body": "Point the CLI and MCP clients at the stella server your organisation operates.",
-          "title": "Self-host friendly"
+          "body": "Suuna CLI ja MCP kliendid sinu organisatsiooni hallatavasse stella serverisse.",
+          "title": "Sobib ise majutamiseks"
         }
       },
       "cta": {
-        "heading": "Bring stella into the tools where you already work."
+        "heading": "Too stella nendesse tööriistadesse, kus sa juba töötad."
       },
       "faqs": {
         "0": {
-          "answer": "No. They are separate interfaces generated from the same capability registry and connected to the same stella server.",
-          "question": "Is the CLI a separate product from the MCP server?"
+          "answer": "Ei. Need on eraldi liidesed, mis genereeritakse samast võimekusregistrist ja ühenduvad sama stella serveriga.",
+          "question": "Kas CLI on MCP serverist eraldi toode?"
         },
         "1": {
-          "answer": "Yes. The CLI supports structured JSON output, pagination, predictable exit codes, and non-interactive use suitable for automation.",
-          "question": "Can I use the CLI in scripts?"
+          "answer": "Jah. CLI toetab struktureeritud JSON-väljundit, lehekülgedeks jaotamist, ennustatavaid väljumiskoode ja automatiseerimiseks sobivat mitteinteraktiivset kasutust.",
+          "question": "Kas CLI-d saab skriptides kasutada?"
         },
         "2": {
-          "answer": "No. The server checks authentication scopes and stella permissions before a capability runs.",
-          "question": "Does connecting an MCP client bypass workspace permissions?"
+          "answer": "Ei. Server kontrollib enne võimekuse käivitamist autentimise ulatusi ja stella õigusi.",
+          "question": "Kas MCP kliendi ühendamine läheb tööruumi õigustest mööda?"
         }
       },
-      "metaDescription": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capabilities, permissions, and data.",
-      "metaTitle": "MCP server and CLI for your legal workspace | stella",
+      "metaDescription": "Otsi, loe ja tööta rakendusega stella käsurealt või ükskõik millisest MCP-ga ühilduvast kliendist. Mõlemal pinnal on samad võimalused ja õigused.",
+      "metaTitle": "MCP server ja CLI sinu õigustööruumi jaoks | stella",
       "quickAnswer": {
-        "answer": "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
-        "question": "What are the stella CLI and MCP server?"
+        "answer": "Need on kaks liidest samadele rakenduse stella võimalustele. CLI peegeldab MCP tööriistaregistrit käskudena, MCP server aga lubab ühilduvatel agentidel ja tööriistadel töötada toimikute, dokumentide, mallide ja avalike õigusandmetega samade juurdepääsureeglite alusel.",
+        "question": "Mis on stella CLI ja MCP server?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Find passages across matter documents with stella search matters",
-            "1": "Read documents, list matters, and inspect templates without switching context",
-            "2": "Use paginated, structured results in scripts and automated workflows"
+            "0": "Leia lõike toimiku dokumentidest käsuga stella search matters",
+            "1": "Loe dokumente, loetle toimikuid ja vaata malle ilma konteksti vahetamata",
+            "2": "Kasuta lehekülgedeks jaotatud struktureeritud tulemusi skriptides ja automaatsetes töövoogudes"
           },
-          "heading": "Search the whole matter from your terminal"
+          "heading": "Otsi kogu toimikust terminalist"
         },
         "1": {
           "bullets": {
-            "0": "Expose matters, documents, case law, templates, and other approved tools",
-            "1": "Keep the capability catalogue and CLI commands generated from one registry",
-            "2": "Connect compatible agents without copying legal data into another workspace"
+            "0": "Ava toimikud, dokumendid, kohtupraktika, mallid ja muud lubatud tööriistad",
+            "1": "Võimekuste kataloog ja CLI käsud genereeritakse ühest registrist",
+            "2": "Ühenda ühilduvad agendid, ilma et õigusandmed teise tööruumi kopeeritaks"
           },
-          "heading": "The same capabilities through MCP"
+          "heading": "Samad võimalused MCP kaudu"
         }
       }
     },
     "editor": {
       "adjacent": {
         "0": {
-          "body": "See where matters, documents, and tools live together."
+          "body": "Vaata, kus toimikud, dokumendid ja tööriistad koos elavad."
         },
         "1": {
-          "body": "Create reusable Word documents with fields and conditional clauses."
+          "body": "Loo korduskasutatavaid Wordi dokumente väljade ja tingimuslike klauslitega."
         },
         "2": {
-          "body": "Try the same editor on its own: open and edit a .docx in the browser, no account needed."
+          "body": "Proovi sama redaktorit eraldi: ava ja muuda .docx-i brauseris, kontot pole vaja."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Open and edit Word documents directly in stella's online editor: no install, and no converting the file into a separate proprietary format.",
-          "title": "Edit .docx files in the browser"
+          "body": "Ava ja muuda Wordi dokumente otse rakenduse stella veebiredaktoris: ilma paigalduseta ja ilma faili eraldi suletud vormingusse teisendamata.",
+          "title": "Muuda .docx-faile brauseris"
         },
         "1": {
-          "body": "The document stays a .docx throughout, so fonts, styles, and layout render and save the way Word created them.",
-          "title": "Formatting stays intact"
+          "body": "Dokument jääb kogu aeg .docx-iks, nii et fondid, stiilid ja paigutus kuvatakse ja salvestatakse nii, nagu Word need lõi.",
+          "title": "Vorming jääb puutumata"
         },
         "2": {
-          "body": "Tracked insertions and deletions render in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
-          "title": "Track changes"
+          "body": "Jälgitud lisamised ja kustutamised kuvatakse kohapeal ning tehisintellekti pakutud muudatused saabuvad jälgitud muudatustena, mille saad dokumendis vastu võtta või tagasi lükata.",
+          "title": "Muudatuste jälgimine"
         },
         "3": {
-          "body": "Saved edits become document revisions, so the current file and its full history stay together.",
-          "title": "Version history for every save"
+          "body": "Salvestatud muudatustest saavad dokumendi versioonid, nii et praegune fail ja kogu selle ajalugu püsivad koos.",
+          "title": "Iga salvestus läheb versiooniajalukku"
         },
         "4": {
-          "body": "The document remains attached to its matter, alongside its files, properties, tasks, and conversations.",
-          "title": "Matter context stays visible"
+          "body": "Dokument jääb oma toimikuga seotuks, koos selle failide, omaduste, ülesannete ja vestlustega.",
+          "title": "Toimiku kontekst jääb nähtavale"
         },
         "5": {
-          "body": "Use the desktop bridge when a document needs Microsoft Word, then return the updated file to the same matter.",
-          "title": "Local Office bridge"
+          "body": "Kasuta töölauasilda, kui dokument vajab Microsoft Wordi, ja saada uuendatud fail samasse toimikusse tagasi.",
+          "title": "Sild kohaliku Office’iga"
         }
       },
       "cta": {
-        "heading": "Edit a Word document in its matter."
+        "heading": "Muuda Wordi dokumenti otse selle toimikus."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The document is edited where it lives, alongside the matter's other files, properties, tasks, and conversations, so no local copy is downloaded and re-uploaded to make a change.",
-          "question": "Does the document stay attached to its matter while I edit?"
+          "answer": "Jah. Dokumenti muudetakse seal, kus see asub, koos toimiku teiste failide, omaduste, ülesannete ja vestlustega, nii et muudatuse tegemiseks ei pea kohalikku koopiat alla ega uuesti üles laadima.",
+          "question": "Kas dokument jääb muutmise ajal oma toimikuga seotuks?"
         },
         "1": {
-          "answer": "Yes. Tracked insertions and deletions render in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
-          "question": "Does the editor keep track changes?"
+          "answer": "Jah. Jälgitud lisamised ja kustutamised kuvatakse kohapeal, nii nagu Word neid näitab. Rakenduse stella tehisintellekti pakutud muudatused saabuvad samamoodi, nii et parandused vaadatakse üle ning võetakse vastu või lükatakse tagasi, enne kui need dokumendi osaks saavad.",
+          "question": "Kas redaktor säilitab muudatuste jälgimise?"
         },
         "2": {
-          "answer": "The saved file remains connected to the same matter and document, and the save becomes a revision in that document's version history.",
-          "question": "What happens when I save?"
+          "answer": "Salvestatud fail jääb seotuks sama toimiku ja dokumendiga ning salvestusest saab versioon selle dokumendi versiooniajaloos.",
+          "question": "Mis juhtub, kui ma salvestan?"
         },
         "3": {
-          "answer": "Yes. Saved revisions stay in the document's version history, so the current file and the ones it replaced remain together on the same document.",
-          "question": "Can I get back to an earlier revision?"
+          "answer": "Jah. Salvestatud versioonid jäävad dokumendi versiooniajalukku, nii et praegune fail ja need, mille see asendas, püsivad sama dokumendi juures koos.",
+          "question": "Kas ma pääsen varasema versiooni juurde tagasi?"
         },
         "4": {
-          "answer": "Yes. The stella desktop bridge opens the document in local Office for Word-specific workflows and returns the edited file to the same matter.",
-          "question": "Can I open the same document in Microsoft Word?"
+          "answer": "Jah. Rakenduse stella töölauasild avab dokumendi kohalikus Office’is Wordi-põhiste töövoogude jaoks ja saadab muudetud faili samasse toimikusse tagasi.",
+          "question": "Kas ma saan sama dokumendi Microsoft Wordis avada?"
         },
         "5": {
-          "answer": "Yes. The document is part of its matter's context, so matter-aware tools can read it and propose edits as tracked changes in the same document.",
-          "question": "Can stella's AI work on the document I am editing?"
+          "answer": "Jah. Dokument on osa oma toimiku kontekstist, nii et toimikut tundvad tööriistad saavad seda lugeda ja pakkuda muudatusi jälgitud muudatustena samas dokumendis.",
+          "question": "Kas rakenduse stella tehisintellekt saab töötada dokumendiga, mida ma parajasti muudan?"
         }
       },
-      "metaDescription": "Edit a matter's Word documents inside stella: track changes reviewed in place, a revision in the version history for every save, and a bridge to local Word.",
-      "metaTitle": "Editing Word Documents in Your Legal Workspace | stella",
+      "metaDescription": "Muuda toimiku Wordi dokumente rakenduses stella: kohapeal üle vaadatavad muudatused, iga salvestus versiooniajalukku ja sild kohaliku Wordiga.",
+      "metaTitle": "Wordi dokumentide muutmine õigustööruumis | stella",
       "quickAnswer": {
-        "answer": "Yes. Open a .docx file from a matter and edit it in the browser. stella keeps the document in its original Word format and records saved revisions in the same document's version history.",
-        "question": "Can I edit Word documents in stella?"
+        "answer": "Jah. Ava toimikust .docx-fail ja muuda seda brauseris. stella hoiab dokumendi algses Wordi vormingus ja salvestab versioonid sama dokumendi versiooniajalukku.",
+        "question": "Kas ma saan rakenduses stella Wordi dokumente muuta?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Open a .docx directly from a matter",
-            "1": "Edit the document with familiar page and formatting controls",
-            "2": "Review track changes in place, including edits proposed by AI",
-            "3": "Keep the original Word file format",
-            "4": "Save changes into the document's version history"
+            "0": "Ava .docx otse toimikust",
+            "1": "Muuda dokumenti tuttavate lehe- ja vormingunuppudega",
+            "2": "Vaata muudatused kohapeal üle, ka need, mida pakub tehisintellekt",
+            "3": "Säilita algne Wordi failivorming",
+            "4": "Salvesta muudatused dokumendi versiooniajalukku"
           },
-          "heading": "The .docx stays a .docx"
+          "heading": ".docx jääb .docx-iks"
         },
         "1": {
           "bullets": {
-            "0": "Move between the document and its matter without uploading copies",
-            "1": "Keep document properties and revisions with the file",
-            "2": "Open the same document through the desktop bridge when needed",
-            "3": "Use the document as context for matter-aware tools"
+            "0": "Liigu dokumendi ja selle toimiku vahel ilma koopiaid üles laadimata",
+            "1": "Dokumendi omadused ja versioonid püsivad failiga koos",
+            "2": "Vajadusel ava sama dokument töölauasilla kaudu",
+            "3": "Kasuta dokumenti kontekstina toimikut tundvatele tööriistadele"
           },
-          "heading": "Connected to the rest of the matter"
+          "heading": "Ühenduses ülejäänud toimikuga"
         }
       }
     },
     "public-data": {
       "adjacent": {
         "0": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "Valmista tundlik materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
         },
         "1": {
-          "body": "Chat across matters, files, and sources with approvals and citations."
+          "body": "Vestle toimikute, failide ja allikate lõikes, kinnituste ja allikaviidetega."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Muuda dokumendikogum toimikupõhiseks ülevaatustabeliks."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Decisions from official public legal sources, not scraped third-party summaries.",
-          "title": "Official case law"
+          "body": "Lahendid ametlikest avalikest õigusallikatest, mitte kolmandate osapoolte kraabitud kokkuvõtetest.",
+          "title": "Ametlik kohtupraktika"
         },
         "1": {
-          "body": "Legal Atlas parses each decision while keeping its original structure intact.",
-          "title": "Structure preserved"
+          "body": "Legal Atlas töötleb iga lahendi nii, et selle algne struktuur jääb puutumata.",
+          "title": "Struktuur säilib"
         },
         "2": {
-          "body": "Typed clients for national company and commercial registries, queried from a matter.",
-          "title": "Company registries"
+          "body": "Tüübitud kliendid riiklike äri- ja kaubandusregistrite jaoks, päritavad otse toimikust.",
+          "title": "Ettevõtete registrid"
         },
         "3": {
-          "body": "Move between a decision and the cases it cites without leaving the reader.",
-          "title": "Follow citations"
+          "body": "Liigu lahendi ja selle viidatud otsuste vahel lugerist lahkumata.",
+          "title": "Järgi viiteid"
         },
         "4": {
-          "body": "Browse and filter case law and registries scoped to the jurisdiction you work in.",
-          "title": "By jurisdiction"
+          "body": "Sirvi ja filtreeri kohtupraktikat ja registreid selles jurisdiktsioonis, kus sa töötad.",
+          "title": "Jurisdiktsiooni kaupa"
         },
         "5": {
-          "body": "Reference any source from a matter so the agent's answers stay traceable to it.",
-          "title": "Grounded for AI"
+          "body": "Viita toimikust ükskõik millisele allikale, et agendi vastused jääksid selleni jälgitavaks.",
+          "title": "Alus tehisintellektile"
         }
       },
       "cta": {
-        "heading": "Bring official legal data into your matters."
+        "heading": "Too ametlikud õigusandmed oma toimikutesse."
       },
       "faqs": {
         "0": {
-          "answer": "Case law comes from official public legal sources, ingested and parsed by stella's Legal Atlas stack. Company data comes from national company and commercial registries through typed clients, not third-party copies.",
-          "question": "Where does the data come from?"
+          "answer": "Kohtupraktika pärineb ametlikest avalikest õigusallikatest, mille kogub ja töötleb rakenduse stella Legal Atlas. Ettevõtete andmed tulevad riiklikest äri- ja kaubandusregistritest tüübitud klientide kaudu, mitte kolmandate osapoolte koopiatest.",
+          "question": "Kust andmed pärinevad?"
         },
         "1": {
-          "answer": "Two lists, both expanding. Typed registry clients already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources surface per jurisdiction from stella's connector catalogue; Czechia, Spain, and Taiwan, for example, already have connected sources, and the case-law reader is built to browse and filter by jurisdiction as more official sources are added.",
-          "question": "Which jurisdictions and registries are covered?"
+          "answer": "Kaks loendit, mõlemad kasvavad. Tüübitud registrikliendid hõlmavad juba ARES-t (Tšehhi), Companies House’i (Ühendkuningriik), SEC EDGAR-i (USA), KRS-i (Poola), PRH-d (Soome) ja VIES-t (ELi käibemaks). Registritest kaugemal ilmuvad ametlikud allikad jurisdiktsiooni kaupa rakenduse stella konnektorikataloogist; näiteks Tšehhil, Hispaanial ja Taiwanil on juba ühendatud allikad ning kohtupraktika luger on ehitatud nii, et saad jurisdiktsiooni kaupa sirvida ja filtreerida, kui ametlikke allikaid lisandub.",
+          "question": "Millised jurisdiktsioonid ja registrid on kaetud?"
         },
         "2": {
-          "answer": "Yes. Public data referenced from a matter becomes a grounded source: the AI agent cites the underlying decision or record so its answers stay traceable.",
-          "question": "Can the AI use this data?"
+          "answer": "Jah. Toimikust viidatud avalikest andmetest saab põhjendatud allikas: tehisintellekti agent viitab aluseks olevale lahendile või registrikandele, nii et tema vastused jäävad jälgitavaks.",
+          "question": "Kas tehisintellekt saab neid andmeid kasutada?"
         }
       },
-      "metaDescription": "Case law and company registries from official public sources. Read decisions, look up companies, follow citations, and pull it into a matter or the AI agent.",
-      "metaTitle": "Case law and company registry data | stella",
+      "metaDescription": "Kohtupraktika ja ettevõtete registrid ametlikest avalikest allikatest. Loe lahendeid, otsi ettevõtteid, järgi viiteid ja too need otse toimikusse.",
+      "metaTitle": "Kohtupraktika ja ettevõtete registriandmed | stella",
       "quickAnswer": {
-        "answer": "Two kinds. Official public case law, ingested and structure-parsed so you can read and search decisions and follow their citations. And typed access to national company and commercial registries, so you can pull official company data straight into a matter. Both are grounded sources the AI agent can cite.",
-        "question": "What public data does stella bring in?"
+        "answer": "Kahte liiki. Ametlikku avalikku kohtupraktikat, mis on kogutud ja struktuuri säilitades töödeldud, nii et saad lahendeid lugeda, neist otsida ja nende viiteid järgida. Ning tüübitud juurdepääsu riiklikele äri- ja kaubandusregistritele, et tõmmata ametlikud ettevõtteandmed otse toimikusse. Mõlemad on põhjendatud allikad, millele tehisintellekti agent saab viidata.",
+        "question": "Milliseid avalikke andmeid stella juurde toob?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Collected from official public legal sources",
-            "1": "Structure-preserving parsers keep headings, paragraphs, and references",
-            "2": "Built on the open Legal Atlas ingestion stack"
+            "0": "Kogutud ametlikest avalikest õigusallikatest",
+            "1": "Struktuuri säilitavad parserid hoiavad alles pealkirjad, lõigud ja viited",
+            "2": "Põhineb avatud Legal Atlase kogumissüsteemil"
           },
-          "heading": "Case law from official sources, parsed with structure intact"
+          "heading": "Kohtupraktika ametlikest allikatest, struktuur puutumata"
         },
         "1": {
           "bullets": {
-            "0": "Typed clients for national registries: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES, and more",
-            "1": "Pull official company data into a matter instead of copying it by hand",
-            "2": "Coverage expands as more official sources are added"
+            "0": "Tüübitud kliendid riiklikele registritele: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES ja teised",
+            "1": "Too ametlikud ettevõtteandmed toimikusse, selle asemel et neid käsitsi kopeerida",
+            "2": "Kaetus laieneb, kui ametlikke allikaid lisandub"
           },
-          "heading": "Company and commercial registries, queried from a matter"
+          "heading": "Äri- ja kaubandusregistrid, päritavad toimikust"
         },
         "2": {
           "bullets": {
-            "0": "Reference a decision or company record from a matter",
-            "1": "The agent cites the underlying source, not a paraphrase",
-            "2": "Search across sources, not just within one"
+            "0": "Viita toimikust lahendile või ettevõtte registrikandele",
+            "1": "Agent viitab aluseks olevale allikale, mitte ümbersõnastusele",
+            "2": "Otsi allikate üleselt, mitte ainult ühe sees"
           },
-          "heading": "One grounded source for the agent"
+          "heading": "Üks põhjendatud allikas agendile"
         }
       }
     },
     "tabular-review": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected sources with approvals and source previews."
+          "body": "Vestle toimikute, failide ja ühendatud allikate lõikes, kinnituste ja allika eelvaadetega."
         },
         "1": {
-          "body": "Official case law and company registries, pulled into a matter."
+          "body": "Ametlik kohtupraktika ja ettevõtete registrid, tõmmatud otse toimikusse."
         },
         "2": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "Valmista tundlik materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Define a column in plain language; stella answers it for every document in the set.",
-          "title": "Columns are questions"
+          "body": "Sõnasta veerg tavakeeles; stella vastab sellele iga kogumi dokumendi kohta.",
+          "title": "Veerud on küsimused"
         },
         "1": {
-          "body": "Each cell links to the exact passage it was extracted from, so you can verify in one click.",
-          "title": "Cited to the source"
+          "body": "Iga lahter viitab täpsele lõigule, kust see pärineb, nii et saad ühe klikiga kontrollida.",
+          "title": "Viidatud kuni allikani"
         },
         "2": {
-          "body": "Reviews live inside a matter alongside the documents, contacts, and chat they relate to.",
-          "title": "Matter-scoped"
+          "body": "Ülevaatused elavad toimiku sees, koos dokumentide, kontaktide ja vestlustega, mille juurde nad kuuluvad.",
+          "title": "Toimikupõhine"
         },
         "3": {
-          "body": "Treat answers like data: sort by any column, filter to the rows that need attention.",
-          "title": "Sort and filter"
+          "body": "Kohtle vastuseid andmetena: sordi mis tahes veeru järgi ja filtreeri välja read, mis vajavad tähelepanu.",
+          "title": "Sordi ja filtreeri"
         },
         "4": {
-          "body": "Run the same questions across large document sets instead of opening files one by one.",
-          "title": "Built for scale"
+          "body": "Esita samad küsimused suurte dokumendikogumite kohta, selle asemel et faile ükshaaval avada.",
+          "title": "Loodud mahu jaoks"
         },
         "5": {
-          "body": "Take the table with you in standard formats — no lock-in on your own work product.",
-          "title": "Export anywhere"
+          "body": "Võta tabel kaasa standardvormingutes: sinu enda töö tulemus ei jää lõksu.",
+          "title": "Ekspordi kuhu tahes"
         }
       },
       "cta": {
-        "heading": "Review your next document set in stella."
+        "heading": "Vaata oma järgmine dokumendikogum rakenduses stella üle."
       },
       "faqs": {
         "0": {
-          "answer": "Anything you would ask a person reviewing the document: factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
-          "question": "What kinds of questions can a column ask?"
+          "answer": "Kõike, mida küsiksid dokumenti üle vaatavalt inimeselt: faktide väljanoppimist, näiteks kuupäevi, pooli ja summasid, või kaalutlust nõudvaid küsimusi, näiteks kas klausel on olemas ja kuidas see on sõnastatud. Vastused tulevad koos viidetega lähtetekstile.",
+          "question": "Milliseid küsimusi saab veerg esitada?"
         },
         "1": {
-          "answer": "From the documents in your matter. AI features are bring-your-own-key, so extraction runs through the AI provider you configure, and every answer links back to the passage it was drawn from.",
-          "question": "Where do the answers come from?"
+          "answer": "Sinu toimiku dokumentidest. Tehisintellekti funktsioonid kasutavad sinu enda teenusepakkuja võtmeid, nii et väljanoppimine käib sinu seadistatud teenusepakkuja kaudu ja iga vastus viitab tagasi lõigule, kust see pärineb.",
+          "question": "Kust vastused pärinevad?"
         },
         "2": {
-          "answer": "Yes. Tabular Review output is exportable in standard formats, so your work product stays portable with no lock-in.",
-          "question": "Can I export the review?"
+          "answer": "Jah. Tabelülevaatuse tulemuse saab eksportida standardvormingutes, nii et sinu töö tulemus jääb ülekantavaks, tarnijalõksuta.",
+          "question": "Kas ma saan ülevaatuse eksportida?"
         }
       },
-      "metaDescription": "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.",
-      "metaTitle": "Tabular document review for due diligence | stella",
+      "metaDescription": "Esita küsimused tervele dokumendikogumile ja saa struktureeritud vastused sorditava, allikani jälgitava tabelina. Loodud due diligence’i ja otsingu jaoks.",
+      "metaTitle": "Tabelülevaatus due diligence’i jaoks | stella",
       "quickAnswer": {
-        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions — for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.",
-        "question": "How does Tabular Review work?"
+        "answer": "Suunad Tabelülevaatuse toimiku dokumendikogumile ja sõnastad veerud küsimustena: näiteks „kohaldatav õigus“, „ülesütlemise etteteatamistähtaeg“ või „kontrolli muutumise klausel“. stella eraldab iga dokumendi kohta vastuse tabelisse, mida saad sortida, filtreerida ja eksportida, ning iga lahter viitab tagasi lõigule, kust see pärineb.",
+        "question": "Kuidas Tabelülevaatus töötab?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Add a column by writing the question you would ask a junior",
-            "1": "Reuse column sets across matters for repeatable review playbooks",
-            "2": "Mix extraction (dates, parties, amounts) with judgement questions"
+            "0": "Lisa veerg, kirjutades küsimuse, mida küsiksid noorelt juristilt",
+            "1": "Taaskasuta veerukomplekte eri toimikutes korratavate ülevaatusjuhendite jaoks",
+            "2": "Sega väljanoppimine (kuupäevad, pooled, summad) kaalutlust nõudvate küsimustega"
           },
-          "heading": "Define the questions once, answer them everywhere"
+          "heading": "Sõnasta küsimused korra, vastused tulevad kõigi kohta"
         },
         "1": {
           "bullets": {
-            "0": "Click a cell to open the source document at the cited passage",
-            "1": "Answers are grounded by citations, not free-floating summaries",
-            "2": "Spot disagreements across documents at a glance"
+            "0": "Klõpsa lahtril ja allikdokument avaneb viidatud lõigus",
+            "1": "Vastused toetuvad viidetele, mitte õhku rippuma jäävatele kokkuvõtetele",
+            "2": "Märka ühe pilguga dokumentide vahelisi lahknevusi"
           },
-          "heading": "Every answer traces back to the text"
+          "heading": "Iga vastus viib tagasi tekstini"
         },
         "2": {
           "bullets": {
-            "0": "Reviews are scoped to a matter, next to its files and chat",
-            "1": "Hand a review to the AI agent for follow-up questions",
-            "2": "Export the table or keep refining it in place"
+            "0": "Ülevaatused kuuluvad toimiku juurde, selle failide ja vestluste kõrvale",
+            "1": "Anna ülevaatus tehisintellekti agendile edasisteks küsimusteks",
+            "2": "Ekspordi tabel või jätka selle täpsustamist kohapeal"
           },
-          "heading": "It lives where the work lives"
+          "heading": "See on seal, kus töö"
         }
       }
     },
     "templates": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, and Word editing in one place."
+          "body": "Toimikud, dokumendid ja Wordi muutmine ühes kohas."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Muuda dokumendikogum toimikupõhiseks ülevaatustabeliks."
         },
         "2": {
-          "body": "Chat across matters, files, and sources with citations."
+          "body": "Vestle toimikute, failide ja allikate lõikes, koos viidetega."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Start repeat documents from a known-good base instead of a copied file.",
-          "title": "Reusable templates"
+          "body": "Alusta korduvaid dokumente tõestatud alusest, mitte kopeeritud failist.",
+          "title": "Korduskasutatavad mallid"
         },
         "1": {
-          "body": "Define the values a document needs and fill them in when you assemble it.",
-          "title": "Fields and placeholders"
+          "body": "Määra, milliseid väärtusi dokument vajab, ja täida need kokkupanemisel.",
+          "title": "Väljad ja kohatäited"
         },
         "2": {
-          "body": "Include or omit clauses based on the values you provide, so a template covers variants.",
-          "title": "Conditional clauses"
+          "body": "Lisa või jäta klauslid välja sisestatud väärtuste põhjal, nii katab üks mall mitu varianti.",
+          "title": "Tingimuslikud klauslid"
         },
         "3": {
-          "body": "Let stella draft a filled document from a matter's data, then refine it.",
-          "title": "Fill with AI"
+          "body": "Lase rakendusel stella koostada toimiku andmetest täidetud dokument ja täpsusta seda siis.",
+          "title": "Täida tehisintellektiga"
         },
         "4": {
-          "body": "Author and adjust templates in the editor, then assemble from them.",
-          "title": "Edit in place"
+          "body": "Kirjuta ja kohenda malle redaktoris ning pane siis nende põhjal dokumendid kokku.",
+          "title": "Muuda kohapeal"
         },
         "5": {
-          "body": "Produce a draft into a matter and keep editing it alongside the rest of the work.",
-          "title": "Into a matter"
+          "body": "Loo mustand toimikusse ja jätka selle muutmist ülejäänud töö kõrval.",
+          "title": "Otse toimikusse"
         }
       },
       "cta": {
-        "heading": "Start from a template, not a blank page."
+        "heading": "Alusta mallist, mitte tühjast lehest."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Templates are authored and adjusted in the editor, then you assemble documents from them.",
-          "question": "Can I edit a template?"
+          "answer": "Jah. Malle kirjutatakse ja kohendatakse redaktoris ning seejärel pannakse nende põhjal dokumendid kokku.",
+          "question": "Kas ma saan malli muuta?"
         },
         "1": {
-          "answer": "A reusable piece of a document. Clauses can be included across templates and added conditionally based on the values you provide when assembling.",
-          "question": "What is a clause?"
+          "answer": "Dokumendi korduskasutatav osa. Klausleid saab kasutada mitmes mallis ja lisada tingimuslikult, lähtudes väärtustest, mille kokkupanemisel annad.",
+          "question": "Mis on klausel?"
         },
         "2": {
-          "answer": "Into a matter, as a draft you can keep editing alongside the rest of the matter's documents.",
-          "question": "Where does the assembled document go?"
+          "answer": "Toimikusse, mustandina, mida saad edasi muuta koos toimiku ülejäänud dokumentidega.",
+          "question": "Kuhu kokkupandud dokument läheb?"
         }
       },
-      "metaDescription": "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. Produce a document into the matter.",
-      "metaTitle": "Legal document templates with AI drafting | stella",
+      "metaDescription": "Määra mall väljade ja tingimuslike klauslitega, täida see käsitsi või lase rakendusel stella koostada dokument toimiku andmetest otse toimikusse.",
+      "metaTitle": "Õigusdokumentide mallid tehisintellektiga | stella",
       "quickAnswer": {
-        "answer": "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the conditional clauses resolve, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
-        "question": "How do templates work in stella?"
+        "answer": "Mall on dokument, milles on väljad ja klauslid, mida saab tingimuslikult kaasata. Täidad väljad käsitsi või lased rakendusel stella need toimiku andmetest koostada; tingimuslikud klauslid lahenevad ja saad dokumendi, millega toimikus edasi töötada. Mallid ja klauslid on korduskasutatavad, nii et korduvad dokumendid algavad tõestatud alusest.",
+        "question": "Kuidas mallid rakenduses stella töötavad?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Assemble a document from a template instead of starting blank",
-            "1": "Reuse clauses across templates",
-            "2": "Keep repeat documents consistent"
+            "0": "Pane dokument mallist kokku, selle asemel et tühjalt alustada",
+            "1": "Taaskasuta klausleid eri mallides",
+            "2": "Hoia korduvad dokumendid ühtsena"
           },
-          "heading": "Build from templates and clauses"
+          "heading": "Ehita mallidest ja klauslitest"
         },
         "1": {
           "bullets": {
-            "0": "Prefill fields from a document already stored in the matter",
-            "1": "Review and adjust every value before producing the draft",
-            "2": "Conditional clauses still resolve from the values you keep"
+            "0": "Eeltäida väljad dokumendist, mis on toimikus juba olemas",
+            "1": "Vaata iga väärtus üle ja kohenda seda enne mustandi loomist",
+            "2": "Tingimuslikud klauslid lahenevad ikka nende väärtuste põhjal, mille alles jätad"
           },
-          "heading": "Fill it from the matter's data"
+          "heading": "Täida see toimiku andmetest"
         },
         "2": {
           "bullets": {
-            "0": "Author and adjust templates in the editor",
-            "1": "Produce the draft into a matter",
-            "2": "Keep editing the result alongside the matter's files"
+            "0": "Kirjuta ja kohenda malle redaktoris",
+            "1": "Loo mustand otse toimikusse",
+            "2": "Jätka tulemuse muutmist toimiku failide kõrval"
           },
-          "heading": "Edit and produce in place"
+          "heading": "Muuda ja loo kohapeal"
         }
       }
     },
     "ui": {
-      "capabilities": "Capabilities",
-      "exploreMore": "Explore more",
-      "faq": "FAQ",
-      "inShort": "In short"
+      "capabilities": "Võimalused",
+      "exploreMore": "Avasta veel",
+      "faq": "KKK",
+      "inShort": "Lühidalt"
     },
     "workspace": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "Vestle toimikute, failide ja ühendatud tööriistade lõikes, kinnituste ja allika eelvaadetega."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Muuda dokumendikogum toimikupõhiseks tabeliks, mida saab sortida, filtreerida ja jälgida."
         },
         "2": {
-          "body": "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools."
+          "body": "Jõua samade toimikute, dokumentide ja kohtupraktikani CLI-st ja MCP-ga ühilduvatest tööriistadest."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella masinloetaval kujul tehisintellekti otsimootoritele."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Organise documents, contacts, review, and chat around the matter they belong to. Everything added to a matter stays attached to it, searchable across the whole workspace, so the context is there when you come back.",
-          "title": "Matters"
+          "body": "Korralda dokumendid, kontaktid, ülevaatus ja vestlus toimiku ümber, kuhu need kuuluvad. Kõik, mis toimikusse lisatakse, jääb sellega seotuks ja on otsitav kõigi toimikute lõikes, nii et kontekst on olemas, kui tagasi tuled.",
+          "title": "Toimikud"
         },
         "1": {
-          "body": "Open, edit, and review Word .docx documents directly in the workspace.",
-          "title": "Documents and .docx editing"
+          "body": "Ava, muuda ja vaata Wordi .docx-dokumente üle otse tööruumis.",
+          "title": "Dokumendid ja .docx-i muutmine"
         },
         "2": {
-          "body": "Run tabular review and research alongside the documents they relate to.",
-          "title": "Review and research"
+          "body": "Tee tabelülevaatust ja otsingut nende dokumentide kõrval, mille juurde need kuuluvad.",
+          "title": "Ülevaatus ja otsing"
         },
         "3": {
-          "body": "Bring the AI agent and knowledge tools into the same workspace as your files.",
-          "title": "Chat and knowledge tools"
+          "body": "Too tehisintellekti agent ja teadmustööriistad samasse tööruumi, kus on su failid.",
+          "title": "Vestlus ja teadmustööriistad"
         },
         "4": {
-          "body": "A desktop app acts as a local bridge for editing Office documents from stella.",
-          "title": "Desktop bridge"
+          "body": "Töölauarakendus toimib kohaliku sillana Office’i dokumentide muutmiseks rakendusest stella.",
+          "title": "Töölauasild"
         },
         "5": {
-          "body": "Saved edits and uploads become document revisions, so the current file and its history stay together.",
-          "title": "Version history"
+          "body": "Salvestatud muudatustest ja üleslaadimistest saavad dokumendi versioonid, nii et praegune fail ja selle ajalugu püsivad koos.",
+          "title": "Versiooniajalugu"
         }
       },
       "cta": {
-        "heading": "Bring your matters into one workspace."
+        "heading": "Too oma toimikud ühte kohta."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your machine.",
-          "question": "Can I edit Word documents in stella?"
+          "answer": "Jah. Veebirakendus toetab Wordi .docx-dokumentide muutmist ja ülevaatust. Kohalikuks Office’is muutmiseks toimib töölauarakendus sillana: saad dokumendi rakendusest stella avada ja seda oma arvutis muuta.",
+          "question": "Kas ma saan rakenduses stella Wordi dokumente muuta?"
         },
         "1": {
-          "answer": "Documents, contacts, review tables, chat threads, and document history. Everything added to a matter stays attached to it, so the context is there when you return.",
-          "question": "What lives inside a matter?"
+          "answer": "Dokumendid, kontaktid, ülevaatustabelid, vestlused ja dokumentide ajalugu. Kõik, mis toimikusse lisatakse, jääb sellega seotuks, nii et kontekst on olemas, kui tagasi tuled.",
+          "question": "Mis elab toimiku sees?"
         },
         "2": {
-          "answer": "Yes. The stella CLI and MCP server expose the same matters, documents, and case law to connected tools, under the same permissions. See CLI & MCP for details.",
-          "question": "Can other tools reach the workspace?"
+          "answer": "Jah. stella CLI ja MCP server avavad samad toimikud, dokumendid ja kohtupraktika ühendatud tööriistadele, samade õigustega. Üksikasjad leiad lehelt CLI & MCP.",
+          "question": "Kas teised tööriistad pääsevad tööruumi ligi?"
         }
       },
-      "metaDescription": "Matters, documents, Word .docx editing, review, research, and chat in one legal workspace. The work stays in context from source material to answer.",
-      "metaTitle": "Legal matter management workspace | stella",
+      "metaDescription": "Toimikud, dokumendid, Wordi .docx-i muutmine, ülevaatus, otsing ja vestlus ühes õigustööruumis. Töö püsib kontekstis lähtematerjalist vastuseni.",
+      "metaTitle": "Õigustoimikute haldus ühes kohas | stella",
       "quickAnswer": {
-        "answer": "A web app that holds matters, documents, Word .docx editing, review, research, and chat in one place. Everything added to a matter stays attached to it, so the context is there when you return. A companion desktop app acts as a local bridge when a document needs Microsoft Word.",
-        "question": "What is the stella workspace?"
+        "answer": "Veebirakendus, mis hoiab toimikud, dokumendid, Wordi .docx-i muutmise, ülevaatuse, otsingu ja vestluse ühes kohas. Kõik, mis toimikusse lisatakse, jääb sellega seotuks, nii et kontekst on olemas, kui tagasi tuled. Kaasnev töölauarakendus toimib kohaliku sillana, kui dokument vajab Microsoft Wordi.",
+        "question": "Mis on stella tööruum?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Documents, contacts, review, and chat live inside the matter",
-            "1": "Edit Word .docx documents without leaving the workspace",
-            "2": "Move between research, review, and chat without switching apps"
+            "0": "Dokumendid, kontaktid, ülevaatus ja vestlus elavad toimiku sees",
+            "1": "Muuda Wordi .docx-dokumente tööruumist lahkumata",
+            "2": "Liigu otsingu, ülevaatuse ja vestluse vahel ilma rakendust vahetamata"
           },
-          "heading": "Everything for a matter, in one place"
+          "heading": "Kõik, mis toimikusse kuulub, ühes kohas"
         },
         "1": {
           "bullets": {
-            "0": "Open and edit Word .docx documents directly in the workspace",
-            "1": "The redline stays a Word file: no conversion, no copies",
-            "2": "Use the desktop bridge when a document needs Microsoft Word"
+            "0": "Ava ja muuda Wordi .docx-dokumente otse tööruumis",
+            "1": "Parandustega versioon jääb Wordi failiks: ei mingit teisendust ega koopiaid",
+            "2": "Kasuta töölauasilda, kui dokument vajab Microsoft Wordi"
           },
-          "heading": "Word documents, edited where you need them"
+          "heading": "Wordi dokumendid, muudetud seal, kus vaja"
         }
       }
     }

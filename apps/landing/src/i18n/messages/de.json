@@ -10,7 +10,7 @@
     "label": "Eine KI zu stella befragen"
   },
   "common": {
-    "getCli": "Get the CLI",
+    "getCli": "CLI herunterladen",
     "startFree": "Kostenlos loslegen"
   },
   "demo": {
@@ -81,7 +81,7 @@
     "blog": "Blog",
     "changelog": "Änderungsprotokoll",
     "chooseLanguage": "Sprache auswählen",
-    "docxEditor": "Standalone DOCX editor",
+    "docxEditor": "Eigenständiger DOCX-Editor",
     "github": "stella auf GitHub",
     "openMenu": "Navigation öffnen",
     "pillars": {
@@ -138,705 +138,705 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle im Rahmen der Akte, sortierbar, filterbar und nachvollziehbar."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "Akten, Dokumente, .docx-Bearbeitung, Prüfung und Chat in einem Arbeitsbereich."
         },
         "2": {
-          "body": "Read and search official case law, legal sources, and company registries."
+          "body": "Offizielle Rechtsprechung, Rechtsquellen und Handelsregister lesen und durchsuchen."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Ask questions over the matters, documents, and contacts you already have in stella. One conversation can reach every matter you have access to, with the same permissions that govern the rest of your workspace.",
-          "title": "Works across your matters"
+          "body": "Stellen Sie Fragen zu den Akten, Dokumenten und Kontakten, die Sie bereits in stella haben. Ein Gespräch erreicht jede Akte, auf die Sie Zugriff haben, mit denselben Berechtigungen, die auch sonst in Ihrem Arbeitsbereich gelten.",
+          "title": "Über alle Akten hinweg"
         },
         "1": {
-          "body": "Bring documents into the conversation and ask the agent to read, compare, or summarise them.",
-          "title": "Reads your files"
+          "body": "Holen Sie Dokumente ins Gespräch und lassen Sie den Agenten sie lesen, vergleichen oder zusammenfassen.",
+          "title": "Liest Ihre Dateien"
         },
         "2": {
-          "body": "Reach company registries and other connected sources without leaving the chat.",
-          "title": "Connected tools"
+          "body": "Greifen Sie auf Handelsregister und andere angebundene Quellen zu, ohne den Chat zu verlassen.",
+          "title": "Angebundene Werkzeuge"
         },
         "3": {
-          "body": "The agent asks before it acts, so you stay in control of each step.",
-          "title": "Approvals before acting"
+          "body": "Der Agent fragt, bevor er handelt, damit Sie jeden Schritt in der Hand behalten.",
+          "title": "Erst Freigabe, dann Aktion"
         },
         "4": {
-          "body": "See what the agent is reading with a preview of the source behind each step.",
-          "title": "Source previews"
+          "body": "Sehen Sie, was der Agent liest: Zu jedem Schritt gehört eine Vorschau der zugrunde liegenden Quelle.",
+          "title": "Quellvorschauen"
         },
         "5": {
-          "body": "Answers link back to the source, and a citation opens the document at the exact passage.",
-          "title": "Grounded by citations"
+          "body": "Antworten verweisen zurück auf die Quelle, und eine Fundstelle öffnet das Dokument an genau der Stelle.",
+          "title": "Mit Fundstellen belegt"
         }
       },
       "cta": {
-        "heading": "Hand the agent a real matter."
+        "heading": "Geben Sie dem Agenten eine echte Akte."
       },
       "faqs": {
         "0": {
-          "answer": "No. It asks for approval before it acts, and it shows a source preview for what it reads, so you can follow and confirm each step.",
-          "question": "Does the agent act on its own?"
+          "answer": "Nein. Er holt vor jeder Aktion eine Freigabe ein und zeigt eine Quellvorschau zu dem, was er liest, sodass Sie jeden Schritt nachvollziehen und bestätigen.",
+          "question": "Handelt der Agent eigenmächtig?"
         },
         "1": {
-          "answer": "Through skills (reusable prompts and tool definitions) and external connectors that are MCP-compatible. Both extend what the agent can reach without changing the chat itself.",
-          "question": "How do I add new capabilities?"
+          "answer": "Über Skills (wiederverwendbare Prompts und Tool-Definitionen) und externe Konnektoren, die MCP-kompatibel sind. Beides erweitert die Reichweite des Agenten, ohne den Chat selbst zu verändern.",
+          "question": "Wie erweitere ich seine Fähigkeiten?"
         },
         "2": {
-          "answer": "From your matters, files, registries, and connected tools. AI features are bring-your-own-key, and answers are grounded by citations back to the source.",
-          "question": "Where do its answers come from?"
+          "answer": "Aus Ihren Akten, Dateien, Registern und angebundenen Tools. KI-Funktionen laufen über Ihre eigenen Anbieter-Schlüssel, und jede Antwort ist mit Fundstellen zur Quelle belegt.",
+          "question": "Woher stammen seine Antworten?"
         }
       },
-      "metaDescription": "Chat with your matters, documents, registries, and connected tools. The agent acts with approvals, grounds answers in citations, and extends via skills.",
-      "metaTitle": "AI agent for legal matters | stella",
+      "metaDescription": "Chatten Sie mit Ihren Akten, Dokumenten, Registern und Tools. Der Agent handelt mit Freigaben, belegt Antworten mit Fundstellen und wächst mit Skills.",
+      "metaTitle": "KI-Agent für juristische Akten | stella",
       "quickAnswer": {
-        "answer": "The agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
-        "question": "What can the AI agent do?"
+        "answer": "Der Agent chattet mit Ihren Akten, Dateien, Handelsregistern und angebundenen Tools. Er holt vor jeder Aktion eine Freigabe ein, zeigt eine Quellvorschau zu dem, was er liest, und belegt Antworten mit Fundstellen. Erweitern lässt er sich über wiederverwendbare Skills und externe Konnektoren, die MCP-kompatibel sind.",
+        "question": "Was kann der KI-Agent?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Chat over matters, documents, and contacts in one conversation",
-            "1": "Pull company and registry data into the same thread",
-            "2": "Hand a tabular review to the agent for follow-up questions"
+            "0": "Akten, Dokumente und Kontakte in einem Gespräch",
+            "1": "Unternehmens- und Registerdaten in denselben Verlauf holen",
+            "2": "Eine Tabellenprüfung für Rückfragen an den Agenten übergeben"
           },
-          "heading": "Ask once, across everything in the matter"
+          "heading": "Eine Frage, die ganze Akte"
         },
         "1": {
           "bullets": {
-            "0": "Each action waits for your approval before it runs",
-            "1": "A source preview shows what the agent read for every step",
-            "2": "Citations open the source document at the exact passage"
+            "0": "Jede Aktion wartet auf Ihre Freigabe",
+            "1": "Eine Quellvorschau zeigt zu jedem Schritt die Grundlage",
+            "2": "Fundstellen öffnen das Quelldokument an der genauen Stelle"
           },
-          "heading": "You stay in control"
+          "heading": "Sie behalten die Hand darauf"
         },
         "2": {
           "bullets": {
-            "0": "Skills are prompts and tool definitions you can reuse across matters",
-            "1": "External connectors are MCP-compatible, so the agent reaches more tools",
-            "2": "Add capabilities without changing how the chat works"
+            "0": "Skills sind Prompts und Tool-Definitionen für jede Akte",
+            "1": "Externe Konnektoren sind MCP-kompatibel und öffnen weitere Tools",
+            "2": "Neue Fähigkeiten, ohne den Chat umzubauen"
           },
-          "heading": "Extend it with skills and connectors"
+          "heading": "Mehr Reichweite über Skills und Konnektoren"
         }
       }
     },
     "anonymization": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "Chatten Sie über Akten, Dateien und angebundene Tools hinweg, mit Freigaben und Quellvorschauen."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "Akten, Dokumente, .docx-Bearbeitung, Prüfung und Chat in einem Arbeitsbereich."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle im Rahmen der Akte, sortierbar, filterbar und nachvollziehbar."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Removes names, entities, and identifying details before material reaches an AI step.",
-          "title": "Keeps identifying details out"
+          "body": "Entfernt Namen, Entitäten und identifizierende Angaben, bevor Material in einen KI-Schritt geht.",
+          "title": "Identifizierende Angaben bleiben draußen"
         },
         "1": {
-          "body": "Runs directly in the chat composer and in document review, not in a separate tool.",
-          "title": "Works in chat and review"
+          "body": "Läuft direkt im Chat-Eingabefeld und in der Dokumentenprüfung, nicht in einem separaten Werkzeug.",
+          "title": "Im Chat und in der Prüfung"
         },
         "2": {
-          "body": "Add your organisation's terms and blacklists so the names that matter to you are always caught.",
-          "title": "Your terms included"
+          "body": "Ergänzen Sie die Begriffe und Sperrlisten Ihrer Organisation, damit die für Sie relevanten Namen immer erfasst werden.",
+          "title": "Ihre eigenen Begriffe"
         },
         "3": {
-          "body": "Shows the redacted document in context, so you confirm what leaves the matter.",
-          "title": "Reviewable output"
+          "body": "Zeigt das geschwärzte Dokument im Kontext, damit Sie bestätigen, was die Akte verlässt.",
+          "title": "Ergebnis zum Nachprüfen"
         }
       },
       "cta": {
-        "heading": "Keep identifying details out of your AI workflows."
+        "heading": "Halten Sie identifizierende Angaben aus Ihren KI-Workflows heraus."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Anonymization is available today, integrated in chat and document review.",
-          "question": "Is anonymization available now?"
+          "answer": "Ja. Die Anonymisierung ist heute verfügbar, integriert in Chat und Dokumentenprüfung.",
+          "question": "Ist die Anonymisierung schon verfügbar?"
         },
         "1": {
-          "answer": "Preparing material for AI workflows without exposing names, entities, or identifying details, while keeping the redacted result available for review.",
-          "question": "What does it help with?"
+          "answer": "Beim Aufbereiten von Material für KI-Workflows, ohne Namen, Entitäten oder identifizierende Angaben preiszugeben, und das geschwärzte Ergebnis bleibt zur Prüfung verfügbar.",
+          "question": "Wobei hilft sie?"
         }
       },
-      "metaDescription": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
-      "metaTitle": "Document anonymization for legal AI | stella",
+      "metaDescription": "Entfernen Sie Namen, Entitäten und identifizierende Angaben, bevor Material die KI erreicht, direkt aus Chat und Prüfung, mit prüfbarem Ergebnis.",
+      "metaTitle": "Dokumente anonymisieren für juristische KI | stella",
       "quickAnswer": {
-        "answer": "It removes names, entities, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
-        "question": "What is anonymization in stella?"
+        "answer": "Sie entfernt Namen, Entitäten und identifizierende Angaben, bevor Material in einen KI-Workflow geht, und zeigt Ihnen das geschwärzte Ergebnis, damit Sie bestätigen, was die Akte verlässt. Sie ist direkt in Chat und Dokumentenprüfung integriert.",
+        "question": "Was ist Anonymisierung in stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Keeps names, entities, and identifying details out of AI steps",
-            "1": "Built for legal AI workflows rather than generic document masking",
-            "2": "Leaves a reviewable redacted document before the next step"
+            "0": "Namen, Entitäten und identifizierende Angaben bleiben aus KI-Schritten heraus",
+            "1": "Für juristische KI-Workflows gebaut, nicht für generisches Maskieren",
+            "2": "Vor dem nächsten Schritt liegt ein prüfbares geschwärztes Dokument vor"
           },
-          "heading": "Prepare material before it reaches AI"
+          "heading": "Material aufbereiten, bevor die KI es sieht"
         },
         "1": {
           "bullets": {
-            "0": "Available from chat and document review",
-            "1": "No copy-pasting into an external redaction tool",
-            "2": "Built on stella's own open-source anonymization engine"
+            "0": "Aus dem Chat und der Dokumentenprüfung erreichbar",
+            "1": "Kein Kopieren in ein externes Schwärzungswerkzeug",
+            "2": "Basiert auf der eigenen Open-Source-Anonymisierungs-Engine von stella"
           },
-          "heading": "Part of the workspace, not a separate tool"
+          "heading": "Teil des Arbeitsbereichs, kein Extra-Werkzeug"
         }
       }
     },
     "cli-mcp": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, review, and chat in one workspace."
+          "body": "Akten, Dokumente, Prüfung und Chat in einem Arbeitsbereich."
         },
         "1": {
-          "body": "Work across matters and connected tools with approvals and citations."
+          "body": "Arbeiten Sie über Akten und angebundene Tools hinweg, mit Freigaben und Fundstellen."
         },
         "2": {
-          "body": "Fill reusable legal documents through the app, CLI, or connected tools."
+          "body": "Füllen Sie wiederverwendbare juristische Dokumente über die App, die CLI oder angebundene Tools aus."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Use generated commands such as stella search matters, document read, and template fill from scripts or your terminal.",
-          "title": "A real command line"
+          "body": "Nutzen Sie generierte Befehle wie stella search matters, document read und template fill aus Skripten oder Ihrem Terminal.",
+          "title": "Eine echte Kommandozeile"
         },
         "1": {
-          "body": "Connect stella to MCP-compatible clients without building a separate integration for each one.",
-          "title": "MCP-compatible"
+          "body": "Verbinden Sie stella mit MCP-kompatiblen Clients, ohne für jeden eine eigene Integration zu bauen.",
+          "title": "MCP-kompatibel"
         },
         "2": {
-          "body": "The CLI command surface is generated from the MCP tool registry, so the two interfaces stay aligned as stella evolves.",
-          "title": "One capability registry"
+          "body": "Die Befehle der CLI werden aus der MCP-Tool-Registry generiert, sodass beide Oberflächen mit stella im Gleichschritt bleiben.",
+          "title": "Eine gemeinsame Capability-Registry"
         },
         "3": {
-          "body": "Authentication scopes and workspace permissions remain the boundary, whichever interface you use.",
-          "title": "Workspace permissions apply"
+          "body": "Authentifizierungs-Scopes und die Berechtigungen des Arbeitsbereichs bleiben die Grenze, gleich über welche Oberfläche Sie arbeiten.",
+          "title": "Berechtigungen des Arbeitsbereichs gelten"
         },
         "4": {
-          "body": "Commands return machine-readable JSON for scripts and agents as well as readable terminal output for people.",
-          "title": "Structured output"
+          "body": "Befehle liefern maschinenlesbares JSON für Skripte und Agenten sowie lesbare Terminalausgabe für Menschen.",
+          "title": "Strukturierte Ausgabe"
         },
         "5": {
-          "body": "Point the CLI and MCP clients at the stella server your organisation operates.",
-          "title": "Self-host friendly"
+          "body": "Richten Sie CLI und MCP-Clients auf den stella-Server, den Ihre Organisation betreibt.",
+          "title": "Auch selbst gehostet"
         }
       },
       "cta": {
-        "heading": "Bring stella into the tools where you already work."
+        "heading": "Holen Sie stella in die Werkzeuge, mit denen Sie ohnehin arbeiten."
       },
       "faqs": {
         "0": {
-          "answer": "No. They are separate interfaces generated from the same capability registry and connected to the same stella server.",
-          "question": "Is the CLI a separate product from the MCP server?"
+          "answer": "Nein. Es sind zwei Oberflächen, die aus derselben Capability-Registry generiert werden und an denselben stella-Server angebunden sind.",
+          "question": "Ist die CLI ein eigenes Produkt neben dem MCP-Server?"
         },
         "1": {
-          "answer": "Yes. The CLI supports structured JSON output, pagination, predictable exit codes, and non-interactive use suitable for automation.",
-          "question": "Can I use the CLI in scripts?"
+          "answer": "Ja. Die CLI unterstützt strukturierte JSON-Ausgabe, Paginierung, vorhersehbare Exit-Codes und den nicht-interaktiven Einsatz in Automatisierungen.",
+          "question": "Lässt sich die CLI in Skripten einsetzen?"
         },
         "2": {
-          "answer": "No. The server checks authentication scopes and stella permissions before a capability runs.",
-          "question": "Does connecting an MCP client bypass workspace permissions?"
+          "answer": "Nein. Der Server prüft Authentifizierungs-Scopes und die Berechtigungen in stella, bevor eine Capability ausgeführt wird.",
+          "question": "Umgeht ein angebundener MCP-Client die Berechtigungen des Arbeitsbereichs?"
         }
       },
-      "metaDescription": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capabilities, permissions, and data.",
-      "metaTitle": "MCP server and CLI for your legal workspace | stella",
+      "metaDescription": "Suchen, lesen und arbeiten Sie mit stella über die Kommandozeile oder jeden MCP-kompatiblen Client. Beide Oberflächen teilen Rechte und Daten.",
+      "metaTitle": "MCP-Server und CLI für Ihren Arbeitsbereich | stella",
       "quickAnswer": {
-        "answer": "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
-        "question": "What are the stella CLI and MCP server?"
+        "answer": "Zwei Oberflächen auf dieselben Capabilities von stella. Die CLI bildet die MCP-Tool-Registry als Befehle ab, und der MCP-Server lässt kompatible Agenten und Werkzeuge mit Akten, Dokumenten, Vorlagen und öffentlichen Rechtsdaten arbeiten, unter denselben Zugriffsregeln.",
+        "question": "Was sind die stella-CLI und der MCP-Server?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Find passages across matter documents with stella search matters",
-            "1": "Read documents, list matters, and inspect templates without switching context",
-            "2": "Use paginated, structured results in scripts and automated workflows"
+            "0": "Passagen in den Dokumenten einer Akte finden mit stella search matters",
+            "1": "Dokumente lesen, Akten auflisten, Vorlagen prüfen, ohne den Kontext zu wechseln",
+            "2": "Paginierte, strukturierte Ergebnisse in Skripten und Automatisierungen nutzen"
           },
-          "heading": "Search the whole matter from your terminal"
+          "heading": "Die ganze Akte aus dem Terminal durchsuchen"
         },
         "1": {
           "bullets": {
-            "0": "Expose matters, documents, case law, templates, and other approved tools",
-            "1": "Keep the capability catalogue and CLI commands generated from one registry",
-            "2": "Connect compatible agents without copying legal data into another workspace"
+            "0": "Akten, Dokumente, Rechtsprechung, Vorlagen und weitere freigegebene Tools bereitstellen",
+            "1": "Capability-Katalog und CLI-Befehle stammen aus einer Registry",
+            "2": "Kompatible Agenten anbinden, ohne Rechtsdaten in einen anderen Arbeitsbereich zu kopieren"
           },
-          "heading": "The same capabilities through MCP"
+          "heading": "Dieselben Capabilities über MCP"
         }
       }
     },
     "editor": {
       "adjacent": {
         "0": {
-          "body": "See where matters, documents, and tools live together."
+          "body": "Sehen Sie, wo Akten, Dokumente und Werkzeuge zusammenkommen."
         },
         "1": {
-          "body": "Create reusable Word documents with fields and conditional clauses."
+          "body": "Erstellen Sie wiederverwendbare Word-Dokumente mit Feldern und bedingten Klauseln."
         },
         "2": {
-          "body": "Try the same editor on its own: open and edit a .docx in the browser, no account needed."
+          "body": "Testen Sie denselben Editor eigenständig: eine .docx im Browser öffnen und bearbeiten, ganz ohne Konto."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Open and edit Word documents directly in stella's online editor: no install, and no converting the file into a separate proprietary format.",
-          "title": "Edit .docx files in the browser"
+          "body": "Öffnen und bearbeiten Sie Word-Dokumente direkt im Online-Editor von stella: keine Installation und keine Umwandlung in ein eigenes proprietäres Format.",
+          "title": ".docx-Dateien im Browser bearbeiten"
         },
         "1": {
-          "body": "The document stays a .docx throughout, so fonts, styles, and layout render and save the way Word created them.",
-          "title": "Formatting stays intact"
+          "body": "Das Dokument bleibt durchgehend eine .docx, sodass Schriften, Formatvorlagen und Layout so dargestellt und gespeichert werden, wie Word sie angelegt hat.",
+          "title": "Die Formatierung bleibt"
         },
         "2": {
-          "body": "Tracked insertions and deletions render in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
-          "title": "Track changes"
+          "body": "Nachverfolgte Einfügungen und Löschungen erscheinen an Ort und Stelle, und von der KI vorgeschlagene Änderungen kommen als nachverfolgte Änderungen an, die Sie im Dokument annehmen oder ablehnen.",
+          "title": "Änderungen nachverfolgen"
         },
         "3": {
-          "body": "Saved edits become document revisions, so the current file and its full history stay together.",
-          "title": "Version history for every save"
+          "body": "Gespeicherte Änderungen werden zu Dokumentversionen, sodass die aktuelle Datei und ihre gesamte Historie beisammenbleiben.",
+          "title": "Jede Speicherung wird zur Version"
         },
         "4": {
-          "body": "The document remains attached to its matter, alongside its files, properties, tasks, and conversations.",
-          "title": "Matter context stays visible"
+          "body": "Das Dokument bleibt mit seiner Akte verbunden, neben deren Dateien, Eigenschaften, Aufgaben und Gesprächen.",
+          "title": "Der Aktenkontext bleibt sichtbar"
         },
         "5": {
-          "body": "Use the desktop bridge when a document needs Microsoft Word, then return the updated file to the same matter.",
-          "title": "Local Office bridge"
+          "body": "Nutzen Sie die Desktop-Brücke, wenn ein Dokument Microsoft Word braucht, und geben Sie die aktualisierte Datei in dieselbe Akte zurück.",
+          "title": "Brücke zum lokalen Office"
         }
       },
       "cta": {
-        "heading": "Edit a Word document in its matter."
+        "heading": "Bearbeiten Sie ein Word-Dokument in seiner Akte."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The document is edited where it lives, alongside the matter's other files, properties, tasks, and conversations, so no local copy is downloaded and re-uploaded to make a change.",
-          "question": "Does the document stay attached to its matter while I edit?"
+          "answer": "Ja. Das Dokument wird dort bearbeitet, wo es liegt, neben den übrigen Dateien, Eigenschaften, Aufgaben und Gesprächen der Akte; für eine Änderung wird keine lokale Kopie heruntergeladen und wieder hochgeladen.",
+          "question": "Bleibt das Dokument während der Bearbeitung mit seiner Akte verbunden?"
         },
         "1": {
-          "answer": "Yes. Tracked insertions and deletions render in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
-          "question": "Does the editor keep track changes?"
+          "answer": "Ja. Nachverfolgte Einfügungen und Löschungen erscheinen an Ort und Stelle, so wie Word sie zeigt. Von der KI in stella vorgeschlagene Änderungen kommen genauso an, sodass jede Überarbeitung geprüft und angenommen oder abgelehnt wird, bevor sie Teil des Dokuments wird.",
+          "question": "Behält der Editor die Änderungsverfolgung bei?"
         },
         "2": {
-          "answer": "The saved file remains connected to the same matter and document, and the save becomes a revision in that document's version history.",
-          "question": "What happens when I save?"
+          "answer": "Die gespeicherte Datei bleibt mit derselben Akte und demselben Dokument verbunden, und die Speicherung wird zu einer Version in der Historie dieses Dokuments.",
+          "question": "Was passiert beim Speichern?"
         },
         "3": {
-          "answer": "Yes. Saved revisions stay in the document's version history, so the current file and the ones it replaced remain together on the same document.",
-          "question": "Can I get back to an earlier revision?"
+          "answer": "Ja. Gespeicherte Versionen bleiben in der Versionshistorie des Dokuments, sodass die aktuelle Datei und die von ihr abgelösten beisammen am selben Dokument liegen.",
+          "question": "Komme ich zu einer früheren Version zurück?"
         },
         "4": {
-          "answer": "Yes. The stella desktop bridge opens the document in local Office for Word-specific workflows and returns the edited file to the same matter.",
-          "question": "Can I open the same document in Microsoft Word?"
+          "answer": "Ja. Die Desktop-Brücke von stella öffnet das Dokument im lokalen Office für Word-spezifische Abläufe und gibt die bearbeitete Datei in dieselbe Akte zurück.",
+          "question": "Kann ich dasselbe Dokument in Microsoft Word öffnen?"
         },
         "5": {
-          "answer": "Yes. The document is part of its matter's context, so matter-aware tools can read it and propose edits as tracked changes in the same document.",
-          "question": "Can stella's AI work on the document I am editing?"
+          "answer": "Ja. Das Dokument gehört zum Kontext seiner Akte, sodass aktenbezogene Werkzeuge es lesen und Änderungen als nachverfolgte Änderungen im selben Dokument vorschlagen können.",
+          "question": "Kann die KI in stella an dem Dokument arbeiten, das ich gerade bearbeite?"
         }
       },
-      "metaDescription": "Edit a matter's Word documents inside stella: track changes reviewed in place, a revision in the version history for every save, and a bridge to local Word.",
-      "metaTitle": "Editing Word Documents in Your Legal Workspace | stella",
+      "metaDescription": "Bearbeiten Sie Word-Dokumente einer Akte in stella: Änderungen direkt prüfen, jede Speicherung als Version in der Historie und eine Brücke zum lokalen Word.",
+      "metaTitle": "Word-Dokumente im Arbeitsbereich bearbeiten | stella",
       "quickAnswer": {
-        "answer": "Yes. Open a .docx file from a matter and edit it in the browser. stella keeps the document in its original Word format and records saved revisions in the same document's version history.",
-        "question": "Can I edit Word documents in stella?"
+        "answer": "Ja. Öffnen Sie eine .docx-Datei aus einer Akte und bearbeiten Sie sie im Browser. stella behält das ursprüngliche Word-Format bei und hält gespeicherte Versionen in der Versionshistorie desselben Dokuments fest.",
+        "question": "Kann ich Word-Dokumente in stella bearbeiten?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Open a .docx directly from a matter",
-            "1": "Edit the document with familiar page and formatting controls",
-            "2": "Review track changes in place, including edits proposed by AI",
-            "3": "Keep the original Word file format",
-            "4": "Save changes into the document's version history"
+            "0": "Eine .docx direkt aus der Akte öffnen",
+            "1": "Mit vertrauten Seiten- und Formatierungswerkzeugen arbeiten",
+            "2": "Nachverfolgte Änderungen direkt prüfen, auch die der KI",
+            "3": "Das ursprüngliche Word-Dateiformat behalten",
+            "4": "Änderungen in die Versionshistorie des Dokuments speichern"
           },
-          "heading": "The .docx stays a .docx"
+          "heading": "Eine .docx bleibt eine .docx"
         },
         "1": {
           "bullets": {
-            "0": "Move between the document and its matter without uploading copies",
-            "1": "Keep document properties and revisions with the file",
-            "2": "Open the same document through the desktop bridge when needed",
-            "3": "Use the document as context for matter-aware tools"
+            "0": "Zwischen Dokument und Akte wechseln, ohne Kopien hochzuladen",
+            "1": "Dokumenteigenschaften und Versionen bleiben an der Datei",
+            "2": "Bei Bedarf dasselbe Dokument über die Desktop-Brücke öffnen",
+            "3": "Das Dokument als Kontext für aktenbezogene Werkzeuge nutzen"
           },
-          "heading": "Connected to the rest of the matter"
+          "heading": "Mit der ganzen Akte verbunden"
         }
       }
     },
     "public-data": {
       "adjacent": {
         "0": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "Bereiten Sie sensibles Material für KI auf, ohne identifizierende Angaben preiszugeben."
         },
         "1": {
-          "body": "Chat across matters, files, and sources with approvals and citations."
+          "body": "Chatten Sie über Akten, Dateien und Quellen hinweg, mit Freigaben und Fundstellen."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle im Rahmen der Akte."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Decisions from official public legal sources, not scraped third-party summaries.",
-          "title": "Official case law"
+          "body": "Entscheidungen aus offiziellen öffentlichen Rechtsquellen, keine abgegriffenen Zusammenfassungen Dritter.",
+          "title": "Offizielle Rechtsprechung"
         },
         "1": {
-          "body": "Legal Atlas parses each decision while keeping its original structure intact.",
-          "title": "Structure preserved"
+          "body": "Legal Atlas erschließt jede Entscheidung und lässt ihre ursprüngliche Struktur unangetastet.",
+          "title": "Struktur bleibt erhalten"
         },
         "2": {
-          "body": "Typed clients for national company and commercial registries, queried from a matter.",
-          "title": "Company registries"
+          "body": "Typisierte Clients für nationale Unternehmens- und Handelsregister, abfragbar aus der Akte.",
+          "title": "Handelsregister"
         },
         "3": {
-          "body": "Move between a decision and the cases it cites without leaving the reader.",
-          "title": "Follow citations"
+          "body": "Wechseln Sie zwischen einer Entscheidung und den zitierten Fällen, ohne die Leseansicht zu verlassen.",
+          "title": "Fundstellen folgen"
         },
         "4": {
-          "body": "Browse and filter case law and registries scoped to the jurisdiction you work in.",
-          "title": "By jurisdiction"
+          "body": "Durchstöbern und filtern Sie Rechtsprechung und Register in der Jurisdiktion, in der Sie arbeiten.",
+          "title": "Nach Jurisdiktion"
         },
         "5": {
-          "body": "Reference any source from a matter so the agent's answers stay traceable to it.",
-          "title": "Grounded for AI"
+          "body": "Verweisen Sie aus einer Akte auf jede Quelle, damit die Antworten des Agenten dorthin nachvollziehbar bleiben.",
+          "title": "Belegt für die KI"
         }
       },
       "cta": {
-        "heading": "Bring official legal data into your matters."
+        "heading": "Holen Sie offizielle Rechtsdaten in Ihre Akten."
       },
       "faqs": {
         "0": {
-          "answer": "Case law comes from official public legal sources, ingested and parsed by stella's Legal Atlas stack. Company data comes from national company and commercial registries through typed clients, not third-party copies.",
-          "question": "Where does the data come from?"
+          "answer": "Die Rechtsprechung stammt aus offiziellen öffentlichen Rechtsquellen, eingelesen und aufbereitet vom Legal-Atlas-Stack in stella. Unternehmensdaten kommen über typisierte Clients aus nationalen Unternehmens- und Handelsregistern, nicht aus Kopien Dritter.",
+          "question": "Woher stammen die Daten?"
         },
         "1": {
-          "answer": "Two lists, both expanding. Typed registry clients already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources surface per jurisdiction from stella's connector catalogue; Czechia, Spain, and Taiwan, for example, already have connected sources, and the case-law reader is built to browse and filter by jurisdiction as more official sources are added.",
-          "question": "Which jurisdictions and registries are covered?"
+          "answer": "Zwei Listen, beide wachsend. Zu den typisierten Registry-Clients zählen bereits ARES (Tschechien), Companies House (UK), SEC EDGAR (USA), KRS (Polen), PRH (Finnland) und VIES (EU-USt). Über Register hinaus erscheinen offizielle Quellen je Jurisdiktion aus dem Konnektorkatalog von stella; Tschechien, Spanien und Taiwan haben zum Beispiel bereits angebundene Quellen, und die Leseansicht für Rechtsprechung ist darauf ausgelegt, nach Jurisdiktion zu blättern und zu filtern, während weitere offizielle Quellen hinzukommen.",
+          "question": "Welche Jurisdiktionen und Register sind abgedeckt?"
         },
         "2": {
-          "answer": "Yes. Public data referenced from a matter becomes a grounded source: the AI agent cites the underlying decision or record so its answers stay traceable.",
-          "question": "Can the AI use this data?"
+          "answer": "Ja. Öffentliche Daten, auf die aus einer Akte verwiesen wird, werden zur belegten Quelle: Der KI-Agent zitiert die zugrunde liegende Entscheidung oder den Registereintrag, sodass seine Antworten nachvollziehbar bleiben.",
+          "question": "Kann die KI diese Daten nutzen?"
         }
       },
-      "metaDescription": "Case law and company registries from official public sources. Read decisions, look up companies, follow citations, and pull it into a matter or the AI agent.",
-      "metaTitle": "Case law and company registry data | stella",
+      "metaDescription": "Rechtsprechung und Handelsregister aus offiziellen Quellen. Entscheidungen lesen, Unternehmen nachschlagen, Fundstellen folgen, alles direkt in die Akte.",
+      "metaTitle": "Rechtsprechung und Handelsregisterdaten | stella",
       "quickAnswer": {
-        "answer": "Two kinds. Official public case law, ingested and structure-parsed so you can read and search decisions and follow their citations. And typed access to national company and commercial registries, so you can pull official company data straight into a matter. Both are grounded sources the AI agent can cite.",
-        "question": "What public data does stella bring in?"
+        "answer": "Zweierlei. Offizielle öffentliche Rechtsprechung, eingelesen und strukturerhaltend aufbereitet, sodass Sie Entscheidungen lesen, durchsuchen und ihren Fundstellen folgen. Und typisierten Zugriff auf nationale Unternehmens- und Handelsregister, sodass Sie offizielle Unternehmensdaten direkt in eine Akte holen. Beides sind belegte Quellen, die der KI-Agent zitieren kann.",
+        "question": "Welche öffentlichen Daten bringt stella mit?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Collected from official public legal sources",
-            "1": "Structure-preserving parsers keep headings, paragraphs, and references",
-            "2": "Built on the open Legal Atlas ingestion stack"
+            "0": "Aus offiziellen öffentlichen Rechtsquellen gesammelt",
+            "1": "Strukturerhaltende Parser bewahren Überschriften, Absätze und Verweise",
+            "2": "Basiert auf dem offenen Legal-Atlas-Ingestion-Stack"
           },
-          "heading": "Case law from official sources, parsed with structure intact"
+          "heading": "Rechtsprechung aus offiziellen Quellen, mit erhaltener Struktur"
         },
         "1": {
           "bullets": {
-            "0": "Typed clients for national registries: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES, and more",
-            "1": "Pull official company data into a matter instead of copying it by hand",
-            "2": "Coverage expands as more official sources are added"
+            "0": "Typisierte Clients für nationale Register: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES und mehr",
+            "1": "Offizielle Unternehmensdaten in die Akte holen, statt sie abzutippen",
+            "2": "Die Abdeckung wächst mit jeder weiteren offiziellen Quelle"
           },
-          "heading": "Company and commercial registries, queried from a matter"
+          "heading": "Unternehmens- und Handelsregister, abgefragt aus der Akte"
         },
         "2": {
           "bullets": {
-            "0": "Reference a decision or company record from a matter",
-            "1": "The agent cites the underlying source, not a paraphrase",
-            "2": "Search across sources, not just within one"
+            "0": "Aus einer Akte auf eine Entscheidung oder einen Registereintrag verweisen",
+            "1": "Der Agent zitiert die zugrunde liegende Quelle, keine Umschreibung",
+            "2": "Über alle Quellen hinweg suchen, nicht nur in einer"
           },
-          "heading": "One grounded source for the agent"
+          "heading": "Eine belegte Quelle für den Agenten"
         }
       }
     },
     "tabular-review": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected sources with approvals and source previews."
+          "body": "Chatten Sie über Akten, Dateien und angebundene Quellen hinweg, mit Freigaben und Quellvorschauen."
         },
         "1": {
-          "body": "Official case law and company registries, pulled into a matter."
+          "body": "Offizielle Rechtsprechung und Handelsregister, direkt in der Akte."
         },
         "2": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "Bereiten Sie sensibles Material für KI auf, ohne identifizierende Angaben preiszugeben."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Define a column in plain language; stella answers it for every document in the set.",
-          "title": "Columns are questions"
+          "body": "Formulieren Sie eine Spalte in normaler Sprache; stella beantwortet sie für jedes Dokument im Bestand.",
+          "title": "Spalten sind Fragen"
         },
         "1": {
-          "body": "Each cell links to the exact passage it was extracted from, so you can verify in one click.",
-          "title": "Cited to the source"
+          "body": "Jede Zelle verlinkt genau die Stelle, aus der sie stammt, sodass Sie mit einem Klick prüfen.",
+          "title": "Bis zur Quelle belegt"
         },
         "2": {
-          "body": "Reviews live inside a matter alongside the documents, contacts, and chat they relate to.",
-          "title": "Matter-scoped"
+          "body": "Prüfungen liegen in der Akte, neben den Dokumenten, Kontakten und Gesprächen, zu denen sie gehören.",
+          "title": "Im Rahmen der Akte"
         },
         "3": {
-          "body": "Treat answers like data: sort by any column, filter to the rows that need attention.",
-          "title": "Sort and filter"
+          "body": "Behandeln Sie Antworten wie Daten: nach jeder Spalte sortieren, auf die Zeilen filtern, die Aufmerksamkeit brauchen.",
+          "title": "Sortieren und filtern"
         },
         "4": {
-          "body": "Run the same questions across large document sets instead of opening files one by one.",
-          "title": "Built for scale"
+          "body": "Stellen Sie dieselben Fragen an große Dokumentenbestände, statt Datei für Datei zu öffnen.",
+          "title": "Für große Bestände gebaut"
         },
         "5": {
-          "body": "Take the table with you in standard formats — no lock-in on your own work product.",
-          "title": "Export anywhere"
+          "body": "Nehmen Sie die Tabelle in Standardformaten mit: kein Lock-in auf Ihr eigenes Arbeitsergebnis.",
+          "title": "Überall weiterverwendbar"
         }
       },
       "cta": {
-        "heading": "Review your next document set in stella."
+        "heading": "Prüfen Sie Ihren nächsten Dokumentenbestand in stella."
       },
       "faqs": {
         "0": {
-          "answer": "Anything you would ask a person reviewing the document: factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
-          "question": "What kinds of questions can a column ask?"
+          "answer": "Alles, was Sie einer Person stellen würden, die das Dokument prüft: Faktenextraktion wie Daten, Parteien und Beträge, oder Wertungsfragen wie die, ob eine Klausel vorhanden ist und wie sie gefasst ist. Die Antworten kommen mit Fundstellen zum Ausgangstext zurück.",
+          "question": "Welche Fragen kann eine Spalte stellen?"
         },
         "1": {
-          "answer": "From the documents in your matter. AI features are bring-your-own-key, so extraction runs through the AI provider you configure, and every answer links back to the passage it was drawn from.",
-          "question": "Where do the answers come from?"
+          "answer": "Aus den Dokumenten Ihrer Akte. KI-Funktionen laufen über Ihre eigenen Anbieter-Schlüssel, die Extraktion also über den von Ihnen konfigurierten KI-Anbieter, und jede Antwort verweist zurück auf die Stelle, aus der sie stammt.",
+          "question": "Woher kommen die Antworten?"
         },
         "2": {
-          "answer": "Yes. Tabular Review output is exportable in standard formats, so your work product stays portable with no lock-in.",
-          "question": "Can I export the review?"
+          "answer": "Ja. Die Ergebnisse der Tabellenprüfung lassen sich in Standardformaten exportieren, sodass Ihr Arbeitsergebnis portabel bleibt, ohne Lock-in.",
+          "question": "Lässt sich die Prüfung exportieren?"
         }
       },
-      "metaDescription": "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.",
-      "metaTitle": "Tabular document review for due diligence | stella",
+      "metaDescription": "Stellen Sie Fragen an einen Dokumentenbestand und erhalten Sie strukturierte Antworten als sortierbare, belegte Tabelle. Für Due Diligence und Recherche.",
+      "metaTitle": "Tabellenprüfung für Due Diligence | stella",
       "quickAnswer": {
-        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions — for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.",
-        "question": "How does Tabular Review work?"
+        "answer": "Sie richten die Tabellenprüfung auf einen Dokumentenbestand in einer Akte und formulieren Spalten als Fragen, zum Beispiel „anwendbares Recht“, „Kündigungsfrist“ oder „Change-of-Control-Klausel“. stella zieht für jedes Dokument eine Antwort in eine Tabelle, die Sie sortieren, filtern und exportieren, und jede Zelle verweist zurück auf die Stelle, aus der sie stammt.",
+        "question": "Wie funktioniert die Tabellenprüfung?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Add a column by writing the question you would ask a junior",
-            "1": "Reuse column sets across matters for repeatable review playbooks",
-            "2": "Mix extraction (dates, parties, amounts) with judgement questions"
+            "0": "Eine Spalte anlegen heißt, die Frage zu formulieren, die Sie sonst weitergeben",
+            "1": "Spaltensätze über Akten hinweg wiederverwenden, als Prüfvorlage",
+            "2": "Faktenextraktion (Daten, Parteien, Beträge) und Wertungsfragen mischen"
           },
-          "heading": "Define the questions once, answer them everywhere"
+          "heading": "Einmal formulierte Fragen, für jedes Dokument beantwortet"
         },
         "1": {
           "bullets": {
-            "0": "Click a cell to open the source document at the cited passage",
-            "1": "Answers are grounded by citations, not free-floating summaries",
-            "2": "Spot disagreements across documents at a glance"
+            "0": "Ein Klick auf eine Zelle öffnet das Quelldokument an der Fundstelle",
+            "1": "Antworten sind mit Fundstellen belegt, keine freischwebenden Zusammenfassungen",
+            "2": "Abweichungen zwischen Dokumenten auf einen Blick erkennen"
           },
-          "heading": "Every answer traces back to the text"
+          "heading": "Jede Antwort führt zurück in den Text"
         },
         "2": {
           "bullets": {
-            "0": "Reviews are scoped to a matter, next to its files and chat",
-            "1": "Hand a review to the AI agent for follow-up questions",
-            "2": "Export the table or keep refining it in place"
+            "0": "Prüfungen gehören zur Akte, neben ihren Dateien und dem Chat",
+            "1": "Eine Prüfung für Rückfragen an den KI-Agenten übergeben",
+            "2": "Die Tabelle exportieren oder direkt weiter verfeinern"
           },
-          "heading": "It lives where the work lives"
+          "heading": "Dort, wo die Arbeit liegt"
         }
       }
     },
     "templates": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, and Word editing in one place."
+          "body": "Akten, Dokumente und Word-Bearbeitung an einem Ort."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Prüftabelle im Rahmen der Akte."
         },
         "2": {
-          "body": "Chat across matters, files, and sources with citations."
+          "body": "Chatten Sie über Akten, Dateien und Quellen hinweg, mit Fundstellen."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Start repeat documents from a known-good base instead of a copied file.",
-          "title": "Reusable templates"
+          "body": "Starten Sie wiederkehrende Dokumente von einer geprüften Grundlage statt von einer kopierten Datei.",
+          "title": "Wiederverwendbare Vorlagen"
         },
         "1": {
-          "body": "Define the values a document needs and fill them in when you assemble it.",
-          "title": "Fields and placeholders"
+          "body": "Legen Sie fest, welche Werte ein Dokument braucht, und füllen Sie sie beim Erzeugen aus.",
+          "title": "Felder und Platzhalter"
         },
         "2": {
-          "body": "Include or omit clauses based on the values you provide, so a template covers variants.",
-          "title": "Conditional clauses"
+          "body": "Klauseln je nach den eingegebenen Werten aufnehmen oder weglassen, damit eine Vorlage mehrere Varianten abdeckt.",
+          "title": "Bedingte Klauseln"
         },
         "3": {
-          "body": "Let stella draft a filled document from a matter's data, then refine it.",
-          "title": "Fill with AI"
+          "body": "Lassen Sie stella aus den Daten einer Akte einen ausgefüllten Entwurf erstellen und feilen Sie daran.",
+          "title": "Mit KI ausfüllen"
         },
         "4": {
-          "body": "Author and adjust templates in the editor, then assemble from them.",
-          "title": "Edit in place"
+          "body": "Vorlagen im Editor anlegen und anpassen, dann Dokumente daraus erzeugen.",
+          "title": "Direkt bearbeiten"
         },
         "5": {
-          "body": "Produce a draft into a matter and keep editing it alongside the rest of the work.",
-          "title": "Into a matter"
+          "body": "Erzeugen Sie einen Entwurf in eine Akte und arbeiten Sie neben allem anderen daran weiter.",
+          "title": "Direkt in die Akte"
         }
       },
       "cta": {
-        "heading": "Start from a template, not a blank page."
+        "heading": "Beginnen Sie mit einer Vorlage, nicht mit einem leeren Blatt."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Templates are authored and adjusted in the editor, then you assemble documents from them.",
-          "question": "Can I edit a template?"
+          "answer": "Ja. Vorlagen werden im Editor angelegt und angepasst, und daraus erzeugen Sie dann Dokumente.",
+          "question": "Kann ich eine Vorlage bearbeiten?"
         },
         "1": {
-          "answer": "A reusable piece of a document. Clauses can be included across templates and added conditionally based on the values you provide when assembling.",
-          "question": "What is a clause?"
+          "answer": "Ein wiederverwendbarer Baustein eines Dokuments. Klauseln lassen sich in mehreren Vorlagen einsetzen und je nach den beim Erzeugen eingegebenen Werten bedingt hinzufügen.",
+          "question": "Was ist eine Klausel?"
         },
         "2": {
-          "answer": "Into a matter, as a draft you can keep editing alongside the rest of the matter's documents.",
-          "question": "Where does the assembled document go?"
+          "answer": "In eine Akte, als Entwurf, an dem Sie neben den übrigen Dokumenten der Akte weiterarbeiten.",
+          "question": "Wohin kommt das erzeugte Dokument?"
         }
       },
-      "metaDescription": "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. Produce a document into the matter.",
-      "metaTitle": "Legal document templates with AI drafting | stella",
+      "metaDescription": "Definieren Sie eine Vorlage mit Feldern und bedingten Klauseln, füllen Sie sie von Hand aus oder lassen Sie stella das aus den Daten der Akte übernehmen.",
+      "metaTitle": "Vorlagen für Rechtsdokumente mit KI-Entwurf | stella",
       "quickAnswer": {
-        "answer": "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the conditional clauses resolve, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
-        "question": "How do templates work in stella?"
+        "answer": "Eine Vorlage ist ein Dokument mit Feldern und Klauseln, die sich bedingt aufnehmen lassen. Sie füllen die Felder von Hand aus oder lassen stella sie aus den Daten einer Akte entwerfen; die bedingten Klauseln lösen sich auf, und Sie erhalten ein Dokument, an dem Sie in der Akte weiterarbeiten. Vorlagen und Klauseln sind wiederverwendbar, sodass wiederkehrende Dokumente von einer geprüften Grundlage starten.",
+        "question": "Wie funktionieren Vorlagen in stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Assemble a document from a template instead of starting blank",
-            "1": "Reuse clauses across templates",
-            "2": "Keep repeat documents consistent"
+            "0": "Ein Dokument aus einer Vorlage erzeugen statt bei null zu beginnen",
+            "1": "Klauseln über Vorlagen hinweg wiederverwenden",
+            "2": "Wiederkehrende Dokumente bleiben einheitlich"
           },
-          "heading": "Build from templates and clauses"
+          "heading": "Aus Vorlagen und Klauseln bauen"
         },
         "1": {
           "bullets": {
-            "0": "Prefill fields from a document already stored in the matter",
-            "1": "Review and adjust every value before producing the draft",
-            "2": "Conditional clauses still resolve from the values you keep"
+            "0": "Felder aus einem Dokument vorbelegen, das schon in der Akte liegt",
+            "1": "Jeden Wert prüfen und anpassen, bevor der Entwurf entsteht",
+            "2": "Bedingte Klauseln lösen sich weiterhin aus den übernommenen Werten"
           },
-          "heading": "Fill it from the matter's data"
+          "heading": "Aus den Daten der Akte befüllen"
         },
         "2": {
           "bullets": {
-            "0": "Author and adjust templates in the editor",
-            "1": "Produce the draft into a matter",
-            "2": "Keep editing the result alongside the matter's files"
+            "0": "Vorlagen im Editor anlegen und anpassen",
+            "1": "Den Entwurf in eine Akte erzeugen",
+            "2": "Am Ergebnis neben den Dateien der Akte weiterarbeiten"
           },
-          "heading": "Edit and produce in place"
+          "heading": "Bearbeiten und erzeugen an einem Ort"
         }
       }
     },
     "ui": {
-      "capabilities": "Capabilities",
-      "exploreMore": "Explore more",
-      "faq": "FAQ",
-      "inShort": "In short"
+      "capabilities": "Was es kann",
+      "exploreMore": "Mehr entdecken",
+      "faq": "Häufige Fragen",
+      "inShort": "Kurz gefasst"
     },
     "workspace": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "Chatten Sie über Akten, Dateien und angebundene Tools hinweg, mit Freigaben und Quellvorschauen."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Machen Sie aus einem Dokumentenbestand eine Tabelle im Rahmen der Akte, sortierbar, filterbar und nachvollziehbar."
         },
         "2": {
-          "body": "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools."
+          "body": "Erreichen Sie dieselben Akten, Dokumente und Rechtsprechung über die CLI und MCP-kompatible Werkzeuge."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella in maschinenlesbarer Form für KI-Suchmaschinen."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Organise documents, contacts, review, and chat around the matter they belong to. Everything added to a matter stays attached to it, searchable across the whole workspace, so the context is there when you come back.",
-          "title": "Matters"
+          "body": "Ordnen Sie Dokumente, Kontakte, Prüfung und Chat der Akte zu, zu der sie gehören. Alles, was in eine Akte kommt, bleibt daran hängen und ist im gesamten Arbeitsbereich durchsuchbar, sodass der Kontext da ist, wenn Sie zurückkommen.",
+          "title": "Akten"
         },
         "1": {
-          "body": "Open, edit, and review Word .docx documents directly in the workspace.",
-          "title": "Documents and .docx editing"
+          "body": "Öffnen, bearbeiten und prüfen Sie Word-.docx-Dokumente direkt im Arbeitsbereich.",
+          "title": "Dokumente und .docx-Bearbeitung"
         },
         "2": {
-          "body": "Run tabular review and research alongside the documents they relate to.",
-          "title": "Review and research"
+          "body": "Führen Sie Tabellenprüfung und Recherche neben den zugehörigen Dokumenten durch.",
+          "title": "Prüfung und Recherche"
         },
         "3": {
-          "body": "Bring the AI agent and knowledge tools into the same workspace as your files.",
-          "title": "Chat and knowledge tools"
+          "body": "Holen Sie den KI-Agenten und die Wissenswerkzeuge in denselben Arbeitsbereich wie Ihre Dateien.",
+          "title": "Chat und Wissenswerkzeuge"
         },
         "4": {
-          "body": "A desktop app acts as a local bridge for editing Office documents from stella.",
-          "title": "Desktop bridge"
+          "body": "Eine Desktop-App dient als lokale Brücke, um Office-Dokumente aus stella zu bearbeiten.",
+          "title": "Desktop-Brücke"
         },
         "5": {
-          "body": "Saved edits and uploads become document revisions, so the current file and its history stay together.",
-          "title": "Version history"
+          "body": "Gespeicherte Änderungen und Uploads werden zu Dokumentversionen, sodass die aktuelle Datei und ihre Historie beisammenbleiben.",
+          "title": "Versionshistorie"
         }
       },
       "cta": {
-        "heading": "Bring your matters into one workspace."
+        "heading": "Führen Sie Ihre Akten in einem Arbeitsbereich zusammen."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your machine.",
-          "question": "Can I edit Word documents in stella?"
+          "answer": "Ja. Die Web-App unterstützt die Bearbeitung und Prüfung von Word-.docx-Dokumenten. Für die lokale Office-Bearbeitung dient die Desktop-App als Brücke, sodass Sie ein Dokument aus stella öffnen und auf Ihrem Rechner bearbeiten.",
+          "question": "Kann ich Word-Dokumente in stella bearbeiten?"
         },
         "1": {
-          "answer": "Documents, contacts, review tables, chat threads, and document history. Everything added to a matter stays attached to it, so the context is there when you return.",
-          "question": "What lives inside a matter?"
+          "answer": "Dokumente, Kontakte, Prüftabellen, Chatverläufe und die Dokumenthistorie. Alles, was in eine Akte kommt, bleibt daran hängen, sodass der Kontext da ist, wenn Sie zurückkehren.",
+          "question": "Was steckt in einer Akte?"
         },
         "2": {
-          "answer": "Yes. The stella CLI and MCP server expose the same matters, documents, and case law to connected tools, under the same permissions. See CLI & MCP for details.",
-          "question": "Can other tools reach the workspace?"
+          "answer": "Ja. Die stella-CLI und der MCP-Server stellen angebundenen Werkzeugen dieselben Akten, Dokumente und Rechtsprechung bereit, unter denselben Berechtigungen. Details unter CLI & MCP.",
+          "question": "Können andere Werkzeuge auf den Arbeitsbereich zugreifen?"
         }
       },
-      "metaDescription": "Matters, documents, Word .docx editing, review, research, and chat in one legal workspace. The work stays in context from source material to answer.",
-      "metaTitle": "Legal matter management workspace | stella",
+      "metaDescription": "Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat in einem juristischen Arbeitsbereich, von den Unterlagen bis zur Antwort.",
+      "metaTitle": "Arbeitsbereich für die Aktenführung | stella",
       "quickAnswer": {
-        "answer": "A web app that holds matters, documents, Word .docx editing, review, research, and chat in one place. Everything added to a matter stays attached to it, so the context is there when you return. A companion desktop app acts as a local bridge when a document needs Microsoft Word.",
-        "question": "What is the stella workspace?"
+        "answer": "Eine Web-App, die Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat an einem Ort hält. Alles, was in eine Akte kommt, bleibt daran hängen, sodass der Kontext da ist, wenn Sie zurückkehren. Eine begleitende Desktop-App dient als lokale Brücke, wenn ein Dokument Microsoft Word braucht.",
+        "question": "Was ist der Arbeitsbereich von stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Documents, contacts, review, and chat live inside the matter",
-            "1": "Edit Word .docx documents without leaving the workspace",
-            "2": "Move between research, review, and chat without switching apps"
+            "0": "Dokumente, Kontakte, Prüfung und Chat liegen in der Akte",
+            "1": "Word-.docx-Dokumente bearbeiten, ohne den Arbeitsbereich zu verlassen",
+            "2": "Zwischen Recherche, Prüfung und Chat wechseln, ohne die App zu wechseln"
           },
-          "heading": "Everything for a matter, in one place"
+          "heading": "Die ganze Akte an einem Ort"
         },
         "1": {
           "bullets": {
-            "0": "Open and edit Word .docx documents directly in the workspace",
-            "1": "The redline stays a Word file: no conversion, no copies",
-            "2": "Use the desktop bridge when a document needs Microsoft Word"
+            "0": "Word-.docx-Dokumente direkt im Arbeitsbereich öffnen und bearbeiten",
+            "1": "Die Überarbeitung bleibt eine Word-Datei: keine Umwandlung, keine Kopien",
+            "2": "Die Desktop-Brücke nutzen, wenn ein Dokument Microsoft Word braucht"
           },
-          "heading": "Word documents, edited where you need them"
+          "heading": "Word-Dokumente, bearbeitet, wo sie hingehören"
         }
       }
     }

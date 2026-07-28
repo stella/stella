@@ -10,7 +10,7 @@
     "label": "Klauskite DI apie programą stella"
   },
   "common": {
-    "getCli": "Get the CLI",
+    "getCli": "Atsisiųskite CLI",
     "startFree": "Pradėkite nemokamai"
   },
   "demo": {
@@ -81,7 +81,7 @@
     "blog": "Tinklaraštis",
     "changelog": "Pakeitimų žurnalas",
     "chooseLanguage": "Pasirinkite kalbą",
-    "docxEditor": "Standalone DOCX editor",
+    "docxEditor": "Atskiras DOCX redaktorius",
     "github": "stella platformoje GitHub",
     "openMenu": "Atidaryti naršymo meniu",
     "pillars": {
@@ -138,705 +138,705 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Paverskite dokumentų rinkinį byloje esančia lentele, kurią galima rikiuoti, filtruoti ir atsekti."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "Bylos, dokumentai, .docx redagavimas, peržiūra ir pokalbiai vienoje darbo srityje."
         },
         "2": {
-          "body": "Read and search official case law, legal sources, and company registries."
+          "body": "Skaitykite ir ieškokite oficialioje teismų praktikoje, teisės šaltiniuose ir įmonių registruose."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Ask questions over the matters, documents, and contacts you already have in stella. One conversation can reach every matter you have access to, with the same permissions that govern the rest of your workspace.",
-          "title": "Works across your matters"
+          "body": "Klauskite apie bylas, dokumentus ir kontaktus, kuriuos jau turite programoje stella. Vienas pokalbis gali pasiekti kiekvieną jums prieinamą bylą, taikant tas pačias teises kaip ir visoje darbo srityje.",
+          "title": "Dirba su visomis jūsų bylomis"
         },
         "1": {
-          "body": "Bring documents into the conversation and ask the agent to read, compare, or summarise them.",
-          "title": "Reads your files"
+          "body": "Įtraukite dokumentus į pokalbį ir paprašykite agento juos perskaityti, palyginti ar apibendrinti.",
+          "title": "Skaito jūsų failus"
         },
         "2": {
-          "body": "Reach company registries and other connected sources without leaving the chat.",
-          "title": "Connected tools"
+          "body": "Pasiekite įmonių registrus ir kitus prijungtus šaltinius neišeidami iš pokalbio.",
+          "title": "Prijungti įrankiai"
         },
         "3": {
-          "body": "The agent asks before it acts, so you stay in control of each step.",
-          "title": "Approvals before acting"
+          "body": "Agentas paklausia prieš veikdamas, todėl kiekvieną žingsnį valdote jūs.",
+          "title": "Patvirtinimas prieš veiksmą"
         },
         "4": {
-          "body": "See what the agent is reading with a preview of the source behind each step.",
-          "title": "Source previews"
+          "body": "Matykite, ką agentas skaito: prie kiekvieno žingsnio rodoma šaltinio peržiūra.",
+          "title": "Šaltinių peržiūros"
         },
         "5": {
-          "body": "Answers link back to the source, and a citation opens the document at the exact passage.",
-          "title": "Grounded by citations"
+          "body": "Atsakymai veda atgal į šaltinį, o citata atveria dokumentą tiksliai toje vietoje.",
+          "title": "Pagrįsta citatomis"
         }
       },
       "cta": {
-        "heading": "Hand the agent a real matter."
+        "heading": "Patikėkite agentui tikrą bylą."
       },
       "faqs": {
         "0": {
-          "answer": "No. It asks for approval before it acts, and it shows a source preview for what it reads, so you can follow and confirm each step.",
-          "question": "Does the agent act on its own?"
+          "answer": "Ne. Prieš veikdamas jis paprašo patvirtinimo ir šaltinio peržiūroje parodo, ką skaito, todėl kiekvieną žingsnį galite sekti ir patvirtinti.",
+          "question": "Ar agentas veikia savarankiškai?"
         },
         "1": {
-          "answer": "Through skills (reusable prompts and tool definitions) and external connectors that are MCP-compatible. Both extend what the agent can reach without changing the chat itself.",
-          "question": "How do I add new capabilities?"
+          "answer": "Per gebėjimus (pakartotinai naudojamas užklausas ir įrankių aprašus) ir su MCP suderinamas išorines jungtis. Abu būdai praplečia tai, ką agentas pasiekia, nekeisdami paties pokalbio.",
+          "question": "Kaip pridėti naujų gebėjimų?"
         },
         "2": {
-          "answer": "From your matters, files, registries, and connected tools. AI features are bring-your-own-key, and answers are grounded by citations back to the source.",
-          "question": "Where do its answers come from?"
+          "answer": "Iš jūsų bylų, failų, registrų ir prijungtų įrankių. DI funkcijos veikia su jūsų pačių raktais, o atsakymai pagrįsti citatomis, vedančiomis atgal į šaltinį.",
+          "question": "Iš kur atsiranda jo atsakymai?"
         }
       },
-      "metaDescription": "Chat with your matters, documents, registries, and connected tools. The agent acts with approvals, grounds answers in citations, and extends via skills.",
-      "metaTitle": "AI agent for legal matters | stella",
+      "metaDescription": "Bendraukite su bylomis, dokumentais, registrais ir prijungtais įrankiais. Agentas veikia gavęs patvirtinimą, atsako su citatomis ir plečiasi gebėjimais.",
+      "metaTitle": "DI agentas teisinėms byloms | stella",
       "quickAnswer": {
-        "answer": "The agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
-        "question": "What can the AI agent do?"
+        "answer": "Agentas bendrauja su jūsų bylomis, failais, įmonių registrais ir prijungtais įrankiais. Prieš veikdamas paprašo patvirtinimo, šaltinio peržiūroje parodo, ką skaito, ir atsakymus grindžia citatomis. Jį galite praplėsti pakartotinai naudojamais gebėjimais ir su MCP suderinamomis išorinėmis jungtimis.",
+        "question": "Ką gali DI agentas?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Chat over matters, documents, and contacts in one conversation",
-            "1": "Pull company and registry data into the same thread",
-            "2": "Hand a tabular review to the agent for follow-up questions"
+            "0": "Kalbėkitės apie bylas, dokumentus ir kontaktus viename pokalbyje",
+            "1": "Įtraukite įmonių ir registrų duomenis į tą pačią giją",
+            "2": "Perduokite lentelinę peržiūrą agentui tolesniems klausimams"
           },
-          "heading": "Ask once, across everything in the matter"
+          "heading": "Vienas klausimas visai bylai"
         },
         "1": {
           "bullets": {
-            "0": "Each action waits for your approval before it runs",
-            "1": "A source preview shows what the agent read for every step",
-            "2": "Citations open the source document at the exact passage"
+            "0": "Kiekvienas veiksmas laukia jūsų patvirtinimo",
+            "1": "Šaltinio peržiūra parodo, ką agentas perskaitė kiekviename žingsnyje",
+            "2": "Citatos atveria šaltinio dokumentą tiksliai toje vietoje"
           },
-          "heading": "You stay in control"
+          "heading": "Kontrolė lieka jums"
         },
         "2": {
           "bullets": {
-            "0": "Skills are prompts and tool definitions you can reuse across matters",
-            "1": "External connectors are MCP-compatible, so the agent reaches more tools",
-            "2": "Add capabilities without changing how the chat works"
+            "0": "Gebėjimai yra užklausos ir įrankių aprašai, naudojami skirtingose bylose",
+            "1": "Išorinės jungtys suderinamos su MCP, todėl agentas pasiekia daugiau įrankių",
+            "2": "Pridėkite galimybių nekeisdami pokalbio veikimo"
           },
-          "heading": "Extend it with skills and connectors"
+          "heading": "Praplėskite jį gebėjimais ir jungtimis"
         }
       }
     },
     "anonymization": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "Bendraukite su bylomis, failais ir prijungtais įrankiais: su patvirtinimais ir šaltinių peržiūromis."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "Bylos, dokumentai, .docx redagavimas, peržiūra ir pokalbiai vienoje darbo srityje."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Paverskite dokumentų rinkinį byloje esančia lentele, kurią galima rikiuoti, filtruoti ir atsekti."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Removes names, entities, and identifying details before material reaches an AI step.",
-          "title": "Keeps identifying details out"
+          "body": "Pašalina vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepasiekė DI žingsnio.",
+          "title": "Identifikuojantys duomenys lieka nuošalyje"
         },
         "1": {
-          "body": "Runs directly in the chat composer and in document review, not in a separate tool.",
-          "title": "Works in chat and review"
+          "body": "Veikia tiesiai pokalbio lauke ir dokumentų peržiūroje, o ne atskirame įrankyje.",
+          "title": "Veikia pokalbyje ir peržiūroje"
         },
         "2": {
-          "body": "Add your organisation's terms and blacklists so the names that matter to you are always caught.",
-          "title": "Your terms included"
+          "body": "Pridėkite savo organizacijos terminus ir sąrašus, kad jums svarbūs vardai visada būtų aptikti.",
+          "title": "Su jūsų pačių terminais"
         },
         "3": {
-          "body": "Shows the redacted document in context, so you confirm what leaves the matter.",
-          "title": "Reviewable output"
+          "body": "Parodo paslėptą dokumentą kontekste, todėl patvirtinate, kas išeina iš bylos.",
+          "title": "Rezultatas, kurį patikrinsite"
         }
       },
       "cta": {
-        "heading": "Keep identifying details out of your AI workflows."
+        "heading": "Neįleiskite identifikuojančių duomenų į DI darbo eigas."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Anonymization is available today, integrated in chat and document review.",
-          "question": "Is anonymization available now?"
+          "answer": "Taip. Anonimizavimas veikia jau šiandien ir yra integruotas į pokalbį bei dokumentų peržiūrą.",
+          "question": "Ar anonimizavimas jau veikia?"
         },
         "1": {
-          "answer": "Preparing material for AI workflows without exposing names, entities, or identifying details, while keeping the redacted result available for review.",
-          "question": "What does it help with?"
+          "answer": "Paruošti medžiagą DI darbo eigoms neatskleidžiant vardų, subjektų ar identifikuojančių duomenų, o paslėptą rezultatą palikti peržiūrai.",
+          "question": "Kam jis padeda?"
         }
       },
-      "metaDescription": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
-      "metaTitle": "Document anonymization for legal AI | stella",
+      "metaDescription": "Pašalinkite vardus, subjektus ir identifikuojančius duomenis, kol medžiaga nepasiekė DI, tiesiai iš pokalbio ir peržiūros; rezultatą patikrinsite.",
+      "metaTitle": "Dokumentų anonimizavimas teisiniam DI | stella",
       "quickAnswer": {
-        "answer": "It removes names, entities, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
-        "question": "What is anonymization in stella?"
+        "answer": "Jis pašalina vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepateko į DI darbo eigą, ir parodo paslėptą rezultatą, kad patvirtintumėte, kas išeina iš bylos. Jis integruotas tiesiai į pokalbį ir dokumentų peržiūrą.",
+        "question": "Kas yra anonimizavimas programoje stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Keeps names, entities, and identifying details out of AI steps",
-            "1": "Built for legal AI workflows rather than generic document masking",
-            "2": "Leaves a reviewable redacted document before the next step"
+            "0": "Vardai, subjektai ir identifikuojantys duomenys nepatenka į DI žingsnius",
+            "1": "Sukurta teisinėms DI darbo eigoms, o ne bendram dokumentų slėpimui",
+            "2": "Prieš kitą žingsnį palieka paslėptą dokumentą peržiūrai"
           },
-          "heading": "Prepare material before it reaches AI"
+          "heading": "Paruoškite medžiagą prieš ją perduodami DI"
         },
         "1": {
           "bullets": {
-            "0": "Available from chat and document review",
-            "1": "No copy-pasting into an external redaction tool",
-            "2": "Built on stella's own open-source anonymization engine"
+            "0": "Pasiekiama iš pokalbio ir dokumentų peržiūros",
+            "1": "Nereikia nieko kopijuoti į išorinį slėpimo įrankį",
+            "2": "Veikia programos stella atvirojo kodo anonimizavimo varikliu"
           },
-          "heading": "Part of the workspace, not a separate tool"
+          "heading": "Darbo srities dalis, o ne atskiras įrankis"
         }
       }
     },
     "cli-mcp": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, review, and chat in one workspace."
+          "body": "Bylos, dokumentai, peržiūra ir pokalbiai vienoje darbo srityje."
         },
         "1": {
-          "body": "Work across matters and connected tools with approvals and citations."
+          "body": "Dirbkite su bylomis ir prijungtais įrankiais: su patvirtinimais ir citatomis."
         },
         "2": {
-          "body": "Fill reusable legal documents through the app, CLI, or connected tools."
+          "body": "Pildykite pakartotinai naudojamus teisinius dokumentus programoje, per CLI ar prijungtus įrankius."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Use generated commands such as stella search matters, document read, and template fill from scripts or your terminal.",
-          "title": "A real command line"
+          "body": "Naudokite sugeneruotas komandas, tokias kaip stella search matters, document read ir template fill, iš scenarijų arba terminalo.",
+          "title": "Tikra komandinė eilutė"
         },
         "1": {
-          "body": "Connect stella to MCP-compatible clients without building a separate integration for each one.",
-          "title": "MCP-compatible"
+          "body": "Prijunkite programą stella prie su MCP suderinamų klientų nekurdami atskiros integracijos kiekvienam.",
+          "title": "Suderinama su MCP"
         },
         "2": {
-          "body": "The CLI command surface is generated from the MCP tool registry, so the two interfaces stay aligned as stella evolves.",
-          "title": "One capability registry"
+          "body": "CLI komandos generuojamos iš MCP įrankių registro, todėl abi sąsajos išlieka suderintos programai stella tobulėjant.",
+          "title": "Vienas gebėjimų registras"
         },
         "3": {
-          "body": "Authentication scopes and workspace permissions remain the boundary, whichever interface you use.",
-          "title": "Workspace permissions apply"
+          "body": "Autentifikavimo apimtys ir darbo srities teisės lieka riba, kad ir kurią sąsają naudotumėte.",
+          "title": "Galioja darbo srities teisės"
         },
         "4": {
-          "body": "Commands return machine-readable JSON for scripts and agents as well as readable terminal output for people.",
-          "title": "Structured output"
+          "body": "Komandos grąžina mašinai skaitomą JSON scenarijams ir agentams bei įskaitomą terminalo išvestį žmonėms.",
+          "title": "Struktūruota išvestis"
         },
         "5": {
-          "body": "Point the CLI and MCP clients at the stella server your organisation operates.",
-          "title": "Self-host friendly"
+          "body": "Nukreipkite CLI ir MCP klientus į jūsų organizacijos valdomą stella serverį.",
+          "title": "Tinka talpinti patiems"
         }
       },
       "cta": {
-        "heading": "Bring stella into the tools where you already work."
+        "heading": "Turėkite programą stella ten, kur jau dirbate."
       },
       "faqs": {
         "0": {
-          "answer": "No. They are separate interfaces generated from the same capability registry and connected to the same stella server.",
-          "question": "Is the CLI a separate product from the MCP server?"
+          "answer": "Ne. Tai atskiros sąsajos, sugeneruotos iš to paties gebėjimų registro ir prijungtos prie to paties stella serverio.",
+          "question": "Ar CLI yra atskiras produktas nuo MCP serverio?"
         },
         "1": {
-          "answer": "Yes. The CLI supports structured JSON output, pagination, predictable exit codes, and non-interactive use suitable for automation.",
-          "question": "Can I use the CLI in scripts?"
+          "answer": "Taip. CLI palaiko struktūruotą JSON išvestį, puslapiavimą, nuspėjamus išėjimo kodus ir neinteraktyvų naudojimą, tinkamą automatizavimui.",
+          "question": "Ar galiu naudoti CLI scenarijuose?"
         },
         "2": {
-          "answer": "No. The server checks authentication scopes and stella permissions before a capability runs.",
-          "question": "Does connecting an MCP client bypass workspace permissions?"
+          "answer": "Ne. Serveris patikrina autentifikavimo apimtis ir programos stella teises prieš paleisdamas gebėjimą.",
+          "question": "Ar prijungus MCP klientą apeinamos darbo srities teisės?"
         }
       },
-      "metaDescription": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capabilities, permissions, and data.",
-      "metaTitle": "MCP server and CLI for your legal workspace | stella",
+      "metaDescription": "Ieškokite, skaitykite ir dirbkite su programa stella iš komandinės eilutės ar su MCP suderinamo kliento. Abi sąsajos dalijasi gebėjimais ir teisėmis.",
+      "metaTitle": "MCP serveris ir CLI teisinei darbo sričiai | stella",
       "quickAnswer": {
-        "answer": "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
-        "question": "What are the stella CLI and MCP server?"
+        "answer": "Tai dvi sąsajos į tuos pačius programos stella gebėjimus. CLI atkartoja MCP įrankių registrą kaip komandas, o MCP serveris leidžia suderinamiems agentams ir įrankiams dirbti su bylomis, dokumentais, šablonais ir viešais teisiniais duomenimis, taikant tas pačias prieigos taisykles.",
+        "question": "Kas yra programos stella CLI ir MCP serveris?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Find passages across matter documents with stella search matters",
-            "1": "Read documents, list matters, and inspect templates without switching context",
-            "2": "Use paginated, structured results in scripts and automated workflows"
+            "0": "Raskite teksto vietas bylos dokumentuose su stella search matters",
+            "1": "Skaitykite dokumentus, peržiūrėkite bylų sąrašą ir šablonus nekeisdami konteksto",
+            "2": "Naudokite puslapiuotus struktūruotus rezultatus scenarijuose ir automatizuotose darbo eigose"
           },
-          "heading": "Search the whole matter from your terminal"
+          "heading": "Ieškokite visoje byloje tiesiai iš terminalo"
         },
         "1": {
           "bullets": {
-            "0": "Expose matters, documents, case law, templates, and other approved tools",
-            "1": "Keep the capability catalogue and CLI commands generated from one registry",
-            "2": "Connect compatible agents without copying legal data into another workspace"
+            "0": "Atverkite bylas, dokumentus, teismų praktiką, šablonus ir kitus patvirtintus įrankius",
+            "1": "Gebėjimų katalogas ir CLI komandos generuojami iš vieno registro",
+            "2": "Prijunkite suderinamus agentus nekopijuodami teisinių duomenų į kitą darbo sritį"
           },
-          "heading": "The same capabilities through MCP"
+          "heading": "Tie patys gebėjimai per MCP"
         }
       }
     },
     "editor": {
       "adjacent": {
         "0": {
-          "body": "See where matters, documents, and tools live together."
+          "body": "Pažiūrėkite, kur bylos, dokumentai ir įrankiai laikomi kartu."
         },
         "1": {
-          "body": "Create reusable Word documents with fields and conditional clauses."
+          "body": "Kurkite pakartotinai naudojamus Word dokumentus su laukais ir sąlyginėmis nuostatomis."
         },
         "2": {
-          "body": "Try the same editor on its own: open and edit a .docx in the browser, no account needed."
+          "body": "Išbandykite tą patį redaktorių atskirai: atverkite ir redaguokite .docx naršyklėje, paskyros nereikia."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Open and edit Word documents directly in stella's online editor: no install, and no converting the file into a separate proprietary format.",
-          "title": "Edit .docx files in the browser"
+          "body": "Atverkite ir redaguokite Word dokumentus tiesiai programos stella internetiniame redaktoriuje: be diegimo ir be konvertavimo į atskirą nuosavybinį formatą.",
+          "title": "Redaguokite .docx failus naršyklėje"
         },
         "1": {
-          "body": "The document stays a .docx throughout, so fonts, styles, and layout render and save the way Word created them.",
-          "title": "Formatting stays intact"
+          "body": "Dokumentas visą laiką lieka .docx, todėl šriftai, stiliai ir maketas rodomi bei įrašomi taip, kaip juos sukūrė Word.",
+          "title": "Formatavimas išlieka"
         },
         "2": {
-          "body": "Tracked insertions and deletions render in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
-          "title": "Track changes"
+          "body": "Sekami intarpai ir išbraukimai rodomi vietoje, o DI pasiūlyti taisymai atkeliauja kaip sekami keitimai, kuriuos dokumente priimate arba atmetate.",
+          "title": "Keitimų sekimas"
         },
         "3": {
-          "body": "Saved edits become document revisions, so the current file and its full history stay together.",
-          "title": "Version history for every save"
+          "body": "Įrašyti pakeitimai tampa dokumento versijomis, todėl dabartinis failas ir visa jo istorija lieka kartu.",
+          "title": "Versijų istorija kiekvienam įrašymui"
         },
         "4": {
-          "body": "The document remains attached to its matter, alongside its files, properties, tasks, and conversations.",
-          "title": "Matter context stays visible"
+          "body": "Dokumentas lieka susietas su savo byla, šalia jos failų, savybių, užduočių ir pokalbių.",
+          "title": "Bylos kontekstas visada matomas"
         },
         "5": {
-          "body": "Use the desktop bridge when a document needs Microsoft Word, then return the updated file to the same matter.",
-          "title": "Local Office bridge"
+          "body": "Kai dokumentui reikia Microsoft Word, pasitelkite tiltą į kompiuterį ir grąžinkite atnaujintą failą į tą pačią bylą.",
+          "title": "Tiltas į vietinį Office"
         }
       },
       "cta": {
-        "heading": "Edit a Word document in its matter."
+        "heading": "Redaguokite Word dokumentą tiesiai jo byloje."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The document is edited where it lives, alongside the matter's other files, properties, tasks, and conversations, so no local copy is downloaded and re-uploaded to make a change.",
-          "question": "Does the document stay attached to its matter while I edit?"
+          "answer": "Taip. Dokumentas redaguojamas ten, kur jis laikomas, šalia kitų bylos failų, savybių, užduočių ir pokalbių, todėl pakeitimui nereikia atsisiųsti vietinės kopijos ir jos vėl įkelti.",
+          "question": "Ar redaguojamas dokumentas lieka susietas su byla?"
         },
         "1": {
-          "answer": "Yes. Tracked insertions and deletions render in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
-          "question": "Does the editor keep track changes?"
+          "answer": "Taip. Sekami intarpai ir išbraukimai rodomi vietoje, taip pat kaip juos rodo Word. Programos stella DI pasiūlyti taisymai atkeliauja tokiu pat pavidalu, todėl taisymai peržiūrimi ir priimami arba atmetami dar prieš tapdami dokumento dalimi.",
+          "question": "Ar redaktorius išlaiko keitimų sekimą?"
         },
         "2": {
-          "answer": "The saved file remains connected to the same matter and document, and the save becomes a revision in that document's version history.",
-          "question": "What happens when I save?"
+          "answer": "Įrašytas failas lieka susietas su ta pačia byla ir dokumentu, o įrašymas tampa versija to dokumento versijų istorijoje.",
+          "question": "Kas nutinka įrašius?"
         },
         "3": {
-          "answer": "Yes. Saved revisions stay in the document's version history, so the current file and the ones it replaced remain together on the same document.",
-          "question": "Can I get back to an earlier revision?"
+          "answer": "Taip. Įrašytos versijos lieka dokumento versijų istorijoje, todėl dabartinis failas ir tie, kuriuos jis pakeitė, lieka kartu prie to paties dokumento.",
+          "question": "Ar galiu grįžti prie ankstesnės versijos?"
         },
         "4": {
-          "answer": "Yes. The stella desktop bridge opens the document in local Office for Word-specific workflows and returns the edited file to the same matter.",
-          "question": "Can I open the same document in Microsoft Word?"
+          "answer": "Taip. Programos stella tiltas į kompiuterį atveria dokumentą vietiniame Office, kai reikia Word būdingų veiksmų, ir grąžina suredaguotą failą į tą pačią bylą.",
+          "question": "Ar galiu tą patį dokumentą atverti su Microsoft Word?"
         },
         "5": {
-          "answer": "Yes. The document is part of its matter's context, so matter-aware tools can read it and propose edits as tracked changes in the same document.",
-          "question": "Can stella's AI work on the document I am editing?"
+          "answer": "Taip. Dokumentas yra bylos konteksto dalis, todėl bylą matantys įrankiai gali jį perskaityti ir pasiūlyti taisymus kaip sekamus keitimus tame pačiame dokumente.",
+          "question": "Ar programos stella DI gali dirbti su redaguojamu dokumentu?"
         }
       },
-      "metaDescription": "Edit a matter's Word documents inside stella: track changes reviewed in place, a revision in the version history for every save, and a bridge to local Word.",
-      "metaTitle": "Editing Word Documents in Your Legal Workspace | stella",
+      "metaDescription": "Redaguokite bylos Word dokumentus programoje stella: keitimų sekimas vietoje, kiekvienas įrašymas kaip versija istorijoje ir tiltas į vietinį Word.",
+      "metaTitle": "Word dokumentų redagavimas byloje | stella",
       "quickAnswer": {
-        "answer": "Yes. Open a .docx file from a matter and edit it in the browser. stella keeps the document in its original Word format and records saved revisions in the same document's version history.",
-        "question": "Can I edit Word documents in stella?"
+        "answer": "Taip. Atverkite .docx failą iš bylos ir redaguokite jį naršyklėje. stella išlaiko dokumentą pirminiu Word formatu, o įrašytas versijas registruoja to paties dokumento versijų istorijoje.",
+        "question": "Ar galiu redaguoti Word dokumentus programoje stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Open a .docx directly from a matter",
-            "1": "Edit the document with familiar page and formatting controls",
-            "2": "Review track changes in place, including edits proposed by AI",
-            "3": "Keep the original Word file format",
-            "4": "Save changes into the document's version history"
+            "0": "Atverkite .docx tiesiai iš bylos",
+            "1": "Redaguokite dokumentą įprastais puslapio ir formatavimo valdikliais",
+            "2": "Peržiūrėkite sekamus keitimus vietoje, įskaitant DI pasiūlytus taisymus",
+            "3": "Išlaikykite pirminį Word failo formatą",
+            "4": "Įrašykite pakeitimus į dokumento versijų istoriją"
           },
-          "heading": "The .docx stays a .docx"
+          "heading": "Iš .docx lieka .docx"
         },
         "1": {
           "bullets": {
-            "0": "Move between the document and its matter without uploading copies",
-            "1": "Keep document properties and revisions with the file",
-            "2": "Open the same document through the desktop bridge when needed",
-            "3": "Use the document as context for matter-aware tools"
+            "0": "Judėkite tarp dokumento ir jo bylos neįkeldami kopijų",
+            "1": "Laikykite dokumento savybes ir versijas kartu su failu",
+            "2": "Prireikus atverkite tą patį dokumentą per tiltą į kompiuterį",
+            "3": "Naudokite dokumentą kaip kontekstą bylą matantiems įrankiams"
           },
-          "heading": "Connected to the rest of the matter"
+          "heading": "Susieta su likusia bylos dalimi"
         }
       }
     },
     "public-data": {
       "adjacent": {
         "0": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "Paruoškite jautrią medžiagą DI neatskleisdami identifikuojančių duomenų."
         },
         "1": {
-          "body": "Chat across matters, files, and sources with approvals and citations."
+          "body": "Bendraukite su bylomis, failais ir šaltiniais: su patvirtinimais ir citatomis."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Paverskite dokumentų rinkinį byloje esančia peržiūros lentele."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Decisions from official public legal sources, not scraped third-party summaries.",
-          "title": "Official case law"
+          "body": "Sprendimai iš oficialių viešų teisės šaltinių, o ne iš trečiųjų šalių santraukų.",
+          "title": "Oficiali teismų praktika"
         },
         "1": {
-          "body": "Legal Atlas parses each decision while keeping its original structure intact.",
-          "title": "Structure preserved"
+          "body": "Legal Atlas išanalizuoja kiekvieną sprendimą išsaugodamas jo pirminę struktūrą.",
+          "title": "Su išsaugota struktūra"
         },
         "2": {
-          "body": "Typed clients for national company and commercial registries, queried from a matter.",
-          "title": "Company registries"
+          "body": "Tipizuotos jungtys su nacionaliniais įmonių ir komerciniais registrais, užklausiamos tiesiai iš bylos.",
+          "title": "Įmonių registrai"
         },
         "3": {
-          "body": "Move between a decision and the cases it cites without leaving the reader.",
-          "title": "Follow citations"
+          "body": "Judėkite tarp sprendimo ir jo cituojamų bylų neišeidami iš skaityklės.",
+          "title": "Sekite citatas"
         },
         "4": {
-          "body": "Browse and filter case law and registries scoped to the jurisdiction you work in.",
-          "title": "By jurisdiction"
+          "body": "Naršykite ir filtruokite teismų praktiką bei registrus pagal jurisdikciją, kurioje dirbate.",
+          "title": "Pagal jurisdikciją"
         },
         "5": {
-          "body": "Reference any source from a matter so the agent's answers stay traceable to it.",
-          "title": "Grounded for AI"
+          "body": "Remkitės bet kuriuo šaltiniu byloje, kad agento atsakymai liktų iki jo atsekami.",
+          "title": "Pagrindas DI atsakymams"
         }
       },
       "cta": {
-        "heading": "Bring official legal data into your matters."
+        "heading": "Turėkite oficialius teisinius duomenis savo bylose."
       },
       "faqs": {
         "0": {
-          "answer": "Case law comes from official public legal sources, ingested and parsed by stella's Legal Atlas stack. Company data comes from national company and commercial registries through typed clients, not third-party copies.",
-          "question": "Where does the data come from?"
+          "answer": "Teismų praktika gaunama iš oficialių viešų teisės šaltinių, kuriuos surenka ir išanalizuoja programos stella Legal Atlas. Įmonių duomenys gaunami iš nacionalinių įmonių ir komercinių registrų per tipizuotas jungtis, o ne iš trečiųjų šalių kopijų.",
+          "question": "Iš kur gaunami duomenys?"
         },
         "1": {
-          "answer": "Two lists, both expanding. Typed registry clients already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources surface per jurisdiction from stella's connector catalogue; Czechia, Spain, and Taiwan, for example, already have connected sources, and the case-law reader is built to browse and filter by jurisdiction as more official sources are added.",
-          "question": "Which jurisdictions and registries are covered?"
+          "answer": "Du sąrašai, abu vis plečiami. Tipizuotos registrų jungtys jau apima ARES (Čekija), Companies House (Jungtinė Karalystė), SEC EDGAR (JAV), KRS (Lenkija), PRH (Suomija) ir VIES (ES PVM). Be registrų, oficialūs šaltiniai pateikiami pagal jurisdikciją iš programos stella jungčių katalogo; pavyzdžiui, Čekija, Ispanija ir Taivanas jau turi prijungtų šaltinių, o teismų praktikos skaityklė sukurta naršyti ir filtruoti pagal jurisdikciją, prijungiant vis daugiau oficialių šaltinių.",
+          "question": "Kokios jurisdikcijos ir registrai apimami?"
         },
         "2": {
-          "answer": "Yes. Public data referenced from a matter becomes a grounded source: the AI agent cites the underlying decision or record so its answers stay traceable.",
-          "question": "Can the AI use this data?"
+          "answer": "Taip. Vieši duomenys, į kuriuos remiamasi byloje, tampa pagrįstu šaltiniu: DI agentas cituoja patį sprendimą ar įrašą, todėl jo atsakymai lieka atsekami.",
+          "question": "Ar DI gali naudoti šiuos duomenis?"
         }
       },
-      "metaDescription": "Case law and company registries from official public sources. Read decisions, look up companies, follow citations, and pull it into a matter or the AI agent.",
-      "metaTitle": "Case law and company registry data | stella",
+      "metaDescription": "Teismų praktika ir įmonių registrai iš oficialių viešų šaltinių. Skaitykite sprendimus, tikrinkite įmones, sekite citatas ir įtraukite juos į bylą.",
+      "metaTitle": "Teismų praktika ir įmonių registrai | stella",
       "quickAnswer": {
-        "answer": "Two kinds. Official public case law, ingested and structure-parsed so you can read and search decisions and follow their citations. And typed access to national company and commercial registries, so you can pull official company data straight into a matter. Both are grounded sources the AI agent can cite.",
-        "question": "What public data does stella bring in?"
+        "answer": "Dviejų rūšių. Oficiali vieša teismų praktika, surinkta ir struktūriškai išanalizuota, todėl galite skaityti sprendimus, jų ieškoti ir sekti citatas. Ir tipizuota prieiga prie nacionalinių įmonių bei komercinių registrų, kad oficialius įmonių duomenis įtrauktumėte tiesiai į bylą. Abu yra pagrįsti šaltiniai, kuriuos DI agentas gali cituoti.",
+        "question": "Kokius viešus duomenis pateikia stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Collected from official public legal sources",
-            "1": "Structure-preserving parsers keep headings, paragraphs, and references",
-            "2": "Built on the open Legal Atlas ingestion stack"
+            "0": "Surinkta iš oficialių viešų teisės šaltinių",
+            "1": "Struktūrą išsaugantys analizatoriai palieka antraštes, punktus ir nuorodas",
+            "2": "Remiasi atvira Legal Atlas duomenų surinkimo sistema"
           },
-          "heading": "Case law from official sources, parsed with structure intact"
+          "heading": "Teismų praktika iš oficialių šaltinių su išsaugota struktūra"
         },
         "1": {
           "bullets": {
-            "0": "Typed clients for national registries: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES, and more",
-            "1": "Pull official company data into a matter instead of copying it by hand",
-            "2": "Coverage expands as more official sources are added"
+            "0": "Tipizuotos jungtys su nacionaliniais registrais: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES ir kitais",
+            "1": "Įtraukite oficialius įmonių duomenis į bylą, užuot juos perrašinėję ranka",
+            "2": "Aprėptis plečiasi prijungiant vis daugiau oficialių šaltinių"
           },
-          "heading": "Company and commercial registries, queried from a matter"
+          "heading": "Įmonių ir komerciniai registrai, užklausiami tiesiai iš bylos"
         },
         "2": {
           "bullets": {
-            "0": "Reference a decision or company record from a matter",
-            "1": "The agent cites the underlying source, not a paraphrase",
-            "2": "Search across sources, not just within one"
+            "0": "Remkitės sprendimu ar įmonės įrašu tiesiai byloje",
+            "1": "Agentas cituoja patį šaltinį, o ne perpasakojimą",
+            "2": "Ieškokite per visus šaltinius, o ne tik viename"
           },
-          "heading": "One grounded source for the agent"
+          "heading": "Vienas patikimas pagrindas agentui"
         }
       }
     },
     "tabular-review": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected sources with approvals and source previews."
+          "body": "Bendraukite su bylomis, failais ir prijungtais šaltiniais: su patvirtinimais ir šaltinių peržiūromis."
         },
         "1": {
-          "body": "Official case law and company registries, pulled into a matter."
+          "body": "Oficiali teismų praktika ir įmonių registrai, įtraukiami tiesiai į bylą."
         },
         "2": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "Paruoškite jautrią medžiagą DI neatskleisdami identifikuojančių duomenų."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Define a column in plain language; stella answers it for every document in the set.",
-          "title": "Columns are questions"
+          "body": "Stulpelį apibrėžkite paprasta kalba, o stella atsakys į jį kiekvienam rinkinio dokumentui.",
+          "title": "Stulpeliai yra klausimai"
         },
         "1": {
-          "body": "Each cell links to the exact passage it was extracted from, so you can verify in one click.",
-          "title": "Cited to the source"
+          "body": "Kiekvienas langelis veda į tikslią teksto vietą, iš kurios paimtas, todėl patikrinsite vienu spustelėjimu.",
+          "title": "Su nuoroda į šaltinį"
         },
         "2": {
-          "body": "Reviews live inside a matter alongside the documents, contacts, and chat they relate to.",
-          "title": "Matter-scoped"
+          "body": "Peržiūros laikomos byloje, šalia su jomis susijusių dokumentų, kontaktų ir pokalbių.",
+          "title": "Bylos ribose"
         },
         "3": {
-          "body": "Treat answers like data: sort by any column, filter to the rows that need attention.",
-          "title": "Sort and filter"
+          "body": "Atsakymus traktuokite kaip duomenis: rikiuokite pagal bet kurį stulpelį, filtruokite iki dėmesio reikalaujančių eilučių.",
+          "title": "Rikiavimas ir filtrai"
         },
         "4": {
-          "body": "Run the same questions across large document sets instead of opening files one by one.",
-          "title": "Built for scale"
+          "body": "Užduokite tuos pačius klausimus dideliems dokumentų rinkiniams, užuot atvertę failus po vieną.",
+          "title": "Pritaikyta dideliems kiekiams"
         },
         "5": {
-          "body": "Take the table with you in standard formats — no lock-in on your own work product.",
-          "title": "Export anywhere"
+          "body": "Pasiimkite lentelę su savimi standartiniais formatais: jokio pririšimo prie savo pačių darbo rezultato.",
+          "title": "Eksportas kur panorėsite"
         }
       },
       "cta": {
-        "heading": "Review your next document set in stella."
+        "heading": "Kitą dokumentų rinkinį peržiūrėkite programoje stella."
       },
       "faqs": {
         "0": {
-          "answer": "Anything you would ask a person reviewing the document: factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
-          "question": "What kinds of questions can a column ask?"
+          "answer": "Bet kokius, kokius užduotumėte dokumentą peržiūrinčiam žmogui: faktinius, pavyzdžiui, datas, šalis ir sumas, arba vertinamuosius, pavyzdžiui, ar nuostata yra ir kaip ji suformuluota. Atsakymai grąžinami pagrįsti citatomis iš pirminio teksto.",
+          "question": "Kokius klausimus gali užduoti stulpelis?"
         },
         "1": {
-          "answer": "From the documents in your matter. AI features are bring-your-own-key, so extraction runs through the AI provider you configure, and every answer links back to the passage it was drawn from.",
-          "question": "Where do the answers come from?"
+          "answer": "Iš jūsų bylos dokumentų. DI funkcijos veikia su jūsų pačių raktais, todėl duomenys išgaunami per jūsų sukonfigūruotą DI tiekėją, o kiekvienas atsakymas veda atgal į teksto vietą, iš kurios paimtas.",
+          "question": "Iš kur atsiranda atsakymai?"
         },
         "2": {
-          "answer": "Yes. Tabular Review output is exportable in standard formats, so your work product stays portable with no lock-in.",
-          "question": "Can I export the review?"
+          "answer": "Taip. Lentelinės peržiūros rezultatą galima eksportuoti standartiniais formatais, todėl jūsų darbo rezultatas lieka perkeliamas, be pririšimo.",
+          "question": "Ar galiu eksportuoti peržiūrą?"
         }
       },
-      "metaDescription": "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.",
-      "metaTitle": "Tabular document review for due diligence | stella",
+      "metaDescription": "Užduokite klausimus visam dokumentų rinkiniui ir gaukite struktūruotus atsakymus rikiuojamoje, iki šaltinio atsekamoje lentelėje. Skirta due diligence.",
+      "metaTitle": "Lentelinė dokumentų peržiūra due diligence | stella",
       "quickAnswer": {
-        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions — for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.",
-        "question": "How does Tabular Review work?"
+        "answer": "Lentelinę peržiūrą nukreipiate į byloje esantį dokumentų rinkinį ir stulpelius apibrėžiate kaip klausimus, pavyzdžiui, „taikytina teisė“, „įspėjimo apie nutraukimą terminas“ ar „kontrolės pasikeitimo nuostata“. stella kiekvienam dokumentui išgauna atsakymą į lentelę, kurią galite rikiuoti, filtruoti ir eksportuoti, o kiekvienas langelis veda atgal į teksto vietą, iš kurios kilęs.",
+        "question": "Kaip veikia lentelinė peržiūra?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Add a column by writing the question you would ask a junior",
-            "1": "Reuse column sets across matters for repeatable review playbooks",
-            "2": "Mix extraction (dates, parties, amounts) with judgement questions"
+            "0": "Pridėkite stulpelį įrašę klausimą, kurį užduotumėte jaunesniajam kolegai",
+            "1": "Naudokite tuos pačius stulpelių rinkinius kitose bylose kaip peržiūros metodikas",
+            "2": "Derinkite faktų išgavimą (datos, šalys, sumos) su vertinamaisiais klausimais"
           },
-          "heading": "Define the questions once, answer them everywhere"
+          "heading": "Klausimus apibrėžkite kartą, atsakymai bus visur"
         },
         "1": {
           "bullets": {
-            "0": "Click a cell to open the source document at the cited passage",
-            "1": "Answers are grounded by citations, not free-floating summaries",
-            "2": "Spot disagreements across documents at a glance"
+            "0": "Spustelėję langelį atversite šaltinio dokumentą ties cituojama vieta",
+            "1": "Atsakymai pagrįsti citatomis, o ne laisvai plaukiojančiomis santraukomis",
+            "2": "Vienu žvilgsniu pastebėkite dokumentų neatitikimus"
           },
-          "heading": "Every answer traces back to the text"
+          "heading": "Kiekvienas atsakymas veda atgal į tekstą"
         },
         "2": {
           "bullets": {
-            "0": "Reviews are scoped to a matter, next to its files and chat",
-            "1": "Hand a review to the AI agent for follow-up questions",
-            "2": "Export the table or keep refining it in place"
+            "0": "Peržiūros priskirtos bylai, šalia jos failų ir pokalbių",
+            "1": "Perduokite peržiūrą DI agentui tolesniems klausimams",
+            "2": "Eksportuokite lentelę arba toliau ją tikslinkite vietoje"
           },
-          "heading": "It lives where the work lives"
+          "heading": "Ten, kur vyksta darbas"
         }
       }
     },
     "templates": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, and Word editing in one place."
+          "body": "Bylos, dokumentai ir Word redagavimas vienoje vietoje."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "Paverskite dokumentų rinkinį byloje esančia peržiūros lentele."
         },
         "2": {
-          "body": "Chat across matters, files, and sources with citations."
+          "body": "Bendraukite su bylomis, failais ir šaltiniais, gaudami citatas."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Start repeat documents from a known-good base instead of a copied file.",
-          "title": "Reusable templates"
+          "body": "Pasikartojančius dokumentus pradėkite nuo patikimo pagrindo, o ne nuo nukopijuoto failo.",
+          "title": "Pakartotinai naudojami šablonai"
         },
         "1": {
-          "body": "Define the values a document needs and fill them in when you assemble it.",
-          "title": "Fields and placeholders"
+          "body": "Apibrėžkite dokumentui reikalingas reikšmes ir įrašykite jas rengdami dokumentą.",
+          "title": "Laukai ir vietaženkliai"
         },
         "2": {
-          "body": "Include or omit clauses based on the values you provide, so a template covers variants.",
-          "title": "Conditional clauses"
+          "body": "Įtraukite arba praleiskite nuostatas pagal pateiktas reikšmes, kad vienas šablonas apimtų kelis variantus.",
+          "title": "Sąlyginės nuostatos"
         },
         "3": {
-          "body": "Let stella draft a filled document from a matter's data, then refine it.",
-          "title": "Fill with AI"
+          "body": "Leiskite programai stella parengti užpildytą dokumentą iš bylos duomenų ir jį patikslinkite.",
+          "title": "Užpildymas su DI"
         },
         "4": {
-          "body": "Author and adjust templates in the editor, then assemble from them.",
-          "title": "Edit in place"
+          "body": "Kurkite ir koreguokite šablonus redaktoriuje, o paskui iš jų renkite dokumentus.",
+          "title": "Redagavimas vietoje"
         },
         "5": {
-          "body": "Produce a draft into a matter and keep editing it alongside the rest of the work.",
-          "title": "Into a matter"
+          "body": "Sukurkite projektą tiesiai byloje ir toliau jį redaguokite šalia viso kito darbo.",
+          "title": "Tiesiai į bylą"
         }
       },
       "cta": {
-        "heading": "Start from a template, not a blank page."
+        "heading": "Pradėkite nuo šablono, o ne nuo tuščio lapo."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Templates are authored and adjusted in the editor, then you assemble documents from them.",
-          "question": "Can I edit a template?"
+          "answer": "Taip. Šablonai kuriami ir koreguojami redaktoriuje, o paskui iš jų renkate dokumentus.",
+          "question": "Ar galiu redaguoti šabloną?"
         },
         "1": {
-          "answer": "A reusable piece of a document. Clauses can be included across templates and added conditionally based on the values you provide when assembling.",
-          "question": "What is a clause?"
+          "answer": "Pakartotinai naudojama dokumento dalis. Nuostatas galima įtraukti į skirtingus šablonus ir pridėti pagal sąlygas, priklausomai nuo rengiant pateiktų reikšmių.",
+          "question": "Kas yra nuostata?"
         },
         "2": {
-          "answer": "Into a matter, as a draft you can keep editing alongside the rest of the matter's documents.",
-          "question": "Where does the assembled document go?"
+          "answer": "Byloje, kaip projektas, kurį galite toliau redaguoti šalia kitų bylos dokumentų.",
+          "question": "Kur atsiduria parengtas dokumentas?"
         }
       },
-      "metaDescription": "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. Produce a document into the matter.",
-      "metaTitle": "Legal document templates with AI drafting | stella",
+      "metaDescription": "Apibrėžkite šabloną su laukais ir sąlyginėmis nuostatomis, užpildykite ranka arba leiskite programai stella parengti jį iš bylos duomenų, tiesiai byloje.",
+      "metaTitle": "Teisinių dokumentų šablonai su DI | stella",
       "quickAnswer": {
-        "answer": "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the conditional clauses resolve, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
-        "question": "How do templates work in stella?"
+        "answer": "Šablonas yra dokumentas su laukais ir nuostatomis, kurias galima įtraukti pagal sąlygas. Laukus užpildote ranka arba leidžiate programai stella parengti juos iš bylos duomenų; sąlyginės nuostatos išsisprendžia, ir gaunate dokumentą, su kuriuo toliau dirbate byloje. Šablonai ir nuostatos naudojami pakartotinai, todėl pasikartojantys dokumentai pradedami nuo patikimo pagrindo.",
+        "question": "Kaip veikia šablonai programoje stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Assemble a document from a template instead of starting blank",
-            "1": "Reuse clauses across templates",
-            "2": "Keep repeat documents consistent"
+            "0": "Dokumentą surinkite iš šablono, o ne pradėkite nuo tuščio lapo",
+            "1": "Naudokite tas pačias nuostatas skirtinguose šablonuose",
+            "2": "Išlaikykite pasikartojančius dokumentus nuoseklius"
           },
-          "heading": "Build from templates and clauses"
+          "heading": "Statykite iš šablonų ir nuostatų"
         },
         "1": {
           "bullets": {
-            "0": "Prefill fields from a document already stored in the matter",
-            "1": "Review and adjust every value before producing the draft",
-            "2": "Conditional clauses still resolve from the values you keep"
+            "0": "Iš anksto užpildykite laukus iš byloje jau esančio dokumento",
+            "1": "Prieš rengdami projektą peržiūrėkite ir pakoreguokite kiekvieną reikšmę",
+            "2": "Sąlyginės nuostatos išsisprendžia pagal paliktas reikšmes"
           },
-          "heading": "Fill it from the matter's data"
+          "heading": "Užpildykite jį bylos duomenimis"
         },
         "2": {
           "bullets": {
-            "0": "Author and adjust templates in the editor",
-            "1": "Produce the draft into a matter",
-            "2": "Keep editing the result alongside the matter's files"
+            "0": "Kurkite ir koreguokite šablonus redaktoriuje",
+            "1": "Sukurkite projektą tiesiai byloje",
+            "2": "Toliau redaguokite rezultatą šalia bylos failų"
           },
-          "heading": "Edit and produce in place"
+          "heading": "Redaguokite ir kurkite vietoje"
         }
       }
     },
     "ui": {
-      "capabilities": "Capabilities",
-      "exploreMore": "Explore more",
-      "faq": "FAQ",
-      "inShort": "In short"
+      "capabilities": "Galimybės",
+      "exploreMore": "Sužinokite daugiau",
+      "faq": "Dažni klausimai",
+      "inShort": "Trumpai"
     },
     "workspace": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "Bendraukite su bylomis, failais ir prijungtais įrankiais: su patvirtinimais ir šaltinių peržiūromis."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "Paverskite dokumentų rinkinį byloje esančia lentele, kurią galima rikiuoti, filtruoti ir atsekti."
         },
         "2": {
-          "body": "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools."
+          "body": "Pasiekite tas pačias bylas, dokumentus ir teismų praktiką iš CLI ir su MCP suderinamų įrankių."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella mašinai skaitomu formatu DI paieškos sistemoms."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Organise documents, contacts, review, and chat around the matter they belong to. Everything added to a matter stays attached to it, searchable across the whole workspace, so the context is there when you come back.",
-          "title": "Matters"
+          "body": "Tvarkykite dokumentus, kontaktus, peržiūrą ir pokalbius aplink bylą, kuriai jie priklauso. Viskas, kas įtraukta į bylą, lieka prie jos ir randama visoje darbo srityje, todėl grįžę rasite visą kontekstą.",
+          "title": "Bylos"
         },
         "1": {
-          "body": "Open, edit, and review Word .docx documents directly in the workspace.",
-          "title": "Documents and .docx editing"
+          "body": "Atverkite, redaguokite ir peržiūrėkite Word .docx dokumentus tiesiai darbo srityje.",
+          "title": "Dokumentai ir .docx redagavimas"
         },
         "2": {
-          "body": "Run tabular review and research alongside the documents they relate to.",
-          "title": "Review and research"
+          "body": "Atlikite lentelinę peržiūrą ir teisinę paiešką šalia susijusių dokumentų.",
+          "title": "Peržiūra ir paieška"
         },
         "3": {
-          "body": "Bring the AI agent and knowledge tools into the same workspace as your files.",
-          "title": "Chat and knowledge tools"
+          "body": "Turėkite DI agentą ir žinių įrankius toje pačioje darbo srityje kaip ir failus.",
+          "title": "Pokalbiai ir žinių įrankiai"
         },
         "4": {
-          "body": "A desktop app acts as a local bridge for editing Office documents from stella.",
-          "title": "Desktop bridge"
+          "body": "Kompiuterio programa veikia kaip vietinis tiltas Office dokumentams redaguoti iš programos stella.",
+          "title": "Tiltas į kompiuterį"
         },
         "5": {
-          "body": "Saved edits and uploads become document revisions, so the current file and its history stay together.",
-          "title": "Version history"
+          "body": "Įrašyti pakeitimai ir įkelti failai tampa dokumento versijomis, todėl dabartinis failas ir jo istorija lieka kartu.",
+          "title": "Versijų istorija"
         }
       },
       "cta": {
-        "heading": "Bring your matters into one workspace."
+        "heading": "Suneškite visas bylas į vieną darbo sritį."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your machine.",
-          "question": "Can I edit Word documents in stella?"
+          "answer": "Taip. Žiniatinklio programa leidžia redaguoti ir peržiūrėti Word .docx failus. Vietiniam redagavimui su Office kompiuterio programa veikia kaip tiltas: dokumentą atveriate iš programos stella ir redaguojate savo įrenginyje.",
+          "question": "Ar galiu redaguoti Word dokumentus programoje stella?"
         },
         "1": {
-          "answer": "Documents, contacts, review tables, chat threads, and document history. Everything added to a matter stays attached to it, so the context is there when you return.",
-          "question": "What lives inside a matter?"
+          "answer": "Dokumentai, kontaktai, peržiūros lentelės, pokalbių gijos ir dokumentų istorija. Viskas, kas įtraukta į bylą, lieka prie jos, todėl grįžę rasite visą kontekstą.",
+          "question": "Kas telpa vienoje byloje?"
         },
         "2": {
-          "answer": "Yes. The stella CLI and MCP server expose the same matters, documents, and case law to connected tools, under the same permissions. See CLI & MCP for details.",
-          "question": "Can other tools reach the workspace?"
+          "answer": "Taip. Programos stella CLI ir MCP serveris prijungtiems įrankiams atveria tas pačias bylas, dokumentus ir teismų praktiką, taikydami tas pačias teises. Daugiau rasite skiltyje CLI & MCP.",
+          "question": "Ar darbo sritį gali pasiekti kiti įrankiai?"
         }
       },
-      "metaDescription": "Matters, documents, Word .docx editing, review, research, and chat in one legal workspace. The work stays in context from source material to answer.",
-      "metaTitle": "Legal matter management workspace | stella",
+      "metaDescription": "Bylos, dokumentai, Word .docx redagavimas, peržiūra, paieška ir pokalbiai vienoje teisinėje darbo srityje. Kontekstas išlieka nuo šaltinių iki atsakymo.",
+      "metaTitle": "Teisinių bylų valdymas vienoje vietoje | stella",
       "quickAnswer": {
-        "answer": "A web app that holds matters, documents, Word .docx editing, review, research, and chat in one place. Everything added to a matter stays attached to it, so the context is there when you return. A companion desktop app acts as a local bridge when a document needs Microsoft Word.",
-        "question": "What is the stella workspace?"
+        "answer": "Žiniatinklio programa, kurioje vienoje vietoje telpa bylos, dokumentai, Word .docx redagavimas, peržiūra, paieška ir pokalbiai. Viskas, kas įtraukta į bylą, lieka prie jos, todėl grįžę rasite visą kontekstą. Kai dokumentui reikia Microsoft Word, kompiuterio programa veikia kaip vietinis tiltas.",
+        "question": "Kas yra programos stella darbo sritis?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Documents, contacts, review, and chat live inside the matter",
-            "1": "Edit Word .docx documents without leaving the workspace",
-            "2": "Move between research, review, and chat without switching apps"
+            "0": "Dokumentai, kontaktai, peržiūra ir pokalbiai laikomi byloje",
+            "1": "Redaguokite Word .docx dokumentus neišeidami iš darbo srities",
+            "2": "Pereikite tarp paieškos, peržiūros ir pokalbių nekeisdami programų"
           },
-          "heading": "Everything for a matter, in one place"
+          "heading": "Visa byla vienoje vietoje"
         },
         "1": {
           "bullets": {
-            "0": "Open and edit Word .docx documents directly in the workspace",
-            "1": "The redline stays a Word file: no conversion, no copies",
-            "2": "Use the desktop bridge when a document needs Microsoft Word"
+            "0": "Atverkite ir redaguokite Word .docx dokumentus tiesiai darbo srityje",
+            "1": "Taisymai lieka Word faile: be konvertavimo ir be kopijų",
+            "2": "Kai dokumentui reikia Microsoft Word, pasitelkite tiltą į kompiuterį"
           },
-          "heading": "Word documents, edited where you need them"
+          "heading": "Word dokumentai redaguojami ten, kur jų reikia"
         }
       }
     }

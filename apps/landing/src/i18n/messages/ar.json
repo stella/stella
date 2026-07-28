@@ -10,7 +10,7 @@
     "label": "اسأل الذكاء الاصطناعي عن stella"
   },
   "common": {
-    "getCli": "Get the CLI",
+    "getCli": "احصل على CLI",
     "startFree": "ابدأ مجاناً"
   },
   "demo": {
@@ -81,7 +81,7 @@
     "blog": "المدونة",
     "changelog": "آخر التحديثات",
     "chooseLanguage": "اختر اللغة",
-    "docxEditor": "Standalone DOCX editor",
+    "docxEditor": "محرر DOCX مستقل",
     "github": "stella على GitHub",
     "openMenu": "فتح قائمة التنقل",
     "pillars": {
@@ -138,705 +138,705 @@
     "agent": {
       "adjacent": {
         "0": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "حوّل مجموعة مستندات إلى جدول ضمن الملف القانوني يمكنك فرزه وتصفيته وتتبّعه."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "الملفات القانونية والمستندات وتحرير المستندات بصيغة .docx والمراجعة والمحادثة في مساحة عمل واحدة."
         },
         "2": {
-          "body": "Read and search official case law, legal sources, and company registries."
+          "body": "اقرأ وابحث في الاجتهاد القضائي الرسمي والمصادر القانونية والسجلات التجارية."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella بصيغة مقروءة آليًا لمحركات البحث المدعومة بالذكاء الاصطناعي."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Ask questions over the matters, documents, and contacts you already have in stella. One conversation can reach every matter you have access to, with the same permissions that govern the rest of your workspace.",
-          "title": "Works across your matters"
+          "body": "اطرح أسئلتك على الملفات القانونية والمستندات وجهات الاتصال الموجودة لديك في stella. تكفي محادثة واحدة للوصول إلى كل ملف قانوني تملك صلاحية الاطلاع عليه، بالصلاحيات نفسها التي تحكم بقية مساحة العمل.",
+          "title": "يعمل عبر ملفاتك القانونية"
         },
         "1": {
-          "body": "Bring documents into the conversation and ask the agent to read, compare, or summarise them.",
-          "title": "Reads your files"
+          "body": "أدرِج المستندات في المحادثة واطلب من الوكيل قراءتها أو مقارنتها أو تلخيصها.",
+          "title": "يقرأ مستنداتك"
         },
         "2": {
-          "body": "Reach company registries and other connected sources without leaving the chat.",
-          "title": "Connected tools"
+          "body": "استعلم من السجلات التجارية ومن المصادر المتصلة الأخرى دون مغادرة المحادثة.",
+          "title": "أدوات متصلة"
         },
         "3": {
-          "body": "The agent asks before it acts, so you stay in control of each step.",
-          "title": "Approvals before acting"
+          "body": "يستأذنك الوكيل قبل أن يتصرّف، فتبقى كل خطوة تحت سيطرتك.",
+          "title": "موافقتك قبل التنفيذ"
         },
         "4": {
-          "body": "See what the agent is reading with a preview of the source behind each step.",
-          "title": "Source previews"
+          "body": "شاهد ما يقرأه الوكيل عبر معاينة المصدر وراء كل خطوة.",
+          "title": "معاينة المصادر"
         },
         "5": {
-          "body": "Answers link back to the source, and a citation opens the document at the exact passage.",
-          "title": "Grounded by citations"
+          "body": "تعود كل إجابة إلى مصدرها، ويفتح الاستشهاد المستند عند الفقرة المطلوبة تماماً.",
+          "title": "إجابات موثّقة بالمصادر"
         }
       },
       "cta": {
-        "heading": "Hand the agent a real matter."
+        "heading": "سلّم الوكيل ملفاً قانونياً حقيقياً."
       },
       "faqs": {
         "0": {
-          "answer": "No. It asks for approval before it acts, and it shows a source preview for what it reads, so you can follow and confirm each step.",
-          "question": "Does the agent act on its own?"
+          "answer": "لا. يطلب موافقتك قبل أن يتصرّف، ويعرض معاينة للمصدر الذي يقرأه، فتتابع كل خطوة وتؤكدها.",
+          "question": "هل يتصرّف الوكيل من تلقاء نفسه؟"
         },
         "1": {
-          "answer": "Through skills (reusable prompts and tool definitions) and external connectors that are MCP-compatible. Both extend what the agent can reach without changing the chat itself.",
-          "question": "How do I add new capabilities?"
+          "answer": "عبر المهارات (توجيهات وتعريفات أدوات قابلة لإعادة الاستخدام) وعبر الموصّلات الخارجية المتوافقة مع MCP. كلاهما يوسّع ما يصل إليه الوكيل من دون تغيير المحادثة نفسها.",
+          "question": "كيف أضيف قدرات جديدة؟"
         },
         "2": {
-          "answer": "From your matters, files, registries, and connected tools. AI features are bring-your-own-key, and answers are grounded by citations back to the source.",
-          "question": "Where do its answers come from?"
+          "answer": "من ملفاتك القانونية ومستنداتك ومن السجلات والأدوات المتصلة. تعمل ميزات الذكاء الاصطناعي بمفاتيحك الخاصة، وتُسنَد الإجابات إلى استشهادات تعود إلى المصدر.",
+          "question": "من أين تأتي إجاباته؟"
         }
       },
-      "metaDescription": "Chat with your matters, documents, registries, and connected tools. The agent acts with approvals, grounds answers in citations, and extends via skills.",
-      "metaTitle": "AI agent for legal matters | stella",
+      "metaDescription": "تحدّث مع ملفاتك القانونية ومستنداتك والسجلات والأدوات المتصلة. يتصرّف الوكيل بموافقتك، ويُسند إجاباته إلى الاستشهادات، ويتوسّع عبر المهارات.",
+      "metaTitle": "وكيل ذكاء اصطناعي للملفات القانونية | stella",
       "quickAnswer": {
-        "answer": "The agent chats with your matters, files, company registries, and connected tools. It asks for approval before acting, shows a source preview for what it reads, and grounds answers in citations. You can extend it with reusable skills and external connectors that are MCP-compatible.",
-        "question": "What can the AI agent do?"
+        "answer": "يتحدّث الوكيل مع ملفاتك القانونية ومستنداتك والسجلات التجارية والأدوات المتصلة. يطلب موافقتك قبل التنفيذ، ويعرض معاينة للمصدر الذي يقرأه، ويُسند إجاباته إلى الاستشهادات. ويمكنك توسيعه بمهارات قابلة لإعادة الاستخدام وبموصّلات خارجية متوافقة مع MCP.",
+        "question": "ماذا يستطيع وكيل الذكاء الاصطناعي أن يفعل؟"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Chat over matters, documents, and contacts in one conversation",
-            "1": "Pull company and registry data into the same thread",
-            "2": "Hand a tabular review to the agent for follow-up questions"
+            "0": "الملفات القانونية والمستندات وجهات الاتصال في محادثة واحدة",
+            "1": "استقدم بيانات الشركات والسجلات إلى المحادثة نفسها",
+            "2": "سلّم المراجعة الجدولية إلى الوكيل لطرح أسئلة المتابعة"
           },
-          "heading": "Ask once, across everything in the matter"
+          "heading": "اسأل مرة واحدة، عبر كل ما في الملف القانوني"
         },
         "1": {
           "bullets": {
-            "0": "Each action waits for your approval before it runs",
-            "1": "A source preview shows what the agent read for every step",
-            "2": "Citations open the source document at the exact passage"
+            "0": "كل إجراء ينتظر موافقتك قبل تنفيذه",
+            "1": "معاينة المصدر تُظهر ما قرأه الوكيل في كل خطوة",
+            "2": "الاستشهادات تفتح المستند المصدر عند الفقرة المطلوبة تماماً"
           },
-          "heading": "You stay in control"
+          "heading": "التحكم يبقى بيدك"
         },
         "2": {
           "bullets": {
-            "0": "Skills are prompts and tool definitions you can reuse across matters",
-            "1": "External connectors are MCP-compatible, so the agent reaches more tools",
-            "2": "Add capabilities without changing how the chat works"
+            "0": "المهارات توجيهات وتعريفات أدوات تعيد استخدامها عبر الملفات القانونية",
+            "1": "الموصّلات الخارجية متوافقة مع MCP، فيصل الوكيل إلى أدوات أكثر",
+            "2": "أضف قدرات جديدة دون تغيير طريقة عمل المحادثة"
           },
-          "heading": "Extend it with skills and connectors"
+          "heading": "وسّعه بالمهارات والموصّلات"
         }
       }
     },
     "anonymization": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "تحدّث عبر الملفات القانونية والمستندات والأدوات المتصلة، بموافقتك ومع معاينة المصادر."
         },
         "1": {
-          "body": "Matters, documents, .docx editing, review, and chat in one workspace."
+          "body": "الملفات القانونية والمستندات وتحرير المستندات بصيغة .docx والمراجعة والمحادثة في مساحة عمل واحدة."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "حوّل مجموعة مستندات إلى جدول ضمن الملف القانوني يمكنك فرزه وتصفيته وتتبّعه."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella بصيغة مقروءة آليًا لمحركات البحث المدعومة بالذكاء الاصطناعي."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Removes names, entities, and identifying details before material reaches an AI step.",
-          "title": "Keeps identifying details out"
+          "body": "يزيل الأسماء والكيانات والتفاصيل التعريفية قبل أن تصل المواد إلى أي خطوة ذكاء اصطناعي.",
+          "title": "إبقاء التفاصيل التعريفية بعيداً"
         },
         "1": {
-          "body": "Runs directly in the chat composer and in document review, not in a separate tool.",
-          "title": "Works in chat and review"
+          "body": "يعمل مباشرة في محرّر رسائل المحادثة وفي مراجعة المستندات، لا في أداة منفصلة.",
+          "title": "يعمل في المحادثة والمراجعة"
         },
         "2": {
-          "body": "Add your organisation's terms and blacklists so the names that matter to you are always caught.",
-          "title": "Your terms included"
+          "body": "أضف مصطلحات مؤسستك وقوائم الحظر لديها ليُلتقط دائماً ما يهمّك من الأسماء.",
+          "title": "مصطلحاتك مشمولة"
         },
         "3": {
-          "body": "Shows the redacted document in context, so you confirm what leaves the matter.",
-          "title": "Reviewable output"
+          "body": "يعرض المستند المحجوب في سياقه لتؤكد ما يغادر الملف القانوني.",
+          "title": "نتيجة قابلة للمراجعة"
         }
       },
       "cta": {
-        "heading": "Keep identifying details out of your AI workflows."
+        "heading": "أبقِ التفاصيل التعريفية خارج مسارات عملك مع الذكاء الاصطناعي."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Anonymization is available today, integrated in chat and document review.",
-          "question": "Is anonymization available now?"
+          "answer": "نعم. إخفاء الهوية متاح اليوم، مدمجاً في المحادثة وفي مراجعة المستندات.",
+          "question": "هل إخفاء الهوية متاح الآن؟"
         },
         "1": {
-          "answer": "Preparing material for AI workflows without exposing names, entities, or identifying details, while keeping the redacted result available for review.",
-          "question": "What does it help with?"
+          "answer": "في تجهيز المواد لمسارات عمل الذكاء الاصطناعي دون كشف الأسماء أو الكيانات أو التفاصيل التعريفية، مع إبقاء النتيجة المحجوبة متاحة للمراجعة.",
+          "question": "فيمَ يفيد؟"
         }
       },
-      "metaDescription": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
-      "metaTitle": "Document anonymization for legal AI | stella",
+      "metaDescription": "أزل الأسماء والكيانات والتفاصيل التعريفية قبل أن تصل المواد إلى الذكاء الاصطناعي، مباشرة من المحادثة ومن مراجعة المستندات، مع نتيجة محجوبة تراجعها.",
+      "metaTitle": "إخفاء هوية المستندات للذكاء الاصطناعي القانوني | stella",
       "quickAnswer": {
-        "answer": "It removes names, entities, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
-        "question": "What is anonymization in stella?"
+        "answer": "يزيل الأسماء والكيانات والتفاصيل التعريفية قبل دخول المواد إلى مسار عمل الذكاء الاصطناعي، ويعرض عليك النتيجة المحجوبة لتؤكد ما يغادر الملف القانوني. وهو مدمج مباشرة في المحادثة وفي مراجعة المستندات.",
+        "question": "ما إخفاء الهوية في stella؟"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Keeps names, entities, and identifying details out of AI steps",
-            "1": "Built for legal AI workflows rather than generic document masking",
-            "2": "Leaves a reviewable redacted document before the next step"
+            "0": "الأسماء والكيانات والتفاصيل التعريفية خارج خطوات الذكاء الاصطناعي",
+            "1": "مصمَّم لمسارات العمل القانونية لا لحجب عام للمستندات",
+            "2": "يترك مستنداً محجوباً قابلاً للمراجعة قبل الخطوة التالية"
           },
-          "heading": "Prepare material before it reaches AI"
+          "heading": "جهّز المواد قبل أن تبلغ الذكاء الاصطناعي"
         },
         "1": {
           "bullets": {
-            "0": "Available from chat and document review",
-            "1": "No copy-pasting into an external redaction tool",
-            "2": "Built on stella's own open-source anonymization engine"
+            "0": "متاح من المحادثة ومن مراجعة المستندات",
+            "1": "بلا نسخ ولصق في أداة حجب خارجية",
+            "2": "مبني على محرك stella المفتوح المصدر لإخفاء الهوية"
           },
-          "heading": "Part of the workspace, not a separate tool"
+          "heading": "جزء من مساحة العمل لا أداة منفصلة"
         }
       }
     },
     "cli-mcp": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, review, and chat in one workspace."
+          "body": "الملفات القانونية والمستندات والمراجعة والمحادثة في مساحة عمل واحدة."
         },
         "1": {
-          "body": "Work across matters and connected tools with approvals and citations."
+          "body": "اعمل عبر الملفات القانونية والأدوات المتصلة، بموافقتك ومع الاستشهادات."
         },
         "2": {
-          "body": "Fill reusable legal documents through the app, CLI, or connected tools."
+          "body": "املأ مستندات قانونية قابلة لإعادة الاستخدام من التطبيق أو سطر الأوامر أو الأدوات المتصلة."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella بصيغة مقروءة آليًا لمحركات البحث المدعومة بالذكاء الاصطناعي."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Use generated commands such as stella search matters, document read, and template fill from scripts or your terminal.",
-          "title": "A real command line"
+          "body": "استخدم أوامر مولَّدة مثل: stella search matters، document read، template fill، من البرامج النصية أو من طرفيتك.",
+          "title": "سطر أوامر حقيقي"
         },
         "1": {
-          "body": "Connect stella to MCP-compatible clients without building a separate integration for each one.",
-          "title": "MCP-compatible"
+          "body": "اربط stella بالعملاء المتوافقين مع MCP دون بناء تكامل منفصل لكل واحد منهم.",
+          "title": "متوافق مع MCP"
         },
         "2": {
-          "body": "The CLI command surface is generated from the MCP tool registry, so the two interfaces stay aligned as stella evolves.",
-          "title": "One capability registry"
+          "body": "تُولَّد أوامر سطر الأوامر من سجل أدوات MCP، فتبقى الواجهتان متوائمتين مع تطوّر stella.",
+          "title": "سجل قدرات واحد"
         },
         "3": {
-          "body": "Authentication scopes and workspace permissions remain the boundary, whichever interface you use.",
-          "title": "Workspace permissions apply"
+          "body": "تظل نطاقات المصادقة وصلاحيات مساحة العمل هي الحدّ الفاصل، أياً كانت الواجهة التي تستخدمها.",
+          "title": "صلاحيات مساحة العمل سارية"
         },
         "4": {
-          "body": "Commands return machine-readable JSON for scripts and agents as well as readable terminal output for people.",
-          "title": "Structured output"
+          "body": "تعيد الأوامر JSON مقروءاً آلياً للبرامج النصية والوكلاء، ومخرجات طرفية مقروءة للبشر.",
+          "title": "مخرجات منظّمة"
         },
         "5": {
-          "body": "Point the CLI and MCP clients at the stella server your organisation operates.",
-          "title": "Self-host friendly"
+          "body": "وجّه سطر الأوامر وعملاء MCP إلى خادم stella الذي تشغّله مؤسستك.",
+          "title": "ملائم للاستضافة الذاتية"
         }
       },
       "cta": {
-        "heading": "Bring stella into the tools where you already work."
+        "heading": "أدخِل stella إلى الأدوات التي تعمل بها أصلاً."
       },
       "faqs": {
         "0": {
-          "answer": "No. They are separate interfaces generated from the same capability registry and connected to the same stella server.",
-          "question": "Is the CLI a separate product from the MCP server?"
+          "answer": "لا. هما واجهتان مختلفتان مولَّدتان من سجل القدرات نفسه ومتصلتان بخادم stella نفسه.",
+          "question": "هل سطر الأوامر منتج منفصل عن خادم MCP؟"
         },
         "1": {
-          "answer": "Yes. The CLI supports structured JSON output, pagination, predictable exit codes, and non-interactive use suitable for automation.",
-          "question": "Can I use the CLI in scripts?"
+          "answer": "نعم. يدعم سطر الأوامر مخرجات JSON منظّمة، وتقسيم النتائج إلى صفحات، ورموز خروج متوقّعة، واستخداماً غير تفاعلي يناسب الأتمتة.",
+          "question": "هل أستطيع استخدام سطر الأوامر في البرامج النصية؟"
         },
         "2": {
-          "answer": "No. The server checks authentication scopes and stella permissions before a capability runs.",
-          "question": "Does connecting an MCP client bypass workspace permissions?"
+          "answer": "لا. يتحقق الخادم من نطاقات المصادقة ومن صلاحيات stella قبل تنفيذ أي قدرة.",
+          "question": "هل يتجاوز ربط عميل MCP صلاحيات مساحة العمل؟"
         }
       },
-      "metaDescription": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capabilities, permissions, and data.",
-      "metaTitle": "MCP server and CLI for your legal workspace | stella",
+      "metaDescription": "ابحث واقرأ واعمل مع stella من سطر الأوامر أو من أي عميل متوافق مع MCP. تتشارك الواجهتان سجل القدرات نفسه والصلاحيات وبيانات مساحة العمل نفسها.",
+      "metaTitle": "خادم MCP وسطر أوامر لمساحة عملك القانونية | stella",
       "quickAnswer": {
-        "answer": "They are two interfaces to the same stella capabilities. The CLI mirrors the MCP tool registry as commands, while the MCP server lets compatible agents and tools work with matters, documents, templates, and public legal data under the same access controls.",
-        "question": "What are the stella CLI and MCP server?"
+        "answer": "هما واجهتان لقدرات stella نفسها. يعكس سطر الأوامر سجل أدوات MCP في صورة أوامر، بينما يتيح خادم MCP للوكلاء والأدوات المتوافقة العمل مع الملفات القانونية والمستندات والقوالب والبيانات القانونية العامة ضمن ضوابط الوصول نفسها.",
+        "question": "ما سطر أوامر stella وخادم MCP؟"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Find passages across matter documents with stella search matters",
-            "1": "Read documents, list matters, and inspect templates without switching context",
-            "2": "Use paginated, structured results in scripts and automated workflows"
+            "0": "اعثر على الفقرات في مستندات الملف القانوني بأمر stella search matters",
+            "1": "اقرأ المستندات، واسرد الملفات القانونية، وافحص القوالب دون تبديل السياق",
+            "2": "استخدم نتائج منظّمة ومقسّمة إلى صفحات في البرامج النصية ومسارات العمل الآلية"
           },
-          "heading": "Search the whole matter from your terminal"
+          "heading": "ابحث في الملف القانوني كله من طرفيتك"
         },
         "1": {
           "bullets": {
-            "0": "Expose matters, documents, case law, templates, and other approved tools",
-            "1": "Keep the capability catalogue and CLI commands generated from one registry",
-            "2": "Connect compatible agents without copying legal data into another workspace"
+            "0": "أتِح الملفات القانونية والمستندات والاجتهاد القضائي والقوالب وسائر الأدوات المعتمدة",
+            "1": "يبقى كتالوج القدرات وأوامر سطر الأوامر مولَّدين من سجل واحد",
+            "2": "اربط الوكلاء المتوافقين دون نسخ البيانات القانونية إلى مساحة عمل أخرى"
           },
-          "heading": "The same capabilities through MCP"
+          "heading": "القدرات نفسها عبر MCP"
         }
       }
     },
     "editor": {
       "adjacent": {
         "0": {
-          "body": "See where matters, documents, and tools live together."
+          "body": "شاهد أين تجتمع الملفات القانونية والمستندات والأدوات."
         },
         "1": {
-          "body": "Create reusable Word documents with fields and conditional clauses."
+          "body": "أنشئ مستندات Word قابلة لإعادة الاستخدام بحقول وبنود شرطية."
         },
         "2": {
-          "body": "Try the same editor on its own: open and edit a .docx in the browser, no account needed."
+          "body": "جرّب المحرر نفسه بمفرده: افتح ملفاً بصيغة .docx وحرّره في المتصفح، بلا حاجة إلى حساب."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella بصيغة مقروءة آليًا لمحركات البحث المدعومة بالذكاء الاصطناعي."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Open and edit Word documents directly in stella's online editor: no install, and no converting the file into a separate proprietary format.",
-          "title": "Edit .docx files in the browser"
+          "body": "افتح مستندات Word وحرّرها مباشرة في محرر stella عبر الإنترنت: بلا تثبيت وبلا تحويل الملف إلى صيغة احتكارية منفصلة.",
+          "title": "حرّر ملفات .docx في المتصفح"
         },
         "1": {
-          "body": "The document stays a .docx throughout, so fonts, styles, and layout render and save the way Word created them.",
-          "title": "Formatting stays intact"
+          "body": "يظل المستند بصيغة .docx طوال الوقت، فتُعرَض الخطوط والأنماط والتخطيط وتُحفظ كما أنشأها Word.",
+          "title": "التنسيق يبقى كما هو"
         },
         "2": {
-          "body": "Tracked insertions and deletions render in place, and AI-proposed edits arrive as tracked changes you accept or reject in the document.",
-          "title": "Track changes"
+          "body": "تظهر الإضافات والحذوفات المتعقَّبة في مواضعها، وتصل التعديلات التي يقترحها الذكاء الاصطناعي كتغييرات متعقَّبة تقبلها أو ترفضها داخل المستند.",
+          "title": "تتبّع التغييرات"
         },
         "3": {
-          "body": "Saved edits become document revisions, so the current file and its full history stay together.",
-          "title": "Version history for every save"
+          "body": "تصبح التعديلات المحفوظة إصدارات من المستند، فيبقى الملف الحالي وتاريخه الكامل معاً.",
+          "title": "سجل إصدارات مع كل حفظ"
         },
         "4": {
-          "body": "The document remains attached to its matter, alongside its files, properties, tasks, and conversations.",
-          "title": "Matter context stays visible"
+          "body": "يبقى المستند مرتبطاً بملفه القانوني، إلى جانب ملفاته وخصائصه ومهامه ومحادثاته.",
+          "title": "سياق الملف القانوني حاضر"
         },
         "5": {
-          "body": "Use the desktop bridge when a document needs Microsoft Word, then return the updated file to the same matter.",
-          "title": "Local Office bridge"
+          "body": "استخدم جسر تطبيق سطح المكتب حين يحتاج المستند إلى Microsoft Word، ثم أعد الملف المحدَّث إلى الملف القانوني نفسه.",
+          "title": "جسر إلى Office المحلي"
         }
       },
       "cta": {
-        "heading": "Edit a Word document in its matter."
+        "heading": "حرّر مستند Word داخل ملفه القانوني."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The document is edited where it lives, alongside the matter's other files, properties, tasks, and conversations, so no local copy is downloaded and re-uploaded to make a change.",
-          "question": "Does the document stay attached to its matter while I edit?"
+          "answer": "نعم. يُحرَّر المستند حيث يوجد، إلى جانب بقية ملفات الملف القانوني وخصائصه ومهامه ومحادثاته، فلا تُنزَّل نسخة محلية وتُرفع من جديد لإجراء تعديل.",
+          "question": "هل يبقى المستند مرتبطاً بملفه القانوني أثناء التحرير؟"
         },
         "1": {
-          "answer": "Yes. Tracked insertions and deletions render in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
-          "question": "Does the editor keep track changes?"
+          "answer": "نعم. تظهر الإضافات والحذوفات المتعقَّبة في مواضعها كما يعرضها Word. وتصل التعديلات التي يقترحها الذكاء الاصطناعي في stella بالطريقة نفسها، فيُراجَع التعديل ويُقبل أو يُرفض قبل أن يصير جزءاً من المستند.",
+          "question": "هل يحافظ المحرر على تتبّع التغييرات؟"
         },
         "2": {
-          "answer": "The saved file remains connected to the same matter and document, and the save becomes a revision in that document's version history.",
-          "question": "What happens when I save?"
+          "answer": "يظل الملف المحفوظ متصلاً بالملف القانوني نفسه وبالمستند نفسه، ويصبح الحفظ إصداراً في سجل إصدارات ذلك المستند.",
+          "question": "ماذا يحدث عند الحفظ؟"
         },
         "3": {
-          "answer": "Yes. Saved revisions stay in the document's version history, so the current file and the ones it replaced remain together on the same document.",
-          "question": "Can I get back to an earlier revision?"
+          "answer": "نعم. تبقى الإصدارات المحفوظة في سجل إصدارات المستند، فيظل الملف الحالي والملفات التي حلّ محلها معاً على المستند نفسه.",
+          "question": "هل يمكنني العودة إلى إصدار سابق؟"
         },
         "4": {
-          "answer": "Yes. The stella desktop bridge opens the document in local Office for Word-specific workflows and returns the edited file to the same matter.",
-          "question": "Can I open the same document in Microsoft Word?"
+          "answer": "نعم. يفتح جسر تطبيق stella لسطح المكتب المستند في Office المحلي لمسارات العمل الخاصة بـ Word، ويعيد الملف المحرَّر إلى الملف القانوني نفسه.",
+          "question": "هل أستطيع فتح المستند نفسه في Microsoft Word؟"
         },
         "5": {
-          "answer": "Yes. The document is part of its matter's context, so matter-aware tools can read it and propose edits as tracked changes in the same document.",
-          "question": "Can stella's AI work on the document I am editing?"
+          "answer": "نعم. المستند جزء من سياق ملفه القانوني، فتستطيع الأدوات المدركة للملف القانوني قراءته واقتراح تعديلات كتغييرات متعقَّبة في المستند نفسه.",
+          "question": "هل يمكن للذكاء الاصطناعي في stella العمل على المستند الذي أحرّره؟"
         }
       },
-      "metaDescription": "Edit a matter's Word documents inside stella: track changes reviewed in place, a revision in the version history for every save, and a bridge to local Word.",
-      "metaTitle": "Editing Word Documents in Your Legal Workspace | stella",
+      "metaDescription": "حرّر مستندات Word في ملفك القانوني داخل stella: تغييرات متعقَّبة تُراجَع في مواضعها، وإصدار جديد في سجل الإصدارات مع كل حفظ، وجسر إلى Word المحلي.",
+      "metaTitle": "تحرير مستندات Word في مساحة عملك القانونية | stella",
       "quickAnswer": {
-        "answer": "Yes. Open a .docx file from a matter and edit it in the browser. stella keeps the document in its original Word format and records saved revisions in the same document's version history.",
-        "question": "Can I edit Word documents in stella?"
+        "answer": "نعم. افتح ملفاً بصيغة .docx من ملف قانوني وحرّره في المتصفح. تُبقي stella المستند بصيغة Word الأصلية وتسجّل الإصدارات المحفوظة في سجل إصدارات المستند نفسه.",
+        "question": "هل أستطيع تحرير مستندات Word في stella؟"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Open a .docx directly from a matter",
-            "1": "Edit the document with familiar page and formatting controls",
-            "2": "Review track changes in place, including edits proposed by AI",
-            "3": "Keep the original Word file format",
-            "4": "Save changes into the document's version history"
+            "0": "افتح ملف .docx مباشرة من الملف القانوني",
+            "1": "حرّر المستند بأدوات صفحات وتنسيق مألوفة",
+            "2": "راجع التغييرات المتعقَّبة في مواضعها، بما فيها ما يقترحه الذكاء الاصطناعي",
+            "3": "احتفظ بصيغة ملف Word الأصلية",
+            "4": "احفظ التغييرات في سجل إصدارات المستند"
           },
-          "heading": "The .docx stays a .docx"
+          "heading": "يبقى ملف .docx كما هو"
         },
         "1": {
           "bullets": {
-            "0": "Move between the document and its matter without uploading copies",
-            "1": "Keep document properties and revisions with the file",
-            "2": "Open the same document through the desktop bridge when needed",
-            "3": "Use the document as context for matter-aware tools"
+            "0": "انتقل بين المستند وملفه القانوني دون رفع نسخ",
+            "1": "تبقى خصائص المستند وإصداراته مع الملف",
+            "2": "افتح المستند نفسه عبر جسر سطح المكتب عند الحاجة",
+            "3": "استخدم المستند سياقاً للأدوات المدركة للملف القانوني"
           },
-          "heading": "Connected to the rest of the matter"
+          "heading": "متصل ببقية الملف القانوني"
         }
       }
     },
     "public-data": {
       "adjacent": {
         "0": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "جهّز المواد الحساسة للذكاء الاصطناعي دون كشف التفاصيل التعريفية."
         },
         "1": {
-          "body": "Chat across matters, files, and sources with approvals and citations."
+          "body": "تحدّث عبر الملفات القانونية والمستندات والمصادر، بموافقتك ومع الاستشهادات."
         },
         "2": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "حوّل مجموعة مستندات إلى جدول مراجعة ضمن الملف القانوني."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella بصيغة مقروءة آليًا لمحركات البحث المدعومة بالذكاء الاصطناعي."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Decisions from official public legal sources, not scraped third-party summaries.",
-          "title": "Official case law"
+          "body": "أحكام من مصادر قانونية عامة رسمية، لا ملخصات مكشوطة من أطراف أخرى.",
+          "title": "اجتهاد قضائي رسمي"
         },
         "1": {
-          "body": "Legal Atlas parses each decision while keeping its original structure intact.",
-          "title": "Structure preserved"
+          "body": "يحلّل Legal Atlas كل حكم مع إبقاء بنيته الأصلية سليمة.",
+          "title": "بنية محفوظة"
         },
         "2": {
-          "body": "Typed clients for national company and commercial registries, queried from a matter.",
-          "title": "Company registries"
+          "body": "عملاء محدّدو الأنواع للسجلات الوطنية للشركات والسجلات التجارية، يُستعلم منهم من داخل الملف القانوني.",
+          "title": "السجلات التجارية"
         },
         "3": {
-          "body": "Move between a decision and the cases it cites without leaving the reader.",
-          "title": "Follow citations"
+          "body": "انتقل بين الحكم والأحكام التي يستشهد بها دون مغادرة القارئ.",
+          "title": "تتبّع الاستشهادات"
         },
         "4": {
-          "body": "Browse and filter case law and registries scoped to the jurisdiction you work in.",
-          "title": "By jurisdiction"
+          "body": "تصفّح الاجتهاد القضائي والسجلات وصفّها حسب الولاية القضائية التي تعمل فيها.",
+          "title": "حسب الولاية القضائية"
         },
         "5": {
-          "body": "Reference any source from a matter so the agent's answers stay traceable to it.",
-          "title": "Grounded for AI"
+          "body": "أشِر إلى أي مصدر من الملف القانوني لتبقى إجابات الوكيل قابلة للتتبّع إليه.",
+          "title": "مصدر موثّق للذكاء الاصطناعي"
         }
       },
       "cta": {
-        "heading": "Bring official legal data into your matters."
+        "heading": "أدخِل البيانات القانونية الرسمية إلى ملفاتك القانونية."
       },
       "faqs": {
         "0": {
-          "answer": "Case law comes from official public legal sources, ingested and parsed by stella's Legal Atlas stack. Company data comes from national company and commercial registries through typed clients, not third-party copies.",
-          "question": "Where does the data come from?"
+          "answer": "يأتي الاجتهاد القضائي من مصادر قانونية عامة رسمية، تستوعبها منظومة Legal Atlas في stella وتحلّل بنيتها. وتأتي بيانات الشركات من السجلات الوطنية للشركات والسجلات التجارية عبر عملاء محدّدي الأنواع، لا من نسخ لدى أطراف أخرى.",
+          "question": "من أين تأتي البيانات؟"
         },
         "1": {
-          "answer": "Two lists, both expanding. Typed registry clients already include ARES (Czechia), Companies House (UK), SEC EDGAR (US), KRS (Poland), PRH (Finland), and VIES (EU VAT). Beyond registries, official sources surface per jurisdiction from stella's connector catalogue; Czechia, Spain, and Taiwan, for example, already have connected sources, and the case-law reader is built to browse and filter by jurisdiction as more official sources are added.",
-          "question": "Which jurisdictions and registries are covered?"
+          "answer": "قائمتان، كلتاهما في توسّع. يشمل عملاء السجلات المحدّدو الأنواع اليوم: ARES (تشيكيا)، Companies House (المملكة المتحدة)، SEC EDGAR (الولايات المتحدة)، KRS (بولندا)، PRH (فنلندا)، VIES (ضريبة القيمة المضافة في الاتحاد الأوروبي). وإلى جانب السجلات، تظهر المصادر الرسمية حسب الولاية القضائية من كتالوج الموصّلات في stella؛ فتشيكيا وإسبانيا وتايوان، مثلاً، لديها مصادر متصلة بالفعل، وقارئ الاجتهاد القضائي مبني للتصفّح والتصفية حسب الولاية القضائية مع إضافة مزيد من المصادر الرسمية.",
+          "question": "أي الولايات القضائية والسجلات مشمولة؟"
         },
         "2": {
-          "answer": "Yes. Public data referenced from a matter becomes a grounded source: the AI agent cites the underlying decision or record so its answers stay traceable.",
-          "question": "Can the AI use this data?"
+          "answer": "نعم. تصبح البيانات العامة المشار إليها من ملف قانوني مصدراً موثّقاً: يستشهد وكيل الذكاء الاصطناعي بالحكم أو بالقيد الأصلي لتبقى إجاباته قابلة للتتبّع.",
+          "question": "هل يستطيع الذكاء الاصطناعي استخدام هذه البيانات؟"
         }
       },
-      "metaDescription": "Case law and company registries from official public sources. Read decisions, look up companies, follow citations, and pull it into a matter or the AI agent.",
-      "metaTitle": "Case law and company registry data | stella",
+      "metaDescription": "الاجتهاد القضائي والسجلات التجارية من مصادر عامة رسمية. اقرأ الأحكام، وابحث عن الشركات، وتتبّع الاستشهادات، وأدخِلها إلى ملفك القانوني أو إلى الوكيل.",
+      "metaTitle": "الاجتهاد القضائي وبيانات السجلات التجارية | stella",
       "quickAnswer": {
-        "answer": "Two kinds. Official public case law, ingested and structure-parsed so you can read and search decisions and follow their citations. And typed access to national company and commercial registries, so you can pull official company data straight into a matter. Both are grounded sources the AI agent can cite.",
-        "question": "What public data does stella bring in?"
+        "answer": "نوعان. اجتهاد قضائي عام رسمي، يُستوعَب وتُحلَّل بنيته لتقرأ الأحكام وتبحث فيها وتتبع استشهاداتها. ووصول محدّد الأنواع إلى السجلات الوطنية للشركات والسجلات التجارية، لتستقدم بيانات الشركات الرسمية مباشرة إلى الملف القانوني. وكلاهما مصدر موثّق يستطيع وكيل الذكاء الاصطناعي الاستشهاد به.",
+        "question": "ما البيانات العامة التي تجلبها stella؟"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Collected from official public legal sources",
-            "1": "Structure-preserving parsers keep headings, paragraphs, and references",
-            "2": "Built on the open Legal Atlas ingestion stack"
+            "0": "مجموع من مصادر قانونية عامة رسمية",
+            "1": "محلّلات تحفظ البنية فتبقى العناوين والفقرات والإحالات",
+            "2": "مبني على منظومة Legal Atlas المفتوحة لاستيعاب البيانات"
           },
-          "heading": "Case law from official sources, parsed with structure intact"
+          "heading": "اجتهاد قضائي من مصادر رسمية، ببنية سليمة"
         },
         "1": {
           "bullets": {
-            "0": "Typed clients for national registries: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES, and more",
-            "1": "Pull official company data into a matter instead of copying it by hand",
-            "2": "Coverage expands as more official sources are added"
+            "0": "عملاء محدّدو الأنواع للسجلات الوطنية: ARES، Companies House، SEC EDGAR، KRS، PRH، VIES وغيرها",
+            "1": "استقدم بيانات الشركات الرسمية إلى الملف القانوني بدل نسخها يدوياً",
+            "2": "تتوسّع التغطية مع إضافة مزيد من المصادر الرسمية"
           },
-          "heading": "Company and commercial registries, queried from a matter"
+          "heading": "السجلات التجارية، يُستعلم منها من الملف القانوني"
         },
         "2": {
           "bullets": {
-            "0": "Reference a decision or company record from a matter",
-            "1": "The agent cites the underlying source, not a paraphrase",
-            "2": "Search across sources, not just within one"
+            "0": "أشِر إلى حكم أو قيد شركة من الملف القانوني",
+            "1": "يستشهد الوكيل بالمصدر الأصلي لا بإعادة صياغة",
+            "2": "ابحث عبر المصادر كلها لا داخل مصدر واحد"
           },
-          "heading": "One grounded source for the agent"
+          "heading": "مصدر موثّق واحد للوكيل"
         }
       }
     },
     "tabular-review": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected sources with approvals and source previews."
+          "body": "تحدّث عبر الملفات القانونية والمستندات والمصادر المتصلة، بموافقتك ومع معاينة المصادر."
         },
         "1": {
-          "body": "Official case law and company registries, pulled into a matter."
+          "body": "اجتهاد قضائي رسمي وسجلات تجارية، تُستقدَم إلى الملف القانوني."
         },
         "2": {
-          "body": "Prepare sensitive material for AI without exposing identifying details."
+          "body": "جهّز المواد الحساسة للذكاء الاصطناعي دون كشف التفاصيل التعريفية."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella بصيغة مقروءة آليًا لمحركات البحث المدعومة بالذكاء الاصطناعي."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Define a column in plain language; stella answers it for every document in the set.",
-          "title": "Columns are questions"
+          "body": "عرّف العمود بلغة بسيطة، وتجيب عنه stella لكل مستند في المجموعة.",
+          "title": "الأعمدة أسئلة"
         },
         "1": {
-          "body": "Each cell links to the exact passage it was extracted from, so you can verify in one click.",
-          "title": "Cited to the source"
+          "body": "ترتبط كل خلية بالفقرة التي استُخرجت منها تماماً، فتتحقق بنقرة واحدة.",
+          "title": "موثّقة إلى المصدر"
         },
         "2": {
-          "body": "Reviews live inside a matter alongside the documents, contacts, and chat they relate to.",
-          "title": "Matter-scoped"
+          "body": "تعيش المراجعات داخل الملف القانوني إلى جانب المستندات وجهات الاتصال والمحادثات المتصلة بها.",
+          "title": "ضمن الملف القانوني"
         },
         "3": {
-          "body": "Treat answers like data: sort by any column, filter to the rows that need attention.",
-          "title": "Sort and filter"
+          "body": "تعامل مع الإجابات كبيانات: افرز بأي عمود، وصفِّ الصفوف التي تحتاج انتباهك.",
+          "title": "فرز وتصفية"
         },
         "4": {
-          "body": "Run the same questions across large document sets instead of opening files one by one.",
-          "title": "Built for scale"
+          "body": "اطرح الأسئلة نفسها على مجموعات مستندات كبيرة بدل فتح الملفات واحداً تلو الآخر.",
+          "title": "مبنية للحجم الكبير"
         },
         "5": {
-          "body": "Take the table with you in standard formats — no lock-in on your own work product.",
-          "title": "Export anywhere"
+          "body": "خذ الجدول معك بصيغ قياسية: بلا تقييد على ناتج عملك.",
+          "title": "تصدير إلى أي مكان"
         }
       },
       "cta": {
-        "heading": "Review your next document set in stella."
+        "heading": "راجع مجموعة مستنداتك التالية في stella."
       },
       "faqs": {
         "0": {
-          "answer": "Anything you would ask a person reviewing the document: factual extraction like dates, parties, and amounts, or judgement calls like whether a clause is present and how it is framed. Answers come back grounded by citations to the source text.",
-          "question": "What kinds of questions can a column ask?"
+          "answer": "كل ما تسأله من يراجع المستند: استخراج وقائع مثل التواريخ والأطراف والمبالغ، أو أحكام تقديرية مثل وجود بند معيّن وكيفية صياغته. وتعود الإجابات موثّقة باستشهادات إلى النص المصدر.",
+          "question": "أي الأسئلة يمكن أن يطرحها العمود؟"
         },
         "1": {
-          "answer": "From the documents in your matter. AI features are bring-your-own-key, so extraction runs through the AI provider you configure, and every answer links back to the passage it was drawn from.",
-          "question": "Where do the answers come from?"
+          "answer": "من مستندات ملفك القانوني. تعمل ميزات الذكاء الاصطناعي بمفاتيحك الخاصة، فيجري الاستخراج عبر المزوّد الذي تضبطه، وترتبط كل إجابة بالفقرة التي أُخذت منها.",
+          "question": "من أين تأتي الإجابات؟"
         },
         "2": {
-          "answer": "Yes. Tabular Review output is exportable in standard formats, so your work product stays portable with no lock-in.",
-          "question": "Can I export the review?"
+          "answer": "نعم. مخرجات المراجعة الجدولية قابلة للتصدير بصيغ قياسية، فيبقى ناتج عملك قابلاً للنقل بلا تقييد.",
+          "question": "هل يمكنني تصدير المراجعة؟"
         }
       },
-      "metaDescription": "Ask questions across a whole document set and get structured answers as a sortable, source-traceable table. Built for due diligence, discovery, and research.",
-      "metaTitle": "Tabular document review for due diligence | stella",
+      "metaDescription": "اطرح أسئلة على مجموعة المستندات كاملة واحصل على إجابات منظّمة في جدول قابل للفرز والتتبّع إلى المصدر. مصمَّم للعناية الواجبة والإفصاح والبحث.",
+      "metaTitle": "مراجعة جدولية للمستندات في العناية الواجبة | stella",
       "quickAnswer": {
-        "answer": "You point Tabular Review at a set of documents in a matter and define columns as questions — for example 'governing law', 'termination notice period', or 'change-of-control clause'. stella extracts an answer for each document into a table you can sort, filter, and export, with every cell linked back to the passage it came from.",
-        "question": "How does Tabular Review work?"
+        "answer": "توجّه المراجعة الجدولية إلى مجموعة مستندات في ملف قانوني، وتعرّف الأعمدة على هيئة أسئلة: مثل «القانون الواجب التطبيق» أو «مدة الإشعار بالإنهاء» أو «بند تغيّر السيطرة». تستخرج stella إجابة لكل مستند في جدول يمكنك فرزه وتصفيته وتصديره، مع ربط كل خلية بالفقرة التي جاءت منها.",
+        "question": "كيف تعمل المراجعة الجدولية؟"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Add a column by writing the question you would ask a junior",
-            "1": "Reuse column sets across matters for repeatable review playbooks",
-            "2": "Mix extraction (dates, parties, amounts) with judgement questions"
+            "0": "أضف عموداً بكتابة السؤال الذي تطرحه على محامٍ مبتدئ",
+            "1": "أعد استخدام مجموعات الأعمدة عبر الملفات القانونية كأدلة مراجعة متكررة",
+            "2": "امزج الاستخراج (تواريخ، أطراف، مبالغ) بأسئلة التقدير"
           },
-          "heading": "Define the questions once, answer them everywhere"
+          "heading": "عرّف الأسئلة مرة، وأجب عنها في كل مستند"
         },
         "1": {
           "bullets": {
-            "0": "Click a cell to open the source document at the cited passage",
-            "1": "Answers are grounded by citations, not free-floating summaries",
-            "2": "Spot disagreements across documents at a glance"
+            "0": "انقر خلية ليفتح المستند المصدر عند الفقرة المستشهد بها",
+            "1": "الإجابات موثّقة باستشهادات لا ملخصات معلّقة في الهواء",
+            "2": "التقط التعارضات بين المستندات بنظرة واحدة"
           },
-          "heading": "Every answer traces back to the text"
+          "heading": "كل إجابة تعود إلى النص"
         },
         "2": {
           "bullets": {
-            "0": "Reviews are scoped to a matter, next to its files and chat",
-            "1": "Hand a review to the AI agent for follow-up questions",
-            "2": "Export the table or keep refining it in place"
+            "0": "المراجعات ضمن الملف القانوني، إلى جانب مستنداته ومحادثاته",
+            "1": "سلّم المراجعة إلى وكيل الذكاء الاصطناعي لطرح أسئلة المتابعة",
+            "2": "صدّر الجدول أو واصل تحسينه في مكانه"
           },
-          "heading": "It lives where the work lives"
+          "heading": "تعيش حيث يجري العمل"
         }
       }
     },
     "templates": {
       "adjacent": {
         "0": {
-          "body": "Matters, documents, and Word editing in one place."
+          "body": "الملفات القانونية والمستندات وتحرير Word في مكان واحد."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped review table."
+          "body": "حوّل مجموعة مستندات إلى جدول مراجعة ضمن الملف القانوني."
         },
         "2": {
-          "body": "Chat across matters, files, and sources with citations."
+          "body": "تحدّث عبر الملفات القانونية والمستندات والمصادر، مع الاستشهادات."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella بصيغة مقروءة آليًا لمحركات البحث المدعومة بالذكاء الاصطناعي."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Start repeat documents from a known-good base instead of a copied file.",
-          "title": "Reusable templates"
+          "body": "ابدأ المستندات المتكررة من أساس موثوق بدل ملف منسوخ.",
+          "title": "قوالب قابلة لإعادة الاستخدام"
         },
         "1": {
-          "body": "Define the values a document needs and fill them in when you assemble it.",
-          "title": "Fields and placeholders"
+          "body": "حدّد القيم التي يحتاجها المستند واملأها عند تركيبه.",
+          "title": "الحقول والعناصر النائبة"
         },
         "2": {
-          "body": "Include or omit clauses based on the values you provide, so a template covers variants.",
-          "title": "Conditional clauses"
+          "body": "أدرج البنود أو احذفها بحسب القيم التي تدخلها، فيغطي القالب الواحد عدة صور.",
+          "title": "بنود شرطية"
         },
         "3": {
-          "body": "Let stella draft a filled document from a matter's data, then refine it.",
-          "title": "Fill with AI"
+          "body": "دع stella تصوغ مستنداً مملوءاً من بيانات الملف القانوني، ثم نقّحه.",
+          "title": "ملء بالذكاء الاصطناعي"
         },
         "4": {
-          "body": "Author and adjust templates in the editor, then assemble from them.",
-          "title": "Edit in place"
+          "body": "أنشئ القوالب واضبطها في المحرر، ثم ركّب منها المستندات.",
+          "title": "تحرير في المكان"
         },
         "5": {
-          "body": "Produce a draft into a matter and keep editing it alongside the rest of the work.",
-          "title": "Into a matter"
+          "body": "أنتج المسودة داخل الملف القانوني وواصل تحريرها مع بقية العمل.",
+          "title": "إلى الملف القانوني"
         }
       },
       "cta": {
-        "heading": "Start from a template, not a blank page."
+        "heading": "ابدأ من قالب، لا من صفحة بيضاء."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. Templates are authored and adjusted in the editor, then you assemble documents from them.",
-          "question": "Can I edit a template?"
+          "answer": "نعم. تُنشأ القوالب وتُضبط في المحرر، ثم تركّب منها المستندات.",
+          "question": "هل أستطيع تحرير القالب؟"
         },
         "1": {
-          "answer": "A reusable piece of a document. Clauses can be included across templates and added conditionally based on the values you provide when assembling.",
-          "question": "What is a clause?"
+          "answer": "جزء من مستند قابل لإعادة الاستخدام. يمكن إدراج البنود في عدة قوالب وإضافتها شرطياً بحسب القيم التي تدخلها عند التركيب.",
+          "question": "ما البند؟"
         },
         "2": {
-          "answer": "Into a matter, as a draft you can keep editing alongside the rest of the matter's documents.",
-          "question": "Where does the assembled document go?"
+          "answer": "إلى الملف القانوني، كمسودة تواصل تحريرها إلى جانب بقية مستنداته.",
+          "question": "أين يذهب المستند المركّب؟"
         }
       },
-      "metaDescription": "Define a template with fields and conditional clauses, then fill it by hand or let stella draft it from a matter's data. Produce a document into the matter.",
-      "metaTitle": "Legal document templates with AI drafting | stella",
+      "metaDescription": "عرّف قالباً بحقول وبنود شرطية، ثم املأه يدوياً أو دع stella تصوغه من بيانات الملف القانوني. وأنتج المستند داخل الملف القانوني وواصل تحريره هناك.",
+      "metaTitle": "قوالب المستندات القانونية بصياغة الذكاء الاصطناعي | stella",
       "quickAnswer": {
-        "answer": "A template is a document with fields and clauses you can include conditionally. You fill the fields in by hand or let stella draft them from a matter's data; the conditional clauses resolve, and you get a document to keep working on in the matter. Templates and clauses are reusable, so repeat documents start from a known-good base.",
-        "question": "How do templates work in stella?"
+        "answer": "القالب مستند بحقول وبنود يمكن إدراجها شرطياً. تملأ الحقول يدوياً أو تدع stella تصوغها من بيانات الملف القانوني؛ فتُحسم البنود الشرطية وتحصل على مستند تواصل العمل عليه داخل الملف القانوني. والقوالب والبنود قابلة لإعادة الاستخدام، فتبدأ المستندات المتكررة من أساس موثوق.",
+        "question": "كيف تعمل القوالب في stella؟"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Assemble a document from a template instead of starting blank",
-            "1": "Reuse clauses across templates",
-            "2": "Keep repeat documents consistent"
+            "0": "ركّب المستند من قالب بدل البدء من صفحة فارغة",
+            "1": "أعد استخدام البنود عبر القوالب",
+            "2": "حافظ على اتساق المستندات المتكررة"
           },
-          "heading": "Build from templates and clauses"
+          "heading": "ابنِ من القوالب والبنود"
         },
         "1": {
           "bullets": {
-            "0": "Prefill fields from a document already stored in the matter",
-            "1": "Review and adjust every value before producing the draft",
-            "2": "Conditional clauses still resolve from the values you keep"
+            "0": "املأ الحقول مسبقاً من مستند محفوظ في الملف القانوني",
+            "1": "راجع كل قيمة واضبطها قبل إنتاج المسودة",
+            "2": "تُحسم البنود الشرطية من القيم التي تبقيها"
           },
-          "heading": "Fill it from the matter's data"
+          "heading": "املأه من بيانات الملف القانوني"
         },
         "2": {
           "bullets": {
-            "0": "Author and adjust templates in the editor",
-            "1": "Produce the draft into a matter",
-            "2": "Keep editing the result alongside the matter's files"
+            "0": "أنشئ القوالب واضبطها في المحرر",
+            "1": "أنتج المسودة داخل الملف القانوني",
+            "2": "واصل تحرير النتيجة إلى جانب مستندات الملف القانوني"
           },
-          "heading": "Edit and produce in place"
+          "heading": "حرّر وأنتج في المكان نفسه"
         }
       }
     },
     "ui": {
-      "capabilities": "Capabilities",
-      "exploreMore": "Explore more",
-      "faq": "FAQ",
-      "inShort": "In short"
+      "capabilities": "الإمكانات",
+      "exploreMore": "استكشف المزيد",
+      "faq": "الأسئلة الشائعة",
+      "inShort": "باختصار"
     },
     "workspace": {
       "adjacent": {
         "0": {
-          "body": "Chat across matters, files, and connected tools with approvals and source previews."
+          "body": "تحدّث عبر الملفات القانونية والمستندات والأدوات المتصلة، بموافقتك ومع معاينة المصادر."
         },
         "1": {
-          "body": "Turn a document set into a matter-scoped table you can sort, filter, and trace."
+          "body": "حوّل مجموعة مستندات إلى جدول ضمن الملف القانوني يمكنك فرزه وتصفيته وتتبّعه."
         },
         "2": {
-          "body": "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools."
+          "body": "صِل إلى الملفات القانونية والمستندات والاجتهاد القضائي نفسها من سطر الأوامر ومن الأدوات المتوافقة مع MCP."
         },
         "3": {
-          "body": "stella in machine-readable form for AI search engines."
+          "body": "stella بصيغة مقروءة آليًا لمحركات البحث المدعومة بالذكاء الاصطناعي."
         }
       },
       "capabilities": {
         "0": {
-          "body": "Organise documents, contacts, review, and chat around the matter they belong to. Everything added to a matter stays attached to it, searchable across the whole workspace, so the context is there when you come back.",
-          "title": "Matters"
+          "body": "نظّم المستندات وجهات الاتصال والمراجعة والمحادثة حول الملف القانوني الذي تنتمي إليه. يبقى كل ما يُضاف إليه مرتبطاً به وقابلاً للبحث عبر مساحة العمل كلها، فيكون السياق حاضراً حين تعود.",
+          "title": "الملفات القانونية"
         },
         "1": {
-          "body": "Open, edit, and review Word .docx documents directly in the workspace.",
-          "title": "Documents and .docx editing"
+          "body": "افتح مستندات Word بصيغة .docx وحرّرها وراجعها مباشرة في مساحة العمل.",
+          "title": "المستندات وتحرير .docx"
         },
         "2": {
-          "body": "Run tabular review and research alongside the documents they relate to.",
-          "title": "Review and research"
+          "body": "أجرِ المراجعة الجدولية والبحث إلى جانب المستندات المتصلة بهما.",
+          "title": "المراجعة والبحث"
         },
         "3": {
-          "body": "Bring the AI agent and knowledge tools into the same workspace as your files.",
-          "title": "Chat and knowledge tools"
+          "body": "أحضِر وكيل الذكاء الاصطناعي وأدوات المعرفة إلى مساحة العمل نفسها التي تضم ملفاتك.",
+          "title": "المحادثة وأدوات المعرفة"
         },
         "4": {
-          "body": "A desktop app acts as a local bridge for editing Office documents from stella.",
-          "title": "Desktop bridge"
+          "body": "يعمل تطبيق سطح المكتب جسراً محلياً لتحرير مستندات Office من stella.",
+          "title": "جسر سطح المكتب"
         },
         "5": {
-          "body": "Saved edits and uploads become document revisions, so the current file and its history stay together.",
-          "title": "Version history"
+          "body": "تصبح التعديلات المحفوظة والملفات المرفوعة إصدارات من المستند، فيبقى الملف الحالي وتاريخه معاً.",
+          "title": "سجل الإصدارات"
         }
       },
       "cta": {
-        "heading": "Bring your matters into one workspace."
+        "heading": "اجمع ملفاتك القانونية في مساحة عمل واحدة."
       },
       "faqs": {
         "0": {
-          "answer": "Yes. The web app supports Word .docx editing and review. For local Office editing, the desktop app acts as a bridge so you can open a document from stella and edit it on your machine.",
-          "question": "Can I edit Word documents in stella?"
+          "answer": "نعم. يدعم تطبيق الويب تحرير مستندات Word بصيغة .docx ومراجعتها. وللتحرير في Office المحلي، يعمل تطبيق سطح المكتب جسراً يتيح لك فتح مستند من stella وتحريره على جهازك.",
+          "question": "هل أستطيع تحرير مستندات Word في stella؟"
         },
         "1": {
-          "answer": "Documents, contacts, review tables, chat threads, and document history. Everything added to a matter stays attached to it, so the context is there when you return.",
-          "question": "What lives inside a matter?"
+          "answer": "المستندات وجهات الاتصال وجداول المراجعة ومسارات المحادثة وتاريخ المستندات. يبقى كل ما يُضاف إلى الملف القانوني مرتبطاً به، فيكون السياق حاضراً حين تعود.",
+          "question": "ماذا يضم الملف القانوني؟"
         },
         "2": {
-          "answer": "Yes. The stella CLI and MCP server expose the same matters, documents, and case law to connected tools, under the same permissions. See CLI & MCP for details.",
-          "question": "Can other tools reach the workspace?"
+          "answer": "نعم. يتيح سطر أوامر stella وخادم MCP الملفات القانونية والمستندات والاجتهاد القضائي نفسها للأدوات المتصلة، بالصلاحيات نفسها. راجع CLI & MCP للتفاصيل.",
+          "question": "هل تستطيع أدوات أخرى الوصول إلى مساحة العمل؟"
         }
       },
-      "metaDescription": "Matters, documents, Word .docx editing, review, research, and chat in one legal workspace. The work stays in context from source material to answer.",
-      "metaTitle": "Legal matter management workspace | stella",
+      "metaDescription": "الملفات القانونية والمستندات وتحرير Word بصيغة .docx والمراجعة والبحث والمحادثة في مساحة عمل قانونية واحدة، فيبقى العمل في سياقه من المصدر حتى الإجابة.",
+      "metaTitle": "مساحة عمل لإدارة الملفات القانونية | stella",
       "quickAnswer": {
-        "answer": "A web app that holds matters, documents, Word .docx editing, review, research, and chat in one place. Everything added to a matter stays attached to it, so the context is there when you return. A companion desktop app acts as a local bridge when a document needs Microsoft Word.",
-        "question": "What is the stella workspace?"
+        "answer": "تطبيق ويب يجمع الملفات القانونية والمستندات وتحرير Word بصيغة .docx والمراجعة والبحث والمحادثة في مكان واحد. يبقى كل ما يُضاف إلى الملف القانوني مرتبطاً به، فيكون السياق حاضراً حين تعود. ويعمل تطبيق سطح مكتب مرافق جسراً محلياً حين يحتاج المستند إلى Microsoft Word.",
+        "question": "ما مساحة العمل في stella؟"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Documents, contacts, review, and chat live inside the matter",
-            "1": "Edit Word .docx documents without leaving the workspace",
-            "2": "Move between research, review, and chat without switching apps"
+            "0": "المستندات وجهات الاتصال والمراجعة والمحادثة داخل الملف القانوني",
+            "1": "حرّر مستندات Word بصيغة .docx دون مغادرة مساحة العمل",
+            "2": "انتقل بين البحث والمراجعة والمحادثة دون تبديل التطبيقات"
           },
-          "heading": "Everything for a matter, in one place"
+          "heading": "كل ما يخص الملف القانوني في مكان واحد"
         },
         "1": {
           "bullets": {
-            "0": "Open and edit Word .docx documents directly in the workspace",
-            "1": "The redline stays a Word file: no conversion, no copies",
-            "2": "Use the desktop bridge when a document needs Microsoft Word"
+            "0": "افتح مستندات Word بصيغة .docx وحرّرها مباشرة في مساحة العمل",
+            "1": "تبقى النسخة المعلَّمة ملف Word: بلا تحويل وبلا نسخ",
+            "2": "استخدم جسر سطح المكتب حين يحتاج المستند إلى Microsoft Word"
           },
-          "heading": "Word documents, edited where you need them"
+          "heading": "مستندات Word تُحرَّر حيث تحتاجها"
         }
       }
     }
