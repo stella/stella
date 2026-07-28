@@ -8,7 +8,6 @@ type CapturedBrowserEvent = {
 };
 
 type PostHogInitOptions = {
-  advanced_disable_decide: boolean;
   advanced_disable_feature_flags: boolean;
   advanced_disable_flags: boolean;
   autocapture: boolean;

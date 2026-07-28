@@ -129,7 +129,6 @@ export const DocumentAiSourceBar = ({
   const shouldGenerateBoxes = Boolean(
     justificationId && isActiveTab && hasBoundingBoxCitations && !boundingBoxes,
   );
-  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- queryClient and analytics are stable runtime services, not request/cache identity
   const generateBoundingBoxes = useQuery({
     queryKey: [
       ...workspaceKeys.justifications(workspaceId),
@@ -187,7 +186,6 @@ export const DocumentAiSourceBar = ({
     setIsAnswerExpanded(false);
   }
 
-  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- queryClient is a stable runtime service, not polling cache identity
   useQuery({
     queryKey: [
       ...workspaceKeys.justifications(workspaceId),
