@@ -26,6 +26,19 @@ import { ares } from "@stll/business-registries";
 await ares.lookupByIco("27082440");
 ```
 
+Browser applications initialize the validation runtime once during startup. Calls
+are safe to share when several features initialize concurrently:
+
+```ts
+import { initialize } from "@stll/business-registries/browser";
+
+await initialize();
+```
+
+Registry identifier validators stay synchronous after initialization. Calling one
+before the runtime is ready throws `StdnumNotInitializedError`, also exported from
+the `/browser` subpath.
+
 ## Supported registries
 
 | Subpath   | Jurisdiction   | Registry                                                                                                                      |
