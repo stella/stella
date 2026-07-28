@@ -138,11 +138,30 @@ describe("mockStructuredData", () => {
     expect(parsed.required).toBe("mock");
   });
 
-  test("synthesizes the templates/prefill schema as an empty field list", () => {
+  test("keeps the curated templates/prefill fixture", () => {
     const data = mockStructuredData(
       structuredOutputSchemaFor(prefillOutputSchema, "openai"),
     );
-    expect(v.parse(prefillOutputSchema, data)).toEqual({ fields: [] });
+    const { fields } = v.parse(prefillOutputSchema, data);
+    expect(fields.map(({ id }) => id)).toEqual(
+      Array.from({ length: 16 }, (_, index) => `f${index + 1}`),
+    );
+    expect(fields.at(3)).toEqual({
+      id: "f4",
+      value: "Northstar Robotics, Inc.",
+      sourceSnippet:
+        "Northstar Robotics, Inc., a Delaware corporation with offices at 548 Market Street, San Francisco, California 94104, United States",
+    });
+    expect(fields.at(5)).toEqual({
+      id: "f6",
+      value: null,
+      sourceSnippet: null,
+    });
+    expect(fields.at(8)).toEqual({
+      id: "f9",
+      value: null,
+      sourceSnippet: null,
+    });
   });
 
   test("keeps the curated playbook.verdict tier-match fixture", () => {
