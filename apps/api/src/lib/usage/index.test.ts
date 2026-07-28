@@ -28,6 +28,7 @@ import {
   isEntitlementConsumableAt,
   recordUsageEvent,
 } from "@/api/lib/usage/usage-ledger";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -151,6 +152,14 @@ describe("usage entitlement consumability", () => {
       );
     });
   }
+
+  test("fails closed for a stored status outside the inferred domain", () => {
+    expect(
+      isConsumableEntitlementStatus(
+        asTestRaw<UsageEntitlementStatus>("unknown_status"),
+      ),
+    ).toBe(false);
+  });
 
   test("uses a start-inclusive, end-exclusive current period", () => {
     const entitlement = {

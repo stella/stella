@@ -65,7 +65,8 @@ export const isConsumableEntitlementStatus = (
     case "paused":
       return false;
     default:
-      return status satisfies never;
+      status satisfies never;
+      return false;
   }
 };
 
