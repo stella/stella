@@ -15,8 +15,8 @@
 // publishes ~10 versioned `@stll/*` workspace packages, so it carries this
 // exposure even though it has no changesets-driven version bump script.
 //
-// The only fix once it drifts is `rm bun.lock && bun install` (a full
-// regenerate). This script cross-checks every workspace package.json
+// The safe fix is the targeted workspace-version synchronizer. This script
+// cross-checks every workspace package.json
 // `version` against the version bun.lock has cached for that workspace, so
 // the drift itself gets caught in CI instead of silently persisting.
 //
@@ -131,10 +131,10 @@ if (mismatches.length > 0) {
       ...mismatches.map((line) => `  - ${line}`),
       "",
       "A plain `bun install` will not fix this (it doesn't rewrite cached",
-      "workspace versions for entries that already exist). Regenerate the",
-      "lockfile instead:",
+      "workspace versions for entries that already exist). Synchronize the",
+      "cached self-versions without re-resolving unrelated dependencies:",
       "",
-      "    rm bun.lock && bun install",
+      "    bun scripts/sync-lockfile-workspace-versions.ts",
       "",
       "Then commit the refreshed bun.lock.",
     ].join("\n"),
