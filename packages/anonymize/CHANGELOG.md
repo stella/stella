@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.7.3
+
+### Patch Changes
+
+- [#434](https://github.com/stella/anonymize/pull/434) [`8d4526e`](https://github.com/stella/anonymize/commit/8d4526e1c2bc0a485b713cb107683755a128ce05) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use one runtime-neutral session plan state machine across the Node, Python, and
+  browser bindings.
+
 ## 2.7.2
 
 ### Patch Changes

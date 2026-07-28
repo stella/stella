@@ -1,5 +1,7 @@
 # @stll/anonymize-linux-arm64-gnu
 
+## 2.7.3
+
 ## 2.7.2
 
 ## 2.7.1
