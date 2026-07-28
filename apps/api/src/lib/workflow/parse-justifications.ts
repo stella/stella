@@ -2,13 +2,17 @@ import { Result } from "better-result";
 
 import type {
   DocxFolioJustificationBlock,
-  DocxFolioJustificationCitation,
   JustificationBlock,
   JustificationContent,
   PdfBatesJustificationBlock,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { citationTextMatches } from "@/api/lib/workflow/citation-normalize";
+
+// The stored citation shape, derived from the block type so it stays in
+// lockstep without a second import from the schema barrel.
+type DocxFolioJustificationCitation =
+  DocxFolioJustificationBlock["statements"][number]["citations"][number];
 
 export type JustificationFilename = {
   original: string;

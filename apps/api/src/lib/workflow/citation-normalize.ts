@@ -100,7 +100,7 @@ export type CitationTextMatchesOptions = CitationNormalizeOptions & {
 export const citationTextMatches = ({
   quote,
   source,
-  caseFold,
+  caseFold = true,
 }: CitationTextMatchesOptions): boolean => {
   const normalizedQuote = normalizeForCitationMatch(quote, { caseFold });
   if (normalizedQuote.length === 0) {

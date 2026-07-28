@@ -261,18 +261,14 @@ export const DocumentAiSourceBar = ({
     if (scrolledForDocxJustificationRef.current === justificationId) {
       return;
     }
+    // The inferred type predicate narrows the result to a verified docx
+    // citation, the only kind that carries a navigable block id.
     const firstDocxCitation = citations.find(
       (citation) =>
         citation.kind === "docx-folio" &&
         citation.citationStatus === "verified",
     );
-    // Narrowed by the predicate above; only a verified docx citation
-    // carries a navigable block id.
-    if (
-      !firstDocxCitation ||
-      firstDocxCitation.kind !== "docx-folio" ||
-      firstDocxCitation.citationStatus !== "verified"
-    ) {
+    if (!firstDocxCitation) {
       return;
     }
     scrolledForDocxJustificationRef.current = justificationId;

@@ -3047,6 +3047,7 @@ const buildExportReviewJustificationContent = ({
               text: citationSeed.statement,
               citations: [
                 {
+                  citationStatus: "verified",
                   blockId: deriveBlockId({
                     paraId: null,
                     index: citationSeed.blockIndex,
