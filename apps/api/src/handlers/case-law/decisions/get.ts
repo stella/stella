@@ -18,6 +18,7 @@ import {
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
+import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
@@ -263,9 +264,21 @@ export const readDecisionHandler = async (
       corpusReadEnabled() &&
       decision.textS3Key !== null &&
       decision.contentHash !== null,
+    contentHash: decision.contentHash,
+    pgAstPresent: decision.documentAst !== null,
     resolvedFulltext: fulltext,
-    decisionId,
-    caseLawDb,
+    readTextColumnWritten: async () => {
+      const [row] = await caseLawDb((tx) =>
+        tx
+          .select({
+            written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, decisionId))
+          .limit(1),
+      );
+      return row?.written ?? null;
+    },
   });
 
   return {
@@ -360,15 +373,25 @@ const resolveAst = async ({
   });
 };
 
-type ResolveDocumentStateInput = {
+export type ResolveDocumentStateInput = {
   /** Whether the read resolved something a reader can actually read. */
   hasReadableDocument: boolean;
   documentUrl: string | null;
   /** Whether the payload above came from object storage. */
   corpusServed: boolean;
+  contentHash: string | null;
+  /**
+   * Whether the row's own `document_ast` column still holds anything.
+   * A trimmed, corpus-served decision has every payload column nulled.
+   */
+  pgAstPresent: boolean;
   resolvedFulltext: string | null;
-  decisionId: SafeId<"caseLawDecision">;
-  caseLawDb: CaseLawPublicReadDb;
+  /**
+   * Reads the row's own text column as a boolean — has it ever been
+   * fetched — without pulling the document across. Called only where
+   * nothing else can tell the two empty states apart.
+   */
+  readTextColumnWritten: () => Promise<boolean | null>;
 };
 
 type DocumentState = {
@@ -385,16 +408,46 @@ type DocumentState = {
  * object storage served it, it is not — a metadata-first ingest writes
  * an empty payload, and an empty payload reads back as an empty string
  * whichever of the two states wrote it — so the column is re-read as a
- * boolean, without the document itself, and only for a decision that
- * resolved to nothing at all.
+ * boolean, without the document itself, and only where the content hash
+ * says the objects are one of those empty shapes.
+ *
+ * The states this has to separate, and what each answers:
+ *
+ * | pg text | pg ast | content hash | resolved | state       |
+ * | ------- | ------ | ------------ | -------- | ----------- |
+ * | NULL    | any    | none         | nothing  | pending     |
+ * | ''      | any    | none         | ''       | unavailable |
+ * | text    | any    | none         | document | served      |
+ * | NULL    | any    | empty shape  | ''       | pending     |
+ * | ''      | any    | empty shape  | ''       | unavailable |
+ * | NULL    | NULL   | row-specific | document | served      |
+ * | text    | any    | row-specific | document | served      |
+ * | NULL    | present| row-specific | ''       | pending     |
+ *
+ * The sixth row is a trimmed canonical decision: its columns are empty
+ * by design and object storage holds the document, so it is neither
+ * pending nor unavailable — and if its payload failed to arrive, that is
+ * an object-storage failure the read raises rather than a document
+ * waiting to be fetched.
+ *
+ * The last row is what separates that from a decision whose objects
+ * merely mirror an empty payload. A row-specific hash proves only that
+ * the objects are this row's, not that they hold anything: an empty
+ * DocumentAst envelope carries the decision's own metadata and hashes
+ * to a value no constant can name. The trim is what nulls the columns,
+ * and it refuses a row whose objects do not hold what the columns hold,
+ * so a surviving AST artifact means the corpus copy is verbatim empty
+ * rather than served — the same discriminator the queue's pending gate
+ * uses.
  */
-const resolveDocumentState = async ({
+export const resolveDocumentState = async ({
   hasReadableDocument,
   documentUrl,
   corpusServed,
+  contentHash,
+  pgAstPresent,
   resolvedFulltext,
-  decisionId,
-  caseLawDb,
+  readTextColumnWritten,
 }: ResolveDocumentStateInput): Promise<DocumentState> => {
   if (hasReadableDocument || documentUrl === null) {
     return { documentPending: false, documentUnavailable: false };
@@ -407,19 +460,15 @@ const resolveDocumentState = async ({
     };
   }
 
-  const [row] = await caseLawDb((tx) =>
-    tx
-      .select({
-        fetched: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
-      })
-      .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, decisionId))
-      .limit(1),
-  );
+  if (corpusCarriesDocument(contentHash) && !pgAstPresent) {
+    return { documentPending: false, documentUnavailable: false };
+  }
+
+  const written = await readTextColumnWritten();
 
   return {
-    documentPending: row?.fetched === false,
-    documentUnavailable: row?.fetched === true,
+    documentPending: written === false,
+    documentUnavailable: written === true,
   };
 };
 

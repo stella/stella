@@ -50,9 +50,10 @@ const processPending = async (
 ): Promise<DecisionDocumentOutcome["status"]> => {
   const outcome = await fetchDecisionDocument({ decision, scopedDb, signal });
 
-  if (outcome.status === "filled") {
+  if (outcome.status === "filled" || outcome.status === "superseded") {
     // Pace the next download; the court's site is the reason these
-    // fetches were taken off the crawl.
+    // fetches were taken off the crawl. A superseded store consumed a
+    // download just the same.
     await Bun.sleep(FETCH_DELAY_MS);
   }
 
@@ -74,7 +75,13 @@ export const backfillSkDocuments: SchedulerTask = async ({
   // `claimed` is a decision another worker — a second scheduler run, or
   // a reader on any replica — is already fetching, so this run moves on
   // without downloading it again.
-  const counts = { filled: 0, unavailable: 0, claimed: 0, failed: 0 };
+  const counts = {
+    filled: 0,
+    unavailable: 0,
+    claimed: 0,
+    superseded: 0,
+    failed: 0,
+  };
 
   for (const decision of pending) {
     if (signal.aborted) {

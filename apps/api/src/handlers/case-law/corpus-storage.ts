@@ -64,7 +64,7 @@ export const corpusKeys = ({
   };
 };
 
-type CorpusPayload = {
+export type CorpusPayload = {
   text: string | null;
   sections: DecisionSection[] | null;
   ast: DocumentAst | EmptyAst | null;
@@ -107,14 +107,32 @@ export const corpusContentHash = ({
  *
  * Derived rather than written down, so a change to the hash function or
  * to the empty shapes cannot leave a stale constant behind. `null` and
- * `""` text hash alike (the hasher coalesces), so the two variants here
- * are the AST ones: the `EMPTY_AST` placeholder adapters use, and no AST
- * at all.
+ * `""` text hash alike (the hasher coalesces), so the variants are the
+ * cross product of the empty sections shapes (none, or a stored `[]`)
+ * with the constant empty AST shapes (the `EMPTY_AST` placeholder, or
+ * none at all). A structurally valid AST with no blocks is deliberately
+ * NOT here — its envelope carries per-document metadata, so its hash is
+ * row-specific and no constant can name it; those rows are recognised
+ * structurally instead (see stored-payload.ts).
  */
-export const EMPTY_CORPUS_CONTENT_HASHES: readonly string[] = [
-  corpusContentHash({ text: null, sections: null, ast: EMPTY_AST }),
-  corpusContentHash({ text: null, sections: null, ast: null }),
+const EMPTY_SECTION_SHAPES: readonly (DecisionSection[] | null)[] = [null, []];
+// A full `DocumentAst` with an empty `blocks` array is NOT representable
+// here: it carries per-document `source`/`metadata`, so its hash is
+// row-specific and no constant can name it. Such a row (empty text, empty
+// blocks, populated envelope) is judged by the Postgres-side structural
+// predicate instead; the hash constants cover every payload whose empty
+// shape is content-independent.
+const EMPTY_AST_SHAPES: readonly (DocumentAst | EmptyAst | null)[] = [
+  EMPTY_AST,
+  null,
 ];
+
+export const EMPTY_CORPUS_CONTENT_HASHES: readonly string[] =
+  EMPTY_SECTION_SHAPES.flatMap((sections) =>
+    EMPTY_AST_SHAPES.map((ast) =>
+      corpusContentHash({ text: null, sections, ast }),
+    ),
+  );
 
 type WriteCorpusInput = CorpusPayload & {
   documentId: string;
