@@ -106,6 +106,8 @@ jobs:
             packages/docx-utils/tsconfig.build.json
             packages/docx-utils/tsdown.config.ts
           generated-paths: |
+            apps/web/CHANGELOG.md
+            apps/web/package.json
             bun.lock
             packages/cli/CHANGELOG.md
             packages/cli/package.json
