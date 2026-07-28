@@ -19,7 +19,7 @@ import { and, eq } from "drizzle-orm";
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { usagePolicies, usageEntitlements } from "@/api/db/schema";
-import type { UsageEntitlementStatus } from "@/api/db/schema";
+import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
 import type {
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
@@ -43,6 +43,7 @@ type PolicyLookup = {
 const resolvePolicyByHostedPolicyRef = async (
   tx: Transaction,
   hostedPolicyRef: string,
+  expectedKind: UsagePolicyKind,
 ): Promise<PolicyLookup | null> => {
   const rows = await tx
     .select({
@@ -50,7 +51,12 @@ const resolvePolicyByHostedPolicyRef = async (
       monthlyUsageUnits: usagePolicies.monthlyUsageUnits,
     })
     .from(usagePolicies)
-    .where(eq(usagePolicies.hostedPolicyRef, hostedPolicyRef))
+    .where(
+      and(
+        eq(usagePolicies.hostedPolicyRef, hostedPolicyRef),
+        eq(usagePolicies.kind, expectedKind),
+      ),
+    )
     .limit(1);
   return rows.at(0) ?? null;
 };
@@ -200,11 +206,15 @@ export const handleHostedEntitlementUpsert = async ({
   // drop the new period and skip the periodic allocation.
   const metadataOrganizationId = payload.metadata?.organization_id ?? null;
 
-  const policy = await resolvePolicyByHostedPolicyRef(tx, payload.policy_ref);
+  const policy = await resolvePolicyByHostedPolicyRef(
+    tx,
+    payload.policy_ref,
+    "subscription",
+  );
   if (!policy) {
     return {
       kind: "ignored",
-      reason: `no usage_policy matches hosted policy reference ${payload.policy_ref}`,
+      reason: `no subscription usage_policy matches hosted policy reference ${payload.policy_ref}`,
     };
   }
 
@@ -533,11 +543,15 @@ export const handleHostedAllocation = async ({
     return { kind: "ignored", reason: "invalid metadata.organization_id" };
   }
 
-  const policy = await resolvePolicyByHostedPolicyRef(tx, payload.policy_ref);
+  const policy = await resolvePolicyByHostedPolicyRef(
+    tx,
+    payload.policy_ref,
+    "addon",
+  );
   if (!policy) {
     return {
       kind: "ignored",
-      reason: `no usage_policy matches hosted policy reference ${payload.policy_ref}`,
+      reason: `no add-on usage_policy matches hosted policy reference ${payload.policy_ref}`,
     };
   }
 

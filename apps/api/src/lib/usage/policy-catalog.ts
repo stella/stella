@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -36,11 +36,90 @@ type CatalogQueryRow = Pick<
   | "hostedPolicyRef"
 > & { key: UsagePolicyRow["policyKey"] };
 
-type UsagePolicyCatalogEntry = Omit<CatalogQueryRow, "hostedPolicyRef"> & {
-  hostedCheckoutAvailable: boolean;
+export type UsagePolicyCatalogPrice = {
+  amountCents: NonNullable<CatalogQueryRow["priceAmountCents"]>;
+  currency: NonNullable<CatalogQueryRow["priceCurrency"]>;
+  billingInterval: NonNullable<CatalogQueryRow["billingInterval"]>;
+};
+
+export type UsagePolicyCatalogHostedCheckout =
+  | { status: "available" }
+  | {
+      status: "unavailable";
+      reason: "provider_unavailable" | "policy_unavailable";
+    };
+
+export type UsagePolicyCatalogEntry = Pick<
+  CatalogQueryRow,
+  | "id"
+  | "key"
+  | "displayName"
+  | "description"
+  | "kind"
+  | "monthlyUsageUnits"
+  | "sortOrder"
+> & {
+  price: UsagePolicyCatalogPrice | null;
+  hostedCheckout: UsagePolicyCatalogHostedCheckout;
 };
 
 type ListPoliciesResult = { policies: UsagePolicyCatalogEntry[] };
+
+const catalogPrice = ({
+  priceAmountCents,
+  priceCurrency,
+  billingInterval,
+}: CatalogQueryRow): UsagePolicyCatalogPrice | null => {
+  if (
+    priceAmountCents === null &&
+    priceCurrency === null &&
+    billingInterval === null
+  ) {
+    return null;
+  }
+
+  if (
+    priceAmountCents === null ||
+    priceCurrency === null ||
+    billingInterval === null
+  ) {
+    return panic("Usage policy has incomplete catalog price fields");
+  }
+
+  return {
+    amountCents: priceAmountCents,
+    currency: priceCurrency,
+    billingInterval,
+  };
+};
+
+const hostedCheckout = (
+  hostedPolicyRef: CatalogQueryRow["hostedPolicyRef"],
+  providerConfigured: boolean,
+): UsagePolicyCatalogHostedCheckout => {
+  if (!providerConfigured) {
+    return { status: "unavailable", reason: "provider_unavailable" };
+  }
+  if (!hostedPolicyRef) {
+    return { status: "unavailable", reason: "policy_unavailable" };
+  }
+  return { status: "available" };
+};
+
+export const buildUsagePolicyCatalogEntry = (
+  row: CatalogQueryRow,
+  providerConfigured: boolean,
+): UsagePolicyCatalogEntry => ({
+  id: row.id,
+  key: row.key,
+  displayName: row.displayName,
+  description: row.description,
+  kind: row.kind,
+  monthlyUsageUnits: row.monthlyUsageUnits,
+  sortOrder: row.sortOrder,
+  price: catalogPrice(row),
+  hostedCheckout: hostedCheckout(row.hostedPolicyRef, providerConfigured),
+});
 
 export const readUsagePolicyCatalog = async function* ({
   safeDb,
@@ -81,11 +160,8 @@ export const readUsagePolicyCatalog = async function* ({
   // alone would send the picker into a setup call that deterministically
   // fails. The provider reference itself stays server-side.
   const providerConfigured = getApiCredentials() !== null;
-  const policies: UsagePolicyCatalogEntry[] = rows.map(
-    ({ hostedPolicyRef, ...policy }) =>
-      Object.assign(policy, {
-        hostedCheckoutAvailable: providerConfigured && Boolean(hostedPolicyRef),
-      }),
+  const policies = rows.map((row) =>
+    buildUsagePolicyCatalogEntry(row, providerConfigured),
   );
 
   return Result.ok({ policies });

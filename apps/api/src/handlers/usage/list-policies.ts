@@ -13,8 +13,8 @@ const config = {
   description:
     "List the plans and add-on packs available to this deployment: " +
     "display name, description, included monthly usage units, price " +
-    "display fields, and whether hosted checkout can be started for " +
-    "the entry. The catalog is deployment-level: add-on packs " +
+    "display data, and the hosted-checkout availability state for the " +
+    "entry. The catalog is deployment-level: add-on packs " +
     "additionally require the organization to hold an active hosted " +
     "subscription (pair with GET /usage/entitlement). Requires " +
     "organization-settings management access.",
