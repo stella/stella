@@ -3,7 +3,7 @@
 // lib for their globals (document, localStorage, MutationObserver, ...).
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
-import { chromium, request as playwrightRequest } from "@playwright/test";
+import { chromium } from "@playwright/test";
 import type { Browser, Locator, Page } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -1434,24 +1434,31 @@ const isViewRecord = (value: unknown): value is ViewRecord => {
   return "type" in value.layout && typeof value.layout.type === "string";
 };
 
+// Plain fetch, not playwright's request context: under Bun, playwright's
+// set-cookie parser receives the relative response URL Bun's node:http
+// reports and throws ERR_INVALID_URL, so the session cookies are parsed
+// from the sign-in response by hand instead.
 const authenticate = async () => {
-  const request = await playwrightRequest.newContext();
   const origin = new URL(WEB_URL).origin;
-  const sendResponse = await request.post(
+  const jsonHeaders = { origin, "content-type": "application/json" };
+  const sendResponse = await fetch(
     `${API_URL}/api/auth/email-otp/send-verification-otp`,
     {
-      data: { email: EMAIL, type: "sign-in" },
-      headers: { origin },
+      method: "POST",
+      body: JSON.stringify({ email: EMAIL, type: "sign-in" }),
+      headers: jsonHeaders,
+      signal: AbortSignal.timeout(15_000),
     },
   );
-  if (!sendResponse.ok()) {
+  if (!sendResponse.ok) {
     throw new Error(await sendResponse.text());
   }
 
-  const otpResponse = await request.get(
+  const otpResponse = await fetch(
     `${API_URL}/dev-public/last-otp?email=${encodeURIComponent(EMAIL)}`,
+    { signal: AbortSignal.timeout(15_000) },
   );
-  if (!otpResponse.ok()) {
+  if (!otpResponse.ok) {
     throw new Error("Could not obtain the development marketing OTP");
   }
   const otpPayload: unknown = await otpResponse.json();
@@ -1463,19 +1470,38 @@ const authenticate = async () => {
   ) {
     throw new Error("The development marketing OTP response had no otp field");
   }
-  const signInResponse = await request.post(
-    `${API_URL}/api/auth/sign-in/email-otp`,
-    {
-      data: { email: EMAIL, otp: otpPayload.otp },
-      headers: { origin },
-    },
-  );
-  if (!signInResponse.ok()) {
+  const signInResponse = await fetch(`${API_URL}/api/auth/sign-in/email-otp`, {
+    method: "POST",
+    body: JSON.stringify({ email: EMAIL, otp: otpPayload.otp }),
+    headers: jsonHeaders,
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!signInResponse.ok) {
     throw new Error(await signInResponse.text());
   }
 
-  const { cookies } = await request.storageState();
-  await request.dispose();
+  // One cookie per set-cookie header, offered to both hostnames the local
+  // stack answers on (the web and API hosts may differ, e.g. localhost vs
+  // 127.0.0.1; the browser matches cookies by host, ignoring ports).
+  const hosts = [
+    ...new Set([new URL(WEB_URL).hostname, new URL(API_URL).hostname]),
+  ];
+  const cookies = signInResponse.headers.getSetCookie().flatMap((header) => {
+    const [pair] = header.split(";");
+    const separator = pair?.indexOf("=") ?? -1;
+    if (pair === undefined || separator <= 0) {
+      return [];
+    }
+    return hosts.map((domain) => ({
+      name: pair.slice(0, separator).trim(),
+      value: decodeURIComponent(pair.slice(separator + 1).trim()),
+      domain,
+      path: "/",
+    }));
+  });
+  if (cookies.length === 0) {
+    throw new Error("Sign-in succeeded but set no session cookie");
+  }
   return cookies;
 };
 
