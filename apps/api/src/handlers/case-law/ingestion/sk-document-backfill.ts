@@ -27,6 +27,7 @@ import {
   eq,
   gt,
   gte,
+  inArray,
   isNotNull,
   isNull,
   lt,
@@ -38,7 +39,10 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
-import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
+import {
+  EMPTY_CORPUS_CONTENT_HASHES,
+  writeCorpusDocument,
+} from "@/api/handlers/case-law/corpus-storage";
 import {
   type DocumentAst,
   isDocumentAst,
@@ -193,13 +197,40 @@ const outsideFetchCooldown = or(
 );
 
 /**
- * A decision whose document has not been fetched yet: no text, and
- * something to fetch. An empty string is the "tried and got nothing"
- * marker and is deliberately not NULL, so it leaves the queue.
+ * A decision whose document has not been fetched yet: nothing readable
+ * anywhere, and something to fetch. An empty string is the "tried and
+ * got nothing" marker and is deliberately not NULL, so it leaves the
+ * queue.
+ *
+ * A NULL text column is not enough on its own. Under canonical storage
+ * the payload lives in object storage and the column trim nulls the
+ * columns by design, so every drained decision would read as pending
+ * again and the queue would re-fetch the whole corpus forever. The
+ * content hash is what distinguishes the two: absent (nothing was ever
+ * written to object storage) or one of the empty shapes (written before
+ * the document existed) means there is still nothing to read.
+ *
+ * The hash test is a residual filter: the partial indexes behind the two
+ * tiers are predicated on the text column and the document URL only,
+ * because an index predicate would have to spell the hashes out as
+ * literals and could then drift from these. Under the deployed storage
+ * mode nothing carries a hash, so the filter costs nothing; a canonical
+ * cutover should revisit it, since a fully drained corpus would leave
+ * the scan walking trimmed rows to conclude the queue is empty.
  */
 export const pendingDocumentPredicate = and(
   isNull(caseLawDecisions.fulltext),
   isNotNull(caseLawDecisions.documentUrl),
+  or(
+    isNull(caseLawDecisions.contentHash),
+    inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
+    // A row whose corpus hash is row-specific but whose Postgres AST
+    // column is still present is a legacy empty-envelope copy, not a
+    // corpus-served document: a trimmed (corpus-served) row has had every
+    // payload column nulled, so a surviving AST artifact marks the corpus
+    // object as a verbatim copy of a payload that carries no document.
+    isNotNull(caseLawDecisions.documentAst),
+  ),
 );
 
 /** Pending, asked for by a reader, and still within its retry budget. */
@@ -436,6 +467,14 @@ export type StoreBackfilledDocumentOptions = {
    * first. Production passes nothing.
    */
   writeCorpus?: typeof writeCorpusDocument | null;
+  /**
+   * The row's source hash when the fetch was claimed. The store applies
+   * only while it still holds: a source refresh that lands mid-fetch has
+   * rewritten the decision this document was parsed for, so the document
+   * is dropped and the queue fetches it again against the new state.
+   * Omitted by callers with no claim of their own (the repair scripts).
+   */
+  claimedSourceHash?: string | null;
 };
 
 /**
@@ -470,7 +509,8 @@ export const storeBackfilledDocument = async ({
   document,
   scopedDb,
   writeCorpus = corpusDocumentWriter(),
-}: StoreBackfilledDocumentOptions): Promise<void> => {
+  claimedSourceHash,
+}: StoreBackfilledDocumentOptions): Promise<"stored" | "superseded"> => {
   const sections = document.sections.length > 0 ? document.sections : null;
   const corpus =
     writeCorpus === null
@@ -483,9 +523,9 @@ export const storeBackfilledDocument = async ({
           ast: document.documentAst,
         });
 
-  await scopedDb(async (tx) => {
+  const stored = await scopedDb(async (tx) => {
     // audit: skip — scheduler backfill of public case-law text; no user action
-    await tx
+    const applied = await tx
       .update(caseLawDecisions)
       .set({
         fulltext: document.fulltext,
@@ -505,11 +545,21 @@ export const storeBackfilledDocument = async ({
         and(
           eq(caseLawDecisions.id, decision.id),
           sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
+          claimedSourceHash === undefined
+            ? undefined
+            : sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${claimedSourceHash}`,
         ),
-      );
+      )
+      .returning({ id: caseLawDecisions.id });
+    return applied.length > 0;
   });
 
   await indexDecision(decision.id, scopedDb);
+  // A missed compare-and-set is a superseded store, not a stored document:
+  // the source moved while this fetch was in flight, and the queue's next
+  // pass fetches the current version. Reporting it as stored would count a
+  // document that is not there.
+  return stored ? "stored" : "superseded";
 };
 
 /**
@@ -556,10 +606,20 @@ const CLAIM_TTL_SECONDS = 120;
  * Claiming also counts the attempt, before the attempt is made, so a
  * worker that dies mid-download still leaves a record of having tried.
  */
+/**
+ * A won claim, carrying the source hash the row had when it was won.
+ * The store pins that hash, so a source refresh landing mid-fetch takes
+ * the store out of scope rather than being overwritten by a document
+ * parsed from what the source used to say.
+ */
+export type DocumentFetchClaim =
+  | { status: "claimed"; sourceHash: string | null }
+  | { status: "held" };
+
 export const claimDocumentFetch = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
-): Promise<boolean> =>
+): Promise<DocumentFetchClaim> =>
   await scopedDb(async (tx) => {
     const lockResult: unknown = await tx.execute(
       sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law'), hashtext(${decisionId})) AS locked`,
@@ -568,7 +628,7 @@ export const claimDocumentFetch = async (
       ? lockResult.at(0)
       : undefined;
     if (!isRecord(lockRow) || lockRow["locked"] !== true) {
-      return false;
+      return { status: "held" };
     }
 
     // Raw statement rather than the query builder: the claim has to
@@ -588,10 +648,21 @@ export const claimDocumentFetch = async (
           OR document_fetch_attempted_at
              < now() - ${`${CLAIM_TTL_SECONDS} seconds`}::interval
         )
-      RETURNING id
+      RETURNING source_hash AS "sourceHash"
     `);
 
-    return Array.isArray(claimed) && claimed.length > 0;
+    const claimedRow: unknown = Array.isArray(claimed)
+      ? claimed.at(0)
+      : undefined;
+    if (!isRecord(claimedRow)) {
+      return { status: "held" };
+    }
+
+    const sourceHash = claimedRow["sourceHash"];
+    return {
+      status: "claimed",
+      sourceHash: typeof sourceHash === "string" ? sourceHash : null,
+    };
   });
 
 /**
@@ -629,7 +700,9 @@ export const markDocumentUnavailable = async (
 export type DecisionDocumentOutcome =
   | { status: "filled"; document: BackfilledDocument }
   | { status: "unavailable" }
-  | { status: "claimed" };
+  | { status: "claimed" }
+  /** The source moved mid-fetch; the queue's next pass fetches the current version. */
+  | { status: "superseded" };
 
 /**
  * Wall-clock budget for the whole unit. The download has its own
@@ -652,7 +725,8 @@ const runDecisionDocumentFetch = async ({
   scopedDb,
   signal,
 }: FetchDecisionDocumentOptions): Promise<DecisionDocumentOutcome> => {
-  if (!(await claimDocumentFetch(decision.id, scopedDb))) {
+  const claim = await claimDocumentFetch(decision.id, scopedDb);
+  if (claim.status === "held") {
     return { status: "claimed" };
   }
 
@@ -668,7 +742,15 @@ const runDecisionDocumentFetch = async ({
     return { status: "unavailable" };
   }
 
-  await storeBackfilledDocument({ decision, document, scopedDb });
+  const stored = await storeBackfilledDocument({
+    decision,
+    document,
+    scopedDb,
+    claimedSourceHash: claim.sourceHash,
+  });
+  if (stored === "superseded") {
+    return { status: "superseded" };
+  }
   return { status: "filled", document };
 };
 

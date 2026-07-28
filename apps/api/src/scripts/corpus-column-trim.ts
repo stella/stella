@@ -7,22 +7,40 @@ import type { SQL } from "drizzle-orm";
  * storage, and remove their pg-fts projection (a canonical row is served
  * by the corpus index, so the tsvector row is dead weight).
  *
- * Every object is verified present before anything is nulled, the update
- * is compare-and-set against the row state it read, and the scan is
- * keyset-paginated, so the run is idempotent and safe to repeat.
+ * A row is only trimmed once object storage is proven to hold exactly
+ * what is about to be deleted: every object is read back, decompressed
+ * and compared against the column it stands in for. That costs the scan
+ * both payloads — the columns from Postgres and the objects from the
+ * bucket — which is the right trade for a one-off pass whose mistakes
+ * are unrecoverable. Batches stay small and keyset-paginated for it.
+ * Rows whose columns hold no document skip the comparison: presence is
+ * all they need, because there is nothing to lose. The update is
+ * compare-and-set against the row state it read, so the run is
+ * idempotent and safe to repeat.
  *
  *   CORPUS_STORAGE_MODE=canonical LEGAL_CORPUS_S3_BUCKET=... \
  *     bun run src/scripts/corpus-column-trim.ts [--limit N] [--dry-run] [--force]
  */
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
 import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { corpusStorageMode } from "@/api/env-base";
+import {
+  readCorpusAst,
+  readCorpusSections,
+  readCorpusText,
+} from "@/api/handlers/case-law/corpus-storage";
+import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
+import { payloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
+import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { getCorpusS3, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
+import type { CorpusObjectState } from "@/api/scripts/corpus-column-trim-plan";
 import {
   columnTrimGate,
   corpusObjectState,
@@ -39,6 +57,10 @@ type TrimRow = {
   normalizedS3Key: string | null;
   astS3Key: string | null;
   contentHash: string | null;
+  /** The payload this run would delete, which it has to hash first. */
+  fulltext: string | null;
+  sections: DecisionSection[] | null;
+  documentAst: DocumentAst | EmptyAst | null;
   updatedAt: Date;
 };
 
@@ -92,26 +114,94 @@ const corpusObjectExists = async (key: string): Promise<boolean> =>
     timeoutMs: LIMITS.corpusObjectIoTimeoutMs,
   });
 
+type ObjectCheck = {
+  key: string | null;
+  /**
+   * Reads the object and answers whether it holds what the column
+   * holds. Not called where the column holds no document.
+   */
+  matchesColumn: () => Promise<boolean>;
+};
+
+const checkObject = async (
+  { key, matchesColumn }: ObjectCheck,
+  compareContent: boolean,
+): Promise<CorpusObjectState> => {
+  if (key === null) {
+    return corpusObjectState({
+      key,
+      exists: false,
+      matchesColumn: "not-checked",
+    });
+  }
+  const exists = await corpusObjectExists(key);
+  if (!exists || !compareContent) {
+    return corpusObjectState({ key, exists, matchesColumn: "not-checked" });
+  }
+  return corpusObjectState({
+    key,
+    exists,
+    matchesColumn: await matchesColumn(),
+  });
+};
+
 const trimRow = async (row: TrimRow): Promise<void> => {
   try {
-    // Every object whose column this run nulls has to be checked, sections
-    // included: `writeCorpusDocument` always writes a sections object, so
-    // its absence means the row is not actually backed by object storage.
-    const [textExists, sectionsExists, astExists] = await Promise.all([
-      row.textS3Key === null ? false : corpusObjectExists(row.textS3Key),
-      row.normalizedS3Key === null
-        ? false
-        : corpusObjectExists(row.normalizedS3Key),
-      row.astS3Key === null ? false : corpusObjectExists(row.astS3Key),
+    const columnPayload = {
+      text: row.fulltext,
+      sections: row.sections,
+      ast: row.documentAst,
+    };
+    // Every object whose column this run nulls has to be checked,
+    // sections included: `writeCorpusDocument` always writes a sections
+    // object, so its absence means the row is not actually backed by
+    // object storage. Where the columns hold a document, presence is not
+    // enough and the object's content is compared with the column's;
+    // `Bun.deepEquals` rather than a serialization, because the columns
+    // come back through jsonb with their keys reordered.
+    const compareContent = payloadCarriesDocument(columnPayload);
+    const [text, sections, ast] = await Promise.all([
+      checkObject(
+        {
+          key: row.textS3Key,
+          matchesColumn: async () =>
+            row.textS3Key !== null &&
+            (await readCorpusText(row.textS3Key)) === (row.fulltext ?? ""),
+        },
+        compareContent,
+      ),
+      checkObject(
+        {
+          key: row.normalizedS3Key,
+          matchesColumn: async () =>
+            row.normalizedS3Key !== null &&
+            Bun.deepEquals(
+              await readCorpusSections(row.normalizedS3Key),
+              row.sections ?? null,
+            ),
+        },
+        compareContent,
+      ),
+      checkObject(
+        {
+          key: row.astS3Key,
+          matchesColumn: async () =>
+            row.astS3Key !== null &&
+            Bun.deepEquals(
+              await readCorpusAst(row.astS3Key),
+              row.documentAst ?? null,
+            ),
+        },
+        compareContent,
+      ),
     ]);
 
     const decision = planColumnTrim({
-      text: corpusObjectState({ key: row.textS3Key, exists: textExists }),
-      sections: corpusObjectState({
-        key: row.normalizedS3Key,
-        exists: sectionsExists,
-      }),
-      ast: corpusObjectState({ key: row.astS3Key, exists: astExists }),
+      text,
+      sections,
+      ast,
+      columnPayload,
+      contentHash: row.contentHash,
     });
 
     if (decision.type === "skip") {
@@ -185,6 +275,9 @@ while (true) {
         normalizedS3Key: caseLawDecisions.normalizedS3Key,
         astS3Key: caseLawDecisions.astS3Key,
         contentHash: caseLawDecisions.contentHash,
+        fulltext: caseLawDecisions.fulltext,
+        sections: caseLawDecisions.sections,
+        documentAst: caseLawDecisions.documentAst,
         updatedAt: caseLawDecisions.updatedAt,
       })
       .from(caseLawDecisions)
