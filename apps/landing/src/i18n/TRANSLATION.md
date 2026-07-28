@@ -43,6 +43,17 @@ triplet ("Your matters. Your stack. Your terms.") needs an equally punchy
 native triplet, not a literal gloss. When an English pun cannot carry over
 ("work that matters"), translate the meaning and drop the pun.
 
+The failure mode to watch for is the beat-by-beat calque that happens to be
+grammatical: `story.title`'s "One matter. Every part of the work." was once
+rendered cs "Jeden spis. Každá část práce." — every word correct, and no
+native would write it. The maintainer rejected it, and rejected the closer
+"Celá práce." too. The settled rendering re-tells the section's arc instead:
+cs "Jeden spis. Od podkladů po odpověď." (from source material to answer),
+fr "Des pièces à la réponse.", hu "Az iratoktól a válaszig.". When a short
+headline resists translation twice, stop translating it and write the claim
+a native marketer would make; matching the section's actual content beats
+matching the English syntax.
+
 ## Register per locale
 
 Each catalog has an established register. Stay consistent **within the
