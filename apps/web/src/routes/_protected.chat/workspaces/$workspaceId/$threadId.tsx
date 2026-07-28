@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
+import { chatThreadOptions } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
-import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
-import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
 
 export const Route = createFileRoute(
   "/_protected/chat/workspaces/$workspaceId/$threadId",

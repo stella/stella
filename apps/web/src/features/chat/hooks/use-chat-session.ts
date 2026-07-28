@@ -40,6 +40,23 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import {
+  createInitialSendQueueState,
+  describeQueuedMessage,
+  reduceSendQueue,
+  snapshotChatRequestOptions,
+  type QueuedChatEntry,
+  type SendQueueEvent,
+  type SendQueueState,
+} from "@/features/chat/hooks/use-chat-session-send-queue.logic";
+import {
+  fetchOlderMessages,
+  isChatMessageStartError,
+  sendThreadChatMessage,
+  type ChatRuntime,
+  type ChatSendMessageOptions,
+  type ChatUserMessageInput,
+} from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -54,23 +71,6 @@ import { detached } from "@/lib/detached";
 import { internalToolErrorMessage, toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
-import {
-  createInitialSendQueueState,
-  describeQueuedMessage,
-  reduceSendQueue,
-  snapshotChatRequestOptions,
-  type QueuedChatEntry,
-  type SendQueueEvent,
-  type SendQueueState,
-} from "@/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic";
-import {
-  fetchOlderMessages,
-  isChatMessageStartError,
-  sendThreadChatMessage,
-  type ChatRuntime,
-  type ChatSendMessageOptions,
-  type ChatUserMessageInput,
-} from "@/routes/_protected.chat/-queries";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -121,7 +121,7 @@ const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
 // canonical definition (plus `QueuedChatEntry` and the send-queue
 // reducer) lives in the sibling `.logic.ts` file. Re-exported here so
 // existing consumers keep importing it from this hook.
-export type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic";
+export type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session-send-queue.logic";
 
 type AskUserToolCallPart = Extract<
   ChatPart,

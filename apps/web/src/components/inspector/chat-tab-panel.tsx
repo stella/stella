@@ -60,6 +60,15 @@ import {
 } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
+import { useChatSession } from "@/features/chat/hooks/use-chat-session";
+import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
+import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import {
+  chatThreadOptions,
+  chatThreadSuggestedPromptsOptions,
+} from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -79,15 +88,6 @@ import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
-import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
-import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
-import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
-import {
-  chatThreadOptions,
-  chatThreadSuggestedPromptsOptions,
-} from "@/routes/_protected.chat/-queries";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 
 type ChatTabPanelProps = {

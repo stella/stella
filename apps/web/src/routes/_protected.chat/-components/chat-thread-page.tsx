@@ -36,6 +36,17 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
+import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
+import { useChatSession } from "@/features/chat/hooks/use-chat-session";
+import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
+import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import {
+  applyChatModelChange,
+  chatThreadOptions,
+  chatThreadSuggestedPromptsOptions,
+  invalidateChatThreadAcrossScopes,
+} from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -63,18 +74,7 @@ import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { roleOptions } from "@/routes/-queries";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
-import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
-import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
-import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
-import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
-import {
-  applyChatModelChange,
-  chatThreadOptions,
-  chatThreadSuggestedPromptsOptions,
-  invalidateChatThreadAcrossScopes,
-} from "@/routes/_protected.chat/-queries";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
 import { usageEntitlementOptions } from "@/routes/_protected.settings/-queries/usage";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";

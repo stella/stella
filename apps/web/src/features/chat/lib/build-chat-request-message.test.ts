@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { expectTypeOf } from "expect-type";
 
+import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import type { SafeId } from "@/lib/safe-id";
-import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 
 const UUID_PATTERN =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;

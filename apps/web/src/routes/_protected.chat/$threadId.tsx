@@ -2,10 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 
+import { chatThreadOptions } from "@/features/chat/queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
-import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({
   component: ThreadRoute,

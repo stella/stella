@@ -8,10 +8,10 @@ import {
   DefaultNotFoundComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
+import { installChatRuntimeCleanup } from "@/features/chat/queries";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
-import { installChatRuntimeCleanup } from "@/routes/_protected.chat/-queries";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();

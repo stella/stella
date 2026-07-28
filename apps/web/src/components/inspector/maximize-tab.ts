@@ -3,12 +3,12 @@ import type { useNavigate } from "@tanstack/react-router";
 
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
-import { detached } from "@/lib/detached";
-import type { ChatThreadFetched } from "@/routes/_protected.chat/-queries";
+import type { ChatThreadFetched } from "@/features/chat/queries";
 import {
   chatKeys,
   invalidateChatThreadAcrossScopes,
-} from "@/routes/_protected.chat/-queries";
+} from "@/features/chat/queries";
+import { detached } from "@/lib/detached";
 
 type MaximizeContext = {
   activeOrganizationId: string;

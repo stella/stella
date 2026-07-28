@@ -30,10 +30,10 @@ import type {
   ReviewSuggestion,
   ReviewSuggestionStatus,
 } from "@/components/ai-suggestions/review-store";
+import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
-import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 const DOCUMENT_OPERATION_CONTRACT_VERSION = 1 as const;
 

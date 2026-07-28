@@ -28,6 +28,11 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import {
+  groupedChatThreadsOptions,
+  invalidateChatThreadLists,
+  mergeGroupedChatThreadPages,
+} from "@/features/chat/queries";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -37,11 +42,6 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  groupedChatThreadsOptions,
-  invalidateChatThreadLists,
-  mergeGroupedChatThreadPages,
-} from "@/routes/_protected.chat/-queries";
 
 type ThreadsSheetProps = {
   icon?: ReactNode;
