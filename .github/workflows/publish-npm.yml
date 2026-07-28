@@ -348,7 +348,7 @@ jobs:
       contents: write # Create immutable package tags and GitHub releases.
       id-token: write # Exchange a short-lived npm trusted-publishing credential.
     # The repository owner publishes this versioned shared contract.
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@v1.2.0 # zizmor: ignore[unpinned-uses]
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@v1.5.0 # zizmor: ignore[unpinned-uses]
     with:
       artifact-pattern: npm-tarball-*
       package-files: ${{ needs.pack.outputs.package_files }}
