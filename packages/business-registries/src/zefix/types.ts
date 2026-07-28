@@ -1,3 +1,5 @@
+import type { SwissUid } from "./validation.js";
+
 export type ZefixRawFirm = {
   name?: string;
   ehraid?: number;
@@ -33,7 +35,7 @@ export type ZefixCompanyStatus =
   | { type: "unknown"; upstreamValue: string | null };
 
 export type ZefixCompany = {
-  uid: string;
+  uid: SwissUid;
   uidFormatted: string;
   name: string;
   legalSeat: string | null;
@@ -43,7 +45,7 @@ export type ZefixCompany = {
 };
 
 export type ZefixSearchResult = {
-  uid: string;
+  uid: SwissUid;
   uidFormatted: string;
   name: string;
   legalSeat: string | null;

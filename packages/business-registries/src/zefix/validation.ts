@@ -4,6 +4,10 @@ import {
   validate as validateSwissUid,
 } from "@stll/stdnum/ch/uid";
 
+import { type CanonicalId, unsafeBrand } from "../shared/canonical-id.js";
+
+export type SwissUid = CanonicalId<"CH-UID">;
+
 const OPTIONAL_PREFIX_UID = /^(?:CHE[-.\s]?)?(?<digits>(?:\d[-.\s]?){9})$/iu;
 
 const withSwissPrefix = (input: string): string => {
@@ -22,8 +26,15 @@ const withoutSwissPrefix = (compact: string): string =>
 export const normalizeUid = (input: string): string =>
   withoutSwissPrefix(compactSwissUid(withSwissPrefix(input)));
 
-export const validateUid = (input: string): boolean =>
-  validateSwissUid(withSwissPrefix(input)).valid;
+export const parseUid = (input: string): SwissUid | null => {
+  const prefixed = withSwissPrefix(input);
+  if (!validateSwissUid(prefixed).valid) {
+    return null;
+  }
+  return unsafeBrand<"CH-UID">(withoutSwissPrefix(compactSwissUid(prefixed)));
+};
+
+export const validateUid = (input: string): boolean => parseUid(input) !== null;
 
 export const formatUid = (input: string): string => {
   const prefixed = withSwissPrefix(input);

@@ -1,12 +1,30 @@
 import { describe, expect, test } from "bun:test";
 
-import { normalizeKrsNumber, validateKrsNumber } from "./validation.js";
+import {
+  normalizeKrsNumber,
+  validateKrsNumber,
+  validateNip,
+  validateRegon,
+} from "./validation.js";
 
 describe("normalizeKrsNumber", () => {
   test("strips whitespace", () => {
     expect(normalizeKrsNumber(" 0000006865 ")).toBe("0000006865");
     expect(normalizeKrsNumber("0000006865\n")).toBe("0000006865");
     expect(normalizeKrsNumber("0000 006 865")).toBe("0000006865");
+  });
+});
+
+describe("Polish alternate registry identifiers", () => {
+  test("validates NIP checksums", () => {
+    expect(validateNip("7342867148")).toBe(true);
+    expect(validateNip("7342867149")).toBe(false);
+  });
+
+  test("accepts national REGON values and their KRS zero-padded form", () => {
+    expect(validateRegon("492707333")).toBe(true);
+    expect(validateRegon("49270733300000")).toBe(true);
+    expect(validateRegon("49270733400000")).toBe(false);
   });
 });
 

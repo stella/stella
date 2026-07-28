@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { formatUid, normalizeUid, validateUid } from "./validation.js";
+import {
+  formatUid,
+  normalizeUid,
+  parseUid,
+  validateUid,
+} from "./validation.js";
 
 describe("Swiss UID validation", () => {
   test("normalizes common registry spellings", () => {
@@ -13,6 +18,11 @@ describe("Swiss UID validation", () => {
     expect(validateUid("CHE-191.546.434")).toBe(true);
     expect(validateUid("CHE-191.546.435")).toBe(false);
     expect(validateUid("not-a-uid-191546434")).toBe(false);
+  });
+
+  test("brands only checksum-valid canonical values", () => {
+    expect(String(parseUid("CHE-191.546.434"))).toBe("191546434");
+    expect(parseUid("CHE-191.546.435")).toBeNull();
   });
 
   test("formats canonical digits", () => {

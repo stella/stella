@@ -1,6 +1,6 @@
 import {
   availableField,
-  fromValidatedRegistryIdentifier,
+  toValidatedRegistryIdentifier,
   unsupportedField,
 } from "../shared/normalized.js";
 import type {
@@ -11,6 +11,7 @@ import type {
   NormalizedRegistrySearchResult,
 } from "../shared/normalized.js";
 import type { OrsrAddress, OrsrCompany, OrsrSearchResult } from "./types.js";
+import { validateIco } from "./validation.js";
 
 const normalizeAddress = (address: OrsrAddress): NormalizedRegistryAddress => ({
   streetName: address.street,
@@ -73,7 +74,11 @@ export const toNormalizedEntity = (
   company: OrsrCompany,
 ): NormalizedRegistryEntity => ({
   country: "SK",
-  registryId: fromValidatedRegistryIdentifier("SK-ICO", company.ico),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "SK-ICO",
+    value: company.ico,
+    validate: validateIco,
+  }),
   identifiers: [],
   name: company.name,
   nameWithoutLegalForm: unsupportedField(),
@@ -126,7 +131,11 @@ export const toNormalizedSearchResult = (
   result: OrsrSearchResult,
 ): NormalizedRegistrySearchResult => ({
   country: "SK",
-  registryId: fromValidatedRegistryIdentifier("SK-ICO", result.ico),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "SK-ICO",
+    value: result.ico,
+    validate: validateIco,
+  }),
   name: result.name,
   legalForm: unsupportedField(),
   status: unsupportedField(),

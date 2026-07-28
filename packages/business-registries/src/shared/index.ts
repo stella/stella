@@ -1,6 +1,6 @@
 export type { RegistryAdapterShape, RegistryDescriptor } from "./adapter.js";
 export type { CanonicalId, KnownCanonicalIdScheme } from "./canonical-id.js";
-export { CANONICAL_ID_SCHEMES, unsafeBrand } from "./canonical-id.js";
+export { CANONICAL_ID_SCHEMES } from "./canonical-id.js";
 export {
   isEntityNotFound,
   RegistryAuthRequiredError,
@@ -9,6 +9,7 @@ export {
   RegistryLicenceIncompatibleError,
   RegistryRateLimitedError,
   RegistryUnavailableError,
+  RegistryValidationError,
 } from "./errors.js";
 export type { EntityNotFound } from "./errors.js";
 export { clampSearchLimit } from "./search.js";

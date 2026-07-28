@@ -1,6 +1,6 @@
 import {
   availableField,
-  fromValidatedRegistryIdentifier,
+  toValidatedRegistryIdentifier,
   unsupportedField,
 } from "../shared/normalized.js";
 import type {
@@ -9,6 +9,7 @@ import type {
   NormalizedRegistrySearchResult,
 } from "../shared/normalized.js";
 import type { SudregAddress, SudregCompany } from "./types.js";
+import { validateMbs } from "./validation.js";
 
 const normalizeAddress = (
   address: SudregAddress,
@@ -29,7 +30,11 @@ export const toNormalizedEntity = (
   company: SudregCompany,
 ): NormalizedRegistryEntity => ({
   country: "HR",
-  registryId: fromValidatedRegistryIdentifier("HR-MBS", company.mbs),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "HR-MBS",
+    value: company.mbs,
+    validate: validateMbs,
+  }),
   identifiers: [],
   name: company.name,
   nameWithoutLegalForm: unsupportedField(),
@@ -63,7 +68,11 @@ export const toNormalizedSearchResult = (
   company: SudregCompany,
 ): NormalizedRegistrySearchResult => ({
   country: "HR",
-  registryId: fromValidatedRegistryIdentifier("HR-MBS", company.mbs),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "HR-MBS",
+    value: company.mbs,
+    validate: validateMbs,
+  }),
   name: company.name,
   legalForm: availableField(
     company.legalForm ? { code: null, label: company.legalForm } : null,

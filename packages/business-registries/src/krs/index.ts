@@ -28,4 +28,9 @@ export type {
   KrsRegisterCode,
   KrsRegisteredSeat,
 } from "./types.js";
-export { normalizeKrsNumber, validateKrsNumber } from "./validation.js";
+export {
+  normalizeKrsNumber,
+  validateKrsNumber,
+  validateNip,
+  validateRegon,
+} from "./validation.js";

@@ -1,6 +1,6 @@
 import {
   availableField,
-  fromValidatedRegistryIdentifier,
+  toValidatedRegistryIdentifier,
   unsupportedField,
 } from "../shared/normalized.js";
 import type {
@@ -11,6 +11,7 @@ import type {
 } from "../shared/normalized.js";
 import type { EntityStatus } from "../shared/status.js";
 import type { KrsAddress, KrsEntity, KrsEntityStatus } from "./types.js";
+import { validateKrsNumber, validateNip, validateRegon } from "./validation.js";
 
 const normalizeStatus = (status: KrsEntityStatus): EntityStatus => {
   switch (status.type) {
@@ -42,23 +43,62 @@ const normalizeAddress = (address: KrsAddress): NormalizedRegistryAddress => ({
   textAddress: address.textAddress,
 });
 
+const POLISH_DATE = /^(?<day>\d{2})\.(?<month>\d{2})\.(?<year>\d{4})$/u;
+
+const normalizePolishDate = (value: string | null): string | null => {
+  if (!value) {
+    return null;
+  }
+  const groups = POLISH_DATE.exec(value)?.groups;
+  const daySource = groups?.["day"];
+  const monthSource = groups?.["month"];
+  const yearSource = groups?.["year"];
+  if (!daySource || !monthSource || !yearSource) {
+    return null;
+  }
+  const year = Number(yearSource);
+  const month = Number(monthSource);
+  const day = Number(daySource);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${yearSource}-${monthSource}-${daySource}`;
+};
+
 export const toNormalizedEntity = (
   entity: KrsEntity,
 ): NormalizedRegistryEntity => {
   const identifiers: NormalizedRegistryIdentifier[] = [];
   if (entity.identifiers.nip) {
     identifiers.push(
-      fromValidatedRegistryIdentifier("PL-NIP", entity.identifiers.nip),
+      toValidatedRegistryIdentifier({
+        scheme: "PL-NIP",
+        value: entity.identifiers.nip,
+        validate: validateNip,
+      }),
     );
   }
   if (entity.identifiers.regon) {
     identifiers.push(
-      fromValidatedRegistryIdentifier("PL-REGON", entity.identifiers.regon),
+      toValidatedRegistryIdentifier({
+        scheme: "PL-REGON",
+        value: entity.identifiers.regon,
+        validate: validateRegon,
+      }),
     );
   }
   return {
     country: "PL",
-    registryId: fromValidatedRegistryIdentifier("PL-KRS", entity.krsNumber),
+    registryId: toValidatedRegistryIdentifier({
+      scheme: "PL-KRS",
+      value: entity.krsNumber,
+      validate: validateKrsNumber,
+    }),
     identifiers,
     name: entity.name,
     nameWithoutLegalForm: unsupportedField(),
@@ -71,7 +111,7 @@ export const toNormalizedEntity = (
       entity.address ? normalizeAddress(entity.address) : null,
     ),
     creationDate: unsupportedField(),
-    registrationDate: availableField(entity.registeredAt),
+    registrationDate: availableField(normalizePolishDate(entity.registeredAt)),
     removalDate: unsupportedField(),
     registryRecord: availableField({
       courtName: null,
@@ -100,7 +140,11 @@ export const toNormalizedSearchResult = (
   entity: KrsEntity,
 ): NormalizedRegistrySearchResult => ({
   country: "PL",
-  registryId: fromValidatedRegistryIdentifier("PL-KRS", entity.krsNumber),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "PL-KRS",
+    value: entity.krsNumber,
+    validate: validateKrsNumber,
+  }),
   name: entity.name,
   legalForm: availableField(
     entity.legalForm ? { code: null, label: entity.legalForm } : null,

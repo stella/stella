@@ -134,7 +134,8 @@ const parseStreet = (
   SudregAddress,
   "street" | "houseNumber" | "orientationNumber" | "orientationLetter"
 > => {
-  const suffixMatch = /^(?<houseNumber>\d+)(?:\/(?<orientation>[\da-z]+))?$/iu;
+  const suffixMatch =
+    /^(?<houseNumber>\d+)(?<houseLetter>[a-z])?(?:\/(?:(?<orientationNumber>\d+)(?<orientationLetter>[a-z]+)?|(?<orientationLetterOnly>[a-z]+)))?$/iu;
   const words = line.split(/\s+/u);
   const lastWord = words.at(-1) ?? "";
   const precedingWord = words.at(-2) ?? "";
@@ -156,18 +157,17 @@ const parseStreet = (
     separateLetter ? precedingWord : lastWord,
   );
   const street = line.slice(0, suffixStart).trim();
-  const orientation = numberMatch.groups["orientation"] ?? null;
-  let orientationLetter: string | null = null;
-  if (separateLetter) {
-    orientationLetter = lastWord;
-  } else if (orientation && /^[a-z]+$/iu.test(orientation)) {
-    orientationLetter = orientation;
-  }
+  const orientationNumber = numberMatch.groups["orientationNumber"] ?? null;
+  const orientationLetter = separateLetter
+    ? lastWord
+    : (numberMatch.groups["orientationLetter"] ??
+      numberMatch.groups["orientationLetterOnly"] ??
+      numberMatch.groups["houseLetter"] ??
+      null);
   return {
     street: street || null,
     houseNumber: numberMatch.groups["houseNumber"] ?? null,
-    orientationNumber:
-      orientation && /^\d+$/u.test(orientation) ? orientation : null,
+    orientationNumber,
     orientationLetter,
   };
 };

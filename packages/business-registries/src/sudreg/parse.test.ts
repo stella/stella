@@ -58,6 +58,23 @@ describe("SUDREG parser", () => {
     });
   });
 
+  test.each([
+    ["Ilica 12A", "12", null, "A"],
+    ["Ilica 12/2A", "12", "2", "A"],
+    ["Ilica 12/V", "12", null, "V"],
+    ["Ilica 12/2 A", "12", "2", "A"],
+  ])(
+    "parses compact Croatian street number %s",
+    (line, houseNumber, orientationNumber, orientationLetter) => {
+      expect(parseAddress(`Zagreb\n${line}`).address).toMatchObject({
+        street: "Ilica",
+        houseNumber,
+        orientationNumber,
+        orientationLetter,
+      });
+    },
+  );
+
   test("accepts the alternate official company-name heading", () => {
     expect(
       parseCompanyPage(

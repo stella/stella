@@ -60,4 +60,58 @@ describe("Companies House normalized projection", () => {
       status: { availability: "available" },
     });
   });
+
+  test("does not present a historical appointment bound as an exact date", () => {
+    const company = parseCompanyProfile(companyRaw);
+    const sourceOfficer = parseOfficersResponse(officersRaw).at(0);
+    expect(sourceOfficer).toBeDefined();
+    if (!sourceOfficer) {
+      return;
+    }
+    const entity = toNormalizedEntity(company, {
+      officers: [
+        {
+          ...sourceOfficer,
+          appointedOn: null,
+          appointedBefore: "1992-01-01",
+        },
+      ],
+    });
+    expect(entity.keyPeople.availability).toBe("available");
+    if (entity.keyPeople.availability !== "available") {
+      return;
+    }
+    expect(entity.keyPeople.value.at(0)?.people.at(0)?.since).toBeNull();
+  });
+
+  test("preserves a known cessation date for removed companies", () => {
+    const company = parseCompanyProfile(companyRaw);
+    const removedAt = "2015-05-05";
+    expect(
+      toNormalizedEntity({
+        ...company,
+        status: { type: "removed" },
+        dateOfCessation: removedAt,
+      }).status,
+    ).toEqual({
+      availability: "available",
+      value: { type: "deleted", at: removedAt },
+    });
+
+    const searchResult = parseSearchResponse(searchRaw).at(0);
+    expect(searchResult).toBeDefined();
+    if (!searchResult) {
+      return;
+    }
+    expect(
+      toNormalizedSearchResult({
+        ...searchResult,
+        status: { type: "removed" },
+        dateOfCessation: removedAt,
+      }).status,
+    ).toEqual({
+      availability: "available",
+      value: { type: "deleted", at: removedAt },
+    });
+  });
 });

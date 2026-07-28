@@ -29,10 +29,16 @@ const isZefixRawFirm = (value: unknown): value is ZefixRawFirm =>
   isOptionalString(value["uid"]) &&
   isOptionalString(value["uidFormatted"]);
 
-const isZefixSearchResponse = (value: unknown): value is ZefixSearchResponse =>
+type ZefixSuccessfulSearchResponse = ZefixSearchResponse & {
+  list: ZefixRawFirm[];
+};
+
+const isZefixSearchResponse = (
+  value: unknown,
+): value is ZefixSuccessfulSearchResponse =>
   isRecord(value) &&
-  (value["list"] === undefined ||
-    (Array.isArray(value["list"]) && value["list"].every(isZefixRawFirm))) &&
+  Array.isArray(value["list"]) &&
+  value["list"].every(isZefixRawFirm) &&
   (value["error"] === undefined || isRecord(value["error"]));
 
 const getErrorCode = (value: unknown): string | null => {
@@ -47,7 +53,7 @@ const getErrorCode = (value: unknown): string | null => {
 const zefixSearch = async (
   nameOrId: string,
   maxEntries: number,
-): Promise<ZefixSearchResponse | null> => {
+): Promise<ZefixSuccessfulSearchResponse | null> => {
   const response = await performRegistryRequest({
     url: SEARCH_URL,
     init: {
@@ -108,7 +114,7 @@ export const lookupByUid = async (
   }
 
   const response = await zefixSearch(uid, 2);
-  if (!response?.list) {
+  if (!response) {
     return null;
   }
   for (const entry of response.list) {
@@ -138,7 +144,7 @@ export const searchByName = async (
     MAX_SEARCH_LIMIT,
   );
   const response = await zefixSearch(trimmed, limit);
-  if (!response?.list) {
+  if (!response) {
     return [];
   }
   const results: ZefixSearchResult[] = [];

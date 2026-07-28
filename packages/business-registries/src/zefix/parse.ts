@@ -5,7 +5,7 @@ import type {
   ZefixRawFirm,
   ZefixSearchResult,
 } from "./types.js";
-import { formatUid, normalizeUid } from "./validation.js";
+import { formatUid, parseUid } from "./validation.js";
 
 const parseStatus = (raw: ZefixRawFirm): ZefixCompanyStatus => {
   const status = trimToNull(raw.status)?.toUpperCase() ?? null;
@@ -24,8 +24,8 @@ export const parseFirm = (raw: ZefixRawFirm): ZefixCompany | null => {
   if (!uidSource || !name) {
     return null;
   }
-  const uid = normalizeUid(uidSource);
-  if (!/^\d{9}$/u.test(uid)) {
+  const uid = parseUid(uidSource);
+  if (!uid) {
     return null;
   }
   return {

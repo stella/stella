@@ -1,6 +1,6 @@
 import {
   availableField,
-  fromValidatedRegistryIdentifier,
+  fromCanonicalRegistryIdentifier,
   unsupportedField,
 } from "../shared/normalized.js";
 import type {
@@ -33,7 +33,7 @@ export const toNormalizedEntity = (
   company: ZefixCompany,
 ): NormalizedRegistryEntity => ({
   country: "CH",
-  registryId: fromValidatedRegistryIdentifier("CH-UID", company.uid),
+  registryId: fromCanonicalRegistryIdentifier("CH-UID", company.uid),
   identifiers: [],
   name: company.name,
   nameWithoutLegalForm: unsupportedField(),
@@ -81,7 +81,7 @@ export const toNormalizedSearchResult = (
   result: ZefixSearchResult,
 ): NormalizedRegistrySearchResult => ({
   country: "CH",
-  registryId: fromValidatedRegistryIdentifier("CH-UID", result.uid),
+  registryId: fromCanonicalRegistryIdentifier("CH-UID", result.uid),
   name: result.name,
   legalForm: unsupportedField(),
   status: availableField(normalizeStatus(result.status)),

@@ -1,7 +1,7 @@
 import {
   availableField,
-  fromValidatedRegistryIdentifier,
   notLoadedField,
+  toValidatedRegistryIdentifier,
   unsupportedField,
 } from "../shared/normalized.js";
 import type {
@@ -18,8 +18,16 @@ import type {
   CompaniesHouseOfficer,
   CompaniesHouseSearchResult,
 } from "./types.js";
+import { validateCompanyNumber } from "./validation.js";
 
-const normalizeStatus = (status: CompaniesHouseEntityStatus): EntityStatus => {
+type NormalizeStatusOptions = {
+  removedAt: string | null;
+};
+
+const normalizeStatus = (
+  status: CompaniesHouseEntityStatus,
+  { removedAt }: NormalizeStatusOptions,
+): EntityStatus => {
   switch (status.type) {
     case "active":
     case "open":
@@ -32,7 +40,7 @@ const normalizeStatus = (status: CompaniesHouseEntityStatus): EntityStatus => {
     case "insolvency-proceedings":
       return { type: "bankruptcy" };
     case "removed":
-      return { type: "deleted", at: null };
+      return { type: "deleted", at: removedAt };
     case "administration":
     case "closed":
     case "converted-closed":
@@ -70,7 +78,9 @@ const normalizeOfficer = (
   nameWithTitles: null,
   position: officer.role.title ?? officer.role.code,
   organName: null,
-  since: officer.appointedOn ?? officer.appointedBefore,
+  // `appointedBefore` is only an upper bound for historical records, not an
+  // exact appointment date. The normalized `since` field carries exact dates.
+  since: officer.appointedOn,
   address: officer.address?.textAddress ?? null,
   citizenship: officer.nationality,
   birthDate: officer.dateOfBirth
@@ -94,14 +104,20 @@ export const toNormalizedEntity = (
   options?: NormalizeCompaniesHouseOptions,
 ): NormalizedRegistryEntity => ({
   country: "GB",
-  registryId: fromValidatedRegistryIdentifier("GB-CRN", company.companyNumber),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "GB-CRN",
+    value: company.companyNumber,
+    validate: validateCompanyNumber,
+  }),
   identifiers: [],
   name: company.name,
   nameWithoutLegalForm: unsupportedField(),
   legalForm: availableField(
     company.type ? { code: company.type, label: null } : null,
   ),
-  status: availableField(normalizeStatus(company.status)),
+  status: availableField(
+    normalizeStatus(company.status, { removedAt: company.dateOfCessation }),
+  ),
   statusDetail: company.statusDetail ?? company.status.type,
   address: availableField(
     company.registeredOfficeAddress
@@ -128,12 +144,18 @@ export const toNormalizedSearchResult = (
   result: CompaniesHouseSearchResult,
 ): NormalizedRegistrySearchResult => ({
   country: "GB",
-  registryId: fromValidatedRegistryIdentifier("GB-CRN", result.companyNumber),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "GB-CRN",
+    value: result.companyNumber,
+    validate: validateCompanyNumber,
+  }),
   name: result.name,
   legalForm: availableField(
     result.type ? { code: result.type, label: null } : null,
   ),
-  status: availableField(normalizeStatus(result.status)),
+  status: availableField(
+    normalizeStatus(result.status, { removedAt: result.dateOfCessation }),
+  ),
   address: availableField(result.address),
   registryUrl: availableField(result.registryUrl),
 });

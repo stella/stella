@@ -1,7 +1,7 @@
 import {
   availableField,
-  fromValidatedRegistryIdentifier,
   notLoadedField,
+  toValidatedRegistryIdentifier,
   unsupportedField,
 } from "../shared/normalized.js";
 import type {
@@ -11,6 +11,7 @@ import type {
   NormalizedRegistrySearchResult,
 } from "../shared/normalized.js";
 import type { AresAddress, AresCompany, AresSearchResult } from "./types.js";
+import { validateIco } from "./validation.js";
 
 const normalizeAddress = (address: AresAddress): NormalizedRegistryAddress => ({
   streetName: address.street,
@@ -55,7 +56,11 @@ export const toNormalizedEntity = (
   options: NormalizeAresOptions,
 ): NormalizedRegistryEntity => ({
   country: "CZ",
-  registryId: fromValidatedRegistryIdentifier("CZ-ICO", company.ico),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "CZ-ICO",
+    value: company.ico,
+    validate: validateIco,
+  }),
   identifiers: [],
   name: company.name,
   nameWithoutLegalForm: unsupportedField(),
@@ -108,7 +113,11 @@ export const toNormalizedSearchResult = (
   result: AresSearchResult,
 ): NormalizedRegistrySearchResult => ({
   country: "CZ",
-  registryId: fromValidatedRegistryIdentifier("CZ-ICO", result.ico),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "CZ-ICO",
+    value: result.ico,
+    validate: validateIco,
+  }),
   name: result.name,
   legalForm: unsupportedField(),
   status: unsupportedField(),

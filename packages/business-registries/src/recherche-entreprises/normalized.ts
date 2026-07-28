@@ -1,6 +1,6 @@
 import {
   availableField,
-  fromValidatedRegistryIdentifier,
+  toValidatedRegistryIdentifier,
   unsupportedField,
 } from "../shared/normalized.js";
 import type {
@@ -18,6 +18,7 @@ import type {
   RechercheEntreprisesLegalEntityStatus,
   RechercheEntreprisesSearchResult,
 } from "./types.js";
+import { validateSiren, validateSiret } from "./validation.js";
 
 const normalizeStatus = (
   status: RechercheEntreprisesLegalEntityStatus,
@@ -89,7 +90,11 @@ export const toNormalizedEntity = (
   const identifiers: NormalizedRegistryIdentifier[] = [];
   if (company.headOffice) {
     identifiers.push(
-      fromValidatedRegistryIdentifier("FR-SIRET", company.headOffice.siret),
+      toValidatedRegistryIdentifier({
+        scheme: "FR-SIRET",
+        value: company.headOffice.siret,
+        validate: validateSiret,
+      }),
     );
   }
   if (
@@ -97,15 +102,20 @@ export const toNormalizedEntity = (
     company.matchedEstablishment.siret !== company.headOffice?.siret
   ) {
     identifiers.push(
-      fromValidatedRegistryIdentifier(
-        "FR-SIRET",
-        company.matchedEstablishment.siret,
-      ),
+      toValidatedRegistryIdentifier({
+        scheme: "FR-SIRET",
+        value: company.matchedEstablishment.siret,
+        validate: validateSiret,
+      }),
     );
   }
   return {
     country: "FR",
-    registryId: fromValidatedRegistryIdentifier("FR-SIREN", company.siren),
+    registryId: toValidatedRegistryIdentifier({
+      scheme: "FR-SIREN",
+      value: company.siren,
+      validate: validateSiren,
+    }),
     identifiers,
     name: company.name,
     nameWithoutLegalForm: unsupportedField(),
@@ -142,7 +152,11 @@ export const toNormalizedSearchResult = (
   result: RechercheEntreprisesSearchResult,
 ): NormalizedRegistrySearchResult => ({
   country: "FR",
-  registryId: fromValidatedRegistryIdentifier("FR-SIREN", result.siren),
+  registryId: toValidatedRegistryIdentifier({
+    scheme: "FR-SIREN",
+    value: result.siren,
+    validate: validateSiren,
+  }),
   name: result.name,
   legalForm: unsupportedField(),
   status: unsupportedField(),

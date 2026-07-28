@@ -58,8 +58,12 @@ describe("Zefix client", () => {
     });
 
     const company = await lookupByUid("CHE-191.546.434");
-    expect(company).toEqual({
-      uid: "191546434",
+    expect(company).not.toBeNull();
+    if (!company) {
+      return;
+    }
+    expect(String(company.uid)).toBe("191546434");
+    expect(company).toMatchObject({
       uidFormatted: "CHE-191.546.434",
       name: "Swiss Re AG",
       legalSeat: "Zürich",
@@ -120,7 +124,7 @@ describe("Zefix client", () => {
     });
     const companies = await searchByName("Swiss Re", { limit: 500 });
     expect(companies).toHaveLength(1);
-    expect(companies[0]?.uid).toBe("191546434");
+    expect(String(companies.at(0)?.uid)).toBe("191546434");
     expect(JSON.parse(body)).toMatchObject({
       name: "Swiss Re",
       maxEntries: 50,
@@ -138,6 +142,17 @@ describe("Zefix client", () => {
     restore = installFetchStub(
       async () =>
         new Response("not json", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    expect(lookupByUid("191546434")).rejects.toBeInstanceOf(ZefixAPIError);
+  });
+
+  test("rejects a successful response without a result list", async () => {
+    restore = installFetchStub(
+      async () =>
+        new Response(JSON.stringify({}), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),

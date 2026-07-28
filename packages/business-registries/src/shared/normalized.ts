@@ -2,6 +2,7 @@ import type { CountryCode } from "@stll/country-codes";
 
 import { unsafeBrand } from "./canonical-id.js";
 import type { CanonicalId, KnownCanonicalIdScheme } from "./canonical-id.js";
+import { RegistryValidationError } from "./errors.js";
 import type { EntityStatus } from "./status.js";
 
 export type NormalizedRegistryIdentifier<
@@ -13,22 +14,33 @@ export type NormalizedRegistryIdentifier<
   };
 }[Scheme];
 
-/**
- * Project an identifier from an adapter's validated, canonical domain model.
- *
- * Raw upstream values must pass through the adapter parser before reaching this
- * boundary. Keeping the brand operation here prevents individual projectors from
- * using unchecked assertions.
- */
-export const fromValidatedRegistryIdentifier = <
+type ValidatedRegistryIdentifierOptions<Scheme extends KnownCanonicalIdScheme> =
+  {
+    scheme: Scheme;
+    value: string;
+    validate: (value: string) => boolean;
+  };
+
+/** Validate the adapter boundary before constructing a canonical identifier. */
+export const toValidatedRegistryIdentifier = <
+  Scheme extends KnownCanonicalIdScheme,
+>({
+  scheme,
+  value,
+  validate,
+}: ValidatedRegistryIdentifierOptions<Scheme>): NormalizedRegistryIdentifier<Scheme> => {
+  if (!validate(value)) {
+    throw new RegistryValidationError(scheme);
+  }
+  return { scheme, value: unsafeBrand<Scheme>(value) };
+};
+
+export const fromCanonicalRegistryIdentifier = <
   Scheme extends KnownCanonicalIdScheme,
 >(
   scheme: Scheme,
-  validatedValue: string,
-): NormalizedRegistryIdentifier<Scheme> => ({
-  scheme,
-  value: unsafeBrand<Scheme>(validatedValue),
-});
+  value: CanonicalId<Scheme>,
+): NormalizedRegistryIdentifier<Scheme> => ({ scheme, value });
 
 export type NormalizedRegistryAddress = {
   streetName: string | null;
