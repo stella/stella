@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   getWordEditAuthorName,
   getWordEditShortcut,
-} from "@/routes/_protected.chat/-hooks/use-chat-user-context";
+} from "@/features/chat/hooks/use-chat-user-context";
 
 describe("getWordEditAuthorName", () => {
   test("prefers the explicit Word author name over the account name", () => {

@@ -12,6 +12,12 @@ import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
+import {
+  chatThreadTitleOptions,
+  groupedChatThreadsOptions,
+  invalidateChatThreadLists,
+  mergeGroupedChatThreadPages,
+} from "@/features/chat/queries";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -19,12 +25,6 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  chatThreadTitleOptions,
-  groupedChatThreadsOptions,
-  invalidateChatThreadLists,
-  mergeGroupedChatThreadPages,
-} from "@/routes/_protected.chat/-queries";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 
 const protectedRoute = getRouteApi("/_protected");

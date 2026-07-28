@@ -10,13 +10,13 @@ import { resolveChatComposerDockControls } from "@/components/chat/chat-composer
 import { ChatContextMeter } from "@/components/chat/chat-context-meter";
 import { ComposerStatusRow } from "@/components/chat/composer-status-row";
 import Tooltip from "@/components/tooltip";
+import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
+import { ChatWebSearchToggle } from "@/features/chat/components/chat-web-search-toggle";
 import {
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
-import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 
 type ChatComposerDockProps = {
   threadRef: ChatThreadRef;

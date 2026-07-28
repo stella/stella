@@ -55,6 +55,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/sidebar";
+import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
@@ -73,7 +74,6 @@ import { usePinnedStore } from "@/lib/pinned-store";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { roleOptions } from "@/routes/-queries";
-import { useGlobalChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-global-chat-mention-registration";
 import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";

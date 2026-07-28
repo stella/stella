@@ -23,6 +23,7 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   sanitizeRunningToolCalls,
 } from "@/components/chat/chat-ui-tools";
+import type { ChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
@@ -45,7 +46,6 @@ import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
-import type { ChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { invalidateWorkspaceActivity } from "@/routes/_protected.workspaces/-queries";
 
 type ActiveFileContext = {

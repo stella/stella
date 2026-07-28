@@ -51,6 +51,7 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
+import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
@@ -60,7 +61,6 @@ import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
 } from "@/lib/user-files";
-import type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat-session";
 
 export const ChatThreadMessages = ({
   activeFileName,

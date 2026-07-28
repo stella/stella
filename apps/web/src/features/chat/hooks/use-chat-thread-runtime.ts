@@ -1,12 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import {
   acquireChatRuntime,
   type ChatRuntime,
   type ChatThreadFetched,
   type ChatThreadOptionsContext,
-} from "@/routes/_protected.chat/-queries";
+} from "@/features/chat/queries";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 type UseChatThreadRuntimeArgs = {
   activeOrganizationId: string;

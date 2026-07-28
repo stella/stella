@@ -58,6 +58,10 @@ import type {
 } from "@/components/ai-suggestions/review-store";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import Tooltip from "@/components/tooltip";
+import {
+  getWordEditAuthorName,
+  getWordEditShortcut,
+} from "@/features/chat/hooks/use-chat-user-context";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth";
@@ -65,10 +69,6 @@ import { compareByLocale } from "@/lib/collation";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { sessionOptions } from "@/routes/-queries";
-import {
-  getWordEditAuthorName,
-  getWordEditShortcut,
-} from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
 

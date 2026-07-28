@@ -8,8 +8,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
-import { toChatThreadId } from "@/lib/chat-thread-ref";
-import { toSafeId, type SafeId } from "@/lib/safe-id";
 import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
@@ -24,7 +22,9 @@ import {
   mergeGroupedChatThreadPages,
   sendThreadChatMessage,
   type ChatThreadFetched,
-} from "@/routes/_protected.chat/-queries";
+} from "@/features/chat/queries";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { toSafeId, type SafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({

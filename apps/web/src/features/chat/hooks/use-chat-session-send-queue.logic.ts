@@ -4,13 +4,13 @@ import { panic } from "better-result";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type {
+  ChatSendMessageOptions,
+  ChatUserMessageInput,
+} from "@/features/chat/queries";
+import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
 } from "@/lib/chat-edit-mode";
-import type {
-  ChatSendMessageOptions,
-  ChatUserMessageInput,
-} from "@/routes/_protected.chat/-queries";
 
 export const snapshotChatRequestOptions = ({
   docxEditRepresentation,

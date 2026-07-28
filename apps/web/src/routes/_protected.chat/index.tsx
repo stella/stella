@@ -38,6 +38,16 @@ import { MatterIcon } from "@/components/matter-icon";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import {
+  acquireChatRuntime,
+  applyChatModelChange,
+  chatThreadOptions,
+  groupedChatThreadsOptions,
+  invalidateGroupedChatThreads,
+  mergeGroupedChatThreadPages,
+} from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -63,16 +73,6 @@ import { formatRelativeTime } from "@/lib/relative-time";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
-import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
-import {
-  acquireChatRuntime,
-  applyChatModelChange,
-  chatThreadOptions,
-  groupedChatThreadsOptions,
-  invalidateGroupedChatThreads,
-  mergeGroupedChatThreadPages,
-} from "@/routes/_protected.chat/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";

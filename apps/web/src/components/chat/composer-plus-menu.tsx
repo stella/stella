@@ -63,11 +63,11 @@ import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
+import { modelOptionsOptions } from "@/features/chat/queries";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
-import { modelOptionsOptions } from "@/routes/_protected.chat/-queries";
 import {
   knowledgeKeys,
   mcpConnectionsOptions,

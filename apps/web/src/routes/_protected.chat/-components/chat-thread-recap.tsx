@@ -5,8 +5,8 @@ import { ClockIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { chatThreadRecapOptions } from "@/features/chat/queries";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { chatThreadRecapOptions } from "@/routes/_protected.chat/-queries";
 
 // Mirrors RECAP_STALENESS_THRESHOLD_MS in
 // apps/api/src/handlers/chat/thread-recap.ts. The server re-checks

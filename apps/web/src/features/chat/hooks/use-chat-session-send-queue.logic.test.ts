@@ -1,15 +1,15 @@
 import type { ChatClientState } from "@tanstack/ai-client";
 import { describe, expect, test } from "bun:test";
 
-import { toSafeId } from "@/lib/safe-id";
 import {
   createInitialSendQueueState,
   reduceSendQueue,
   snapshotChatRequestOptions,
   type QueuedChatEntry,
   type SendQueueState,
-} from "@/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic";
-import type { ChatUserMessageInput } from "@/routes/_protected.chat/-queries";
+} from "@/features/chat/hooks/use-chat-session-send-queue.logic";
+import type { ChatUserMessageInput } from "@/features/chat/queries";
+import { toSafeId } from "@/lib/safe-id";
 
 const CONVERSATION_ID = "conversation-1";
 

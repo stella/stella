@@ -84,6 +84,21 @@ import type {
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
+import { useChatSession } from "@/features/chat/hooks/use-chat-session";
+import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
+import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import type {
+  ApplyActiveDocxEditsInput,
+  ApplyActiveDocxEditsOutput,
+} from "@/features/chat/queries";
+import {
+  applyChatModelChange,
+  chatThreadOptions,
+  chatThreadSuggestedPromptsOptions,
+  fileChatThreadOptions,
+} from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getTranslator } from "@/i18n/i18n-store";
@@ -110,21 +125,6 @@ import { toAPIError } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
-import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
-import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
-import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
-import type {
-  ApplyActiveDocxEditsInput,
-  ApplyActiveDocxEditsOutput,
-} from "@/routes/_protected.chat/-queries";
-import {
-  applyChatModelChange,
-  chatThreadOptions,
-  chatThreadSuggestedPromptsOptions,
-  fileChatThreadOptions,
-} from "@/routes/_protected.chat/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type ActiveFile = {

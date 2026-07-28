@@ -57,13 +57,13 @@ import {
   computeRiskRollup,
   isFlaggedPlaybookFinding,
 } from "@/components/inspector/playbook-risk-rollup";
+import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import type {
   Negotiation,
   PlaybookPositionsValue,

@@ -20,7 +20,7 @@ import { isFieldPath } from "@stll/template-conditions";
 import type {
   ApplyActiveDocxEditsInput,
   ApplyActiveDocxEditsOutput,
-} from "@/routes/_protected.chat/-queries";
+} from "@/features/chat/queries";
 
 /** Chars of surrounding text recorded so suggestions survive document edits
  *  (the host re-anchors stale ranges via contextBefore/After). */

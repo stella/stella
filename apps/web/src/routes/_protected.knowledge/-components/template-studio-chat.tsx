@@ -64,6 +64,21 @@ import type {
   UnresolvedActiveDocxEditToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { useChatSession } from "@/features/chat/hooks/use-chat-session";
+import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
+import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
+import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
+import {
+  chatKeys,
+  chatThreadOptions,
+  SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE,
+  templateChatThreadOptions,
+} from "@/features/chat/queries";
+import type {
+  ApplyActiveDocxEditsInput,
+  ApplyActiveDocxEditsOutput,
+  ChatUserMessageInput,
+} from "@/features/chat/queries";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -81,21 +96,6 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind } from "@/lib/value-types";
-import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
-import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
-import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
-import {
-  chatKeys,
-  chatThreadOptions,
-  SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE,
-  templateChatThreadOptions,
-} from "@/routes/_protected.chat/-queries";
-import type {
-  ApplyActiveDocxEditsInput,
-  ApplyActiveDocxEditsOutput,
-  ChatUserMessageInput,
-} from "@/routes/_protected.chat/-queries";
 import { isInputType } from "@/routes/_protected.knowledge/-components/template-field-manifest";
 import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import {

@@ -870,7 +870,7 @@ export default defineConfig({
                   "Older-version paging updates the seeded query identity during render so in-flight page responses can be discarded before the passive-effect window; useEffectEvent would not protect this async race.",
               },
               {
-                path: "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts",
+                path: "apps/web/src/features/chat/hooks/use-chat-session.ts",
                 reason:
                   "Older-message paging updates the seeded Chat identity during render so stale in-flight page responses are discarded across thread switches and same-thread refetches.",
               },
