@@ -127,7 +127,6 @@ jobs:
             packages/template-conditions/package.json
             packages/docx-utils/package.json
           version-file: bun.lock
-          version-pr-author: "stella-release-deployer[bot]"
 
   ci-changes:
     needs: trust-check
