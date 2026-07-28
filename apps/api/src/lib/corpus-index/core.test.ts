@@ -241,7 +241,8 @@ describe("failed index jobs always reach the audit trail", () => {
       selectMissing: async () => [czRow, skRow],
       selectStale: async () => [],
       fetchFulltext: async () => "body",
-      markIndexed: async () => true,
+      markIndexedBatch: async (_tx, { rows }) =>
+        new Set(rows.map((row) => row.id)),
       insertSucceededJobs: async () => undefined,
       recordJobs: async (_db, jobs, indexId) => {
         recorded.push({ indexId, jobs: [...jobs] });
