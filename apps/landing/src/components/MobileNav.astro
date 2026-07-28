@@ -8,6 +8,7 @@ import {
   resolveNavLinks,
   resourceLinks,
 } from "../data/site-nav";
+import { productHref } from "../data/products/links";
 import { defaultLocale, isLocale } from "../i18n/config";
 import { getTranslations } from "../i18n/utils";
 
@@ -38,7 +39,7 @@ const connect = resolveNavLinks(connectLinks, t);
       <div class="mt-3 grid grid-cols-2 gap-x-2">
         {
           productNavEntries.map((product) => (
-            <a href={product.href} class="mobile-nav-link">
+            <a href={productHref(product.slug, locale)} class="mobile-nav-link">
               {t(product.eyebrowKey)}
             </a>
           ))

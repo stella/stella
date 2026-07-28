@@ -1,5 +1,6 @@
 ---
 import ProductMediaFrame from "./ProductMediaFrame.astro";
+import { productHref } from "../data/products/links";
 import { pillars } from "../data/products/pillars";
 import { productBySlug } from "../data/products/registry";
 import { connectLinks, isExternal, resolveNavLinks, resourceLinks } from "../data/site-nav";
@@ -20,10 +21,10 @@ const t = getTranslations(locale);
 // literal pillar ids), and so are the product eyebrows under them
 // (`nav.products.<slug>.eyebrow`); see src/i18n/TRANSLATION.md.
 //
-// The header renders on every localized homepage, so the preview copy is
-// catalog copy keyed on the slug, not the registry's English `title`/`summary`
-// (those stay the source for the unlocalized /product/<slug> pages). The slugs
-// are literals, so a product without catalog entries fails typecheck.
+// The header renders on every localized page, so the preview copy is catalog
+// copy keyed on the slug, and the links carry the active locale's prefix so a
+// reader on /cs/ stays on /cs/. The slugs are literals, so a product without
+// catalog entries fails typecheck.
 // Built in pillar order like the list beside it, so every trigger has a pane.
 const previews = pillars.flatMap((pillar) =>
   pillar.slugs.flatMap((slug) => {
@@ -35,6 +36,7 @@ const previews = pillars.flatMap((pillar) =>
       {
         slug,
         hero: product.hero,
+        href: productHref(slug, locale),
         title: t(`nav.products.${slug}.title`),
         blurb: t(`nav.products.${slug}.blurb`),
       },
@@ -90,7 +92,7 @@ const compactMenus = [
                     return (
                       <li>
                         <a
-                          href={`/product/${p.slug}`}
+                          href={productHref(p.slug, locale)}
                           class={`nav-mega-item ${first ? "is-hover" : ""}`}
                           data-mega-trigger
                           data-slug={p.slug}
@@ -112,7 +114,7 @@ const compactMenus = [
           {
             previews.map((preview, i) => (
               <a
-                href={`/product/${preview.slug}`}
+                href={preview.href}
                 class={`nav-mega-pane ${i === 0 ? "is-active" : ""}`}
                 data-pane={preview.slug}
               >

@@ -1,4 +1,4 @@
-import { frameAccents, type Product } from "./types";
+import { frameAccents, productCtaLabels, type Product } from "./types";
 
 // The review hero reuses the same deterministic scene as the opening story.
 export const tabularReview: Product = {
@@ -93,23 +93,22 @@ export const tabularReview: Product = {
   ],
   adjacent: [
     {
-      title: "AI agent",
-      href: "/product/agent",
+      to: "product",
+      slug: "agent",
       body: "Chat across matters, files, and connected sources with approvals and source previews.",
     },
     {
-      title: "Public data",
-      href: "/product/public-data",
+      to: "product",
+      slug: "public-data",
       body: "Official case law and company registries, pulled into a matter.",
     },
     {
-      title: "Anonymization",
-      href: "/product/anonymization",
+      to: "product",
+      slug: "anonymization",
       body: "Prepare sensitive material for AI without exposing identifying details.",
     },
     {
-      title: "AI fact sheet",
-      href: "/ai-info",
+      to: "ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
   ],
@@ -122,6 +121,6 @@ export const tabularReview: Product = {
   cta: {
     heading: "Review your next document set in stella.",
     href: "https://my.stll.app",
-    label: "Start free",
+    label: productCtaLabels.startFree,
   },
 };

@@ -25,7 +25,7 @@ type LocalizedMessages<T> = {
 };
 type LocaleMessages = LocalizedMessages<Messages>;
 
-const catalogs: Record<Locale, LocaleMessages> = {
+export const catalogs: Record<Locale, LocaleMessages> = {
   ar,
   cs,
   de,
@@ -47,6 +47,12 @@ const catalogs: Record<Locale, LocaleMessages> = {
 // guaranteed by the i18n-check gate, so no runtime fallback merge is needed.
 export const getTranslations = (locale: Locale) =>
   createTranslator({ locale, messages: catalogs[locale] });
+
+// Dot-path key union of the message catalog, derived from the translator so a
+// stale key fails typecheck (mirrors apps/web/src/i18n/types.ts). It lives
+// beside the translator rather than in `data/site-nav.ts` so data modules can
+// reference a catalog key without importing the nav (which imports them back).
+export type TranslationKey = Parameters<ReturnType<typeof getTranslations>>[0];
 
 // --- URL helpers (locale routing + multilingual SEO) ---
 

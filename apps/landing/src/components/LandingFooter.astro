@@ -7,6 +7,7 @@ import {
   resolveNavLinks,
   resourceLinks,
 } from "../data/site-nav";
+import { productHref } from "../data/products/links";
 import { defaultLocale, isLocale, locales } from "../i18n/config";
 import { getTranslations } from "../i18n/utils";
 
@@ -20,7 +21,7 @@ const columns = [
     heading: t("nav.product"),
     links: productNavEntries.map((product) => ({
       label: resolveNavLabel(product.footerLabel, t),
-      href: product.href,
+      href: productHref(product.slug, locale),
     })),
   },
   {

@@ -10,6 +10,7 @@
     "label": "Spýtajte sa AI na aplikáciu stella"
   },
   "common": {
+    "getCli": "Získať CLI",
     "startFree": "Začnite zadarmo"
   },
   "demo": {
@@ -80,6 +81,7 @@
     "blog": "Blog",
     "changelog": "Zoznam zmien",
     "chooseLanguage": "Vyberte jazyk",
+    "docxEditor": "Samostatný DOCX editor",
     "github": "stella na GitHube",
     "openMenu": "Otvoriť navigáciu",
     "pillars": {
@@ -131,6 +133,713 @@
       }
     },
     "security": "Bezpečnosť"
+  },
+  "products": {
+    "agent": {
+      "adjacent": {
+        "0": {
+          "body": "Premeňte sadu dokumentov na tabuľku v rámci spisu, ktorú zoradíte, filtrujete a dohľadáte."
+        },
+        "1": {
+          "body": "Spisy, dokumenty, revízia a chat v jednom pracovnom priestore."
+        },
+        "2": {
+          "body": "Čítajte a prehľadávajte oficiálnu judikatúru, právne zdroje aj obchodné registre."
+        },
+        "3": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Pýtajte sa na spisy, dokumenty a kontakty, ktoré už v aplikácii stella máte. Jedna konverzácia dosiahne na každý spis, ku ktorému máte prístup, s rovnakými oprávneniami, aké platia v celom pracovnom priestore.",
+          "title": "Pracuje naprieč vašimi spismi"
+        },
+        "1": {
+          "body": "Vložte dokumenty do konverzácie a nechajte agenta, nech ich prečíta, porovná alebo zhrnie.",
+          "title": "Prečíta vaše súbory"
+        },
+        "2": {
+          "body": "Siahnite na obchodné registre aj ďalšie pripojené zdroje bez toho, aby ste opustili chat.",
+          "title": "Pripojené nástroje"
+        },
+        "3": {
+          "body": "Agent sa spýta skôr, než niečo urobí, takže každý krok máte pod kontrolou.",
+          "title": "Schválenie pred akciou"
+        },
+        "4": {
+          "body": "Pri každom kroku vidíte v náhľade, čo agent práve číta.",
+          "title": "Náhľady zdrojov"
+        },
+        "5": {
+          "body": "Odpovede odkazujú späť na zdroj a citácia otvorí dokument presne v danej pasáži.",
+          "title": "Podložené citáciami"
+        }
+      },
+      "cta": {
+        "heading": "Dajte agentovi skutočný spis."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Nie. Skôr než niečo urobí, požiada o schválenie, a pri tom, čo číta, ukazuje náhľad zdroja, takže každý krok sledujete a potvrdíte.",
+          "question": "Koná agent sám od seba?"
+        },
+        "1": {
+          "answer": "Cez zručnosti (opakovane použiteľné prompty a definície nástrojov) a externé konektory kompatibilné s MCP. Oboje rozširuje dosah agenta bez toho, aby sa menil samotný chat.",
+          "question": "Ako pridám nové schopnosti?"
+        },
+        "2": {
+          "answer": "Z vašich spisov, súborov, registrov a pripojených nástrojov. AI funkcie bežia na vašich vlastných kľúčoch a odpovede sú podložené citáciami späť na zdroj.",
+          "question": "Odkiaľ jeho odpovede pochádzajú?"
+        }
+      },
+      "metaDescription": "Komunikujte so svojimi spismi, dokumentmi, registrami aj pripojenými nástrojmi. Agent koná so schválením, opiera odpovede o citácie a rozširuje sa cez zručnosti.",
+      "metaTitle": "AI agent pre právne spisy | stella",
+      "quickAnswer": {
+        "answer": "Agent komunikuje s vašimi spismi, súbormi, obchodnými registrami aj pripojenými nástrojmi. Skôr než niečo urobí, požiada o schválenie, pri tom, čo číta, ukazuje náhľad zdroja, a odpovede opiera o citácie. Rozšírite ho o opakovane použiteľné zručnosti a externé konektory kompatibilné s MCP.",
+        "question": "Čo AI agent dokáže?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Chat nad spismi, dokumentmi aj kontaktmi v jednej konverzácii",
+            "1": "Načítajte do rovnakého vlákna dáta o firmách aj z registrov",
+            "2": "Odovzdajte agentovi tabuľkovú revíziu a pýtajte sa ďalej"
+          },
+          "heading": "Spýtajte sa raz, naprieč celým spisom"
+        },
+        "1": {
+          "bullets": {
+            "0": "Každá akcia čaká na vaše schválenie",
+            "1": "Náhľad zdroja ukazuje, čo agent v každom kroku čítal",
+            "2": "Citácie otvoria zdrojový dokument presne v danej pasáži"
+          },
+          "heading": "Kontrolu máte vy"
+        },
+        "2": {
+          "bullets": {
+            "0": "Zručnosti sú prompty a definície nástrojov, ktoré použijete opakovane naprieč spismi",
+            "1": "Externé konektory sú kompatibilné s MCP, takže agent dosiahne na ďalšie nástroje",
+            "2": "Pridávajte schopnosti bez toho, aby ste menili spôsob práce s chatom"
+          },
+          "heading": "Rozšírte ho o zručnosti a konektory"
+        }
+      }
+    },
+    "anonymization": {
+      "adjacent": {
+        "0": {
+          "body": "Komunikujte naprieč spismi, súbormi aj pripojenými nástrojmi, so schvaľovaním a náhľadmi zdrojov."
+        },
+        "1": {
+          "body": "Spisy, dokumenty, revízia a chat v jednom pracovnom priestore."
+        },
+        "2": {
+          "body": "Premeňte sadu dokumentov na tabuľku v rámci spisu, ktorú zoradíte, filtrujete a dohľadáte."
+        },
+        "3": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Odstráni mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI.",
+          "title": "Identifikačné údaje zostanú bokom"
+        },
+        "1": {
+          "body": "Beží priamo v okne chatu a v revízii dokumentov, nie v oddelenom nástroji.",
+          "title": "Funguje v chate aj v revízii"
+        },
+        "2": {
+          "body": "Pridajte výrazy a čierne listiny svojej organizácie, aby sa vždy zachytili mená, na ktorých vám záleží.",
+          "title": "S vašimi vlastnými výrazmi"
+        },
+        "3": {
+          "body": "Ukáže upravený dokument v kontexte, takže si potvrdíte, čo zo spisu odchádza.",
+          "title": "Výsledok na kontrolu"
+        }
+      },
+      "cta": {
+        "heading": "Udržte identifikačné údaje mimo svojich postupov s AI."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Áno. Anonymizácia je dostupná dnes, zabudovaná v chate aj v revízii dokumentov.",
+          "question": "Je anonymizácia dostupná už teraz?"
+        },
+        "1": {
+          "answer": "S prípravou podkladov pre postupy s AI bez odhalenia mien, subjektov či identifikačných údajov, pričom upravený výsledok zostáva na kontrolu.",
+          "question": "S čím pomáha?"
+        }
+      },
+      "metaDescription": "Odstráňte mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI, priamo z chatu aj z revízie dokumentov, s výsledkom, ktorý si skontrolujete.",
+      "metaTitle": "Anonymizácia dokumentov pre právnu AI | stella",
+      "quickAnswer": {
+        "answer": "Odstráni mená, subjekty a identifikačné údaje skôr, než podklady vstúpia do pracovného postupu s AI, a ukáže vám upravený výsledok, takže si potvrdíte, čo zo spisu odchádza. Je zabudovaná priamo do chatu a revízie dokumentov.",
+        "question": "Čo je anonymizácia v aplikácii stella?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Drží mená, subjekty a identifikačné údaje mimo krokov s AI",
+            "1": "Stavané pre právne postupy s AI, nie pre všeobecné maskovanie dokumentov",
+            "2": "Pred ďalším krokom zostáva upravený dokument na kontrolu"
+          },
+          "heading": "Pripravte podklady skôr, než sa dostanú k AI"
+        },
+        "1": {
+          "bullets": {
+            "0": "Dostupná z chatu aj z revízie dokumentov",
+            "1": "Žiadne kopírovanie do externého nástroja na začierňovanie",
+            "2": "Postavené na vlastnom open source anonymizačnom engine aplikácie stella"
+          },
+          "heading": "Súčasť pracovného priestoru, nie samostatný nástroj"
+        }
+      }
+    },
+    "cli-mcp": {
+      "adjacent": {
+        "0": {
+          "body": "Spisy, dokumenty, revízia a chat v jednom pracovnom priestore."
+        },
+        "1": {
+          "body": "Pracujte naprieč spismi a pripojenými nástrojmi, so schvaľovaním a citáciami."
+        },
+        "2": {
+          "body": "Vypĺňajte opakovane použiteľné právne dokumenty cez aplikáciu, CLI aj pripojené nástroje."
+        },
+        "3": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Používajte generované príkazy ako stella search matters, document read alebo template fill zo skriptov aj z terminálu.",
+          "title": "Ozajstný príkazový riadok"
+        },
+        "1": {
+          "body": "Pripojte aplikáciu stella ku klientom kompatibilným s MCP bez toho, aby ste pre každého stavali vlastnú integráciu.",
+          "title": "Kompatibilné s MCP"
+        },
+        "2": {
+          "body": "Príkazy CLI sa generujú z registra nástrojov MCP, takže obe rozhrania zostávajú v súlade, ako sa stella vyvíja.",
+          "title": "Jeden register schopností"
+        },
+        "3": {
+          "body": "Hranicou zostávajú rozsahy overenia a oprávnenia pracovného priestoru, nech použijete ktorékoľvek rozhranie.",
+          "title": "Platia oprávnenia pracovného priestoru"
+        },
+        "4": {
+          "body": "Príkazy vracajú strojovo čitateľný JSON pre skripty a agentov aj čitateľný výstup do terminálu pre ľudí.",
+          "title": "Štruktúrovaný výstup"
+        },
+        "5": {
+          "body": "Nasmerujte CLI aj klientov MCP na server aplikácie stella, ktorý prevádzkuje vaša organizácia.",
+          "title": "Pripravené na vlastný hosting"
+        }
+      },
+      "cta": {
+        "heading": "Majte aplikáciu stella v nástrojoch, kde už pracujete."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Nie. Sú to samostatné rozhrania generované z rovnakého registra schopností a pripojené k rovnakému serveru aplikácie stella.",
+          "question": "Je CLI iný produkt než MCP server?"
+        },
+        "1": {
+          "answer": "Áno. CLI podporuje štruktúrovaný výstup v JSON, stránkovanie, predvídateľné návratové kódy a neinteraktívny beh vhodný na automatizáciu.",
+          "question": "Môžem CLI použiť v skriptoch?"
+        },
+        "2": {
+          "answer": "Nie. Server overí rozsahy overenia aj oprávnenia v aplikácii stella skôr, než sa schopnosť spustí.",
+          "question": "Obíde pripojenie klienta MCP oprávnenia pracovného priestoru?"
+        }
+      },
+      "metaDescription": "Vyhľadávajte, čítajte a pracujte s aplikáciou stella z príkazového riadka alebo z klienta kompatibilného s MCP. Obe rozhrania zdieľajú schopnosti, oprávnenia aj dáta.",
+      "metaTitle": "MCP server a CLI pre váš právny pracovný priestor | stella",
+      "quickAnswer": {
+        "answer": "Dve rozhrania k rovnakým schopnostiam aplikácie stella. CLI zrkadlí register nástrojov MCP ako príkazy, zatiaľ čo MCP server umožňuje kompatibilným agentom a nástrojom pracovať so spismi, dokumentmi, vzormi aj verejnými právnymi dátami pod rovnakou kontrolou prístupu.",
+        "question": "Čo je CLI a MCP server aplikácie stella?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Nájdite pasáže naprieč dokumentmi spisu príkazom stella search matters",
+            "1": "Čítajte dokumenty, vypisujte spisy a prezerajte vzory bez prepínania kontextu",
+            "2": "Používajte stránkované štruktúrované výsledky v skriptoch aj v automatizovaných postupoch"
+          },
+          "heading": "Prehľadajte celý spis z terminálu"
+        },
+        "1": {
+          "bullets": {
+            "0": "Sprístupnite spisy, dokumenty, judikatúru, vzory aj ďalšie schválené nástroje",
+            "1": "Katalóg schopností aj príkazy CLI sa generujú z jedného registra",
+            "2": "Pripojte kompatibilných agentov bez kopírovania právnych dát do iného pracovného priestoru"
+          },
+          "heading": "Tie isté schopnosti cez MCP"
+        }
+      }
+    },
+    "editor": {
+      "adjacent": {
+        "0": {
+          "body": "Pozrite sa, kde spisy, dokumenty a nástroje žijú pokope."
+        },
+        "1": {
+          "body": "Vytvárajte opakovane použiteľné wordové dokumenty s poľami a podmienenými ustanoveniami."
+        },
+        "2": {
+          "body": "Vyskúšajte ten istý editor samostatne: otvorte a upravte .docx v prehliadači, bez účtu."
+        },
+        "3": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Otvorte a upravte wordové dokumenty priamo v online editore aplikácie stella: bez inštalácie a bez prevodu do iného, uzavretého formátu.",
+          "title": "Úpravy .docx priamo v prehliadači"
+        },
+        "1": {
+          "body": "Dokument zostáva po celý čas vo formáte .docx, takže písma, štýly aj rozloženie sa zobrazia a uložia tak, ako ich vytvoril Word.",
+          "title": "Formátovanie zostáva"
+        },
+        "2": {
+          "body": "Sledované vloženia a zmazania sa zobrazujú na mieste a úpravy navrhnuté AI prichádzajú ako sledované zmeny, ktoré v dokumente prijmete, alebo odmietnete.",
+          "title": "Sledovanie zmien"
+        },
+        "3": {
+          "body": "Z uložených úprav vznikajú verzie dokumentu, takže aktuálny súbor aj celá jeho história zostávajú pokope.",
+          "title": "História verzií pri každom uložení"
+        },
+        "4": {
+          "body": "Dokument zostáva pripojený k svojmu spisu, vedľa jeho súborov, vlastností, úloh aj konverzácií.",
+          "title": "Kontext spisu zostáva na očiach"
+        },
+        "5": {
+          "body": "Keď dokument potrebuje Microsoft Word, použite desktopový most a upravený súbor sa vráti do toho istého spisu.",
+          "title": "Most do lokálneho Office"
+        }
+      },
+      "cta": {
+        "heading": "Upravte wordový dokument priamo v jeho spise."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Áno. Dokument sa upravuje tam, kde je, vedľa ostatných súborov, vlastností, úloh aj konverzácií spisu, takže kvôli zmene nesťahujete lokálnu kópiu a nenahrávate ju späť.",
+          "question": "Zostane dokument počas úprav pripojený k spisu?"
+        },
+        "1": {
+          "answer": "Áno. Sledované vloženia a zmazania sa zobrazujú na mieste, ako ich ukazuje Word. Rovnakou cestou prichádzajú aj úpravy navrhnuté AI v aplikácii stella, takže sa revízia prejde a prijme alebo odmietne skôr, než sa stane súčasťou dokumentu.",
+          "question": "Zachováva editor sledovanie zmien?"
+        },
+        "2": {
+          "answer": "Uložený súbor zostáva prepojený s tým istým spisom aj dokumentom a z uloženia sa stane verzia v histórii verzií daného dokumentu.",
+          "question": "Čo sa stane pri uložení?"
+        },
+        "3": {
+          "answer": "Áno. Uložené verzie zostávajú v histórii verzií dokumentu, takže aktuálny súbor aj tie, ktoré nahradil, zostávajú pokope pri tom istom dokumente.",
+          "question": "Dostanem sa späť k staršej verzii?"
+        },
+        "4": {
+          "answer": "Áno. Desktopový most aplikácie stella otvorí dokument v lokálnom Office pre postupy, ktoré Word vyžadujú, a upravený súbor vráti do toho istého spisu.",
+          "question": "Môžem ten istý dokument otvoriť v Microsoft Worde?"
+        },
+        "5": {
+          "answer": "Áno. Dokument je súčasťou kontextu svojho spisu, takže nástroje, ktoré spis poznajú, si ho prečítajú a navrhnú úpravy ako sledované zmeny v tom istom dokumente.",
+          "question": "Môže AI v aplikácii stella pracovať s dokumentom, ktorý upravujem?"
+        }
+      },
+      "metaDescription": "Upravujte wordové dokumenty spisu priamo v aplikácii stella: sledovanie zmien na mieste, každé uloženie ako verzia v histórii a most do lokálneho Wordu.",
+      "metaTitle": "Úpravy wordových dokumentov priamo v spise | stella",
+      "quickAnswer": {
+        "answer": "Áno. Otvorte súbor .docx zo spisu a upravte ho v prehliadači. stella drží dokument v pôvodnom wordovom formáte a uložené úpravy zapisuje do histórie verzií toho istého dokumentu.",
+        "question": "Môžem v aplikácii stella upravovať wordové dokumenty?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Otvorte .docx priamo zo spisu",
+            "1": "Upravujte dokument so známym ovládaním strany aj formátovania",
+            "2": "Sledované zmeny revidujte na mieste, vrátane úprav navrhnutých AI",
+            "3": "Zachovajte pôvodný wordový formát súboru",
+            "4": "Zmeny ukladajte do histórie verzií dokumentu"
+          },
+          "heading": "Z .docx zostane .docx"
+        },
+        "1": {
+          "bullets": {
+            "0": "Prechádzajte medzi dokumentom a jeho spisom bez nahrávania kópií",
+            "1": "Vlastnosti dokumentu aj verzie zostávajú pri súbore",
+            "2": "V prípade potreby otvorte ten istý dokument cez desktopový most",
+            "3": "Použite dokument ako kontext pre nástroje, ktoré poznajú spis"
+          },
+          "heading": "Prepojené so zvyškom spisu"
+        }
+      }
+    },
+    "public-data": {
+      "adjacent": {
+        "0": {
+          "body": "Pripravte citlivé podklady pre AI bez odhalenia identifikačných údajov."
+        },
+        "1": {
+          "body": "Komunikujte naprieč spismi, súbormi aj zdrojmi, so schvaľovaním a citáciami."
+        },
+        "2": {
+          "body": "Premeňte sadu dokumentov na revíznu tabuľku v rámci spisu."
+        },
+        "3": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Rozhodnutia z oficiálnych verejných právnych zdrojov, nie výťahy vyťažené od tretích strán.",
+          "title": "Oficiálna judikatúra"
+        },
+        "1": {
+          "body": "Legal Atlas každé rozhodnutie spracuje a zachová jeho pôvodnú štruktúru.",
+          "title": "So zachovanou štruktúrou"
+        },
+        "2": {
+          "body": "Typovaní klienti k národným obchodným registrom, dopyt položíte priamo zo spisu.",
+          "title": "Obchodné registre"
+        },
+        "3": {
+          "body": "Prechádzajte medzi rozhodnutím a judikátmi, ktoré cituje, bez toho, aby ste opustili čítačku.",
+          "title": "Sledujte citácie"
+        },
+        "4": {
+          "body": "Prechádzajte a filtrujte judikatúru aj registre v rámci jurisdikcie, v ktorej pracujete.",
+          "title": "Podľa jurisdikcie"
+        },
+        "5": {
+          "body": "Odkážte na ktorýkoľvek zdroj zo spisu, aby odpovede agenta zostali dohľadateľné.",
+          "title": "Podklad pre AI"
+        }
+      },
+      "cta": {
+        "heading": "Majte oficiálne právne dáta priamo v spisoch."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Judikatúra pochádza z oficiálnych verejných právnych zdrojov, ktoré načítava a spracúva Legal Atlas, dátový stack aplikácie stella. Dáta o firmách prichádzajú z národných obchodných registrov cez typovaných klientov, nie z kópií od tretích strán.",
+          "question": "Odkiaľ dáta pochádzajú?"
+        },
+        "1": {
+          "answer": "Dva zoznamy a oba rastú. Medzi typovanými klientmi registrov už sú ARES (Česko), Companies House (Spojené kráľovstvo), SEC EDGAR (USA), KRS (Poľsko), PRH (Fínsko) a VIES (DPH v EÚ). Okrem registrov sa oficiálne zdroje objavujú podľa jurisdikcie z katalógu konektorov aplikácie stella; pripojené zdroje má napríklad Česko, Španielsko aj Taiwan a čítačka judikatúry vie prechádzať a filtrovať podľa jurisdikcie, ako ďalších oficiálnych zdrojov pribúda.",
+          "question": "Ktoré jurisdikcie a registre sú pokryté?"
+        },
+        "2": {
+          "answer": "Áno. Verejné dáta, na ktoré odkážete zo spisu, sa stávajú podloženým zdrojom: AI agent cituje pôvodné rozhodnutie alebo záznam, takže jeho odpovede zostávajú dohľadateľné.",
+          "question": "Môže s týmito dátami pracovať AI?"
+        }
+      },
+      "metaDescription": "Judikatúra a obchodné registre z oficiálnych verejných zdrojov. Čítajte rozhodnutia, vyhľadávajte firmy, sledujte citácie a načítajte ich do spisu aj k AI agentovi.",
+      "metaTitle": "Judikatúra a dáta z obchodných registrov | stella",
+      "quickAnswer": {
+        "answer": "Dvojaké. Oficiálnu verejnú judikatúru, ktorú stella načítava a štruktúrovane spracúva, takže si rozhodnutia prečítate, vyhľadáte v nich a prejdete ich citácie. A typovaný prístup do národných obchodných registrov, takže oficiálne údaje o firme načítate priamo do spisu. Oboje je podložený zdroj, na ktorý sa AI agent môže odvolať.",
+        "question": "Aké verejné dáta prináša stella?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Zbierané z oficiálnych verejných právnych zdrojov",
+            "1": "Parsery zachovávajú nadpisy, odseky aj odkazy",
+            "2": "Postavené na otvorenom dátovom stacku Legal Atlas"
+          },
+          "heading": "Judikatúra z oficiálnych zdrojov so zachovanou štruktúrou"
+        },
+        "1": {
+          "bullets": {
+            "0": "Typovaní klienti k národným registrom: ARES, Companies House, SEC EDGAR, KRS, PRH, VIES a ďalšie",
+            "1": "Načítajte oficiálne dáta o firme do spisu namiesto ručného prepisovania",
+            "2": "Pokrytie sa rozširuje s každým ďalším oficiálnym zdrojom"
+          },
+          "heading": "Obchodné registre, dopytované priamo zo spisu"
+        },
+        "2": {
+          "bullets": {
+            "0": "Odkážte zo spisu na rozhodnutie alebo záznam o firme",
+            "1": "Agent cituje pôvodný zdroj, nie parafrázu",
+            "2": "Hľadajte naprieč zdrojmi, nielen v jednom"
+          },
+          "heading": "Jeden podložený zdroj pre agenta"
+        }
+      }
+    },
+    "tabular-review": {
+      "adjacent": {
+        "0": {
+          "body": "Komunikujte naprieč spismi, súbormi aj pripojenými zdrojmi, so schvaľovaním a náhľadmi zdrojov."
+        },
+        "1": {
+          "body": "Oficiálna judikatúra a obchodné registre načítané do spisu."
+        },
+        "2": {
+          "body": "Pripravte citlivé podklady pre AI bez odhalenia identifikačných údajov."
+        },
+        "3": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Stĺpec popíšete bežnou rečou; stella naň odpovie pri každom dokumente v sade.",
+          "title": "Stĺpce sú otázky"
+        },
+        "1": {
+          "body": "Každá bunka odkazuje na presnú pasáž, z ktorej pochádza, takže overíte na jedno kliknutie.",
+          "title": "S citáciou k zdroju"
+        },
+        "2": {
+          "body": "Revízie žijú vnútri spisu vedľa dokumentov, kontaktov a chatu, ku ktorým patria.",
+          "title": "V rámci spisu"
+        },
+        "3": {
+          "body": "Berte odpovede ako dáta: zoraďte podľa ľubovoľného stĺpca, vyfiltrujte riadky, ktoré potrebujú pozornosť.",
+          "title": "Zoraďovanie a filtre"
+        },
+        "4": {
+          "body": "Položte rovnaké otázky nad veľkými sadami dokumentov namiesto otvárania súboru po súbore.",
+          "title": "Zvládne veľké objemy"
+        },
+        "5": {
+          "body": "Odneste si tabuľku v štandardných formátoch; na vlastných výstupoch žiadna viazanosť.",
+          "title": "Export kamkoľvek"
+        }
+      },
+      "cta": {
+        "heading": "Zrevidujte ďalšiu sadu dokumentov v aplikácii stella."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Na čokoľvek, čo by ste položili človeku, ktorý dokument reviduje: na fakty ako dátumy, strany a sumy, aj na posúdenie, napríklad či je určité ustanovenie prítomné a ako je formulované. Odpovede sa vracajú podložené citáciami zdrojového textu.",
+          "question": "Na čo sa stĺpec môže pýtať?"
+        },
+        "1": {
+          "answer": "Z dokumentov vo vašom spise. AI funkcie bežia na vašich vlastných kľúčoch, takže vyťažovanie ide cez poskytovateľa AI, ktorého si nastavíte, a každá odpoveď odkazuje späť na pasáž, z ktorej vychádza.",
+          "question": "Odkiaľ odpovede pochádzajú?"
+        },
+        "2": {
+          "answer": "Áno. Výstup tabuľkovej revízie sa exportuje v štandardných formátoch, takže si svoje výstupy odnesiete bez viazanosti.",
+          "question": "Dá sa revízia vyexportovať?"
+        }
+      },
+      "metaDescription": "Položte otázky nad celou sadou dokumentov a získajte štruktúrované odpovede ako zoraditeľnú tabuľku dohľadateľnú k zdroju. Pre due diligence, discovery aj rešerše.",
+      "metaTitle": "Tabuľková revízia dokumentov pre due diligence | stella",
+      "quickAnswer": {
+        "answer": "Namierite tabuľkovú revíziu na sadu dokumentov v spise a stĺpce nadefinujete ako otázky: napríklad „rozhodné právo“, „výpovedná lehota“ alebo „ustanovenie o zmene kontroly“. stella ku každému dokumentu vytiahne odpoveď do tabuľky, ktorú zoradíte, vyfiltrujete aj vyexportujete, a každá bunka odkazuje späť na pasáž, z ktorej pochádza.",
+        "question": "Ako tabuľková revízia funguje?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Stĺpec pridáte tak, že napíšete otázku, ktorú by ste položili koncipientovi",
+            "1": "Sady stĺpcov používajte opakovane naprieč spismi ako revízne playbooky",
+            "2": "Kombinujte vyťažovanie údajov (dátumy, strany, sumy) s otázkami na posúdenie"
+          },
+          "heading": "Otázky nadefinujete raz, odpoveď dostanete všade"
+        },
+        "1": {
+          "bullets": {
+            "0": "Kliknite na bunku a zdrojový dokument sa otvorí na citovanej pasáži",
+            "1": "Odpovede stoja na citáciách, nie na voľných zhrnutiach",
+            "2": "Rozpory medzi dokumentmi uvidíte na prvý pohľad"
+          },
+          "heading": "Každá odpoveď vedie späť k textu"
+        },
+        "2": {
+          "bullets": {
+            "0": "Revízie patria k spisu, hneď vedľa jeho súborov a chatu",
+            "1": "Odovzdajte revíziu AI agentovi a pýtajte sa ďalej",
+            "2": "Tabuľku vyexportujte, alebo ju ďalej upravujte na mieste"
+          },
+          "heading": "Je tam, kde je práca"
+        }
+      }
+    },
+    "templates": {
+      "adjacent": {
+        "0": {
+          "body": "Spisy, dokumenty a úpravy Wordu na jednom mieste."
+        },
+        "1": {
+          "body": "Premeňte sadu dokumentov na revíznu tabuľku v rámci spisu."
+        },
+        "2": {
+          "body": "Komunikujte naprieč spismi, súbormi aj zdrojmi, s citáciami."
+        },
+        "3": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Opakované dokumenty začínajú na overenom základe, nie na skopírovanom súbore.",
+          "title": "Opakovane použiteľné vzory"
+        },
+        "1": {
+          "body": "Nadefinujte hodnoty, ktoré dokument potrebuje, a doplňte ich pri zostavení.",
+          "title": "Polia a zástupné značky"
+        },
+        "2": {
+          "body": "Ustanovenia sa podľa zadaných hodnôt zaradia, alebo vynechajú, takže jeden vzor pokryje varianty.",
+          "title": "Podmienené ustanovenia"
+        },
+        "3": {
+          "body": "Nechajte aplikáciu stella pripraviť vyplnený dokument z dát spisu a potom ho doladíte.",
+          "title": "Vyplnenie cez AI"
+        },
+        "4": {
+          "body": "Vzory píšte a upravujte v editore a potom z nich zostavujte dokumenty.",
+          "title": "Úpravy na mieste"
+        },
+        "5": {
+          "body": "Koncept vznikne priamo v spise a upravujete ho vedľa ostatnej práce.",
+          "title": "Rovno do spisu"
+        }
+      },
+      "cta": {
+        "heading": "Začnite od vzoru, nie od prázdnej strany."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Áno. Vzory sa píšu a upravujú v editore a potom z nich zostavujete dokumenty.",
+          "question": "Môžem vzor upraviť?"
+        },
+        "1": {
+          "answer": "Opakovane použiteľná časť dokumentu. Ustanovenia sa zaraďujú naprieč vzormi a možno ich pridať podmienene podľa hodnôt, ktoré pri zostavovaní zadáte.",
+          "question": "Čo je ustanovenie?"
+        },
+        "2": {
+          "answer": "Do spisu, ako koncept, ktorý upravujete ďalej vedľa ostatných dokumentov spisu.",
+          "question": "Kam zostavený dokument zamieri?"
+        }
+      },
+      "metaDescription": "Nadefinujte vzor s poľami a podmienenými ustanoveniami a vyplňte ho ručne, alebo nechajte aplikáciu stella pripraviť návrh z dát spisu. Dokument vznikne v spise.",
+      "metaTitle": "Vzory právnych dokumentov s návrhom od AI | stella",
+      "quickAnswer": {
+        "answer": "Vzor je dokument s poľami a ustanoveniami, ktoré možno zaradiť podmienene. Polia vyplníte ručne, alebo ich nechajte pripraviť aplikáciu stella z dát spisu; podmienené ustanovenia sa vyhodnotia a vy dostanete dokument, na ktorom v spise pracujete ďalej. Vzory aj ustanovenia sa používajú opakovane, takže opakované dokumenty začínajú na overenom základe.",
+        "question": "Ako vzory v aplikácii stella fungujú?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Zostavte dokument zo vzoru namiesto prázdnej strany",
+            "1": "Používajte ustanovenia opakovane naprieč vzormi",
+            "2": "Držte opakované dokumenty jednotné"
+          },
+          "heading": "Stavajte zo vzorov a ustanovení"
+        },
+        "1": {
+          "bullets": {
+            "0": "Predvyplňte polia z dokumentu, ktorý už v spise leží",
+            "1": "Skôr než koncept vznikne, každú hodnotu skontrolujete a upravíte",
+            "2": "Podmienené ustanovenia sa vyhodnotia podľa hodnôt, ktoré ponecháte"
+          },
+          "heading": "Vyplňte ho z dát spisu"
+        },
+        "2": {
+          "bullets": {
+            "0": "Vzory píšte a upravujte v editore",
+            "1": "Koncept vytvorte priamo do spisu",
+            "2": "Výsledok upravujte ďalej vedľa ostatných súborov spisu"
+          },
+          "heading": "Upravujte a vytvárajte na mieste"
+        }
+      }
+    },
+    "ui": {
+      "capabilities": "Čo to dokáže",
+      "exploreMore": "Preskúmajte ďalej",
+      "faq": "Časté otázky",
+      "inShort": "V skratke"
+    },
+    "workspace": {
+      "adjacent": {
+        "0": {
+          "body": "Komunikujte naprieč spismi, súbormi aj pripojenými nástrojmi, so schvaľovaním a náhľadmi zdrojov."
+        },
+        "1": {
+          "body": "Premeňte sadu dokumentov na tabuľku v rámci spisu, ktorú zoradíte, filtrujete a dohľadáte."
+        },
+        "2": {
+          "body": "Siahnite na tie isté spisy, dokumenty aj judikatúru z CLI a z nástrojov kompatibilných s MCP."
+        },
+        "3": {
+          "body": "stella v strojovo čitateľnej podobe pre AI vyhľadávače."
+        }
+      },
+      "capabilities": {
+        "0": {
+          "body": "Usporiadajte dokumenty, kontakty, revíziu aj chat okolo spisu, ku ktorému patria. Všetko, čo do spisu pridáte, pri ňom zostane a dohľadáte to naprieč celým pracovným priestorom, takže kontext nájdete aj po návrate.",
+          "title": "Spisy"
+        },
+        "1": {
+          "body": "Otvárajte, upravujte a revidujte dokumenty Word .docx priamo v pracovnom priestore.",
+          "title": "Dokumenty a úpravy .docx"
+        },
+        "2": {
+          "body": "Spustite tabuľkovú revíziu aj rešerše vedľa dokumentov, ku ktorým patria.",
+          "title": "Revízia a rešerše"
+        },
+        "3": {
+          "body": "Majte AI agenta aj znalostné nástroje v rovnakom pracovnom priestore ako svoje súbory.",
+          "title": "Chat a znalostné nástroje"
+        },
+        "4": {
+          "body": "Desktopová aplikácia slúži ako lokálny most na úpravy dokumentov Office z aplikácie stella.",
+          "title": "Desktopový most"
+        },
+        "5": {
+          "body": "Z uložených úprav aj nahraných súborov vznikajú verzie dokumentu, takže aktuálny súbor a jeho história zostávajú pokope.",
+          "title": "História verzií"
+        }
+      },
+      "cta": {
+        "heading": "Majte všetky spisy v jednom pracovnom priestore."
+      },
+      "faqs": {
+        "0": {
+          "answer": "Áno. Webová aplikácia zvláda úpravy a revíziu dokumentov Word .docx. Pre lokálne úpravy v Office slúži desktopová aplikácia ako most: dokument otvoríte z aplikácie stella a upravíte ho u seba v počítači.",
+          "question": "Môžem v aplikácii stella upravovať wordové dokumenty?"
+        },
+        "1": {
+          "answer": "Dokumenty, kontakty, revízne tabuľky, vlákna chatu a história dokumentov. Všetko, čo do spisu pridáte, pri ňom zostane, takže kontext nájdete aj po návrate.",
+          "question": "Čo všetko je vnútri spisu?"
+        },
+        "2": {
+          "answer": "Áno. CLI a MCP server aplikácie stella sprístupňujú pripojeným nástrojom tie isté spisy, dokumenty aj judikatúru, s rovnakými oprávneniami. Podrobnosti nájdete pri CLI & MCP.",
+          "question": "Dosiahnu na pracovný priestor aj iné nástroje?"
+        }
+      },
+      "metaDescription": "Spisy, dokumenty, úpravy Word .docx, revízia, rešerše aj chat v jednom právnom pracovnom priestore. Práca zostáva v kontexte od podkladov až po odpoveď.",
+      "metaTitle": "Pracovný priestor na správu právnych spisov | stella",
+      "quickAnswer": {
+        "answer": "Webová aplikácia, ktorá drží spisy, dokumenty, úpravy Word .docx, revíziu, rešerše aj chat na jednom mieste. Všetko, čo do spisu pridáte, pri ňom zostane, takže kontext nájdete aj po návrate. Sprievodná desktopová aplikácia slúži ako lokálny most, keď dokument potrebuje Microsoft Word.",
+        "question": "Čo je pracovný priestor v aplikácii stella?"
+      },
+      "sections": {
+        "0": {
+          "bullets": {
+            "0": "Dokumenty, kontakty, revízia aj chat žijú vnútri spisu",
+            "1": "Upravujte dokumenty Word .docx bez toho, aby ste opustili pracovný priestor",
+            "2": "Prechádzajte medzi rešeršami, revíziou a chatom bez striedania aplikácií"
+          },
+          "heading": "Všetko k spisu na jednom mieste"
+        },
+        "1": {
+          "bullets": {
+            "0": "Otvorte a upravte dokumenty Word .docx priamo v pracovnom priestore",
+            "1": "Revízia zostáva wordovým súborom: žiadne prevody, žiadne kópie",
+            "2": "Keď dokument potrebuje Microsoft Word, použite desktopový most"
+          },
+          "heading": "Wordové dokumenty upravené tam, kde ich potrebujete"
+        }
+      }
+    }
   },
   "story": {
     "agentBody": "Agent prehľadá spis, prečíta relevantný text a odpovie s citáciami, ktoré otvoria zdroj presne v danej pasáži. Použijete ho priamo v aplikácii stella, alebo si ho pripojíte k nástrojom, ktoré už používate.",

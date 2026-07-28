@@ -1,6 +1,8 @@
 ---
+import { productHref } from "../data/products/links";
+import type { ProductSlug } from "../data/products/pillars";
 import { resolveSceneWindowLabels } from "../data/product-story";
-import type { TranslationKey } from "../data/site-nav";
+import type { TranslationKey } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
 import { getTranslations } from "../i18n/utils";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
@@ -18,7 +20,9 @@ type StoryChapter = {
   eyebrowKey: TranslationKey;
   titleKey: TranslationKey;
   bodyKey: TranslationKey;
-  links: readonly { labelKey: TranslationKey; href: string }[];
+  // Chapter links only ever point at product pages, so they carry the slug
+  // and the locale-aware URL is built at render time.
+  links: readonly { labelKey: TranslationKey; slug: ProductSlug }[];
 };
 
 const chapters = [
@@ -28,12 +32,9 @@ const chapters = [
     titleKey: "story.workspaceTitle",
     bodyKey: "story.workspaceBody",
     links: [
-      { labelKey: "story.exploreWorkspace", href: "/product/workspace" },
-      { labelKey: "story.openEditor", href: "/product/editor" },
-      {
-        labelKey: "story.exploreTabularReview",
-        href: "/product/tabular-review",
-      },
+      { labelKey: "story.exploreWorkspace", slug: "workspace" },
+      { labelKey: "story.openEditor", slug: "editor" },
+      { labelKey: "story.exploreTabularReview", slug: "tabular-review" },
     ],
   },
   {
@@ -42,8 +43,8 @@ const chapters = [
     titleKey: "story.agentTitle",
     bodyKey: "story.agentBody",
     links: [
-      { labelKey: "story.exploreAgent", href: "/product/agent" },
-      { labelKey: "story.exploreTemplates", href: "/product/templates" },
+      { labelKey: "story.exploreAgent", slug: "agent" },
+      { labelKey: "story.exploreTemplates", slug: "templates" },
     ],
   },
   {
@@ -52,8 +53,8 @@ const chapters = [
     titleKey: "story.dataTitle",
     bodyKey: "story.dataBody",
     links: [
-      { labelKey: "story.explorePublicData", href: "/product/public-data" },
-      { labelKey: "story.exploreAnonymization", href: "/product/anonymization" },
+      { labelKey: "story.explorePublicData", slug: "public-data" },
+      { labelKey: "story.exploreAnonymization", slug: "anonymization" },
     ],
   },
 ] as const satisfies readonly StoryChapter[];
@@ -153,7 +154,7 @@ const proofItems = [
               </p>
               <nav class="mt-6 flex flex-wrap gap-x-5 gap-y-1" aria-label={t(chapter.eyebrowKey)}>
                 {chapter.links.map((link) => (
-                  <a class="story-link group inline-flex min-h-11 items-center gap-2 text-sm font-medium" href={link.href}>
+                  <a class="story-link group inline-flex min-h-11 items-center gap-2 text-sm font-medium" href={productHref(link.slug, locale)}>
                     <span>{t(link.labelKey)}</span>
                     <span
                       aria-hidden="true"

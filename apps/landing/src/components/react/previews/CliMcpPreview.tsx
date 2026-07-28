@@ -76,7 +76,7 @@ export const CliMcpPreview = ({
     }
     const slug = slugForWindow(window);
     return {
-      href: `/product/${slug}`,
+      href: discover.productHrefs[slug],
       label: `${discover.label} ${discover.productNames[slug]}`,
     };
   };
@@ -621,7 +621,7 @@ export const CliMcpPreview = ({
               ? undefined
               : positions[selection.window]
           }
-          href={`/product/${slugForWindow(selection.window)}`}
+          href={discover.productHrefs[slugForWindow(selection.window)]}
           label={discover.label}
           onPointerEnter={cancelSelectionClear}
           onPointerLeave={() => scheduleSelectionClear(selection.window)}
@@ -806,14 +806,16 @@ type CliMcpPreviewProps = {
   /**
    * Discover chips: when set, each window shows a hover/focus chip linking to
    * its product page (the main window follows the active scene). Omitted in
-   * embeds that have their own product links. The label and the product names
-   * arrive together because this island has no translator; pairing them in one
-   * prop means a caller cannot supply a translated verb and leave the product
-   * name English.
+   * embeds that have their own product links. The label, the product names,
+   * and the product URLs arrive together because this island has neither a
+   * translator nor a locale; pairing them in one prop means a caller cannot
+   * supply a translated verb and leave the product name English, or send a
+   * reader on /cs/ to the English page.
    */
   discover?: {
     label: string;
     productNames: Record<ProductSlug, string>;
+    productHrefs: Record<ProductSlug, string>;
   };
   includeStyles?: boolean;
   initialScenarioId?: CliScenarioId;
@@ -948,10 +950,10 @@ const TERMINAL_LOOP_DURATION_MS = 9000;
 const getInitialActiveWindow = (): PreviewWindow => "terminal";
 
 // Product destination per scene for the main window's discover chip; the
-// companion windows have fixed products. Slugs only: the href is
-// `/product/<slug>` and the chip's product name is the localized eyebrow the
-// `discover` prop carries in, so the scene cannot drift from the nav menus or
-// hold an English name on a localized page.
+// companion windows have fixed products. Slugs only: both the URL and the
+// product name come from the `discover` prop (localized by the mounting Astro
+// page), so the scene cannot drift from the nav menus, hold an English name on
+// a localized page, or link out of the reader's locale.
 const DISCOVER_SCENE_SLUGS = {
   workspace: "workspace",
   review: "tabular-review",

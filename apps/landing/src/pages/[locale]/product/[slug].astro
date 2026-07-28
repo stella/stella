@@ -1,0 +1,23 @@
+---
+import ProductPage from "../../../components/ProductPage.astro";
+import { products } from "../../../data/products/registry";
+import { defaultLocale, localeCodes, locales } from "../../../i18n/config";
+
+// Every product page for every non-default locale at its path prefix
+// (/cs/product/anonymization). ProductPage reads Astro.currentLocale for its
+// translations, so the route only has to enumerate the pairs.
+export function getStaticPaths() {
+  return localeCodes
+    .filter((code) => code !== defaultLocale)
+    .flatMap((code) =>
+      products.map((product) => ({
+        params: { locale: locales[code].path, slug: product.slug },
+        props: { product },
+      })),
+    );
+}
+
+const { product } = Astro.props;
+---
+
+<ProductPage product={product} />

@@ -131,8 +131,7 @@ console.log(`Rendered ${pngPath}`);
 // ——— Per-product cards ———
 mkdirSync(OG_DIR, { recursive: true });
 for (const product of products) {
-  const headline =
-    product.metaTitle?.replace(/\s*\|\s*stella\s*$/u, "") ?? product.eyebrow;
+  const headline = product.metaTitle.replace(/\s*\|\s*stella\s*$/u, "");
   const productPngPath = path.join(OG_DIR, `${product.slug}.png`);
   writeFileSync(
     productPngPath,

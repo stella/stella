@@ -252,10 +252,10 @@ earlier rule that treated the eyebrows as brand-constant English: a Czech page
 whose footer said "Tabulková revize" while the menu above it said "Tabular
 Review" was naming the same page twice, as two products.
 
-The `/product/<slug>` pages are English-only and keep rendering the registry's
-own `eyebrow` from `data/products/*.ts`; that field stays the English source
-of truth, and `menu-copy.test.ts` asserts `en.json` agrees with it, the same
-drift guard the menu `title`/`blurb` already have.
+The product pages render the same eyebrow from the same key. They are localized
+too (`/<lang>/product/<slug>`), and their hero reads
+`nav.products.<slug>.eyebrow`/`.title`/`.blurb` rather than restating them, so a
+product is named once per locale across the menu, the footer, and its own page.
 
 | Locale | Workspace          | Editor      | Templates  | Tabular Review        | AI agent              | Anonymization  | Public data       |
 | ------ | ------------------ | ----------- | ---------- | --------------------- | --------------------- | -------------- | ----------------- |
@@ -363,6 +363,63 @@ takes the indefinite مساحة عمل and the product entry the definite مسا
 Estonian uses _taristu_, the standard Estonian term for infrastructure, so the
 data pillar is _Andmetaristu_ rather than the loan compound
 _andmeinfrastruktuur_.
+
+## The product pages: `products.<slug>.*`
+
+Everything below a product page's hero lives under `products.<slug>.*`: the quick
+answer, the capability cards, the deep-dive sections and their bullets, the FAQ,
+the "Explore more" card bodies, the closing CTA heading, and the two meta
+strings. The page's own eyebrow, headline, and lead paragraph are **not** here:
+they are `nav.products.<slug>.eyebrow`/`.title`/`.blurb`, so the mega-menu and
+the page cannot say two different things. The four section labels the template
+prints around that copy (`In short`, `Capabilities`, `FAQ`, `Explore more`) are
+`products.ui.*`, and the CTA button label is `common.startFree` (or
+`common.getCli` on the CLI & MCP page).
+
+The message format has no array form, so lists are numbered sibling keys:
+`products.editor.sections.0.bullets.3`. The numbers are positions in
+`data/products/<slug>.ts`, which stays the English source of truth and owns
+everything that is not prose (media, evidence, link destinations);
+`menu-copy.test.ts` compares the whole `en` subtree against it, so a dropped
+bullet or an extra FAQ fails there rather than rendering as a gap. Never add,
+drop, or reorder a numbered key in a translation: the count is the English
+structure, and `i18n:check` enforces it.
+
+What a translated page owes the reader:
+
+- The **meta strings** keep the home page's budgets: `metaTitle` ≤ ~60
+  characters including the ` | stella` suffix, `metaDescription` ~140–160.
+  Rewrite them for the market rather than compressing a literal translation; a
+  Czech `metaTitle` that says what the page is about beats one that preserves
+  the English word order and gets cut.
+- **Section headings and capability titles are headlines.** They take the
+  transcreation rule at the top of this document: re-tell the claim the way a
+  native legal-tech marketer would make it, never beat by beat. "It lives where
+  the work lives" is cs "Je tam, kde je práce", not a gloss of "lives".
+- **Bullets stay short.** They render as a list, not as prose; a bullet that
+  grows a subordinate clause in translation has lost the format.
+- The **card bodies under "Explore more"** describe the destination page, and
+  several pages point at the same destination with the same English sentence.
+  Translate such a sentence once and reuse that rendering on every page that
+  carries it, the way `products.cli-mcp.adjacent.0.body` reuses
+  `nav.products.workspace.title`'s rendering (the two share an English value and
+  are listed under `duplicateValues` in `i18n-check-baseline.json`).
+- **Product names inside body copy** take the eyebrow table above, not a fresh
+  translation: cs "tabulková revize", sk "tabuľková revízia", never a synonym.
+
+Czech has one extra constraint on this namespace. The glossary forbids cs
+`pracovní prostor` on strings whose English mentions **matter**, and the
+workspace page's copy names both concepts constantly. Restructure instead of
+reaching for a second workspace term (which is what `glossary.json` bans): the
+workspace `metaTitle` is cs "Správa právních spisů na jednom místě", and
+`cta.heading` is "Mějte všechny spisy na jednom místě", both of which say the
+product's claim without the word. Slovak has no such ban and uses `pracovný
+priestor` freely.
+
+Only `cs` and `sk` are translated today. The other ten locales hold the English
+values, grandfathered per key in `i18n-check-baseline.json` under
+`identicalToSource`; a locale is finished when its entries there are gone, and
+`--write-baseline` is not how to finish it.
 
 ## Shared chrome is UI copy, not decoration
 

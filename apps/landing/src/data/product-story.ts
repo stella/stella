@@ -1,4 +1,4 @@
-import type { TranslationKey } from "./site-nav";
+import type { TranslationKey } from "../i18n/utils";
 
 export const productStorySceneIds = [
   "workspace",

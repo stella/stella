@@ -2,7 +2,9 @@
 // renders any Product, so a new page is a data file, not new markup.
 
 import type { ProductPreviewKey } from "../../components/react/previews/keys";
+import type { TranslationKey } from "../../i18n/utils";
 import type { ProductStorySceneId } from "../product-story";
+import type { ProductSlug } from "./pillars";
 
 // Media is a discriminated union. `story` reuses a deterministic product scene
 // on the homepage and product pages; small menu cards use its theme-aware capture
@@ -100,27 +102,53 @@ export type ProductSection = {
 
 export type ProductFaq = { question: string; answer: string };
 
-export type ProductLink = { title: string; href: string; body: string };
+/**
+ * An "Explore more" card. The card's title is the destination's own name, so
+ * it is not stored here: a product card takes `nav.products.<slug>.eyebrow`,
+ * the two standalone pages take their nav label. That makes a card that names
+ * its destination differently from the destination itself unrepresentable,
+ * and leaves only the one-line `body` as this page's own copy. `to` also says
+ * whether the destination is localized: product pages are, the standalone
+ * `/ai-info` and `/docx-editor` pages are English-only.
+ */
+export type ProductLink =
+  | { to: "product"; slug: ProductSlug; body: string }
+  | { to: "ai-info"; body: string }
+  | { to: "docx-editor"; body: string };
+
+/**
+ * CTA button labels. They are shared across pages (seven of eight say the same
+ * thing), so they live in the catalog under `common.*` and are referenced by
+ * key; `en` mirrors the catalog value so the data file still reads as the
+ * English source, and menu-copy.test.ts keeps the pair honest.
+ */
+export const productCtaLabels = {
+  startFree: { key: "common.startFree", en: "Start free" },
+  getCli: { key: "common.getCli", en: "Get the CLI" },
+} as const satisfies Record<string, { key: TranslationKey; en: string }>;
+
+export type ProductCtaLabel =
+  (typeof productCtaLabels)[keyof typeof productCtaLabels];
 
 export type ProductEvidence =
   | { type: "capability"; id: string }
   | { type: "source"; path: string; contains: readonly string[] };
 
 export type Product = {
-  slug: string;
+  slug: ProductSlug;
   eyebrow: string;
   title: string;
   summary: string;
   /**
    * SERP title, topic-first with the brand suffix, kept at 60 characters or
-   * fewer. Falls back to `stella | ${eyebrow}` when absent.
+   * fewer.
    */
-  metaTitle?: string;
+  metaTitle: string;
   /**
    * SERP description, 140-158 characters distilled from `summary` with the
-   * same claims. Falls back to `summary` when absent.
+   * same claims.
    */
-  metaDescription?: string;
+  metaDescription: string;
   hero: ProductMedia;
   /** Frame recipe for the hero media frame; dormant, see `FrameVariant`. */
   heroFrameVariant?: FrameVariant;
@@ -135,5 +163,5 @@ export type Product = {
   faqs: readonly ProductFaq[];
   adjacent: readonly ProductLink[];
   evidence: readonly ProductEvidence[];
-  cta: { heading: string; href: string; label: string };
+  cta: { heading: string; href: string; label: ProductCtaLabel };
 };

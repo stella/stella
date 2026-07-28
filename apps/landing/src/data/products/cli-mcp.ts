@@ -1,4 +1,4 @@
-import { frameAccents, type Product } from "./types";
+import { frameAccents, productCtaLabels, type Product } from "./types";
 
 export const cliMcp: Product = {
   slug: "cli-mcp",
@@ -100,23 +100,22 @@ export const cliMcp: Product = {
   ],
   adjacent: [
     {
-      title: "Workspace",
-      href: "/product/workspace",
+      to: "product",
+      slug: "workspace",
       body: "Matters, documents, review, and chat in one workspace.",
     },
     {
-      title: "AI agent",
-      href: "/product/agent",
+      to: "product",
+      slug: "agent",
       body: "Work across matters and connected tools with approvals and citations.",
     },
     {
-      title: "Templates",
-      href: "/product/templates",
+      to: "product",
+      slug: "templates",
       body: "Fill reusable legal documents through the app, CLI, or connected tools.",
     },
     {
-      title: "AI fact sheet",
-      href: "/ai-info",
+      to: "ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
   ],
@@ -136,6 +135,6 @@ export const cliMcp: Product = {
   cta: {
     heading: "Bring stella into the tools where you already work.",
     href: "https://github.com/stella/stella/tree/main/packages/cli",
-    label: "Get the CLI",
+    label: productCtaLabels.getCli,
   },
 };

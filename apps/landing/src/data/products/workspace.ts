@@ -1,4 +1,4 @@
-import { frameAccents, type Product } from "./types";
+import { frameAccents, productCtaLabels, type Product } from "./types";
 
 // The live preview is assembled from shared tokens and product UI components,
 // so it evolves with the application instead of depending on screenshots.
@@ -99,23 +99,22 @@ export const workspace: Product = {
   ],
   adjacent: [
     {
-      title: "AI agent",
-      href: "/product/agent",
+      to: "product",
+      slug: "agent",
       body: "Chat across matters, files, and connected tools with approvals and source previews.",
     },
     {
-      title: "Tabular Review",
-      href: "/product/tabular-review",
+      to: "product",
+      slug: "tabular-review",
       body: "Turn a document set into a matter-scoped table you can sort, filter, and trace.",
     },
     {
-      title: "CLI & MCP",
-      href: "/product/cli-mcp",
+      to: "product",
+      slug: "cli-mcp",
       body: "Reach the same matters, documents, and case law from the CLI and MCP-compatible tools.",
     },
     {
-      title: "AI fact sheet",
-      href: "/ai-info",
+      to: "ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
   ],
@@ -144,6 +143,6 @@ export const workspace: Product = {
   cta: {
     heading: "Bring your matters into one workspace.",
     href: "https://my.stll.app",
-    label: "Start free",
+    label: productCtaLabels.startFree,
   },
 };

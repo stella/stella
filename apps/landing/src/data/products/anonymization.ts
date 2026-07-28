@@ -1,4 +1,4 @@
-import { frameAccents, type Product } from "./types";
+import { frameAccents, productCtaLabels, type Product } from "./types";
 
 // Claims stay anchored to the shared WASM-backed anonymization pipeline and
 // the product surfaces that expose it.
@@ -73,23 +73,22 @@ export const anonymization: Product = {
   ],
   adjacent: [
     {
-      title: "AI agent",
-      href: "/product/agent",
+      to: "product",
+      slug: "agent",
       body: "Chat across matters, files, and connected tools with approvals and source previews.",
     },
     {
-      title: "Workspace",
-      href: "/product/workspace",
+      to: "product",
+      slug: "workspace",
       body: "Matters, documents, .docx editing, review, and chat in one workspace.",
     },
     {
-      title: "Tabular Review",
-      href: "/product/tabular-review",
+      to: "product",
+      slug: "tabular-review",
       body: "Turn a document set into a matter-scoped table you can sort, filter, and trace.",
     },
     {
-      title: "AI fact sheet",
-      href: "/ai-info",
+      to: "ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
   ],
@@ -114,6 +113,6 @@ export const anonymization: Product = {
   cta: {
     heading: "Keep identifying details out of your AI workflows.",
     href: "https://my.stll.app",
-    label: "Start free",
+    label: productCtaLabels.startFree,
   },
 };

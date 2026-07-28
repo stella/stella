@@ -1,4 +1,4 @@
-import { frameAccents, type Product } from "./types";
+import { frameAccents, productCtaLabels, type Product } from "./types";
 
 // "Public data" merges the case-law reader and the company-registry clients
 // into one data-infrastructure story, matching the README's "Data
@@ -97,23 +97,22 @@ export const publicData: Product = {
   ],
   adjacent: [
     {
-      title: "Anonymization",
-      href: "/product/anonymization",
+      to: "product",
+      slug: "anonymization",
       body: "Prepare sensitive material for AI without exposing identifying details.",
     },
     {
-      title: "AI agent",
-      href: "/product/agent",
+      to: "product",
+      slug: "agent",
       body: "Chat across matters, files, and sources with approvals and citations.",
     },
     {
-      title: "Tabular Review",
-      href: "/product/tabular-review",
+      to: "product",
+      slug: "tabular-review",
       body: "Turn a document set into a matter-scoped review table.",
     },
     {
-      title: "AI fact sheet",
-      href: "/ai-info",
+      to: "ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
   ],
@@ -145,6 +144,6 @@ export const publicData: Product = {
   cta: {
     heading: "Bring official legal data into your matters.",
     href: "https://my.stll.app",
-    label: "Start free",
+    label: productCtaLabels.startFree,
   },
 };

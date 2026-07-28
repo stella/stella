@@ -1,4 +1,4 @@
-import { frameAccents, type Product } from "./types";
+import { frameAccents, productCtaLabels, type Product } from "./types";
 
 export const editor: Product = {
   slug: "editor",
@@ -109,23 +109,21 @@ export const editor: Product = {
   ],
   adjacent: [
     {
-      title: "Workspace",
-      href: "/product/workspace",
+      to: "product",
+      slug: "workspace",
       body: "See where matters, documents, and tools live together.",
     },
     {
-      title: "Templates",
-      href: "/product/templates",
+      to: "product",
+      slug: "templates",
       body: "Create reusable Word documents with fields and conditional clauses.",
     },
     {
-      title: "Standalone DOCX editor",
-      href: "/docx-editor",
+      to: "docx-editor",
       body: "Try the same editor on its own: open and edit a .docx in the browser, no account needed.",
     },
     {
-      title: "AI fact sheet",
-      href: "/ai-info",
+      to: "ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
   ],
@@ -145,6 +143,6 @@ export const editor: Product = {
   cta: {
     heading: "Edit a Word document in its matter.",
     href: "https://my.stll.app",
-    label: "Start free",
+    label: productCtaLabels.startFree,
   },
 };

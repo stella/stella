@@ -1,4 +1,4 @@
-import type { getTranslations } from "../i18n/utils";
+import type { TranslationKey } from "../i18n/utils";
 import { pillars, type ProductSlug } from "./products/pillars";
 import { productBySlug } from "./products/registry";
 
@@ -8,10 +8,6 @@ import { productBySlug } from "./products/registry";
 // time in each component); literal brand names ("Discord", "GitHub") stay
 // plain strings, and the `kind` discriminator makes that distinction
 // structural.
-
-// Dot-path key union of the message catalog, derived from the translator so a
-// stale key fails typecheck (mirrors apps/web/src/i18n/types.ts).
-export type TranslationKey = Parameters<ReturnType<typeof getTranslations>>[0];
 
 export type NavLabel =
   | { kind: "translated"; labelKey: TranslationKey }
@@ -30,6 +26,7 @@ export const selfHostingUrl = `${githubUrl}/blob/main/docs/self-hosting.md`;
 export const resourceLinks = [
   { kind: "translated", labelKey: "nav.security", href: "/security" },
   { kind: "translated", labelKey: "nav.blog", href: "/blog" },
+  { kind: "translated", labelKey: "nav.aiFactSheet", href: "/ai-info" },
   { kind: "translated", labelKey: "hero.selfHost", href: selfHostingUrl },
   { kind: "translated", labelKey: "footer.status", href: statusUrl },
 ] as const satisfies readonly NavLink[];
@@ -72,7 +69,6 @@ const productFooterLabels = {
 
 export type ProductNavEntry = {
   slug: ProductSlug;
-  href: string;
   eyebrowKey: TranslationKey;
   footerLabel: NavLabel;
 };
@@ -80,14 +76,14 @@ export type ProductNavEntry = {
 // Product pages in pillar order (the README spine), so nav surfaces and the
 // footer share one ordering and cannot drift from pillars.ts. Registered
 // products only: `productBySlug` guards against a pillar naming a page that
-// does not exist.
+// does not exist. No `href`: every surface builds one with `productHref` from
+// `data/products/links.ts`, which carries the active locale's prefix.
 export const productNavEntries = pillars.flatMap((pillar) =>
   pillar.slugs.flatMap((slug) =>
     productBySlug.has(slug)
       ? [
           {
             slug,
-            href: `/product/${slug}`,
             eyebrowKey: `nav.products.${slug}.eyebrow` as const,
             footerLabel: productFooterLabels[slug],
           },

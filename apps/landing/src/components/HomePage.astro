@@ -4,6 +4,7 @@ import LandingFooter from "./LandingFooter.astro";
 import HomeProductStory from "./HomeProductStory.astro";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import { getChangelogReleases, getReleaseKind } from "../lib/changelog";
+import { resolveProductHrefs } from "../data/products/links";
 import { resolveProductEyebrows } from "../data/site-nav";
 import { resolveSceneWindowLabels } from "../data/product-story";
 import { getTranslations } from "../i18n/utils";
@@ -174,6 +175,7 @@ const selfHostingDocsUrl =
             backdrop="transparent"
             discover={{
               label: t("story.discover"),
+              productHrefs: resolveProductHrefs(locale),
               productNames: resolveProductEyebrows(t),
             }}
             windowLabels={resolveSceneWindowLabels(t)}

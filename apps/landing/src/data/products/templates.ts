@@ -1,4 +1,4 @@
-import { frameAccents, type Product } from "./types";
+import { frameAccents, productCtaLabels, type Product } from "./types";
 
 // Templates shipped in 0.5.0. Part of the Legal-intelligence pillar: build
 // reusable templates with fields and conditional clauses, and let AI fill them
@@ -114,23 +114,22 @@ export const templates: Product = {
   ],
   adjacent: [
     {
-      title: "Workspace",
-      href: "/product/workspace",
+      to: "product",
+      slug: "workspace",
       body: "Matters, documents, and Word editing in one place.",
     },
     {
-      title: "Tabular Review",
-      href: "/product/tabular-review",
+      to: "product",
+      slug: "tabular-review",
       body: "Turn a document set into a matter-scoped review table.",
     },
     {
-      title: "AI agent",
-      href: "/product/agent",
+      to: "product",
+      slug: "agent",
       body: "Chat across matters, files, and sources with citations.",
     },
     {
-      title: "AI fact sheet",
-      href: "/ai-info",
+      to: "ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
   ],
@@ -143,6 +142,6 @@ export const templates: Product = {
   cta: {
     heading: "Start from a template, not a blank page.",
     href: "https://my.stll.app",
-    label: "Start free",
+    label: productCtaLabels.startFree,
   },
 };

@@ -1,4 +1,4 @@
-import { frameAccents, type Product } from "./types";
+import { frameAccents, productCtaLabels, type Product } from "./types";
 
 // The hero reuses the same agent scene as the opening product story.
 export const agent: Product = {
@@ -94,23 +94,22 @@ export const agent: Product = {
   ],
   adjacent: [
     {
-      title: "Tabular Review",
-      href: "/product/tabular-review",
+      to: "product",
+      slug: "tabular-review",
       body: "Turn a document set into a matter-scoped table you can sort, filter, and trace.",
     },
     {
-      title: "Workspace",
-      href: "/product/workspace",
+      to: "product",
+      slug: "workspace",
       body: "Matters, documents, .docx editing, review, and chat in one workspace.",
     },
     {
-      title: "Public data",
-      href: "/product/public-data",
+      to: "product",
+      slug: "public-data",
       body: "Read and search official case law, legal sources, and company registries.",
     },
     {
-      title: "AI fact sheet",
-      href: "/ai-info",
+      to: "ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
   ],
@@ -132,6 +131,6 @@ export const agent: Product = {
   cta: {
     heading: "Hand the agent a real matter.",
     href: "https://my.stll.app",
-    label: "Start free",
+    label: productCtaLabels.startFree,
   },
 };
