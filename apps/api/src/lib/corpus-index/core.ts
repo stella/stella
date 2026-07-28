@@ -551,12 +551,22 @@ export const createCorpusIndexer = <
     options: { readConcurrency?: number } = {},
   ): Promise<number> => {
     const staleReserved = Math.max(1, Math.floor(batchSize / 4));
-    const missingLimit = Math.max(1, batchSize - staleReserved);
+    // A due duty batch cedes one missing slot up front so granting the
+    // stale scan capacity below cannot push the batch past its requested
+    // size (batchSize 1 becomes a stale-only batch on the due call).
+    const dutyDue = staleSkips >= STALE_SCAN_DUTY_CYCLE - 1;
+    const missingLimit = Math.max(
+      dutyDue ? 0 : 1,
+      batchSize - staleReserved - (dutyDue ? 1 : 0),
+    );
 
-    const missing = await adapter.selectMissing(scopedDb, {
-      generation,
-      limit: missingLimit,
-    });
+    const missing =
+      missingLimit === 0
+        ? []
+        : await adapter.selectMissing(scopedDb, {
+            generation,
+            limit: missingLimit,
+          });
 
     // The stale scan is duty-cycled while the missing backlog fills its
     // quota. Its predicate (hash mismatch within the current generation)
@@ -568,14 +578,10 @@ export const createCorpusIndexer = <
     // backlog full indefinitely, so every STALE_SCAN_DUTY_CYCLEth batch
     // still runs the scan with its reserve, bounding staleness instead of
     // trading it away.
-    // A due duty batch always grants the stale scan at least one slot —
-    // batchSize 1 would otherwise leave staleLimit at zero on the due
-    // batch and the counter would grow without the scan ever running.
-    const dutyDue = staleSkips >= STALE_SCAN_DUTY_CYCLE - 1;
     const staleLimit =
       missing.length >= missingLimit && !dutyDue
         ? 0
-        : Math.max(batchSize - missing.length, dutyDue ? 1 : 0);
+        : batchSize - missing.length;
     staleSkips = staleLimit === 0 ? staleSkips + 1 : 0;
     const stale =
       staleLimit <= 0
