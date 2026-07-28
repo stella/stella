@@ -1085,9 +1085,21 @@ const sendMessage = createSafeRootHandler(
                     panic("Missing chat response message");
                   }
 
+                  // `isAborted` is the metered stream's own signal: true only
+                  // when the generation was cut off mid-stream (metered-timeout
+                  // abort or aborted-stream finish), never on natural
+                  // completion. It is NOT folded together with
+                  // `isClientConnectionAborted()`: the metered provider call is
+                  // decoupled from the client socket, so a connection dropped
+                  // mid-generation still runs the model to completion and meters
+                  // it. That completed message must be persisted, or the user is
+                  // billed for an answer they can never see after remount. Only
+                  // a genuinely incomplete generation is discarded.
                   const persistencePlan = planAssistantFinishPersistence({
                     existingIds: latestMessagePlan.existingIds,
-                    isAborted: isAborted || isClientConnectionAborted(),
+                    finishOutcome: isAborted
+                      ? { type: "aborted" }
+                      : { type: "completed" },
                     message: resolvedResponseMessage,
                   });
 
@@ -1097,7 +1109,10 @@ const sendMessage = createSafeRootHandler(
                   // for transient parts that never land in
                   // `chat_messages` could make the thread unreadable
                   // after future access changes even though no
-                  // corresponding content was saved.
+                  // corresponding content was saved. A completed
+                  // message whose client merely disconnected is NOT
+                  // `none` here, so it flows through the same
+                  // scope-widening and persist path below.
                   if (persistencePlan.type === "none") {
                     return;
                   }

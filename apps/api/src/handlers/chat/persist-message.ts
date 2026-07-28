@@ -134,28 +134,46 @@ export const planMessagePersistence = ({
   };
 };
 
+/**
+ * Why the assistant streaming turn finished, from the streaming loop's point of
+ * view. Only a fully completed generation is persisted; a generation cut off
+ * mid-stream (metered-timeout abort, aborted-stream finish) leaves an
+ * incomplete message that must be discarded.
+ *
+ * This is deliberately independent of the client HTTP connection. The metered
+ * provider call is decoupled from the socket (see `createMeteredAIAbortSignal`),
+ * so a dropped connection does not make the generation "aborted": the message is
+ * still fully generated and metered, and must be persisted. Modelling the finish
+ * reason as an outcome rather than a bare `isAborted` boolean keeps a future
+ * caller from folding connection state back into the persistence decision.
+ */
+export type ChatAssistantFinishOutcome =
+  | { type: "completed" }
+  | { type: "aborted" };
+
 type PlanAssistantFinishPersistenceProps = {
   existingIds: Set<SafeId<"chatMessage">>;
-  isAborted: boolean;
+  finishOutcome: ChatAssistantFinishOutcome;
   message: PersistableChatMessage;
 };
 
 export const planAssistantFinishPersistence = ({
   existingIds,
-  isAborted,
+  finishOutcome,
   message,
 }: PlanAssistantFinishPersistenceProps): MessagePersistencePlan => {
-  if (isAborted || message.role !== "assistant") {
+  if (message.role !== "assistant") {
     return { type: "none" };
   }
 
-  if (existingIds.has(message.id)) {
-    return {
-      type: "update",
-      messageId: message.id,
-      message,
-    };
+  switch (finishOutcome.type) {
+    case "aborted":
+      return { type: "none" };
+    case "completed":
+      return existingIds.has(message.id)
+        ? { type: "update", messageId: message.id, message }
+        : { type: "insert", message };
+    default:
+      return finishOutcome satisfies never;
   }
-
-  return { type: "insert", message };
 };

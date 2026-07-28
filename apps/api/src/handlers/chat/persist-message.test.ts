@@ -155,7 +155,7 @@ describe("chat approval persistence", () => {
 
     const finishPlan = planAssistantFinishPersistence({
       existingIds: incomingPlan.existingIds,
-      isAborted: false,
+      finishOutcome: { type: "completed" },
       message: createDocumentFinishedMessage,
     });
 
@@ -174,7 +174,7 @@ describe("chat approval persistence", () => {
 
     const finishPlan = planAssistantFinishPersistence({
       existingIds: incomingPlan.existingIds,
-      isAborted: false,
+      finishOutcome: { type: "completed" },
       message: updateFieldsFinishedMessage,
     });
 
@@ -199,7 +199,7 @@ describe("chat approval persistence", () => {
 
     const finishPlan = planAssistantFinishPersistence({
       existingIds: incomingPlan.existingIds,
-      isAborted: false,
+      finishOutcome: { type: "completed" },
       message: createDocumentFinishedMessage,
     });
 
@@ -218,7 +218,7 @@ describe("chat approval persistence", () => {
 
     const finishPlan = planAssistantFinishPersistence({
       existingIds: new Set([userMessage.id]),
-      isAborted: false,
+      finishOutcome: { type: "completed" },
       message: userMessage,
     });
 
@@ -228,11 +228,88 @@ describe("chat approval persistence", () => {
   test("leaves approval-responded messages untouched when a stream aborts", () => {
     const finishPlan = planAssistantFinishPersistence({
       existingIds: new Set([createDocumentFinishedMessage.id]),
-      isAborted: true,
+      finishOutcome: { type: "aborted" },
       message: createDocumentFinishedMessage,
     });
 
     expect(finishPlan).toEqual({ type: "none" });
+  });
+});
+
+describe("chat finish persistence on client disconnect", () => {
+  const userMessage = {
+    id: chatMessageId("019aef0c-4df0-7d25-b5ad-cfa5a548fb30"),
+    role: "user",
+    parts: [{ type: "text", content: "Draft a mutual NDA" }],
+  } satisfies PersistableChatMessage;
+
+  const completedAssistantMessage = {
+    id: chatMessageId("019aef0c-4df0-7d25-b5ad-cfa5a548fb31"),
+    role: "assistant",
+    parts: [{ type: "text", content: "Here is the completed draft." }],
+  } satisfies PersistableChatMessage;
+
+  // A dropped client connection does not abort the metered provider call, so
+  // the generation still reaches `onFinish` as completed. The completed (and
+  // metered) message must be persisted even though nobody is listening.
+  test("inserts a completed assistant message even when the client disconnected", () => {
+    const incomingPlan = planMessagePersistence({
+      message: userMessage,
+      storedMessages: [stored(userMessage)],
+    });
+
+    const finishPlan = planAssistantFinishPersistence({
+      existingIds: incomingPlan.existingIds,
+      finishOutcome: { type: "completed" },
+      message: completedAssistantMessage,
+    });
+
+    expect(finishPlan).toEqual({
+      type: "insert",
+      message: completedAssistantMessage,
+    });
+  });
+
+  // A metered-timeout / aborted-stream finish yields an incomplete message that
+  // must never be persisted, regardless of client connection state.
+  test("does not persist a generation cut off mid-stream", () => {
+    const finishPlan = planAssistantFinishPersistence({
+      existingIds: new Set([userMessage.id]),
+      finishOutcome: { type: "aborted" },
+      message: completedAssistantMessage,
+    });
+
+    expect(finishPlan).toEqual({ type: "none" });
+  });
+
+  // The genuine-error path never invokes `onFinish` in the streaming loop, so
+  // it never reaches persistence. Guard the adjacent invariant the planner is
+  // responsible for: a non-assistant message is never persisted from finish.
+  test("does not persist a non-assistant finish message", () => {
+    const finishPlan = planAssistantFinishPersistence({
+      existingIds: new Set([userMessage.id]),
+      finishOutcome: { type: "completed" },
+      message: userMessage,
+    });
+
+    expect(finishPlan).toEqual({ type: "none" });
+  });
+
+  // Idempotency: a completed message already present in the thread updates in
+  // place rather than inserting a duplicate, so a refetch after reconnect does
+  // not produce two assistant rows for the same turn.
+  test("updates in place when the completed message id already exists", () => {
+    const finishPlan = planAssistantFinishPersistence({
+      existingIds: new Set([userMessage.id, completedAssistantMessage.id]),
+      finishOutcome: { type: "completed" },
+      message: completedAssistantMessage,
+    });
+
+    expect(finishPlan).toEqual({
+      type: "update",
+      messageId: completedAssistantMessage.id,
+      message: completedAssistantMessage,
+    });
   });
 });
 
