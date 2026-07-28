@@ -37,6 +37,25 @@ const expectSubset = (
 };
 
 describe("API and CLI release contract", () => {
+  test("private workspaces stay outside Changesets releases", async () => {
+    const config: unknown = await Bun.file(
+      new URL("../.changeset/config.json", import.meta.url),
+    ).json();
+
+    expect(isRecord(config)).toBe(true);
+    if (!isRecord(config)) {
+      throw new TypeError("Changesets config is not an object");
+    }
+
+    const privatePackages = config["privatePackages"];
+    expect(isRecord(privatePackages)).toBe(true);
+    if (!isRecord(privatePackages)) {
+      throw new TypeError("Changesets private package config is not an object");
+    }
+
+    expect(privatePackages["version"]).toBe(false);
+  });
+
   test("the server advertises the contract version implemented by the CLI", () => {
     expect(STELLA_MCP_API_CONTRACT_VERSION).toBe(
       CLI_SUPPORTED_API_CONTRACT_VERSION,

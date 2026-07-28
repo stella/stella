@@ -7,6 +7,9 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
+  "privatePackages": {
+    "version": false
+  },
   "ignore": [
     "@stll/api",
     "@stll/boe",
