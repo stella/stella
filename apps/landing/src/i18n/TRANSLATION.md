@@ -246,20 +246,20 @@ own `eyebrow` from `data/products/*.ts`; that field stays the English source
 of truth, and `menu-copy.test.ts` asserts `en.json` agrees with it, the same
 drift guard the menu `title`/`blurb` already have.
 
-| Locale | Workspace          | Editor      | Templates | Tabular Review        | AI agent              | Anonymization | Public data       |
-| ------ | ------------------ | ----------- | --------- | --------------------- | --------------------- | ------------- | ----------------- |
-| ar     | مساحة العمل        | المحرر      | القوالب   | المراجعة الجدولية     | وكيل الذكاء الاصطناعي | إخفاء الهوية  | البيانات العامة   |
-| cs     | Pracovní prostor   | Editor      | Vzory     | Tabulková revize      | AI agent              | Anonymizace   | Veřejná data      |
-| de     | Arbeitsbereich     | Editor      | Vorlagen  | Tabellenprüfung       | KI-Agent              | Anonymisierung | Öffentliche Daten |
-| es     | Espacio de trabajo | Editor      | Plantillas | Revisión tabular      | Agente de IA          | Anonimización | Datos públicos    |
-| et     | Tööruum            | Redaktor    | Mallid    | Tabelülevaatus        | Tehisintellekti agent | Anonüümimine  | Avalikud andmed   |
-| fr     | Espace de travail  | Éditeur     | Modèles   | Revue tabulaire       | Agent IA              | Anonymisation | Données publiques |
-| hu     | Munkaterület       | Szerkesztő  | Sablonok  | Táblázatos ellenőrzés | AI-ügynök             | Anonimizálás  | Nyilvános adatok  |
-| lt     | Darbo sritis       | Redaktorius | Šablonai  | Lentelinė peržiūra    | DI agentas            | Anonimizavimas | Viešieji duomenys |
-| lv     | Darbvieta          | Redaktors   | Veidnes   | Tabulāra pārskatīšana | AI aģents             | Anonimizācija | Publiskie dati    |
-| pl     | Obszar roboczy     | Edytor      | Szablony  | Przegląd tabelaryczny | Agent AI              | Anonimizacja  | Dane publiczne    |
-| pt-BR  | Espaço de trabalho | Editor      | Modelos   | Revisão tabular       | Agente de IA          | Anonimização  | Dados públicos    |
-| sk     | Pracovný priestor  | Editor      | Vzory     | Tabuľková revízia     | AI agent              | Anonymizácia  | Verejné dáta      |
+| Locale | Workspace          | Editor      | Templates  | Tabular Review        | AI agent              | Anonymization  | Public data       |
+| ------ | ------------------ | ----------- | ---------- | --------------------- | --------------------- | -------------- | ----------------- |
+| ar     | مساحة العمل        | المحرر      | القوالب    | المراجعة الجدولية     | وكيل الذكاء الاصطناعي | إخفاء الهوية   | البيانات العامة   |
+| cs     | Pracovní prostor   | Editor      | Vzory      | Tabulková revize      | AI agent              | Anonymizace    | Veřejná data      |
+| de     | Arbeitsbereich     | Editor      | Vorlagen   | Tabellenprüfung       | KI-Agent              | Anonymisierung | Öffentliche Daten |
+| es     | Espacio de trabajo | Editor      | Plantillas | Revisión tabular      | Agente de IA          | Anonimización  | Datos públicos    |
+| et     | Tööruum            | Redaktor    | Mallid     | Tabelülevaatus        | Tehisintellekti agent | Anonüümimine   | Avalikud andmed   |
+| fr     | Espace de travail  | Éditeur     | Modèles    | Revue tabulaire       | Agent IA              | Anonymisation  | Données publiques |
+| hu     | Munkaterület       | Szerkesztő  | Sablonok   | Táblázatos ellenőrzés | AI-ügynök             | Anonimizálás   | Nyilvános adatok  |
+| lt     | Darbo sritis       | Redaktorius | Šablonai   | Lentelinė peržiūra    | DI agentas            | Anonimizavimas | Viešieji duomenys |
+| lv     | Darbvieta          | Redaktors   | Veidnes    | Tabulāra pārskatīšana | AI aģents             | Anonimizācija  | Publiskie dati    |
+| pl     | Obszar roboczy     | Edytor      | Szablony   | Przegląd tabelaryczny | Agent AI              | Anonimizacja   | Dane publiczne    |
+| pt-BR  | Espaço de trabalho | Editor      | Modelos    | Revisão tabular       | Agente de IA          | Anonimização   | Dados públicos    |
+| sk     | Pracovný priestor  | Editor      | Vzory      | Tabuľková revízia     | AI agent              | Anonymizácia   | Verejné dáta      |
 
 No cell in that table is a new translation. Each one is the `footer.*`
 descriptor the same locale already used for the same product page, copied
@@ -378,17 +378,17 @@ more politely.
 | Locale | Bring stella workspace to front                         |
 | ------ | ------------------------------------------------------- |
 | ar     | إحضار مساحة عمل stella إلى المقدمة                      |
-| cs     | Přenést do popředí pracovní prostor aplikace stella      |
-| de     | Arbeitsbereich von stella in den Vordergrund holen       |
-| es     | Traer al frente el espacio de trabajo de stella          |
-| et     | Too rakenduse stella tööruum esiplaanile                 |
-| fr     | Mettre l’espace de travail stella au premier plan        |
-| hu     | A stella alkalmazás munkaterületének előtérbe hozása     |
-| lt     | Perkelti programos stella darbo sritį į priekinį planą   |
-| lv     | Pārvietot lietotnes stella darbvietu priekšplānā         |
-| pl     | Przenieś na wierzch obszar roboczy aplikacji stella      |
-| pt-BR  | Trazer o espaço de trabalho da stella para a frente      |
-| sk     | Preniesť do popredia pracovný priestor aplikácie stella  |
+| cs     | Přenést do popředí pracovní prostor aplikace stella     |
+| de     | Arbeitsbereich von stella in den Vordergrund holen      |
+| es     | Traer al frente el espacio de trabajo de stella         |
+| et     | Too rakenduse stella tööruum esiplaanile                |
+| fr     | Mettre l’espace de travail stella au premier plan       |
+| hu     | A stella alkalmazás munkaterületének előtérbe hozása    |
+| lt     | Perkelti programos stella darbo sritį į priekinį planą  |
+| lv     | Pārvietot lietotnes stella darbvietu priekšplānā        |
+| pl     | Przenieś na wierzch obszar roboczy aplikacji stella     |
+| pt-BR  | Trazer o espaço de trabalho da stella para a frente     |
+| sk     | Preniesť do popredia pracovný priestor aplikácie stella |
 
 The editor and terminal labels are the same sentence with that locale's word
 for the editor (the `footer.editor` descriptor) and for a terminal. Two rules
