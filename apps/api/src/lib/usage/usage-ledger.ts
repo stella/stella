@@ -48,20 +48,45 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
 
 /**
- * Entitlement statuses that allow consumption to proceed.
- * Other statuses (cancelled, paused, past_due) block AI calls
- * even if the unit balance is positive: leftover units survive
- * until the period naturally expires, but no new spend.
+ * Whether an entitlement lifecycle status permits consumption.
+ *
+ * Keep this exhaustive rather than checking membership in a set: adding a new
+ * persisted status must be classified here before the code can typecheck.
  */
-export const CONSUMABLE_STATUSES: ReadonlySet<UsageEntitlementStatus> = new Set(
-  ["active", "trialing"],
-);
+export const isConsumableEntitlementStatus = (
+  status: UsageEntitlementStatus,
+): boolean => {
+  switch (status) {
+    case "active":
+    case "trialing":
+      return true;
+    case "cancelled":
+    case "past_due":
+    case "paused":
+      return false;
+    default:
+      status satisfies never;
+      return false;
+  }
+};
 
 type EntitlementForCheck = {
   status: UsageEntitlementStatus;
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
 };
+
+/**
+ * Whether an entitlement can receive or spend units at an instant. Periods are
+ * start-inclusive and end-exclusive, matching every ledger balance query.
+ */
+export const isEntitlementConsumableAt = (
+  entitlement: EntitlementForCheck,
+  asOf = new Date(),
+): boolean =>
+  isConsumableEntitlementStatus(entitlement.status) &&
+  entitlement.currentPeriodStart <= asOf &&
+  entitlement.currentPeriodEnd > asOf;
 
 const fetchEntitlement = async (
   tx: Transaction,
@@ -85,6 +110,29 @@ type BalanceInput = {
   asOf?: Date;
 };
 
+const decodeUsageUnitSum = (value: unknown): number => {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+    return value;
+  }
+
+  if (
+    typeof value === "bigint" &&
+    value >= 0n &&
+    value <= BigInt(Number.MAX_SAFE_INTEGER)
+  ) {
+    return Number(value);
+  }
+
+  if (typeof value === "string" && /^(0|[1-9]\d*)$/u.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed)) {
+      return parsed;
+    }
+  }
+
+  return panic("Usage-unit sum is not a non-negative safe integer");
+};
+
 /**
  * Sum of unused units inside the period that covers `asOf`.
  * Returns 0 if no allocations exist (whether because there's no
@@ -97,7 +145,11 @@ export const getRemainingUsageUnits = async ({
 }: BalanceInput): Promise<number> => {
   const allocatedRow = await tx
     .select({
-      total: sql<number>`COALESCE(SUM(${usageAllocations.units}), 0)::int`,
+      // PostgreSQL SUM(integer) returns bigint. Do not narrow back to int4:
+      // valid organization totals can exceed a single row's int4 ceiling.
+      total: sql`COALESCE(SUM(${usageAllocations.units}), 0)`.mapWith(
+        decodeUsageUnitSum,
+      ),
     })
     .from(usageAllocations)
     .where(
@@ -110,7 +162,9 @@ export const getRemainingUsageUnits = async ({
 
   const consumedRow = await tx
     .select({
-      total: sql<number>`COALESCE(SUM(${usageEvents.unitsConsumed}), 0)::int`,
+      total: sql`COALESCE(SUM(${usageEvents.unitsConsumed}), 0)`.mapWith(
+        decodeUsageUnitSum,
+      ),
     })
     .from(usageEvents)
     .where(
@@ -163,7 +217,7 @@ export const assertUsageAvailable = async ({
     };
   }
 
-  if (!CONSUMABLE_STATUSES.has(entitlement.status)) {
+  if (!isConsumableEntitlementStatus(entitlement.status)) {
     return {
       ok: false,
       error: new UsageLimitExceededError({

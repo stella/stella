@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -20,6 +27,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+setDefaultTimeout(120_000);
+
 let testDb: TestDatabase;
 
 beforeAll(async () => {
@@ -39,6 +48,7 @@ type Fixture = {
   organizationId: SafeId<"organization">;
   usagePolicyId: SafeId<"usagePolicy">;
   hostedPolicyRef: string;
+  hostedAddonPolicyRef: string;
   hostedAccountRef: string;
   hostedEntitlementExternalId: string;
 };
@@ -47,6 +57,7 @@ const setupFixture = async (tx: Transaction): Promise<Fixture> => {
   const organizationId = toSafeId<"organization">(`org_${Bun.randomUUIDv7()}`);
   const userId = `user_${Bun.randomUUIDv7()}`;
   const hostedPolicyRef = `provider_policy_${Bun.randomUUIDv7()}`;
+  const hostedAddonPolicyRef = `provider_addon_${Bun.randomUUIDv7()}`;
 
   await tx.insert(organization).values({
     id: organizationId,
@@ -74,10 +85,19 @@ const setupFixture = async (tx: Transaction): Promise<Fixture> => {
     throw new Error("Failed to insert test plan");
   }
 
+  await tx.insert(usagePolicies).values({
+    policyKey: "hosted-addon-test",
+    displayName: "Extra units",
+    kind: "addon",
+    monthlyUsageUnits: 1000,
+    hostedPolicyRef: hostedAddonPolicyRef,
+  });
+
   return {
     organizationId,
     usagePolicyId,
     hostedPolicyRef,
+    hostedAddonPolicyRef,
     hostedAccountRef: `provider_account_${Bun.randomUUIDv7()}`,
     hostedEntitlementExternalId: `provider_ent_${Bun.randomUUIDv7()}`,
   };
@@ -123,7 +143,7 @@ const buildAllocationPayload = (
 ): HostedUsageAllocationPayload => ({
   id: `provider_ord_${Bun.randomUUIDv7()}`,
   account_ref: fx.hostedAccountRef,
-  policy_ref: fx.hostedPolicyRef,
+  policy_ref: fx.hostedAddonPolicyRef,
   allocation_reason: "addon",
   metadata: { organization_id: fx.organizationId },
   ...overrides,
@@ -233,6 +253,29 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
       if (outcome.kind === "ignored") {
         expect(outcome.reason).toContain("hosted policy reference");
       }
+    });
+  });
+
+  test("refuses to create an entitlement from an add-on policy", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      const outcome = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          policy_ref: fx.hostedAddonPolicyRef,
+        }),
+        eventId: "evt_wrong_policy_kind_subscription",
+      });
+
+      expect(outcome).toEqual({
+        kind: "ignored",
+        reason: `no subscription usage_policy matches hosted policy reference ${fx.hostedAddonPolicyRef}`,
+      });
+      const rows = await tx
+        .select({ id: usageEntitlements.id })
+        .from(usageEntitlements)
+        .where(eq(usageEntitlements.organizationId, fx.organizationId));
+      expect(rows).toHaveLength(0);
     });
   });
 
@@ -637,6 +680,43 @@ describe("dispatch — handleHostedAllocation", () => {
         asOf: new Date(PERIOD_START.getTime() + 1000),
       });
       expect(balanceAfter).toBe(balanceBefore);
+    });
+  });
+
+  test("refuses an add-on allocation from a subscription policy", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx),
+        eventId: "evt_wrong_policy_kind_seed",
+      });
+      const asOf = new Date(PERIOD_START.getTime() + 1000);
+      const balanceBefore = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf,
+      });
+
+      const outcome = await handleHostedAllocation({
+        tx,
+        payload: buildAllocationPayload(fx, {
+          policy_ref: fx.hostedPolicyRef,
+        }),
+        eventId: "evt_wrong_policy_kind_addon",
+      });
+
+      expect(outcome).toEqual({
+        kind: "ignored",
+        reason: `no add-on usage_policy matches hosted policy reference ${fx.hostedPolicyRef}`,
+      });
+      expect(
+        await getRemainingUsageUnits({
+          tx,
+          organizationId: fx.organizationId,
+          asOf,
+        }),
+      ).toBe(balanceBefore);
     });
   });
 

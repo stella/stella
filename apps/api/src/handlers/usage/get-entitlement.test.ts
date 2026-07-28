@@ -35,13 +35,15 @@ import getEntitlement from "./get-entitlement";
 
 setDefaultTimeout(120_000);
 
-// Statuses under which the org may consume units; every other status blocks
-// consumption even with a positive balance. Mirrors CONSUMABLE_STATUSES in
-// usage-ledger.ts.
-const CONSUMABLE: ReadonlySet<UsageEntitlementStatus> = new Set([
-  "active",
-  "trialing",
-]);
+// This record is deliberately exhaustive: adding a persisted lifecycle status
+// requires an explicit boundary decision before this test can typecheck.
+const STATUS_CONSUMABILITY = {
+  active: true,
+  trialing: true,
+  past_due: false,
+  cancelled: false,
+  paused: false,
+} as const satisfies Record<UsageEntitlementStatus, boolean>;
 
 const ALLOCATED_UNITS = 10;
 const DAY_MS = 86_400_000;
@@ -177,11 +179,11 @@ describe("usage entitlement gating boundary", () => {
   // consumable statuses reach the balance check, the rest block regardless of
   // balance.
   for (const status of USAGE_ENTITLEMENT_STATUSES) {
-    test(`status "${status}": ${CONSUMABLE.has(status) ? "consumes" : "blocks"} against a full balance`, async () => {
+    test(`status "${status}": ${STATUS_CONSUMABILITY[status] ? "consumes" : "blocks"} against a full balance`, async () => {
       await setEntitlementStatus(status);
       try {
         const result = await assertForOrgA(1);
-        if (CONSUMABLE.has(status)) {
+        if (STATUS_CONSUMABILITY[status]) {
           expect(result).toEqual({ ok: true, available: ALLOCATED_UNITS });
         } else {
           expect(result.ok).toBe(false);

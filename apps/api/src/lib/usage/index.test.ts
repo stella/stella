@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { TransactionRollbackError } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -6,19 +13,26 @@ import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ALLOCATION_REASONS,
   USAGE_ALLOCATION_SOURCES,
+  USAGE_ENTITLEMENT_STATUSES,
   usagePolicies,
   usageEntitlements,
 } from "@/api/db/schema";
+import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   assertUsageAvailable,
   allocateUsage,
   getRemainingUsageUnits,
+  isConsumableEntitlementStatus,
+  isEntitlementConsumableAt,
   recordUsageEvent,
 } from "@/api/lib/usage/usage-ledger";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 
@@ -121,6 +135,55 @@ const withRolledBackTx = async (
 };
 
 const midPeriod = new Date((PERIOD_START.getTime() + PERIOD_END.getTime()) / 2);
+
+const EXPECTED_STATUS_CONSUMABILITY = {
+  active: true,
+  trialing: true,
+  past_due: false,
+  cancelled: false,
+  paused: false,
+} as const satisfies Record<UsageEntitlementStatus, boolean>;
+
+describe("usage entitlement consumability", () => {
+  for (const status of USAGE_ENTITLEMENT_STATUSES) {
+    test(`classifies "${status}" exhaustively`, () => {
+      expect(isConsumableEntitlementStatus(status)).toBe(
+        EXPECTED_STATUS_CONSUMABILITY[status],
+      );
+    });
+  }
+
+  test("fails closed for a stored status outside the inferred domain", () => {
+    expect(
+      isConsumableEntitlementStatus(
+        asTestRaw<UsageEntitlementStatus>("unknown_status"),
+      ),
+    ).toBe(false);
+  });
+
+  test("uses a start-inclusive, end-exclusive current period", () => {
+    const entitlement = {
+      status: "active",
+      currentPeriodStart: PERIOD_START,
+      currentPeriodEnd: PERIOD_END,
+    } as const;
+
+    expect(
+      isEntitlementConsumableAt(
+        entitlement,
+        new Date(PERIOD_START.getTime() - 1),
+      ),
+    ).toBe(false);
+    expect(isEntitlementConsumableAt(entitlement, PERIOD_START)).toBe(true);
+    expect(
+      isEntitlementConsumableAt(
+        entitlement,
+        new Date(PERIOD_END.getTime() - 1),
+      ),
+    ).toBe(true);
+    expect(isEntitlementConsumableAt(entitlement, PERIOD_END)).toBe(false);
+  });
+});
 
 describe("usage ledger — assertUsageAvailable", () => {
   test("returns no_entitlement when org has no entitlement row", async () => {
@@ -278,6 +341,61 @@ describe("usage ledger — allocation + usage math", () => {
       });
       // 2000 + 500 - 300 - 200 = 2000
       expect(balance).toBe(2000);
+    });
+  });
+
+  test("sums allocations beyond PostgreSQL's int4 range", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      for (const [sourceRef, units] of [
+        ["evt_large_allocation_a", 1_500_000_000],
+        ["evt_large_allocation_b", 1_500_000_000],
+      ] as const) {
+        // oxlint-disable-next-line no-await-in-loop -- two ordered ledger writes build one aggregate fixture
+        await allocateUsage({
+          tx,
+          organizationId: fx.organizationId,
+          units,
+          reason: "periodic",
+          sourceType: "hosted_entitlement",
+          sourceRef,
+          period: { start: fx.periodStart, end: fx.periodEnd },
+        });
+      }
+
+      const balance = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf: midPeriod,
+      });
+      expect(balance).toBe(3_000_000_000);
+    });
+  });
+
+  test("sums consumption beyond PostgreSQL's int4 range", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      for (const actionType of ["doc_review", "chat"] as const) {
+        // oxlint-disable-next-line no-await-in-loop -- two ordered ledger writes build one aggregate fixture
+        await recordUsageEvent({
+          tx,
+          organizationId: fx.organizationId,
+          workspaceId: null,
+          userId: fx.userId,
+          actionType,
+          modelRole: "fast",
+          unitsConsumed: 1_500_000_000,
+          serviceTier: "flex",
+          isByok: false,
+        });
+      }
+
+      const balance = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf: midPeriod,
+      });
+      expect(balance).toBe(-3_000_000_000);
     });
   });
 
