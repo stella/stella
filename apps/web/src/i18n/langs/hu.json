@@ -1927,9 +1927,9 @@
         "violatedRedLine": "Nem elfogadható szabályt sért:"
       },
       "risk": {
-        "complianceLabel": "Compliance",
+        "complianceLabel": "Megfelelőség",
         "flaggedCount": "{flagged} of {total} positions flagged",
-        "notApplicableExcluded": "({count} not applicable, excluded)",
+        "notApplicableExcluded": "({count} nem alkalmazható, kizárva)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1971,7 +1971,7 @@
         "deviation": "Eltérés",
         "fallback": "Alternatív megfogalmazás",
         "missing": "Hiányzik",
-        "notApplicable": "Not applicable"
+        "notApplicable": "Nem alkalmazható"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",

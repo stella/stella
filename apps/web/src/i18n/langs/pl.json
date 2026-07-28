@@ -1927,9 +1927,9 @@
         "violatedRedLine": "Narusza nieakceptowalną regułę:"
       },
       "risk": {
-        "complianceLabel": "Compliance",
+        "complianceLabel": "Zgodność",
         "flaggedCount": "{flagged} of {total} positions flagged",
-        "notApplicableExcluded": "({count} not applicable, excluded)",
+        "notApplicableExcluded": "({count} nie dotyczy, wykluczono)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1971,7 +1971,7 @@
         "deviation": "Odstępstwo",
         "fallback": "Alternatywne brzmienie",
         "missing": "Brak",
-        "notApplicable": "Not applicable"
+        "notApplicable": "Nie dotyczy"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",

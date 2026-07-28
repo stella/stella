@@ -1927,9 +1927,9 @@
         "violatedRedLine": "Viola a linha vermelha:"
       },
       "risk": {
-        "complianceLabel": "Compliance",
+        "complianceLabel": "Conformidade",
         "flaggedCount": "{flagged} of {total} positions flagged",
-        "notApplicableExcluded": "({count} not applicable, excluded)",
+        "notApplicableExcluded": "({count} não aplicável, excluídas)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1971,7 +1971,7 @@
         "deviation": "Desvio",
         "fallback": "Alternativa",
         "missing": "Ausente",
-        "notApplicable": "Not applicable"
+        "notApplicable": "Não aplicável"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",

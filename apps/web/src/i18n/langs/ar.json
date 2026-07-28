@@ -1927,9 +1927,9 @@
         "violatedRedLine": "الخط الأحمر المخالف:"
       },
       "risk": {
-        "complianceLabel": "Compliance",
+        "complianceLabel": "الامتثال",
         "flaggedCount": "{flagged} of {total} positions flagged",
-        "notApplicableExcluded": "({count} not applicable, excluded)",
+        "notApplicableExcluded": "({count} غير قابلة للتطبيق، مستبعدة)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1971,7 +1971,7 @@
         "deviation": "انحراف",
         "fallback": "بديل",
         "missing": "مفقود",
-        "notApplicable": "Not applicable"
+        "notApplicable": "غير قابل للتطبيق"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",

@@ -1927,9 +1927,9 @@
         "violatedRedLine": "Pažeista raudona linija:"
       },
       "risk": {
-        "complianceLabel": "Compliance",
+        "complianceLabel": "Atitiktis",
         "flaggedCount": "{flagged} of {total} positions flagged",
-        "notApplicableExcluded": "({count} not applicable, excluded)",
+        "notApplicableExcluded": "({count} netaikoma, neįtraukta)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1971,7 +1971,7 @@
         "deviation": "Nukrypimas",
         "fallback": "Alternatyva",
         "missing": "Trūksta",
-        "notApplicable": "Not applicable"
+        "notApplicable": "Netaikoma"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",

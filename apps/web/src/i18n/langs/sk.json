@@ -1927,9 +1927,9 @@
         "violatedRedLine": "Porušuje neprijateľné pravidlo:"
       },
       "risk": {
-        "complianceLabel": "Compliance",
+        "complianceLabel": "Súlad",
         "flaggedCount": "{flagged} of {total} positions flagged",
-        "notApplicableExcluded": "({count} not applicable, excluded)",
+        "notApplicableExcluded": "({count} neaplikovateľné, vylúčené)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1971,7 +1971,7 @@
         "deviation": "Odchýlka",
         "fallback": "Náhradné znenie",
         "missing": "Chýba",
-        "notApplicable": "Not applicable"
+        "notApplicable": "Neaplikovateľné"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
