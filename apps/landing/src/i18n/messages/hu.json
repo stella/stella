@@ -81,7 +81,7 @@
     "toolsTitle": "Eszközök ügynököknek."
   },
   "meta": {
-    "homeDescription": "Nyílt forráskódú jogi munkaterület: dokumentumok, ügyek, ellenőrzés és kutatás. Futtassa saját szerverén vagy a felhőnkben. Használatalapú AI, bezártság nélkül.",
+    "homeDescription": "Nyílt forráskódú jogi munkaterület ügyvédeknek: dokumentumok, ügyek, ellenőrzés és kutatás. Futtassa saját szerverén vagy a felhőnkben. Használatalapú AI.",
     "homeTitle": "stella | nyílt forráskódú jogi munkaterület"
   },
   "nav": {
@@ -203,7 +203,7 @@
           "question": "Honnan származnak a válaszai?"
         }
       },
-      "metaDescription": "Beszélgessen ügyeivel, dokumentumaival, a nyilvántartásokkal és a csatlakoztatott eszközökkel. Az ügynök jóváhagyással cselekszik, és hivatkozásokkal válaszol.",
+      "metaDescription": "Beszélgessen ügyeivel, dokumentumaival, a nyilvántartásokkal és a csatlakoztatott eszközökkel. Az ügynök jóváhagyással cselekszik, hivatkozásokkal válaszol.",
       "metaTitle": "AI-ügynök jogi ügyekhez | stella",
       "quickAnswer": {
         "answer": "Az ügynök az Ön ügyeivel, fájljaival, a cégnyilvántartásokkal és a csatlakoztatott eszközökkel dolgozik. Jóváhagyást kér, mielőtt cselekszik, forrás-előnézetet mutat arról, amit olvas, és hivatkozásokkal támasztja alá a válaszait. Újrafelhasználható készségekkel és MCP-kompatibilis külső csatlakozókkal bővítheti.",

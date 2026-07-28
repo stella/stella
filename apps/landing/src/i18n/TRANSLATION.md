@@ -416,10 +416,65 @@ workspace `metaTitle` is cs "Správa právních spisů na jednom místě", and
 product's claim without the word. Slovak has no such ban and uses `pracovný
 priestor` freely.
 
-Only `cs` and `sk` are translated today. The other ten locales hold the English
-values, grandfathered per key in `i18n-check-baseline.json` under
-`identicalToSource`; a locale is finished when its entries there are gone, and
-`--write-baseline` is not how to finish it.
+All twelve locales are translated; no `products.*` key remains grandfathered
+under `identicalToSource` in `i18n-check-baseline.json`, and none should be
+added back (`--write-baseline` is not how to finish a locale).
+
+### The two meta strings are written against the market's queries
+
+A translated `metaTitle` says what the page is about in the reader's language.
+An optimized one says it in the words that market's practitioners type. The
+difference is worth a rewrite, and only in the meta strings: the H1, the
+eyebrow, and the body keep the settled product names.
+
+The rule with teeth: **never promise a query the page cannot deliver.** Two
+kinds of miss keep recurring.
+
+_Terms the market does not have._ `discovery` had been carried into the cs and
+sk tabular-review descriptions, and `الإفصاح` into the Arabic one; neither
+legal system has that procedural stage. Arabic `العناية الواجبة` is the AML/KYC
+sense of due diligence in Gulf practice, not the transactional sense a document
+review page means (`الفحص النافي للجهالة`).
+
+_Terms that overclaim._ pt-BR searches `processos`, but that word promises
+tribunal docket sync, so the Brazilian pages stay on `casos`. The anonymization
+feature is reversible (`deanonymise`, and the CLI's `--revert`), which is
+pseudonymization under the GDPR: the descriptions therefore say what it removes
+and that the result is reviewable, and never claim GDPR-grade anonymization of
+personal data. German makes the same trap concrete — `Schwärzung` asserts the
+content is gone from the file, which is the Akteneinsicht and beA sense, so the
+German page says `anonymisieren` and not `schwärzen`.
+
+_Calques that pass review because they are grammatical._ A translated term can
+be correct and still be a word nobody types. pl `przegląd umów` reads as a
+periodic inspection (`przegląd techniczny`); Polish vendors title on
+`analiza umów` without exception. fr `revue de contrats` fails the same way
+against `analyse`. The tell is that no competitor page in that market uses the
+phrase in a title.
+
+Two nouns that are UI labels rather than queries: de `Arbeitsbereich` (its
+results are dictionary sites; German marketing prose reaches for `Arbeitsplatz`)
+and, in the same family, any locale's literal rendering of "workspace" outside
+the identity phrase. They stay in the identity phrase on the homepage and out of
+the per-page titles, which name the function instead (de `Akte`, pl `sprawa`).
+
+Where the head query is an audience rather than a capability, add the audience:
+cs `pro advokáty`, de `für Kanzleien`, pl `dla kancelarii`, fr `pour avocats`,
+es `para despachos`, pt-BR `para advogados`, hu `ügyvédeknek`. That captures the
+category query without coining a synonym for a glossary term.
+
+One rejected candidate is worth recording so it is not re-litigated: Czech
+**"AI právní pracovní prostor"**. It is a press-release label from a single
+vendor launch, rendered four different ways across that vendor's own channels,
+with no independent usage. Ranking for it would deliver a competitor-branded
+SERP. Czech titles use demand terms instead (`AI pro právníky`,
+`právní rešerše`, `elektronický advokátní spis`).
+
+### The budgets are checked, not remembered
+
+`bun run test` runs `scripts/check-meta-budgets.ts`: title ≤ 60, description
+140–158, and no two pages in a locale sharing either. Thirteen locales drifted
+past the budget at once while it was only written down here.
 
 ## Shared chrome is UI copy, not decoration
 

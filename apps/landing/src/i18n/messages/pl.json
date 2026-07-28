@@ -81,7 +81,7 @@
     "toolsTitle": "Narzędzia dla agentów."
   },
   "meta": {
-    "homeDescription": "Prawniczy obszar roboczy open source: dokumenty, sprawy, przegląd i orzecznictwo. Hostuj sam albo w naszej chmurze. AI płatna za użycie, bez uzależnienia.",
+    "homeDescription": "Prawniczy obszar roboczy open source dla kancelarii prawnych: sprawy, dokumenty, analiza umów i orzecznictwo. Hostuj sam albo w chmurze. AI płatna za użycie.",
     "homeTitle": "stella | prawniczy obszar roboczy open source"
   },
   "nav": {
@@ -204,7 +204,7 @@
         }
       },
       "metaDescription": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i narzędziami. Agent działa za zatwierdzeniem, cytuje źródła i rośnie o kolejne umiejętności.",
-      "metaTitle": "Agent AI do spraw prawnych | stella",
+      "metaTitle": "Agent AI dla prawników: asystent prawny do spraw | stella",
       "quickAnswer": {
         "answer": "Agent rozmawia z Twoimi sprawami, plikami, rejestrami firm i podłączonymi narzędziami. Przed działaniem prosi o zatwierdzenie, pokazuje podgląd źródła, które czyta, i opiera odpowiedzi na cytowaniach. Rozszerzysz go o umiejętności wielokrotnego użytku i zewnętrzne konektory zgodne z MCP.",
         "question": "Co potrafi agent AI?"
@@ -283,7 +283,7 @@
         }
       },
       "metaDescription": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i przeglądu dokumentów, z wynikiem do sprawdzenia.",
-      "metaTitle": "Anonimizacja dokumentów dla prawniczej AI | stella",
+      "metaTitle": "Anonimizacja dokumentów przed wysłaniem do AI | stella",
       "quickAnswer": {
         "answer": "Usuwa nazwiska, podmioty i dane identyfikujące, zanim materiały wejdą do przepływu pracy z AI, i pokazuje zredagowany wynik, więc potwierdzasz, co opuszcza sprawę. Jest wbudowana wprost w czat i w przegląd dokumentów.",
         "question": "Czym jest anonimizacja w aplikacji stella?"
@@ -461,7 +461,7 @@
         }
       },
       "metaDescription": "Edytuj dokumenty Word ze sprawy w aplikacji stella: śledzone zmiany na miejscu, każdy zapis jako wersja w historii i mostek do lokalnego Worda.",
-      "metaTitle": "Edycja dokumentów Word w obszarze roboczym | stella",
+      "metaTitle": "Edycja dokumentów Word w sprawie | stella",
       "quickAnswer": {
         "answer": "Tak. Otwórz plik .docx ze sprawy i edytuj go w przeglądarce. stella zachowuje oryginalny format Word i zapisuje kolejne wersje w historii tego samego dokumentu.",
         "question": "Czy mogę edytować dokumenty Word w aplikacji stella?"
@@ -547,7 +547,7 @@
         }
       },
       "metaDescription": "Orzecznictwo i rejestry firm z oficjalnych źródeł publicznych. Czytaj orzeczenia, sprawdzaj firmy, śledź cytowania i wciągaj je wprost do sprawy.",
-      "metaTitle": "Orzecznictwo i dane z rejestrów firm | stella",
+      "metaTitle": "Research prawny: orzecznictwo i rejestry firm | stella",
       "quickAnswer": {
         "answer": "Dwa rodzaje. Oficjalne publiczne orzecznictwo, wczytane i sparsowane ze strukturą, więc przeczytasz i przeszukasz orzeczenia oraz prześledzisz ich cytowania. Oraz typowany dostęp do krajowych rejestrów przedsiębiorców i rejestrów handlowych, więc wciągniesz oficjalne dane o firmie prosto do sprawy. Jedno i drugie to ugruntowane źródła, które agent AI może cytować.",
         "question": "Jakie dane publiczne wnosi aplikacja stella?"
@@ -638,7 +638,7 @@
         }
       },
       "metaDescription": "Zadaj pytania całemu zbiorowi dokumentów i odbierz ustrukturyzowane odpowiedzi jako sortowalną tabelę ze wskazaniem źródeł. Do due diligence i badań.",
-      "metaTitle": "Przegląd tabelaryczny do due diligence | stella",
+      "metaTitle": "Przegląd tabelaryczny: analiza umów z AI | stella",
       "quickAnswer": {
         "answer": "Kierujesz przegląd tabelaryczny na zbiór dokumentów w sprawie i definiujesz kolumny jako pytania, na przykład „prawo właściwe”, „okres wypowiedzenia” albo „klauzula zmiany kontroli”. stella wydobywa odpowiedź dla każdego dokumentu do tabeli, którą sortujesz, filtrujesz i eksportujesz, a każda komórka odsyła do fragmentu, z którego pochodzi.",
         "question": "Jak działa przegląd tabelaryczny?"
@@ -729,7 +729,7 @@
         }
       },
       "metaDescription": "Zdefiniuj szablon z polami i klauzulami warunkowymi, wypełnij go ręcznie albo pozwól aplikacji stella zrobić to z danych sprawy. Dokument trafia do sprawy.",
-      "metaTitle": "Szablony dokumentów prawnych z AI | stella",
+      "metaTitle": "Automatyzacja dokumentów i szablony z AI | stella",
       "quickAnswer": {
         "answer": "Szablon to dokument z polami i klauzulami, które można włączać warunkowo. Pola wypełniasz ręcznie albo pozwalasz aplikacji stella przygotować je z danych sprawy; klauzule warunkowe rozstrzygają się same, a Ty dostajesz dokument, nad którym pracujesz dalej w sprawie. Szablony i klauzule są wielokrotnego użytku, więc powtarzalne dokumenty zaczynają się od sprawdzonej podstawy.",
         "question": "Jak działają szablony w aplikacji stella?"
@@ -826,7 +826,7 @@
         }
       },
       "metaDescription": "Sprawy, dokumenty, edycja plików Word .docx, przegląd, badania i czat w jednym prawniczym obszarze roboczym, od materiałów źródłowych po odpowiedź.",
-      "metaTitle": "Obszar roboczy do prowadzenia spraw | stella",
+      "metaTitle": "Zarządzanie sprawami dla kancelarii prawnych | stella",
       "quickAnswer": {
         "answer": "Aplikacja webowa, która trzyma w jednym miejscu sprawy, dokumenty, edycję plików Word .docx, przegląd, badania i czat. Wszystko dodane do sprawy zostaje przy niej, więc kontekst czeka, gdy wracasz. Towarzysząca aplikacja desktopowa działa jako lokalny mostek, gdy dokument wymaga Microsoft Word.",
         "question": "Czym jest obszar roboczy aplikacji stella?"

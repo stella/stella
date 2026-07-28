@@ -81,7 +81,7 @@
     "toolsTitle": "Herramientas para agentes."
   },
   "meta": {
-    "homeDescription": "Espacio de trabajo legal de código abierto: documentos, asuntos, revisión e investigación. Autoalójalo o usa nuestra nube. IA por uso, sin dependencia.",
+    "homeDescription": "Espacio de trabajo legal de código abierto para despachos: asuntos, documentos, revisión de contratos y jurisprudencia. Autoalójalo o usa la nube. IA por uso.",
     "homeTitle": "stella | espacio de trabajo legal de código abierto"
   },
   "nav": {
@@ -204,7 +204,7 @@
         }
       },
       "metaDescription": "Conversa con tus asuntos, documentos, registros y herramientas conectadas. El agente actúa con aprobaciones, respalda las respuestas con citas y se amplía.",
-      "metaTitle": "Agente de IA para asuntos jurídicos | stella",
+      "metaTitle": "Agente de IA: asistente jurídico para tus asuntos | stella",
       "quickAnswer": {
         "answer": "El agente conversa con tus asuntos, archivos, registros mercantiles y herramientas conectadas. Pide aprobación antes de actuar, muestra una vista previa de lo que lee y respalda sus respuestas con citas. Puedes ampliarlo con habilidades reutilizables y conectores externos compatibles con MCP.",
         "question": "¿Qué puede hacer el agente de IA?"
@@ -547,7 +547,7 @@
         }
       },
       "metaDescription": "Jurisprudencia y registros mercantiles de fuentes públicas oficiales. Lee resoluciones, consulta empresas, sigue las citas y llévalo todo a un asunto.",
-      "metaTitle": "Jurisprudencia y datos de registros mercantiles | stella",
+      "metaTitle": "Buscador de jurisprudencia y Registro Mercantil | stella",
       "quickAnswer": {
         "answer": "Dos tipos. Jurisprudencia pública oficial, recopilada y analizada con su estructura para que leas y busques resoluciones y sigas sus citas. Y acceso tipado a los registros mercantiles y de sociedades nacionales, para llevar datos oficiales de empresas directamente a un asunto. Ambos son fuentes respaldadas que el agente de IA puede citar.",
         "question": "¿Qué datos públicos trae stella?"
@@ -638,7 +638,7 @@
         }
       },
       "metaDescription": "Haz preguntas a todo un conjunto de documentos y recibe respuestas estructuradas en una tabla ordenable y rastreable hasta la fuente. Para due diligence.",
-      "metaTitle": "Revisión tabular de documentos para due diligence | stella",
+      "metaTitle": "Revisión tabular de contratos con IA | stella",
       "quickAnswer": {
         "answer": "Apuntas la revisión tabular a un conjunto de documentos de un asunto y defines las columnas como preguntas: «ley aplicable», «plazo de preaviso» o «cláusula de cambio de control», por ejemplo. stella extrae una respuesta por documento en una tabla que puedes ordenar, filtrar y exportar, con cada celda enlazada al pasaje del que procede.",
         "question": "¿Cómo funciona la revisión tabular?"
@@ -729,7 +729,7 @@
         }
       },
       "metaDescription": "Define una plantilla con campos y cláusulas condicionales y rellénala a mano o deja que stella la redacte con los datos del asunto. Genera el documento allí.",
-      "metaTitle": "Plantillas de documentos jurídicos con IA | stella",
+      "metaTitle": "Plantillas y generación de contratos con IA | stella",
       "quickAnswer": {
         "answer": "Una plantilla es un documento con campos y cláusulas que puedes incluir de forma condicional. Rellenas los campos a mano o dejas que stella los redacte con los datos del asunto; las cláusulas condicionales se resuelven y obtienes un documento con el que seguir trabajando dentro del asunto. Plantillas y cláusulas son reutilizables, así que los documentos repetidos parten de una base probada.",
         "question": "¿Cómo funcionan las plantillas en stella?"
@@ -825,8 +825,8 @@
           "question": "¿Pueden otras herramientas llegar al espacio de trabajo?"
         }
       },
-      "metaDescription": "Asuntos, documentos, edición .docx, revisión, investigación y chat en un espacio de trabajo jurídico. Todo sigue en contexto, de los documentos a la respuesta.",
-      "metaTitle": "Espacio de trabajo para gestionar asuntos | stella",
+      "metaDescription": "Asuntos, documentos, edición .docx, revisión y chat en un espacio de trabajo jurídico. Todo sigue en contexto, de los documentos a la respuesta.",
+      "metaTitle": "Espacio de trabajo para despachos de abogados | stella",
       "quickAnswer": {
         "answer": "Una aplicación web que reúne asuntos, documentos, edición de Word .docx, revisión, investigación y chat en un solo lugar. Todo lo que añades a un asunto queda vinculado a él, así que el contexto sigue ahí cuando vuelves. Una aplicación de escritorio complementaria actúa como puente local cuando un documento necesita Microsoft Word.",
         "question": "¿Qué es el espacio de trabajo de stella?"

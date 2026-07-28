@@ -81,7 +81,7 @@
     "toolsTitle": "Des outils pour les agents."
   },
   "meta": {
-    "homeDescription": "Plateforme juridique open source : documents, dossiers, revue et recherche. À héberger vous-même ou dans notre cloud. IA à l’usage, sans dépendance.",
+    "homeDescription": "Plateforme juridique open source pour avocats : dossiers, documents, analyse de contrats et recherche de jurisprudence. À héberger vous-même ou dans le cloud.",
     "homeTitle": "stella | espace de travail juridique open source"
   },
   "nav": {
@@ -204,7 +204,7 @@
         }
       },
       "metaDescription": "Dialoguez avec vos dossiers, documents et registres. L’agent agit avec validation, fonde ses réponses sur des citations et s’étend via des compétences.",
-      "metaTitle": "Agent IA pour vos dossiers juridiques | stella",
+      "metaTitle": "Agent IA : assistant juridique pour vos dossiers | stella",
       "quickAnswer": {
         "answer": "L’agent dialogue avec vos dossiers, vos fichiers, les registres d’entreprises et vos outils connectés. Il demande votre accord avant d’agir, affiche un aperçu de ce qu’il lit et fonde ses réponses sur des citations. Vous pouvez l’étendre avec des compétences réutilisables et des connecteurs externes compatibles MCP.",
         "question": "Que sait faire l’agent IA ?"
@@ -547,7 +547,7 @@
         }
       },
       "metaDescription": "Jurisprudence et registres d’entreprises issus de sources publiques officielles. Lisez les décisions, suivez les citations et versez le tout au dossier.",
-      "metaTitle": "Jurisprudence et registres d’entreprises | stella",
+      "metaTitle": "Recherche de jurisprudence et registre du commerce | stella",
       "quickAnswer": {
         "answer": "Deux types. La jurisprudence publique officielle, collectée et analysée en préservant sa structure, pour lire et interroger les décisions et suivre leurs citations. Et l’accès typé aux registres du commerce et des sociétés nationaux, pour verser des données d’entreprise officielles directement au dossier. Les deux sont des sources fondées que l’agent IA peut citer.",
         "question": "Quelles données publiques stella apporte-t-elle ?"
@@ -638,7 +638,7 @@
         }
       },
       "metaDescription": "Posez vos questions à tout un ensemble de documents : des réponses structurées en tableau triable, traçable jusqu’à la source. Pour la due diligence.",
-      "metaTitle": "Revue tabulaire de documents pour la due diligence | stella",
+      "metaTitle": "Revue tabulaire : analyse de contrats par l’IA | stella",
       "quickAnswer": {
         "answer": "Vous pointez la revue tabulaire vers un ensemble de documents d’un dossier et vous définissez les colonnes comme des questions : « droit applicable », « préavis de résiliation » ou « clause de changement de contrôle », par exemple. stella extrait une réponse par document dans un tableau que vous triez, filtrez et exportez, chaque cellule renvoyant au passage dont elle provient.",
         "question": "Comment fonctionne la revue tabulaire ?"
@@ -729,7 +729,7 @@
         }
       },
       "metaDescription": "Définissez un modèle avec des champs et des clauses conditionnelles, remplissez-le à la main ou laissez stella le rédiger depuis les données du dossier.",
-      "metaTitle": "Modèles de documents juridiques rédigés par l’IA | stella",
+      "metaTitle": "Modèles et automatisation de documents juridiques | stella",
       "quickAnswer": {
         "answer": "Un modèle est un document doté de champs et de clauses que vous pouvez inclure sous condition. Vous remplissez les champs à la main ou laissez stella les rédiger à partir des données du dossier ; les clauses conditionnelles se résolvent et vous obtenez un document à retravailler dans le dossier. Modèles et clauses sont réutilisables : vos documents récurrents partent d’une base éprouvée.",
         "question": "Comment fonctionnent les modèles dans stella ?"
@@ -826,7 +826,7 @@
         }
       },
       "metaDescription": "Dossiers, documents, édition Word .docx, revue, recherche et chat au même endroit. Le travail reste dans son contexte, des pièces à la réponse.",
-      "metaTitle": "Gestion des dossiers juridiques au même endroit | stella",
+      "metaTitle": "Gestion de dossiers pour cabinets d’avocats | stella",
       "quickAnswer": {
         "answer": "Une application web qui réunit dossiers, documents, édition Word .docx, revue, recherche et chat au même endroit. Tout ce qui est ajouté à un dossier y reste rattaché, pour retrouver le contexte à votre retour. Une application de bureau complémentaire sert de passerelle locale quand un document exige Microsoft Word.",
         "question": "Qu’est-ce que l’espace de travail stella ?"

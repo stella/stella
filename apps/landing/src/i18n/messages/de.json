@@ -81,7 +81,7 @@
     "toolsTitle": "Werkzeuge für Agenten."
   },
   "meta": {
-    "homeDescription": "Juristischer Open-Source-Arbeitsbereich für Dokumente, Akten, Prüfung und Recherche. Selbst hosten oder in unserer Cloud. Nutzungsbasierte KI, ohne Lock-in.",
+    "homeDescription": "Juristischer Open-Source-Arbeitsbereich für Kanzleien: Akten, Dokumente, Vertragsanalyse und Recherche. Selbst hosten oder in der Cloud. Nutzungsbasierte KI.",
     "homeTitle": "stella | juristischer Open-Source-Arbeitsbereich"
   },
   "nav": {
@@ -204,7 +204,7 @@
         }
       },
       "metaDescription": "Chatten Sie mit Ihren Akten, Dokumenten, Registern und Tools. Der Agent handelt mit Freigaben, belegt Antworten mit Fundstellen und wächst mit Skills.",
-      "metaTitle": "KI-Agent für juristische Akten | stella",
+      "metaTitle": "KI für Anwälte: KI-Agent für Akten und Register | stella",
       "quickAnswer": {
         "answer": "Der Agent chattet mit Ihren Akten, Dateien, Handelsregistern und angebundenen Tools. Er holt vor jeder Aktion eine Freigabe ein, zeigt eine Quellvorschau zu dem, was er liest, und belegt Antworten mit Fundstellen. Erweitern lässt er sich über wiederverwendbare Skills und externe Konnektoren, die MCP-kompatibel sind.",
         "question": "Was kann der KI-Agent?"
@@ -283,7 +283,7 @@
         }
       },
       "metaDescription": "Entfernen Sie Namen, Entitäten und identifizierende Angaben, bevor Material die KI erreicht, direkt aus Chat und Prüfung, mit prüfbarem Ergebnis.",
-      "metaTitle": "Dokumente anonymisieren für juristische KI | stella",
+      "metaTitle": "Dokumente anonymisieren für KI in der Kanzlei | stella",
       "quickAnswer": {
         "answer": "Sie entfernt Namen, Entitäten und identifizierende Angaben, bevor Material in einen KI-Workflow geht, und zeigt Ihnen das geschwärzte Ergebnis, damit Sie bestätigen, was die Akte verlässt. Sie ist direkt in Chat und Dokumentenprüfung integriert.",
         "question": "Was ist Anonymisierung in stella?"
@@ -461,7 +461,7 @@
         }
       },
       "metaDescription": "Bearbeiten Sie Word-Dokumente einer Akte in stella: Änderungen direkt prüfen, jede Speicherung als Version in der Historie und eine Brücke zum lokalen Word.",
-      "metaTitle": "Word-Dokumente im Arbeitsbereich bearbeiten | stella",
+      "metaTitle": "Word-Dokumente in der Akte bearbeiten | stella",
       "quickAnswer": {
         "answer": "Ja. Öffnen Sie eine .docx-Datei aus einer Akte und bearbeiten Sie sie im Browser. stella behält das ursprüngliche Word-Format bei und hält gespeicherte Versionen in der Versionshistorie desselben Dokuments fest.",
         "question": "Kann ich Word-Dokumente in stella bearbeiten?"
@@ -547,7 +547,7 @@
         }
       },
       "metaDescription": "Rechtsprechung und Handelsregister aus offiziellen Quellen. Entscheidungen lesen, Unternehmen nachschlagen, Fundstellen folgen, alles direkt in die Akte.",
-      "metaTitle": "Rechtsprechung und Handelsregisterdaten | stella",
+      "metaTitle": "Juristische Recherche: Rechtsprechung und Register | stella",
       "quickAnswer": {
         "answer": "Zweierlei. Offizielle öffentliche Rechtsprechung, eingelesen und strukturerhaltend aufbereitet, sodass Sie Entscheidungen lesen, durchsuchen und ihren Fundstellen folgen. Und typisierten Zugriff auf nationale Unternehmens- und Handelsregister, sodass Sie offizielle Unternehmensdaten direkt in eine Akte holen. Beides sind belegte Quellen, die der KI-Agent zitieren kann.",
         "question": "Welche öffentlichen Daten bringt stella mit?"
@@ -638,7 +638,7 @@
         }
       },
       "metaDescription": "Stellen Sie Fragen an einen Dokumentenbestand und erhalten Sie strukturierte Antworten als sortierbare, belegte Tabelle. Für Due Diligence und Recherche.",
-      "metaTitle": "Tabellenprüfung für Due Diligence | stella",
+      "metaTitle": "Tabellenprüfung: Vertragsanalyse mit KI | stella",
       "quickAnswer": {
         "answer": "Sie richten die Tabellenprüfung auf einen Dokumentenbestand in einer Akte und formulieren Spalten als Fragen, zum Beispiel „anwendbares Recht“, „Kündigungsfrist“ oder „Change-of-Control-Klausel“. stella zieht für jedes Dokument eine Antwort in eine Tabelle, die Sie sortieren, filtern und exportieren, und jede Zelle verweist zurück auf die Stelle, aus der sie stammt.",
         "question": "Wie funktioniert die Tabellenprüfung?"
@@ -729,7 +729,7 @@
         }
       },
       "metaDescription": "Definieren Sie eine Vorlage mit Feldern und bedingten Klauseln, füllen Sie sie von Hand aus oder lassen Sie stella das aus den Daten der Akte übernehmen.",
-      "metaTitle": "Vorlagen für Rechtsdokumente mit KI-Entwurf | stella",
+      "metaTitle": "Vorlagen für die Dokumentenerstellung mit KI | stella",
       "quickAnswer": {
         "answer": "Eine Vorlage ist ein Dokument mit Feldern und Klauseln, die sich bedingt aufnehmen lassen. Sie füllen die Felder von Hand aus oder lassen stella sie aus den Daten einer Akte entwerfen; die bedingten Klauseln lösen sich auf, und Sie erhalten ein Dokument, an dem Sie in der Akte weiterarbeiten. Vorlagen und Klauseln sind wiederverwendbar, sodass wiederkehrende Dokumente von einer geprüften Grundlage starten.",
         "question": "Wie funktionieren Vorlagen in stella?"
@@ -826,7 +826,7 @@
         }
       },
       "metaDescription": "Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat in einem juristischen Arbeitsbereich, von den Unterlagen bis zur Antwort.",
-      "metaTitle": "Arbeitsbereich für die Aktenführung | stella",
+      "metaTitle": "Digitale Aktenverwaltung für Kanzleien | stella",
       "quickAnswer": {
         "answer": "Eine Web-App, die Akten, Dokumente, Word-.docx-Bearbeitung, Prüfung, Recherche und Chat an einem Ort hält. Alles, was in eine Akte kommt, bleibt daran hängen, sodass der Kontext da ist, wenn Sie zurückkehren. Eine begleitende Desktop-App dient als lokale Brücke, wenn ein Dokument Microsoft Word braucht.",
         "question": "Was ist der Arbeitsbereich von stella?"

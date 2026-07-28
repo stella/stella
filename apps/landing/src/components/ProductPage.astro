@@ -7,7 +7,7 @@ import McpProofSection from "./McpProofSection.astro";
 import LandingFooter from "./LandingFooter.astro";
 import { resolveProductLink } from "../data/products/links";
 import type { Product } from "../data/products/types";
-import { defaultLocale, isLocale } from "../i18n/config";
+import { defaultLocale, isLocale, locales } from "../i18n/config";
 import { getProductCopy } from "../i18n/product-copy";
 import { getTranslations, localizePath } from "../i18n/utils";
 
@@ -52,9 +52,15 @@ const adjacent = product.adjacent.map((link, index) => {
 
 // FAQPage structured data: the quick answer plus every FAQ, sourced from the
 // same content rendered below so assistants and people see the same answers.
+// `inLanguage` is stated here and nowhere else in the graph: this node is
+// per-page and its text is the catalog's, whereas the site-wide `#website` and
+// `#software` nodes share one @id across all thirteen locales and would get as
+// many conflicting languages as there are pages (the PRODUCT_DESCRIPTION
+// problem). BreadcrumbList is an ItemList, which has no inLanguage.
 const faqJsonLd = {
   "@context": "https://schema.org",
   "@type": "FAQPage",
+  inLanguage: locales[locale].hreflang,
   mainEntity: [copy.quickAnswer, ...copy.faqs].map((faq) => ({
     "@type": "Question",
     name: faq.question,

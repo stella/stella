@@ -81,7 +81,7 @@
     "toolsTitle": "Nástroje pre agentov."
   },
   "meta": {
-    "homeDescription": "Open source právny pracovný priestor pre dokumenty, spisy, revíziu a rešerše. Prevádzkujte sami alebo v našom cloude. AI podľa využitia, bez viazanosti.",
+    "homeDescription": "Open source právny pracovný priestor pre advokátov: spisy, dokumenty, kontrola zmlúv aj právne rešerše. Prevádzkujte sami alebo v cloude. AI podľa využitia.",
     "homeTitle": "stella | open source právny pracovný priestor"
   },
   "nav": {
@@ -203,8 +203,8 @@
           "question": "Odkiaľ jeho odpovede pochádzajú?"
         }
       },
-      "metaDescription": "Komunikujte so svojimi spismi, dokumentmi, registrami aj pripojenými nástrojmi. Agent koná so schválením, opiera odpovede o citácie a rozširuje sa cez zručnosti.",
-      "metaTitle": "AI agent pre právne spisy | stella",
+      "metaDescription": "Právny asistent, ktorý komunikuje s vašimi spismi, dokumentmi aj registrami. Agent koná so schválením, opiera odpovede o citácie a rozširuje sa cez zručnosti.",
+      "metaTitle": "AI agent: právny asistent pre vaše spisy | stella",
       "quickAnswer": {
         "answer": "Agent komunikuje s vašimi spismi, súbormi, obchodnými registrami aj pripojenými nástrojmi. Skôr než niečo urobí, požiada o schválenie, pri tom, čo číta, ukazuje náhľad zdroja, a odpovede opiera o citácie. Rozšírite ho o opakovane použiteľné zručnosti a externé konektory kompatibilné s MCP.",
         "question": "Čo AI agent dokáže?"
@@ -282,7 +282,7 @@
           "question": "S čím pomáha?"
         }
       },
-      "metaDescription": "Odstráňte mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI, priamo z chatu aj z revízie dokumentov, s výsledkom, ktorý si skontrolujete.",
+      "metaDescription": "Odstráňte mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI, priamo z chatu aj z revízie dokumentov, s výsledkom na kontrolu.",
       "metaTitle": "Anonymizácia dokumentov pre právnu AI | stella",
       "quickAnswer": {
         "answer": "Odstráni mená, subjekty a identifikačné údaje skôr, než podklady vstúpia do pracovného postupu s AI, a ukáže vám upravený výsledok, takže si potvrdíte, čo zo spisu odchádza. Je zabudovaná priamo do chatu a revízie dokumentov.",
@@ -365,7 +365,7 @@
           "question": "Obíde pripojenie klienta MCP oprávnenia pracovného priestoru?"
         }
       },
-      "metaDescription": "Vyhľadávajte, čítajte a pracujte s aplikáciou stella z príkazového riadka alebo z klienta kompatibilného s MCP. Obe rozhrania zdieľajú schopnosti, oprávnenia aj dáta.",
+      "metaDescription": "Vyhľadávajte, čítajte a pracujte s aplikáciou stella z príkazového riadka alebo z klienta kompatibilného s MCP. Obe rozhrania zdieľajú oprávnenia aj dáta.",
       "metaTitle": "MCP server a CLI pre váš právny pracovný priestor | stella",
       "quickAnswer": {
         "answer": "Dve rozhrania k rovnakým schopnostiam aplikácie stella. CLI zrkadlí register nástrojov MCP ako príkazy, zatiaľ čo MCP server umožňuje kompatibilným agentom a nástrojom pracovať so spismi, dokumentmi, vzormi aj verejnými právnymi dátami pod rovnakou kontrolou prístupu.",
@@ -546,8 +546,8 @@
           "question": "Môže s týmito dátami pracovať AI?"
         }
       },
-      "metaDescription": "Judikatúra a obchodné registre z oficiálnych verejných zdrojov. Čítajte rozhodnutia, vyhľadávajte firmy, sledujte citácie a načítajte ich do spisu aj k AI agentovi.",
-      "metaTitle": "Judikatúra a dáta z obchodných registrov | stella",
+      "metaDescription": "Judikatúra a obchodné registre z oficiálnych verejných zdrojov. Čítajte rozhodnutia, vyhľadávajte firmy, sledujte citácie a načítajte ich priamo do spisu.",
+      "metaTitle": "Právne rešerše judikatúry a obchodné registre | stella",
       "quickAnswer": {
         "answer": "Dvojaké. Oficiálnu verejnú judikatúru, ktorú stella načítava a štruktúrovane spracúva, takže si rozhodnutia prečítate, vyhľadáte v nich a prejdete ich citácie. A typovaný prístup do národných obchodných registrov, takže oficiálne údaje o firme načítate priamo do spisu. Oboje je podložený zdroj, na ktorý sa AI agent môže odvolať.",
         "question": "Aké verejné dáta prináša stella?"
@@ -637,8 +637,8 @@
           "question": "Dá sa revízia vyexportovať?"
         }
       },
-      "metaDescription": "Položte otázky nad celou sadou dokumentov a získajte štruktúrované odpovede ako zoraditeľnú tabuľku dohľadateľnú k zdroju. Pre due diligence, discovery aj rešerše.",
-      "metaTitle": "Tabuľková revízia dokumentov pre due diligence | stella",
+      "metaDescription": "Položte jednu otázku nad celou sadou zmlúv a získajte odpovede ako zoraditeľnú tabuľku dohľadateľnú k zdroju. Hromadná kontrola pre due diligence aj rešerše.",
+      "metaTitle": "Tabuľková revízia zmlúv pre due diligence | stella",
       "quickAnswer": {
         "answer": "Namierite tabuľkovú revíziu na sadu dokumentov v spise a stĺpce nadefinujete ako otázky: napríklad „rozhodné právo“, „výpovedná lehota“ alebo „ustanovenie o zmene kontroly“. stella ku každému dokumentu vytiahne odpoveď do tabuľky, ktorú zoradíte, vyfiltrujete aj vyexportujete, a každá bunka odkazuje späť na pasáž, z ktorej pochádza.",
         "question": "Ako tabuľková revízia funguje?"
@@ -728,8 +728,8 @@
           "question": "Kam zostavený dokument zamieri?"
         }
       },
-      "metaDescription": "Nadefinujte vzor s poľami a podmienenými ustanoveniami a vyplňte ho ručne, alebo nechajte aplikáciu stella pripraviť návrh z dát spisu. Dokument vznikne v spise.",
-      "metaTitle": "Vzory právnych dokumentov s návrhom od AI | stella",
+      "metaDescription": "Nadefinujte vzor s poľami a podmienenými ustanoveniami a vyplňte ho ručne, alebo nechajte aplikáciu stella pripraviť návrh z dát spisu priamo v spise.",
+      "metaTitle": "Automatizácia zmlúv a vzory právnych dokumentov | stella",
       "quickAnswer": {
         "answer": "Vzor je dokument s poľami a ustanoveniami, ktoré možno zaradiť podmienene. Polia vyplníte ručne, alebo ich nechajte pripraviť aplikáciu stella z dát spisu; podmienené ustanovenia sa vyhodnotia a vy dostanete dokument, na ktorom v spise pracujete ďalej. Vzory aj ustanovenia sa používajú opakovane, takže opakované dokumenty začínajú na overenom základe.",
         "question": "Ako vzory v aplikácii stella fungujú?"
@@ -826,7 +826,7 @@
         }
       },
       "metaDescription": "Spisy, dokumenty, úpravy Word .docx, revízia, rešerše aj chat v jednom právnom pracovnom priestore. Práca zostáva v kontexte od podkladov až po odpoveď.",
-      "metaTitle": "Pracovný priestor na správu právnych spisov | stella",
+      "metaTitle": "Správa advokátskych spisov na jednom mieste | stella",
       "quickAnswer": {
         "answer": "Webová aplikácia, ktorá drží spisy, dokumenty, úpravy Word .docx, revíziu, rešerše aj chat na jednom mieste. Všetko, čo do spisu pridáte, pri ňom zostane, takže kontext nájdete aj po návrate. Sprievodná desktopová aplikácia slúži ako lokálny most, keď dokument potrebuje Microsoft Word.",
         "question": "Čo je pracovný priestor v aplikácii stella?"

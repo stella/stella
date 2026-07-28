@@ -81,7 +81,7 @@
     "toolsTitle": "Ferramentas para agentes."
   },
   "meta": {
-    "homeDescription": "Espaço de trabalho jurídico de código aberto: documentos, casos, revisão e pesquisa. Auto-hospede ou use nossa nuvem. IA por uso, sem dependência de fornecedor.",
+    "homeDescription": "Espaço de trabalho jurídico de código aberto para advogados: casos, documentos, revisão de contratos e pesquisa. Auto-hospede ou use nossa nuvem. IA por uso.",
     "homeTitle": "stella | espaço de trabalho jurídico de código aberto"
   },
   "nav": {
@@ -204,7 +204,7 @@
         }
       },
       "metaDescription": "Converse com seus casos, documentos, registros e ferramentas conectadas. O agente age com aprovações, responde com citações e se estende por habilidades.",
-      "metaTitle": "Agente de IA para casos jurídicos | stella",
+      "metaTitle": "Agente de IA: assistente jurídico para seus casos | stella",
       "quickAnswer": {
         "answer": "O agente conversa com seus casos, arquivos, registros de empresas e ferramentas conectadas. Ele pede aprovação antes de agir, mostra uma prévia da fonte do que lê e fundamenta as respostas em citações. Você pode ampliá-lo com habilidades reutilizáveis e conectores externos compatíveis com MCP.",
         "question": "O que o agente de IA faz?"
@@ -547,7 +547,7 @@
         }
       },
       "metaDescription": "Jurisprudência e registros de empresas de fontes públicas oficiais. Leia decisões, consulte empresas, siga citações e leve tudo para um caso ou para a IA.",
-      "metaTitle": "Jurisprudência e registros de empresas | stella",
+      "metaTitle": "Pesquisa de jurisprudência e registros de empresas | stella",
       "quickAnswer": {
         "answer": "Dois tipos. Jurisprudência pública oficial, coletada e analisada com a estrutura preservada, para você ler e pesquisar decisões e seguir as citações. E acesso tipado a registros nacionais de empresas e do comércio, para puxar dados oficiais direto para um caso. Os dois são fontes fundamentadas que o agente de IA pode citar.",
         "question": "Que dados públicos a stella traz?"
@@ -638,7 +638,7 @@
         }
       },
       "metaDescription": "Faça perguntas a um conjunto inteiro de documentos e receba respostas em uma tabela ordenável e rastreável até a fonte. Para due diligence e pesquisa.",
-      "metaTitle": "Revisão tabular de documentos para due diligence | stella",
+      "metaTitle": "Revisão tabular: análise de contratos com IA | stella",
       "quickAnswer": {
         "answer": "Você aponta a revisão tabular para um conjunto de documentos do caso e define colunas como perguntas: por exemplo, “lei aplicável”, “prazo de aviso prévio de rescisão” ou “cláusula de mudança de controle”. A stella extrai uma resposta para cada documento em uma tabela que você pode ordenar, filtrar e exportar, com cada célula ligada à passagem de onde veio.",
         "question": "Como funciona a revisão tabular?"
@@ -729,7 +729,7 @@
         }
       },
       "metaDescription": "Defina um modelo com campos e cláusulas condicionais e preencha à mão ou deixe a stella redigir com os dados do caso. O documento nasce dentro do caso.",
-      "metaTitle": "Modelos de documentos jurídicos com IA | stella",
+      "metaTitle": "Modelos de petições e contratos com IA | stella",
       "quickAnswer": {
         "answer": "Um modelo é um documento com campos e cláusulas que podem ser incluídas condicionalmente. Você preenche os campos à mão ou deixa a stella redigi-los com os dados do caso; as cláusulas condicionais se resolvem e você recebe um documento para continuar trabalhando dentro do caso. Modelos e cláusulas são reutilizáveis, então os documentos recorrentes partem de uma base confiável.",
         "question": "Como funcionam os modelos na stella?"

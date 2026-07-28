@@ -8,7 +8,7 @@ import {
   localeCodes,
   type Locale,
 } from "../i18n/config";
-import { getAlternates, stripLocale } from "../i18n/utils";
+import { catalogs, getAlternates, stripLocale } from "../i18n/utils";
 import SiteHeader from "../components/SiteHeader.astro";
 
 /** One ancestor on the trail from the site root to the current page. */
@@ -53,9 +53,11 @@ type Props = {
 // The product's own description, distinct from the per-page meta description.
 // Every page emits the same `#software` node, so feeding it the page
 // description would give one @id as many conflicting values as there are
-// pages. Doubles as the default meta description on the homepage.
-const PRODUCT_DESCRIPTION =
-  "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.";
+// pages. Doubles as the default meta description on pages that pass none.
+// Read from the source catalog rather than restated here: it was a verbatim
+// copy of `en.meta.homeDescription`, which is the kind of duplicate that
+// survives one edit and not the second.
+const PRODUCT_DESCRIPTION = catalogs.en.meta.homeDescription;
 
 const {
   title = "stella | open source legal workspace",
