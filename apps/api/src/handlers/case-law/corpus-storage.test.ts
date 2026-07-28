@@ -134,10 +134,20 @@ describe("empty corpus payload hashes", () => {
    * matches nothing.
    */
   test("cover the empty shapes a metadata-first ingest writes", () => {
-    expect([...EMPTY_CORPUS_CONTENT_HASHES]).toEqual([
+    // The two shapes the pipeline itself writes stay pinned by value; the
+    // matrix additionally covers legacy column shapes the backfill copies
+    // verbatim (stored `[]` sections, a valid AST with no blocks).
+    expect(EMPTY_CORPUS_CONTENT_HASHES).toContain(
       "38c18e8567ab7eb43737fbcb0b460cc715edc003359f072526757949857ba315",
+    );
+    expect(EMPTY_CORPUS_CONTENT_HASHES).toContain(
       "c21295bcba9c492b8fa6894ee2fcd6ca93b825ea61fc4965d00f41ea611071e2",
-    ]);
+    );
+    expect(EMPTY_CORPUS_CONTENT_HASHES).toHaveLength(4);
+    expect(new Set(EMPTY_CORPUS_CONTENT_HASHES).size).toBe(4);
+    expect(EMPTY_CORPUS_CONTENT_HASHES).toContain(
+      corpusContentHash({ text: "", sections: [], ast: null }),
+    );
   });
 
   test("a payload carrying a document hashes to none of them", () => {
