@@ -1,5 +1,5 @@
-import { slugify } from "@/api/handlers/skills/slug";
 import type { SafeId } from "@/api/lib/branded-types";
+import { slugifyAscii } from "@/api/lib/slug";
 
 const TAG_ESCAPE = "\\";
 const TAG_SEPARATOR = ",";
@@ -13,8 +13,10 @@ export const deriveClauseSlug = (
     return providedSlug;
   }
 
-  const derivedSlug = slugify(title);
-  return derivedSlug === "skill" ? `clause-${clauseId}` : derivedSlug;
+  return slugifyAscii(title, {
+    fallback: `clause-${clauseId}`,
+    maxLength: 56,
+  });
 };
 
 export const serializeClauseTags = (tags: readonly string[]): string =>
