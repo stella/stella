@@ -31,7 +31,11 @@ export type PlaybookVerdict =
   | "compliant"
   | "fallback"
   | "deviation"
-  | "missing";
+  | "missing"
+  // Outside the compliance ladder: the position does not pertain to this
+  // document, so it is neither a pass nor a flagged gap and is excluded from the
+  // compliance denominator (see `computeRiskRollup`).
+  | "not-applicable";
 
 export type PlaybookCitation = { blockId: string; text: string };
 export type PlaybookFindingFix = {

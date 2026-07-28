@@ -134,16 +134,100 @@ describe("computeRiskRollup — counts", () => {
       finding({ positionId: "3", severity: "low", verdict: "missing" }),
       finding({ positionId: "4", severity: "low", verdict: "compliant" }),
       finding({ positionId: "5", severity: "medium", verdict: null }),
+      finding({
+        positionId: "6",
+        severity: "blocker",
+        verdict: "not-applicable",
+      }),
     ]);
 
-    expect(rollup.totalPositions).toBe(5);
+    expect(rollup.totalPositions).toBe(6);
+    // A not-applicable position (even at blocker severity) is never flagged.
     expect(rollup.flaggedCount).toBe(3);
     expect(rollup.verdictCounts).toEqual({
       compliant: 1,
       fallback: 1,
       deviation: 1,
       missing: 1,
+      "not-applicable": 1,
     });
+  });
+
+  test("a not-applicable position is never a flag or a top issue", () => {
+    const rollup = computeRiskRollup([
+      finding({
+        positionId: "na",
+        severity: "blocker",
+        verdict: "not-applicable",
+      }),
+    ]);
+    expect(rollup.overallRisk).toBe("none");
+    expect(rollup.flaggedCount).toBe(0);
+    expect(rollup.topIssues).toHaveLength(0);
+    expect(
+      isFlaggedPlaybookFinding(
+        finding({ positionId: "na", verdict: "not-applicable" }),
+      ),
+    ).toBe(false);
+  });
+});
+
+// The score-math invariants: a not-applicable position must never enter the
+// denominator (a document that legitimately omits a topic is not penalized),
+// while a `missing` gap must stay in it (a real omission counts against
+// compliance). `met` = compliant + fallback; `notMet` = deviation + missing.
+describe("computeRiskRollup — compliance score", () => {
+  test("excludes not-applicable from the denominator but keeps missing in it", () => {
+    const rollup = computeRiskRollup([
+      finding({ positionId: "1", verdict: "compliant" }),
+      finding({ positionId: "2", verdict: "fallback" }),
+      finding({ positionId: "3", verdict: "deviation" }),
+      finding({ positionId: "4", verdict: "missing" }),
+      finding({ positionId: "5", verdict: "not-applicable" }),
+      finding({ positionId: "6", verdict: "not-applicable" }),
+      // Extract-only positions carry no verdict and are excluded too.
+      finding({ positionId: "7", verdict: null }),
+    ]);
+
+    // met = compliant + fallback = 2; notMet = deviation + missing = 2.
+    expect(rollup.compliance.met).toBe(2);
+    expect(rollup.compliance.notMet).toBe(2);
+    // Denominator excludes the two not-applicable and the one extract-only.
+    expect(rollup.compliance.scored).toBe(4);
+    expect(rollup.compliance.notApplicable).toBe(2);
+    expect(rollup.compliance.ratio).toBe(0.5);
+  });
+
+  test("marking a flagged position not-applicable raises the score by shrinking the denominator", () => {
+    const withMissing = computeRiskRollup([
+      finding({ positionId: "1", verdict: "compliant" }),
+      finding({ positionId: "2", verdict: "missing" }),
+    ]);
+    // 1 met / 2 scored.
+    expect(withMissing.compliance.ratio).toBe(0.5);
+
+    const asNotApplicable = computeRiskRollup([
+      finding({ positionId: "1", verdict: "compliant" }),
+      finding({ positionId: "2", verdict: "not-applicable" }),
+    ]);
+    // The same position, now out of scope, leaves 1 met / 1 scored.
+    expect(asNotApplicable.compliance.scored).toBe(1);
+    expect(asNotApplicable.compliance.ratio).toBe(1);
+  });
+
+  test("ratio is null when nothing is scored (all not-applicable or extract-only)", () => {
+    const rollup = computeRiskRollup([
+      finding({ positionId: "1", verdict: "not-applicable" }),
+      finding({ positionId: "2", verdict: null }),
+    ]);
+    expect(rollup.compliance.scored).toBe(0);
+    expect(rollup.compliance.ratio).toBeNull();
+  });
+
+  test("empty findings produce a null ratio, not a divide-by-zero", () => {
+    const rollup = computeRiskRollup([]);
+    expect(rollup.compliance.ratio).toBeNull();
+    expect(rollup.compliance.scored).toBe(0);
   });
 });
 

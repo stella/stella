@@ -1927,7 +1927,9 @@
         "violatedRedLine": "Nem elfogadható szabályt sért:"
       },
       "risk": {
+        "complianceLabel": "Compliance",
         "flaggedCount": "{flagged} of {total} positions flagged",
+        "notApplicableExcluded": "({count} not applicable, excluded)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1968,7 +1970,8 @@
         "compliant": "Megfelel",
         "deviation": "Eltérés",
         "fallback": "Alternatív megfogalmazás",
-        "missing": "Hiányzik"
+        "missing": "Hiányzik",
+        "notApplicable": "Not applicable"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
