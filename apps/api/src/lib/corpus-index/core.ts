@@ -258,6 +258,12 @@ export type LoadDocsForBatchOptions<TBrand extends SafeIdType, TRow> = {
   fetchFulltext: FetchFulltext<TBrand>;
   /** Override the per-row canonical payload load (test seam). */
   readPayload?: (row: TRow) => Promise<CorpusDocumentPayload>;
+  /**
+   * Concurrent canonical-object reads per chunk. The daemon default keeps
+   * S3 pressure low next to live traffic; a dedicated bulk build may raise
+   * it, since the build task is the only reader of its corpus prefix.
+   */
+  readConcurrency?: number;
 };
 
 /**
@@ -374,6 +380,7 @@ export const createCorpusIndexer = <
       generation,
       fetchFulltext,
       readPayload,
+      readConcurrency = INDEX_CONCURRENCY,
     }: LoadDocsForBatchOptions<TBrand, TRow>,
   ): Promise<LoadedBatch<TBrand, TRow>> => {
     const loadRowPayload =
@@ -398,8 +405,8 @@ export const createCorpusIndexer = <
       });
     const built: LoadedBatch<TBrand, TRow>["built"] = [];
     const readFailures: LoadedBatch<TBrand, TRow>["readFailures"] = [];
-    for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
-      const slice = rows.slice(i, i + INDEX_CONCURRENCY);
+    for (let i = 0; i < rows.length; i += readConcurrency) {
+      const slice = rows.slice(i, i + readConcurrency);
       // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
       const loaded = await Promise.all(
         slice.map(async (row) => {
@@ -529,6 +536,7 @@ export const createCorpusIndexer = <
     scopedDb: ScopedDb,
     batchSize: number,
     generation: string,
+    options: { readConcurrency?: number } = {},
   ): Promise<number> => {
     const staleReserved = Math.max(1, Math.floor(batchSize / 4));
     const missingLimit = Math.max(1, batchSize - staleReserved);
@@ -538,7 +546,16 @@ export const createCorpusIndexer = <
       limit: missingLimit,
     });
 
-    const staleLimit = batchSize - missing.length;
+    // The stale scan runs only once the missing backlog stops filling its
+    // quota. Its predicate (hash mismatch within the current generation)
+    // has no covering index, so against a generation with a large missing
+    // backlog — a fresh generation build being the extreme — it is a long
+    // scan that returns nothing, paid on every batch. Stale rows are
+    // re-indexes of content the index already serves in some version;
+    // deferring them behind the missing drain is self-limiting, because
+    // the drain itself empties the backlog that defers them.
+    const staleLimit =
+      missing.length >= missingLimit ? 0 : batchSize - missing.length;
     const stale =
       staleLimit <= 0
         ? []
@@ -560,6 +577,9 @@ export const createCorpusIndexer = <
     const { built, readFailures } = await loadDocsForBatch(rows, {
       generation,
       fetchFulltext,
+      ...(options.readConcurrency === undefined
+        ? {}
+        : { readConcurrency: options.readConcurrency }),
     });
     await recordReadFailures(scopedDb, readFailures, generation);
 
