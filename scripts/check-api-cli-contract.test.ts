@@ -100,12 +100,12 @@ describe("API and CLI release contract", () => {
     );
     const manifests = new Map(
       await Promise.all(
-        SHARED_NPM_PACKAGES.map(async (packageName) => [
-          packageName,
-          await Bun.file(
+        SHARED_NPM_PACKAGES.map(async (packageName) => {
+          const manifest: unknown = await Bun.file(
             new URL(`../packages/${packageName}/package.json`, import.meta.url),
-          ).json(),
-        ]),
+          ).json();
+          return [packageName, manifest] as const;
+        }),
       ),
     );
 
@@ -124,11 +124,12 @@ describe("API and CLI release contract", () => {
       if (!isRecord(manifest)) {
         throw new TypeError(`${packageName} package manifest is not an object`);
       }
-      expect(isRecord(manifest.exports)).toBe(true);
-      if (!isRecord(manifest.exports)) {
+      const packageExports = manifest["exports"];
+      expect(isRecord(packageExports)).toBe(true);
+      if (!isRecord(packageExports)) {
         throw new TypeError(`${packageName} exports is not an object`);
       }
-      for (const target of Object.values(manifest.exports)) {
+      for (const target of Object.values(packageExports)) {
         expect(typeof target).toBe("string");
         if (typeof target !== "string") {
           throw new TypeError(`${packageName} has a non-string export target`);
