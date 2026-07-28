@@ -28,11 +28,13 @@ await ares.lookupByIco("27082440");
 
 ## Supported registries
 
-| Subpath  | Jurisdiction   | Registry                                                                                                                      |
-| -------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `/ares`  | Czech Republic | [ARES](https://ares.gov.cz) — public open API                                                                                 |
-| `/brreg` | Norway         | [Brønnøysundregistrene](https://data.brreg.no/enhetsregisteret/api/docs/index.html) — public open API                         |
-| `/denue` | Mexico         | [INEGI DENUE](https://www.inegi.org.mx/servicios/api_denue.html) — official establishment / economic-unit API; token required |
+| Subpath   | Jurisdiction   | Registry                                                                                                                      |
+| --------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `/ares`   | Czech Republic | [ARES](https://ares.gov.cz) — public open API                                                                                 |
+| `/brreg`  | Norway         | [Brønnøysundregistrene](https://data.brreg.no/enhetsregisteret/api/docs/index.html) — public open API                         |
+| `/denue`  | Mexico         | [INEGI DENUE](https://www.inegi.org.mx/servicios/api_denue.html) — official establishment / economic-unit API; token required |
+| `/sudreg` | Croatia        | [Sudski registar](https://sudreg.pravosudje.hr) — public company lookup                                                       |
+| `/zefix`  | Switzerland    | [Zefix](https://www.zefix.ch) — public commercial-register search API                                                         |
 
 More jurisdictions land per-PR; see the package README on the main branch for
 the current list.
@@ -49,6 +51,11 @@ Every registry client follows the same contract:
   failure mode.
 - Pure parsers exposed alongside the client so consumers can ingest cached or
   mocked raw payloads without hitting the network.
+
+Adapters also export `toNormalizedEntity` and `toNormalizedSearchResult`
+projections where a domain model is available. Each optional normalized field is
+a discriminated value: it contains data when available, or records that the field
+was not loaded or is not supported by that adapter. These states cannot overlap.
 
 Live integration tests live in `*.test.ts` files guarded by
 `SMOKE_TEST=1` so the unit suite stays offline-safe.

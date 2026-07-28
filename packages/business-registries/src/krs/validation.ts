@@ -13,10 +13,30 @@
 // is ambiguous (could be an arbitrary numeric identifier), and the
 // dispatch layer keys on a shape match to choose lookup vs. search.
 
+import { validate as validateNipStdnum } from "@stll/stdnum/pl/nip";
+import {
+  compact as compactRegon,
+  validate as validateRegonStdnum,
+} from "@stll/stdnum/pl/regon";
+
 export const normalizeKrsNumber = (input: string): string =>
   input.trim().replaceAll(/\s/gu, "");
 
 export const validateKrsNumber = (input: string): boolean => {
   const compact = normalizeKrsNumber(input);
   return /^\d{10}$/u.test(compact);
+};
+
+export const validateNip = (input: string): boolean =>
+  validateNipStdnum(input).valid;
+
+export const validateRegon = (input: string): boolean => {
+  const compact = compactRegon(input);
+  if (validateRegonStdnum(compact).valid) {
+    return true;
+  }
+  return (
+    /^\d{9}0{5}$/u.test(compact) &&
+    validateRegonStdnum(compact.slice(0, 9)).valid
+  );
 };

@@ -10,8 +10,6 @@
   "ignore": [
     "@stll/api",
     "@stll/boe",
-    "@stll/business-registries",
-    "@stll/country-codes",
     "@stll/infosoud",
     "@stll/locales",
     "@stll/text-normalize"

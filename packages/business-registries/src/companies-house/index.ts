@@ -20,6 +20,8 @@ export {
   parseSearchItem,
   parseSearchResponse,
 } from "./parse.js";
+export { toNormalizedEntity, toNormalizedSearchResult } from "./normalized.js";
+export type { NormalizeCompaniesHouseOptions } from "./normalized.js";
 export type {
   CompaniesHouseAccounts,
   CompaniesHouseAddress,

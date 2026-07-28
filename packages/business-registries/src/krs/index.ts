@@ -7,6 +7,7 @@ export {
   KrsValidationError,
 } from "./errors.js";
 export { parseAddress, parseEntity, parseStatus } from "./parse.js";
+export { toNormalizedEntity, toNormalizedSearchResult } from "./normalized.js";
 export type {
   KrsAddress,
   KrsEntity,
@@ -27,4 +28,9 @@ export type {
   KrsRegisterCode,
   KrsRegisteredSeat,
 } from "./types.js";
-export { normalizeKrsNumber, validateKrsNumber } from "./validation.js";
+export {
+  normalizeKrsNumber,
+  validateKrsNumber,
+  validateNip,
+  validateRegon,
+} from "./validation.js";

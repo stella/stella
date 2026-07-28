@@ -20,6 +20,9 @@ export const CANONICAL_ID_SCHEMES = [
   "GB-CRN",
   "FR-SIREN",
   "FR-SIRET",
+  "SK-ICO",
+  "CH-UID",
+  "HR-MBS",
   "BR-CNPJ",
 ] as const;
 

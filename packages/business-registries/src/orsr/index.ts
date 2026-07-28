@@ -7,6 +7,7 @@ export {
   OrsrValidationError,
 } from "./errors.js";
 export { parseAddress, parseExtract, parseSearchHit } from "./parse.js";
+export { toNormalizedEntity, toNormalizedSearchResult } from "./normalized.js";
 export type {
   OrsrAddress,
   OrsrCompany,

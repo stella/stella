@@ -1,0 +1,24 @@
+{
+  "list": [
+    {
+      "name": "Swiss Re AG",
+      "ehraid": 1009345,
+      "uid": "CHE191546434",
+      "uidFormatted": "CHE-191.546.434",
+      "chid": "CH02030361838",
+      "chidFormatted": "CH-020-3036183-8",
+      "legalSeatId": 261,
+      "legalSeat": "Zürich",
+      "registerOfficeId": 20,
+      "legalFormId": 3,
+      "status": "EXISTIEREND",
+      "shabDate": "2026-05-08",
+      "deleteDate": null,
+      "cantonalExcerptWeb": "https://zh.chregister.ch/cr-portal/auszug/auszug.xhtml?uid=CHE-191.546.434"
+    }
+  ],
+  "hasMoreResults": false,
+  "offset": 0,
+  "maxEntries": 2,
+  "maxOffset": null
+}

@@ -82,6 +82,14 @@ jobs:
             packages/cli/src/**
             packages/cli/skills/**
             packages/cli/tsconfig.build.json
+            packages/business-registries/README.md
+            packages/business-registries/package.json
+            packages/business-registries/src/**
+            packages/business-registries/tsconfig.build.json
+            packages/country-codes/README.md
+            packages/country-codes/package.json
+            packages/country-codes/src/**
+            packages/country-codes/tsconfig.build.json
             packages/conditions/README.md
             packages/conditions/package.json
             packages/conditions/src/**
@@ -101,6 +109,10 @@ jobs:
             bun.lock
             packages/cli/CHANGELOG.md
             packages/cli/package.json
+            packages/business-registries/CHANGELOG.md
+            packages/business-registries/package.json
+            packages/country-codes/CHANGELOG.md
+            packages/country-codes/package.json
             packages/conditions/CHANGELOG.md
             packages/conditions/package.json
             packages/template-conditions/CHANGELOG.md
@@ -109,6 +121,8 @@ jobs:
             packages/docx-utils/package.json
           package-files: |
             packages/cli/package.json
+            packages/business-registries/package.json
+            packages/country-codes/package.json
             packages/conditions/package.json
             packages/template-conditions/package.json
             packages/docx-utils/package.json

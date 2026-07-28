@@ -1,7 +1,8 @@
 # Changesets
 
 Pull requests that change the shipped source of `@stll/cli`,
-`@stll/conditions`, `@stll/template-conditions`, or `@stll/docx-utils` must
+`@stll/business-registries`, `@stll/conditions`,
+`@stll/country-codes`, `@stll/template-conditions`, or `@stll/docx-utils` must
 include a Changeset describing the user-visible change and its semver impact.
 
 Run `bun run changeset`, select the affected package(s), and commit the generated

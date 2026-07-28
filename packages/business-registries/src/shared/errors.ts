@@ -19,6 +19,16 @@ export class RegistryUnavailableError extends RegistryError {
   }
 }
 
+export class RegistryValidationError extends RegistryError {
+  readonly scheme: string;
+
+  constructor(scheme: string) {
+    super(`Invalid ${scheme} registry identifier`);
+    this.name = "RegistryValidationError";
+    this.scheme = scheme;
+  }
+}
+
 // Not-found is intentionally NOT a class. JavaScript single inheritance
 // means a per-adapter class can extend either its adapter base
 // (AresError / BrregError, preserving `error instanceof AresError`
