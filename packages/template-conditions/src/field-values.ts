@@ -3,7 +3,7 @@
  * template fill applies — composite (parts joined by a `{{key}}` format),
  * formula (arithmetic over the other values), and locale-aware date rendering.
  *
- * Both the API fill engine (apps/api/src/lib/docx) and the web live
+ * Both the API fill engine (apps/api/src/handlers/docx) and the web live
  * preview (template-studio.tsx) MUST route their rendering through
  * {@link renderDeterministicFieldValue} so the preview and the generated
  * document produce byte-identical strings. The api/field-value-parity.test.ts
