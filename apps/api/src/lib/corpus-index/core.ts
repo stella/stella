@@ -13,6 +13,7 @@ import {
 import { corpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Shared corpus-index search-projection core for the corpus document families
@@ -117,6 +118,38 @@ export type CorpusIndexRow<TBrand extends SafeIdType> = {
   indexedHash: string | null;
   indexedGeneration: string | null;
   updatedAt: Date;
+};
+
+/**
+ * Resolve a batched mark statement's RETURNING ids against the rows the
+ * statement was built from. Matching through the input rows keeps the branded
+ * ids without an assertion, and only ids the batch actually supplied can come
+ * back. The production driver returns the rows directly; pglite (tests) wraps
+ * them in `{ rows }` — both shapes are accepted.
+ */
+export const resolveMarkedRowIds = <TBrand extends SafeIdType>(
+  marked: unknown,
+  rows: readonly CorpusIndexRow<TBrand>[],
+): Set<SafeId<TBrand>> => {
+  let returned: unknown[] = [];
+  if (Array.isArray(marked)) {
+    returned = marked;
+  } else if (isRecord(marked) && Array.isArray(marked["rows"])) {
+    returned = marked["rows"];
+  }
+  const byId = new Map<string, SafeId<TBrand>>(
+    rows.map((row) => [row.id, row.id]),
+  );
+  const ids = new Set<SafeId<TBrand>>();
+  for (const entry of returned) {
+    if (isRecord(entry) && typeof entry["id"] === "string") {
+      const id = byId.get(entry["id"]);
+      if (id !== undefined) {
+        ids.add(id);
+      }
+    }
+  }
+  return ids;
 };
 
 /**

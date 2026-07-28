@@ -21,8 +21,10 @@ import type {
   CorpusDocumentPayload,
   CorpusIndexAdapter,
 } from "@/api/lib/corpus-index/core";
-import { createCorpusIndexer } from "@/api/lib/corpus-index/core";
-import { isRecord } from "@/api/lib/type-guards";
+import {
+  createCorpusIndexer,
+  resolveMarkedRowIds,
+} from "@/api/lib/corpus-index/core";
 
 /**
  * corpus index search-projection maintenance for the `case_law` family.
@@ -257,11 +259,15 @@ export const caseLawCorpusIndexAdapter = {
     // audit: skip — search index maintenance; rebuilds derived state
     // One statement for the whole request: each tuple carries the row's
     // expected pre-state, so every row keeps its individual compare-and-set
-    // while the batch pays a single round-trip.
+    // while the batch pays a single round-trip. The mark deliberately leaves
+    // updated_at alone — bookkeeping must not read as a content change to
+    // other compare-and-set scans — so the expected generation is part of
+    // the pre-state: without it, two overlapping builds of a hash-current
+    // row would both match and both record success.
     const tuples = sql.join(
       rows.map(
         (row) =>
-          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.updatedAt.toISOString()}::timestamptz)`,
+          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAt.toISOString()}::timestamp)`,
       ),
       sql`, `,
     );
@@ -269,30 +275,15 @@ export const caseLawCorpusIndexAdapter = {
       UPDATE ${caseLawDecisions} AS d
       SET indexed_hash = v.content_hash,
           indexed_generation = ${indexId},
-          indexed_at = ${now.toISOString()}::timestamptz
-      FROM (VALUES ${tuples}) AS v(id, content_hash, expected_hash, expected_updated)
+          indexed_at = ${now.toISOString()}::timestamp
+      FROM (VALUES ${tuples}) AS v(id, content_hash, expected_hash, expected_generation, expected_updated)
       WHERE d.id = v.id
         AND d.indexed_hash IS NOT DISTINCT FROM v.expected_hash
+        AND d.indexed_generation IS NOT DISTINCT FROM v.expected_generation
         AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
       RETURNING d.id
     `);
-    // The bun-sql driver returns the rows directly; pglite (tests) wraps
-    // them in { rows }. Accept both shapes.
-    let returned: unknown[] = [];
-    if (Array.isArray(marked)) {
-      returned = marked;
-    } else if (isRecord(marked) && Array.isArray(marked["rows"])) {
-      returned = marked["rows"];
-    }
-    const ids = new Set<SafeId<"caseLawDecision">>();
-    for (const entry of returned) {
-      if (isRecord(entry) && typeof entry["id"] === "string") {
-        // SAFETY: RETURNING yields the same uuid values the branded rows
-        // supplied in the VALUES tuples, so the brand is preserved.
-        ids.add(entry["id"] as SafeId<"caseLawDecision">);
-      }
-    }
-    return ids;
+    return resolveMarkedRowIds(marked, rows);
   },
   insertSucceededJobs: async (tx, { rows, indexId }) => {
     // audit: skip — append-only index-job rows ARE the indexing audit trail

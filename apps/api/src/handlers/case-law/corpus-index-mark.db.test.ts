@@ -19,12 +19,16 @@ import {
 // The batched mark rewrites hundreds of per-row compare-and-set updates
 // into one VALUES join. The batching must not weaken the per-row CAS:
 // a row whose expected pre-state no longer matches (concurrent refresh)
-// stays unmarked while its batch-mates commit — and NULL expected hashes
-// (a first-time index) must compare via IS NOT DISTINCT FROM, which is
-// exactly the shape a serializer-level test cannot prove.
+// stays unmarked while its batch-mates commit, NULL expected hashes
+// (a first-time index) must compare via IS NOT DISTINCT FROM, and the
+// mark must neither bump updated_at nor let a stale overlapping build
+// re-mark a hash-current row whose generation already advanced — all
+// shapes a serializer-level test cannot prove.
 
 const allSchema = { ...schema, ...authSchema, ...rlsExports };
 const NOW = new Date("2026-07-28T12:00:00.000Z");
+const OLD_GENERATION = "case_law_v1_cze";
+const NEW_GENERATION = "case_law_v2_cze";
 
 let client: Awaited<ReturnType<typeof createSchemaPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -32,6 +36,7 @@ let db: ReturnType<typeof drizzle>;
 const sourceId = createSafeId<"caseLawSource">();
 const freshId = createSafeId<"caseLawDecision">();
 const movedId = createSafeId<"caseLawDecision">();
+const regenId = createSafeId<"caseLawDecision">();
 
 beforeAll(
   async () => {
@@ -45,6 +50,11 @@ beforeAll(
       // oxlint-disable-next-line no-await-in-loop -- DDL statements must apply in emitted order (deterministic test schema setup)
       await db.execute(sql.raw(statement));
     }
+    // The columns are naive timestamps while the statement's expected values
+    // arrive as text; a non-UTC session proves the comparison does not detour
+    // through timestamptz and the session time zone (which would make every
+    // CAS miss on a non-UTC connection).
+    await db.execute(sql.raw("SET TIME ZONE 'Europe/Prague'"));
 
     await db.insert(caseLawSources).values({
       id: sourceId,
@@ -78,6 +88,16 @@ beforeAll(
         contentHash: "hash-moved",
         indexedHash: "hash-old",
       },
+      {
+        ...base,
+        id: regenId,
+        caseNumber: "3 T 3/2020",
+        slug: "regen",
+        languageGroupKey: "regen",
+        contentHash: "hash-regen",
+        indexedHash: "hash-regen",
+        indexedGeneration: OLD_GENERATION,
+      },
     ]);
   },
   { timeout: 30_000 },
@@ -107,11 +127,18 @@ const loadRow = async (id: SafeId<"caseLawDecision">) => {
   return row;
 };
 
+// SAFETY: the adapter only calls `execute` on the transaction, and pglite's
+// drizzle instance provides that surface structurally — the same reasoning
+// the ingestion pipeline tests rely on for their fakes.
+// eslint-disable-next-line typescript/no-unsafe-type-assertion
+const tx = () => db as unknown as Transaction;
+
 test(
   "marks matching rows and refuses moved ones in one statement",
   async () => {
     const fresh = await loadRow(freshId);
     const moved = await loadRow(movedId);
+    const regen = await loadRow(regenId);
     // Simulate a concurrent refresh landing after `moved` was selected:
     // its expected pre-state (indexedHash "hash-old") no longer matches.
     await db
@@ -119,26 +146,37 @@ test(
       .set({ indexedHash: null })
       .where(sql`${caseLawDecisions.id} = ${movedId}`);
 
-    const marked = await caseLawCorpusIndexAdapter.markIndexedBatch(
-      // SAFETY: the adapter only calls `execute` on the transaction, and
-      // pglite's drizzle instance provides that surface structurally —
-      // the same reasoning the citation-authority pglite test relies on.
-      db as unknown as Transaction,
-      {
-        rows: [fresh, moved],
-        indexId: "case_law_v2_cze",
-        now: NOW,
-      },
-    );
+    const marked = await caseLawCorpusIndexAdapter.markIndexedBatch(tx(), {
+      rows: [fresh, moved, regen],
+      indexId: NEW_GENERATION,
+      now: NOW,
+    });
 
     expect(marked.has(freshId)).toBe(true);
     expect(marked.has(movedId)).toBe(false);
+    expect(marked.has(regenId)).toBe(true);
 
     const freshAfter = await loadRow(freshId);
-    expect(freshAfter.indexedGeneration).toBe("case_law_v2_cze");
+    expect(freshAfter.indexedGeneration).toBe(NEW_GENERATION);
     expect(freshAfter.indexedHash).toBe("hash-fresh");
+    // Bookkeeping must not read as a content change: the trim scan and the
+    // ingest refresh both compare-and-set on updated_at.
+    expect(freshAfter.updatedAt).toEqual(fresh.updatedAt);
     const movedAfter = await loadRow(movedId);
     expect(movedAfter.indexedGeneration).toBeNull();
+
+    // Overlapping-build fixed point: a second worker that read `regen`
+    // before the first mark (hash already current, generation still old)
+    // must refuse rather than record another success, and the expected
+    // generation is the only pre-state field that can catch it.
+    const stale = await caseLawCorpusIndexAdapter.markIndexedBatch(tx(), {
+      rows: [regen],
+      indexId: NEW_GENERATION,
+      now: NOW,
+    });
+    expect(stale.size).toBe(0);
+    const regenAfter = await loadRow(regenId);
+    expect(regenAfter.indexedGeneration).toBe(NEW_GENERATION);
   },
   { timeout: 30_000 },
 );

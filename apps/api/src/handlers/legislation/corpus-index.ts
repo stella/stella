@@ -9,8 +9,10 @@ import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
-import { createCorpusIndexer } from "@/api/lib/corpus-index/core";
-import { isRecord } from "@/api/lib/type-guards";
+import {
+  createCorpusIndexer,
+  resolveMarkedRowIds,
+} from "@/api/lib/corpus-index/core";
 
 /**
  * corpus index projection for the `legislation` family. Domain adapter over the
@@ -178,11 +180,12 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
     // audit: skip — search index maintenance; rebuilds derived state
     // One statement for the whole request; each tuple carries the row's
     // expected pre-state so per-row compare-and-set semantics survive the
-    // batching (see the case-law twin).
+    // batching. Generation is part of the pre-state and updated_at is left
+    // alone (see the case-law twin for the reasoning).
     const tuples = sql.join(
       rows.map(
         (row) =>
-          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.updatedAt.toISOString()}::timestamptz)`,
+          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAt.toISOString()}::timestamp)`,
       ),
       sql`, `,
     );
@@ -190,30 +193,15 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
       UPDATE ${legislationDocuments} AS d
       SET indexed_hash = v.content_hash,
           indexed_generation = ${indexId},
-          indexed_at = ${now.toISOString()}::timestamptz
-      FROM (VALUES ${tuples}) AS v(id, content_hash, expected_hash, expected_updated)
+          indexed_at = ${now.toISOString()}::timestamp
+      FROM (VALUES ${tuples}) AS v(id, content_hash, expected_hash, expected_generation, expected_updated)
       WHERE d.id = v.id
         AND d.indexed_hash IS NOT DISTINCT FROM v.expected_hash
+        AND d.indexed_generation IS NOT DISTINCT FROM v.expected_generation
         AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
       RETURNING d.id
     `);
-    // The bun-sql driver returns the rows directly; pglite (tests) wraps
-    // them in { rows }. Accept both shapes.
-    let returned: unknown[] = [];
-    if (Array.isArray(marked)) {
-      returned = marked;
-    } else if (isRecord(marked) && Array.isArray(marked["rows"])) {
-      returned = marked["rows"];
-    }
-    const ids = new Set<SafeId<"legislationDocument">>();
-    for (const entry of returned) {
-      if (isRecord(entry) && typeof entry["id"] === "string") {
-        // SAFETY: RETURNING yields the same uuid values the branded rows
-        // supplied in the VALUES tuples, so the brand is preserved.
-        ids.add(entry["id"] as SafeId<"legislationDocument">);
-      }
-    }
-    return ids;
+    return resolveMarkedRowIds(marked, rows);
   },
   insertSucceededJobs: async (tx, { rows, indexId }) => {
     // audit: skip — append-only index-job rows ARE the indexing audit trail
