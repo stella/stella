@@ -64,6 +64,7 @@ export type {
   CentsAmount,
   DecisionSection,
   DocxFolioJustificationBlock,
+  DocxFolioJustificationCitation,
   DocumentAst,
   EmptyAst,
   EntityKind,

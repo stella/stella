@@ -976,6 +976,8 @@
     "undo": "Undo",
     "unexpectedError": "Radās neparedzēta kļūda. Lūdzu, sazinieties ar atbalsta dienestu.",
     "unpin": "Atspraust",
+    "unverified": "Nav pārbaudīts",
+    "unverifiedCitationHint": "Šo citātu neizdevās sasaistīt ar avota dokumentu.",
     "uploadFiles": "Augšupielādēt failus",
     "urlIdentifier": "Identifikators",
     "urlIdentifierPlaceholder": "mana-organizacija",

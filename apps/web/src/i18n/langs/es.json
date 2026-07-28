@@ -976,6 +976,8 @@
     "undo": "Undo",
     "unexpectedError": "Se produjo un error inesperado. Contacte con soporte.",
     "unpin": "Desfijar",
+    "unverified": "Sin verificar",
+    "unverifiedCitationHint": "No se pudo asociar esta cita con el documento de origen.",
     "uploadFiles": "Subir archivos",
     "urlIdentifier": "Slug",
     "urlIdentifierPlaceholder": "mi-organizacion",

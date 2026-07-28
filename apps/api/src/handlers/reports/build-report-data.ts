@@ -230,7 +230,11 @@ const citationFromJustification = (
   for (const block of content.blocks) {
     if (block.kind === "docx-folio") {
       for (const statement of block.statements) {
-        const cite = statement.citations.find((c) => c.text.length > 0);
+        // A report quotes grounded source language only: skip unverified
+        // citations, whose text is the model's ungrounded hint.
+        const cite = statement.citations.find(
+          (c) => c.citationStatus !== "unverified" && c.text.length > 0,
+        );
         if (cite) {
           return cite.text;
         }

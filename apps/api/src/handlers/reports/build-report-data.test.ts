@@ -297,7 +297,13 @@ describe("assembleReportData", () => {
               statements: [
                 {
                   text: "stmt",
-                  citations: [{ blockId: "b1", text: "Clause 12.1 quoted." }],
+                  citations: [
+                    {
+                      citationStatus: "verified",
+                      blockId: "b1",
+                      text: "Clause 12.1 quoted.",
+                    },
+                  ],
                 },
               ],
             },

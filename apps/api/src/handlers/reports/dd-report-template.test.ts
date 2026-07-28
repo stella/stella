@@ -220,6 +220,7 @@ describe("Due Diligence Report built-in template", () => {
                   text: "stmt",
                   citations: [
                     {
+                      citationStatus: "verified",
                       blockId: "b1",
                       text: "Clause 12.1: governed by Czech law.",
                     },

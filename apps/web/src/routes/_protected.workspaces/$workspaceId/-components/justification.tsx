@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
+import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
@@ -146,12 +147,28 @@ type DocxQuoteProps = {
 };
 
 const DocxQuote = ({ citation }: DocxQuoteProps) => {
+  const t = useTranslations();
   const requestBlockScroll = useInspectorStore((s) => s.requestBlockScroll);
   const trimmed = citation.text.trim();
   const preview =
     trimmed.length > DOCX_CHIP_PREVIEW_CHARS
       ? `${trimmed.slice(0, DOCX_CHIP_PREVIEW_CHARS).trimEnd()}…`
       : trimmed || "¶";
+  if (citation.citationStatus === "unverified") {
+    // No navigable block: render the model's quote as plain, non-clickable
+    // text with an "unverified" affordance so it is never mistaken for a
+    // grounded source.
+    return (
+      <Tooltip
+        content={t("common.unverifiedCitationHint")}
+        render={
+          <span className="text-muted-foreground inline-flex max-w-[16rem] items-center gap-1 truncate align-baseline text-[11px] font-medium italic underline decoration-dotted underline-offset-2">
+            “{preview}” · {t("common.unverified")}
+          </span>
+        }
+      />
+    );
+  }
   return (
     <Tooltip
       content={trimmed || undefined}

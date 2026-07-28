@@ -979,6 +979,8 @@ type Messages = {
     "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unpin": "Unpin";
+    "unverified": "Unverified";
+    "unverifiedCitationHint": "This quote could not be matched to the source document.";
     "uploadFiles": "Upload files";
     "urlIdentifier": "Slug";
     "urlIdentifierPlaceholder": "my-organization";

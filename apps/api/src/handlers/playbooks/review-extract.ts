@@ -131,6 +131,11 @@ const collectDocxCitations = (
     }
     for (const statement of block.statements) {
       for (const cite of statement.citations) {
+        // Only verified citations carry a navigable block id; unverified
+        // hints have no anchor for scroll or one-click fix.
+        if (cite.citationStatus === "unverified") {
+          continue;
+        }
         if (seen.has(cite.blockId)) {
           continue;
         }

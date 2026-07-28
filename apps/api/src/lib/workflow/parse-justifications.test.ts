@@ -151,8 +151,16 @@ describe("normalizeJustification — docx-folio branch", () => {
               {
                 text: "The defendant breached.",
                 citations: [
-                  { blockId: "AAAA0001", text: "First paragraph text." },
-                  { blockId: "seq-0002", text: "Second paragraph text." },
+                  {
+                    citationStatus: "verified",
+                    blockId: "AAAA0001",
+                    text: "First paragraph text.",
+                  },
+                  {
+                    citationStatus: "verified",
+                    blockId: "seq-0002",
+                    text: "Second paragraph text.",
+                  },
                 ],
               },
             ],
@@ -184,7 +192,11 @@ describe("normalizeJustification — docx-folio branch", () => {
               {
                 text: "claim",
                 citations: [
-                  { blockId: "AAAA0001", text: "First paragraph text." },
+                  {
+                    citationStatus: "verified",
+                    blockId: "AAAA0001",
+                    text: "First paragraph text.",
+                  },
                 ],
               },
             ],
@@ -204,10 +216,138 @@ describe("normalizeJustification — docx-folio branch", () => {
     ];
 
     // "BBBB9999" passes isFolioBlockId structurally but is absent from
-    // blocksById, and "seq-9999" is absent too — both dropped.
+    // blocksById, and "seq-9999" is absent too. Both are id-shaped tokens
+    // with no readable quote, so both drop and the statement is empty.
     expect(unwrap(normalizeJustification({ justification, filenames }))).toBe(
       null,
     );
+  });
+
+  test("surfaces an ungrounded prose quote as an unverified citation", () => {
+    const justification: AIJustificationOutput = [
+      {
+        file: "brief",
+        statements: [
+          {
+            text: "claim",
+            citations: ["The tenant waived all remedies."], // not in any block
+          },
+        ],
+      },
+    ];
+
+    expect(
+      unwrap(normalizeJustification({ justification, filenames })),
+    ).toEqual({
+      content: {
+        version: 1,
+        blocks: [
+          {
+            kind: "docx-folio",
+            fileFieldId: field("f-docx"),
+            statements: [
+              {
+                text: "claim",
+                citations: [
+                  {
+                    citationStatus: "unverified",
+                    text: "The tenant waived all remedies.",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      fileFieldIds: [field("f-docx")],
+    });
+  });
+
+  test("rescues a pasted quote that is a verbatim span of a block as verified", () => {
+    const justification: AIJustificationOutput = [
+      {
+        file: "brief",
+        // A span of "First paragraph text." — resolves to that block.
+        statements: [{ text: "claim", citations: ["First paragraph"] }],
+      },
+    ];
+
+    expect(
+      unwrap(normalizeJustification({ justification, filenames })),
+    ).toEqual({
+      content: {
+        version: 1,
+        blocks: [
+          {
+            kind: "docx-folio",
+            fileFieldId: field("f-docx"),
+            statements: [
+              {
+                text: "claim",
+                citations: [
+                  {
+                    citationStatus: "verified",
+                    blockId: "AAAA0001",
+                    text: "First paragraph text.",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      fileFieldIds: [field("f-docx")],
+    });
+  });
+
+  test("rescues a quote as verified despite dash and whitespace differences", () => {
+    const legalFilenames: JustificationFilenames = [
+      {
+        kind: "docx-folio",
+        original: "Lease.docx",
+        simplified: "lease",
+        fileFieldId: field("f-lease"),
+        // Stored block uses a non-breaking space and an en dash.
+        blocksById: new Map([
+          ["AAAA0009", "Rent is due on the first – no grace period."],
+        ]),
+      },
+    ];
+    const justification: AIJustificationOutput = [
+      {
+        file: "lease",
+        statements: [
+          {
+            // Quote uses a plain space and a hyphen — must still verify.
+            text: "claim",
+            citations: ["Rent is due on the first - no grace period."],
+          },
+        ],
+      },
+    ];
+
+    const result = unwrap(
+      normalizeJustification({
+        justification,
+        filenames: legalFilenames,
+      }),
+    );
+    expect(result).not.toBeNull();
+    if (result === null) {
+      throw new Error("expected a normalized justification");
+    }
+    const block = result.content.blocks.at(0);
+    expect(block?.kind).toBe("docx-folio");
+    if (block?.kind !== "docx-folio") {
+      throw new Error("expected a docx-folio block");
+    }
+    expect(block.statements.at(0)?.citations).toEqual([
+      {
+        citationStatus: "verified",
+        blockId: "AAAA0009",
+        text: "Rent is due on the first – no grace period.",
+      },
+    ]);
   });
 });
 
