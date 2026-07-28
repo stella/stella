@@ -1927,7 +1927,9 @@
         "violatedRedLine": "Pažeista raudona linija:"
       },
       "risk": {
+        "complianceLabel": "Atitiktis",
         "flaggedCount": "{flagged} of {total} positions flagged",
+        "notApplicableExcluded": "({count} netaikoma, neįtraukta)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1968,7 +1970,8 @@
         "compliant": "Atitinka",
         "deviation": "Nukrypimas",
         "fallback": "Alternatyva",
-        "missing": "Trūksta"
+        "missing": "Trūksta",
+        "notApplicable": "Netaikoma"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",

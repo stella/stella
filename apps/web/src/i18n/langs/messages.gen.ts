@@ -1930,7 +1930,9 @@ type Messages = {
         "violatedRedLine": "Violates red line:";
       };
       "risk": {
+        "complianceLabel": "Compliance";
         "flaggedCount": "{flagged} of {total} positions flagged";
+        "notApplicableExcluded": "({count} not applicable, excluded)";
         "riskLevel": {
           "critical": "Critical";
           "high": "High";
@@ -1972,6 +1974,7 @@ type Messages = {
         "deviation": "Deviation";
         "fallback": "Fallback";
         "missing": "Missing";
+        "notApplicable": "Not applicable";
       };
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.";

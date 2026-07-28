@@ -1927,7 +1927,9 @@
         "violatedRedLine": "الخط الأحمر المخالف:"
       },
       "risk": {
+        "complianceLabel": "الامتثال",
         "flaggedCount": "{flagged} of {total} positions flagged",
+        "notApplicableExcluded": "({count} غير قابلة للتطبيق، مستبعدة)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1968,7 +1970,8 @@
         "compliant": "مطابِق",
         "deviation": "انحراف",
         "fallback": "بديل",
-        "missing": "مفقود"
+        "missing": "مفقود",
+        "notApplicable": "غير قابل للتطبيق"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",

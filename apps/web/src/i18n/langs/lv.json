@@ -1927,7 +1927,9 @@
         "violatedRedLine": "Pārkāptā sarkanā līnija:"
       },
       "risk": {
+        "complianceLabel": "Atbilstība",
         "flaggedCount": "{flagged} of {total} positions flagged",
+        "notApplicableExcluded": "({count} nav piemērojams, izslēgts)",
         "riskLevel": {
           "critical": "Critical",
           "high": "High",
@@ -1968,7 +1970,8 @@
         "compliant": "Atbilst",
         "deviation": "Novirze",
         "fallback": "Alternatīva",
-        "missing": "Trūkst"
+        "missing": "Trūkst",
+        "notApplicable": "Nav piemērojams"
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",

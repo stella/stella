@@ -22,16 +22,20 @@ import { SEVERITY_ORDER } from "@/components/ai-suggestions/playbook-review-stor
 
 export type OverallRisk = "critical" | "high" | "medium" | "low" | "none";
 
-// A compliant or unset (extract-only positions carry no verdict) finding has
-// nothing worth raising with the counterparty; only these three verdicts are
-// ever "flagged".
+// A compliant, not-applicable, or unset (extract-only positions carry no
+// verdict) finding has nothing worth raising with the counterparty; only these
+// three verdicts are ever "flagged". Frozen readonly array (not a `Set`) so the
+// membership check reads a widened `PlaybookVerdict`, matching the file's
+// original immutable-collection shape.
 const FLAGGED_VERDICTS: readonly PlaybookVerdict[] = Object.freeze([
   "deviation",
   "fallback",
   "missing",
 ]);
 
-type FlaggedVerdict = Exclude<PlaybookVerdict, "compliant">;
+// The flagged verdicts as a type. `not-applicable` is excluded alongside
+// `compliant`: neither is a flag.
+type FlaggedVerdict = Exclude<PlaybookVerdict, "compliant" | "not-applicable">;
 
 export type FlaggedPlaybookFinding = PlaybookFinding & {
   verdict: FlaggedVerdict;
@@ -46,12 +50,67 @@ export type RiskTopIssue = {
   verdict: FlaggedVerdict;
 };
 
+// A Met / Not-met / Not-applicable compliance score over the reviewed positions.
+// `scored` is the denominator and deliberately EXCLUDES `not-applicable` (the
+// position does not pertain to this document) and extract-only findings (no
+// verdict), so a document that legitimately omits a topic is not penalized.
+// `met` counts `compliant` + `fallback` (a fallback is pre-approved, if
+// non-ideal, language); `notMet` counts `deviation` + `missing` (a real gap
+// stays in the denominator). `ratio` is null when nothing was scored.
+export type ComplianceScore = {
+  met: number;
+  notMet: number;
+  scored: number;
+  notApplicable: number;
+  ratio: number | null;
+};
+
 export type RiskRollup = {
   overallRisk: OverallRisk;
   totalPositions: number;
   flaggedCount: number;
   verdictCounts: RiskVerdictCounts;
+  compliance: ComplianceScore;
   topIssues: readonly RiskTopIssue[];
+};
+
+const computeCompliance = (
+  findings: readonly PlaybookFinding[],
+): ComplianceScore => {
+  let met = 0;
+  let notMet = 0;
+  let notApplicable = 0;
+  // A switch (not module-level Set membership) classifies each verdict, so the
+  // exhaustiveness check forces every future verdict to declare which bucket it
+  // falls in and no long-lived mutable collection is created at module scope.
+  for (const { verdict } of findings) {
+    switch (verdict) {
+      // Extract-only positions carry no verdict; excluded from the score.
+      case null:
+        break;
+      case "compliant":
+      case "fallback":
+        met += 1;
+        break;
+      case "deviation":
+      case "missing":
+        notMet += 1;
+        break;
+      case "not-applicable":
+        notApplicable += 1;
+        break;
+      default:
+        verdict satisfies never;
+    }
+  }
+  const scored = met + notMet;
+  return {
+    met,
+    notMet,
+    scored,
+    notApplicable,
+    ratio: scored === 0 ? null : met / scored,
+  };
 };
 
 const TOP_ISSUES_LIMIT = 5;
@@ -71,6 +130,7 @@ export const computeRiskRollup = (
     fallback: 0,
     deviation: 0,
     missing: 0,
+    "not-applicable": 0,
   };
   for (const finding of findings) {
     if (finding.verdict !== null) {
@@ -97,6 +157,7 @@ export const computeRiskRollup = (
     totalPositions: findings.length,
     flaggedCount: flagged.length,
     verdictCounts,
+    compliance: computeCompliance(findings),
     topIssues,
   };
 };

@@ -148,8 +148,13 @@ export const TIER_MATCH_SYSTEM_PROMPT =
   'the [rank N] of the option it matched. Choose "deviation" when the value ' +
   'violates a red-line rule; set matched to { kind: "redLine", rank } with ' +
   'the [rank N] of the violated rule. Also choose "deviation" when the value ' +
-  "satisfies none of the tiers, and omit matched. Judge by legal substance and " +
-  "effect, not wording. Give a short one-sentence rationale.";
+  'satisfies none of the tiers, and omit matched. Choose "not-applicable" only ' +
+  "when the issue does not pertain to this contract at all, meaning the extracted " +
+  "value shows the document is a different kind of agreement or the topic is " +
+  "structurally out of scope, so it counts neither for nor against compliance; " +
+  "omit matched. Do not use not-applicable merely because a clause is absent " +
+  '(that is a "missing" gap). Judge by legal substance and effect, not wording. ' +
+  "Give a short one-sentence rationale.";
 
 export const buildTierMatchUserMessage = ({
   tiers,
@@ -195,7 +200,7 @@ export const buildTierMatchUserMessage = ({
 };
 
 const tierMatchSchema = v.strictObject({
-  tier: v.picklist(["compliant", "fallback", "deviation"]),
+  tier: v.picklist(["compliant", "fallback", "deviation", "not-applicable"]),
   rationale: v.pipe(v.string(), v.maxLength(1000)),
   matched: v.optional(
     v.strictObject({

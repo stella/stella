@@ -586,6 +586,7 @@ const RISK_BREAKDOWN_ORDER: readonly PlaybookVerdict[] = [
   "missing",
   "fallback",
   "compliant",
+  "not-applicable",
 ];
 
 const RiskSummaryCard = ({
@@ -632,6 +633,25 @@ const RiskSummaryCard = ({
           total: String(rollup.totalPositions),
         })}
       </p>
+
+      {rollup.compliance.ratio !== null && (
+        <p className="text-muted-foreground text-xs">
+          <span className="text-foreground-strong-muted">
+            {t("knowledge.playbooks.risk.complianceLabel")}
+          </span>{" "}
+          <span className="text-foreground tabular-nums">
+            {format.number(rollup.compliance.ratio, { style: "percent" })}
+          </span>
+          {rollup.compliance.notApplicable > 0 && (
+            <span>
+              {" "}
+              {t("knowledge.playbooks.risk.notApplicableExcluded", {
+                count: String(rollup.compliance.notApplicable),
+              })}
+            </span>
+          )}
+        </p>
+      )}
 
       {rollup.flaggedCount > 0 && (
         <ul className="flex flex-wrap gap-x-3 gap-y-1">
@@ -1062,6 +1082,7 @@ const useVerdictLabels = (): Record<PlaybookVerdict, string> => {
     fallback: t("knowledge.playbooks.verdict.fallback"),
     deviation: t("knowledge.playbooks.verdict.deviation"),
     missing: t("knowledge.playbooks.verdict.missing"),
+    "not-applicable": t("knowledge.playbooks.verdict.notApplicable"),
   };
 };
 
@@ -1150,6 +1171,9 @@ const verdictDotClass = (verdict: PlaybookVerdict): string => {
       return "bg-destructive";
     case "missing":
       return "bg-muted-foreground";
+    // Neutral, distinct from missing: not-applicable is out of scope, not a gap.
+    case "not-applicable":
+      return "bg-border";
     default:
       verdict satisfies never;
       return "";
@@ -1160,6 +1184,10 @@ const VERDICT_CHIP_COMPLIANT = "border-success/30 text-success";
 const VERDICT_CHIP_FALLBACK = "border-warning/30 text-warning-foreground";
 const VERDICT_CHIP_DEVIATION = "border-destructive/30 text-destructive";
 const VERDICT_CHIP_MISSING = "border-border text-muted-foreground";
+// A dashed neutral chip so not-applicable reads as "out of scope" rather than a
+// solid-bordered missing gap.
+const VERDICT_CHIP_NOT_APPLICABLE =
+  "border-dashed border-border text-muted-foreground";
 
 const verdictChipClass = (verdict: PlaybookVerdict): string => {
   switch (verdict) {
@@ -1171,6 +1199,8 @@ const verdictChipClass = (verdict: PlaybookVerdict): string => {
       return VERDICT_CHIP_DEVIATION;
     case "missing":
       return VERDICT_CHIP_MISSING;
+    case "not-applicable":
+      return VERDICT_CHIP_NOT_APPLICABLE;
     default:
       verdict satisfies never;
       return "";
