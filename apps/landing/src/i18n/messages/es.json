@@ -135,7 +135,7 @@
   "story": {
     "agentBody": "El agente busca en el asunto, lee el texto relevante y responde con citas que abren la fuente exactamente en el pasaje correspondiente. Úsalo en stella o a través de MCP y la CLI; los mismos permisos y fuentes acompañan cada solicitud.",
     "agentEyebrow": "Flujos de trabajo del agente",
-    "agentTitle": "Pregunta una vez. Cada respuesta cita su fuente.",
+    "agentTitle": "Basta con preguntar. Cada respuesta cita su fuente.",
     "bringEditorToFront": "Traer al frente el editor de stella",
     "bringTerminalToFront": "Traer al frente el terminal de stella",
     "bringWorkspaceToFront": "Traer al frente el espacio de trabajo de stella",

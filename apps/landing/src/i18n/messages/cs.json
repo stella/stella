@@ -135,7 +135,7 @@
   "story": {
     "agentBody": "Agent prohledá spis, přečte relevantní text a odpoví s citacemi, které otevřou zdroj přesně v dané pasáži. Použijte ho v aplikaci stella nebo přes MCP a CLI; s požadavkem putují stejná oprávnění i zdroje.",
     "agentEyebrow": "Pracovní postupy agenta",
-    "agentTitle": "Zeptejte se jednou. Každá odpověď cituje svůj zdroj.",
+    "agentTitle": "Stačí se zeptat. Každá odpověď uvádí svůj zdroj.",
     "bringEditorToFront": "Přenést do popředí editor aplikace stella",
     "bringTerminalToFront": "Přenést do popředí terminál aplikace stella",
     "bringWorkspaceToFront": "Přenést do popředí pracovní prostor aplikace stella",

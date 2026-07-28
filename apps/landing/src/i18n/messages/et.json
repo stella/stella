@@ -135,7 +135,7 @@
   "story": {
     "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta seda rakenduses stella või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
     "agentEyebrow": "Agendi töövood",
-    "agentTitle": "Küsi üks kord. Iga vastus viitab oma allikale.",
+    "agentTitle": "Piisab ühest küsimusest. Iga vastus viitab allikale.",
     "bringEditorToFront": "Too rakenduse stella redaktor esiplaanile",
     "bringTerminalToFront": "Too rakenduse stella terminal esiplaanile",
     "bringWorkspaceToFront": "Too rakenduse stella tööruum esiplaanile",

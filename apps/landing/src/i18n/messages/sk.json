@@ -135,7 +135,7 @@
   "story": {
     "agentBody": "Agent prehľadá spis, prečíta relevantný text a odpovie s citáciami, ktoré otvoria zdroj presne v danej pasáži. Použite ho v aplikácii stella alebo cez MCP a CLI; s požiadavkou putujú rovnaké oprávnenia aj zdroje.",
     "agentEyebrow": "Pracovné postupy agenta",
-    "agentTitle": "Spýtajte sa raz. Každá odpoveď cituje svoj zdroj.",
+    "agentTitle": "Stačí sa spýtať. Každá odpoveď uvádza svoj zdroj.",
     "bringEditorToFront": "Preniesť do popredia editor aplikácie stella",
     "bringTerminalToFront": "Preniesť do popredia terminál aplikácie stella",
     "bringWorkspaceToFront": "Preniesť do popredia pracovný priestor aplikácie stella",

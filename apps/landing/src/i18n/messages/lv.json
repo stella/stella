@@ -135,7 +135,7 @@
   "story": {
     "agentBody": "Aģents meklē lietā, izlasa būtisko tekstu un atbild ar citātiem, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to lietotnē stella vai ar MCP un komandrindas palīdzību; pieprasījumam seko tās pašas atļaujas un avoti.",
     "agentEyebrow": "Aģenta darbplūsmas",
-    "agentTitle": "Pajautājiet vienreiz. Katra atbilde norāda savu avotu.",
+    "agentTitle": "Pietiek pajautāt. Katra atbilde norāda avotu.",
     "bringEditorToFront": "Pārvietot lietotnes stella redaktoru priekšplānā",
     "bringTerminalToFront": "Pārvietot lietotnes stella termināli priekšplānā",
     "bringWorkspaceToFront": "Pārvietot lietotnes stella darbvietu priekšplānā",

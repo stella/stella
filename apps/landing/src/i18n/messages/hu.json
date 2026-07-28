@@ -135,7 +135,7 @@
   "story": {
     "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és hivatkozásokkal válaszol, amelyek a pontos szövegrésznél nyitják meg a forrást. Használja a stella alkalmazásban vagy MCP-n és parancssoron keresztül; a kérést ugyanazok a jogosultságok és források kísérik.",
     "agentEyebrow": "Ügynöki munkafolyamatok",
-    "agentTitle": "Kérdezzen egyszer. Minden válasz megjelöli a forrását.",
+    "agentTitle": "Egy kérdés elég. Minden válasz megjelöli a forrását.",
     "bringEditorToFront": "A stella alkalmazás szerkesztőjének előtérbe hozása",
     "bringTerminalToFront": "A stella alkalmazás termináljának előtérbe hozása",
     "bringWorkspaceToFront": "A stella alkalmazás munkaterületének előtérbe hozása",

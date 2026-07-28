@@ -135,7 +135,7 @@
   "story": {
     "agentBody": "Agent przeszukuje sprawę, czyta istotny tekst i odpowiada cytatami, które otwierają źródło dokładnie w danym fragmencie. Używaj go w aplikacji stella albo przez MCP i CLI; za żądaniem podążają te same uprawnienia i źródła.",
     "agentEyebrow": "Przepływy pracy agenta",
-    "agentTitle": "Zapytaj raz. Każda odpowiedź wskazuje swoje źródło.",
+    "agentTitle": "Wystarczy zapytać. Każda odpowiedź wskazuje źródło.",
     "bringEditorToFront": "Przenieś na wierzch edytor aplikacji stella",
     "bringTerminalToFront": "Przenieś na wierzch terminal aplikacji stella",
     "bringWorkspaceToFront": "Przenieś na wierzch obszar roboczy aplikacji stella",
