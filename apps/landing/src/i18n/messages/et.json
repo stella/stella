@@ -91,34 +91,42 @@
     "products": {
       "agent": {
         "blurb": "Vestle oma toimikute, dokumentide, registrite ja ühendatud tööriistadega ühes kohas. Agent tegutseb kinnituste ja allika eelvaadetega, tugineb vastustes allikaviidetele ning laieneb oskuste ja väliste konnektorite kaudu.",
+        "eyebrow": "Tehisintellekti agent",
         "title": "Tehisintellekti agent, mis töötab su toimikute, failide ja tööriistade lõikes."
       },
       "anonymization": {
         "blurb": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja dokumentide ülevaatusest, ning kontrolli redigeeritud tulemust, enne kui miski edasi liigub.",
+        "eyebrow": "Anonüümimine",
         "title": "Valmista materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
       },
       "cli-mcp": {
         "blurb": "Otsi, loe ja tööta rakendusega stella käsurealt või ükskõik millisest MCP-ga ühilduvast kliendist. Mõlemad pinnad jagavad sama võimekusregistrit, samu õigusi ja samu tööruumi andmeid mis veebirakendus.",
+        "eyebrow": "CLI & MCP",
         "title": "Üks tööruum, igast tööriistast."
       },
       "editor": {
         "blurb": "Ava ja muuda Wordi .docx-faile otse brauseris: ilma paigalduseta ja teise vormingusse teisendamata. Rakenduse stella veebipõhine DOCX-redaktor säilitab algse vormingu ja muudatuste jälgimise, hoiab faili oma toimikuga seotuna ning salvestab iga versiooni dokumendi versiooniajalukku.",
+        "eyebrow": "Redaktor",
         "title": "Muuda Wordi dokumente brauseris, toimikust lahkumata."
       },
       "public-data": {
         "blurb": "Kohtupraktika ja ettevõtete registrid ametlikest avalikest allikatest, mille kogub ja struktuuri säilitades töötleb rakenduse stella Legal Atlas. Loe lahendit, otsi ettevõtet, järgi allikaviiteid ja viita neile toimikust või anna need tehisintellekti agendile.",
+        "eyebrow": "Avalikud andmed",
         "title": "Ametlikud õigusandmed, valmis toimikusse tõmbamiseks."
       },
       "tabular-review": {
         "blurb": "Esita küsimused tervele dokumendikogumile ja saa struktureeritud vastused toimikupõhise tabelina: sorditav, filtreeritav ja jälgitav kuni lähtetekstini. Loodud due diligence’i, discovery ja otsingu jaoks.",
+        "eyebrow": "Tabelülevaatus",
         "title": "Muuda dokumendihunnik tabeliks, mille saab üle vaadata."
       },
       "templates": {
         "blurb": "Määra mall korra ära, koos väljade ja tingimuslike klauslitega, ning täida see siis käsitsi või lase rakendusel stella koostada mustand toimiku andmetest. Loo dokument otse toimikusse ja jätka selle muutmist.",
+        "eyebrow": "Mallid",
         "title": "Koosta korduskasutatavad mallid ja lase tehisintellektil need täita."
       },
       "workspace": {
         "blurb": "Toimiku dokumendid, Wordi .docx-i muutmine, ülevaatus, otsing ja vestlus püsivad koos ühes kohas, nii et töö jääb konteksti lähtematerjalist vastuseni.",
+        "eyebrow": "Tööruum",
         "title": "Toimikud, dokumendid, ülevaatus ja vestlus ühes kohas."
       }
     },
@@ -128,6 +136,9 @@
     "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta seda rakenduses stella või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
     "agentEyebrow": "Agendi töövood",
     "agentTitle": "Küsi üks kord. Iga vastus viitab oma allikale.",
+    "bringEditorToFront": "Too rakenduse stella redaktor esiplaanile",
+    "bringTerminalToFront": "Too rakenduse stella terminal esiplaanile",
+    "bringWorkspaceToFront": "Too rakenduse stella tööruum esiplaanile",
     "controlBody": "stella on avatud lähtekoodiga õigustarkvara, mida saad ise majutada: uuri koodi, käita seda oma moodi ja ekspordi kõik standardvormingutes; tarnijalõksuta.",
     "controlEyebrow": "Loodud kontrolli hoidmiseks",
     "controlTitle": "Hoia taristu enda kontrolli all.",

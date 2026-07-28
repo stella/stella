@@ -91,34 +91,42 @@
     "products": {
       "agent": {
         "blurb": "Bendraukite su savo bylomis, dokumentais, registrais ir prijungtais įrankiais vienoje vietoje. Agentas veikia gavęs patvirtinimą ir su šaltinių peržiūromis, atsakymus grindžia citatomis ir plečiasi per gebėjimus bei išorines jungtis.",
+        "eyebrow": "DI agentas",
         "title": "DI agentas, dirbantis su jūsų bylomis, failais ir įrankiais."
       },
       "anonymization": {
         "blurb": "Pašalinkite vardus, subjektus ir identifikuojančius duomenis, kol medžiaga dar nepasiekė DI, tiesiai iš pokalbio ir dokumentų peržiūros, o paslėptą rezultatą patikrinkite prieš judant toliau.",
+        "eyebrow": "Anonimizavimas",
         "title": "Paruoškite medžiagą DI neatskleisdami identifikuojančių duomenų."
       },
       "cli-mcp": {
         "blurb": "Ieškokite, skaitykite ir dirbkite su programa stella iš komandinės eilutės arba iš bet kurio su MCP suderinamo kliento. Abu paviršiai naudoja tą patį gebėjimų registrą, tas pačias teises ir tuos pačius darbo srities duomenis kaip ir žiniatinklio programa.",
+        "eyebrow": "CLI & MCP",
         "title": "Viena darbo sritis, iš kiekvieno įrankio."
       },
       "editor": {
         "blurb": "Atverkite ir redaguokite Word .docx failus tiesiai naršyklėje: be diegimo ir be konvertavimo į kitą formatą. Programos stella internetinis DOCX redaktorius išsaugo pirminį formatavimą ir keitimų sekimą, palieka failą susietą su byla ir kiekvieną įrašymą įtraukia į dokumento versijų istoriją.",
+        "eyebrow": "Redaktorius",
         "title": "Redaguokite Word dokumentus naršyklėje neišeidami iš bylos."
       },
       "public-data": {
         "blurb": "Teismų praktika ir įmonių registrai iš oficialių viešų šaltinių, kuriuos surenka ir struktūriškai išanalizuoja programos stella Legal Atlas. Perskaitykite sprendimą, pasitikrinkite įmonę, sekite citatas ir remkitės bet kuriuo iš jų byloje arba perduokite juos DI agentui.",
+        "eyebrow": "Viešieji duomenys",
         "title": "Oficialūs teisiniai duomenys, parengti įtraukti į bylą."
       },
       "tabular-review": {
         "blurb": "Užduokite klausimus visam dokumentų rinkiniui ir gaukite struktūruotus atsakymus byloje esančioje lentelėje: rikiuojamoje, filtruojamoje ir atsekamoje iki pirminio teksto. Skirta due diligence, discovery ir teisinei paieškai.",
+        "eyebrow": "Lentelinė peržiūra",
         "title": "Paverskite dokumentų krūvą lentele, kurią galima peržiūrėti."
       },
       "templates": {
         "blurb": "Šabloną apibrėžkite kartą, su laukais ir sąlyginėmis nuostatomis, o paskui užpildykite jį ranka arba leiskite programai stella parengti projektą iš bylos duomenų. Sukurkite dokumentą tiesiai byloje ir toliau jį redaguokite.",
+        "eyebrow": "Šablonai",
         "title": "Kurkite pakartotinai naudojamus šablonus ir leiskite DI juos užpildyti."
       },
       "workspace": {
         "blurb": "Darbo sritis vienoje vietoje laiko bylos dokumentus, Word .docx redagavimą, peržiūrą, paiešką ir pokalbius, todėl darbas išlieka kontekste nuo pirminės medžiagos iki atsakymo.",
+        "eyebrow": "Darbo sritis",
         "title": "Bylos, dokumentai, peržiūra ir pokalbiai vienoje darbo srityje."
       }
     },
@@ -128,6 +136,9 @@
     "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir atsako citatomis, kurios atveria šaltinį tiksliai reikiamoje vietoje. Naudokite jį programoje stella arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
     "agentEyebrow": "Agento darbo eigos",
     "agentTitle": "Paklauskite kartą. Kiekvienas atsakymas nurodo savo šaltinį.",
+    "bringEditorToFront": "Perkelti programos stella redaktorių į priekinį planą",
+    "bringTerminalToFront": "Perkelti programos stella terminalą į priekinį planą",
+    "bringWorkspaceToFront": "Perkelti programos stella darbo sritį į priekinį planą",
     "controlBody": "stella – atvirojo kodo teisinė programinė įranga, kurią galite talpinti patys: peržiūrėkite kodą, paleiskite ją savaip ir eksportuokite viską standartiniais formatais; be pririšimo.",
     "controlEyebrow": "Sukurta kontrolei",
     "controlTitle": "Išlaikykite infrastruktūros kontrolę.",

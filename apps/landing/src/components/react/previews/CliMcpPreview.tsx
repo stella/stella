@@ -16,19 +16,22 @@ import {
   openingProductStory,
   type ProductStorySceneId,
   type ProductStoryWindowId,
+  type SceneWindowId,
   storyTeamsExchange,
 } from "../../../data/product-story";
+import type { ProductSlug } from "../../../data/products/pillars";
 import { RecordedStellaScene } from "../product-story/RecordedStellaScene";
 
 export const CliMcpPreview = ({
   backdrop = "wash",
-  discoverLabel,
+  discover,
   initialScenarioId = "search",
   includeStyles = true,
   revealSideWindowsOnScroll = false,
   sceneId,
   showCompanions = true,
   sideWindows = true,
+  windowLabels,
 }: CliMcpPreviewProps) => {
   const [activeWindow, setActiveWindow] = useState(getInitialActiveWindow);
   const [hasManualWindowFocus, setHasManualWindowFocus] = useState(false);
@@ -60,6 +63,23 @@ export const CliMcpPreview = ({
   const storyStep = storyFrame % STORY_PHASES.length;
   const storyPhase = STORY_PHASES.at(storyStep) ?? STORY_PHASES[0];
   const activeSceneId = sceneId ?? storyPhase.sceneId;
+  // The main window's product follows the active scene; the companions are
+  // fixed. One resolver so the chip, its aria-label, and the tag cannot name
+  // different products for the same window.
+  const slugForWindow = (window: PreviewWindow): ProductSlug =>
+    window === "workspace"
+      ? DISCOVER_SCENE_SLUGS[activeSceneId]
+      : DISCOVER_WINDOW_SLUGS[window];
+  const discoverFor = (window: PreviewWindow) => {
+    if (!discover) {
+      return undefined;
+    }
+    const slug = slugForWindow(window);
+    return {
+      href: `/product/${slug}`,
+      label: `${discover.label} ${discover.productNames[slug]}`,
+    };
+  };
   const focusedWindow = getFocusedWindow({
     activeWindow,
     focus: storyPhase.focus,
@@ -301,7 +321,7 @@ export const CliMcpPreview = ({
         <div
           className={cn(
             "cli-client mac-window group bg-card absolute start-[2.5%] top-[8%] hidden w-[clamp(11rem,15.5%,18.5rem)] min-w-0 overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] sm:block",
-            discoverLabel && selection?.window === "client" && "cli-selected",
+            discover && selection?.window === "client" && "cli-selected",
           )}
           onPointerDown={() => activateWindow("client")}
           onPointerEnter={(event) =>
@@ -332,14 +352,7 @@ export const CliMcpPreview = ({
             />
           </div>
           <WindowBodyLink
-            discover={
-              discoverLabel
-                ? {
-                    href: DISCOVER_WINDOW_PRODUCTS.client.href,
-                    label: `${discoverLabel} ${DISCOVER_WINDOW_PRODUCTS.client.name}`,
-                  }
-                : undefined
-            }
+            discover={discoverFor("client")}
             onBlur={() => scheduleSelectionClear("client")}
             onFocus={(event) => selectWindow("client", event.currentTarget)}
           >
@@ -351,11 +364,11 @@ export const CliMcpPreview = ({
       )}
 
       <div
-        aria-label="Bring stella workspace to front"
+        aria-label={windowLabels.workspace}
         aria-pressed={focusedWindow === "workspace"}
         className={cn(
           "cli-main-window mac-window group bg-card absolute start-[18.5%] top-[8%] h-[81%] w-[63%] overflow-hidden border p-0 text-start shadow-[0_42px_110px_-54px_rgba(15,23,42,.5)]",
-          discoverLabel && selection?.window === "workspace" && "cli-selected",
+          discover && selection?.window === "workspace" && "cli-selected",
         )}
         onPointerDown={() => activateWindow("workspace")}
         onPointerEnter={(event) =>
@@ -374,14 +387,7 @@ export const CliMcpPreview = ({
         <WindowChrome label={getSceneChromeLabel(activeSceneId)} prominent />
         <WindowBodyLink
           className="bg-background relative h-[calc(100%-var(--mac-titlebar-height))] overflow-hidden"
-          discover={
-            discoverLabel
-              ? {
-                  href: DISCOVER_PRODUCTS[activeSceneId].href,
-                  label: `${discoverLabel} ${DISCOVER_PRODUCTS[activeSceneId].name}`,
-                }
-              : undefined
-          }
+          discover={discoverFor("workspace")}
           onBlur={() => scheduleSelectionClear("workspace")}
           onFocus={(event) => selectWindow("workspace", event.currentTarget)}
         >
@@ -401,11 +407,11 @@ export const CliMcpPreview = ({
           scene size instead of only at the % geometry's design width. */}
       {showCompanions && sideWindows && (
         <div
-          aria-label="Bring stella Editor to front"
+          aria-label={windowLabels.source}
           aria-pressed={focusedWindow === "source"}
           className={cn(
             "cli-response mac-window group bg-card absolute end-[2%] top-[15%] hidden h-[calc(var(--cli-editor-width)/0.869_+_var(--mac-titlebar-height))] w-[var(--cli-editor-width)] overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] [--cli-editor-width:clamp(12rem,16cqw,19.5rem)] sm:block",
-            discoverLabel && selection?.window === "source" && "cli-selected",
+            discover && selection?.window === "source" && "cli-selected",
           )}
           key={activeScenario.id}
           onPointerDown={() => activateWindow("source")}
@@ -434,14 +440,7 @@ export const CliMcpPreview = ({
           </div>
           <WindowBodyLink
             className="bg-background relative h-[calc(100%-var(--mac-titlebar-height))] overflow-hidden"
-            discover={
-              discoverLabel
-                ? {
-                    href: DISCOVER_WINDOW_PRODUCTS.source.href,
-                    label: `${discoverLabel} ${DISCOVER_WINDOW_PRODUCTS.source.name}`,
-                  }
-                : undefined
-            }
+            discover={discoverFor("source")}
             onBlur={() => scheduleSelectionClear("source")}
             onFocus={(event) => selectWindow("source", event.currentTarget)}
           >
@@ -464,12 +463,12 @@ export const CliMcpPreview = ({
           overflow-hidden below) instead of overlapping the idle prompt. */}
       {showCompanions && (
         <div
-          aria-label="Bring stella terminal to front"
+          aria-label={windowLabels.terminal}
           aria-live="polite"
           aria-pressed={focusedWindow === "terminal"}
           className={cn(
             "cli-window mac-window group absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] sm:start-[4.5%] sm:bottom-[14%] sm:h-[31%] sm:min-h-[17rem] sm:w-[clamp(12rem,14%,17.5rem)]",
-            discoverLabel && selection?.window === "terminal" && "cli-selected",
+            discover && selection?.window === "terminal" && "cli-selected",
           )}
           onPointerDown={() => activateWindow("terminal")}
           onPointerEnter={(event) =>
@@ -500,14 +499,7 @@ export const CliMcpPreview = ({
 
           <WindowBodyLink
             className="flex min-h-0 flex-1 flex-col overflow-hidden"
-            discover={
-              discoverLabel
-                ? {
-                    href: DISCOVER_WINDOW_PRODUCTS.terminal.href,
-                    label: `${discoverLabel} ${DISCOVER_WINDOW_PRODUCTS.terminal.name}`,
-                  }
-                : undefined
-            }
+            discover={discoverFor("terminal")}
             key={`${activeScenario.id}-${terminalLoopFrame}`}
             onBlur={() => scheduleSelectionClear("terminal")}
             onFocus={(event) => selectWindow("terminal", event.currentTarget)}
@@ -622,27 +614,19 @@ export const CliMcpPreview = ({
         </div>
       )}
 
-      {discoverLabel && selection && (
+      {discover && selection && (
         <DiscoverTag
           dragOffset={
             selection.window === "workspace"
               ? undefined
               : positions[selection.window]
           }
-          href={
-            selection.window === "workspace"
-              ? DISCOVER_PRODUCTS[activeSceneId].href
-              : DISCOVER_WINDOW_PRODUCTS[selection.window].href
-          }
-          label={discoverLabel}
+          href={`/product/${slugForWindow(selection.window)}`}
+          label={discover.label}
           onPointerEnter={cancelSelectionClear}
           onPointerLeave={() => scheduleSelectionClear(selection.window)}
           position={selection.tag}
-          productName={
-            selection.window === "workspace"
-              ? DISCOVER_PRODUCTS[activeSceneId].name
-              : DISCOVER_WINDOW_PRODUCTS[selection.window].name
-          }
+          productName={discover.productNames[slugForWindow(selection.window)]}
         />
       )}
     </div>
@@ -820,16 +804,29 @@ type CliMcpPreviewProps = {
    */
   backdrop?: "wash" | "transparent";
   /**
-   * Translated "Discover" label; when set, each window shows a hover/focus
-   * chip linking to its product page (the main window follows the active
-   * scene). Omitted in embeds that have their own product links.
+   * Discover chips: when set, each window shows a hover/focus chip linking to
+   * its product page (the main window follows the active scene). Omitted in
+   * embeds that have their own product links. The label and the product names
+   * arrive together because this island has no translator; pairing them in one
+   * prop means a caller cannot supply a translated verb and leave the product
+   * name English.
    */
-  discoverLabel?: string;
+  discover?: {
+    label: string;
+    productNames: Record<ProductSlug, string>;
+  };
   includeStyles?: boolean;
   initialScenarioId?: CliScenarioId;
   revealSideWindowsOnScroll?: boolean;
   sceneId?: ProductStorySceneId;
   showCompanions?: boolean;
+  /**
+   * Accessible names for the window drag handles, from
+   * `resolveSceneWindowLabels`. Required, not optional with an English
+   * fallback: the handles render in every mount, so a default would be an
+   * English `aria-label` waiting for the next localized scene.
+   */
+  windowLabels: Record<SceneWindowId, string>;
   /**
    * The Teams and Editor side companions. Default true (the homepage opening
    * story's full four-window scene). Set false to slim to just the CLI
@@ -951,24 +948,20 @@ const TERMINAL_LOOP_DURATION_MS = 9000;
 const getInitialActiveWindow = (): PreviewWindow => "terminal";
 
 // Product destination per scene for the main window's discover chip; the
-// companion windows have fixed products. Names match the product eyebrows
-// used across the nav (brand-constant, not translated).
-const DISCOVER_PRODUCTS: Record<
-  ProductStorySceneId,
-  { href: string; name: string }
-> = {
-  workspace: { href: "/product/workspace", name: "Workspace" },
-  review: { href: "/product/tabular-review", name: "Tabular Review" },
-  "review-citation": {
-    href: "/product/tabular-review",
-    name: "Tabular Review",
-  },
-  editor: { href: "/product/editor", name: "Editor" },
-  agent: { href: "/product/agent", name: "AI agent" },
-  cli: { href: "/product/cli-mcp", name: "CLI & MCP" },
-  templates: { href: "/product/templates", name: "Templates" },
-  "template-fill": { href: "/product/templates", name: "Templates" },
-};
+// companion windows have fixed products. Slugs only: the href is
+// `/product/<slug>` and the chip's product name is the localized eyebrow the
+// `discover` prop carries in, so the scene cannot drift from the nav menus or
+// hold an English name on a localized page.
+const DISCOVER_SCENE_SLUGS = {
+  workspace: "workspace",
+  review: "tabular-review",
+  "review-citation": "tabular-review",
+  editor: "editor",
+  agent: "agent",
+  cli: "cli-mcp",
+  templates: "templates",
+  "template-fill": "templates",
+} as const satisfies Record<ProductStorySceneId, ProductSlug>;
 
 // Gap between a selected window's bottom edge and its tag; the tag anchor
 // itself is measured from the window's live box in selectWindow, because the
@@ -977,15 +970,12 @@ const DISCOVER_PRODUCTS: Record<
 const DISCOVER_TAG_GAP_PX = 9;
 
 // Companion windows map to fixed products; the main window's product
-// follows the active scene via DISCOVER_PRODUCTS.
-const DISCOVER_WINDOW_PRODUCTS: Record<
-  DraggableWindow,
-  { href: string; name: string }
-> = {
-  client: { href: "/product/agent", name: "AI agent" },
-  source: { href: "/product/editor", name: "Editor" },
-  terminal: { href: "/product/cli-mcp", name: "CLI & MCP" },
-};
+// follows the active scene via DISCOVER_SCENE_SLUGS.
+const DISCOVER_WINDOW_SLUGS = {
+  client: "agent",
+  source: "editor",
+  terminal: "cli-mcp",
+} as const satisfies Record<DraggableWindow, ProductSlug>;
 
 type WindowBodyLinkProps = {
   children: ReactNode;

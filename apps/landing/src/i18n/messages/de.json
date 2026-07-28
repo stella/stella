@@ -91,34 +91,42 @@
     "products": {
       "agent": {
         "blurb": "Chatten Sie mit Ihren Akten, Dokumenten, Registern und angebundenen Tools an einem Ort. Der Agent handelt mit Freigaben und Quellvorschauen, stützt seine Antworten auf Fundstellen und lässt sich über Skills und externe Konnektoren erweitern.",
+        "eyebrow": "KI-Agent",
         "title": "Ein KI-Agent, der über Ihre Akten, Dateien und Tools hinweg arbeitet."
       },
       "anonymization": {
         "blurb": "Entfernen Sie Namen, Entitäten und identifizierende Angaben, bevor Material die KI erreicht, direkt aus dem Chat und der Dokumentenprüfung, mit einem geschwärzten Ergebnis, das Sie prüfen, bevor irgendetwas weitergeht.",
+        "eyebrow": "Anonymisierung",
         "title": "Material für KI vorbereiten, ohne identifizierende Angaben preiszugeben."
       },
       "cli-mcp": {
         "blurb": "Suchen, lesen und arbeiten Sie mit stella über die Kommandozeile oder jeden MCP-kompatiblen Client. Beide Oberflächen teilen dieselbe Capability-Registry, dieselben Berechtigungen und dieselben Arbeitsbereichsdaten wie die Web-App.",
+        "eyebrow": "CLI & MCP",
         "title": "Ein Arbeitsbereich, aus jedem Werkzeug."
       },
       "editor": {
         "blurb": "Öffnen und bearbeiten Sie Word-.docx-Dateien direkt im Browser: keine Installation, keine Umwandlung in ein anderes Format. Der Online-DOCX-Editor in stella erhält die ursprüngliche Formatierung und die Änderungsverfolgung, hält die Datei mit ihrer Akte verbunden und schreibt jede Speicherung in die Versionshistorie des Dokuments.",
+        "eyebrow": "Editor",
         "title": "Bearbeiten Sie Word-Dokumente im Browser, ohne die Akte zu verlassen."
       },
       "public-data": {
         "blurb": "Rechtsprechung und Handelsregister aus offiziellen öffentlichen Quellen, gesammelt und strukturerhaltend aufbereitet vom Legal-Atlas-Stack in stella. Lesen Sie eine Entscheidung, schlagen Sie ein Unternehmen nach, folgen Sie Fundstellen und verweisen Sie aus einer Akte auf all das oder übergeben Sie es dem KI-Agenten.",
+        "eyebrow": "Öffentliche Daten",
         "title": "Offizielle Rechtsdaten, bereit für die Akte."
       },
       "tabular-review": {
         "blurb": "Stellen Sie Fragen an einen ganzen Dokumentenbestand und erhalten Sie strukturierte Antworten als Tabelle im Rahmen der Akte: sortierbar, filterbar und bis zum Ausgangstext nachvollziehbar. Gebaut für Due Diligence, Discovery und Recherche.",
+        "eyebrow": "Tabellenprüfung",
         "title": "Machen Sie aus einem Dokumentenstapel eine prüfbare Tabelle."
       },
       "templates": {
         "blurb": "Definieren Sie eine Vorlage einmal, mit Feldern und bedingten Klauseln, und füllen Sie sie dann von Hand aus oder lassen Sie stella daraus einen Entwurf aus den Daten der Akte erstellen. Erzeugen Sie ein Dokument in die Akte und bearbeiten Sie es weiter.",
+        "eyebrow": "Vorlagen",
         "title": "Bauen Sie wiederverwendbare Vorlagen und lassen Sie KI sie ausfüllen."
       },
       "workspace": {
         "blurb": "Der Arbeitsbereich hält die Dokumente einer Akte, die Word-.docx-Bearbeitung, Prüfung, Recherche und Chat an einem Ort zusammen, damit die Arbeit vom Ausgangsmaterial bis zur Antwort im Kontext bleibt.",
+        "eyebrow": "Arbeitsbereich",
         "title": "Akten, Dokumente, Prüfung und Chat in einem Arbeitsbereich."
       }
     },
@@ -128,6 +136,9 @@
     "agentBody": "Der Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Fundstellen, die die Quelle exakt an der richtigen Textstelle öffnen. Nutzen Sie ihn in stella oder über MCP und die CLI; dieselben Berechtigungen und Quellen gelten für jede Anfrage.",
     "agentEyebrow": "Agenten-Workflows",
     "agentTitle": "Einmal fragen. Jede Antwort nennt ihre Quelle.",
+    "bringEditorToFront": "Editor von stella in den Vordergrund holen",
+    "bringTerminalToFront": "Terminal von stella in den Vordergrund holen",
+    "bringWorkspaceToFront": "Arbeitsbereich von stella in den Vordergrund holen",
     "controlBody": "stella ist juristische Open-Source-Software, die Sie selbst hosten können: Prüfen Sie den Code, betreiben Sie sie auf Ihre Weise und exportieren Sie alles in Standardformaten; ohne Lock-in.",
     "controlEyebrow": "Auf Kontrolle ausgelegt",
     "controlTitle": "Behalten Sie die Kontrolle über Ihren Stack.",

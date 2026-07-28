@@ -91,34 +91,42 @@
     "products": {
       "agent": {
         "blurb": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i podłączonymi narzędziami w jednym miejscu. Agent działa za zatwierdzeniem i z podglądem źródeł, opiera odpowiedzi na cytowaniach i rozszerza się o umiejętności oraz zewnętrzne konektory.",
+        "eyebrow": "Agent AI",
         "title": "Agent AI, który działa w Twoich sprawach, plikach i narzędziach."
       },
       "anonymization": {
         "blurb": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i z przeglądu dokumentów, z zredagowanym wynikiem, który sprawdzisz, zanim cokolwiek pójdzie dalej.",
+        "eyebrow": "Anonimizacja",
         "title": "Przygotuj materiały dla AI bez ujawniania danych identyfikujących."
       },
       "cli-mcp": {
         "blurb": "Szukaj, czytaj i pracuj z aplikacją stella z wiersza poleceń albo z dowolnego klienta zgodnego z MCP. Oba interfejsy korzystają z tego samego rejestru możliwości, uprawnień i danych obszaru roboczego co aplikacja webowa.",
+        "eyebrow": "CLI & MCP",
         "title": "Jeden obszar roboczy, z każdego narzędzia."
       },
       "editor": {
         "blurb": "Otwórz i edytuj pliki Word .docx prosto w przeglądarce: bez instalacji i bez konwersji na inny format. Edytor DOCX online w aplikacji stella zachowuje oryginalne formatowanie i śledzenie zmian, utrzymuje powiązanie pliku ze sprawą i zapisuje każdą wersję w historii dokumentu.",
+        "eyebrow": "Edytor",
         "title": "Edytuj dokumenty Word w przeglądarce, nie opuszczając sprawy."
       },
       "public-data": {
         "blurb": "Orzecznictwo i rejestry firm z oficjalnych źródeł publicznych, zbierane i parsowane ze strukturą przez stack Legal Atlas w aplikacji stella. Przeczytaj orzeczenie, sprawdź firmę, prześledź cytowania i powołaj się na dowolne z nich ze sprawy albo przekaż je agentowi AI.",
+        "eyebrow": "Dane publiczne",
         "title": "Oficjalne dane prawne gotowe do wciągnięcia do sprawy."
       },
       "tabular-review": {
         "blurb": "Zadaj pytania całemu zbiorowi dokumentów i otrzymaj ustrukturyzowane odpowiedzi jako tabelę w obrębie sprawy: sortowalną, filtrowalną i możliwą do prześledzenia aż do tekstu źródłowego. Stworzone do due diligence, discovery i badań.",
+        "eyebrow": "Przegląd tabelaryczny",
         "title": "Zamień stos dokumentów w tabelę gotową do przeglądu."
       },
       "templates": {
         "blurb": "Zdefiniuj szablon raz, z polami i klauzulami warunkowymi, a potem wypełnij go ręcznie albo pozwól aplikacji stella przygotować projekt z danych sprawy. Utwórz dokument prosto w sprawie i dalej go edytuj.",
+        "eyebrow": "Szablony",
         "title": "Twórz szablony wielokrotnego użytku i pozwól AI je wypełnić."
       },
       "workspace": {
         "blurb": "Obszar roboczy trzyma razem dokumenty sprawy, edycję plików Word .docx, przegląd, badania i czat w jednym miejscu, dzięki czemu praca zostaje w kontekście od materiałów źródłowych po odpowiedź.",
+        "eyebrow": "Obszar roboczy",
         "title": "Sprawy, dokumenty, przegląd i czat w jednym obszarze roboczym."
       }
     },
@@ -128,6 +136,9 @@
     "agentBody": "Agent przeszukuje sprawę, czyta istotny tekst i odpowiada cytatami, które otwierają źródło dokładnie w danym fragmencie. Używaj go w aplikacji stella albo przez MCP i CLI; za żądaniem podążają te same uprawnienia i źródła.",
     "agentEyebrow": "Przepływy pracy agenta",
     "agentTitle": "Zapytaj raz. Każda odpowiedź wskazuje swoje źródło.",
+    "bringEditorToFront": "Przenieś na wierzch edytor aplikacji stella",
+    "bringTerminalToFront": "Przenieś na wierzch terminal aplikacji stella",
+    "bringWorkspaceToFront": "Przenieś na wierzch obszar roboczy aplikacji stella",
     "controlBody": "stella to prawnicze oprogramowanie open source, które możesz hostować samodzielnie: przejrzyj kod, uruchamiaj je po swojemu i eksportuj wszystko w standardowych formatach; bez uzależnienia.",
     "controlEyebrow": "Zbudowane z myślą o kontroli",
     "controlTitle": "Zachowaj kontrolę nad infrastrukturą.",

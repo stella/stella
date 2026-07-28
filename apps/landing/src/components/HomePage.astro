@@ -4,6 +4,8 @@ import LandingFooter from "./LandingFooter.astro";
 import HomeProductStory from "./HomeProductStory.astro";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import { getChangelogReleases, getReleaseKind } from "../lib/changelog";
+import { resolveProductEyebrows } from "../data/site-nav";
+import { resolveSceneWindowLabels } from "../data/product-story";
 import { getTranslations } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
 
@@ -170,7 +172,11 @@ const selfHostingDocsUrl =
             client:load
             revealSideWindowsOnScroll
             backdrop="transparent"
-            discoverLabel={t("story.discover")}
+            discover={{
+              label: t("story.discover"),
+              productNames: resolveProductEyebrows(t),
+            }}
+            windowLabels={resolveSceneWindowLabels(t)}
           />
         </div>
       </section>

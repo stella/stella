@@ -1,5 +1,5 @@
 import type { getTranslations } from "../i18n/utils";
-import { pillars } from "./products/pillars";
+import { pillars, type ProductSlug } from "./products/pillars";
 import { productBySlug } from "./products/registry";
 
 // Single source of truth for the Resources/Connect link groups and product nav
@@ -55,10 +55,11 @@ export const resolveNavLinks = (
 ) =>
   links.map((link) => ({ label: resolveNavLabel(link, t), href: link.href }));
 
-// The footer names products with its own translated labels (nav menus use the
-// product eyebrow from the registry). New products without an entry here fall
-// back to their eyebrow.
-const productFooterLabels: Record<string, NavLabel | undefined> = {
+// The footer names products with its own translated descriptors, keyed on the
+// literal slugs, so a new pillar slug without an entry fails typecheck rather
+// than silently falling back to an English label. The nav menus render
+// `nav.products.<slug>.eyebrow` instead; both are catalog copy.
+const productFooterLabels = {
   "public-data": { kind: "translated", labelKey: "footer.publicData" },
   anonymization: { kind: "translated", labelKey: "footer.anonymization" },
   "tabular-review": { kind: "translated", labelKey: "footer.tabularReview" },
@@ -67,34 +68,51 @@ const productFooterLabels: Record<string, NavLabel | undefined> = {
   editor: { kind: "translated", labelKey: "footer.editor" },
   workspace: { kind: "translated", labelKey: "footer.workspace" },
   "cli-mcp": { kind: "literal", label: "CLI & MCP" },
-};
+} as const satisfies Record<ProductSlug, NavLabel>;
 
 export type ProductNavEntry = {
-  slug: string;
+  slug: ProductSlug;
   href: string;
-  eyebrow: string;
+  eyebrowKey: TranslationKey;
   footerLabel: NavLabel;
 };
 
 // Product pages in pillar order (the README spine), so nav surfaces and the
-// footer share one ordering and cannot drift from pillars.ts.
-export const productNavEntries: readonly ProductNavEntry[] = pillars.flatMap(
-  (pillar) =>
-    pillar.slugs.flatMap((slug) => {
-      const product = productBySlug.get(slug);
-      if (!product) {
-        return [];
-      }
-      return [
-        {
-          slug: product.slug,
-          href: `/product/${product.slug}`,
-          eyebrow: product.eyebrow,
-          footerLabel: productFooterLabels[slug] ?? {
-            kind: "literal",
-            label: product.eyebrow,
+// footer share one ordering and cannot drift from pillars.ts. Registered
+// products only: `productBySlug` guards against a pillar naming a page that
+// does not exist.
+export const productNavEntries = pillars.flatMap((pillar) =>
+  pillar.slugs.flatMap((slug) =>
+    productBySlug.has(slug)
+      ? [
+          {
+            slug,
+            href: `/product/${slug}`,
+            eyebrowKey: `nav.products.${slug}.eyebrow` as const,
+            footerLabel: productFooterLabels[slug],
           },
-        },
-      ];
-    }),
-);
+        ]
+      : [],
+  ),
+) satisfies readonly ProductNavEntry[];
+
+/**
+ * Every product eyebrow resolved for one locale. Astro components read
+ * `nav.products.<slug>.eyebrow` straight off the translator; this exists for
+ * the React islands, which have no translator of their own and take the names
+ * as a prop. Written out per slug rather than derived from `productNavEntries`:
+ * `Object.fromEntries` widens the keys back to `string`, and the `satisfies`
+ * here makes a pillar slug without an eyebrow a typecheck error instead of an
+ * undefined label at runtime.
+ */
+export const resolveProductEyebrows = (t: (key: TranslationKey) => string) =>
+  ({
+    "public-data": t("nav.products.public-data.eyebrow"),
+    anonymization: t("nav.products.anonymization.eyebrow"),
+    "tabular-review": t("nav.products.tabular-review.eyebrow"),
+    agent: t("nav.products.agent.eyebrow"),
+    templates: t("nav.products.templates.eyebrow"),
+    editor: t("nav.products.editor.eyebrow"),
+    workspace: t("nav.products.workspace.eyebrow"),
+    "cli-mcp": t("nav.products.cli-mcp.eyebrow"),
+  }) satisfies Record<ProductSlug, string>;

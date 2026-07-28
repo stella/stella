@@ -91,34 +91,42 @@
     "products": {
       "agent": {
         "blurb": "Conversa con tus asuntos, documentos, registros y herramientas conectadas en un solo lugar. El agente actúa con aprobaciones y vistas previas de la fuente, fundamenta sus respuestas en citas y se amplía con habilidades y conectores externos.",
+        "eyebrow": "Agente de IA",
         "title": "Un agente de IA que trabaja en tus asuntos, archivos y herramientas."
       },
       "anonymization": {
         "blurb": "Elimina nombres, entidades y datos identificativos antes de que el material llegue a la IA, directamente desde el chat y la revisión de documentos, con un resultado redactado que puedes comprobar antes de que nada siga adelante.",
+        "eyebrow": "Anonimización",
         "title": "Prepara el material para la IA sin exponer datos identificativos."
       },
       "cli-mcp": {
         "blurb": "Busca, lee y trabaja con stella desde la línea de comandos o desde cualquier cliente compatible con MCP. Ambas superficies comparten el mismo registro de capacidades, los mismos permisos y los mismos datos del espacio de trabajo que la aplicación web.",
+        "eyebrow": "CLI & MCP",
         "title": "Un espacio de trabajo, desde cualquier herramienta."
       },
       "editor": {
         "blurb": "Abre y edita archivos .docx de Word directamente en tu navegador: sin instalar nada y sin convertir a otro formato. El editor DOCX en línea de stella conserva el formato original y el control de cambios, mantiene el archivo vinculado a su asunto y guarda cada revisión en el historial de versiones del documento.",
+        "eyebrow": "Editor",
         "title": "Edita documentos de Word en el navegador, sin salir del asunto."
       },
       "public-data": {
         "blurb": "Jurisprudencia y registros mercantiles de fuentes públicas oficiales, recopilados y analizados con su estructura por el stack Legal Atlas de stella. Lee una resolución, consulta una empresa, sigue las citas y remite a cualquiera de ellos desde un asunto o pásalo al agente de IA.",
+        "eyebrow": "Datos públicos",
         "title": "Datos jurídicos oficiales, listos para llevarlos a un asunto."
       },
       "tabular-review": {
         "blurb": "Haz preguntas a todo un conjunto de documentos y recibe respuestas estructuradas en una tabla dentro del asunto: ordenable, filtrable y rastreable hasta el texto de origen. Pensada para due diligence, discovery e investigación.",
+        "eyebrow": "Revisión tabular",
         "title": "Convierte una pila de documentos en una tabla que puedes revisar."
       },
       "templates": {
         "blurb": "Define una plantilla una vez, con campos y cláusulas condicionales, y luego rellénala a mano o deja que stella redacte un borrador con los datos del asunto. Genera un documento dentro del asunto y sigue editándolo.",
+        "eyebrow": "Plantillas",
         "title": "Crea plantillas reutilizables y deja que la IA las rellene."
       },
       "workspace": {
         "blurb": "El espacio de trabajo reúne los documentos de un asunto, la edición de Word .docx, la revisión, la investigación y el chat en un solo lugar, de modo que el trabajo se mantiene en contexto desde el material de origen hasta la respuesta.",
+        "eyebrow": "Espacio de trabajo",
         "title": "Asuntos, documentos, revisión y chat en un solo espacio de trabajo."
       }
     },
@@ -128,6 +136,9 @@
     "agentBody": "El agente busca en el asunto, lee el texto relevante y responde con citas que abren la fuente exactamente en el pasaje correspondiente. Úsalo en stella o a través de MCP y la CLI; los mismos permisos y fuentes acompañan cada solicitud.",
     "agentEyebrow": "Flujos de trabajo del agente",
     "agentTitle": "Pregunta una vez. Cada respuesta cita su fuente.",
+    "bringEditorToFront": "Traer al frente el editor de stella",
+    "bringTerminalToFront": "Traer al frente el terminal de stella",
+    "bringWorkspaceToFront": "Traer al frente el espacio de trabajo de stella",
     "controlBody": "stella es software legal de código abierto que puedes autoalojar: inspecciona el código, ejecútalo a tu manera y exporta todo en formatos estándar; sin dependencia del proveedor.",
     "controlEyebrow": "Diseñado para el control",
     "controlTitle": "Mantén el control de la infraestructura.",

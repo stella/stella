@@ -39,7 +39,7 @@ const connect = resolveNavLinks(connectLinks, t);
         {
           productNavEntries.map((product) => (
             <a href={product.href} class="mobile-nav-link">
-              {product.eyebrow}
+              {t(product.eyebrowKey)}
             </a>
           ))
         }

@@ -231,22 +231,71 @@ extend the baseline only for genuine cognates.
 
 ## Product names on marketing surfaces
 
-Navigation, the mega-menu, and the hero scene's discover tags use the
-English product eyebrows (Workspace, Editor, Tabular Review, CLI & MCP) as
-brand-constant labels. The footer's product column uses localized
-descriptors (existing `footer.*` keys). Follow whichever pattern the
-surface already uses; do not translate a product name in one menu and not
-another.
+Product names are **descriptors, not brand marks**: only `stella` is the
+brand. Every localized surface therefore names a product in the reader's
+language. The product eyebrows (Workspace, Editor, Templates, Tabular Review,
+AI agent, Anonymization, Public data, CLI & MCP) render from
+`nav.products.<slug>.eyebrow` in the mega-menu and the mobile menu, and from
+the `footer.*` descriptors in the footer's product column. This reverses an
+earlier rule that treated the eyebrows as brand-constant English: a Czech page
+whose footer said "Tabulková revize" while the menu above it said "Tabular
+Review" was naming the same page twice, as two products.
+
+The `/product/<slug>` pages are English-only and keep rendering the registry's
+own `eyebrow` from `data/products/*.ts`; that field stays the English source
+of truth, and `menu-copy.test.ts` asserts `en.json` agrees with it, the same
+drift guard the menu `title`/`blurb` already have.
+
+| Locale | Workspace          | Editor      | Templates | Tabular Review        | AI agent              | Anonymization | Public data       |
+| ------ | ------------------ | ----------- | --------- | --------------------- | --------------------- | ------------- | ----------------- |
+| ar     | مساحة العمل        | المحرر      | القوالب   | المراجعة الجدولية     | وكيل الذكاء الاصطناعي | إخفاء الهوية  | البيانات العامة   |
+| cs     | Pracovní prostor   | Editor      | Vzory     | Tabulková revize      | AI agent              | Anonymizace   | Veřejná data      |
+| de     | Arbeitsbereich     | Editor      | Vorlagen  | Tabellenprüfung       | KI-Agent              | Anonymisierung | Öffentliche Daten |
+| es     | Espacio de trabajo | Editor      | Plantillas | Revisión tabular      | Agente de IA          | Anonimización | Datos públicos    |
+| et     | Tööruum            | Redaktor    | Mallid    | Tabelülevaatus        | Tehisintellekti agent | Anonüümimine  | Avalikud andmed   |
+| fr     | Espace de travail  | Éditeur     | Modèles   | Revue tabulaire       | Agent IA              | Anonymisation | Données publiques |
+| hu     | Munkaterület       | Szerkesztő  | Sablonok  | Táblázatos ellenőrzés | AI-ügynök             | Anonimizálás  | Nyilvános adatok  |
+| lt     | Darbo sritis       | Redaktorius | Šablonai  | Lentelinė peržiūra    | DI agentas            | Anonimizavimas | Viešieji duomenys |
+| lv     | Darbvieta          | Redaktors   | Veidnes   | Tabulāra pārskatīšana | AI aģents             | Anonimizācija | Publiskie dati    |
+| pl     | Obszar roboczy     | Edytor      | Szablony  | Przegląd tabelaryczny | Agent AI              | Anonimizacja  | Dane publiczne    |
+| pt-BR  | Espaço de trabalho | Editor      | Modelos   | Revisão tabular       | Agente de IA          | Anonimização  | Dados públicos    |
+| sk     | Pracovný priestor  | Editor      | Vzory     | Tabuľková revízia     | AI agent              | Anonymizácia  | Verejné dáta      |
+
+No cell in that table is a new translation. Each one is the `footer.*`
+descriptor the same locale already used for the same product page, copied
+across so the two surfaces cannot drift: one concept, one translation. When a
+new product page lands, take its eyebrow from its footer descriptor rather
+than translating the English afresh.
+
+`CLI & MCP` is the one eyebrow that stays English in all twelve locales: both
+halves are protocol names, not words. It is recorded per-locale under
+`identicalToSource` in `i18n-check-baseline.json`, the same way other genuine
+cognates are.
+
+The hero scene's discover chips follow the same rule. `CliMcpPreview` is a
+React island with no translator, so `HomePage.astro` resolves every eyebrow for
+the active locale (`resolveProductEyebrows` in `data/site-nav.ts`) and passes
+the names in beside the "Discover" verb, as one `discover` prop: a caller
+cannot supply a translated verb and leave the product name English. The chips
+read "Objevte Pracovní prostor" on `/cs/`, "Entdecken Sie Arbeitsbereich" on
+`/de/`. An island that needs a product name takes it that way; do not hardcode
+one in a `.tsx` file.
+
+Because the eyebrows repeat the footer descriptors, six of them share an
+en.json value with their `footer.*` twin and are listed under `duplicateValues`
+in `i18n-check-baseline.json` (`agent`, `anonymization`, `editor`,
+`public-data`, `templates`, `workspace`). Hoisting a product name to `common.*`
+to serve a menu and a footer would make one key own two surfaces with different
+length budgets; the duplication is the cheaper honest option.
+`tabular-review` needs no entry: the eyebrow is title-cased (_Tabular Review_)
+and `footer.tabularReview` is not, so the two English values differ.
 
 ### Pillar group labels DO translate
 
 The mega-menu's three group headings (`nav.pillars.data`,
 `nav.pillars.intelligence`, `nav.pillars.workspace`, keyed on the pillar ids in
 `data/products/pillars.ts`) name categories, not products, so they translate in
-every locale. The product entries listed under them keep their English eyebrow
-per the rule above; a translated group label above English product names is the
-intended reading (the group says what the section is about, the entries are
-brand labels).
+every locale too.
 
 | Locale | Data infrastructure       | Legal intelligence     | Workspace          |
 | ------ | ------------------------- | ---------------------- | ------------------ |
@@ -281,12 +330,24 @@ function:
 
 "Workspace" reuses the settled rendering from `glossary.json` (the table above
 under _The identity phrase_) rather than coining a menu-only variant. That
-makes `nav.pillars.workspace` hold the same string as `footer.workspace` in
-every locale, which is deliberate: the pillar names the category, the footer
-key names the product page, and they are one word in English. Both keys are
-listed in `i18n-check-baseline.json` under `duplicateValues` for that reason
-(same precedent as `demo.status` / `footer.status`); hoisting one word to
-`common.*` to serve two unrelated surfaces would be worse.
+makes `nav.pillars.workspace` hold the same string as `footer.workspace` and
+`nav.products.workspace.eyebrow` in every locale, which is deliberate: the
+pillar names the category, the other two name the product page, and all three
+are one word in English. The keys are listed in `i18n-check-baseline.json`
+under `duplicateValues` for that reason (same precedent as `demo.status` /
+`footer.status`); hoisting one word to `common.*` to serve three unrelated
+surfaces would be worse.
+
+The visible consequence is that the workspace pillar's group label and its
+first entry are the same word, stacked: _PRACOVNÍ PROSTOR_ over _Pracovní
+prostor_, _ARBEITSBEREICH_ over _Arbeitsbereich_. That is the English menu's
+own reading (_WORKSPACE_ over _Workspace_), not a translation artefact, and the
+two rows are already distinguished the way English distinguishes them: the
+group label is uppercased, 0.625rem, letter-spaced, and muted, the entry is
+0.875rem in the foreground colour. Do not coin a second workspace term to
+break the repetition; the near-synonyms are exactly what `glossary.json` bans.
+Arabic is the one locale where the pair differs by itself, because the pillar
+takes the indefinite مساحة عمل and the product entry the definite مساحة العمل.
 
 Estonian uses _taristu_, the standard Estonian term for infrastructure, so the
 data pillar is _Andmetaristu_ rather than the loan compound
@@ -303,6 +364,45 @@ label counts: a screen-reader user reading the Czech page must not hear
 Chrome labels are also the strings most likely to grow in translation. The
 switcher sizes to its content (`min-w-11` keeps the tap target, the width is
 not fixed), because "Dark" at 44px becomes "Világos" or "Ciemny".
+
+### The hero scene's window handles
+
+The three draggable windows in `CliMcpPreview` are focus controls, so their
+handles carry an accessible name: `story.bringWorkspaceToFront`,
+`story.bringEditorToFront`, `story.bringTerminalToFront`. The island has no
+translator, so every Astro mount passes `windowLabels`
+(`resolveSceneWindowLabels` in `data/product-story.ts`) and the prop is
+required — an optional prop with an English default is the same bug written
+more politely.
+
+| Locale | Bring stella workspace to front                         |
+| ------ | ------------------------------------------------------- |
+| ar     | إحضار مساحة عمل stella إلى المقدمة                      |
+| cs     | Přenést do popředí pracovní prostor aplikace stella      |
+| de     | Arbeitsbereich von stella in den Vordergrund holen       |
+| es     | Traer al frente el espacio de trabajo de stella          |
+| et     | Too rakenduse stella tööruum esiplaanile                 |
+| fr     | Mettre l’espace de travail stella au premier plan        |
+| hu     | A stella alkalmazás munkaterületének előtérbe hozása     |
+| lt     | Perkelti programos stella darbo sritį į priekinį planą   |
+| lv     | Pārvietot lietotnes stella darbvietu priekšplānā         |
+| pl     | Przenieś na wierzch obszar roboczy aplikacji stella      |
+| pt-BR  | Trazer o espaço de trabalho da stella para a frente      |
+| sk     | Preniesť do popredia pracovný priestor aplikácie stella  |
+
+The editor and terminal labels are the same sentence with that locale's word
+for the editor (the `footer.editor` descriptor) and for a terminal. Two rules
+meet here: the verb takes the locale's action-label form (infinitive for cs,
+sk, de, es, fr, lt, lv, pt-BR; imperative for pl and et; verbal noun for hu and
+ar, matching `appearance.toggle`), and the brand rides its carrier noun from
+the table at the top of this document, because "front" puts the phrase in a
+case-bearing slot (cs _aplikace stella_, lt _programos stella_, lv _lietotnes
+stella_, et _rakenduse stella_, pl _aplikacji stella_, hu _a stella
+alkalmazás_). The locales that need no carrier take the bare brand.
+
+The windows' visible titles stay as they are: "Microsoft Teams" is a
+third-party proper noun, and "stella Editor" / "stella CLI" depict OS window
+chrome rather than describing the product.
 
 ### Light / Dark: the app's renderings, verbatim
 

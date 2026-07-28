@@ -2,7 +2,9 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { FrameAccent, FrameVariant, ProductMedia } from "../data/products/types";
-import { productStoryThumbnails } from "../data/product-story";
+import { productStoryThumbnails, resolveSceneWindowLabels } from "../data/product-story";
+import { defaultLocale, isLocale } from "../i18n/config";
+import { getTranslations } from "../i18n/utils";
 import MacWindow from "./MacWindow.astro";
 import MediaSkeleton from "./MediaSkeleton.astro";
 import ThemeImage from "./ThemeImage.astro";
@@ -30,6 +32,14 @@ type Props = {
   accent?: FrameAccent;
 };
 const { media, compact = false, deferThemeImage = false, thumbnail = false } = Astro.props;
+
+// The scene previews below are React islands with no translator; their window
+// handles take accessible names as a prop. Resolved here rather than defaulted
+// in the island, so the /product pages and any localized mount read the same
+// catalog keys.
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const sceneWindowLabels = resolveSceneWindowLabels(getTranslations(locale));
 const aspect = media.aspect ?? "16 / 9";
 
 // A video slot upgrades from skeleton to <video> the moment its file lands in
@@ -45,7 +55,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
   {
     media.type === "preview" && (
       <div class="absolute inset-0">
-        <ProductPreview client:visible previewKey={media.key} />
+        <ProductPreview client:visible previewKey={media.key} windowLabels={sceneWindowLabels} />
       </div>
     )
   }
@@ -75,6 +85,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
           sceneId={media.sceneId}
           showCompanions={media.showCompanions ?? false}
           sideWindows={media.sideWindows ?? true}
+          windowLabels={sceneWindowLabels}
         />
       </div>
     )
@@ -88,6 +99,7 @@ const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sce
           sceneId={media.sceneId}
           showCompanions={media.showCompanions ?? false}
           sideWindows={media.sideWindows ?? true}
+          windowLabels={sceneWindowLabels}
         />
       </div>
     )

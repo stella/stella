@@ -17,9 +17,8 @@ const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 
 // Pillar group labels are catalog copy too (`nav.pillars.<id>`, keyed on the
-// literal pillar ids). The product entries under them keep the registry's
-// English eyebrow, per the brand-constant product-name policy in
-// src/i18n/TRANSLATION.md.
+// literal pillar ids), and so are the product eyebrows under them
+// (`nav.products.<slug>.eyebrow`); see src/i18n/TRANSLATION.md.
 //
 // The header renders on every localized homepage, so the preview copy is
 // catalog copy keyed on the slug, not the registry's English `title`/`summary`
@@ -97,7 +96,7 @@ const compactMenus = [
                           data-slug={p.slug}
                         >
                           <span class="block text-sm font-medium" style="color: var(--foreground)">
-                            {p.eyebrow}
+                            {t(`nav.products.${slug}.eyebrow`)}
                           </span>
                         </a>
                       </li>

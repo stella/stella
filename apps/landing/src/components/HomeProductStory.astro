@@ -1,4 +1,5 @@
 ---
+import { resolveSceneWindowLabels } from "../data/product-story";
 import type { TranslationKey } from "../data/site-nav";
 import { defaultLocale, isLocale } from "../i18n/config";
 import { getTranslations } from "../i18n/utils";
@@ -8,6 +9,7 @@ import ThemeImage from "./ThemeImage.astro";
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
+const sceneWindowLabels = resolveSceneWindowLabels(t);
 
 // Copy is referenced by TranslationKey (not literal strings) so a renamed or
 // removed message key fails typecheck instead of rendering the raw key.
@@ -180,6 +182,7 @@ const proofItems = [
                     includeStyles={false}
                     sceneId="workspace"
                     showCompanions={false}
+                    windowLabels={sceneWindowLabels}
                   />
                 </div>
               )}
@@ -191,6 +194,7 @@ const proofItems = [
                     includeStyles={false}
                     sceneId="agent"
                     showCompanions={false}
+                    windowLabels={sceneWindowLabels}
                   />
                 </div>
               )}

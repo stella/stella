@@ -1,3 +1,5 @@
+import type { TranslationKey } from "./site-nav";
+
 export const productStorySceneIds = [
   "workspace",
   "review",
@@ -34,6 +36,28 @@ export const productStoryScenes = [
 ] as const satisfies readonly ProductStoryScene[];
 
 export type ProductStoryWindowId = "app" | "editor" | "teams" | "terminal";
+
+/**
+ * The scene windows a viewer can bring to front that are ours to name. The
+ * Microsoft Teams companion is deliberately absent: its title is a third-party
+ * proper noun, and so is its handle's accessible name.
+ */
+export type SceneWindowId = "workspace" | "source" | "terminal";
+
+/**
+ * Accessible names for those handles, resolved for one locale. `CliMcpPreview`
+ * is a React island with no translator, so every Astro mount passes these in;
+ * the prop is required, because a scene that renders the handles without them
+ * would ship an English `aria-label` onto a localized page. Written out per
+ * window for the same reason `resolveProductEyebrows` is: `satisfies` here
+ * turns a new scene window into a typecheck error, not a silent English label.
+ */
+export const resolveSceneWindowLabels = (t: (key: TranslationKey) => string) =>
+  ({
+    workspace: t("story.bringWorkspaceToFront"),
+    source: t("story.bringEditorToFront"),
+    terminal: t("story.bringTerminalToFront"),
+  }) satisfies Record<SceneWindowId, string>;
 
 export type ProductStoryPlaybackStep = {
   id: string;
