@@ -75,6 +75,8 @@ export type SafeIdType =
   | "rateTable"
   | "reportExport"
   | "schedulerJobRun"
+  | "sharepointConnection"
+  | "sharepointOAuthState"
   | "styleSet"
   | "taskAssignee"
   | "task"

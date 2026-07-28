@@ -236,6 +236,11 @@ const envApi = createEnv({
     FEATURE_DESKTOP_EDITING: featureFlagSchema,
     FEATURE_TIME_BILLING: featureFlagSchema,
     FEATURE_WEB_SEARCH: featureFlagSchema,
+    // Delegated Microsoft Graph connection: per-user, read-only SharePoint /
+    // OneDrive access for future workspace import. Default-off; a deployment
+    // opts in only after its Microsoft app registration is granted the
+    // read-only delegated scopes (see handlers/sharepoint/graph-oauth.ts).
+    FEATURE_SHAREPOINT: featureFlagSchema,
 
     /**
      * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)

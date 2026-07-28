@@ -21,6 +21,7 @@ import type {
   AnyPgColumn,
   BoundingBoxes,
   CellMetadata,
+  DocumentSource,
   FieldContent,
   JustificationContent,
   LinkMetadata,
@@ -264,6 +265,13 @@ export const entityVersions = p.pgTable(
     }),
     /** User who created this version (uploader, desktop editor, or restorer). */
     createdBy: p.text("created_by"),
+    /**
+     * Provenance of this version's bytes (see {@link DocumentSource}). A
+     * discriminated union, not a boolean: `upload` / `desktop-edit` today,
+     * with a `sharepoint` branch reserved for the read-only Graph import
+     * slice. Null on legacy rows and creation paths not yet threaded.
+     */
+    source: jsonb("source").$type<DocumentSource | null>(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     /**
      * Chain-of-custody tombstone. A non-null `deletedAt` hides the version

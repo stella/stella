@@ -31,6 +31,7 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
@@ -383,6 +384,7 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
       await tx.insert(entityVersions).values({
         entityId: sessionPreview.entityId,
         id: nextVersionId,
+        source: DESKTOP_EDIT_DOCUMENT_SOURCE,
         stamp: nextVersionStamp.stamp,
         verificationCode: nextVersionStamp.verificationCode,
         versionNumber: nextVersionNumber,

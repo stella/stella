@@ -27,6 +27,8 @@ import {
   mcpUserConnectionPolicies,
   organizationCheck,
   orgPolicies,
+  sharepointConnectionPolicies,
+  sharepointOAuthStatePolicies,
   stella,
   templateChatThreadPolicies,
   userPolicies,
@@ -68,6 +70,7 @@ import type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/d
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import type { DocumentSource } from "@/api/lib/document-source";
 import type { TemplateManifest } from "@/api/lib/docx/types";
 import type { CentsAmount } from "@/api/lib/money";
 import { unsafeCents } from "@/api/lib/money";
@@ -384,6 +387,8 @@ export {
   mcpUserConnectionPolicies,
   organizationCheck,
   orgPolicies,
+  sharepointConnectionPolicies,
+  sharepointOAuthStatePolicies,
   stella,
   templateChatThreadPolicies,
   userPolicies,
@@ -413,6 +418,7 @@ export type {
   CentsAmount,
   DecisionSection,
   DocumentAst,
+  DocumentSource,
   EmptyAst,
   EntityKind,
   FieldContent,

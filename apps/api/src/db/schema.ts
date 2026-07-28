@@ -13,6 +13,7 @@ export * from "./schema/docx-suggestions";
 export * from "./schema/extraction-runs";
 export * from "./schema/flows";
 export * from "./schema/mcp";
+export * from "./schema/sharepoint";
 export * from "./schema/files-views";
 export * from "./schema/reports";
 export * from "./schema/skills";

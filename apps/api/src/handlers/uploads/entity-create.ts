@@ -50,6 +50,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -642,6 +643,7 @@ export const finalizeEntityCreate = async function* ({
       workspaceId,
       entityId,
       versionNumber: 1,
+      source: UPLOAD_DOCUMENT_SOURCE,
       stamp: entityStamp.stamp,
       verificationCode: entityStamp.verificationCode,
     });
