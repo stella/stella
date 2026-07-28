@@ -112,10 +112,13 @@ const parseArgs = (argv: readonly string[]): ParseResult => {
       if (!parsed.ok) {
         return parsed;
       }
+      const requestedBatch = parsed.options.caseLawLimit ?? 0;
+      if (requestedBatch <= 0) {
+        return { ok: false, message: `${arg} must be a positive integer` };
+      }
       // Cap keeps one batch's payload and CAS fan-out bounded even when an
       // operator asks for more.
-      options.indexBatchSize =
-        Math.min(parsed.options.caseLawLimit ?? 0, 1000) || null;
+      options.indexBatchSize = Math.min(requestedBatch, 1000);
       i += 1;
       continue;
     }
@@ -124,8 +127,13 @@ const parseArgs = (argv: readonly string[]): ParseResult => {
       if (!parsed.ok) {
         return parsed;
       }
-      options.indexReadConcurrency =
-        Math.min(parsed.options.caseLawLimit ?? 0, 32) || null;
+      const requestedReads = parsed.options.caseLawLimit ?? 0;
+      if (requestedReads <= 0) {
+        return { ok: false, message: `${arg} must be a positive integer` };
+      }
+      // Half the row cap: a passage row issues up to two object reads, so
+      // this bounds in-flight requests at twice the value.
+      options.indexReadConcurrency = Math.min(requestedReads, 16);
       i += 1;
       continue;
     }

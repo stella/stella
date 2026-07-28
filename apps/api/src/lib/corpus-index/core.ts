@@ -591,7 +591,16 @@ export const createCorpusIndexer = <
             limit: staleLimit,
           });
 
-    const rows: TRow[] = [...missing, ...stale];
+    let rows: TRow[] = [...missing, ...stale];
+    if (rows.length === 0 && dutyDue && missingLimit < batchSize) {
+      // A stale-only duty batch that found nothing must not report zero —
+      // callers treat zero as completion. Fall back to a full missing
+      // selection so the duty batch costs at most one extra query.
+      rows = await adapter.selectMissing(scopedDb, {
+        generation,
+        limit: batchSize,
+      });
+    }
     if (rows.length === 0) {
       return 0;
     }
