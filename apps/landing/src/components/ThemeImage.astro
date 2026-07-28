@@ -23,10 +23,21 @@ const {
 
 const transparentPixel =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/%3E";
+
+// Progressive enhancement: the light asset is the real SSR source, so the
+// image is present without JavaScript; theme-images.ts upgrades it to the
+// dark asset once the theme is known. `loading="lazy"` (the default here)
+// keeps the light URL from being fetched before that swap for anything below
+// the fold.
+//
+// `manual` defers keep the placeholder: those are the nav mega-menu
+// thumbnails inside a closed <details>, where a real source would fetch every
+// product preview on every page load.
+const initialSrc = defer === "manual" ? transparentPixel : lightSrc;
 ---
 
 <img
-  src={transparentPixel}
+  src={initialSrc}
   data-theme-image
   data-theme-image-deferred={defer}
   data-theme-light-src={lightSrc}

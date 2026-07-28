@@ -19,6 +19,12 @@ const latestRelease = featureReleases.at(0);
 const releaseDateFormatter = new Intl.DateTimeFormat(locale, {
   dateStyle: "medium",
 });
+// Release headings and notes are read from the English changelog markdown
+// (docs/changelog/*.md), so they cannot be keyed and translated per release.
+// Outside the source locale the badge and the velocity strip therefore carry
+// only locale-neutral provenance (date, tag, `stella <version>`) instead of
+// dropping an English, LTR-only prose island into a translated page.
+const showReleaseProse = locale === defaultLocale;
 
 const appUrl = "https://my.stll.app";
 const selfHostingDocsUrl =
@@ -103,9 +109,9 @@ const selfHostingDocsUrl =
               }
               <span class="min-w-0 truncate">
                 {
-                  latestRelease
+                  showReleaseProse && latestRelease
                     ? (latestRelease.heading ?? latestRelease.displayName)
-                    : "Changelog"
+                    : t("nav.changelog")
                 }
               </span>
               <span
@@ -215,14 +221,18 @@ const selfHostingDocsUrl =
                     <span>{release.tagName}</span>
                   </span>
                   <span class="font-display text-xl font-medium transition-opacity group-hover:opacity-70">
-                    {release.heading ?? release.displayName}
+                    {showReleaseProse
+                      ? (release.heading ?? release.displayName)
+                      : release.displayName}
                   </span>
-                  <span
-                    class="text-sm leading-6"
-                    style="color: var(--muted-foreground)"
-                  >
-                    {release.description}
-                  </span>
+                  {showReleaseProse && (
+                    <span
+                      class="text-sm leading-6"
+                      style="color: var(--muted-foreground)"
+                    >
+                      {release.description}
+                    </span>
+                  )}
                 </a>
               </li>
             ))

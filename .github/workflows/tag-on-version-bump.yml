@@ -78,14 +78,9 @@ jobs:
         with:
           bun-version-file: "package.json"
 
-      - name: Require fresh marketing recordings
-        # Reads the committed captures.ts matrix and recordings-manifest.json
-        # only (no node_modules), so no install step is needed. `--strict`
-        # fails the tag push instead of just reporting; run
-        # `bun run marketing:reshoot` (re-records only the stale captures)
-        # before bumping VERSION to clear this.
-        run: bun run marketing:stale --strict
-
+      # Ahead of the freshness gate: with the tag already pushed this run has
+      # nothing left to create, and failing it on recordings that went stale
+      # after the tag would turn an intended no-op into a red workflow.
       - name: Skip if tag already exists
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -99,6 +94,15 @@ jobs:
             echo "Tag $TAG already exists; nothing to do."
             echo "skip=true" >> "$GITHUB_ENV"
           fi
+
+      - name: Require fresh marketing recordings
+        if: env.skip != 'true'
+        # Reads the committed captures.ts matrix and recordings-manifest.json
+        # only (no node_modules), so no install step is needed. `--strict`
+        # fails the tag push instead of just reporting; run
+        # `bun run marketing:reshoot` (re-records only the stale captures)
+        # before bumping VERSION to clear this.
+        run: bun run marketing:stale --strict
 
       - name: Push tag
         if: env.skip != 'true'

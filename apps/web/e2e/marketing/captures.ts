@@ -70,7 +70,10 @@ export type CaptureDefinition = {
 
 // Repo paths whose changes invalidate every recording: the recorder itself
 // (choreography, viewports, trimming), the seed that produces the filmed
-// content, and the app chrome visible in every capture.
+// content, the app chrome visible in every capture, and the global rendering
+// inputs every filmed route resolves through. Without those last three, a
+// site-wide typography or design-token change would repaint every scene while
+// the staleness gate still reported all recordings fresh.
 const COMMON_WATCHED_PATHS = [
   "apps/web/e2e/marketing/captures.ts",
   "apps/web/e2e/marketing/record-product-story.ts",
@@ -78,6 +81,9 @@ const COMMON_WATCHED_PATHS = [
   "apps/web/src/components/app-sidebar.tsx",
   "apps/web/src/components/app-sidebar.logic.ts",
   "apps/web/src/components/breadcrumbs",
+  "apps/web/src/routes/__root.tsx",
+  "apps/web/src/fonts.css",
+  "packages/ui/src/styles/globals.css",
 ] as const;
 
 // Per-scene product surfaces, deliberately whole feature slices

@@ -82,6 +82,7 @@ type Messages = {
     "beta": "Beta";
     "blog": "Blog";
     "changelog": "Changelog";
+    "chooseLanguage": "Choose a language";
     "github": "stella on GitHub";
     "openMenu": "Open navigation";
     "product": "Product";

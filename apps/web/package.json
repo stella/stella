@@ -22,7 +22,7 @@
     "test:e2e:marketing": "playwright test --config e2e/playwright.marketing.config.ts --project app",
     "test:e2e:marketing:update": "playwright test --config e2e/playwright.marketing.config.ts --project app --update-snapshots",
     "test:e2e:landing": "playwright test --config e2e/playwright.marketing.config.ts --project landing",
-    "capture:product-story": "node e2e/marketing/record-product-story.ts",
+    "capture:product-story": "bun e2e/marketing/record-product-story.ts",
     "test:e2e:staging": "playwright test --config e2e/playwright.staging.config.ts",
     "test:e2e:ui": "playwright test --config e2e/playwright.config.ts --ui"
   },

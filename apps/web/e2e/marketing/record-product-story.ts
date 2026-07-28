@@ -11,10 +11,9 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
-// Explicit .ts extension: `capture:product-story` runs this file under
-// node's type stripping, whose ESM resolver requires real file paths.
 import {
   CAPTURE_DPR,
+  CAPTURE_THEMES,
   captureDefinitions,
   RECORDINGS_MANIFEST_PATH,
 } from "./captures";
@@ -672,11 +671,47 @@ const captures: readonly StoryCapture[] = captureDefinitions.map(
   },
 );
 
-const captureFilter = CAPTURE_FILTER
-  ? new Set(CAPTURE_FILTER.split(","))
-  : undefined;
+// Both filters are validated up front, before authentication and browser
+// setup: a typo used to match nothing and the run still exited 0, reporting
+// success while leaving every requested stale asset untouched.
+const parseCaptureFilter = (): ReadonlySet<string> | undefined => {
+  if (!CAPTURE_FILTER) {
+    return undefined;
+  }
+  const known = new Set(captures.map(({ captureId }) => captureId));
+  const requested = CAPTURE_FILTER.split(",")
+    .map((id) => id.trim())
+    .filter((id) => id !== "");
+  const unknown = requested.filter((id) => !known.has(id));
+  if (requested.length === 0) {
+    throw new Error("MARKETING_CAPTURE is set but names no capture");
+  }
+  if (unknown.length > 0) {
+    throw new Error(
+      `MARKETING_CAPTURE names unknown capture(s): ${unknown.join(", ")}. ` +
+        `Known ids: ${[...known].toSorted().join(", ")}`,
+    );
+  }
+  return new Set(requested);
+};
+
+const parseThemeFilter = (): CaptureTheme | undefined => {
+  if (!THEME_FILTER) {
+    return undefined;
+  }
+  const theme = CAPTURE_THEMES.find((candidate) => candidate === THEME_FILTER);
+  if (!theme) {
+    throw new Error(
+      `MARKETING_THEME must be one of ${CAPTURE_THEMES.join(", ")}; got "${THEME_FILTER}"`,
+    );
+  }
+  return theme;
+};
 
 const main = async () => {
+  const captureFilter = parseCaptureFilter();
+  const themeFilter = parseThemeFilter();
+
   await mkdir(MEDIA_DIR, { recursive: true });
   await rm(RAW_VIDEO_DIR, { force: true, recursive: true });
   await mkdir(RAW_VIDEO_DIR, { recursive: true });
@@ -698,7 +733,7 @@ const main = async () => {
   const views = await resolveMarketingViewRoutes(browser, cookies);
 
   for (const theme of ["light", "dark"] as const) {
-    if (THEME_FILTER && theme !== THEME_FILTER) {
+    if (themeFilter && theme !== themeFilter) {
       continue;
     }
     for (const capture of captures) {

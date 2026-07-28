@@ -39,9 +39,9 @@ const FOLIO_MESSAGES = getFolioMessages("en");
  * and edits.
  */
 export const EditorLiveDemo = () => {
-  const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(
-    null,
-  );
+  const [sample, setSample] = useState<SampleState>({ status: "loading" });
+  // Bumped by the retry button to re-run the load effect.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,19 +50,29 @@ export const EditorLiveDemo = () => {
         const response = await fetch(SAMPLE_DOCX_URL, {
           signal: AbortSignal.timeout(10_000),
         });
-        const buffer = await response.arrayBuffer();
-        if (!cancelled) {
-          setDocumentBuffer(buffer);
+        // A 404/5xx still resolves: without the `ok` check the demo would hand
+        // folio an error page's bytes and fail deeper, as an unreadable
+        // document.
+        const buffer = response.ok ? await response.arrayBuffer() : undefined;
+        if (cancelled) {
+          return;
         }
+        setSample(
+          buffer
+            ? { status: "ready", documentBuffer: buffer }
+            : { status: "failed" },
+        );
       } catch {
-        // Demo hero: on failure the loading state stays; nothing to surface.
+        if (!cancelled) {
+          setSample({ status: "failed" });
+        }
       }
     };
     void load();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   return (
     <IntlProvider
@@ -80,10 +90,10 @@ export const EditorLiveDemo = () => {
         className="h-full w-full"
         style={{ background: "var(--background)" }}
       >
-        {documentBuffer ? (
+        {sample.status === "ready" ? (
           <DocxEditor
             className="folio-docx-preview h-full"
-            documentBuffer={documentBuffer}
+            documentBuffer={sample.documentBuffer}
             documentKey="editor-live-demo"
             // Fit the page to the embed width so the SAFE never overflows and
             // clips on the right; folio re-fits as the hero frame resizes.
@@ -95,14 +105,60 @@ export const EditorLiveDemo = () => {
             showOutline={false}
           />
         ) : (
-          <div
-            className="flex h-full w-full items-center justify-center text-sm"
-            style={{ color: "var(--muted-foreground)" }}
-          >
-            Loading the editor…
-          </div>
+          <SamplePlaceholder
+            status={sample.status}
+            onRetry={() => {
+              setSample({ status: "loading" });
+              setAttempt((previous) => previous + 1);
+            }}
+          />
         )}
       </div>
     </IntlProvider>
+  );
+};
+
+type SampleState =
+  | { status: "loading" }
+  | { status: "ready"; documentBuffer: ArrayBuffer }
+  | { status: "failed" };
+
+type SamplePlaceholderProps = {
+  onRetry: () => void;
+  status: "failed" | "loading";
+};
+
+// The island has no i18n runtime (see FOLIO_MESSAGES above), so its own copy
+// stays English like the rest of this demo.
+const SamplePlaceholder = ({ onRetry, status }: SamplePlaceholderProps) => {
+  if (status === "loading") {
+    return (
+      <div
+        className="flex h-full w-full items-center justify-center text-sm"
+        style={{ color: "var(--muted-foreground)" }}
+      >
+        Loading the editor…
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex h-full w-full flex-col items-center justify-center gap-3 px-6 text-center text-sm"
+      style={{ color: "var(--muted-foreground)" }}
+    >
+      <p>The sample document could not be loaded.</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="inline-flex min-h-11 items-center rounded-[0.625rem] px-4 font-medium"
+        style={{
+          border: "1px solid var(--border)",
+          color: "var(--foreground)",
+        }}
+      >
+        Try again
+      </button>
+    </div>
   );
 };

@@ -6,13 +6,14 @@ import {
   localeCodes,
   type Locale,
 } from "../i18n/config";
-import { localizePath } from "../i18n/utils";
+import { getTranslations, localizePath } from "../i18n/utils";
 
 // Only the homepage is translated today. Keep the switcher available in the
 // shared header, but always send visitors to a real localized route instead of
 // inventing paths such as /de/security that the static build does not emit.
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const current: Locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(current);
 
 const options = localeCodes.map((code) => ({
   code,
@@ -24,7 +25,13 @@ const options = localeCodes.map((code) => ({
 ---
 
 <details class="lang-switcher nav-dropdown relative" data-nav-dropdown>
-  <summary class="lang-trigger flex cursor-pointer list-none items-center gap-1.5">
+  {/* The globe is decorative and the visible text is only the current
+      language code, so the control needs its own name: without it screen
+      readers announce the disclosure as just "AR" or "DE". */}
+  <summary
+    class="lang-trigger flex cursor-pointer list-none items-center gap-1.5"
+    aria-label={t("nav.chooseLanguage")}
+  >
     <svg
       class="size-4 shrink-0"
       viewBox="0 0 24 24"

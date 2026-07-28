@@ -90,14 +90,17 @@ const isKnownCommit = (commit: string): boolean => {
 // Committed history only: releases run on committed trees, and diffing against
 // the working tree would flag the in-flight commit that updates the manifest
 // itself.
-const changedWatchedPaths = (entry: RecordingManifestEntry): string[] => {
+const changedWatchedPaths = (
+  recordedAtCommit: string,
+  watchedPaths: readonly string[],
+): string[] => {
   const output = git([
     "diff",
     "--name-only",
-    entry.recordedAtCommit,
+    recordedAtCommit,
     "HEAD",
     "--",
-    ...entry.watchedPaths,
+    ...watchedPaths,
   ]);
   return output === "" ? [] : output.split("\n");
 };
@@ -142,8 +145,14 @@ const judgeEntry = (entry: RecordingManifestEntry): Verdict => {
       `recorded-at commit ${entry.recordedAtCommit} is unknown here`,
     );
   } else {
+    // The current matrix wins over the snapshot the entry was stamped with:
+    // a watched path added to captures.ts after a recording must invalidate
+    // that recording too, which a stored snapshot could never do.
+    const watchedPaths = definition?.watchedPaths ?? entry.watchedPaths;
     reasons.push(
-      ...changedWatchedPaths(entry).map((path) => `changed: ${path}`),
+      ...changedWatchedPaths(entry.recordedAtCommit, watchedPaths).map(
+        (path) => `changed: ${path}`,
+      ),
     );
   }
 

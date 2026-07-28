@@ -21,6 +21,11 @@ const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review"
 // starts with no active organization, so we set it server-side (below) instead
 // of driving the org-picker UI, which the workspace routes below depend on.
 const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
+// Duplicated from apps/web/src/consts.ts, exactly as
+// apps/web/public/dark-mode-init.js duplicates it: the e2e project has no
+// `@/` path alias. Writing any other key silently leaves the app on its
+// system colour-scheme preference.
+const THEME_STORAGE_KEY = "stella-ui-theme";
 const requestedCapture = process.env["MARKETING_CAPTURE"];
 
 const captures = [
@@ -109,9 +114,6 @@ test("capture landing product screenshots", async ({
   await authenticateMarketingSession(request);
   const { cookies } = await request.storageState();
   await context.addCookies(cookies);
-  await page.addInitScript(() => {
-    localStorage.setItem("theme", "light");
-  });
 
   // The active organization is set server-side in authenticateMarketingSession
   // (via better-auth's set-active endpoint), so the workspace routes below are
@@ -130,10 +132,17 @@ test("capture landing product screenshots", async ({
   for (const theme of ["light", "dark"] as const) {
     // eslint-disable-next-line no-await-in-loop -- captures reuse one authenticated page, so each theme switch and capture must be prepared and shot in order
     await page.emulateMedia({ colorScheme: theme });
+    // Pin the stored theme as well as the media preference. localStorage is
+    // origin-scoped, so this survives the navigations below; both inputs must
+    // agree because dark-mode-init.js reads the stored value first and only
+    // falls back to the media query.
     // eslint-disable-next-line no-await-in-loop -- see above
-    await page.evaluate((nextTheme) => {
-      localStorage.setItem("theme", nextTheme);
-    }, theme);
+    await page.evaluate(
+      ([storageKey, nextTheme]) => {
+        localStorage.setItem(storageKey, nextTheme);
+      },
+      [THEME_STORAGE_KEY, theme] as const,
+    );
 
     for (const capture of captures) {
       if (requestedCapture && capture.name !== requestedCapture) {

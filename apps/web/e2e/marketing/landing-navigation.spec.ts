@@ -261,7 +261,7 @@ test("opening scene stays healthy after a navigation round-trip", async ({
   await page.waitForURL("**/product/workspace");
   await expect(page.locator("main").first()).toBeVisible();
 
-  await page.goBack();
+  await page.goBack({ waitUntil: "domcontentloaded" });
   await page.waitForURL((url) => url.pathname === "/");
   expect(
     await page.evaluate(
