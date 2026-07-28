@@ -533,6 +533,167 @@ describe("outgoing chat stream message ids", () => {
   });
 });
 
+describe("chat stream client-disconnect persistence", () => {
+  const messageId = toSafeId<"chatMessage">(
+    "11111111-1111-4111-8111-111111111111",
+  );
+
+  const accumulatingProcessor = (): {
+    getResponseMessage: () => ChatMessage | null;
+    processor: StreamProcessor;
+  } => {
+    let responseMessage: ChatMessage | null = null;
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          responseMessage = {
+            id: message.id,
+            parts: [
+              {
+                content: message.parts
+                  .map((part) => (part.type === "text" ? part.content : ""))
+                  .join(""),
+                type: "text",
+              },
+            ],
+            role: message.role,
+          };
+        },
+      },
+    });
+    return { getResponseMessage: () => responseMessage, processor };
+  };
+
+  const textOf = (message: { parts: ChatMessage["parts"] }) =>
+    message.parts
+      .map((part) => (part.type === "text" ? part.content : ""))
+      .join("");
+
+  // A dropped client connection `.return()`s the stream generator mid-run. The
+  // metered provider call is decoupled from the socket, so the completed-or-
+  // partial content must be persisted (finish reported as not aborted) rather
+  // than lost.
+  test("persists the accumulated assistant message when the client disconnects mid-stream", async () => {
+    const abortSignal = new AbortController().signal;
+    const { getResponseMessage, processor } = accumulatingProcessor();
+    const finishEvents: { isAborted: boolean; text: string }[] = [];
+
+    const stream = processServerChatStream({
+      abortSignal,
+      getResponseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: ({ isAborted, responseMessage }) => {
+        finishEvents.push({ isAborted, text: textOf(responseMessage) });
+      },
+      processor,
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "provider-message",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          delta: "Partial answer",
+          messageId: "provider-message",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          delta: " continues",
+          messageId: "provider-message",
+        },
+      ]),
+    });
+
+    // Simulate the SSE consumer dropping mid-stream: read up to the first
+    // content chunk, then break. Breaking a `for await` `.return()`s the
+    // generator, running its teardown `finally`.
+    for await (const chunk of stream) {
+      if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+        break;
+      }
+    }
+
+    expect(finishEvents).toEqual([
+      { isAborted: false, text: "Partial answer" },
+    ]);
+    expect(abortSignal.aborted).toBe(false);
+  });
+
+  test("runs the finish callback exactly once on natural completion", async () => {
+    const { getResponseMessage, processor } = accumulatingProcessor();
+    let finishCount = 0;
+
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        finishCount += 1;
+      },
+      processor,
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "provider-message",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          delta: "Done",
+          messageId: "provider-message",
+        },
+        { type: EventType.TEXT_MESSAGE_END, messageId: "provider-message" },
+        {
+          type: EventType.RUN_FINISHED,
+          finishReason: "stop",
+          runId: "run-1",
+          threadId: "thread-1",
+        },
+      ]),
+    });
+
+    await collectChunks(stream);
+
+    // The after-loop finish persists once; the teardown `finally` must not
+    // double-write on a fully drained stream.
+    expect(finishCount).toBe(1);
+  });
+
+  test("does not persist when the client disconnects before any content accumulates", async () => {
+    const { getResponseMessage, processor } = accumulatingProcessor();
+    let finishCount = 0;
+
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        finishCount += 1;
+      },
+      processor,
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "provider-message",
+          role: "assistant",
+        },
+      ]),
+    });
+
+    // Pull the first chunk, then `.return()` the generator before any assistant
+    // text is processed — the explicit form of the consumer dropping mid-stream.
+    const iterator = stream[Symbol.asyncIterator]();
+    await iterator.next();
+    await iterator.return?.();
+
+    expect(finishCount).toBe(0);
+  });
+});
+
 describe("chat message usage metadata", () => {
   test("preserves provider-reported reasoning tokens", () => {
     expect(

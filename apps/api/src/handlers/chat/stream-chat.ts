@@ -944,6 +944,14 @@ export const processServerChatStream = async function* ({
 }: ProcessServerChatStreamProps): AsyncIterable<StreamChunk> {
   const deferredRunFinishedChunks: StreamChunk[] = [];
   let usage: TokenUsage | undefined;
+  // `onFinish` must run at most once. Natural completion and the metered-abort
+  // `catch` invoke it explicitly and set this flag; the `finally` only persists
+  // the accumulated message when neither did.
+  let finishInvoked = false;
+  // A thrown error or an in-band `RUN_ERROR` chunk is a stream failure, handled
+  // above. The teardown persist in `finally` must not fire for it: an aborted
+  // generation is incomplete and an errored one has no trustworthy content.
+  let streamFailed = false;
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
@@ -969,11 +977,12 @@ export const processServerChatStream = async function* ({
       }
       yield chunk;
       if (chunk.type === EventType.RUN_ERROR) {
+        streamFailed = true;
         return;
       }
     }
 
-    await finishResponseMessage({
+    finishInvoked = await finishResponseMessage({
       abortSignal,
       getResponseMessage,
       mapMessageId,
@@ -984,10 +993,11 @@ export const processServerChatStream = async function* ({
       yield chunk;
     }
   } catch (error) {
+    streamFailed = true;
     const kind = classifyAIError(error);
     captureError(error, { kind });
     if (abortSignal.aborted) {
-      await finishAbortedResponseMessage({
+      finishInvoked = await finalizeInterruptedResponseMessage({
         abortSignal,
         getResponseMessage,
         mapMessageId,
@@ -1002,6 +1012,27 @@ export const processServerChatStream = async function* ({
       code: kind,
       timestamp: Date.now(),
     };
+  } finally {
+    // Client-disconnect teardown: Bun's `ReadableStream.cancel()` fires when the
+    // socket drops, tanstack breaks its `for await` on the aborted controller,
+    // and that `.return()`s this generator mid-stream, so neither the
+    // natural-completion finish nor the `catch` ran. The metered provider call
+    // is decoupled from the socket, so the model kept producing and was metered;
+    // persist whatever content accumulated so a completed-or-partial answer is
+    // not silently lost on remount. Skipped when the stream already finished or
+    // failed, and a no-op when nothing accumulated (finalizeStream drops
+    // whitespace-only messages). Awaiting here completes even on teardown, and
+    // persistence uses the shared RLS pool, not a request-scoped handle.
+    if (!finishInvoked && !streamFailed) {
+      await finalizeInterruptedResponseMessage({
+        abortSignal,
+        getResponseMessage,
+        mapMessageId,
+        onFinish,
+        processor,
+        usage,
+      });
+    }
   }
 };
 
@@ -1013,16 +1044,17 @@ type FinishResponseMessageProps = {
   usage: TokenUsage | undefined;
 };
 
+/** Returns whether `onFinish` was invoked (false when no message accumulated). */
 const finishResponseMessage = async ({
   abortSignal,
   getResponseMessage,
   mapMessageId,
   onFinish,
   usage,
-}: FinishResponseMessageProps): Promise<void> => {
+}: FinishResponseMessageProps): Promise<boolean> => {
   const responseMessage = getResponseMessage();
   if (!responseMessage) {
-    return;
+    return false;
   }
 
   await onFinish({
@@ -1035,21 +1067,39 @@ const finishResponseMessage = async ({
       usage,
     }),
   });
+  return true;
 };
 
-type FinishAbortedResponseMessageProps = FinishResponseMessageProps & {
+type FinalizeInterruptedResponseMessageProps = FinishResponseMessageProps & {
   processor: StreamProcessor;
 };
 
-const finishAbortedResponseMessage = async ({
+/**
+ * Flush the processor's partial assistant message and run the finish callback
+ * when the stream stopped before a natural `RUN_FINISHED`. Two callers:
+ *
+ * - the `catch` path, when the metered abort signal fired mid-stream. There
+ *   `abortSignal.aborted` is true, so the finish is reported as aborted and the
+ *   incomplete message is discarded downstream.
+ * - the `finally` path, when the client connection dropped and the SSE consumer
+ *   `.return()`d the stream generator before the after-loop finish ran. The
+ *   metered signal is decoupled from the socket, so `abortSignal.aborted` is
+ *   false, the finish is reported as completed, and the already-generated (and
+ *   separately metered) message is persisted instead of lost.
+ *
+ * Returns whether `onFinish` was invoked (false when no content accumulated,
+ * e.g. `finalizeStream` dropped a whitespace-only message).
+ */
+const finalizeInterruptedResponseMessage = async ({
   processor,
   ...props
-}: FinishAbortedResponseMessageProps): Promise<void> => {
+}: FinalizeInterruptedResponseMessageProps): Promise<boolean> => {
   try {
     processor.finalizeStream();
-    await finishResponseMessage(props);
+    return await finishResponseMessage(props);
   } catch (error) {
     captureError(error, { kind: "aborted_stream_finish_failed" });
+    return false;
   }
 };
 
