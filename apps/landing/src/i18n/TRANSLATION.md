@@ -73,10 +73,15 @@ of the same file before committing it.
 
 The shared glossary (`apps/web/src/i18n/glossary.json`) defines the one
 correct rendering of load-bearing product concepts per language — above all
-**Matter** (ar ملف, cs Spis, sk Spis, pl Sprawa, de Akte, et Toimik, hu Ügy,
-lt Byla, lv Lieta, es Asunto, fr Dossier, pt-BR Caso) — and lists forbidden
-near-synonyms per language (e.g. Arabic قضية reads as "lawsuit", German
-"Mandat" collides with a different concept). `i18n-lint` enforces this.
+**Matter** (ar ملف قانوني, cs Spis, sk Spis, pl Sprawa, de Akte, et Toimik,
+hu Ügy, lt Byla, lv Lieta, es Asunto, fr Dossier, pt-BR Caso) — and lists
+forbidden near-synonyms per language (e.g. Arabic قضية reads as "lawsuit",
+German "Mandat" collides with a different concept). `i18n-lint` enforces this.
+
+Arabic qualifies the term because bare ملف is also the everyday word for a
+computer file, so Matter and Files collided; the landing carries the full
+ملف قانوني wherever the concept is named, and the bare form only where the
+string means a file or document.
 
 Why: Matter names the product's central object. If the landing and the app
 render it differently, users meet two products. Use the app's canonical

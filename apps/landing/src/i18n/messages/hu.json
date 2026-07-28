@@ -83,6 +83,40 @@
     "github": "stella a GitHubon",
     "openMenu": "Navigáció megnyitása",
     "product": "Termék",
+    "products": {
+      "agent": {
+        "blurb": "Beszélgessen az ügyeivel, dokumentumaival, nyilvántartásokkal és a csatlakoztatott eszközökkel egy helyen. Az ügynök jóváhagyással és forrás-előnézettel cselekszik, válaszait hivatkozásokra alapozza, és készségekkel, valamint külső csatlakozókkal bővül.",
+        "title": "AI-ügynök, amely az ügyein, fájljain és eszközein át dolgozik."
+      },
+      "anonymization": {
+        "blurb": "Távolítsa el a neveket, az entitásokat és az azonosító adatokat, mielőtt az anyag az AI-hoz kerül, közvetlenül a csevegésből és a dokumentumok ellenőrzéséből, kitakart eredménnyel, amelyet még azelőtt ellenőrizhet, hogy bármi továbbmenne.",
+        "title": "Készítse elő az anyagot az AI számára az azonosító adatok felfedése nélkül."
+      },
+      "cli-mcp": {
+        "blurb": "Keressen, olvasson és dolgozzon a stella alkalmazással a parancssorból vagy bármely MCP-kompatibilis kliensből. Mindkét felület ugyanazt a képességnyilvántartást, ugyanazokat a jogosultságokat és ugyanazokat a munkaterületi adatokat használja, mint a webalkalmazás.",
+        "title": "Egyetlen munkaterület, minden eszközből."
+      },
+      "editor": {
+        "blurb": "Nyisson meg és szerkesszen Word .docx fájlokat közvetlenül a böngészőben: telepítés és formátumátalakítás nélkül. A stella alkalmazás online DOCX-szerkesztője megőrzi az eredeti formázást és a változáskövetést, a fájlt az ügyéhez kötve tartja, és minden mentést a dokumentum verziótörténetébe ír.",
+        "title": "Szerkesszen Word-dokumentumokat a böngészőben, az ügy elhagyása nélkül."
+      },
+      "public-data": {
+        "blurb": "Ítélkezési gyakorlat és cégnyilvántartások hivatalos nyilvános forrásokból, amelyeket a stella Legal Atlas rendszere gyűjt össze és dolgoz fel a szerkezet megőrzésével. Olvasson el egy határozatot, nézzen utána egy cégnek, kövesse a hivatkozásokat, és hivatkozzon bármelyikre az ügyből, vagy adja át az AI-ügynöknek.",
+        "title": "Hivatalos jogi adatok, készen arra, hogy az ügybe kerüljenek."
+      },
+      "tabular-review": {
+        "blurb": "Tegyen fel kérdéseket egy teljes dokumentumhalmazra, és kapjon strukturált válaszokat az ügyhöz kötött táblázatban: rendezhető, szűrhető és a forrásszövegig visszakövethető. Átvilágításhoz, iratfeltáráshoz és kutatáshoz készült.",
+        "title": "Alakítson egy halom dokumentumot ellenőrizhető táblázattá."
+      },
+      "templates": {
+        "blurb": "Határozza meg a sablont egyszer, mezőkkel és feltételes kikötésekkel, majd töltse ki kézzel, vagy hagyja, hogy a stella alkalmazás megfogalmazza az ügy adataiból. Hozzon létre egy dokumentumot az ügyben, és szerkessze tovább.",
+        "title": "Építsen újrafelhasználható sablonokat, és töltesse ki őket az AI-val."
+      },
+      "workspace": {
+        "blurb": "A munkaterület egy helyen tartja az ügy dokumentumait, a Word .docx szerkesztést, az ellenőrzést, a kutatást és a csevegést, így a munka a forrásanyagtól a válaszig a saját kontextusában marad.",
+        "title": "Ügyek, dokumentumok, ellenőrzés és csevegés egyetlen munkaterületen."
+      }
+    },
     "security": "Biztonság"
   },
   "story": {

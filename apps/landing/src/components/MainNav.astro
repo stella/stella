@@ -1,7 +1,7 @@
 ---
 import ProductMediaFrame from "./ProductMediaFrame.astro";
 import { pillars } from "../data/products/pillars";
-import { products, productBySlug } from "../data/products/registry";
+import { productBySlug } from "../data/products/registry";
 import { connectLinks, isExternal, resolveNavLinks, resourceLinks } from "../data/site-nav";
 import { getTranslations } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
@@ -15,6 +15,28 @@ const { current } = Astro.props;
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
+
+// The header renders on every localized homepage, so the preview copy is
+// catalog copy keyed on the slug, not the registry's English `title`/`summary`
+// (those stay the source for the unlocalized /product/<slug> pages). The slugs
+// are literals, so a product without catalog entries fails typecheck.
+// Built in pillar order like the list beside it, so every trigger has a pane.
+const previews = pillars.flatMap((pillar) =>
+  pillar.slugs.flatMap((slug) => {
+    const product = productBySlug.get(slug);
+    if (!product) {
+      return [];
+    }
+    return [
+      {
+        slug,
+        hero: product.hero,
+        title: t(`nav.products.${slug}.title`),
+        blurb: t(`nav.products.${slug}.blurb`),
+      },
+    ];
+  }),
+);
 
 const compactMenus = [
   {
@@ -84,21 +106,21 @@ const compactMenus = [
 
         <div class="nav-mega-preview grow p-3">
           {
-            products.map((p, i) => (
+            previews.map((preview, i) => (
               <a
-                href={`/product/${p.slug}`}
+                href={`/product/${preview.slug}`}
                 class={`nav-mega-pane ${i === 0 ? "is-active" : ""}`}
-                data-pane={p.slug}
+                data-pane={preview.slug}
               >
-                <ProductMediaFrame media={p.hero} compact deferThemeImage thumbnail />
+                <ProductMediaFrame media={preview.hero} compact deferThemeImage thumbnail />
                 <span class="mt-3 block text-base font-medium leading-snug" style="color: var(--foreground)">
-                  {p.title}
+                  {preview.title}
                 </span>
                 <span
                   class="mt-1 block text-sm leading-[1.5] line-clamp-3"
                   style="color: var(--muted-foreground)"
                 >
-                  {p.summary}
+                  {preview.blurb}
                 </span>
               </a>
             ))

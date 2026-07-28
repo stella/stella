@@ -83,6 +83,40 @@
     "github": "stella sur GitHub",
     "openMenu": "Ouvrir la navigation",
     "product": "Produit",
+    "products": {
+      "agent": {
+        "blurb": "Dialoguez avec vos dossiers, vos documents, les registres et vos outils connectés au même endroit. L’agent agit avec validation et aperçu des sources, fonde ses réponses sur des citations et s’étend via des compétences et des connecteurs externes.",
+        "title": "Un agent IA qui travaille sur vos dossiers, vos fichiers et vos outils."
+      },
+      "anonymization": {
+        "blurb": "Supprimez les noms, les entités et les éléments identifiants avant que le matériel n’atteigne l’IA, directement depuis le chat et la revue de documents, avec un résultat caviardé que vous vérifiez avant que quoi que ce soit ne poursuive son chemin.",
+        "title": "Préparez le matériel pour l’IA sans exposer les éléments identifiants."
+      },
+      "cli-mcp": {
+        "blurb": "Cherchez, lisez et travaillez avec stella depuis la ligne de commande ou depuis n’importe quel client compatible MCP. Les deux surfaces partagent le même registre de capacités, les mêmes permissions et les mêmes données d’espace de travail que l’application web.",
+        "title": "Un seul espace de travail, depuis chaque outil."
+      },
+      "editor": {
+        "blurb": "Ouvrez et modifiez des fichiers Word .docx directement dans votre navigateur : sans installation, sans conversion vers un autre format. L’éditeur DOCX en ligne de stella préserve la mise en forme d’origine et le suivi des modifications, garde le fichier rattaché à son dossier et enregistre chaque révision dans l’historique des versions du document.",
+        "title": "Modifiez des documents Word dans le navigateur, sans quitter le dossier."
+      },
+      "public-data": {
+        "blurb": "Jurisprudence et registres d’entreprises issus de sources publiques officielles, collectés et analysés en préservant leur structure par le stack Legal Atlas de stella. Lisez une décision, consultez une entreprise, suivez les citations et référencez tout cela depuis un dossier ou confiez-le à l’agent IA.",
+        "title": "Des données juridiques officielles, prêtes à verser au dossier."
+      },
+      "tabular-review": {
+        "blurb": "Posez vos questions à un ensemble de documents entier et recevez des réponses structurées sous forme de tableau rattaché au dossier : triable, filtrable et traçable jusqu’au texte source. Conçu pour la due diligence, la discovery et la recherche.",
+        "title": "Transformez une pile de documents en un tableau à passer en revue."
+      },
+      "templates": {
+        "blurb": "Définissez un modèle une fois, avec des champs et des clauses conditionnelles, puis remplissez-le à la main ou laissez stella en rédiger un projet à partir des données du dossier. Produisez un document dans le dossier et continuez à le modifier.",
+        "title": "Créez des modèles réutilisables et laissez l’IA les remplir."
+      },
+      "workspace": {
+        "blurb": "La plateforme réunit les documents d’un dossier, l’édition Word .docx, la revue, la recherche et le chat au même endroit, pour que le travail reste dans son contexte, du document source à la réponse.",
+        "title": "Dossiers, documents, revue et chat au même endroit."
+      }
+    },
     "security": "Sécurité"
   },
   "story": {

@@ -70,7 +70,7 @@
     "ctaTitle": "Too tehisintellekt oma advokaadibüroosse."
   },
   "meta": {
-    "homeDescription": "Avatud lähtekoodiga õigustööruum dokumentide, toimikute, ülevaatuse ja otsingu jaoks. Majuta ise või kasuta meie pilve. Kasutuspõhine tehisintellekt, tarnijalõksuta.",
+    "homeDescription": "Avatud lähtekoodiga õigustööruum: dokumendid, toimikud, ülevaatus ja otsing. Majuta ise või meie pilves. Kasutuspõhine tehisintellekt, tarnijalõksuta.",
     "homeTitle": "stella | avatud lähtekoodiga õigustööruum"
   },
   "nav": {
@@ -83,6 +83,40 @@
     "github": "stella GitHubis",
     "openMenu": "Ava navigatsioon",
     "product": "Toode",
+    "products": {
+      "agent": {
+        "blurb": "Vestle oma toimikute, dokumentide, registrite ja ühendatud tööriistadega ühes kohas. Agent tegutseb kinnituste ja allika eelvaadetega, tugineb vastustes allikaviidetele ning laieneb oskuste ja väliste konnektorite kaudu.",
+        "title": "Tehisintellekti agent, mis töötab su toimikute, failide ja tööriistade lõikes."
+      },
+      "anonymization": {
+        "blurb": "Eemalda nimed, üksused ja tuvastavad andmed enne, kui materjal jõuab tehisintellektini, otse vestlusest ja dokumentide ülevaatusest, ning kontrolli redigeeritud tulemust, enne kui miski edasi liigub.",
+        "title": "Valmista materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
+      },
+      "cli-mcp": {
+        "blurb": "Otsi, loe ja tööta rakendusega stella käsurealt või ükskõik millisest MCP-ga ühilduvast kliendist. Mõlemad pinnad jagavad sama võimekusregistrit, samu õigusi ja samu tööruumi andmeid mis veebirakendus.",
+        "title": "Üks tööruum, igast tööriistast."
+      },
+      "editor": {
+        "blurb": "Ava ja muuda Wordi .docx-faile otse brauseris: ilma paigalduseta ja teise vormingusse teisendamata. Rakenduse stella veebipõhine DOCX-redaktor säilitab algse vormingu ja muudatuste jälgimise, hoiab faili oma toimikuga seotuna ning salvestab iga versiooni dokumendi versiooniajalukku.",
+        "title": "Muuda Wordi dokumente brauseris, toimikust lahkumata."
+      },
+      "public-data": {
+        "blurb": "Kohtupraktika ja ettevõtete registrid ametlikest avalikest allikatest, mille kogub ja struktuuri säilitades töötleb rakenduse stella Legal Atlas. Loe lahendit, otsi ettevõtet, järgi allikaviiteid ja viita neile toimikust või anna need tehisintellekti agendile.",
+        "title": "Ametlikud õigusandmed, valmis toimikusse tõmbamiseks."
+      },
+      "tabular-review": {
+        "blurb": "Esita küsimused tervele dokumendikogumile ja saa struktureeritud vastused toimikupõhise tabelina: sorditav, filtreeritav ja jälgitav kuni lähtetekstini. Loodud due diligence’i, discovery ja otsingu jaoks.",
+        "title": "Muuda dokumendihunnik tabeliks, mille saab üle vaadata."
+      },
+      "templates": {
+        "blurb": "Määra mall korra ära, koos väljade ja tingimuslike klauslitega, ning täida see siis käsitsi või lase rakendusel stella koostada mustand toimiku andmetest. Loo dokument otse toimikusse ja jätka selle muutmist.",
+        "title": "Koosta korduskasutatavad mallid ja lase tehisintellektil need täita."
+      },
+      "workspace": {
+        "blurb": "Toimiku dokumendid, Wordi .docx-i muutmine, ülevaatus, otsing ja vestlus püsivad koos ühes kohas, nii et töö jääb konteksti lähtematerjalist vastuseni.",
+        "title": "Toimikud, dokumendid, ülevaatus ja vestlus ühes kohas."
+      }
+    },
     "security": "Turvalisus"
   },
   "story": {

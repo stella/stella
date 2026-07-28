@@ -13,7 +13,10 @@ export type Pillar = {
   slugs: readonly string[];
 };
 
-export const pillars: readonly Pillar[] = [
+// `as const satisfies`, not a `: readonly Pillar[]` annotation: the annotation
+// widens every slug to `string`, and `ProductSlug` below needs the literals so
+// the mega-menu's per-slug message keys are checked against the catalog.
+export const pillars = [
   {
     id: "data",
     label: "Data infrastructure",
@@ -29,4 +32,11 @@ export const pillars: readonly Pillar[] = [
     label: "Workspace",
     slugs: ["workspace", "editor", "cli-mcp"],
   },
-] as const;
+] as const satisfies readonly Pillar[];
+
+/**
+ * Slug of a product page, as listed by the pillars. Menu copy is keyed on it
+ * (`nav.products.<slug>.*`), so adding a pillar slug without its catalog
+ * entries fails typecheck rather than rendering a raw key.
+ */
+export type ProductSlug = (typeof pillars)[number]["slugs"][number];

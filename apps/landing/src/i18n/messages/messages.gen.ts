@@ -86,6 +86,40 @@ type Messages = {
     "github": "stella on GitHub";
     "openMenu": "Open navigation";
     "product": "Product";
+    "products": {
+      "agent": {
+        "blurb": "Chat with your matters, documents, registries, and connected tools in one place. The agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.";
+        "title": "An AI agent that works across your matters, files, and tools.";
+      };
+      "anonymization": {
+        "blurb": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check before anything moves on.";
+        "title": "Prepare material for AI without exposing identifying details.";
+      };
+      "cli-mcp": {
+        "blurb": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capability registry, permissions, and workspace data as the web app.";
+        "title": "One workspace, from every tool.";
+      };
+      "editor": {
+        "blurb": "Open and edit Word .docx files right in your browser: no install, no converting to another format. stella's online DOCX editor preserves the original formatting and track changes, keeps the file connected to its matter, and saves each revision into the document's version history.";
+        "title": "Edit Word documents in the browser, without leaving the matter.";
+      };
+      "public-data": {
+        "blurb": "Case law and company registries from official public sources, collected and structure-parsed by stella's Legal Atlas stack. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.";
+        "title": "Official legal data, ready to pull into a matter.";
+      };
+      "tabular-review": {
+        "blurb": "Ask questions across a whole document set and get structured answers back as a matter-scoped table — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.";
+        "title": "Turn a pile of documents into a table you can review.";
+      };
+      "templates": {
+        "blurb": "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. Produce a document into the matter and keep editing it.";
+        "title": "Build reusable templates, and let AI fill them in.";
+      };
+      "workspace": {
+        "blurb": "The workspace holds a matter's documents, Word .docx editing, review, research, and chat in one place, so the work stays in context from source material to answer.";
+        "title": "Matters, documents, review, and chat in one workspace.";
+      };
+    };
     "security": "Security";
   };
   "story": {
