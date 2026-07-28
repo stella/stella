@@ -25,7 +25,7 @@ RUN mkdir -p /json && \
 
 FROM build-base AS pruner
 # Keep in sync with the turbo version in the root package.json.
-RUN bun install -g turbo@2.10.5
+RUN bun install -g turbo@2.10.6
 COPY . .
 # The prune graph must contain every workspace package that bun.lock resolves
 # npm dependencies to: @stll/folio-core (npm) depends on @stll/docx-core,
