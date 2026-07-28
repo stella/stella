@@ -137,11 +137,7 @@ describe("computeRawUsageMicroUnits", () => {
       Number.NEGATIVE_INFINITY,
       Number.MAX_SAFE_INTEGER + 1,
     ];
-    const fields = [
-      "inputTokens",
-      "outputTokens",
-      "cacheReadTokens",
-    ] as const;
+    const fields = ["inputTokens", "outputTokens", "cacheReadTokens"] as const;
 
     for (const field of fields) {
       for (const invalidCount of invalidCounts) {
