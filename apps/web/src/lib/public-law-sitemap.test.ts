@@ -656,7 +656,7 @@ describe("public law sitemap", () => {
       [
         readSource("apps/web/src/components/chat/case-law-open.ts"),
         readSource(
-          "apps/web/src/routes/_protected.chat/-hooks/use-global-chat-mention-registration.ts",
+          "apps/web/src/features/chat/hooks/use-global-chat-mention-registration.ts",
         ),
         readSource("apps/web/src/components/search-dialog.tsx"),
       ],
