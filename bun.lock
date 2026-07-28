@@ -426,7 +426,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.1.5",
@@ -489,7 +489,7 @@
     },
     "packages/country-codes": {
       "name": "@stll/country-codes",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
