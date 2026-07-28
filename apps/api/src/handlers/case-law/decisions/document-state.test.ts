@@ -26,6 +26,7 @@ type Scenario = {
   documentUrl?: string | null;
   corpusServed?: boolean;
   contentHash?: string | null;
+  pgAstPresent?: boolean;
   resolvedFulltext?: string | null;
   readTextColumnWritten?: () => Promise<boolean | null>;
 };
@@ -36,6 +37,7 @@ const state = async (scenario: Scenario) =>
     documentUrl: "https://example.test/decision.pdf",
     corpusServed: false,
     contentHash: null,
+    pgAstPresent: false,
     resolvedFulltext: null,
     readTextColumnWritten: noColumnRead,
     ...scenario,
@@ -80,6 +82,35 @@ describe("document state", () => {
         resolvedFulltext: "",
       }),
     ).toEqual({ documentPending: false, documentUnavailable: false });
+  });
+
+  test("a surviving AST artifact marks the corpus copy as verbatim empty", async () => {
+    // The hash is this row's own, so no constant can name it — but the
+    // trim, which is what nulls the payload columns, refuses a row whose
+    // objects do not hold what the columns hold. An AST column that
+    // survived therefore means the objects mirror an empty payload, and
+    // the decision is still waiting for its document.
+    expect(
+      await state({
+        corpusServed: true,
+        contentHash: REAL_HASH,
+        pgAstPresent: true,
+        resolvedFulltext: "",
+        readTextColumnWritten: async () => await Promise.resolve(false),
+      }),
+    ).toEqual({ documentPending: true, documentUnavailable: false });
+
+    // The same row, once its document has been fetched and marked
+    // unavailable, is terminal rather than pending.
+    expect(
+      await state({
+        corpusServed: true,
+        contentHash: REAL_HASH,
+        pgAstPresent: true,
+        resolvedFulltext: "",
+        readTextColumnWritten: async () => await Promise.resolve(true),
+      }),
+    ).toEqual({ documentPending: false, documentUnavailable: true });
   });
 
   test("an empty corpus payload falls back to what the column says", async () => {

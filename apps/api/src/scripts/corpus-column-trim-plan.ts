@@ -1,4 +1,5 @@
-import { namesEmptyCorpusPayload } from "@/api/handlers/case-law/stored-payload";
+import type { CorpusPayload } from "@/api/handlers/case-law/corpus-storage";
+import { payloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 
 /**
@@ -9,48 +10,54 @@ import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 
 /** How a single corpus object stands relative to the row that names it. */
 export const CORPUS_OBJECT_STATES = [
-  /** The row records a key and the object is present in the bucket. */
+  /** Present, and holding what the row's column holds. */
   "verified",
   /** The row records no key, so nothing proves the payload was ever written. */
   "key-missing",
   /** The row records a key but the bucket has no object under it. */
   "object-missing",
+  /** Present, and holding something other than what the column holds. */
+  "content-mismatch",
 ] as const;
 
 export type CorpusObjectState = (typeof CORPUS_OBJECT_STATES)[number];
 
 type CorpusObjectStateInput = {
   key: string | null;
-  /** Result of the bucket existence check; ignored when `key` is null. */
+  /** Result of the bucket lookup; ignored when `key` is null. */
   exists: boolean;
+  /**
+   * Whether the object holds what the column holds. Left undefined
+   * where the column holds nothing worth proving, which is the only
+   * case presence alone settles.
+   */
+  matchesColumn?: boolean;
 };
 
 export const corpusObjectState = ({
   key,
   exists,
+  matchesColumn,
 }: CorpusObjectStateInput): CorpusObjectState => {
   if (key === null) {
     return "key-missing";
   }
-  return exists ? "verified" : "object-missing";
+  if (!exists) {
+    return "object-missing";
+  }
+  return matchesColumn === false ? "content-mismatch" : "verified";
 };
 
 export type ColumnTrimDecision =
   | { type: "trim" }
   | { type: "skip"; reason: string };
 
-/** What the row's own Postgres columns hold. */
-export const COLUMN_PAYLOAD_STATES = ["document", "empty"] as const;
-
-export type ColumnPayloadState = (typeof COLUMN_PAYLOAD_STATES)[number];
-
 type ColumnTrimInput = {
   text: CorpusObjectState;
   sections: CorpusObjectState;
   ast: CorpusObjectState;
-  /** The row's content hash, which says what the objects hold. */
-  contentHash: string | null;
-  columns: ColumnPayloadState;
+  /** What the Postgres columns hold, which is what the trim deletes. */
+  columnPayload: CorpusPayload;
 };
 
 /**
@@ -63,39 +70,53 @@ type ColumnTrimInput = {
  * was never written by the corpus writer. Keys are content-addressed,
  * which makes an existence check a sufficient verification.
  *
- * Present is not the same as populated. A metadata-first ingest writes
- * all three objects before the document exists, so a row can pass every
- * existence check while object storage holds nothing: the content hash
- * is what tells the two apart. Where the objects are those empty shapes
- * and the columns hold the document — a decision hydrated after that
- * ingest, whose corpus objects were never rewritten — trimming would
- * delete the only real copy. That row is skipped until the objects are
- * repaired (`backfill-corpus-storage.ts --include-stale-empty`).
+ * Present is not the same as holding this row's document. A
+ * metadata-first ingest writes all three objects before the document
+ * exists, so a row can pass every existence check while object storage
+ * holds nothing; and the shapes it writes are not all constants — a
+ * DocumentAst envelope with no blocks carries the decision's own
+ * metadata, so no fixed hash can name it. Enumerating the empty shapes
+ * therefore cannot close this: what the trim needs is the positive
+ * proof, that object storage holds exactly what it is about to delete.
+ *
+ * That proof is the objects' own content, compared against the columns.
+ * The row's content hash cannot stand in for it: the hash was taken of
+ * the payload as written, and the columns come back through jsonb,
+ * which normalises key order — re-hashing a read never reproduces the
+ * hash of the write. Comparing the decompressed objects is the same
+ * question asked where it can be answered, and it fails every way of
+ * holding nothing and every way of holding some other version alike.
+ * A mismatch leaves the row to the repair pass
+ * (`backfill-corpus-storage.ts --include-stale-empty`).
+ *
+ * Columns that hold no document are exempt from the content check:
+ * there is nothing to lose, so presence is all they need.
  */
 export const planColumnTrim = ({
   text,
   sections,
   ast,
-  contentHash,
-  columns,
+  columnPayload,
 }: ColumnTrimInput): ColumnTrimDecision => {
-  if (text !== "verified" || sections !== "verified" || ast !== "verified") {
-    return {
-      type: "skip",
-      reason: `text=${text} sections=${sections} ast=${ast}`,
-    };
+  const states = { text, sections, ast };
+  const unusable = Object.entries(states).filter(([, state]) =>
+    payloadCarriesDocument(columnPayload)
+      ? state !== "verified"
+      : state === "key-missing" || state === "object-missing",
+  );
+
+  if (unusable.length === 0) {
+    return { type: "trim" };
   }
 
-  if (namesEmptyCorpusPayload(contentHash) && columns === "document") {
-    return {
-      type: "skip",
-      reason:
-        "objects hold the empty payload while the columns hold the document; " +
-        "repair the objects first (backfill-corpus-storage --include-stale-empty)",
-    };
-  }
-
-  return { type: "trim" };
+  const detail = `text=${text} sections=${sections} ast=${ast}`;
+  return {
+    type: "skip",
+    reason: unusable.some(([, state]) => state === "content-mismatch")
+      ? `object storage does not hold what the columns hold (${detail}); ` +
+        "repair the objects first (backfill-corpus-storage --include-stale-empty)"
+      : detail,
+  };
 };
 
 export type ColumnTrimGate =

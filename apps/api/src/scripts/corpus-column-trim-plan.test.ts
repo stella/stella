@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/handlers/case-law/corpus-storage";
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+
+import type { CorpusPayload } from "@/api/handlers/case-law/corpus-storage";
 import {
   columnTrimGate,
   corpusObjectState,
@@ -8,11 +10,44 @@ import {
   planColumnTrim,
 } from "@/api/scripts/corpus-column-trim-plan";
 
-/** A row whose objects hold the document they are supposed to hold. */
-const populated = {
-  contentHash: "real-content-hash",
-  columns: "document",
-} as const;
+const documentAst = (blocks: DocumentAst["blocks"]): DocumentAst => ({
+  version: 1,
+  source: {
+    system: "obcan.justice.sk",
+    documentId: "trim",
+    webUrl: "https://example.test/web",
+    printUrl: "",
+  },
+  metadata: {
+    caseNumber: "1T/3/2026",
+    ecli: null,
+    court: "Okresný súd",
+    decisionDate: null,
+    decisionType: null,
+    keywords: [],
+    statutes: [],
+  },
+  blocks,
+});
+
+/** What a hydrated decision's Postgres columns hold. */
+const storedDocument: CorpusPayload = {
+  text: "Rozsudok\n\nOdôvodnenie:\n\nText.",
+  sections: [{ index: 0, type: "header", title: null, text: "Rozsudok" }],
+  ast: documentAst([
+    {
+      id: "b1",
+      anchorId: "h-1",
+      type: "heading",
+      level: 1,
+      plainText: "Rozsudok",
+      inlines: [{ type: "text", text: "Rozsudok" }],
+    },
+  ]),
+};
+
+/** A row whose objects hold exactly what its columns hold. */
+const mirrored = { columnPayload: storedDocument } as const;
 
 describe("corpusObjectState", () => {
   test("a recorded key is only verified once the object is found", () => {
@@ -25,13 +60,22 @@ describe("corpusObjectState", () => {
   test("a missing key is never verified, whatever the bucket says", () => {
     expect(corpusObjectState({ key: null, exists: true })).toBe("key-missing");
   });
+
+  test("a present object holding something else is not verified", () => {
+    expect(
+      corpusObjectState({ key: "k", exists: true, matchesColumn: false }),
+    ).toBe("content-mismatch");
+    expect(
+      corpusObjectState({ key: "k", exists: true, matchesColumn: true }),
+    ).toBe("verified");
+  });
 });
 
 describe("planColumnTrim", () => {
   test("trims only when all three objects are verified", () => {
     expect(
       planColumnTrim({
-        ...populated,
+        ...mirrored,
         text: "verified",
         sections: "verified",
         ast: "verified",
@@ -48,61 +92,73 @@ describe("planColumnTrim", () => {
       ["verified", "verified", "key-missing"],
       ["key-missing", "key-missing", "key-missing"],
     ] as const) {
-      expect(planColumnTrim({ ...populated, text, sections, ast }).type).toBe(
+      expect(planColumnTrim({ ...mirrored, text, sections, ast }).type).toBe(
         "skip",
       );
     }
   });
 
-  test("verified but empty objects cannot take the columns' document", () => {
-    // The objects exist, are keyed and are readable, and hold nothing:
-    // a metadata-first ingest wrote them before the document arrived.
-    // Trimming here would delete the only copy that has the document.
-    const decision = planColumnTrim({
-      text: "verified",
-      sections: "verified",
-      ast: "verified",
-      contentHash: EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "",
-      columns: "document",
-    });
+  test("an object holding something else cannot take the document", () => {
+    // Whatever the object turned out to hold — one of the constant
+    // empty shapes, a row-specific empty envelope no fixed hash can
+    // name, or an older version of this decision — the comparison
+    // against the column is what rejects it, and the reason says so.
+    for (const mismatched of ["text", "sections", "ast"] as const) {
+      const decision = planColumnTrim({
+        text: "verified",
+        sections: "verified",
+        ast: "verified",
+        ...mirrored,
+        [mismatched]: "content-mismatch",
+      });
 
-    expect(decision.type).toBe("skip");
-    expect(decision.type === "skip" ? decision.reason : "").toContain(
-      "empty payload",
-    );
+      expect(decision.type).toBe("skip");
+      expect(decision.type === "skip" ? decision.reason : "").toContain(
+        "does not hold what the columns hold",
+      );
+    }
   });
 
-  test("empty objects over empty columns have nothing to lose", () => {
-    for (const contentHash of EMPTY_CORPUS_CONTENT_HASHES) {
+  test("columns holding no document need only presence", () => {
+    for (const columnPayload of [
+      { text: null, sections: null, ast: null },
+      { text: "", sections: null, ast: {} },
+      // An envelope with no blocks is not a document either.
+      { text: "", sections: [], ast: documentAst([]) },
+    ] satisfies CorpusPayload[]) {
       expect(
         planColumnTrim({
           text: "verified",
           sections: "verified",
           ast: "verified",
-          contentHash,
-          columns: "empty",
+          columnPayload,
         }),
       ).toEqual({ type: "trim" });
+      // Nothing to lose, so a mismatch does not block it either.
+      expect(
+        planColumnTrim({
+          text: "content-mismatch",
+          sections: "verified",
+          ast: "verified",
+          columnPayload,
+        }),
+      ).toEqual({ type: "trim" });
+      // A missing object still does: nothing proves the row was ever
+      // written to object storage.
+      expect(
+        planColumnTrim({
+          text: "object-missing",
+          sections: "verified",
+          ast: "verified",
+          columnPayload,
+        }).type,
+      ).toBe("skip");
     }
-  });
-
-  test("a row that was never written to object storage still trims on its hash", () => {
-    // No hash at all is not an empty-payload hash: the object states are
-    // what gate this row, and they are verified.
-    expect(
-      planColumnTrim({
-        text: "verified",
-        sections: "verified",
-        ast: "verified",
-        contentHash: null,
-        columns: "document",
-      }),
-    ).toEqual({ type: "trim" });
   });
 
   test("the skip reason names every object's state", () => {
     const decision = planColumnTrim({
-      ...populated,
+      ...mirrored,
       text: "verified",
       sections: "object-missing",
       ast: "verified",

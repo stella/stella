@@ -64,7 +64,7 @@ export const corpusKeys = ({
   };
 };
 
-type CorpusPayload = {
+export type CorpusPayload = {
   text: string | null;
   sections: DecisionSection[] | null;
   ast: DocumentAst | EmptyAst | null;

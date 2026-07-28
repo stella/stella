@@ -14,7 +14,9 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
+import type { CorpusPayload } from "@/api/handlers/case-law/corpus-storage";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/handlers/case-law/corpus-storage";
+import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 
 /**
  * A jsonb array's length, or 0 for anything that is not an array.
@@ -36,6 +38,19 @@ export const pgPayloadCarriesDocument: SQL<boolean> = sql<boolean>`(
   or ${jsonbArrayLength(sql`${caseLawDecisions.documentAst} -> 'blocks'`)} > 0
   or ${jsonbArrayLength(caseLawDecisions.sections)} > 0
 )`;
+
+/**
+ * The same question as `pgPayloadCarriesDocument`, asked of a payload
+ * already in hand rather than of a row. The two must agree: this one
+ * judges what the trim is about to delete, that one filters rows the
+ * trim and the ingestion refresh never load.
+ */
+export const payloadCarriesDocument = ({
+  text,
+  sections,
+  ast,
+}: CorpusPayload): boolean =>
+  (text ?? "") !== "" || hasUsableAst(ast) || (sections?.length ?? 0) > 0;
 
 /**
  * Whether a content hash names the payload a metadata-first ingest
