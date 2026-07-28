@@ -77,7 +77,12 @@ const parseLimit = (name: string, value: string | undefined): ParseResult => {
 
   return {
     ok: true,
-    options: { caseLawLimit: parsed, legislationLimit: parsed },
+    options: {
+      caseLawLimit: parsed,
+      indexBatchSize: null,
+      indexReadConcurrency: null,
+      legislationLimit: parsed,
+    },
   };
 };
 
@@ -417,9 +422,9 @@ const backfillCaseLawIndex = async (
       ingestionDb,
       batchSize,
       generation,
-      {
-        readConcurrency: bulk.indexReadConcurrency ?? undefined,
-      },
+      bulk.indexReadConcurrency === null
+        ? {}
+        : { readConcurrency: bulk.indexReadConcurrency },
     );
     if (count === 0) {
       break;

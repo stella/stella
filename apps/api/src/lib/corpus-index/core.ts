@@ -28,6 +28,9 @@ import { LIMITS } from "@/api/lib/limits";
  */
 
 const INDEX_CONCURRENCY = 4;
+/** Run the stale scan at least once per this many batches under a full
+ *  missing backlog (see the duty-cycle note in `backfill`). */
+const STALE_SCAN_DUTY_CYCLE = 20;
 
 /**
  * Delete-task query selecting every search document a row projects to. Keyed
@@ -532,6 +535,8 @@ export const createCorpusIndexer = <
    * quarter of the batch for stale so re-indexes are not starved by a
    * missing-doc backlog. Returns the number indexed.
    */
+  let staleSkips = 0;
+
   const backfill = async (
     scopedDb: ScopedDb,
     batchSize: number,
@@ -546,16 +551,21 @@ export const createCorpusIndexer = <
       limit: missingLimit,
     });
 
-    // The stale scan runs only once the missing backlog stops filling its
+    // The stale scan is duty-cycled while the missing backlog fills its
     // quota. Its predicate (hash mismatch within the current generation)
     // has no covering index, so against a generation with a large missing
     // backlog — a fresh generation build being the extreme — it is a long
-    // scan that returns nothing, paid on every batch. Stale rows are
-    // re-indexes of content the index already serves in some version;
-    // deferring them behind the missing drain is self-limiting, because
-    // the drain itself empties the backlog that defers them.
+    // scan that often returns nothing, paid on every batch. Stale rows
+    // are re-indexes of content the index already serves in some version,
+    // so they can wait — but not forever: ingestion can keep the missing
+    // backlog full indefinitely, so every STALE_SCAN_DUTY_CYCLEth batch
+    // still runs the scan with its reserve, bounding staleness instead of
+    // trading it away.
     const staleLimit =
-      missing.length >= missingLimit ? 0 : batchSize - missing.length;
+      missing.length >= missingLimit && staleSkips < STALE_SCAN_DUTY_CYCLE - 1
+        ? 0
+        : batchSize - missing.length;
+    staleSkips = staleLimit === 0 ? staleSkips + 1 : 0;
     const stale =
       staleLimit <= 0
         ? []
