@@ -1,4 +1,5 @@
 export { lookupByMbs } from "./client.js";
+export type { LookupOptions } from "./client.js";
 export {
   SudregAPIError,
   SudregError,

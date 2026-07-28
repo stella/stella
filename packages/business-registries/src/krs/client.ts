@@ -1,5 +1,8 @@
 import { isRecord } from "../shared/guards.js";
-import { performRegistryRequest } from "../shared/http.js";
+import {
+  performRegistryRequest,
+  type RegistryClientOptions,
+} from "../shared/http.js";
 import { KrsAPIError, KrsRequestError, KrsValidationError } from "./errors.js";
 import { parseEntity } from "./parse.js";
 import type {
@@ -11,8 +14,6 @@ import type {
 import { normalizeKrsNumber, validateKrsNumber } from "./validation.js";
 
 const BASE = "https://api-krs.ms.gov.pl/api/krs";
-
-const TIMEOUT_MS = 10_000;
 
 // Default probe order: Rejestr Przedsiębiorców (companies) first,
 // Stowarzyszeń (associations) second. The same KRS number lives in
@@ -130,13 +131,12 @@ E2Efv4WstK2tBZQIgx51F9NxO5NQI1mg7TyRVJ12AMXDuDjb
 
 /** Bun extends RequestInit with a `tls` option that standard lib types do
  *  not model; the runtime guard below scopes its use to Bun. */
-type BunTlsRequestInit = RequestInit & {
+type BunTlsRequestInit = Omit<RequestInit, "signal"> & {
   tls?: { ca: string[] };
 };
 
-const krsFetchOptions = (): RequestInit => {
+const krsFetchOptions = (): Omit<RequestInit, "signal"> => {
   const base: BunTlsRequestInit = {
-    signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: { Accept: "application/json" },
   };
   if (typeof Bun === "undefined") {
@@ -148,6 +148,7 @@ const krsFetchOptions = (): RequestInit => {
 
 const krsGet = async (
   url: string,
+  signal?: AbortSignal,
 ): Promise<{ status: number; body: KrsLookupResponse | null }> => {
   // KRS pins Certum CA certs via Bun's non-standard `tls` fetch option
   // (see krsFetchOptions); it is passed straight through the shared
@@ -155,6 +156,7 @@ const krsGet = async (
   const response = await performRegistryRequest({
     url,
     init: krsFetchOptions(),
+    signal,
     wrapRequestError: (error) => {
       const suffix = error instanceof Error ? `: ${error.message}` : "";
       return new KrsRequestError(url, `KRS request failed${suffix}`, {
@@ -218,7 +220,7 @@ const buildLookupUrl = (
   return `${BASE}/OdpisAktualny/${krsNumber}?${params.toString()}`;
 };
 
-export type LookupOptions = {
+export type LookupOptions = RegistryClientOptions & {
   /**
    * Restrict the probe to a single sub-register. By default the
    * client probes Rejestr Przedsiębiorców (`RejP`) first and falls
@@ -259,7 +261,10 @@ export const lookupByKrsNumber = async (
     options?.register === undefined ? REGISTER_PROBE_ORDER : [options.register];
   for (const register of registers) {
     // oxlint-disable-next-line no-await-in-loop -- sequential sub-register probe, return on first hit, fall through on 404
-    const { status, body } = await krsGet(buildLookupUrl(normalized, register));
+    const { status, body } = await krsGet(
+      buildLookupUrl(normalized, register),
+      options?.signal,
+    );
     if (status === 404 || !body?.odpis) {
       continue;
     }

@@ -1,5 +1,9 @@
 import { isRecord } from "../shared/guards.js";
-import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
+import {
+  performRegistryRequest,
+  readRegistryJson,
+  type RegistryClientOptions,
+} from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   AresAPIError,
@@ -160,13 +164,20 @@ const readAresJson = async <T>(
       }),
   });
 
-const aresGet = async <T>(
-  url: string,
-  isExpectedShape: (value: unknown) => value is T,
-): Promise<T | null> => {
+type AresGetOptions<T> = RegistryClientOptions & {
+  url: string;
+  isExpectedShape: (value: unknown) => value is T;
+};
+
+const aresGet = async <T>({
+  url,
+  isExpectedShape,
+  signal,
+}: AresGetOptions<T>): Promise<T | null> => {
   const response = await performRegistryRequest({
     url,
     init: { headers: { Accept: "application/json" } },
+    signal,
     wrapRequestError: (cause) =>
       new AresRequestError(url, "ARES request failed", { cause }),
   });
@@ -196,11 +207,16 @@ const aresGet = async <T>(
   return readAresJson(response, isExpectedShape);
 };
 
-const aresPost = async <T>(
-  url: string,
-  payload: unknown,
-  isExpectedShape: (value: unknown) => value is T,
-): Promise<T> => {
+type AresPostOptions<T> = AresGetOptions<T> & {
+  payload: unknown;
+};
+
+const aresPost = async <T>({
+  url,
+  payload,
+  isExpectedShape,
+  signal,
+}: AresPostOptions<T>): Promise<T> => {
   const response = await performRegistryRequest({
     url,
     init: {
@@ -211,6 +227,7 @@ const aresPost = async <T>(
       },
       body: JSON.stringify(payload),
     },
+    signal,
     wrapRequestError: (cause) =>
       new AresRequestError(url, "ARES request failed", { cause }),
   });
@@ -226,7 +243,7 @@ const aresPost = async <T>(
 // Public API
 // ---------------------------------------------------------------------------
 
-export type LookupOptions = {
+export type LookupOptions = RegistryClientOptions & {
   /**
    * Whether to fetch VR (commercial register) data for enrichment.
    * Adds statutory bodies, share capital, court file, acting clause.
@@ -259,9 +276,17 @@ export const lookupByIco = async (
   const includeVr = options?.includeVr ?? true;
 
   // Fetch RES (always) and VR (optionally, in parallel)
-  const resPromise = aresGet(`${RES_URL}/${normalized}`, isAresResResponse);
+  const resPromise = aresGet({
+    url: `${RES_URL}/${normalized}`,
+    isExpectedShape: isAresResResponse,
+    signal: options?.signal,
+  });
   const vrPromise = includeVr
-    ? aresGet(`${VR_URL}/${normalized}`, isAresVrResponse)
+    ? aresGet({
+        url: `${VR_URL}/${normalized}`,
+        isExpectedShape: isAresVrResponse,
+        signal: options?.signal,
+      })
     : null;
 
   const [resData, vrData] = await Promise.all([
@@ -287,7 +312,7 @@ export const lookupByIco = async (
   return company;
 };
 
-export type SearchOptions = {
+export type SearchOptions = RegistryClientOptions & {
   /** Maximum number of results. @default 50 */
   limit?: number;
 };
@@ -318,7 +343,12 @@ export const searchByName = async (
     pocet: limit,
   };
 
-  const data = await aresPost(SEARCH_URL, payload, isAresSearchResponse);
+  const data = await aresPost({
+    url: SEARCH_URL,
+    payload,
+    isExpectedShape: isAresSearchResponse,
+    signal: options?.signal,
+  });
 
   return data.ekonomickeSubjekty.flatMap((entry) =>
     entry.ico ? [parseSearchEntry(entry)] : [],

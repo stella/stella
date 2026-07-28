@@ -20,18 +20,64 @@ import { RegistryRateLimitedError } from "./errors.js";
 /** Default per-request timeout. Every adapter used 10s. */
 export const DEFAULT_REGISTRY_TIMEOUT_MS = 10_000;
 
+/** Request controls shared by public registry lookup and search options. */
+export type RegistryClientOptions = {
+  /** Cancel the in-flight request without disabling its timeout. */
+  signal?: AbortSignal | undefined;
+};
+
 export type RegistryRequestOptions = {
   url: string;
   /**
-   * Extra fetch options (method, body, headers, and Bun-only `tls`).
-   * Spread after the timeout signal so a caller can override the signal
-   * or add a custom trust store — KRS pins Certum CA certs this way.
+   * Extra fetch options (method, body, headers, and Bun-only `tls`). The
+   * signal is a separate field so callers cannot accidentally replace the
+   * mandatory timeout — KRS passes its custom trust store through here.
    */
-  init?: RequestInit;
+  init?: Omit<RequestInit, "signal">;
+  /** Cancel the request without disabling its timeout. */
+  signal?: AbortSignal | undefined;
   /** @default DEFAULT_REGISTRY_TIMEOUT_MS */
   timeoutMs?: number;
   /** Map a transport/timeout failure into the adapter's RequestError. */
   wrapRequestError: (cause: unknown) => Error;
+};
+
+type RegistryRequestSignal = {
+  signal: AbortSignal;
+  dispose: () => void;
+};
+
+const noSignalListeners = (): void => undefined;
+
+const createRegistryRequestSignal = (
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number,
+): RegistryRequestSignal => {
+  if (callerSignal?.aborted) {
+    return { signal: callerSignal, dispose: noSignalListeners };
+  }
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  if (!callerSignal) {
+    return { signal: timeoutSignal, dispose: noSignalListeners };
+  }
+
+  const controller = new AbortController();
+  const dispose = (): void => {
+    callerSignal.removeEventListener("abort", abortFromCaller);
+    timeoutSignal.removeEventListener("abort", abortFromTimeout);
+  };
+  const abortFromCaller = (): void => {
+    controller.abort(callerSignal.reason);
+    dispose();
+  };
+  const abortFromTimeout = (): void => {
+    controller.abort(timeoutSignal.reason);
+    dispose();
+  };
+  callerSignal.addEventListener("abort", abortFromCaller, { once: true });
+  timeoutSignal.addEventListener("abort", abortFromTimeout, { once: true });
+
+  return { signal: controller.signal, dispose };
 };
 
 /**
@@ -44,15 +90,23 @@ export type RegistryRequestOptions = {
 export const performRegistryRequest = async (
   options: RegistryRequestOptions,
 ): Promise<Response> => {
+  const requestSignal = createRegistryRequestSignal(
+    options.signal,
+    options.timeoutMs ?? DEFAULT_REGISTRY_TIMEOUT_MS,
+  );
   try {
     return await fetch(options.url, {
-      signal: AbortSignal.timeout(
-        options.timeoutMs ?? DEFAULT_REGISTRY_TIMEOUT_MS,
-      ),
       ...options.init,
+      signal: requestSignal.signal,
     });
   } catch (error) {
+    // Caller cancellation is control flow, not a registry transport failure.
+    // Preserve its reason so consumers can distinguish it from timeouts and
+    // network errors, which retain the adapter-specific error mapping below.
+    options.signal?.throwIfAborted();
     throw options.wrapRequestError(error);
+  } finally {
+    requestSignal.dispose();
   }
 };
 

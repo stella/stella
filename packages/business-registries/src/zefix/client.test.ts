@@ -49,15 +49,24 @@ describe("Zefix client", () => {
   test("looks up and normalizes a formatted UID", async () => {
     const fixture = await readFixture();
     let body = "";
+    let signal: AbortSignal | null | undefined;
     restore = installFetchStub(async (_input, init) => {
       body = typeof init?.body === "string" ? init.body : "";
+      signal = init?.signal;
       return new Response(JSON.stringify(fixture), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     });
 
-    const company = await lookupByUid("CHE-191.546.434");
+    const controller = new AbortController();
+    const lookup = lookupByUid("CHE-191.546.434", {
+      signal: controller.signal,
+    });
+    expect(signal?.aborted).toBe(false);
+    controller.abort();
+    expect(signal?.aborted).toBe(true);
+    const company = await lookup;
     expect(company).not.toBeNull();
     if (!company) {
       return;
