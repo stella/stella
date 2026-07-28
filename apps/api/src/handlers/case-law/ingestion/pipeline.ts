@@ -934,6 +934,14 @@ export const processDecision = async (
             and(
               eq(caseLawDecisions.id, decisionId),
               sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${persistedSourceHash}`,
+              // An empty mirror must not re-point the keys over a row that
+              // gained a document between the stored-document check and this
+              // update: hydration does not advance the source hash, so the
+              // CAS above cannot see it. A mirror that carries the document
+              // is exempt — it is the newer payload by definition.
+              incomingCarriesDocument
+                ? undefined
+                : sql`NOT ${pgPayloadCarriesDocument}`,
             ),
           );
       });

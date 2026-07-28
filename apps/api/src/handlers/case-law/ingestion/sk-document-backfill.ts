@@ -224,6 +224,12 @@ export const pendingDocumentPredicate = and(
   or(
     isNull(caseLawDecisions.contentHash),
     inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
+    // A row whose corpus hash is row-specific but whose Postgres AST
+    // column is still present is a legacy empty-envelope copy, not a
+    // corpus-served document: a trimmed (corpus-served) row has had every
+    // payload column nulled, so a surviving AST artifact marks the corpus
+    // object as a verbatim copy of a payload that carries no document.
+    isNotNull(caseLawDecisions.documentAst),
   ),
 );
 
@@ -504,7 +510,7 @@ export const storeBackfilledDocument = async ({
   scopedDb,
   writeCorpus = corpusDocumentWriter(),
   claimedSourceHash,
-}: StoreBackfilledDocumentOptions): Promise<void> => {
+}: StoreBackfilledDocumentOptions): Promise<"stored" | "superseded"> => {
   const sections = document.sections.length > 0 ? document.sections : null;
   const corpus =
     writeCorpus === null
@@ -517,9 +523,9 @@ export const storeBackfilledDocument = async ({
           ast: document.documentAst,
         });
 
-  await scopedDb(async (tx) => {
+  const stored = await scopedDb(async (tx) => {
     // audit: skip — scheduler backfill of public case-law text; no user action
-    await tx
+    const applied = await tx
       .update(caseLawDecisions)
       .set({
         fulltext: document.fulltext,
@@ -543,10 +549,17 @@ export const storeBackfilledDocument = async ({
             ? undefined
             : sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${claimedSourceHash}`,
         ),
-      );
+      )
+      .returning({ id: caseLawDecisions.id });
+    return applied.length > 0;
   });
 
   await indexDecision(decision.id, scopedDb);
+  // A missed compare-and-set is a superseded store, not a stored document:
+  // the source moved while this fetch was in flight, and the queue's next
+  // pass fetches the current version. Reporting it as stored would count a
+  // document that is not there.
+  return stored ? "stored" : "superseded";
 };
 
 /**
@@ -687,7 +700,9 @@ export const markDocumentUnavailable = async (
 export type DecisionDocumentOutcome =
   | { status: "filled"; document: BackfilledDocument }
   | { status: "unavailable" }
-  | { status: "claimed" };
+  | { status: "claimed" }
+  /** The source moved mid-fetch; the queue's next pass fetches the current version. */
+  | { status: "superseded" };
 
 /**
  * Wall-clock budget for the whole unit. The download has its own
@@ -727,12 +742,15 @@ const runDecisionDocumentFetch = async ({
     return { status: "unavailable" };
   }
 
-  await storeBackfilledDocument({
+  const stored = await storeBackfilledDocument({
     decision,
     document,
     scopedDb,
     claimedSourceHash: claim.sourceHash,
   });
+  if (stored === "superseded") {
+    return { status: "superseded" };
+  }
   return { status: "filled", document };
 };
 
