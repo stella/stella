@@ -41,6 +41,8 @@ DROP INDEX CONCURRENTLY IF EXISTS "legislation_documents_corpus_pending_idx";
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "legislation_documents_corpus_pending_idx" ON "legislation_documents" ("id") WHERE "content_hash" IS NOT NULL AND "indexed_generation" IS NULL;
 --> statement-breakpoint
+SET statement_timeout = '5s';
+--> statement-breakpoint
 SET lock_timeout = '1s';
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction

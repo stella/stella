@@ -246,7 +246,12 @@ export const caseLawCorpusIndexAdapter = {
         )
         .limit(limit - fresh.length),
     );
-    return [...fresh, ...carried];
+    // A row read as never-indexed by the first arm can be marked by a
+    // concurrent build under another generation before the second arm
+    // runs, which would select it again; the ingest is append-only, so
+    // the same id must not be submitted twice.
+    const seen = new Set(fresh.map((row) => row.id));
+    return [...fresh, ...carried.filter((row) => !seen.has(row.id))];
   },
   selectStale: async (scopedDb, { generation, limit }) =>
     await scopedDb((tx) =>
