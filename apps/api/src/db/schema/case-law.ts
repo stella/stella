@@ -183,6 +183,16 @@ export const caseLawDecisions = p.pgTable(
     // (mirrors backfillSearchIndex): rows whose indexedHash differs
     // from contentHash, or were never indexed.
     p.index("case_law_decisions_indexed_idx").on(t.indexedHash, t.contentHash),
+    // Pending set for the corpus indexer's missing scan. Partial on the
+    // un-indexed predicate so the index stays proportional to the remaining
+    // work, not the corpus: without it the scan's cost grows with every row
+    // already marked, which starved bulk builds and the daemon loop alike.
+    p
+      .index("case_law_decisions_corpus_pending_idx")
+      .on(t.id)
+      .where(
+        sql`${t.contentHash} is not null and ${t.indexedGeneration} is null`,
+      ),
     // Deferred-document queue, priority tier: decisions a reader asked
     // for, oldest request first. Partial on the pending predicate, so
     // the index stays proportional to the queue, not to the corpus.

@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import {
   caseLawDecisions,
@@ -202,8 +202,11 @@ export const caseLawCorpusIndexAdapter = {
   // created_at steers the planner onto the created_at index and
   // row-by-row heap filtering; the selective content-hash index is what
   // these scans need.
-  selectMissing: async (scopedDb, { generation, limit }) =>
-    await scopedDb((tx) =>
+  selectMissing: async (scopedDb, { generation, limit }) => {
+    // Never-indexed rows first: this arm is served by the partial pending
+    // index, so its cost tracks the remaining work instead of growing with
+    // every row already marked.
+    const fresh = await scopedDb((tx) =>
       tx
         .select(SELECT_COLUMNS)
         .from(caseLawDecisions)
@@ -215,14 +218,41 @@ export const caseLawCorpusIndexAdapter = {
           and(
             hasContent,
             redistributableCaseLawSource,
-            or(
-              isNull(caseLawDecisions.indexedGeneration),
-              sql`${caseLawDecisions.indexedGeneration} <> (${generation} || '_' || lower(${caseLawDecisions.country}))`,
-            ),
+            isNull(caseLawDecisions.indexedGeneration),
           ),
         )
         .limit(limit),
-    ),
+    );
+    if (fresh.length >= limit) {
+      return fresh;
+    }
+    // Rows marked under an older generation. Only a generation cutover makes
+    // this arm non-empty, so the unindexed scan it costs is rare and shrinks
+    // as rows re-mark into the current generation.
+    const carried = await scopedDb((tx) =>
+      tx
+        .select(SELECT_COLUMNS)
+        .from(caseLawDecisions)
+        .innerJoin(
+          caseLawSources,
+          eq(caseLawSources.id, caseLawDecisions.sourceId),
+        )
+        .where(
+          and(
+            hasContent,
+            redistributableCaseLawSource,
+            sql`${caseLawDecisions.indexedGeneration} <> (${generation} || '_' || lower(${caseLawDecisions.country}))`,
+          ),
+        )
+        .limit(limit - fresh.length),
+    );
+    // A row read as never-indexed by the first arm can be marked by a
+    // concurrent build under another generation before the second arm
+    // runs, which would select it again; the ingest is append-only, so
+    // the same id must not be submitted twice.
+    const seen = new Set(fresh.map((row) => row.id));
+    return [...fresh, ...carried.filter((row) => !seen.has(row.id))];
+  },
   selectStale: async (scopedDb, { generation, limit }) =>
     await scopedDb((tx) =>
       tx

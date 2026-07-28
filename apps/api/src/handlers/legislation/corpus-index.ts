@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import {
   legislationDocuments,
@@ -123,8 +123,11 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
   // created_at steers the planner onto the created_at index and
   // row-by-row heap filtering; the selective content-hash index is what
   // these scans need.
-  selectMissing: async (scopedDb, { generation, limit }) =>
-    await scopedDb((tx) =>
+  selectMissing: async (scopedDb, { generation, limit }) => {
+    // Two arms for the same reason as the case-law twin: the never-indexed
+    // arm rides the partial pending index; the older-generation arm is only
+    // non-empty across a generation cutover.
+    const fresh = await scopedDb((tx) =>
       tx
         .select(SELECT_COLUMNS)
         .from(legislationDocuments)
@@ -136,14 +139,38 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
           and(
             hasContent,
             redistributableLegislationSource,
-            or(
-              isNull(legislationDocuments.indexedGeneration),
-              sql`${legislationDocuments.indexedGeneration} <> (${generation} || '_' || lower(${legislationDocuments.country}))`,
-            ),
+            isNull(legislationDocuments.indexedGeneration),
           ),
         )
         .limit(limit),
-    ),
+    );
+    if (fresh.length >= limit) {
+      return fresh;
+    }
+    const carried = await scopedDb((tx) =>
+      tx
+        .select(SELECT_COLUMNS)
+        .from(legislationDocuments)
+        .innerJoin(
+          legislationSources,
+          eq(legislationSources.id, legislationDocuments.sourceId),
+        )
+        .where(
+          and(
+            hasContent,
+            redistributableLegislationSource,
+            sql`${legislationDocuments.indexedGeneration} <> (${generation} || '_' || lower(${legislationDocuments.country}))`,
+          ),
+        )
+        .limit(limit - fresh.length),
+    );
+    // A row read as never-indexed by the first arm can be marked by a
+    // concurrent build under another generation before the second arm
+    // runs, which would select it again; the ingest is append-only, so
+    // the same id must not be submitted twice.
+    const seen = new Set(fresh.map((row) => row.id));
+    return [...fresh, ...carried.filter((row) => !seen.has(row.id))];
+  },
   selectStale: async (scopedDb, { generation, limit }) =>
     await scopedDb((tx) =>
       tx
