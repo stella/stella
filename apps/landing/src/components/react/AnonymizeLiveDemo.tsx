@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useDebouncedCallback } from "use-debounce";
 
-import type { ChatAnonPair, ChatAnonResult } from "@stll/anonymize-chat";
+import type { ChatAnonPair } from "@stll/anonymize-chat";
 
 import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
 
@@ -17,12 +17,47 @@ import { runAnonymizeDemo } from "../anonymize-demo-worker-client";
  * The visible text always mirrors what's typed; only the *highlighting*
  * lags behind by one debounce + pipeline pass, so a fresh keystroke is
  * never hidden behind a stale render.
+ *
+ * The engine is several hundred kilobytes of wasm plus name and city
+ * dictionaries, so the untouched sample renders from precomputed pairs
+ * immediately and swaps to live output the moment the worker answers.
  */
 
-const INITIAL_TEXT =
-  "This engagement letter is entered into between Angela Merkel, of 14 Rue de la Paix, Paris, and Meridian Capital Partners LLC, represented by its counsel at Barclays Bank plc. Angela Merkel can be reached at +33 1 42 61 53 00 or angela.merkel@meridiancapital.example, tax identification number FR12 345678901.";
+export const INITIAL_TEXT =
+  "This engagement letter is entered into between Laure Chevalier, of 14 Rue de la Paix, Paris, and Meridian Capital Partners LLC, represented by its counsel at Edison Bank plc. Laure Chevalier can be reached at +33 1 42 61 53 00 or laure.chevalier@meridiancapital.example, tax identification number FR12 345678901.";
 
 const DEBOUNCE_MS = 300;
+
+/** All `buildSegments` reads off a detection; also the precomputed shape. */
+type HighlightPair = Pick<ChatAnonPair, "original" | "label">;
+
+/**
+ * What the real pipeline detects in {@link INITIAL_TEXT}, captured so the
+ * demo shows its result on first paint rather than after the wasm engine and
+ * its dictionaries have downloaded. These go through the same
+ * {@link buildSegments} as live pairs, so the swap to engine output when the
+ * worker answers produces identical markup.
+ *
+ * Regenerate whenever {@link INITIAL_TEXT} changes, from apps/landing (prints
+ * this constant; paste it verbatim):
+ *
+ *   bun scripts/precompute-anonymize-demo-sample.ts
+ *
+ * `bun run test` runs that script with `--check` and fails on drift, so a
+ * stale constant cannot reach a visitor.
+ */
+export const PRECOMPUTED_SAMPLE_PAIRS = [
+  { original: "Laure Chevalier", label: "person" },
+  { original: "14 Rue de la Paix, Paris", label: "address" },
+  { original: "Meridian Capital Partners LLC", label: "organization" },
+  { original: "Edison Bank plc", label: "organization" },
+  { original: "+33 1 42 61 53 00", label: "phone number" },
+  {
+    original: "laure.chevalier@meridiancapital.example",
+    label: "email address",
+  },
+  { original: "FR12 345678901", label: "tax identification number" },
+] as const satisfies readonly HighlightPair[];
 
 type Bucket =
   | "person"
@@ -95,12 +130,12 @@ const escapeRegExp = (value: string): string =>
  * Splits `text` into plain/highlighted segments by locating each detected
  * pair's raw span. Pairs are deduplicated by original text (the pipeline
  * already collapses repeat occurrences of the same entity into one
- * placeholder), longest-first, so a highlight for "Barclays Bank plc"
- * takes priority over one for "Barclays" alone.
+ * placeholder), longest-first, so a highlight for "Edison Bank plc"
+ * takes priority over one for "Edison" alone.
  */
 const buildSegments = (
   text: string,
-  pairs: readonly ChatAnonPair[],
+  pairs: readonly HighlightPair[],
 ): Segment[] => {
   if (text.length === 0 || pairs.length === 0) {
     return [{ text }];
@@ -132,7 +167,34 @@ const buildSegments = (
   return segments;
 };
 
-type EngineStatus = "booting" | "ready" | "error";
+type EngineState =
+  | { status: "warming" }
+  | { status: "ready"; pairs: readonly HighlightPair[] }
+  | { status: "error"; message: string };
+
+/**
+ * Which detection the backdrop renders. `precomputed` only ever applies to the
+ * untouched sample: once a visitor edits the text, nothing but the live engine
+ * can say what is in it, so the highlights drop away until the worker answers.
+ */
+type Highlights = {
+  source: "engine" | "precomputed" | "pending";
+  pairs: readonly HighlightPair[];
+};
+
+// Stable identity so the `pending` branch does not invalidate the segment and
+// legend memos on every render.
+const NO_PAIRS: readonly HighlightPair[] = [];
+
+const highlightsFor = (engine: EngineState, text: string): Highlights => {
+  if (engine.status === "ready") {
+    return { source: "engine", pairs: engine.pairs };
+  }
+  if (text === INITIAL_TEXT) {
+    return { source: "precomputed", pairs: PRECOMPUTED_SAMPLE_PAIRS };
+  }
+  return { source: "pending", pairs: NO_PAIRS };
+};
 
 // Shared metrics so the backdrop's highlighted text lines up with the
 // transparent textarea's real characters on top of it.
@@ -141,52 +203,61 @@ const textLayerClassName =
 
 export const AnonymizeLiveDemo = () => {
   const [text, setText] = useState(INITIAL_TEXT);
-  const [pairs, setPairs] = useState<readonly ChatAnonPair[]>([]);
-  const [status, setStatus] = useState<EngineStatus>("booting");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [engine, setEngine] = useState<EngineState>({ status: "warming" });
   const latestRequestRef = useRef(0);
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  const runPipeline = useDebouncedCallback((value: string) => {
+  const run = (value: string) => {
     latestRequestRef.current += 1;
     const requestId = latestRequestRef.current;
     runAnonymizeDemo(value)
-      .then((result: ChatAnonResult) => {
-        if (requestId !== latestRequestRef.current) {
-          return;
+      .then((result) => {
+        if (requestId === latestRequestRef.current) {
+          setEngine({ status: "ready", pairs: result.pairs });
         }
-        setPairs(result.pairs);
-        setStatus("ready");
-        setErrorMessage(null);
         return;
       })
       .catch((error: unknown) => {
         if (requestId !== latestRequestRef.current) {
           return;
         }
-        setStatus("error");
-        setErrorMessage(error instanceof Error ? error.message : String(error));
+        setEngine({
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "The anonymisation engine hit an error.",
+        });
       });
-  }, DEBOUNCE_MS);
+  };
+
+  const runDebounced = useDebouncedCallback(run, DEBOUNCE_MS);
 
   useEffect(() => {
-    runPipeline(text);
-    // Only the text itself should retrigger a run; `runPipeline`'s identity
+    runDebounced(text);
+    // Only the text itself should retrigger a run; `runDebounced`'s identity
     // is stable across renders (useDebouncedCallback memoizes it) and does
     // not need to be listed.
   }, [text]);
 
-  const segments = useMemo(() => buildSegments(text, pairs), [text, pairs]);
+  const highlights = highlightsFor(engine, text);
+  const segments = useMemo(
+    () => buildSegments(text, highlights.pairs),
+    [text, highlights.pairs],
+  );
 
   const legend = useMemo(() => {
     const buckets = new Set<Bucket>();
-    for (const pair of pairs) {
+    for (const pair of highlights.pairs) {
       buckets.add(bucketOf(pair.label));
     }
     return [...buckets];
-  }, [pairs]);
+  }, [highlights.pairs]);
 
-  const statusText = describeEngineStatus(status, errorMessage, pairs.length);
+  const retry = () => {
+    setEngine({ status: "warming" });
+    run(text);
+  };
 
   const syncBackdropScroll = (event: UIEvent<HTMLTextAreaElement>) => {
     if (backdropRef.current) {
@@ -247,9 +318,25 @@ export const AnonymizeLiveDemo = () => {
           color: "var(--muted-foreground)",
         }}
       >
-        <p aria-live="polite" className="m-0">
-          {statusText}
-        </p>
+        <div className="flex items-center gap-2">
+          <p aria-live="polite" className="m-0">
+            {describeEngineStatus(engine, highlights)}
+          </p>
+          {engine.status === "error" && (
+            <button
+              type="button"
+              className="cursor-pointer rounded border px-2 py-0.5 underline-offset-2 hover:underline"
+              style={{
+                borderColor:
+                  "color-mix(in srgb, var(--border) 65%, transparent)",
+                color: "var(--foreground)",
+              }}
+              onClick={retry}
+            >
+              Retry
+            </button>
+          )}
+        </div>
         {legend.length > 0 && (
           <ul className="m-0 flex list-none flex-wrap gap-x-3 gap-y-1 p-0">
             {legend.map((bucket) => (
@@ -279,21 +366,34 @@ export const AnonymizeLiveDemo = () => {
   );
 };
 
+/**
+ * Deliberately quiet while the engine warms: highlights are already on screen,
+ * so the line reports what produced them rather than blocking on a spinner.
+ */
 const describeEngineStatus = (
-  status: EngineStatus,
-  errorMessage: string | null,
-  entityCount: number,
+  engine: EngineState,
+  highlights: Highlights,
 ): string => {
-  if (status === "booting") {
-    return "Preparing the anonymisation engine…";
+  switch (engine.status) {
+    case "warming": {
+      return highlights.source === "precomputed"
+        ? "Engine warming up; showing a saved result for this sample."
+        : "Reading your text…";
+    }
+    case "error": {
+      return engine.message;
+    }
+    case "ready": {
+      if (highlights.pairs.length === 0) {
+        return "No entities detected yet — try adding a name or company.";
+      }
+      return highlights.pairs.length === 1
+        ? "1 entity detected"
+        : `${highlights.pairs.length} entities detected`;
+    }
+    default: {
+      const exhaustive: never = engine;
+      return String(exhaustive);
+    }
   }
-  if (status === "error") {
-    return errorMessage ?? "The anonymisation engine hit an error.";
-  }
-  if (entityCount === 0) {
-    return "No entities detected yet — try adding a name or company.";
-  }
-  return entityCount === 1
-    ? "1 entity detected"
-    : `${entityCount} entities detected`;
 };

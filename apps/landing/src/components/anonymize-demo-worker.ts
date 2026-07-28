@@ -1,25 +1,9 @@
 /// <reference lib="webworker" />
 
-// eslint-disable-next-line unicorn/prefer-node-protocol -- this is the `buffer` browser-polyfill package (npm, no Node dependency), not Node's own `node:buffer` core module; `node:buffer` would not resolve the same way in a browser/worker bundle
-import { Buffer } from "buffer";
+import type { ChatAnonResult } from "@stll/anonymize-chat";
 
-import { runChatAnonPipeline } from "@stll/anonymize-chat";
-import type { ChatAnonResult, ChatAnonRuntime } from "@stll/anonymize-chat";
-import { loadNameDictionaries } from "@stll/anonymize-data";
-import { loadCityDictionary } from "@stll/anonymize-data/cities";
-import * as anonymizeRuntime from "@stll/anonymize-wasm";
-import type { PipelineConfig } from "@stll/anonymize-wasm";
-
-// The napi-rs/emnapi wasm binding (@stll/anonymize-wasm's native glue) checks
-// `globalThis.Buffer` for some Node-API operations; browsers/workers have no
-// such global, so it throws "NotSupportBufferError" the first time that path
-// is hit at runtime. Node itself would provide this for free — a worker in a
-// real browser needs the polyfill installed before the pipeline actually
-// runs (module evaluation order doesn't matter here: this only needs to
-// land before the first `handle()` call below, which only fires once the
-// worker receives a message, well after this module finishes loading).
-// eslint-disable-next-line typescript/no-unnecessary-condition -- ambient lib types claim globalThis.Buffer always exists; a real browser/worker genuinely may not have it, which is exactly the runtime gap this line covers
-globalThis.Buffer ??= Buffer;
+import type { DemoEngine } from "./anonymize-demo-engine";
+import { loadDemoEngine } from "./anonymize-demo-engine";
 
 /**
  * Off-main-thread runner for the landing page's live anonymization demo.
@@ -27,40 +11,39 @@ globalThis.Buffer ??= Buffer;
  * runtime + name dictionaries once, then reuses them for every request);
  * trimmed to the single fixed demo workspace this public page needs, with
  * no app-internal path aliases so it stands alone under apps/landing.
+ *
+ * Module evaluation deliberately pulls in no third-party module by value:
+ * `anonymize-demo-engine` imports the wasm runtime and the dictionaries
+ * dynamically, from inside a promise whose rejection is reported over the
+ * message channel. A failing static import would abort evaluation before the
+ * message listener below is installed, and the page would then wait forever
+ * for a reply that no code is left to send.
  */
 
-type DemoRequest = {
-  id: number;
-  text: string;
+export type DemoRequest = { id: number; text: string };
+
+/**
+ * Worker -> main-thread protocol. `started` is the handshake: it proves the
+ * module evaluated and the listener is live, so the client can distinguish
+ * "worker never booted" from "engine still loading". `init-error` reports a
+ * failure that will fail every request, even when none is in flight.
+ */
+export type DemoResponse =
+  | { type: "started" }
+  | { type: "init-error"; error: string }
+  | { type: "result"; id: number; result: ChatAnonResult }
+  | { type: "error"; id: number; error: string };
+
+const describeError = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+let enginePromise: Promise<DemoEngine> | null = null;
+
+// eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
+const getEngine = (): Promise<DemoEngine> => {
+  enginePromise ??= loadDemoEngine();
+  return enginePromise;
 };
-
-type DemoResponse =
-  | ({ id: number; ok: true } & ChatAnonResult)
-  | { id: number; ok: false; error: string };
-
-// Public demo has no organisation, so no blacklist/gazetteer/exclusion input
-// is needed; every visitor gets the same fixed workspace id and locale.
-const DEMO_WORKSPACE_ID = "landing-demo";
-const DEMO_LOCALE = "en";
-
-// The chat→AI pipeline keeps places by default (see anonymize-chat); this is a
-// capability showcase, so we opt into the deny-list and load city dictionaries
-// for the countries a visitor is most likely to type. City names resolve to the
-// "address" label. Kept to a focused set so the worker payload stays reasonable.
-const DEMO_DENYLIST_COUNTRIES = [
-  "US",
-  "GB",
-  "FR",
-  "DE",
-  "CZ",
-  "IT",
-  "ES",
-  "NL",
-] as const;
-
-let dictionariesPromise: Promise<
-  NonNullable<PipelineConfig["dictionaries"]>
-> | null = null;
 
 // Serializes pipeline calls: the native pipeline context is not safe to
 // reenter concurrently, so overlapping requests (e.g. a stale debounce
@@ -77,72 +60,15 @@ const runWithPipelineContext = async <T>(
   return await run;
 };
 
-// eslint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
-const getDictionaries = (): Promise<
-  NonNullable<PipelineConfig["dictionaries"]>
-> => {
-  dictionariesPromise ??= loadDemoDictionaries();
-  return dictionariesPromise;
-};
-
-// Names (for the person corpus) plus per-country city lists (for the deny-list
-// "Places" layer). `citiesByCountry` drives detection; `cities` is the flat
-// merge the pipeline also expects. `loadCityDictionary` (0.0.8+) resolves each
-// country through a literal-specifier loader map, so the city JSON stays
-// bundler-visible (one lazy chunk per country) and a load failure throws
-// instead of silently yielding an empty list.
-const loadDemoDictionaries = async (): Promise<
-  NonNullable<PipelineConfig["dictionaries"]>
-> => {
-  const [names, cityResults] = await Promise.all([
-    loadNameDictionaries(),
-    Promise.all(
-      DEMO_DENYLIST_COUNTRIES.map(
-        async (country) =>
-          [country, await loadCityDictionary(country)] as const,
-      ),
-    ),
-  ]);
-  const citiesByCountry = Object.fromEntries(cityResults);
-  const cities = cityResults.flatMap(([, entries]) => entries);
-  return { ...names, cities, citiesByCountry };
-};
-
-const handle = async (request: DemoRequest): Promise<DemoResponse> => {
-  const { id, text } = request;
+const handle = async ({ id, text }: DemoRequest): Promise<DemoResponse> => {
   try {
     const result = await runWithPipelineContext(async () => {
-      const dictionaries = await getDictionaries();
-      const context = anonymizeRuntime.createPipelineContext();
-      const runtime: ChatAnonRuntime = {
-        getBinding: anonymizeRuntime.getBinding,
-        createNativePipelineFromConfig:
-          anonymizeRuntime.createNativePipelineFromConfig,
-        createPipelineContext: anonymizeRuntime.createPipelineContext,
-        deanonymise: anonymizeRuntime.deanonymise,
-      };
-      return await runChatAnonPipeline({
-        runtime,
-        dictionaries,
-        text,
-        locale: DEMO_LOCALE,
-        workspaceId: DEMO_WORKSPACE_ID,
-        gazetteerEntries: [],
-        enableDenyList: true,
-        denyListCountries: DEMO_DENYLIST_COUNTRIES,
-        // Showcase: also catch a numbered street with no recognized city
-        // ("14 Rue de la Paix"), scoped to the demo countries' street types.
-        standaloneStreetDetection: "houseNumberAnchored",
-        context,
-      });
+      const engine = await getEngine();
+      return await engine.run(text);
     });
-    return { id, ok: true, ...result };
+    return { type: "result", id, result };
   } catch (error) {
-    return {
-      id,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    return { type: "error", id, error: describeError(error) };
   }
 };
 
@@ -157,12 +83,30 @@ if (!isDedicatedWorkerScope(globalThis)) {
 
 const scope = globalThis;
 
+const post = (message: DemoResponse): void => {
+  // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
+  scope.postMessage(message);
+};
+
 scope.addEventListener("message", (event: MessageEvent<DemoRequest>) => {
+  const { id } = event.data;
   handle(event.data)
     .then((response) => {
-      // eslint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
-      scope.postMessage(response);
+      post(response);
       return;
     })
-    .catch(() => undefined);
+    .catch((error: unknown) => {
+      // Reached when posting the reply itself throws (an uncloneable payload).
+      // Swallowing it here would strand the caller's promise forever, so fall
+      // back to a message built only from strings, which always clones.
+      post({ type: "error", id, error: describeError(error) });
+    });
+});
+
+post({ type: "started" });
+
+// Warm the engine while the visitor reads the page, and surface a load failure
+// even when no request is in flight.
+getEngine().catch((error: unknown) => {
+  post({ type: "init-error", error: describeError(error) });
 });
