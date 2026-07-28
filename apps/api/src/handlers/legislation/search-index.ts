@@ -103,10 +103,12 @@ export const indexLegislationDocument = async (
   });
 };
 
+type LegislationSearchIndexBackfillResult = { found: number; indexed: number };
+
 export const backfillLegislationSearchIndex = async (
   scopedDb: ScopedDb,
   batchSize: number,
-): Promise<number> => {
+): Promise<LegislationSearchIndexBackfillResult> => {
   const staleReserved = Math.max(1, Math.floor(batchSize / 4));
   const missingLimit = Math.max(1, batchSize - staleReserved);
 
@@ -194,7 +196,7 @@ export const backfillLegislationSearchIndex = async (
     }
   }
 
-  return indexed;
+  return { found: rows.length, indexed };
 };
 
 export const removeLegislationFromIndex = async (

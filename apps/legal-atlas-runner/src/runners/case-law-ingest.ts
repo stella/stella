@@ -988,14 +988,17 @@ export const runCaseLawIngest = async (
       }
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
-        const indexed = await runWithHardDeadline(
+        const { found, indexed } = await runWithHardDeadline(
           "search-index",
           SEARCH_INDEX_HARD_DEADLINE_MS,
           async () =>
             await backfillSearchIndex(backfillDb, SEARCH_INDEX_BATCH_SIZE),
         );
+        // Back off only when the probe found nothing: a batch that was
+        // found but failed to index is pending work and keeps the base
+        // retry cadence.
         pollMs =
-          indexed === 0
+          found === 0
             ? Math.min(pollMs * 2, SEARCH_INDEX_IDLE_MAX_MS)
             : SEARCH_INDEX_INTERVAL_MS;
         if (indexed > 0) {
@@ -1113,18 +1116,19 @@ export const runCaseLawIngest = async (
     // Ungated, unlike its case-law sibling: legislation stays dual-write by
     // scope decision, so its rows always carry the text this projection
     // needs and it must always keep building.
+    let pollMs = SEARCH_INDEX_INTERVAL_MS;
     while (true) {
       if (isDraining()) {
         return;
       }
-      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
-      await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait between batches, so this await is intentionally sequential
+      await Bun.sleep(pollMs);
       if (isDraining()) {
         return;
       }
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
-        const indexed = await runWithHardDeadline(
+        const { found, indexed } = await runWithHardDeadline(
           "legislation-search-index",
           SEARCH_INDEX_HARD_DEADLINE_MS,
           async () =>
@@ -1133,6 +1137,10 @@ export const runCaseLawIngest = async (
               SEARCH_INDEX_BATCH_SIZE,
             ),
         );
+        pollMs =
+          found === 0
+            ? Math.min(pollMs * 2, SEARCH_INDEX_IDLE_MAX_MS)
+            : SEARCH_INDEX_INTERVAL_MS;
         if (indexed > 0) {
           logInfo(`[legislation-search-index] Indexed ${indexed} documents`);
         }
