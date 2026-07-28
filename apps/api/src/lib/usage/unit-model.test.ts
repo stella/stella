@@ -172,10 +172,10 @@ describe("computeRawUsageMicroUnits", () => {
     expect(
       computeRawUsageMicroUnits({
         modelId: "unknown-model-name",
-        inputTokens: 20_000_000_001,
+        inputTokens: 9_007_199_254_740_938,
         outputTokens: 0,
       }),
-    ).toBe(10_000_000_001);
+    ).toBe(4_503_599_627_370_469);
   });
 });
 
