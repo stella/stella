@@ -14162,6 +14162,12 @@
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
           },
           {
+            "location": "apps/api/src/handlers/case-law/corpus-storage.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#27"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
@@ -15725,6 +15731,9 @@
             "location": "apps/api/src/lib/two-factor.ts#1"
           },
           {
+            "location": "apps/api/src/lib/usage/policy-catalog.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/usage/unit-model.ts#11"
           },
           {
@@ -17133,6 +17142,9 @@
             "location": "apps/api/scripts/seed-test-user.ts#22"
           },
           {
+            "location": "apps/api/scripts/seed-usage-policies.ts#9"
+          },
+          {
             "location": "apps/api/src/agent-auth/id-jag.ts#2"
           },
           {
@@ -17280,7 +17292,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#16"
+            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#23"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#35"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/status.ts#2"
@@ -18189,6 +18204,9 @@
             "location": "apps/api/src/lib/confirmation-otp.ts#3"
           },
           {
+            "location": "apps/api/src/lib/corpus-ingestion-checkpoint.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
           },
           {
@@ -18366,6 +18384,9 @@
             "location": "apps/api/src/lib/two-factor.ts#2"
           },
           {
+            "location": "apps/api/src/lib/usage/policy-catalog.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/usage/usage-ledger.ts#32"
           },
           {
@@ -18411,16 +18432,22 @@
             "location": "apps/api/src/scripts/adapter-health.ts#17"
           },
           {
-            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#1"
+            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#12"
           },
           {
-            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#2"
+            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#13"
           },
           {
             "location": "apps/api/src/scripts/backfill-fulltext.ts#12"
           },
           {
             "location": "apps/api/src/scripts/backfill-property-roles.ts#10"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-column-trim.ts#2"
           },
           {
             "location": "apps/api/src/scripts/repair-case-law-jsonb.ts#35"
@@ -18566,6 +18593,9 @@
             "location": "apps/api/scripts/seed-test-user.ts#22"
           },
           {
+            "location": "apps/api/scripts/seed-usage-policies.ts#9"
+          },
+          {
             "location": "apps/api/src/agent-auth/id-jag.ts#2"
           },
           {
@@ -18713,7 +18743,10 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#16"
+            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#23"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#35"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/status.ts#2"
@@ -19622,6 +19655,9 @@
             "location": "apps/api/src/lib/confirmation-otp.ts#3"
           },
           {
+            "location": "apps/api/src/lib/corpus-ingestion-checkpoint.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
           },
           {
@@ -19799,6 +19835,9 @@
             "location": "apps/api/src/lib/two-factor.ts#2"
           },
           {
+            "location": "apps/api/src/lib/usage/policy-catalog.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/usage/usage-ledger.ts#32"
           },
           {
@@ -19844,16 +19883,22 @@
             "location": "apps/api/src/scripts/adapter-health.ts#17"
           },
           {
-            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#1"
+            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#12"
           },
           {
-            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#2"
+            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#13"
           },
           {
             "location": "apps/api/src/scripts/backfill-fulltext.ts#12"
           },
           {
             "location": "apps/api/src/scripts/backfill-property-roles.ts#10"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-column-trim.ts#2"
           },
           {
             "location": "apps/api/src/scripts/repair-case-law-jsonb.ts#35"
@@ -27583,7 +27628,7 @@
             "location": "apps/api/scripts/seed-case-law.ts#23"
           },
           {
-            "location": "apps/api/scripts/seed-usage-policies.ts#9"
+            "location": "apps/api/scripts/seed-usage-policies.ts#10"
           },
           {
             "location": "apps/api/src/agent-auth/id-jag.ts#5"
