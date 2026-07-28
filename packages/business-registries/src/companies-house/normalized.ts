@@ -7,6 +7,7 @@ import {
 import type {
   NormalizedRegistryAddress,
   NormalizedRegistryEntity,
+  NormalizedRegistryKeyPeopleGroup,
   NormalizedRegistryKeyPerson,
   NormalizedRegistrySearchResult,
 } from "../shared/normalized.js";
@@ -71,12 +72,15 @@ const normalizeAddress = (
   textAddress: address.textAddress,
 });
 
+const officerRole = (officer: CompaniesHouseOfficer): string =>
+  officer.role.title ?? officer.role.code;
+
 const normalizeOfficer = (
   officer: CompaniesHouseOfficer,
 ): NormalizedRegistryKeyPerson => ({
   name: officer.name,
   nameWithTitles: null,
-  position: officer.role.title ?? officer.role.code,
+  position: officerRole(officer),
   organName: null,
   // `appointedBefore` is only an upper bound for historical records, not an
   // exact appointment date. The normalized `since` field carries exact dates.
@@ -93,6 +97,27 @@ const normalizeOfficer = (
   share: null,
   link: null,
 });
+
+const normalizeCurrentOfficers = (
+  officers: CompaniesHouseOfficer[],
+): NormalizedRegistryKeyPeopleGroup[] => {
+  const groups = new Map<string, NormalizedRegistryKeyPeopleGroup>();
+  for (const officer of officers) {
+    if (officer.isResigned) {
+      continue;
+    }
+    const group = groups.get(officer.role.code);
+    if (group) {
+      group.people.push(normalizeOfficer(officer));
+      continue;
+    }
+    groups.set(officer.role.code, {
+      name: officerRole(officer),
+      people: [normalizeOfficer(officer)],
+    });
+  }
+  return Array.from(groups.values());
+};
 
 export type NormalizeCompaniesHouseOptions = {
   /** Officers returned by the separate Companies House officers endpoint. */
@@ -129,9 +154,7 @@ export const toNormalizedEntity = (
   removalDate: availableField(company.dateOfCessation),
   registryRecord: unsupportedField(),
   keyPeople: options?.officers
-    ? availableField([
-        { name: null, people: options.officers.map(normalizeOfficer) },
-      ])
+    ? availableField(normalizeCurrentOfficers(options.officers))
     : notLoadedField(),
   shareCapital: unsupportedField(),
   shareCapitalPaid: unsupportedField(),

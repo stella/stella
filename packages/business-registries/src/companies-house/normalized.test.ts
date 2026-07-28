@@ -36,9 +36,9 @@ describe("Companies House normalized projection", () => {
       return;
     }
     expect(withOfficers.keyPeople.value[0]?.people.length).toBeGreaterThan(0);
-    const datedOfficer = withOfficers.keyPeople.value[0]?.people.find(
-      (person) => person.birthDate !== null,
-    );
+    const datedOfficer = withOfficers.keyPeople.value
+      .flatMap(({ people }) => people)
+      .find((person) => person.birthDate !== null);
     expect(datedOfficer?.birthDate?.precision).toBe("month");
     expect(withOfficers.shareCapital).toEqual({
       availability: "not-supported",
@@ -82,6 +82,89 @@ describe("Companies House normalized projection", () => {
       return;
     }
     expect(entity.keyPeople.value.at(0)?.people.at(0)?.since).toBeNull();
+  });
+
+  test("groups current officers by role and excludes resigned appointments", () => {
+    const company = parseCompanyProfile(companyRaw);
+    const sourceOfficer = parseOfficersResponse(officersRaw).at(0);
+    expect(sourceOfficer).toBeDefined();
+    if (!sourceOfficer) {
+      return;
+    }
+    const entity = toNormalizedEntity(company, {
+      officers: [
+        sourceOfficer,
+        {
+          ...sourceOfficer,
+          name: "Former officer",
+          resignedOn: "2020-01-01",
+          isResigned: true,
+        },
+        {
+          ...sourceOfficer,
+          name: "Current secretary",
+          role: {
+            code: "synthetic-distinct-role",
+            title: "Company secretary",
+          },
+        },
+        {
+          ...sourceOfficer,
+          name: "Localized title",
+          role: {
+            code: sourceOfficer.role.code,
+            title: "Localized display title",
+          },
+        },
+        {
+          ...sourceOfficer,
+          name: "Same title, distinct code",
+          role: {
+            code: "synthetic-same-title-role",
+            title: "Company secretary",
+          },
+        },
+      ],
+    });
+
+    expect(entity.keyPeople.availability).toBe("available");
+    if (entity.keyPeople.availability !== "available") {
+      return;
+    }
+    expect(entity.keyPeople.value).toHaveLength(3);
+    expect(entity.keyPeople.value.at(0)).toMatchObject({
+      name: sourceOfficer.role.code,
+      people: [
+        expect.objectContaining({
+          name: sourceOfficer.name,
+          organName: null,
+          position: sourceOfficer.role.title ?? sourceOfficer.role.code,
+        }),
+        expect.objectContaining({
+          name: "Localized title",
+          position: "Localized display title",
+        }),
+      ],
+    });
+    expect(entity.keyPeople.value.at(1)).toMatchObject({
+      name: "Company secretary",
+      people: [
+        expect.objectContaining({
+          name: "Current secretary",
+          organName: null,
+          position: "Company secretary",
+        }),
+      ],
+    });
+    expect(entity.keyPeople.value.at(2)).toMatchObject({
+      name: "Company secretary",
+      people: [expect.objectContaining({ name: "Same title, distinct code" })],
+    });
+    expect(
+      entity.keyPeople.value.flatMap(({ people }) =>
+        people.map(({ name }) => name),
+      ),
+    ).not.toContain("Former officer");
   });
 
   test("preserves a known cessation date for removed companies", () => {
