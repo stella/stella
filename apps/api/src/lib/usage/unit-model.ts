@@ -37,7 +37,24 @@ const FALLBACK_RATE: ModelRate = {
   outputPerMTok: 2_000_000,
 };
 
-const ONE_MILLION = 1_000_000;
+const ONE_MILLION_BIGINT = 1_000_000n;
+const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
+const isNonNegativeSafeInteger = (value: number): boolean =>
+  Number.isSafeInteger(value) && value >= 0;
+
+const scaleTokenCost = (tokens: number, ratePerMTok: number): number => {
+  if (!isNonNegativeSafeInteger(ratePerMTok)) {
+    panic("usage rates must be non-negative safe integers");
+  }
+  const scaled =
+    (BigInt(tokens) * BigInt(ratePerMTok) + ONE_MILLION_BIGINT - 1n) /
+    ONE_MILLION_BIGINT;
+  if (scaled > MAX_SAFE_INTEGER_BIGINT) {
+    panic("computed usage component exceeds the safe integer range");
+  }
+  return Number(scaled);
+};
 
 type UsageInput = {
   modelId: string;
@@ -54,9 +71,8 @@ type UsageInput = {
 
 /**
  * Convert token usage into normalized micro-units using the
- * model's public rate table. Caller is responsible for passing
- * non-negative integers; provider adapters are responsible for
- * normalizing their token usage before calling this helper.
+ * model's public rate table. Provider token counts are validated here because
+ * this helper is the shared boundary before usage reaches the ledger.
  */
 export const computeRawUsageMicroUnits = ({
   modelId,
@@ -65,14 +81,14 @@ export const computeRawUsageMicroUnits = ({
   cacheReadTokens = 0,
 }: UsageInput): number => {
   if (
-    inputTokens < 0 ||
-    outputTokens < 0 ||
-    cacheReadTokens < 0 ||
-    cacheReadTokens > inputTokens
+    !isNonNegativeSafeInteger(inputTokens) ||
+    !isNonNegativeSafeInteger(outputTokens) ||
+    !isNonNegativeSafeInteger(cacheReadTokens)
   ) {
-    panic(
-      "computeRawUsageMicroUnits got negative or inconsistent token counts",
-    );
+    panic("usage token counts must be non-negative safe integers");
+  }
+  if (cacheReadTokens > inputTokens) {
+    panic("cached input tokens cannot exceed total input tokens");
   }
   const rate = resolveModelRate(
     getModelRate(modelId) ?? FALLBACK_RATE,
@@ -80,14 +96,14 @@ export const computeRawUsageMicroUnits = ({
   );
   const billedInputTokens = inputTokens - cacheReadTokens;
   const cachedRate = rate.cachedInputPerMTok ?? rate.inputPerMTok;
-  const inputCost = Math.ceil(
-    (billedInputTokens * rate.inputPerMTok) / ONE_MILLION,
-  );
-  const cacheCost = Math.ceil((cacheReadTokens * cachedRate) / ONE_MILLION);
-  const outputCost = Math.ceil(
-    (outputTokens * rate.outputPerMTok) / ONE_MILLION,
-  );
-  return inputCost + cacheCost + outputCost;
+  const inputCost = scaleTokenCost(billedInputTokens, rate.inputPerMTok);
+  const cacheCost = scaleTokenCost(cacheReadTokens, cachedRate);
+  const outputCost = scaleTokenCost(outputTokens, rate.outputPerMTok);
+  const rawUsageMicroUnits = inputCost + cacheCost + outputCost;
+  if (!Number.isSafeInteger(rawUsageMicroUnits)) {
+    panic("computed raw usage exceeds the safe integer range");
+  }
+  return rawUsageMicroUnits;
 };
 
 type UsageUnitsFromTokensInput = UsageInput & {
