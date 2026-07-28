@@ -170,6 +170,11 @@ const CYCLE_DELAY_MS = 5000;
 const HEALTH_INTERVAL_MS = 30_000;
 const SUSTAINED_FAILURE_THRESHOLD = 5;
 const SEARCH_INDEX_INTERVAL_MS = 10_000;
+// The missing-row probe walks created_at order past every already-projected
+// row, so a caught-up projection pays nearly a full scan just to find
+// nothing. Back the poll off while it comes up empty; any hit resets to the
+// base interval, so a fresh ingest batch is picked up promptly.
+const SEARCH_INDEX_IDLE_MAX_MS = 15 * 60_000;
 const SEARCH_INDEX_BATCH_SIZE = 20;
 const SEARCH_INDEX_DRAIN_CONCURRENCY = 4;
 const CORPUS_INDEX_INTERVAL_MS = 15_000;
@@ -971,23 +976,31 @@ export const runCaseLawIngest = async (
     if (corpusStorageMode === "canonical") {
       return;
     }
+    let pollMs = SEARCH_INDEX_INTERVAL_MS;
     while (true) {
       if (isDraining()) {
         return;
       }
-      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
-      await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait between batches, so this await is intentionally sequential
+      await Bun.sleep(pollMs);
       if (isDraining()) {
         return;
       }
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
-        const indexed = await runWithHardDeadline(
+        const { found, indexed } = await runWithHardDeadline(
           "search-index",
           SEARCH_INDEX_HARD_DEADLINE_MS,
           async () =>
             await backfillSearchIndex(backfillDb, SEARCH_INDEX_BATCH_SIZE),
         );
+        // Back off only when the probe found nothing: a batch that was
+        // found but failed to index is pending work and keeps the base
+        // retry cadence.
+        pollMs =
+          found === 0
+            ? Math.min(pollMs * 2, SEARCH_INDEX_IDLE_MAX_MS)
+            : SEARCH_INDEX_INTERVAL_MS;
         if (indexed > 0) {
           logInfo(`[search-index] Indexed ${indexed} decisions (backfill)`);
         }
@@ -1103,18 +1116,19 @@ export const runCaseLawIngest = async (
     // Ungated, unlike its case-law sibling: legislation stays dual-write by
     // scope decision, so its rows always carry the text this projection
     // needs and it must always keep building.
+    let pollMs = SEARCH_INDEX_INTERVAL_MS;
     while (true) {
       if (isDraining()) {
         return;
       }
-      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
-      await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait between batches, so this await is intentionally sequential
+      await Bun.sleep(pollMs);
       if (isDraining()) {
         return;
       }
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
-        const indexed = await runWithHardDeadline(
+        const { found, indexed } = await runWithHardDeadline(
           "legislation-search-index",
           SEARCH_INDEX_HARD_DEADLINE_MS,
           async () =>
@@ -1123,6 +1137,10 @@ export const runCaseLawIngest = async (
               SEARCH_INDEX_BATCH_SIZE,
             ),
         );
+        pollMs =
+          found === 0
+            ? Math.min(pollMs * 2, SEARCH_INDEX_IDLE_MAX_MS)
+            : SEARCH_INDEX_INTERVAL_MS;
         if (indexed > 0) {
           logInfo(`[legislation-search-index] Indexed ${indexed} documents`);
         }

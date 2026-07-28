@@ -122,12 +122,16 @@ export const indexDecision = async (
  * table. Runs as a background loop in the ingestion daemon so
  * the tsvector computation doesn't block the insert path.
  *
- * Returns the number of decisions indexed in this batch.
+ * Returns how many decisions the probe found and how many of them
+ * indexed successfully; the caller schedules its next poll off `found`
+ * (an all-failing batch is pending work, not an idle projection).
  */
+type SearchIndexBackfillResult = { found: number; indexed: number };
+
 export const backfillSearchIndex = async (
   scopedDb: ScopedDb,
   batchSize: number,
-): Promise<number> => {
+): Promise<SearchIndexBackfillResult> => {
   // Find decisions that need (re)indexing. ASC order so the backlog
   // clears in insertion order, avoiding a "poison pill" where a
   // consistently-failing decision at the top of DESC blocks the
@@ -223,7 +227,7 @@ export const backfillSearchIndex = async (
     }
   }
 
-  return indexed;
+  return { found: rows.length, indexed };
 };
 
 /**
