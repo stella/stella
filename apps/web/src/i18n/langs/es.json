@@ -701,6 +701,8 @@
     "editClause": "Editar cláusula",
     "editVariant": "Editar variante",
     "export": "Exportar",
+    "exportAsCsv": "Exportar como CSV",
+    "exportAsJson": "Exportar como JSON",
     "exportFailed": "Error al exportar cláusulas",
     "formattingPreviewHint": "La numeración y el formato aquí son una vista previa. El documento generado aplica su propio formato de lista, así que no escribas los números a mano.",
     "importFailed": "Error al importar cláusulas",

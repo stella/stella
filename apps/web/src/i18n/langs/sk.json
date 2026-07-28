@@ -701,6 +701,8 @@
     "editClause": "Upraviť ustanovenie",
     "editVariant": "Upraviť variant",
     "export": "Exportovať",
+    "exportAsCsv": "Exportovať ako CSV",
+    "exportAsJson": "Exportovať ako JSON",
     "exportFailed": "Export ustanovení sa nepodaril",
     "formattingPreviewHint": "Číslovanie a formátovanie je tu len náhľad. Vygenerovaný dokument použije vlastné formátovanie zoznamov, čísla preto nepíšte ručne.",
     "importFailed": "Import ustanovení sa nepodaril",

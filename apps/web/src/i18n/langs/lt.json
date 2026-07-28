@@ -701,6 +701,8 @@
     "editClause": "Redaguoti sąlygą",
     "editVariant": "Redaguoti variantą",
     "export": "Eksportuoti",
+    "exportAsCsv": "Eksportuoti CSV formatu",
+    "exportAsJson": "Eksportuoti JSON formatu",
     "exportFailed": "Nepavyko eksportuoti sąlygų",
     "formattingPreviewHint": "Numeracija ir formatavimas čia yra peržiūra. Sugeneruotas dokumentas taiko savo sąrašų formatavimą, todėl nerašykite numerių ranka.",
     "importFailed": "Nepavyko importuoti sąlygų",

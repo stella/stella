@@ -701,6 +701,8 @@
     "editClause": "Upravit vzorové ustanovení",
     "editVariant": "Upravit variantu",
     "export": "Exportovat",
+    "exportAsCsv": "Exportovat jako CSV",
+    "exportAsJson": "Exportovat jako JSON",
     "exportFailed": "Export vzorových ustanovení se nezdařil",
     "formattingPreviewHint": "Číslování a formátování je zde jen náhled. Vygenerovaný dokument použije vlastní formátování seznamů, čísla proto nepište ručně.",
     "importFailed": "Import vzorových ustanovení se nezdařil",

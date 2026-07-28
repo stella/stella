@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import { escapeCSV } from "@/api/lib/csv";
+import { CSV_PARSE_STATUS, escapeCSV, parseCSV } from "@/api/lib/csv";
 
 /**
  * Minimal RFC 4180 single-field reader: given the text of one CSV cell as
@@ -88,6 +88,21 @@ describe("escapeCSV (properties)", () => {
         const expected = FORMULA_PREFIX_RE.test(value) ? `\t${value}` : value;
         expect(readCsvField(escapeCSV(value))).toBe(expected);
       }),
+      propertyConfig({ numRuns: 1000 }),
+    );
+  });
+
+  test("roundtrips exported cells through the import parser", () => {
+    fc.assert(
+      fc.property(
+        csvText.filter((value) => value.length > 0),
+        (value) => {
+          expect(parseCSV(escapeCSV(value))).toEqual({
+            status: CSV_PARSE_STATUS.SUCCESS,
+            rows: [[value]],
+          });
+        },
+      ),
       propertyConfig({ numRuns: 1000 }),
     );
   });

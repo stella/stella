@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Result } from "better-result";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { clauses } from "@/api/db/schema";
+import { clauseCategories, clauses } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -23,6 +23,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
 const seededClauseIds: SafeId<"clause">[] = [];
+const seededCategoryIds: SafeId<"clauseCategory">[] = [];
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -35,6 +36,11 @@ beforeAll(async () => {
 afterAll(async () => {
   if (seededClauseIds.length > 0) {
     await testDb.delete(clauses).where(inArray(clauses.id, seededClauseIds));
+  }
+  if (seededCategoryIds.length > 0) {
+    await testDb
+      .delete(clauseCategories)
+      .where(inArray(clauseCategories.id, seededCategoryIds));
   }
   await releaseRlsFixture();
 });
@@ -169,6 +175,81 @@ describe("JSON and CSV Export/Import Integration", () => {
     }
   });
 
+  test("roundtrips comma and backslash characters inside tags", async () => {
+    const clauseId = toSafeId<"clause">(Bun.randomUUIDv7());
+    seededClauseIds.push(clauseId);
+
+    await testDb.insert(clauses).values({
+      id: clauseId,
+      organizationId: ids.orgA,
+      title: "CSV Tag Roundtrip Clause",
+      body: [{ text: "First paragraph" }, { text: "Second paragraph" }],
+      metadata: {
+        version: 1,
+        custom: {
+          slug: "csv-tag-roundtrip",
+          tags: ["civil, commercial", String.raw`path\segment`],
+        },
+      },
+      createdBy: ids.userA1,
+    });
+
+    const exportResult = await Result.gen(() =>
+      exportHandler({
+        safeDb,
+        organizationId: ids.orgA,
+        query: { ids: clauseId, format: "csv" },
+      }),
+    );
+    expect(Result.isError(exportResult)).toBe(false);
+    if (Result.isError(exportResult)) {
+      return;
+    }
+
+    const file = new File(
+      [await exportResult.value.text()],
+      "clauses-roundtrip.csv",
+      { type: "text/csv" },
+    );
+    const importResult = await Result.gen(() =>
+      importHandler({
+        safeDb,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        body: { file },
+        recordAuditEvent: async () => undefined,
+      }),
+    );
+    expect(Result.isError(importResult)).toBe(false);
+    if (Result.isError(importResult)) {
+      return;
+    }
+
+    expect(importResult.value.created).toBe(1);
+    const rows = await testDb
+      .select()
+      .from(clauses)
+      .where(eq(clauses.title, "CSV Tag Roundtrip Clause"));
+    const imported = rows.find((row) => row.id !== clauseId);
+    expect(imported).toBeDefined();
+    if (!imported) {
+      return;
+    }
+
+    seededClauseIds.push(imported.id);
+    expect(imported.body).toEqual([
+      { text: "First paragraph" },
+      { text: "Second paragraph" },
+    ]);
+    expect(imported.metadata).toMatchObject({
+      version: 1,
+      custom: {
+        slug: "csv-tag-roundtrip",
+        tags: ["civil, commercial", String.raw`path\segment`],
+      },
+    });
+  });
+
   test("imports clauses from a valid JSON payload", async () => {
     const jsonPayload = {
       version: 1,
@@ -187,8 +268,8 @@ describe("JSON and CSV Export/Import Integration", () => {
               tags: ["tag-json"],
             },
           },
-          categoryName: "Contracts",
-          categoryPath: ["Contracts"],
+          categoryName: "Imported JSON Contracts",
+          categoryPath: ["Imported JSON Contracts"],
         },
       ],
     };
@@ -230,13 +311,23 @@ describe("JSON and CSV Export/Import Integration", () => {
           },
         });
       }
+
+      const importedCategories = await testDb
+        .select({ id: clauseCategories.id })
+        .from(clauseCategories)
+        .where(eq(clauseCategories.name, "Imported JSON Contracts"));
+      const importedCategory = importedCategories.at(0);
+      if (importedCategory) {
+        seededCategoryIds.push(importedCategory.id);
+      }
     }
   });
 
   test("rejects CSV with missing required headers", async () => {
-    const csvContent = ["title,body", 'Imported Clause 1,"Body paragraph 1"'].join(
-      "\n",
-    );
+    const csvContent = [
+      "title,body",
+      'Imported Clause 1,"Body paragraph 1"',
+    ].join("\n");
 
     const file = new File([csvContent], "clauses.csv", { type: "text/csv" });
     const auditRecorder = async () => undefined;
@@ -258,6 +349,45 @@ describe("JSON and CSV Export/Import Integration", () => {
       });
       expect(res.error.message).toContain("Missing required CSV headers");
     }
+  });
+
+  test("rejects unterminated quoted CSV without inserting a clause", async () => {
+    const file = new File(
+      [
+        [
+          "slug,title,body,tags",
+          'first,Malformed CSV Clause,"Body',
+          "second,Absorbed Clause,Body,tag",
+        ].join("\n"),
+      ],
+      "clauses.csv",
+      { type: "text/csv" },
+    );
+
+    const result = await Result.gen(() =>
+      importHandler({
+        safeDb,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+        body: { file },
+        recordAuditEvent: async () => undefined,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (!Result.isError(result)) {
+      return;
+    }
+    expect(result.error).toMatchObject({
+      status: 400,
+      message: "Invalid CSV file",
+    });
+
+    const rows = await testDb
+      .select({ id: clauses.id })
+      .from(clauses)
+      .where(eq(clauses.title, "Malformed CSV Clause"));
+    expect(rows).toEqual([]);
   });
 
   test("rejects invalid JSON payload", async () => {

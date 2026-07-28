@@ -68,6 +68,7 @@ export const clausesRoute = new Elysia({
     permissions: exportClauses.config.permissions,
     query: exportClauses.config.query,
   })
+  // Deprecated compatibility alias for clients using the original JSON import.
   .put("/import", importClauses.handler, {
     body: importClauses.config.body,
     permissions: importClauses.config.permissions,

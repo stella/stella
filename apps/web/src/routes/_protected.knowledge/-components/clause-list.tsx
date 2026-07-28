@@ -124,9 +124,11 @@ export const ClauseList = ({
     }
 
     const { data } = response;
+    const fileName =
+      format === "csv" ? "clauses-export.csv" : "clauses-export.json";
     if (data instanceof Response) {
       const blob = await data.blob();
-      downloadFile(blob, format === "csv" ? "clauses-export.csv" : "clauses-export.json");
+      downloadFile(blob, fileName);
       return;
     }
 
@@ -134,9 +136,11 @@ export const ClauseList = ({
     const blob =
       format === "csv"
         ? new Blob([String(data)], { type: "text/csv" })
-        : new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        : new Blob([JSON.stringify(data, null, 2)], {
+            type: "application/json",
+          });
 
-    downloadFile(blob, format === "csv" ? "clauses-export.csv" : "clauses-export.json");
+    downloadFile(blob, fileName);
   };
 
   return (
@@ -208,14 +212,14 @@ export const ClauseList = ({
                         detached(handleExport("json"), "ClauseList");
                       }}
                     >
-                      Export as JSON
+                      {t("clauses.exportAsJson")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => {
                         detached(handleExport("csv"), "ClauseList");
                       }}
                     >
-                      Export as CSV
+                      {t("clauses.exportAsCsv")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

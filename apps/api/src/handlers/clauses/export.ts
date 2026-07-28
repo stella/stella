@@ -1,19 +1,21 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses, clauseVariants } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
-import { slugify } from "@/api/handlers/skills/slug";
-import { buildClauseCategoryPath } from "./category-path";
-import { arrayOrEmpty } from "@/api/lib/array";
+import { isRecord } from "@/api/lib/type-guards";
 
+import { buildClauseCategoryPath } from "./category-path";
+import { deriveClauseSlug, serializeClauseTags } from "./clause-csv";
 import type {
   ClauseExportItem,
   ClauseExportPayload,
@@ -29,7 +31,7 @@ const exportQuerySchema = t.Object({
 type ExportProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  query: { ids?: string; format?: "json" | "csv" };
+  query: Static<typeof exportQuerySchema>;
 };
 
 export const exportHandler = async function* ({
@@ -74,37 +76,28 @@ export const exportHandler = async function* ({
     const csvRows = ["slug,title,body,tags"];
 
     for (const row of rows) {
-      const meta = row.metadata;
       let slug = "";
-      let tags = "";
-      if (
-        meta &&
-        typeof meta === "object" &&
-        "custom" in meta &&
-        meta.custom &&
-        typeof meta.custom === "object"
-      ) {
-        const custom = meta.custom as Record<string, unknown>;
+      let tags: string[] = [];
+      const custom = isRecord(row.metadata) ? row.metadata.custom : undefined;
+      if (isRecord(custom)) {
         slug = typeof custom["slug"] === "string" ? custom["slug"] : "";
         if (Array.isArray(custom["tags"])) {
-          tags = custom["tags"].map(String).join(",");
+          tags = custom["tags"].filter(
+            (tag): tag is string => typeof tag === "string",
+          );
         }
       }
 
-      if (!slug) {
-        slug = slugify(row.title);
-      }
+      slug = deriveClauseSlug(row.title, row.id, slug);
 
-      const bodyText = Array.isArray(row.body)
-        ? row.body.map((p) => (typeof p?.text === "string" ? p.text : "")).join("\n")
-        : "";
+      const bodyText = row.body.map(({ text }) => text).join("\n");
 
       csvRows.push(
         [
           escapeCSV(slug),
           escapeCSV(row.title),
           escapeCSV(bodyText),
-          escapeCSV(tags),
+          escapeCSV(serializeClauseTags(tags)),
         ].join(","),
       );
     }

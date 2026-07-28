@@ -19,6 +19,8 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 
+import { getClauseImportPreviewCount } from "./clause-import-dialog.logic";
+
 type ImportResult = {
   created: number;
   skipped: number;
@@ -56,26 +58,8 @@ export const ClauseImportDialog = ({
     selected
       .text()
       .then((text) => {
-        try {
-          const parsed = JSON.parse(text);
-          if (
-            typeof parsed === "object" &&
-            parsed !== null &&
-            "clauses" in parsed
-          ) {
-            const { clauses } = parsed;
-            setPreviewCount(Array.isArray(clauses) ? clauses.length : 0);
-            return;
-          }
-        } catch {
-          // fallback to CSV preview count
-          const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-          if (lines.length > 1) {
-            setPreviewCount(lines.length - 1);
-            return;
-          }
-        }
-        setPreviewCount(0);
+        setPreviewCount(getClauseImportPreviewCount(text, selected.name));
+        return;
       })
       .catch(() => {
         setPreviewCount(null);

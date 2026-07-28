@@ -701,6 +701,8 @@
     "editClause": "Rediģēt klauzulu",
     "editVariant": "Rediģēt variantu",
     "export": "Eksportēt",
+    "exportAsCsv": "Eksportēt CSV formātā",
+    "exportAsJson": "Eksportēt JSON formātā",
     "exportFailed": "Neizdevās eksportēt klauzulas",
     "formattingPreviewHint": "Numerācija un formatējums šeit ir priekšskatījums. Ģenerētais dokuments piemēro savu sarakstu formatējumu, tāpēc neievadiet numurus manuāli.",
     "importFailed": "Neizdevās importēt klauzulas",

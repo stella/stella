@@ -701,6 +701,8 @@
     "editClause": "Edytuj klauzulę",
     "editVariant": "Edytuj wariant",
     "export": "Eksportuj",
+    "exportAsCsv": "Eksportuj jako CSV",
+    "exportAsJson": "Eksportuj jako JSON",
     "exportFailed": "Nie udało się wyeksportować klauzul",
     "formattingPreviewHint": "Numeracja i formatowanie są tutaj tylko podglądem. Wygenerowany dokument stosuje własne formatowanie list, dlatego nie wpisuj numerów ręcznie.",
     "importFailed": "Nie udało się zaimportować klauzul",
