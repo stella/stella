@@ -28,6 +28,9 @@ import { LIMITS } from "@/api/lib/limits";
  */
 
 const INDEX_CONCURRENCY = 4;
+/** Run the stale scan at least once per this many batches under a full
+ *  missing backlog (see the duty-cycle note in `backfill`). */
+const STALE_SCAN_DUTY_CYCLE = 20;
 
 /**
  * Delete-task query selecting every search document a row projects to. Keyed
@@ -258,6 +261,12 @@ export type LoadDocsForBatchOptions<TBrand extends SafeIdType, TRow> = {
   fetchFulltext: FetchFulltext<TBrand>;
   /** Override the per-row canonical payload load (test seam). */
   readPayload?: (row: TRow) => Promise<CorpusDocumentPayload>;
+  /**
+   * Concurrent canonical-object reads per chunk. The daemon default keeps
+   * S3 pressure low next to live traffic; a dedicated bulk build may raise
+   * it, since the build task is the only reader of its corpus prefix.
+   */
+  readConcurrency?: number;
 };
 
 /**
@@ -374,8 +383,16 @@ export const createCorpusIndexer = <
       generation,
       fetchFulltext,
       readPayload,
+      readConcurrency = INDEX_CONCURRENCY,
     }: LoadDocsForBatchOptions<TBrand, TRow>,
   ): Promise<LoadedBatch<TBrand, TRow>> => {
+    // The stride drives the chunk loop; anything below 1 (or non-finite)
+    // would stall or skip rows, so it is clamped rather than trusted.
+    // Counted in rows: a passage row issues up to two object reads, so the
+    // in-flight request ceiling is twice this value.
+    const stride = Number.isFinite(readConcurrency)
+      ? Math.max(1, Math.floor(readConcurrency))
+      : INDEX_CONCURRENCY;
     const loadRowPayload =
       readPayload ??
       (async (row: TRow): Promise<CorpusDocumentPayload> => {
@@ -398,8 +415,8 @@ export const createCorpusIndexer = <
       });
     const built: LoadedBatch<TBrand, TRow>["built"] = [];
     const readFailures: LoadedBatch<TBrand, TRow>["readFailures"] = [];
-    for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
-      const slice = rows.slice(i, i + INDEX_CONCURRENCY);
+    for (let i = 0; i < rows.length; i += stride) {
+      const slice = rows.slice(i, i + stride);
       // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
       const loaded = await Promise.all(
         slice.map(async (row) => {
@@ -525,20 +542,47 @@ export const createCorpusIndexer = <
    * quarter of the batch for stale so re-indexes are not starved by a
    * missing-doc backlog. Returns the number indexed.
    */
+  let staleSkips = 0;
+
   const backfill = async (
     scopedDb: ScopedDb,
     batchSize: number,
     generation: string,
+    options: { readConcurrency?: number } = {},
   ): Promise<number> => {
     const staleReserved = Math.max(1, Math.floor(batchSize / 4));
-    const missingLimit = Math.max(1, batchSize - staleReserved);
+    // A due duty batch cedes one missing slot up front so granting the
+    // stale scan capacity below cannot push the batch past its requested
+    // size (batchSize 1 becomes a stale-only batch on the due call).
+    const dutyDue = staleSkips >= STALE_SCAN_DUTY_CYCLE - 1;
+    const missingLimit = Math.max(
+      dutyDue ? 0 : 1,
+      batchSize - staleReserved - (dutyDue ? 1 : 0),
+    );
 
-    const missing = await adapter.selectMissing(scopedDb, {
-      generation,
-      limit: missingLimit,
-    });
+    const missing =
+      missingLimit === 0
+        ? []
+        : await adapter.selectMissing(scopedDb, {
+            generation,
+            limit: missingLimit,
+          });
 
-    const staleLimit = batchSize - missing.length;
+    // The stale scan is duty-cycled while the missing backlog fills its
+    // quota. Its predicate (hash mismatch within the current generation)
+    // has no covering index, so against a generation with a large missing
+    // backlog — a fresh generation build being the extreme — it is a long
+    // scan that often returns nothing, paid on every batch. Stale rows
+    // are re-indexes of content the index already serves in some version,
+    // so they can wait — but not forever: ingestion can keep the missing
+    // backlog full indefinitely, so every STALE_SCAN_DUTY_CYCLEth batch
+    // still runs the scan with its reserve, bounding staleness instead of
+    // trading it away.
+    const staleLimit =
+      missing.length >= missingLimit && !dutyDue
+        ? 0
+        : batchSize - missing.length;
+    staleSkips = staleLimit === 0 ? staleSkips + 1 : 0;
     const stale =
       staleLimit <= 0
         ? []
@@ -547,7 +591,16 @@ export const createCorpusIndexer = <
             limit: staleLimit,
           });
 
-    const rows: TRow[] = [...missing, ...stale];
+    let rows: TRow[] = [...missing, ...stale];
+    if (rows.length === 0 && dutyDue && missingLimit < batchSize) {
+      // A stale-only duty batch that found nothing must not report zero —
+      // callers treat zero as completion. Fall back to a full missing
+      // selection so the duty batch costs at most one extra query.
+      rows = await adapter.selectMissing(scopedDb, {
+        generation,
+        limit: batchSize,
+      });
+    }
     if (rows.length === 0) {
       return 0;
     }
@@ -560,6 +613,9 @@ export const createCorpusIndexer = <
     const { built, readFailures } = await loadDocsForBatch(rows, {
       generation,
       fetchFulltext,
+      ...(options.readConcurrency === undefined
+        ? {}
+        : { readConcurrency: options.readConcurrency }),
     });
     await recordReadFailures(scopedDb, readFailures, generation);
 
