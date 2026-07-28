@@ -9,6 +9,8 @@ export {
   AresValidationError,
 } from "./errors.js";
 export { parseAddress, parseResRecord, parseSearchEntry } from "./parse.js";
+export { toNormalizedEntity, toNormalizedSearchResult } from "./normalized.js";
+export type { NormalizeAresOptions } from "./normalized.js";
 export type {
   AresAddress,
   AresBodyMember,

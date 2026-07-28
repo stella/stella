@@ -12,5 +12,20 @@ export {
 } from "./errors.js";
 export type { EntityNotFound } from "./errors.js";
 export { clampSearchLimit } from "./search.js";
+export type {
+  NormalizedRegistryAddress,
+  NormalizedRegistryBirthDate,
+  NormalizedRegistryCapital,
+  NormalizedRegistryEntity,
+  NormalizedRegistryEntityFields,
+  NormalizedRegistryField,
+  NormalizedRegistryIdentifier,
+  NormalizedRegistryKeyPeopleGroup,
+  NormalizedRegistryKeyPerson,
+  NormalizedRegistryRecord,
+  NormalizedRegistrySearchFields,
+  NormalizedRegistrySearchResult,
+  NormalizedRegistryWarning,
+} from "./normalized.js";
 export type { EntityStatus } from "./status.js";
 export { mapEntityStatus } from "./status.js";

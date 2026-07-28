@@ -21,8 +21,10 @@
     "registry",
     "sec",
     "sirene",
+    "sudreg",
     "vat",
-    "vies"
+    "vies",
+    "zefix"
   ],
   "homepage": "https://github.com/stella/stella/tree/main/packages/business-registries",
   "bugs": {
@@ -109,6 +111,16 @@
       "bun": "./src/shared/index.ts",
       "types": "./src/shared/index.ts",
       "import": "./dist/shared/index.js"
+    },
+    "./sudreg": {
+      "bun": "./src/sudreg/index.ts",
+      "types": "./src/sudreg/index.ts",
+      "import": "./dist/sudreg/index.js"
+    },
+    "./zefix": {
+      "bun": "./src/zefix/index.ts",
+      "types": "./src/zefix/index.ts",
+      "import": "./dist/zefix/index.js"
     }
   },
   "publishConfig": {

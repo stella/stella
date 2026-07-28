@@ -12,6 +12,7 @@ export {
   parseEstablishment,
   parseSearchEntry,
 } from "./parse.js";
+export { toNormalizedEntity, toNormalizedSearchResult } from "./normalized.js";
 export type {
   RechercheEntreprisesAddress,
   RechercheEntreprisesCompany,
