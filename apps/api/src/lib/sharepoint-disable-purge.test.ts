@@ -15,10 +15,10 @@ import {
   sharepointOAuthState,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
-import { purgeSharepointForOrg } from "@/api/handlers/sharepoint/disable-purge";
 import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { purgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,

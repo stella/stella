@@ -4,6 +4,7 @@ import connectSharepoint from "@/api/handlers/sharepoint/connect";
 import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
 import listSharepointDriveRoot from "@/api/handlers/sharepoint/list-drive-root";
 import sharepointOAuthCallback from "@/api/handlers/sharepoint/oauth-callback";
+import setSharepointEnablement from "@/api/handlers/sharepoint/set-enablement";
 import sharepointConnectionStatus from "@/api/handlers/sharepoint/status";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
@@ -16,6 +17,11 @@ export const sharepointRoute = new Elysia({ prefix: "/sharepoint" })
   .get("/oauth/callback", sharepointOAuthCallback.handler, {
     permissions: sharepointOAuthCallback.config.permissions,
     query: sharepointOAuthCallback.config.query,
+  })
+  .put("/enablement", setSharepointEnablement.handler, {
+    body: setSharepointEnablement.config.body,
+    invalidateQuery: true,
+    permissions: setSharepointEnablement.config.permissions,
   })
   .post("/connect", connectSharepoint.handler, {
     invalidateQuery: true,

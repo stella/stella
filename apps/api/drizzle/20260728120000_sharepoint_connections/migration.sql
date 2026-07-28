@@ -22,8 +22,7 @@ CREATE TABLE "sharepoint_connections" (
 	"status" text NOT NULL,
 	"last_used_at" timestamp with time zone,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "sharepoint_connections_status_values_check" CHECK ("status" IN ('connected', 'reconnect_required'))
+	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "sharepoint_oauth_state" (

@@ -19,6 +19,7 @@ import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import type { RefreshToken } from "@/api/lib/secret-brands";
 
 const GRAPH_OAUTH_TIMEOUT_MS = 10_000;
@@ -172,14 +173,14 @@ const requestToken = async ({
 }): Promise<Result<GraphTokenResponse, HandlerError<502>>> =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetch(tokenEndpoint(tenantId), {
+      const response = await fetchWithTimeout(tokenEndpoint(tenantId), {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
           Accept: "application/json",
         },
         body,
-        signal: AbortSignal.timeout(GRAPH_OAUTH_TIMEOUT_MS),
+        timeoutMs: GRAPH_OAUTH_TIMEOUT_MS,
       });
 
       if (!response.ok) {
@@ -191,14 +192,17 @@ const requestToken = async ({
 
       return v.parse(graphTokenResponseSchema, await response.json());
     },
-    catch: (cause) =>
-      HandlerError.is(cause)
-        ? cause
-        : new HandlerError({
-            status: 502,
-            message: "Failed to reach the Microsoft token endpoint",
-            cause,
-          }),
+    // Always surface a 502 so the Result error channel unifies to
+    // HandlerError<502>; preserve the message when the failure is our own
+    // thrown 502 (a non-ok token response).
+    catch: (cause): HandlerError<502> =>
+      new HandlerError({
+        status: 502,
+        message: HandlerError.is(cause)
+          ? cause.message
+          : "Failed to reach the Microsoft token endpoint",
+        cause,
+      }),
   });
 
 export const exchangeAuthorizationCode = async ({

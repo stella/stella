@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, lt } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import { t } from "elysia";
 
 import { sharepointConnections, sharepointOAuthState } from "@/api/db/schema";

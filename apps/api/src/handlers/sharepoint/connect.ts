@@ -40,10 +40,9 @@ const connectSharepoint = createSafeRootHandler(
     const redirectUri = getSharepointRedirectUri();
 
     yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
+      safeDb(async (tx) => {
         // audit: skip — ephemeral OAuth state row consumed by the callback; the resulting connection is recorded at callback time.
-        return tx.insert(sharepointOAuthState).values({
+        await tx.insert(sharepointOAuthState).values({
           state,
           organizationId: session.activeOrganizationId,
           userId: user.id,

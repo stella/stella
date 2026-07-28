@@ -12,9 +12,10 @@
  *
  * The public entry point runs on the elevated (table-owner) connection
  * deliberately: the per-user RLS on sharepoint_connections would otherwise let
- * an admin delete only their own row. Every statement is filtered by the
- * server-validated organizationId, so the elevation reaches exactly this org's
- * rows.
+ * an admin delete only their own row. This owner-level access lives in a lib
+ * helper (handlers may not import the root db); every statement is filtered by
+ * the server-validated organizationId, so the elevation reaches exactly this
+ * org's rows.
  */
 
 import { eq } from "drizzle-orm";

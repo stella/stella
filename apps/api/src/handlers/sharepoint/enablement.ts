@@ -38,7 +38,7 @@ export const assertSharepointConnectionEnabled = async ({
       ),
     );
 
-    if (settings?.sharepointConnectionEnabled !== true) {
+    if (!settings?.sharepointConnectionEnabled) {
       return Result.err(
         new HandlerError({
           status: 403,

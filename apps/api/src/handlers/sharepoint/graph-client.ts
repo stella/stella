@@ -20,7 +20,7 @@ import * as v from "valibot";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { sharepointConnections } from "@/api/db/schema";
-import type { SharepointConnectionStatus } from "@/api/db/schema/sharepoint";
+import type { SharepointConnectionStatus } from "@/api/db/schema";
 import {
   decryptSharepointSecret,
   encryptSharepointSecret,
@@ -33,6 +33,7 @@ import {
 } from "@/api/handlers/sharepoint/graph-oauth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import type { Page } from "@/api/lib/pagination";
 import type { AccessToken } from "@/api/lib/secret-brands";
 
@@ -68,8 +69,11 @@ const markReconnectRequired = async ({
 }): Promise<Result<void, SafeDbError>> =>
   await Result.gen(async function* () {
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        // audit: skip — token-refresh bookkeeping: flags the connection as
+        // needing reconnect. The user-facing lifecycle events (connect /
+        // disconnect / org-disable purge) are the audited surface.
+        await tx
           .update(sharepointConnections)
           .set({ status: "reconnect_required", updatedAt: new Date() })
           .where(
@@ -81,8 +85,8 @@ const markReconnectRequired = async ({
               ),
               eq(sharepointConnections.userId, connection.userId),
             ),
-          ),
-      ),
+          );
+      }),
     );
     return Result.ok(undefined);
   });
@@ -158,8 +162,12 @@ export const ensureSharepointAccessToken = async ({
       : null;
 
     yield* Result.await(
-      safeDb((tx) =>
-        tx
+      safeDb(async (tx) => {
+        // audit: skip — token-refresh bookkeeping: rotates the stored access /
+        // refresh tokens after a silent Graph refresh. The user-facing
+        // lifecycle events (connect / disconnect / org-disable purge) are the
+        // audited surface.
+        await tx
           .update(sharepointConnections)
           .set({
             accessTokenEncrypted: encryptedAccess.ciphertext,
@@ -186,8 +194,8 @@ export const ensureSharepointAccessToken = async ({
               ),
               eq(sharepointConnections.userId, connection.userId),
             ),
-          ),
-      ),
+          );
+      }),
     );
 
     // Re-decrypt what we just stored so the returned value is minted through
@@ -288,12 +296,12 @@ export const fetchAccountLabel = async (
   try {
     const url = new URL(`${GRAPH_API_BASE_URL}/me`);
     url.searchParams.set("$select", "userPrincipalName,displayName,mail");
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
       },
-      signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
+      timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
     });
     if (!response.ok) {
       return null;
@@ -324,12 +332,12 @@ export const listDriveRootChildren = async ({
         url.searchParams.set("$skiptoken", cursor);
       }
 
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           Accept: "application/json",
         },
-        signal: AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS),
+        timeoutMs: GRAPH_FETCH_TIMEOUT_MS,
       });
 
       if (!response.ok) {
@@ -345,12 +353,14 @@ export const listDriveRootChildren = async ({
       );
       return mapDriveChildrenToPage(parsed, limit);
     },
-    catch: (cause) =>
-      HandlerError.is(cause)
-        ? cause
-        : new HandlerError({
-            status: 502,
-            message: "Failed to reach Microsoft Graph",
-            cause,
-          }),
+    // Always surface a 502 so the Result error channel unifies to
+    // HandlerError<502>; preserve the message from our own thrown 502.
+    catch: (cause): HandlerError<502> =>
+      new HandlerError({
+        status: 502,
+        message: HandlerError.is(cause)
+          ? cause.message
+          : "Failed to reach Microsoft Graph",
+        cause,
+      }),
   });

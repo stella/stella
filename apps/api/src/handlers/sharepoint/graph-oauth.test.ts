@@ -15,7 +15,8 @@ describe("SharePoint delegated scopes", () => {
   });
 
   test("requests exactly the intended read-only + offline set", () => {
-    expect([...SHAREPOINT_DELEGATED_SCOPES].sort()).toEqual(
+    const requested: string[] = [...SHAREPOINT_DELEGATED_SCOPES];
+    expect(requested.sort()).toEqual(
       [
         "offline_access",
         "https://graph.microsoft.com/User.Read",
