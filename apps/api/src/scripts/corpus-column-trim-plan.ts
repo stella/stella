@@ -1,5 +1,8 @@
 import type { CorpusPayload } from "@/api/handlers/case-law/corpus-storage";
-import { payloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
+import {
+  namesEmptyCorpusPayload,
+  payloadCarriesDocument,
+} from "@/api/handlers/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 
 /**
@@ -27,11 +30,12 @@ type CorpusObjectStateInput = {
   /** Result of the bucket lookup; ignored when `key` is null. */
   exists: boolean;
   /**
-   * Whether the object holds what the column holds. Left undefined
-   * where the column holds nothing worth proving, which is the only
-   * case presence alone settles.
+   * Whether the object holds what the column holds, or "not-checked"
+   * where the column holds nothing worth proving — the only case
+   * presence alone settles. Spelled out rather than optional so an
+   * omitted comparison cannot silently pass a destructive gate.
    */
-  matchesColumn?: boolean;
+  matchesColumn: boolean | "not-checked";
 };
 
 export const corpusObjectState = ({
@@ -45,7 +49,9 @@ export const corpusObjectState = ({
   if (!exists) {
     return "object-missing";
   }
-  return matchesColumn === false ? "content-mismatch" : "verified";
+  return matchesColumn === true || matchesColumn === "not-checked"
+    ? "verified"
+    : "content-mismatch";
 };
 
 export type ColumnTrimDecision =
@@ -58,6 +64,8 @@ type ColumnTrimInput = {
   ast: CorpusObjectState;
   /** What the Postgres columns hold, which is what the trim deletes. */
   columnPayload: CorpusPayload;
+  /** The row's stored corpus content hash, for the empty-constant test. */
+  contentHash: string | null;
 };
 
 /**
@@ -97,7 +105,24 @@ export const planColumnTrim = ({
   sections,
   ast,
   columnPayload,
+  contentHash,
 }: ColumnTrimInput): ColumnTrimDecision => {
+  // A row that holds no document anywhere must keep its columns: the
+  // fetch queue recognises a verbatim empty copy by the surviving
+  // Postgres AST artifact, so trimming it would strand the row —
+  // unreadable, yet excluded from fetching. Pure-constant empties are
+  // exempt (the queue admits their hashes directly).
+  if (
+    !payloadCarriesDocument(columnPayload) &&
+    !namesEmptyCorpusPayload(contentHash)
+  ) {
+    return {
+      type: "skip",
+      reason:
+        "columns hold no document and the corpus hash is row-specific; " +
+        "trimming would strand the row for the fetch queue",
+    };
+  }
   const states = { text, sections, ast };
   const unusable = Object.entries(states).filter(([, state]) =>
     payloadCarriesDocument(columnPayload)
@@ -114,7 +139,9 @@ export const planColumnTrim = ({
     type: "skip",
     reason: unusable.some(([, state]) => state === "content-mismatch")
       ? `object storage does not hold what the columns hold (${detail}); ` +
-        "repair the objects first (backfill-corpus-storage --include-stale-empty)"
+        "empty copies are repaired by backfill-corpus-storage " +
+        "--include-stale-empty, version skew by the next ingest refresh " +
+        "of the row (the mirror rewrites the objects); re-run the trim after"
       : detail,
   };
 };

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { CorpusPayload } from "@/api/handlers/case-law/corpus-storage";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/handlers/case-law/corpus-storage";
 import {
   columnTrimGate,
   corpusObjectState,
@@ -47,18 +48,37 @@ const storedDocument: CorpusPayload = {
 };
 
 /** A row whose objects hold exactly what its columns hold. */
-const mirrored = { columnPayload: storedDocument } as const;
+const mirrored = {
+  columnPayload: storedDocument,
+  contentHash: "a-row-specific-hash",
+} as const;
 
 describe("corpusObjectState", () => {
   test("a recorded key is only verified once the object is found", () => {
-    expect(corpusObjectState({ key: "k", exists: true })).toBe("verified");
-    expect(corpusObjectState({ key: "k", exists: false })).toBe(
-      "object-missing",
-    );
+    expect(
+      corpusObjectState({
+        key: "k",
+        exists: true,
+        matchesColumn: "not-checked",
+      }),
+    ).toBe("verified");
+    expect(
+      corpusObjectState({
+        key: "k",
+        exists: false,
+        matchesColumn: "not-checked",
+      }),
+    ).toBe("object-missing");
   });
 
   test("a missing key is never verified, whatever the bucket says", () => {
-    expect(corpusObjectState({ key: null, exists: true })).toBe("key-missing");
+    expect(
+      corpusObjectState({
+        key: null,
+        exists: true,
+        matchesColumn: "not-checked",
+      }),
+    ).toBe("key-missing");
   });
 
   test("a present object holding something else is not verified", () => {
@@ -119,12 +139,11 @@ describe("planColumnTrim", () => {
     }
   });
 
-  test("columns holding no document need only presence", () => {
+  test("columns holding no document trim only when the hash is a known empty", () => {
+    const emptyHash = EMPTY_CORPUS_CONTENT_HASHES[0] ?? "";
     for (const columnPayload of [
       { text: null, sections: null, ast: null },
       { text: "", sections: null, ast: {} },
-      // An envelope with no blocks is not a document either.
-      { text: "", sections: [], ast: documentAst([]) },
     ] satisfies CorpusPayload[]) {
       expect(
         planColumnTrim({
@@ -132,18 +151,10 @@ describe("planColumnTrim", () => {
           sections: "verified",
           ast: "verified",
           columnPayload,
+          contentHash: emptyHash,
         }),
       ).toEqual({ type: "trim" });
-      // Nothing to lose, so a mismatch does not block it either.
-      expect(
-        planColumnTrim({
-          text: "content-mismatch",
-          sections: "verified",
-          ast: "verified",
-          columnPayload,
-        }),
-      ).toEqual({ type: "trim" });
-      // A missing object still does: nothing proves the row was ever
+      // A missing object still blocks: nothing proves the row was ever
       // written to object storage.
       expect(
         planColumnTrim({
@@ -151,9 +162,22 @@ describe("planColumnTrim", () => {
           sections: "verified",
           ast: "verified",
           columnPayload,
+          contentHash: emptyHash,
         }).type,
       ).toBe("skip");
     }
+    // A row-specific hash over empty columns is the verbatim empty-envelope
+    // copy: trimming would strand the row for the fetch queue, which
+    // recognises it by the surviving AST artifact.
+    expect(
+      planColumnTrim({
+        text: "verified",
+        sections: "verified",
+        ast: "verified",
+        columnPayload: { text: "", sections: [], ast: documentAst([]) },
+        contentHash: "a-row-specific-hash",
+      }).type,
+    ).toBe("skip");
   });
 
   test("the skip reason names every object's state", () => {

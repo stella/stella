@@ -128,11 +128,15 @@ const checkObject = async (
   compareContent: boolean,
 ): Promise<CorpusObjectState> => {
   if (key === null) {
-    return corpusObjectState({ key, exists: false });
+    return corpusObjectState({
+      key,
+      exists: false,
+      matchesColumn: "not-checked",
+    });
   }
   const exists = await corpusObjectExists(key);
   if (!exists || !compareContent) {
-    return corpusObjectState({ key, exists });
+    return corpusObjectState({ key, exists, matchesColumn: "not-checked" });
   }
   return corpusObjectState({
     key,
@@ -192,7 +196,13 @@ const trimRow = async (row: TrimRow): Promise<void> => {
       ),
     ]);
 
-    const decision = planColumnTrim({ text, sections, ast, columnPayload });
+    const decision = planColumnTrim({
+      text,
+      sections,
+      ast,
+      columnPayload,
+      contentHash: row.contentHash,
+    });
 
     if (decision.type === "skip") {
       skipped += 1;

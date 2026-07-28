@@ -109,10 +109,11 @@ export const corpusContentHash = ({
  * to the empty shapes cannot leave a stale constant behind. `null` and
  * `""` text hash alike (the hasher coalesces), so the variants are the
  * cross product of the empty sections shapes (none, or a stored `[]`)
- * with the empty AST shapes (the `EMPTY_AST` placeholder, none at all,
- * or a structurally valid AST with no blocks) — every payload a corpus
- * writer can produce for a row that carries no document, including
- * legacy column shapes the backfill copies verbatim.
+ * with the constant empty AST shapes (the `EMPTY_AST` placeholder, or
+ * none at all). A structurally valid AST with no blocks is deliberately
+ * NOT here — its envelope carries per-document metadata, so its hash is
+ * row-specific and no constant can name it; those rows are recognised
+ * structurally instead (see stored-payload.ts).
  */
 const EMPTY_SECTION_SHAPES: readonly (DecisionSection[] | null)[] = [null, []];
 // A full `DocumentAst` with an empty `blocks` array is NOT representable
