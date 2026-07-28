@@ -18,6 +18,7 @@ import {
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
+import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
@@ -263,9 +264,20 @@ export const readDecisionHandler = async (
       corpusReadEnabled() &&
       decision.textS3Key !== null &&
       decision.contentHash !== null,
+    contentHash: decision.contentHash,
     resolvedFulltext: fulltext,
-    decisionId,
-    caseLawDb,
+    readTextColumnWritten: async () => {
+      const [row] = await caseLawDb((tx) =>
+        tx
+          .select({
+            written: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
+          })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, decisionId))
+          .limit(1),
+      );
+      return row?.written ?? null;
+    },
   });
 
   return {
@@ -360,15 +372,20 @@ const resolveAst = async ({
   });
 };
 
-type ResolveDocumentStateInput = {
+export type ResolveDocumentStateInput = {
   /** Whether the read resolved something a reader can actually read. */
   hasReadableDocument: boolean;
   documentUrl: string | null;
   /** Whether the payload above came from object storage. */
   corpusServed: boolean;
+  contentHash: string | null;
   resolvedFulltext: string | null;
-  decisionId: SafeId<"caseLawDecision">;
-  caseLawDb: CaseLawPublicReadDb;
+  /**
+   * Reads the row's own text column as a boolean — has it ever been
+   * fetched — without pulling the document across. Called only where
+   * nothing else can tell the two empty states apart.
+   */
+  readTextColumnWritten: () => Promise<boolean | null>;
 };
 
 type DocumentState = {
@@ -385,16 +402,34 @@ type DocumentState = {
  * object storage served it, it is not — a metadata-first ingest writes
  * an empty payload, and an empty payload reads back as an empty string
  * whichever of the two states wrote it — so the column is re-read as a
- * boolean, without the document itself, and only for a decision that
- * resolved to nothing at all.
+ * boolean, without the document itself, and only where the content hash
+ * says the objects are one of those empty shapes.
+ *
+ * The states this has to separate, and what each answers:
+ *
+ * | pg text | content hash | resolved   | state       |
+ * | ------- | ------------ | ---------- | ----------- |
+ * | NULL    | none         | nothing    | pending     |
+ * | ''      | none         | ''         | unavailable |
+ * | text    | none         | document   | served      |
+ * | NULL    | empty shape  | ''         | pending     |
+ * | ''      | empty shape  | ''         | unavailable |
+ * | NULL    | a document   | document   | served      |
+ * | text    | a document   | document   | served      |
+ *
+ * The sixth row is a trimmed canonical decision: its columns are empty
+ * by design and object storage holds the document, so it is neither
+ * pending nor unavailable — and if its payload failed to arrive, that is
+ * an object-storage failure the read raises rather than a document
+ * waiting to be fetched.
  */
-const resolveDocumentState = async ({
+export const resolveDocumentState = async ({
   hasReadableDocument,
   documentUrl,
   corpusServed,
+  contentHash,
   resolvedFulltext,
-  decisionId,
-  caseLawDb,
+  readTextColumnWritten,
 }: ResolveDocumentStateInput): Promise<DocumentState> => {
   if (hasReadableDocument || documentUrl === null) {
     return { documentPending: false, documentUnavailable: false };
@@ -407,19 +442,15 @@ const resolveDocumentState = async ({
     };
   }
 
-  const [row] = await caseLawDb((tx) =>
-    tx
-      .select({
-        fetched: sql<boolean>`${caseLawDecisions.fulltext} IS NOT NULL`,
-      })
-      .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, decisionId))
-      .limit(1),
-  );
+  if (corpusCarriesDocument(contentHash)) {
+    return { documentPending: false, documentUnavailable: false };
+  }
+
+  const written = await readTextColumnWritten();
 
   return {
-    documentPending: row?.fetched === false,
-    documentUnavailable: row?.fetched === true,
+    documentPending: written === false,
+    documentUnavailable: written === true,
   };
 };
 

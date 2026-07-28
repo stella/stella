@@ -16,7 +16,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -120,6 +120,28 @@ if (!databaseUrl || !runPostgresTests) {
       return row.id;
     };
 
+    /** A decision the queue has not reached: metadata, and no document. */
+    const insertEmptyDecision = async (caseNumber: string) => {
+      const [row] = await db
+        .insert(caseLawDecisions)
+        .values({
+          sourceId,
+          caseNumber,
+          court: "Okresný súd",
+          country: "SVK",
+          language: "sk",
+          documentUrl: "https://example.test/refresh.pdf",
+          metadata: { judge: "Old Judge" },
+          sourceHash: "hash-before",
+        })
+        .returning({ id: caseLawDecisions.id });
+      if (!row) {
+        throw new Error("expected decision row");
+      }
+      created.push(row.id);
+      return row.id;
+    };
+
     /** What the adapter returns for a decision it has no document for. */
     const metadataOnlyResult = (caseNumber: string): IngestionResult => ({
       caseNumber,
@@ -213,6 +235,55 @@ if (!databaseUrl || !runPostgresTests) {
       // The metadata this refresh actually carried did land.
       expect(row?.metadata).toMatchObject({ judge: "New Judge" });
       expect(row?.decisionType).toBe("rozsudok");
+      expect(row?.sourceHash).toBe("hash-after");
+    });
+
+    test("a document landing mid-refresh is not overwritten by the refresh", async () => {
+      // The window the guard closes: the refresh reads a decision with
+      // no document, a backfill commits one while it is deciding, and
+      // the write that follows would put the empty payload over it. The
+      // condition rides in the payload write's WHERE, so the row that
+      // acquired a document simply falls out of scope.
+      const caseNumber = `refresh-race-${suffix}`;
+      const id = await insertEmptyDecision(caseNumber);
+
+      let transactions = 0;
+      const racingDb: ScopedDb = async (callback) => {
+        transactions += 1;
+        // Transactions in order: the decision lookup, the check for a
+        // stored document, then the row write. Injecting as the third
+        // opens exactly the window the guard closes — the check has
+        // already answered "no document", and the write is next.
+        if (transactions === 3) {
+          await db
+            .update(caseLawDecisions)
+            .set({
+              fulltext: STORED_TEXT,
+              documentAst: storedAst,
+              sections: [
+                { index: 0, type: "header", title: null, text: "Rozsudok" },
+              ],
+            })
+            .where(eq(caseLawDecisions.id, id));
+        }
+        return await scopedDb(callback);
+      };
+
+      await processDecision(metadataOnlyResult(caseNumber), sourceId, racingDb);
+
+      // If the sequence ever changes, the injection no longer lands in
+      // the window and this test would pass without exercising it.
+      expect(transactions).toBe(3);
+
+      const row = await readDecision(id);
+      expect(row?.fulltext).toBe(STORED_TEXT);
+      expect(
+        row?.documentAst && "blocks" in row.documentAst
+          ? row.documentAst.blocks.length
+          : 0,
+      ).toBe(1);
+      // The metadata this refresh carried is unconditional and lands.
+      expect(row?.metadata).toMatchObject({ judge: "New Judge" });
       expect(row?.sourceHash).toBe("hash-after");
     });
 

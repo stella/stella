@@ -16,6 +16,7 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS, PARSER_VERSION } from "@/api/handlers/case-law/consts";
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/handlers/case-law/corpus-storage";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   claimDocumentFetch,
@@ -125,6 +126,8 @@ if (!databaseUrl || !runPostgresTests) {
       documentFetchRequestedAt?: Date;
       documentFetchAttemptedAt?: Date;
       documentFetchAttempts?: number;
+      sourceHash?: string;
+      contentHash?: string;
     }) => {
       const [row] = await db
         .insert(caseLawDecisions)
@@ -140,6 +143,8 @@ if (!databaseUrl || !runPostgresTests) {
           documentFetchRequestedAt: values.documentFetchRequestedAt,
           documentFetchAttemptedAt: values.documentFetchAttemptedAt,
           documentFetchAttempts: values.documentFetchAttempts,
+          sourceHash: values.sourceHash,
+          contentHash: values.contentHash,
         })
         .returning({ id: caseLawDecisions.id });
       if (!row) {
@@ -376,8 +381,8 @@ if (!databaseUrl || !runPostgresTests) {
 
       // A reader on one replica and the scheduler on another reach the
       // same decision: exactly one may fetch it.
-      expect(await claimDocumentFetch(id, scopedDb)).toBe(true);
-      expect(await claimDocumentFetch(id, scopedDb)).toBe(false);
+      expect((await claimDocumentFetch(id, scopedDb)).status).toBe("claimed");
+      expect((await claimDocumentFetch(id, scopedDb)).status).toBe("held");
 
       const afterClaims = await readFetchState(id);
       expect(afterClaims?.documentFetchAttempts).toBe(1);
@@ -393,7 +398,7 @@ if (!databaseUrl || !runPostgresTests) {
         documentFetchAttempts: 1,
       });
 
-      expect(await claimDocumentFetch(id, scopedDb)).toBe(true);
+      expect((await claimDocumentFetch(id, scopedDb)).status).toBe("claimed");
       expect((await readFetchState(id))?.documentFetchAttempts).toBe(2);
     });
 
@@ -404,7 +409,101 @@ if (!databaseUrl || !runPostgresTests) {
         documentUrl: "https://example.test/claim-filled.pdf",
       });
 
-      expect(await claimDocumentFetch(id, scopedDb)).toBe(false);
+      expect((await claimDocumentFetch(id, scopedDb)).status).toBe("held");
+    });
+
+    test("a trimmed decision is not queued for a fetch it already had", async () => {
+      // Canonical storage plus the column trim: the text column is NULL
+      // by design and object storage holds the document. Reading NULL as
+      // "never fetched" would put the whole drained corpus back in the
+      // queue.
+      const trimmed = await insertDecision({
+        caseNumber: `trimmed-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/trimmed.pdf",
+        contentHash: "a-real-content-hash",
+      });
+      // Written before its document existed: the objects are the empty
+      // shapes, so this one is still waiting.
+      const emptyObjects = await insertDecision({
+        caseNumber: `empty-objects-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/empty-objects.pdf",
+        contentHash: EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "",
+      });
+
+      const queue = await loadPendingDocuments(scopedDb, QUEUE_READ_LIMIT);
+
+      expect(onlyThese(queue, [trimmed, emptyObjects])).toEqual([emptyObjects]);
+    });
+
+    test("the store applies only while the claimed source hash holds", async () => {
+      const id = await insertDecision({
+        caseNumber: `pin-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/pin.pdf",
+        sourceHash: "hash-at-claim",
+      });
+      const document = {
+        fulltext: "Rozsudok\n\nOdôvodnenie:\n\nText.",
+        documentAst: parsedAst,
+        sections: [],
+      };
+
+      // The source refreshed the decision while the document was being
+      // fetched, so what was parsed describes a row that no longer
+      // exists in that form.
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceHash: "hash-after-refresh" })
+        .where(eq(caseLawDecisions.id, id));
+
+      await storeBackfilledDocument({
+        decision: pendingFor(id),
+        document,
+        scopedDb,
+        claimedSourceHash: "hash-at-claim",
+      });
+
+      expect(
+        (
+          await db.query.caseLawDecisions.findFirst({
+            where: { id: { eq: id } },
+            columns: { fulltext: true },
+          })
+        )?.fulltext,
+      ).toBeNull();
+
+      // Fetched again against the row as it now stands, the same
+      // document stores.
+      await storeBackfilledDocument({
+        decision: pendingFor(id),
+        document,
+        scopedDb,
+        claimedSourceHash: "hash-after-refresh",
+      });
+
+      expect(
+        (
+          await db.query.caseLawDecisions.findFirst({
+            where: { id: { eq: id } },
+            columns: { fulltext: true },
+          })
+        )?.fulltext,
+      ).toContain("Odôvodnenie");
+    });
+
+    test("the claim carries the source hash the store has to pin", async () => {
+      const id = await insertDecision({
+        caseNumber: `claim-hash-${suffix}`,
+        fulltext: null,
+        documentUrl: "https://example.test/claim-hash.pdf",
+        sourceHash: "hash-at-claim",
+      });
+
+      const claim = await claimDocumentFetch(id, scopedDb);
+
+      expect(claim).toEqual({ status: "claimed", sourceHash: "hash-at-claim" });
     });
 
     test("a run just attempted is left alone until its cooldown passes", async () => {

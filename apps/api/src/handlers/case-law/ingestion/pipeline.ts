@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
@@ -47,6 +47,7 @@ import {
   stripDangerousChars,
 } from "@/api/handlers/case-law/ingestion/sanitize";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
+import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -385,14 +386,28 @@ const discardPartialCorpusWrite = async (
 };
 
 /**
- * Whether this decision already holds a document.
+ * SQL for "this row holds a document", in the columns or in the corpus
+ * objects its hash names. The row write below carries this in its WHERE,
+ * where it is evaluated with the write and cannot go stale.
+ */
+const rowHoldsDocument = sql<boolean>`(
+  ${pgPayloadCarriesDocument}
+  or (
+    ${caseLawDecisions.contentHash} is not null
+    and ${notInArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES])}
+  )
+)`;
+
+/**
+ * The same question, asked ahead of the write. Answered as a boolean
+ * rather than by pulling the payload across: the text can be megabytes
+ * and this runs inside the crawl.
  *
- * Asked only when the incoming result carries none, and answered as
- * booleans rather than by pulling the payload across: the text can be
- * megabytes and this runs inside the crawl. Three places can hold it —
- * the text column, the AST column, and, for a row whose canonical
- * payload lives in object storage, a content hash that is not one of
- * the empty-payload hashes.
+ * This answer is advisory: it decides whether to spend a corpus write
+ * and whether to report an empty decision, neither of which can be made
+ * conditional inside the row update. The guarantee that a document is
+ * not overwritten lives in that update's WHERE clause, so a backfill
+ * committing between this read and the write loses nothing.
  */
 const hasStoredDocument = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -400,26 +415,13 @@ const hasStoredDocument = async (
 ): Promise<boolean> => {
   const [row] = await scopedDb((tx) =>
     tx
-      .select({
-        hasText: sql<boolean>`coalesce(${caseLawDecisions.fulltext}, '') <> ''`,
-        hasAst: sql<boolean>`coalesce(jsonb_array_length(case when jsonb_typeof(${caseLawDecisions.documentAst} -> 'blocks') = 'array' then ${caseLawDecisions.documentAst} -> 'blocks' else '[]'::jsonb end), 0) > 0`,
-        contentHash: caseLawDecisions.contentHash,
-      })
+      .select({ holdsDocument: rowHoldsDocument })
       .from(caseLawDecisions)
       .where(eq(caseLawDecisions.id, decisionId))
       .limit(1),
   );
 
-  if (!row) {
-    return false;
-  }
-
-  return (
-    row.hasText ||
-    row.hasAst ||
-    (row.contentHash !== null &&
-      !EMPTY_CORPUS_CONTENT_HASHES.includes(row.contentHash))
-  );
+  return row?.holdsDocument === true;
 };
 
 const planCorpusWrite = async ({
@@ -615,9 +617,12 @@ export const processDecision = async (
   // carries may replace one: the metadata is updated and the payload,
   // its object-storage pointers and the citations drawn from it are left
   // as they are.
+  const incomingCarriesDocument = Boolean(
+    result.fulltext || hasUsableAst(result.documentAst),
+  );
   const preserveStoredDocument =
     existing !== undefined &&
-    !(result.fulltext || hasUsableAst(result.documentAst)) &&
+    !incomingCarriesDocument &&
     (await hasStoredDocument(existing.id, scopedDb));
 
   // Parsers report their own quality through `validateAndLog`, but a
@@ -736,6 +741,18 @@ export const processDecision = async (
     await scopedDb(async (tx) => {
       // audit: skip — background case-law ingestion pipeline; public case-law data, not user actions
       if (existing) {
+        // A refresh with no document of its own may not overwrite one,
+        // and whether the row has one can change between the check above
+        // and this write. So the payload columns move to their own
+        // statement, carrying the condition in the WHERE where it is
+        // evaluated with the write: a backfill that commits in between
+        // takes the update out of scope instead of losing to it. The
+        // metadata is unconditional either way, so a refresh that
+        // declines to touch the payload still lands and still advances
+        // the source hash.
+        const payloadNeedsGuard =
+          !incomingCarriesDocument && Object.keys(payloadColumns).length > 0;
+
         await tx
           .update(caseLawDecisions)
           .set({
@@ -746,7 +763,7 @@ export const processDecision = async (
             languageGroupKey,
             decisionDate: result.decisionDate,
             decisionType: result.decisionType,
-            ...payloadColumns,
+            ...(payloadNeedsGuard ? {} : payloadColumns),
             sourceUrl: result.sourceUrl,
             documentUrl: result.documentUrl,
             metadata: result.metadata,
@@ -766,9 +783,21 @@ export const processDecision = async (
           })
           .where(eq(caseLawDecisions.id, existing.id));
 
+        if (payloadNeedsGuard) {
+          await tx
+            .update(caseLawDecisions)
+            .set(payloadColumns)
+            .where(
+              and(
+                eq(caseLawDecisions.id, existing.id),
+                sql`not ${rowHoldsDocument}`,
+              ),
+            );
+        }
+
         // Citations are read out of the document, so a refresh that
         // carries no document has nothing to say about them either.
-        if (preserveStoredDocument) {
+        if (!incomingCarriesDocument) {
           return;
         }
 

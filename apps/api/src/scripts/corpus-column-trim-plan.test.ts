@@ -1,11 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
+import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/handlers/case-law/corpus-storage";
 import {
   columnTrimGate,
   corpusObjectState,
   parseColumnTrimArgs,
   planColumnTrim,
 } from "@/api/scripts/corpus-column-trim-plan";
+
+/** A row whose objects hold the document they are supposed to hold. */
+const populated = {
+  contentHash: "real-content-hash",
+  columns: "document",
+} as const;
 
 describe("corpusObjectState", () => {
   test("a recorded key is only verified once the object is found", () => {
@@ -24,6 +31,7 @@ describe("planColumnTrim", () => {
   test("trims only when all three objects are verified", () => {
     expect(
       planColumnTrim({
+        ...populated,
         text: "verified",
         sections: "verified",
         ast: "verified",
@@ -40,12 +48,61 @@ describe("planColumnTrim", () => {
       ["verified", "verified", "key-missing"],
       ["key-missing", "key-missing", "key-missing"],
     ] as const) {
-      expect(planColumnTrim({ text, sections, ast }).type).toBe("skip");
+      expect(planColumnTrim({ ...populated, text, sections, ast }).type).toBe(
+        "skip",
+      );
     }
+  });
+
+  test("verified but empty objects cannot take the columns' document", () => {
+    // The objects exist, are keyed and are readable, and hold nothing:
+    // a metadata-first ingest wrote them before the document arrived.
+    // Trimming here would delete the only copy that has the document.
+    const decision = planColumnTrim({
+      text: "verified",
+      sections: "verified",
+      ast: "verified",
+      contentHash: EMPTY_CORPUS_CONTENT_HASHES.at(0) ?? "",
+      columns: "document",
+    });
+
+    expect(decision.type).toBe("skip");
+    expect(decision.type === "skip" ? decision.reason : "").toContain(
+      "empty payload",
+    );
+  });
+
+  test("empty objects over empty columns have nothing to lose", () => {
+    for (const contentHash of EMPTY_CORPUS_CONTENT_HASHES) {
+      expect(
+        planColumnTrim({
+          text: "verified",
+          sections: "verified",
+          ast: "verified",
+          contentHash,
+          columns: "empty",
+        }),
+      ).toEqual({ type: "trim" });
+    }
+  });
+
+  test("a row that was never written to object storage still trims on its hash", () => {
+    // No hash at all is not an empty-payload hash: the object states are
+    // what gate this row, and they are verified.
+    expect(
+      planColumnTrim({
+        text: "verified",
+        sections: "verified",
+        ast: "verified",
+        contentHash: null,
+        columns: "document",
+      }),
+    ).toEqual({ type: "trim" });
   });
 
   test("the skip reason names every object's state", () => {
     const decision = planColumnTrim({
+      ...populated,
       text: "verified",
       sections: "object-missing",
       ast: "verified",

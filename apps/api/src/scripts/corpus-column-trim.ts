@@ -18,6 +18,7 @@ import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSearchDocuments } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { corpusStorageMode } from "@/api/env-base";
+import { pgPayloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -39,6 +40,8 @@ type TrimRow = {
   normalizedS3Key: string | null;
   astS3Key: string | null;
   contentHash: string | null;
+  /** Whether the columns this run would null hold a document. */
+  columnsCarryDocument: boolean;
   updatedAt: Date;
 };
 
@@ -112,6 +115,8 @@ const trimRow = async (row: TrimRow): Promise<void> => {
         exists: sectionsExists,
       }),
       ast: corpusObjectState({ key: row.astS3Key, exists: astExists }),
+      contentHash: row.contentHash,
+      columns: row.columnsCarryDocument ? "document" : "empty",
     });
 
     if (decision.type === "skip") {
@@ -185,6 +190,7 @@ while (true) {
         normalizedS3Key: caseLawDecisions.normalizedS3Key,
         astS3Key: caseLawDecisions.astS3Key,
         contentHash: caseLawDecisions.contentHash,
+        columnsCarryDocument: pgPayloadCarriesDocument,
         updatedAt: caseLawDecisions.updatedAt,
       })
       .from(caseLawDecisions)

@@ -1,3 +1,4 @@
+import { namesEmptyCorpusPayload } from "@/api/handlers/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 
 /**
@@ -38,10 +39,18 @@ export type ColumnTrimDecision =
   | { type: "trim" }
   | { type: "skip"; reason: string };
 
+/** What the row's own Postgres columns hold. */
+export const COLUMN_PAYLOAD_STATES = ["document", "empty"] as const;
+
+export type ColumnPayloadState = (typeof COLUMN_PAYLOAD_STATES)[number];
+
 type ColumnTrimInput = {
   text: CorpusObjectState;
   sections: CorpusObjectState;
   ast: CorpusObjectState;
+  /** The row's content hash, which says what the objects hold. */
+  contentHash: string | null;
+  columns: ColumnPayloadState;
 };
 
 /**
@@ -53,19 +62,40 @@ type ColumnTrimInput = {
  * by object storage carries all three keys; a missing one means the row
  * was never written by the corpus writer. Keys are content-addressed,
  * which makes an existence check a sufficient verification.
+ *
+ * Present is not the same as populated. A metadata-first ingest writes
+ * all three objects before the document exists, so a row can pass every
+ * existence check while object storage holds nothing: the content hash
+ * is what tells the two apart. Where the objects are those empty shapes
+ * and the columns hold the document — a decision hydrated after that
+ * ingest, whose corpus objects were never rewritten — trimming would
+ * delete the only real copy. That row is skipped until the objects are
+ * repaired (`backfill-corpus-storage.ts --include-stale-empty`).
  */
 export const planColumnTrim = ({
   text,
   sections,
   ast,
+  contentHash,
+  columns,
 }: ColumnTrimInput): ColumnTrimDecision => {
-  if (text === "verified" && sections === "verified" && ast === "verified") {
-    return { type: "trim" };
+  if (text !== "verified" || sections !== "verified" || ast !== "verified") {
+    return {
+      type: "skip",
+      reason: `text=${text} sections=${sections} ast=${ast}`,
+    };
   }
-  return {
-    type: "skip",
-    reason: `text=${text} sections=${sections} ast=${ast}`,
-  };
+
+  if (namesEmptyCorpusPayload(contentHash) && columns === "document") {
+    return {
+      type: "skip",
+      reason:
+        "objects hold the empty payload while the columns hold the document; " +
+        "repair the objects first (backfill-corpus-storage --include-stale-empty)",
+    };
+  }
+
+  return { type: "trim" };
 };
 
 export type ColumnTrimGate =
