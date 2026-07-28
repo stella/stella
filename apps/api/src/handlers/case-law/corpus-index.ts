@@ -17,8 +17,14 @@ import {
   chunkDocument,
   formatHeadingPath,
 } from "@/api/lib/corpus-index/chunking";
-import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
-import { createCorpusIndexer } from "@/api/lib/corpus-index/core";
+import type {
+  CorpusDocumentPayload,
+  CorpusIndexAdapter,
+} from "@/api/lib/corpus-index/core";
+import {
+  createCorpusIndexer,
+  resolveMarkedRowIds,
+} from "@/api/lib/corpus-index/core";
 
 /**
  * corpus index search-projection maintenance for the `case_law` family.
@@ -183,7 +189,8 @@ const buildDocs = (
   );
 };
 
-const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>({
+/** Exported for the database-backed test of the batched CAS mark. */
+export const caseLawCorpusIndexAdapter = {
   family: "case_law",
   captureStep: "backfillCorpusIndex.loadText",
   granularity: "passage",
@@ -245,24 +252,38 @@ const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>({
     );
     return fallback.at(0)?.fulltext ?? null;
   },
-  markIndexed: async (tx, { row, indexId, now }) => {
+  markIndexedBatch: async (tx, { rows, indexId, now }) => {
+    if (rows.length === 0) {
+      return new Set();
+    }
     // audit: skip — search index maintenance; rebuilds derived state
-    const marked = await tx
-      .update(caseLawDecisions)
-      .set({
-        indexedHash: row.contentHash,
-        indexedGeneration: indexId,
-        indexedAt: now,
-      })
-      .where(
-        and(
-          eq(caseLawDecisions.id, row.id),
-          sql`${caseLawDecisions.indexedHash} IS NOT DISTINCT FROM ${row.indexedHash}`,
-          sql`${caseLawDecisions.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
-        ),
-      )
-      .returning({ id: caseLawDecisions.id });
-    return marked.length > 0;
+    // One statement for the whole request: each tuple carries the row's
+    // expected pre-state, so every row keeps its individual compare-and-set
+    // while the batch pays a single round-trip. The mark deliberately leaves
+    // updated_at alone — bookkeeping must not read as a content change to
+    // other compare-and-set scans — so the expected generation is part of
+    // the pre-state: without it, two overlapping builds of a hash-current
+    // row would both match and both record success.
+    const tuples = sql.join(
+      rows.map(
+        (row) =>
+          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAt.toISOString()}::timestamp)`,
+      ),
+      sql`, `,
+    );
+    const marked: unknown = await tx.execute(sql`
+      UPDATE ${caseLawDecisions} AS d
+      SET indexed_hash = v.content_hash,
+          indexed_generation = ${indexId},
+          indexed_at = ${now.toISOString()}::timestamp
+      FROM (VALUES ${tuples}) AS v(id, content_hash, expected_hash, expected_generation, expected_updated)
+      WHERE d.id = v.id
+        AND d.indexed_hash IS NOT DISTINCT FROM v.expected_hash
+        AND d.indexed_generation IS NOT DISTINCT FROM v.expected_generation
+        AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
+      RETURNING d.id
+    `);
+    return resolveMarkedRowIds(marked, rows);
   },
   insertSucceededJobs: async (tx, { rows, indexId }) => {
     // audit: skip — append-only index-job rows ARE the indexing audit trail
@@ -295,7 +316,11 @@ const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>({
       );
     });
   },
-});
+} satisfies CorpusIndexAdapter<"caseLawDecision", IndexableRow>;
+
+const indexer = createCorpusIndexer<"caseLawDecision", IndexableRow>(
+  caseLawCorpusIndexAdapter,
+);
 
 export const loadDocsForBatch = indexer.loadDocsForBatch;
 export const backfillCorpusIndex = indexer.backfill;

@@ -13,6 +13,7 @@ import {
 import { corpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Shared corpus-index search-projection core for the corpus document families
@@ -120,6 +121,38 @@ export type CorpusIndexRow<TBrand extends SafeIdType> = {
 };
 
 /**
+ * Resolve a batched mark statement's RETURNING ids against the rows the
+ * statement was built from. Matching through the input rows keeps the branded
+ * ids without an assertion, and only ids the batch actually supplied can come
+ * back. The production driver returns the rows directly; pglite (tests) wraps
+ * them in `{ rows }` — both shapes are accepted.
+ */
+export const resolveMarkedRowIds = <TBrand extends SafeIdType>(
+  marked: unknown,
+  rows: readonly CorpusIndexRow<TBrand>[],
+): Set<SafeId<TBrand>> => {
+  let returned: unknown[] = [];
+  if (Array.isArray(marked)) {
+    returned = marked;
+  } else if (isRecord(marked) && Array.isArray(marked["rows"])) {
+    returned = marked["rows"];
+  }
+  const byId = new Map<string, SafeId<TBrand>>(
+    rows.map((row) => [row.id, row.id]),
+  );
+  const ids = new Set<SafeId<TBrand>>();
+  for (const entry of returned) {
+    if (isRecord(entry) && typeof entry["id"] === "string") {
+      const id = byId.get(entry["id"]);
+      if (id !== undefined) {
+        ids.add(id);
+      }
+    }
+  }
+  return ids;
+};
+
+/**
  * Canonical payload one row contributes to the index. `ast` is loaded only by
  * passage-granularity families (see {@link CorpusIndexGranularity}) and is
  * `null` everywhere else, so a family that indexes whole documents never pays
@@ -221,14 +254,21 @@ export type CorpusIndexAdapter<
     id: SafeId<TBrand>,
   ) => Promise<string | null>;
   /**
-   * Compare-and-set the selected row state to indexed, within the caller's
-   * transaction. Returns whether the row was marked (false = a concurrent
-   * refresh moved it on, so the caller treats it as a CAS miss).
+   * Compare-and-set every row's selected state to indexed, within the
+   * caller's transaction, as ONE statement. Returns the ids that were
+   * marked; a missing id is a CAS miss (a concurrent refresh moved the
+   * row on). One statement rather than a per-row loop: a bulk build
+   * marks hundreds of rows per request, and per-row round-trips were
+   * the dominant batch cost.
    */
-  markIndexed: (
+  markIndexedBatch: (
     tx: Transaction,
-    args: { row: TRow; indexId: string; now: Date },
-  ) => Promise<boolean>;
+    args: {
+      rows: readonly CorpusIndexRow<TBrand>[];
+      indexId: string;
+      now: Date;
+    },
+  ) => Promise<Set<SafeId<TBrand>>>;
   /** Insert succeeded index-job audit rows within the caller's transaction. */
   insertSucceededJobs: (
     tx: Transaction,
@@ -718,19 +758,19 @@ export const createCorpusIndexer = <
           // oxlint-disable-next-line no-await-in-loop -- one CAS transaction per ingest request; sequential to keep index writes and audit rows consistent
           await scopedDb(async (tx) => {
             // audit: skip — search index maintenance; rebuilds derived state
+            // Compare-and-set on each row's selected state: a concurrent
+            // re-ingest clears indexedHash (possibly leaving it null-to-null
+            // when the row was already pending) and bumps updatedAt, and an
+            // unconditional write would mask that refresh so the stale index
+            // document would never be retried. All rows go in one statement;
+            // per-row round-trips dominated bulk-build batch cost.
+            const marked = await adapter.markIndexedBatch(tx, {
+              rows: entries.map(({ row }) => row),
+              indexId,
+              now,
+            });
             for (const { row } of entries) {
-              // Compare-and-set on the selected row state: a concurrent
-              // re-ingest clears indexedHash (possibly leaving it null-to-null
-              // when the row was already pending) and bumps updatedAt, and an
-              // unconditional write would mask that refresh so the stale index
-              // document would never be retried.
-              // oxlint-disable-next-line no-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
-              const marked = await adapter.markIndexed(tx, {
-                row,
-                indexId,
-                now,
-              });
-              if (!marked) {
+              if (!marked.has(row.id)) {
                 casMissed.add(row.id);
               }
             }

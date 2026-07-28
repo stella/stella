@@ -45,7 +45,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 594,
+    "count": 593,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -163,7 +163,7 @@
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
       "apps/api/src/lib/auth.ts": 4,
       "apps/api/src/lib/cell-lock.ts": 1,
-      "apps/api/src/lib/corpus-index/core.ts": 10,
+      "apps/api/src/lib/corpus-index/core.ts": 9,
       "apps/api/src/lib/deepl/client.ts": 3,
       "apps/api/src/lib/document-reference.ts": 2,
       "apps/api/src/lib/docx-stamp.ts": 2,

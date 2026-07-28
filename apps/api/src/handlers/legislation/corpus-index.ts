@@ -9,7 +9,10 @@ import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
-import { createCorpusIndexer } from "@/api/lib/corpus-index/core";
+import {
+  createCorpusIndexer,
+  resolveMarkedRowIds,
+} from "@/api/lib/corpus-index/core";
 
 /**
  * corpus index projection for the `legislation` family. Domain adapter over the
@@ -170,24 +173,35 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
     );
     return fallback.at(0)?.fulltext ?? null;
   },
-  markIndexed: async (tx, { row, indexId, now }) => {
+  markIndexedBatch: async (tx, { rows, indexId, now }) => {
+    if (rows.length === 0) {
+      return new Set();
+    }
     // audit: skip — search index maintenance; rebuilds derived state
-    const marked = await tx
-      .update(legislationDocuments)
-      .set({
-        indexedHash: row.contentHash,
-        indexedGeneration: indexId,
-        indexedAt: now,
-      })
-      .where(
-        and(
-          eq(legislationDocuments.id, row.id),
-          sql`${legislationDocuments.indexedHash} IS NOT DISTINCT FROM ${row.indexedHash}`,
-          sql`${legislationDocuments.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
-        ),
-      )
-      .returning({ id: legislationDocuments.id });
-    return marked.length > 0;
+    // One statement for the whole request; each tuple carries the row's
+    // expected pre-state so per-row compare-and-set semantics survive the
+    // batching. Generation is part of the pre-state and updated_at is left
+    // alone (see the case-law twin for the reasoning).
+    const tuples = sql.join(
+      rows.map(
+        (row) =>
+          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAt.toISOString()}::timestamp)`,
+      ),
+      sql`, `,
+    );
+    const marked: unknown = await tx.execute(sql`
+      UPDATE ${legislationDocuments} AS d
+      SET indexed_hash = v.content_hash,
+          indexed_generation = ${indexId},
+          indexed_at = ${now.toISOString()}::timestamp
+      FROM (VALUES ${tuples}) AS v(id, content_hash, expected_hash, expected_generation, expected_updated)
+      WHERE d.id = v.id
+        AND d.indexed_hash IS NOT DISTINCT FROM v.expected_hash
+        AND d.indexed_generation IS NOT DISTINCT FROM v.expected_generation
+        AND d.updated_at IS NOT DISTINCT FROM v.expected_updated
+      RETURNING d.id
+    `);
+    return resolveMarkedRowIds(marked, rows);
   },
   insertSucceededJobs: async (tx, { rows, indexId }) => {
     // audit: skip — append-only index-job rows ARE the indexing audit trail
