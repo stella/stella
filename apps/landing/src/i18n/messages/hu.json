@@ -70,6 +70,16 @@
   "home": {
     "ctaTitle": "Hozza el az AI-t az Ön ügyvédi irodájába."
   },
+  "mcpProof": {
+    "contextBody": "Vigye a jóváhagyott ügyeket és jogi adatokat a Claude-ba vagy bármely MCP-kompatibilis kliensbe.",
+    "contextTitle": "Az ügy kontextusa.",
+    "scopeBody": "Hitelesítsen OAuth-tal; minden hívás a megadott hatókörök és a munkaterület jogosultságai között marad.",
+    "scopeTitle": "A hozzáférés mindig korlátozott.",
+    "subtitle": "Vigye az ügy naprakész kontextusát azokba az eszközökbe, amelyekkel dolgozik.",
+    "title": "A munkaterület mostantól érti az MCP-t.",
+    "toolsBody": "Keressen, olvasson és töltsön ki sablonokat ugyanabból a nyilvántartásból, amelyből a stella alkalmazás CLI-je készül.",
+    "toolsTitle": "Eszközök ügynököknek."
+  },
   "meta": {
     "homeDescription": "Nyílt forráskódú jogi munkaterület: dokumentumok, ügyek, ellenőrzés és kutatás. Futtassa saját szerverén vagy a felhőnkben. Használatalapú AI, bezártság nélkül.",
     "homeTitle": "stella | nyílt forráskódú jogi munkaterület"

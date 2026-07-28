@@ -70,6 +70,16 @@
   "home": {
     "ctaTitle": "Atneškite DI į savo advokatų kontorą."
   },
+  "mcpProof": {
+    "contextBody": "Perkelkite patvirtintas bylas ir teisinius duomenis į Claude ar bet kurį su MCP suderinamą klientą.",
+    "contextTitle": "Bylos kontekstas.",
+    "scopeBody": "Prisijunkite per OAuth; kiekvienas iškvietimas lieka apribotas suteiktomis apimtimis ir darbo srities teisėmis.",
+    "scopeTitle": "Prieiga visada ribota.",
+    "subtitle": "Perkelkite naujausią bylos kontekstą į įrankius, su kuriais dirbate.",
+    "title": "Darbo sritis dabar supranta MCP.",
+    "toolsBody": "Ieškokite, skaitykite ir pildykite šablonus per tą patį registrą, iš kurio kuriama programos stella CLI.",
+    "toolsTitle": "Įrankiai agentams."
+  },
   "meta": {
     "homeDescription": "Atvirojo kodo teisinė darbo sritis: dokumentai, bylos, peržiūra ir teisinė paieška. Talpinkite patys arba mūsų debesyje. DI pagal naudojimą, be pririšimo.",
     "homeTitle": "stella | atvirojo kodo teisinė darbo sritis"

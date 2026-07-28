@@ -70,6 +70,16 @@
   "home": {
     "ctaTitle": "Too tehisintellekt oma advokaadibüroosse."
   },
+  "mcpProof": {
+    "contextBody": "Too heakskiidetud toimikud ja õigusandmed Claude'i või mis tahes MCP-ga ühilduvasse kliendisse.",
+    "contextTitle": "Toimiku kontekst.",
+    "scopeBody": "Autendi OAuth-iga; iga päring jääb antud ulatuste ja tööruumi õiguste piiresse.",
+    "scopeTitle": "Ligipääs on alati piiritletud.",
+    "subtitle": "Too toimiku ajakohane kontekst tööriistadesse, millega töötad.",
+    "title": "Tööruum räägib nüüd MCP keelt.",
+    "toolsBody": "Otsi, loe ja täida malle sama registri kaudu, millest sünnib rakenduse stella CLI.",
+    "toolsTitle": "Tööriistad agentidele."
+  },
   "meta": {
     "homeDescription": "Avatud lähtekoodiga õigustööruum: dokumendid, toimikud, ülevaatus ja otsing. Majuta ise või meie pilves. Kasutuspõhine tehisintellekt, tarnijalõksuta.",
     "homeTitle": "stella | avatud lähtekoodiga õigustööruum"

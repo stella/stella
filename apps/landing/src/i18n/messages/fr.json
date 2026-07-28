@@ -70,6 +70,16 @@
   "home": {
     "ctaTitle": "Apportez l’IA à votre cabinet d’avocats."
   },
+  "mcpProof": {
+    "contextBody": "Apportez les dossiers approuvés et les données juridiques dans Claude ou tout client compatible MCP.",
+    "contextTitle": "Contexte du dossier.",
+    "scopeBody": "Authentifiez-vous via OAuth ; chaque appel reste limité par les portées accordées et les permissions de l’espace de travail.",
+    "scopeTitle": "Un accès toujours délimité.",
+    "subtitle": "Apportez le contexte à jour du dossier dans les outils que vous utilisez.",
+    "title": "Quand l’espace de travail rencontre MCP.",
+    "toolsBody": "Cherchez, lisez et remplissez des modèles via le registre qui alimente aussi la CLI stella.",
+    "toolsTitle": "Des outils pour les agents."
+  },
   "meta": {
     "homeDescription": "Plateforme juridique open source : documents, dossiers, revue et recherche. À héberger vous-même ou dans notre cloud. IA à l’usage, sans dépendance.",
     "homeTitle": "stella | espace de travail juridique open source"

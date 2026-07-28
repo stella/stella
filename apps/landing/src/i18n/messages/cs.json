@@ -70,6 +70,16 @@
   "home": {
     "ctaTitle": "Využijte AI ve své advokátní kanceláři."
   },
+  "mcpProof": {
+    "contextBody": "Přeneste schválené spisy a právní data do nástroje Claude nebo do libovolného klienta kompatibilního s MCP.",
+    "contextTitle": "Kontext spisu.",
+    "scopeBody": "Přihlaste se přes OAuth; každé volání zůstává omezené udělenými rozsahy a oprávněními pracovního prostoru.",
+    "scopeTitle": "Přístup vždy v mezích.",
+    "subtitle": "Přeneste aktuální kontext spisu do nástrojů, ve kterých pracujete.",
+    "title": "Pracovní prostor teď rozumí MCP.",
+    "toolsBody": "Vyhledávejte, čtěte a vyplňujte vzory přes stejný registr, ze kterého vychází CLI aplikace stella.",
+    "toolsTitle": "Nástroje pro agenty."
+  },
   "meta": {
     "homeDescription": "Open source právní pracovní prostor pro dokumenty, spisy, revize a rešerše. Provozujte sami či v našem cloudu. AI podle využití, bez závislosti na dodavateli.",
     "homeTitle": "stella | open source právní pracovní prostor"

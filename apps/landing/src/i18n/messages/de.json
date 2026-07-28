@@ -70,6 +70,16 @@
   "home": {
     "ctaTitle": "Bringen Sie KI in Ihre Kanzlei."
   },
+  "mcpProof": {
+    "contextBody": "Bringen Sie freigegebene Akten und Rechtsdaten in Claude oder einen beliebigen kompatiblen MCP-Client.",
+    "contextTitle": "Aktenkontext.",
+    "scopeBody": "Melden Sie sich per OAuth an; jeder Aufruf bleibt durch die gewährten Scopes und die Berechtigungen im Arbeitsbereich begrenzt.",
+    "scopeTitle": "Zugriff bleibt begrenzt.",
+    "subtitle": "Bringen Sie den aktuellen Aktenkontext in die Werkzeuge, mit denen Sie arbeiten.",
+    "title": "Arbeitsbereich trifft MCP.",
+    "toolsBody": "Suchen, lesen und Vorlagen ausfüllen: alles über dieselbe Registry, aus der die stella CLI generiert wird.",
+    "toolsTitle": "Werkzeuge für Agenten."
+  },
   "meta": {
     "homeDescription": "Juristischer Open-Source-Arbeitsbereich für Dokumente, Akten, Prüfung und Recherche. Selbst hosten oder in unserer Cloud. Nutzungsbasierte KI, ohne Lock-in.",
     "homeTitle": "stella | juristischer Open-Source-Arbeitsbereich"

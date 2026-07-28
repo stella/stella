@@ -70,6 +70,16 @@
   "home": {
     "ctaTitle": "Lleva la IA a tu bufete."
   },
+  "mcpProof": {
+    "contextBody": "Lleva los asuntos aprobados y los datos jurídicos a Claude o a cualquier cliente compatible con MCP.",
+    "contextTitle": "Contexto del asunto.",
+    "scopeBody": "Autentícate con OAuth; cada llamada sigue limitada por los alcances concedidos y los permisos del espacio de trabajo.",
+    "scopeTitle": "El acceso siempre acotado.",
+    "subtitle": "Lleva el contexto actualizado del asunto a las herramientas con las que trabajas.",
+    "title": "Tu espacio de trabajo ya habla MCP.",
+    "toolsBody": "Busca, lee y rellena plantillas mediante el mismo registro que impulsa la CLI de stella.",
+    "toolsTitle": "Herramientas para agentes."
+  },
   "meta": {
     "homeDescription": "Espacio de trabajo legal de código abierto: documentos, asuntos, revisión e investigación. Autoalójalo o usa nuestra nube. IA por uso, sin dependencia.",
     "homeTitle": "stella | espacio de trabajo legal de código abierto"
