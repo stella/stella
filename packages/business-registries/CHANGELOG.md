@@ -1,5 +1,11 @@
 # @stll/business-registries
 
+## 0.2.1
+
+### Patch Changes
+
+- [#1425](https://github.com/stella/stella/pull/1425) [`24eb1c4`](https://github.com/stella/stella/commit/24eb1c46b5475f09b279335ec57071accf870a61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use the browser-safe stdnum runtime for registry identifier validation and expose an explicit browser initializer.
+
 ## 0.2.0
 
 ### Minor Changes
