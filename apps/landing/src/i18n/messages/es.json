@@ -82,6 +82,11 @@
     "chooseLanguage": "Elige un idioma",
     "github": "stella en GitHub",
     "openMenu": "Abrir navegación",
+    "pillars": {
+      "data": "Infraestructura de datos",
+      "intelligence": "Inteligencia jurídica",
+      "workspace": "Espacio de trabajo"
+    },
     "product": "Producto",
     "products": {
       "agent": {

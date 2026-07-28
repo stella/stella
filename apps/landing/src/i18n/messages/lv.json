@@ -82,6 +82,11 @@
     "chooseLanguage": "Izvēlieties valodu",
     "github": "stella vietnē GitHub",
     "openMenu": "Atvērt navigāciju",
+    "pillars": {
+      "data": "Datu infrastruktūra",
+      "intelligence": "Juridiskā analītika",
+      "workspace": "Darbvieta"
+    },
     "product": "Produkts",
     "products": {
       "agent": {

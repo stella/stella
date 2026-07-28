@@ -19,3 +19,11 @@ for (const slug of pillars.flatMap((pillar) => pillar.slugs)) {
     expect(en.nav.products[slug].blurb).toBe(product.summary);
   });
 }
+
+// Same contract for the pillar group labels the mega-menu renders from the
+// catalog: pillars.ts stays the README spine, en.json stays the string.
+for (const pillar of pillars) {
+  test(`${pillar.id} pillar label matches the catalog`, () => {
+    expect(en.nav.pillars[pillar.id]).toBe(pillar.label);
+  });
+}

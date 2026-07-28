@@ -82,6 +82,11 @@
     "chooseLanguage": "اختر اللغة",
     "github": "stella على GitHub",
     "openMenu": "فتح قائمة التنقل",
+    "pillars": {
+      "data": "البنية التحتية للبيانات",
+      "intelligence": "الذكاء القانوني",
+      "workspace": "مساحة عمل"
+    },
     "product": "المنتج",
     "products": {
       "agent": {

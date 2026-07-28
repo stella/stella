@@ -82,6 +82,11 @@
     "chooseLanguage": "Vali keel",
     "github": "stella GitHubis",
     "openMenu": "Ava navigatsioon",
+    "pillars": {
+      "data": "Andmetaristu",
+      "intelligence": "Õigusanalüütika",
+      "workspace": "Tööruum"
+    },
     "product": "Toode",
     "products": {
       "agent": {

@@ -85,6 +85,11 @@ type Messages = {
     "chooseLanguage": "Choose a language";
     "github": "stella on GitHub";
     "openMenu": "Open navigation";
+    "pillars": {
+      "data": "Data infrastructure";
+      "intelligence": "Legal intelligence";
+      "workspace": "Workspace";
+    };
     "product": "Product";
     "products": {
       "agent": {

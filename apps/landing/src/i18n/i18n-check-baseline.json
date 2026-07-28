@@ -2,7 +2,9 @@
   "duplicatesCommon": [],
   "duplicateValues": [
     "demo.status",
-    "footer.status"
+    "footer.status",
+    "footer.workspace",
+    "nav.pillars.workspace"
   ],
   "identicalToSource": {
     "demo.documents": [

@@ -238,6 +238,60 @@ descriptors (existing `footer.*` keys). Follow whichever pattern the
 surface already uses; do not translate a product name in one menu and not
 another.
 
+### Pillar group labels DO translate
+
+The mega-menu's three group headings (`nav.pillars.data`,
+`nav.pillars.intelligence`, `nav.pillars.workspace`, keyed on the pillar ids in
+`data/products/pillars.ts`) name categories, not products, so they translate in
+every locale. The product entries listed under them keep their English eyebrow
+per the rule above; a translated group label above English product names is the
+intended reading (the group says what the section is about, the entries are
+brand labels).
+
+| Locale | Data infrastructure       | Legal intelligence     | Workspace          |
+| ------ | ------------------------- | ---------------------- | ------------------ |
+| ar     | البنية التحتية للبيانات   | الذكاء القانوني        | مساحة عمل          |
+| cs     | Datová infrastruktura     | Právní analytika       | Pracovní prostor   |
+| de     | Dateninfrastruktur        | Juristische Analytik   | Arbeitsbereich     |
+| es     | Infraestructura de datos  | Inteligencia jurídica  | Espacio de trabajo |
+| et     | Andmetaristu              | Õigusanalüütika        | Tööruum            |
+| fr     | Infrastructure de données | Intelligence juridique | Espace de travail  |
+| hu     | Adatinfrastruktúra        | Jogi analitika         | Munkaterület       |
+| lt     | Duomenų infrastruktūra    | Teisinė analitika      | Darbo sritis       |
+| lv     | Datu infrastruktūra       | Juridiskā analītika    | Darbvieta          |
+| pl     | Infrastruktura danych     | Analityka prawna       | Obszar roboczy     |
+| pt-BR  | Infraestrutura de dados   | Inteligência jurídica  | Espaço de trabalho |
+| sk     | Dátová infraštruktúra     | Právna analytika       | Pracovný priestor  |
+
+"Legal intelligence" is the label that does not travel as one word. Two
+families, chosen by what each language's legal-tech market actually calls the
+function:
+
+- Romance locales and Arabic keep the cognate, which is an established term
+  there for the analytic layer over legal material: fr _intelligence
+  juridique_, es _inteligencia jurídica_, pt-BR _inteligência jurídica_,
+  ar الذكاء القانوني.
+- Germanic, Slavic, Baltic, and Finno-Ugric locales take the analytics family
+  instead, because a literal "intelligence" reads there as either the human
+  faculty or as espionage (cs _právní inteligence_, de _Rechtsintelligenz_ are
+  both wrong readings, not stylistic variants). German _juristische Analytik_,
+  cs _právní analytika_ / sk _právna analytika_, pl _analityka prawna_, hu
+  _jogi analitika_, et _õigusanalüütika_, lt _teisinė analitika_, lv _juridiskā
+  analītika_ are the renderings that market uses for legal analytics.
+
+"Workspace" reuses the settled rendering from `glossary.json` (the table above
+under _The identity phrase_) rather than coining a menu-only variant. That
+makes `nav.pillars.workspace` hold the same string as `footer.workspace` in
+every locale, which is deliberate: the pillar names the category, the footer
+key names the product page, and they are one word in English. Both keys are
+listed in `i18n-check-baseline.json` under `duplicateValues` for that reason
+(same precedent as `demo.status` / `footer.status`); hoisting one word to
+`common.*` to serve two unrelated surfaces would be worse.
+
+Estonian uses _taristu_, the standard Estonian term for infrastructure, so the
+data pillar is _Andmetaristu_ rather than the loan compound
+_andmeinfrastruktuur_.
+
 ## Shared chrome is UI copy, not decoration
 
 The header, the mobile menu, and the footer render on every localized page,

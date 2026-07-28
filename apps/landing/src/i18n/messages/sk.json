@@ -82,6 +82,11 @@
     "chooseLanguage": "Vyberte jazyk",
     "github": "stella na GitHube",
     "openMenu": "Otvoriť navigáciu",
+    "pillars": {
+      "data": "Dátová infraštruktúra",
+      "intelligence": "Právna analytika",
+      "workspace": "Pracovný priestor"
+    },
     "product": "Produkt",
     "products": {
       "agent": {

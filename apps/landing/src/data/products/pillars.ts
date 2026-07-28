@@ -9,6 +9,11 @@ export type PillarId = "data" | "intelligence" | "workspace";
 
 export type Pillar = {
   id: PillarId;
+  /**
+   * English source of the group label. The mega-menu renders the localized
+   * `nav.pillars.<id>` catalog value instead; menu-copy.test.ts asserts the two
+   * English sources agree, the same way it does for `nav.products.<slug>.*`.
+   */
   label: string;
   slugs: readonly string[];
 };

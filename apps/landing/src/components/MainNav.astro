@@ -16,6 +16,11 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 
+// Pillar group labels are catalog copy too (`nav.pillars.<id>`, keyed on the
+// literal pillar ids). The product entries under them keep the registry's
+// English eyebrow, per the brand-constant product-name policy in
+// src/i18n/TRANSLATION.md.
+//
 // The header renders on every localized homepage, so the preview copy is
 // catalog copy keyed on the slug, not the registry's English `title`/`summary`
 // (those stay the source for the unlocalized /product/<slug> pages). The slugs
@@ -77,7 +82,7 @@ const compactMenus = [
           {
             pillars.map((pillar, pi) => (
               <li class="mb-1">
-                <span class="nav-mega-grouplabel">{pillar.label}</span>
+                <span class="nav-mega-grouplabel">{t(`nav.pillars.${pillar.id}`)}</span>
                 <ul>
                   {pillar.slugs.map((slug) => {
                     const p = productBySlug.get(slug);

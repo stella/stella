@@ -5,35 +5,41 @@ import MacWindow from "../components/MacWindow.astro";
 import { DocxEditorTool } from "../components/react/DocxEditorTool";
 
 // A standalone, tool-first SEO landing for the browser DOCX editor (folio),
-// targeting "docx editor" / "online docx editor" / "edit docx in browser" and
-// the AI angle ("llm edit docx" / "edit docx with AI"). Kept separate from
-// /product/editor (the stella product page) so it can lead with the tool and
-// the keyword cluster instead of the product-suite framing.
+// targeting the tool queries ("docx editor", "edit docx online", "open docx
+// without Word") and the AI angle ("llm edit docx" / "edit docx with AI").
+//
+// Split of intent against /product/editor, which is deliberate and must stay
+// that way: this page answers "open and edit a .docx right now, free, without
+// an account, without the file leaving the browser"; the product page answers
+// "editing inside the workspace" (matter context, track changes as a review
+// workflow, version history, the desktop bridge). The two FAQ sets are
+// disjoint — every question lives on exactly one of the pages, so the two
+// FAQPage nodes never restate each other.
 
 const faqs = [
   {
-    q: "Can I edit DOCX files in the browser?",
-    a: "Yes. Open a .docx and edit it directly in the browser, with no download and no separate desktop app.",
+    q: "Can I edit a .docx file in the browser?",
+    a: "Yes. Open a Word document on this page and edit it straight away: no install, no account, and nothing to convert first.",
   },
   {
-    q: "Is it a free online DOCX editor?",
-    a: "You can open and edit a .docx in your browser here with no account, and the file never leaves your device. Connecting a document to a matter, saved revisions, and version history is part of stella.",
+    q: "Do I need Microsoft Word?",
+    a: "No. The editor reads and writes .docx directly in the browser, so Microsoft Word does not have to be installed.",
+  },
+  {
+    q: "Does my file get uploaded anywhere?",
+    a: "No. The document is opened, rendered, and edited in your browser; it stays on your device, and no copy is sent to a server.",
+  },
+  {
+    q: "Is the original formatting preserved?",
+    a: "Yes. The file stays a .docx from open to save, so fonts, styles, and page layout survive instead of being converted to another format and back.",
+  },
+  {
+    q: "Is it free to use?",
+    a: "Yes. Opening and editing a .docx here is free and needs no account.",
   },
   {
     q: "Can an LLM edit my DOCX?",
     a: "Yes. An LLM proposes edits as tracked changes you accept or reject, so nothing is rewritten silently. It works in chat and programmatically over MCP.",
-  },
-  {
-    q: "Does it keep track changes?",
-    a: "Yes. Tracked insertions and deletions render in place, the way Word shows them, including edits proposed by AI.",
-  },
-  {
-    q: "Do I need Microsoft Word?",
-    a: "No. The browser editor handles .docx files directly, so Microsoft Word is not required.",
-  },
-  {
-    q: "Does it convert my document to another format?",
-    a: "No. It works with the .docx and saves the result back as a Word file, so nothing is lost to a round-trip.",
   },
 ];
 
@@ -81,7 +87,6 @@ const softwareJsonLd = {
   url: canonicalUrl,
   description:
     "Open and edit Word .docx files in the browser with track changes, no install and no format conversion. AI-proposed edits arrive as tracked changes you accept or reject.",
-  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
 };
 
 const faqJsonLd = {
@@ -96,8 +101,8 @@ const faqJsonLd = {
 ---
 
 <Base
-  title="Online DOCX Editor: Edit Word Files in Your Browser | stella"
-  description="Edit .docx files in your browser: a Word editor with track changes, no install and no format conversion. An LLM can propose tracked edits you accept or reject."
+  title="Free Online DOCX Editor: Edit .docx in Your Browser | stella"
+  description="Open and edit a Word .docx in your browser: free, no signup, no install. The file never leaves your device, and its formatting survives the round trip."
 >
   <script
     is:inline
@@ -128,10 +133,11 @@ const faqJsonLd = {
             class="mx-auto mt-6 max-w-2xl text-lg leading-[1.8]"
             style="color: var(--muted-foreground)"
           >
-            Open a Word .docx and edit it right here: formatting and track
-            changes intact, no install and no converting to another format. When
-            you want AI in the loop, an LLM proposes changes as tracked edits you
-            accept or reject.
+            Open a Word .docx and edit it right here: free, no account, and the
+            file never leaves your browser. Formatting and track changes stay
+            intact, with no converting to another format. When you want AI in
+            the loop, an LLM proposes changes as tracked edits you accept or
+            reject.
           </p>
         </div>
 
@@ -263,6 +269,17 @@ const faqJsonLd = {
           >
             Bring the editor to your matters.
           </h2>
+          <p
+            class="mx-auto mt-5 max-w-2xl text-base leading-[1.8]"
+            style="color: var(--muted-foreground)"
+          >
+            This editor is <a
+              href="/product/editor"
+              class="underline underline-offset-4"
+              style="color: var(--foreground)">part of the stella workspace</a
+            >, where a .docx opens from its matter, track changes become a review
+            workflow, and every save lands in the document's version history.
+          </p>
           <div class="mt-8">
             <a
               href="https://my.stll.app"

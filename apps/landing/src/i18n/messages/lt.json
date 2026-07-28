@@ -82,6 +82,11 @@
     "chooseLanguage": "Pasirinkite kalbą",
     "github": "stella platformoje GitHub",
     "openMenu": "Atidaryti naršymo meniu",
+    "pillars": {
+      "data": "Duomenų infrastruktūra",
+      "intelligence": "Teisinė analitika",
+      "workspace": "Darbo sritis"
+    },
     "product": "Produktas",
     "products": {
       "agent": {

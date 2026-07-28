@@ -82,6 +82,11 @@
     "chooseLanguage": "Wybierz język",
     "github": "stella na GitHubie",
     "openMenu": "Otwórz nawigację",
+    "pillars": {
+      "data": "Infrastruktura danych",
+      "intelligence": "Analityka prawna",
+      "workspace": "Obszar roboczy"
+    },
     "product": "Produkt",
     "products": {
       "agent": {

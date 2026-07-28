@@ -6,9 +6,13 @@ export const editor: Product = {
   title: "Edit Word documents in the browser, without leaving the matter.",
   summary:
     "Open and edit Word .docx files right in your browser: no install, no converting to another format. stella's online DOCX editor preserves the original formatting and track changes, keeps the file connected to its matter, and saves each revision into the document's version history.",
-  metaTitle: "Online DOCX Editor with Track Changes | stella",
+  // SERP intent for this page is the workspace one: a document inside its
+  // matter, with review and revisions. The tool queries ("edit docx online",
+  // "docx editor without Word") belong to /docx-editor, whose meta, FAQ set,
+  // and structured data are kept disjoint from this page's on purpose.
+  metaTitle: "Editing Word Documents in Your Legal Workspace | stella",
   metaDescription:
-    "Edit Word .docx documents in the browser: no install, no format conversion. stella's online DOCX editor preserves formatting and track changes, in the matter.",
+    "Edit a matter's Word documents inside stella: track changes reviewed in place, a revision in the version history for every save, and a bridge to local Word.",
   hero: {
     type: "live-editor",
     alt: "stella · Editor — live demo",
@@ -68,36 +72,39 @@ export const editor: Product = {
       ],
     },
   ],
+  // Workspace-intent questions only. The tool-intent ones (do I need Word, is
+  // my file uploaded, is formatting preserved, is it free) live on
+  // /docx-editor; no question appears on both pages.
   faqs: [
     {
-      question: "Can I edit Word documents in the browser?",
+      question: "Does the document stay attached to its matter while I edit?",
       answer:
-        "Yes. Open a .docx file from a matter and edit it directly in stella, in the browser: no download, no separate desktop app required.",
-    },
-    {
-      question: "Is my formatting preserved?",
-      answer:
-        "Yes. The document stays a .docx throughout, so fonts, styles, and page layout render and save the way Word created them.",
-    },
-    {
-      question: "Does stella convert the document to another format?",
-      answer:
-        "No. The browser editor works with the .docx document and saves the result back as a Word file.",
+        "Yes. The document is edited where it lives, alongside the matter's other files, properties, tasks, and conversations, so no local copy is downloaded and re-uploaded to make a change.",
     },
     {
       question: "Does the editor keep track changes?",
       answer:
-        "Yes. Tracked insertions and deletions render in place, the way Word shows them. When stella's AI proposes edits, they arrive as tracked changes you accept or reject before they become part of the document.",
-    },
-    {
-      question: "Do I need Microsoft Word?",
-      answer:
-        "No. The browser editor handles .docx files directly, so Microsoft Word is not required. The stella desktop bridge is still there for local Office editing when you need Word-specific workflows.",
+        "Yes. Tracked insertions and deletions render in place, the way Word shows them. Edits proposed by stella's AI arrive the same way, so a redline is reviewed and accepted or rejected before it becomes part of the document.",
     },
     {
       question: "What happens when I save?",
       answer:
-        "The saved file remains connected to the same matter and document, with revisions available through its version history.",
+        "The saved file remains connected to the same matter and document, and the save becomes a revision in that document's version history.",
+    },
+    {
+      question: "Can I get back to an earlier revision?",
+      answer:
+        "Yes. Saved revisions stay in the document's version history, so the current file and the ones it replaced remain together on the same document.",
+    },
+    {
+      question: "Can I open the same document in Microsoft Word?",
+      answer:
+        "Yes. The stella desktop bridge opens the document in local Office for Word-specific workflows and returns the edited file to the same matter.",
+    },
+    {
+      question: "Can stella's AI work on the document I am editing?",
+      answer:
+        "Yes. The document is part of its matter's context, so matter-aware tools can read it and propose edits as tracked changes in the same document.",
     },
   ],
   adjacent: [
@@ -112,9 +119,9 @@ export const editor: Product = {
       body: "Create reusable Word documents with fields and conditional clauses.",
     },
     {
-      title: "Tabular Review",
-      href: "/product/tabular-review",
-      body: "Turn a document set into a matter-scoped review table.",
+      title: "Standalone DOCX editor",
+      href: "/docx-editor",
+      body: "Try the same editor on its own: open and edit a .docx in the browser, no account needed.",
     },
     {
       title: "AI fact sheet",
