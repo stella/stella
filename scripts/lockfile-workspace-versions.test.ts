@@ -47,6 +47,41 @@ describe("workspace version lockfile synchronization", () => {
   it("rejects a missing workspace instead of editing a nested lookalike", () => {
     expect(() =>
       syncLockfileWorkspaceVersions(fixture, { "packages/missing": "1.0.0" }),
-    ).toThrow('bun.lock is missing property "packages/missing"');
+    ).toThrow("bun.lock has no workspace entry for packages/missing");
+  });
+
+  it("preserves every unrelated byte for escaped replacement values", () => {
+    let state = 24_301;
+    const random = (): number => {
+      state = (state * 16_807) % 2_147_483_647;
+      return state;
+    };
+    const alphabet = ['"', "\\", "-", ".", "0", "9", "a", "Z"];
+
+    for (let iteration = 0; iteration < 256; iteration += 1) {
+      const length = 1 + (random() % 24);
+      let version = "";
+      for (let index = 0; index < length; index += 1) {
+        const character = alphabet.at(random() % alphabet.length);
+        if (character === undefined) {
+          throw new Error("random alphabet index is out of bounds");
+        }
+        version += character;
+      }
+      const actual = syncLockfileWorkspaceVersions(fixture, {
+        "packages/example": version,
+      });
+      const expected = fixture.replace(
+        '"version": "1.2.3"',
+        () => `"version": ${JSON.stringify(version)}`,
+      );
+
+      expect(actual).toBe(expected);
+      expect(
+        syncLockfileWorkspaceVersions(actual, {
+          "packages/example": version,
+        }),
+      ).toBe(actual);
+    }
   });
 });

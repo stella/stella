@@ -42,6 +42,7 @@ const directPropertyValue = (
   text: string,
   objectStart: number,
   property: string,
+  missingMessage?: string,
 ): number => {
   if (text[objectStart] !== "{") {
     throw new TypeError(`expected object at offset ${objectStart}`);
@@ -69,7 +70,8 @@ const directPropertyValue = (
     index += 1;
   }
   throw new TypeError(
-    `bun.lock is missing property ${JSON.stringify(property)}`,
+    missingMessage ??
+      `bun.lock is missing property ${JSON.stringify(property)}`,
   );
 };
 
@@ -108,6 +110,7 @@ export const syncLockfileWorkspaceVersions = (
         lockText,
         workspacesStart,
         workspace,
+        `bun.lock has no workspace entry for ${workspace}`,
       );
       if (lockText[workspaceStart] !== "{") {
         throw new TypeError(

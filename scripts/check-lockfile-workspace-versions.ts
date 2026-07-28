@@ -21,8 +21,8 @@
 // the drift itself gets caught in CI instead of silently persisting.
 //
 // Workspace directories are derived from the root package.json `workspaces`
-// globs (`apps/*`, `packages/*`), not hardcoded, so a new workspace root
-// (or a renamed one) is picked up automatically.
+// entries, not hardcoded, so a new workspace root (or a renamed one) is
+// picked up automatically.
 
 import { panic } from "better-result";
 import { readdir } from "node:fs/promises";
@@ -33,12 +33,11 @@ const ROOT = path.resolve(import.meta.dir, "..");
 const readJson = async (filePath: string): Promise<Record<string, unknown>> =>
   JSON.parse(await Bun.file(filePath).text());
 
-// The root `workspaces` field only ever uses single-level globs of the shape
-// `<dir>/*` in this repo (`apps/*`, `packages/*`). Resolve each to its
-// immediate subdirectories rather than hand-rolling a general glob matcher.
 const globParent = (glob: string): string => {
-  if (!glob.endsWith("/*")) {
-    panic(`unsupported workspaces glob "${glob}": expected "<dir>/*"`);
+  if (!glob.endsWith("/*") || glob.slice(0, -2).includes("*")) {
+    panic(
+      `unsupported workspaces glob "${glob}": expected a literal path or "<dir>/*"`,
+    );
   }
   return glob.slice(0, -"/*".length);
 };
@@ -51,6 +50,9 @@ const workspaceGlobs = Array.isArray(rootPkg["workspaces"])
   : panic("root package.json is missing a `workspaces` array");
 
 const dirsForGlob = async (glob: string): Promise<string[]> => {
+  if (!glob.includes("*")) {
+    return [glob];
+  }
   const parent = globParent(glob);
   const entries = await readdir(path.join(ROOT, parent), {
     withFileTypes: true,
@@ -96,13 +98,13 @@ const mismatchForWorkspace = async (
   workspaceDir: string,
 ): Promise<string | null> => {
   const pkgPath = path.join(ROOT, workspaceDir, "package.json");
-  // A directory matched by a workspace glob is not necessarily a real
-  // workspace: skip it (rather than crash the guard) if its package.json is
-  // missing or fails to parse.
-  const pkg = await readJson(pkgPath).catch(() => null);
-  if (pkg === null) {
+  // A directory matched by a workspace glob is not necessarily a package.
+  // Absence is expected; malformed or unreadable manifests must fail loudly.
+  const packageFile = Bun.file(pkgPath);
+  if (!(await packageFile.exists())) {
     return null;
   }
+  const pkg: Record<string, unknown> = JSON.parse(await packageFile.text());
 
   const { name, version } = pkg;
   if (typeof name !== "string" || typeof version !== "string") {

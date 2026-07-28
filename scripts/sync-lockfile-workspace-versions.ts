@@ -19,8 +19,13 @@ const workspaceGlobs = Array.isArray(rootPackage["workspaces"])
   : panic("root package.json is missing a `workspaces` array");
 
 const workspaceParent = (workspaceGlob: string): string => {
-  if (!workspaceGlob.endsWith("/*")) {
-    panic(`unsupported workspaces glob ${workspaceGlob}: expected <dir>/*`);
+  if (
+    !workspaceGlob.endsWith("/*") ||
+    workspaceGlob.slice(0, -2).includes("*")
+  ) {
+    panic(
+      `unsupported workspaces glob ${workspaceGlob}: expected a literal path or <dir>/*`,
+    );
   }
   return workspaceGlob.slice(0, -2);
 };
@@ -28,6 +33,9 @@ const workspaceParent = (workspaceGlob: string): string => {
 const workspaceDirectories = (
   await Promise.all(
     workspaceGlobs.map(async (workspaceGlob) => {
+      if (!workspaceGlob.includes("*")) {
+        return [workspaceGlob];
+      }
       const parent = workspaceParent(workspaceGlob);
       const entries = await readdir(path.join(ROOT, parent), {
         withFileTypes: true,
@@ -45,13 +53,15 @@ const workspaceVersions = Object.fromEntries(
   (
     await Promise.all(
       workspaceDirectories.map(async (workspace) => {
-        const packageJson = await readJson(
-          path.join(ROOT, workspace, "package.json"),
-        ).catch(() => null);
-        if (
-          packageJson === null ||
-          typeof packageJson["version"] !== "string"
-        ) {
+        const packagePath = path.join(ROOT, workspace, "package.json");
+        const packageFile = Bun.file(packagePath);
+        if (!(await packageFile.exists())) {
+          return null;
+        }
+        const packageJson: Record<string, unknown> = JSON.parse(
+          await packageFile.text(),
+        );
+        if (typeof packageJson["version"] !== "string") {
           return null;
         }
         return [workspace, packageJson["version"]] as const;
@@ -63,7 +73,10 @@ const workspaceVersions = Object.fromEntries(
 const lockPath = path.join(ROOT, "bun.lock");
 const before = await Bun.file(lockPath).text();
 const after = syncLockfileWorkspaceVersions(before, workspaceVersions);
-await Bun.write(lockPath, after);
-console.log(
-  `Synchronized ${Object.keys(workspaceVersions).length} workspace versions.`,
-);
+const entryCount = Object.keys(workspaceVersions).length;
+if (process.argv.includes("--check-entries")) {
+  console.log(`Verified ${entryCount} bun.lock workspace entries.`);
+} else {
+  await Bun.write(lockPath, after);
+  console.log(`Synchronized ${entryCount} workspace versions.`);
+}
