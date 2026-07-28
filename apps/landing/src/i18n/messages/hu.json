@@ -7,14 +7,14 @@
   "askAi": {
     "copied": "Másolva",
     "copy": "Prompt másolása",
-    "label": "Kérdezz az AI-tól a stella-ról"
+    "label": "Kérdezze az AI-t a stella alkalmazásról"
   },
   "common": {
     "startFree": "Kezdje el ingyen"
   },
   "demo": {
     "addView": "Nézet hozzáadása",
-    "askStella": "Kérdezze a stellát",
+    "askStella": "Kérdezze a stella alkalmazást",
     "close": "Bezárás",
     "documentType": "Dokumentumtípus",
     "documents": "Dokumentumok",
@@ -24,7 +24,7 @@
     "matters": "Ügyek",
     "notes": "Jegyzetek",
     "overview": "Áttekintés",
-    "sectionBody": "Közvetlenül a működő termékből rögzítve. Amit itt lát, azt fogja használni.",
+    "sectionBody": "Közvetlenül a működő termékből rögzítve. Amit itt lát, azt is használja.",
     "sectionLabel": "A valódi termék",
     "sectionTitle": "stella, úgy, ahogy van.",
     "sort": "Rendezés",
@@ -33,7 +33,7 @@
     "status": "Állapot",
     "statusActive": "Aktív",
     "statusClosed": "Lezárt",
-    "statusInReview": "Felülvizsgálat alatt",
+    "statusInReview": "Ellenőrzés alatt",
     "statusOnHold": "Felfüggesztve",
     "table": "Táblázat",
     "todos": "Feladatok"
@@ -54,8 +54,8 @@
     "resources": "Források",
     "sourceCode": "Forráskód",
     "status": "Szolgáltatás állapota",
-    "tabularReview": "Táblázatos felülvizsgálat",
-    "tagline": "Nyílt jogi munkatér a fontos munkához.",
+    "tabularReview": "Táblázatos ellenőrzés",
+    "tagline": "Nyílt jogi munkaterület a fontos munkához.",
     "templates": "Sablonok",
     "terms": "Feltételek",
     "workspace": "Munkaterület"
@@ -63,14 +63,14 @@
   "hero": {
     "badge": "Aktív fejlesztés alatt",
     "selfHost": "Saját üzemeltetés",
-    "subtitle": "A nyílt forráskódú jogi munkaterület: ügyek, dokumentumok, felülvizsgálat és egy ügynök, amely forráshivatkozásokkal válaszol.",
+    "subtitle": "A nyílt forráskódú jogi munkaterület: ügyek, dokumentumok, ellenőrzés és egy ügynök, amely forráshivatkozásokkal válaszol.",
     "title": "Állítsa munkába az AI-t minden ügyben."
   },
   "home": {
     "ctaTitle": "Hozza el az AI-t az Ön ügyvédi irodájába."
   },
   "meta": {
-    "homeDescription": "Nyílt forráskódú jogi munkaterület: dokumentumok, ügyek, felülvizsgálat és kutatás. Futtassa saját szerverén vagy a felhőnkben. Használatalapú AI, bezártság nélkül.",
+    "homeDescription": "Nyílt forráskódú jogi munkaterület: dokumentumok, ügyek, ellenőrzés és kutatás. Futtassa saját szerverén vagy a felhőnkben. Használatalapú AI, bezártság nélkül.",
     "homeTitle": "stella | nyílt forráskódú jogi munkaterület"
   },
   "nav": {
@@ -86,7 +86,7 @@
     "security": "Biztonság"
   },
   "story": {
-    "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és hivatkozásokkal válaszol, amelyek a pontos szövegrésznél nyitják meg a forrást. Használja a stellában vagy MCP-n és parancssoron keresztül; a kérést ugyanazok a jogosultságok és források kísérik.",
+    "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és hivatkozásokkal válaszol, amelyek a pontos szövegrésznél nyitják meg a forrást. Használja a stella alkalmazásban vagy MCP-n és parancssoron keresztül; a kérést ugyanazok a jogosultságok és források kísérik.",
     "agentEyebrow": "Ügynöki munkafolyamatok",
     "agentTitle": "Kérdezzen egyszer. Minden válasz megjelöli a forrását.",
     "controlBody": "A stella nyílt forráskódú jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, futtassa a maga módján, és exportáljon mindent szabványos formátumokban; bezártság nélkül.",
@@ -100,11 +100,11 @@
     "exploreAgent": "AI-ügynök felfedezése",
     "exploreAnonymization": "Anonimizálás felfedezése",
     "explorePublicData": "Nyilvános adatok felfedezése",
-    "exploreTabularReview": "Táblázatos felülvizsgálat felfedezése",
+    "exploreTabularReview": "Táblázatos ellenőrzés felfedezése",
     "exploreTemplates": "Sablonok felfedezése",
     "exploreWorkspace": "Munkaterület felfedezése",
     "eyebrow": "Egy összekapcsolt munkaterület",
-    "intro": "Az ügy ugyanazon az összekapcsolt rendszeren halad végig: a forrásanyagoktól a felülvizsgálaton és a szövegezésen át a megalapozott válaszig vagy műveletig.",
+    "intro": "Az ügy ugyanazon az összekapcsolt rendszeren halad végig: a forrásanyagoktól az ellenőrzésen és a szövegezésen át a megalapozott válaszig vagy műveletig.",
     "openEditor": "Szerkesztő megnyitása",
     "proofByokBody": "Az AI-funkciókhoz használja saját szolgáltatói kulcsait.",
     "proofByokTitle": "Saját modellek használata",
@@ -112,14 +112,14 @@
     "proofOpenSourceTitle": "Nyílt forráskód",
     "proofPermissionsBody": "A kérések a felhasználóra és a munkaterületre korlátozódnak.",
     "proofPermissionsTitle": "Tiszteletben tartja a jogosultságokat",
-    "proofSelfHostBody": "Futtassa a stellát olyan infrastruktúrán, amelyet Ön felügyel.",
+    "proofSelfHostBody": "Futtassa a stella alkalmazást olyan infrastruktúrán, amelyet Ön felügyel.",
     "proofSelfHostTitle": "Saját szerveren üzemeltethető",
     "selfHostGuide": "Saját üzemeltetési útmutató elolvasása",
     "sourceOnGitHub": "Forráskód a GitHubon",
     "title": "Egy ügy. A munka minden része.",
     "velocityAll": "Teljes változásnapló",
-    "velocityTitle": "Amit mostanában szállítottunk.",
-    "workspaceBody": "A dokumentumok, a határidők, a strukturált felülvizsgálat és a szövegezés együtt maradnak, és minden ügyben kereshetők. Nyisson meg egy ügyet, lássa a munkát a maga kontextusában, és lépjen a táblázatból az alapul szolgáló dokumentumra anélkül, hogy újra össze kellene raknia az előzményeket.",
+    "velocityTitle": "Amit mostanában kiadtunk.",
+    "workspaceBody": "A dokumentumok, a határidők, a strukturált ellenőrzés és a szövegezés együtt maradnak, és minden ügyben kereshetők. Nyisson meg egy ügyet, lássa a munkát a maga kontextusában, és lépjen a táblázatból az alapul szolgáló dokumentumra anélkül, hogy újra össze kellene raknia az előzményeket.",
     "workspaceEyebrow": "Az ügy munkaterülete",
     "workspaceTitle": "Intézze az egész ügyet egy helyen."
   }

@@ -264,11 +264,21 @@
     {
       "id": "matter",
       "en": "Matter",
-      "note": "Load-bearing term (the client-engagement workspace); must not drift into synonyms. The internal `workspace` alias means the same thing where user-facing (createNewWorkspace = \"Create new matter\"); render it with the Matter term, not a literal \"workspace\" translation. ar uses ملف (file/dossier); avoid قضية (lawsuit) and مسألة (abstract legal question).",
+      "note": "Load-bearing term (the client-engagement workspace); must not drift into synonyms. The internal `workspace` alias means the same thing where user-facing (createNewWorkspace = \"Create new matter\"); render it with the Matter term, not a literal \"workspace\" translation. ar uses ملف (file/dossier); avoid قضية (lawsuit) and مسألة (abstract legal question). cs \"případ\" / sk \"prípad\" are banned in the nominative singular and plural only: those are the forms a label or term takes (a landing nav label had drifted to \"Případy\"), while the oblique forms carry the everyday idiom \"v případě\" (\"in case of\") and would false-fire.",
       "forbidden": {
         "ar": ["قضية", "قضايا", "مسألة", "مسائل"],
-        "cs": ["pracovní prostor"],
-        "sk": ["Vec", "veci", "vecou", "vecí", "veciam", "vecami", "veciach"],
+        "cs": ["pracovní prostor", "případ", "případy"],
+        "sk": [
+          "Vec",
+          "veci",
+          "vecou",
+          "vecí",
+          "veciam",
+          "vecami",
+          "veciach",
+          "prípad",
+          "prípady"
+        ],
         "de": [
           "Sache",
           "Sachen",
@@ -847,6 +857,59 @@
     }
   ],
   "nouns": [
+    {
+      "id": "workspace",
+      "en": "Workspace",
+      "note": "\"Workspace\" as product positioning (the category stella belongs to: the landing's identity phrase, the app's own \"your stella workspace\"), NOT the Matter alias — where English \"workspace\" names a matter, the Matter term wins and this concept's bans do not help. Each locale settles one rendering and reuses it; the forms banned here are the near-synonyms the landing had drifted to (cs \"pracovní prostředí\" is Czech for a desktop environment or for workplace conditions, pl \"przestrzeń robocza\"/\"środowisko pracy\", lt \"darbo erdvė\", lv \"darba vide\", hu \"munkatér\"). pt-BR \"ambiente de trabalho\" is a live variant in `consent.description` and is deliberately not banned yet. Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "forbidden": {
+        "cs": [
+          "pracovní prostředí",
+          "pracovního prostředí",
+          "pracovnímu prostředí",
+          "pracovním prostředí"
+        ],
+        "pl": [
+          "przestrzeń robocza",
+          "przestrzeń roboczą",
+          "przestrzeni roboczej",
+          "przestrzenią roboczą",
+          "środowisko pracy",
+          "środowiska pracy",
+          "środowisku pracy",
+          "środowiskiem pracy"
+        ],
+        "lt": [
+          "darbo erdvė",
+          "darbo erdvės",
+          "darbo erdvę",
+          "darbo erdve",
+          "darbo erdvei",
+          "darbo erdvėje"
+        ],
+        "lv": [
+          "darba vide",
+          "darba vidi",
+          "darba vides",
+          "darba videi",
+          "darba vidē"
+        ],
+        "hu": ["munkatér", "munkateret", "munkatéren", "munkatere"]
+      },
+      "translations": {
+        "ar": "مساحة عمل",
+        "cs": "pracovní prostor",
+        "sk": "pracovný priestor",
+        "pl": "obszar roboczy",
+        "de": "Arbeitsbereich",
+        "et": "tööruum",
+        "hu": "munkaterület",
+        "lt": "darbo sritis",
+        "lv": "darbvieta",
+        "es": "espacio de trabajo",
+        "fr": "espace de travail",
+        "pt-BR": "espaço de trabalho"
+      }
+    },
     {
       "id": "column",
       "en": "Column",

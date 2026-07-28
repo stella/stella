@@ -12,6 +12,24 @@
         "source": "Open legal workspace for work that matters.",
         "target": "Un espace de travail juridique ouvert pour le travail qui compte."
       }
+    },
+    "hero.subtitle": {
+      "cs": {
+        "source": "The open-source legal workspace: matters, documents, review, and an agent that answers with citations.",
+        "target": "Open source právní pracovní prostor: spisy, dokumenty, revize a agent, který odpovídá s citacemi."
+      }
+    },
+    "meta.homeDescription": {
+      "cs": {
+        "source": "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.",
+        "target": "Open source právní pracovní prostor pro dokumenty, spisy, revize a rešerše. Provozujte sami či v našem cloudu. AI podle využití, bez závislosti na dodavateli."
+      }
+    },
+    "story.workspaceEyebrow": {
+      "cs": {
+        "source": "Matter workspace",
+        "target": "Pracovní prostor spisu"
+      }
     }
   }
 }

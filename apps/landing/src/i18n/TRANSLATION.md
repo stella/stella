@@ -14,6 +14,28 @@ coherent rather than merely passing.
   transliterated, or declined; in languages that decline nouns, restructure
   around it (e.g. Latvian `lietotnē stella`, not a declined brand).
 
+### Restructuring around the brand: the generic-noun pattern
+
+Declining is the failure mode this rule keeps recurring against (`ve stelle`,
+`w stelli`, `a stellát`), and the naive fix is worse: a bare undeclined name in
+a slot that demands a case reads as broken grammar (`Zeptat se stella`). Put a
+generic noun in the case-bearing slot and leave the brand invariant beside it.
+Use each locale's fixed carrier noun so the pattern reads as one habit:
+
+| Locale | Carrier           | Example                           |
+| ------ | ----------------- | --------------------------------- |
+| cs     | aplikace stella   | `Provozujte aplikaci stella…`     |
+| sk     | aplikácia stella  | `Prevádzkujte aplikáciu stella…`  |
+| pl     | aplikacja stella  | `Uruchamiaj aplikację stella…`    |
+| hu     | stella alkalmazás | `Futtassa a stella alkalmazást…`  |
+| et     | rakendus stella   | `Kasuta seda rakenduses stella…`  |
+| lt     | programa stella   | `Naudokite jį programoje stella…` |
+| lv     | lietotne stella   | `Darbiniet lietotni stella…`      |
+
+Locales that need no carrier (ar, de, en, es, fr, pt-BR) keep the bare brand;
+Portuguese and Spanish may take the article (`a stella`, `na stella`), which is
+not declension.
+
 ## Translate meaning, not words
 
 Marketing copy is translated for effect, not word-by-word. A punchy English
@@ -41,6 +63,12 @@ file** — check the existing hero/footer strings before adding keys:
 | pt-BR  | você                                   |
 | sk     | vykanie (formal you)                   |
 
+The register binds every string, body copy included; the informal locales are
+where it slips, because a translator reaching for a neutral sentence lands on
+the formal default (es `Lo que ve aquí` for `Lo que ves aquí`, et `mida siin
+näete` for `mida siin näed`). Read a new string against the hero and the footer
+of the same file before committing it.
+
 ## Legal terminology: the glossary is binding
 
 The shared glossary (`apps/web/src/i18n/glossary.json`) defines the one
@@ -54,14 +82,48 @@ Why: Matter names the product's central object. If the landing and the app
 render it differently, users meet two products. Use the app's canonical
 translation; never introduce a new synonym on the landing.
 
+The glossary now also bans cs `případ` / sk `prípad` (nominative singular and
+plural) for Matter, because a demo label had drifted to `Případy` / `Prípady`
+while every other string in the same file said `spis`. Only those two forms are
+banned per language: the oblique forms carry the everyday `v případě` idiom and
+would false-fire.
+
+### Terms the app owns, not the landing
+
+For a concept that already has a rendering in `apps/web/src/i18n/langs`, the app
+wins and the landing copies it, even when the landing's own wording reads
+better in isolation. Verified drifts and their resolutions:
+
+| Concept   | Locale | App term           | Landing had          |
+| --------- | ------ | ------------------ | -------------------- |
+| In review | cs     | `V revizi`         | `V kontrole`         |
+| In review | sk     | `V revízii`        | `V kontrole`         |
+| Review    | hu     | `ellenőrzés`       | `felülvizsgálat`     |
+| Workspace | cs     | `pracovní prostor` | `pracovní prostředí` |
+| Workspace | pl     | `obszar roboczy`   | `przestrzeń robocza` |
+| Workspace | lt     | `darbo sritis`     | `darbo erdvė`        |
+| Workspace | lv     | `darbvieta`        | `darba vide`         |
+
+Hungarian is the case worth remembering: `felülvizsgálat` is not a stylistic
+variant, it names the extraordinary appeal to the Kúria, so a legal reader
+parses it as a procedure rather than as document review.
+
+Any status chip, tab label, or column header the demo section reproduces is an
+app string: render it verbatim, not as a fresh translation of the English.
+
 Special case: some languages ban the literal translation of "workspace" on
 matter-related strings (cs "pracovní prostor", fr "espace de travail",
 et standalone "tööruum") because the app uses the Matter term where its UI
 says workspace. On the landing, "workspace" as _product positioning_ (the
-category the product belongs to) may translate literally; the two
-grandfathered tagline entries in `i18n-lint-baseline.json` exist for exactly
-that distinction. Do not add new baseline entries without the same
-justification.
+category the product belongs to) may translate literally; the
+grandfathered entries in `i18n-lint-baseline.json` exist for exactly that
+distinction: the cs and fr taglines, plus the three cs strings that carry the
+identity phrase next to the word "matters" (`hero.subtitle`,
+`meta.homeDescription`, `story.workspaceEyebrow`). Czech had been dodging the
+ban with a second rendering of workspace; one correct term plus an honest
+baseline entry beats two terms. Do not add baseline entries for any other
+reason. Each entry is keyed on the (source, target) pair, so editing either
+side re-checks the string.
 
 ## The identity phrase
 
@@ -70,6 +132,23 @@ locale should settle one natural rendering of it and reuse that rendering
 everywhere it appears — page titles, meta descriptions, the footer tagline,
 hero copy. Consistency here is what makes the phrase recognisable to both
 readers and search engines indexing the localized pages.
+
+The settled rendering of "workspace" per locale now lives in `glossary.json`
+(`nouns` → `workspace`), which bans the near-synonyms each locale had drifted
+to, so the split cannot come back silently:
+
+| Locale | Workspace         | Locale | Workspace          |
+| ------ | ----------------- | ------ | ------------------ |
+| ar     | مساحة عمل         | hu     | munkaterület       |
+| cs     | pracovní prostor  | lt     | darbo sritis       |
+| sk     | pracovný priestor | lv     | darbvieta          |
+| pl     | obszar roboczy    | es     | espacio de trabajo |
+| de     | Arbeitsbereich    | fr     | espace de travail  |
+| et     | tööruum           | pt-BR  | espaço de trabalho |
+
+Czech is the instructive one: `pracovní prostředí` is the Czech term for a
+desktop environment, and in a legal context it reads as workplace conditions.
+Latvian `darba vide` and Hungarian `munkatér` fail the same way.
 
 Two locales cannot use their usual rendering when the string also carries the
 Matter term, because the glossary forbids the literal "workspace" there
@@ -224,6 +303,13 @@ Design, lv Motīvs, ar السمة), not a second synonym coined here.
 | pl     | Zmień motyw      |
 | pt-BR  | Alternar tema    |
 | sk     | Prepnúť vzhľad   |
+
+## Typography per locale
+
+French uses the typographic apostrophe `’` (U+2019) throughout, never the
+straight `'`: the file had been mixing both. Arabic keeps its own punctuation
+(see below). Nothing else in the catalogs needs locale-specific typography
+today; when it does, record it here rather than fixing one string.
 
 ## Arabic specifics
 

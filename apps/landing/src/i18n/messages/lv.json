@@ -7,14 +7,14 @@
   "askAi": {
     "copied": "Nokopēts",
     "copy": "Kopēt uzvedni",
-    "label": "Jautāt AI par stella"
+    "label": "Jautāt AI par lietotni stella"
   },
   "common": {
     "startFree": "Sākt bez maksas"
   },
   "demo": {
     "addView": "Pievienot skatu",
-    "askStella": "Jautāt stella",
+    "askStella": "Jautāt lietotnei stella",
     "close": "Aizvērt",
     "documentType": "Dokumenta veids",
     "documents": "Dokumenti",
@@ -24,7 +24,7 @@
     "matters": "Lietas",
     "notes": "Piezīmes",
     "overview": "Pārskats",
-    "sectionBody": "Uzņemts tieši no darbojoša produkta. Tas, ko redzat šeit, ir tas, ko lietojat.",
+    "sectionBody": "Uzņemts tieši no strādājoša produkta. Tas, ko redzat šeit, ir tas, ko lietojat.",
     "sectionLabel": "Īstais produkts",
     "sectionTitle": "stella tāda, kāda tā ir.",
     "sort": "Kārtot",
@@ -55,7 +55,7 @@
     "sourceCode": "Pirmkods",
     "status": "Statuss",
     "tabularReview": "Tabulāra pārskatīšana",
-    "tagline": "Atvērta juridiskā darba vide darbam, kam ir nozīme.",
+    "tagline": "Atvērta juridiskā darbvieta darbam, kam ir nozīme.",
     "templates": "Veidnes",
     "terms": "Noteikumi",
     "workspace": "Darbvieta"
@@ -63,15 +63,15 @@
   "hero": {
     "badge": "Aktīvi tiek attīstīts",
     "selfHost": "Mitināt pašiem",
-    "subtitle": "Atvērtā pirmkoda juridiskā darba vide: lietas, dokumenti, pārskatīšana un aģents, kas atbild, norādot avotus.",
+    "subtitle": "Atvērtā pirmkoda juridiskā darbvieta: lietas, dokumenti, pārskatīšana un aģents, kas atbild, norādot avotus.",
     "title": "Lieciet AI strādāt katrā lietā."
   },
   "home": {
     "ctaTitle": "Ienesiet AI savā advokātu birojā."
   },
   "meta": {
-    "homeDescription": "Atvērtā pirmkoda juridiskā darba vide: dokumenti, lietas, pārskatīšana un izpēte. Mitiniet paši vai izmantojiet mūsu mākoni. AI pēc lietojuma, bez piesaistes.",
-    "homeTitle": "stella | atvērtā pirmkoda juridiskā darba vide"
+    "homeDescription": "Atvērtā pirmkoda juridiskā darbvieta: dokumenti, lietas, pārskatīšana un izpēte. Mitiniet paši vai izmantojiet mūsu mākoni. AI pēc lietojuma, bez piesaistes.",
+    "homeTitle": "stella | atvērtā pirmkoda juridiskā darbvieta"
   },
   "nav": {
     "aiFactSheet": "AI faktu lapa",
@@ -86,7 +86,7 @@
     "security": "Drošība"
   },
   "story": {
-    "agentBody": "Aģents meklē lietā, izlasa būtisko tekstu un atbild ar citātiem, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to stella vai ar MCP un komandrindas palīdzību; pieprasījumam seko tās pašas atļaujas un avoti.",
+    "agentBody": "Aģents meklē lietā, izlasa būtisko tekstu un atbild ar citātiem, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to lietotnē stella vai ar MCP un komandrindas palīdzību; pieprasījumam seko tās pašas atļaujas un avoti.",
     "agentEyebrow": "Aģenta darbplūsmas",
     "agentTitle": "Pajautājiet vienreiz. Katra atbilde norāda savu avotu.",
     "controlBody": "stella ir atvērtā pirmkoda juridiskā programmatūra, ko varat mitināt paši: pārbaudiet kodu, darbiniet to pēc saviem noteikumiem un eksportējiet visu standarta formātos; bez piesaistes.",
@@ -103,7 +103,7 @@
     "exploreTabularReview": "Iepazīt tabulāro pārskatīšanu",
     "exploreTemplates": "Iepazīt veidnes",
     "exploreWorkspace": "Iepazīt darbvietu",
-    "eyebrow": "Viena savienota darba vide",
+    "eyebrow": "Viena savienota darbvieta",
     "intro": "Lieta virzās pa vienu un to pašu savienoto sistēmu: no avota materiāliem cauri pārskatīšanai un sagatavošanai līdz pamatotai atbildei vai darbībai.",
     "openEditor": "Atvērt redaktoru",
     "proofByokBody": "AI funkcijām izmantojiet savas pakalpojumu sniedzēja atslēgas.",
@@ -112,7 +112,7 @@
     "proofOpenSourceTitle": "Atvērts pirmkods",
     "proofPermissionsBody": "Pieprasījumi paliek lietotāja un darbvietas ietvaros.",
     "proofPermissionsTitle": "Ievēro atļaujas",
-    "proofSelfHostBody": "Darbiniet stella infrastruktūrā, ko pārvaldāt paši.",
+    "proofSelfHostBody": "Darbiniet lietotni stella infrastruktūrā, ko pārvaldāt paši.",
     "proofSelfHostTitle": "Iespējams mitināt pašiem",
     "selfHostGuide": "Lasīt pašmitināšanas ceļvedi",
     "sourceOnGitHub": "Pirmkods vietnē GitHub",
@@ -120,7 +120,7 @@
     "velocityAll": "Pilns izmaiņu žurnāls",
     "velocityTitle": "Ko nesen esam izlaiduši.",
     "workspaceBody": "Dokumenti, termiņi, strukturēta pārskatīšana un sagatavošana paliek kopā un ir meklējami visās lietās. Atveriet lietu, skatiet darbu kontekstā un pārejiet no tabulas uz pamatā esošo dokumentu, nezaudējot izsekojamību.",
-    "workspaceEyebrow": "Lietas darba vide",
+    "workspaceEyebrow": "Lietas darbvieta",
     "workspaceTitle": "Pārvaldiet visu lietu vienā vietā."
   }
 }

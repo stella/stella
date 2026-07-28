@@ -14,7 +14,7 @@
   },
   "demo": {
     "addView": "Lisa vaade",
-    "askStella": "Küsi stellalt",
+    "askStella": "Küsi rakenduselt stella",
     "close": "Sulge",
     "documentType": "Dokumendi tüüp",
     "documents": "Dokumendid",
@@ -24,10 +24,10 @@
     "matters": "Toimikud",
     "notes": "Märkused",
     "overview": "Ülevaade",
-    "sectionBody": "Jäädvustatud otse töötavast tootest. Seda, mida siin näete, te ka kasutate.",
+    "sectionBody": "Jäädvustatud otse töötavast tootest. Seda, mida siin näed, sa ka kasutad.",
     "sectionLabel": "Tegelik toode",
     "sectionTitle": "stella sellisena, nagu see on.",
-    "sort": "Sordi",
+    "sort": "Sorteeri",
     "source": "Allikas",
     "sources": "Allikad",
     "status": "Olek",
@@ -42,7 +42,7 @@
     "agent": "Tehisintellekti agent",
     "anonymization": "Anonüümimine",
     "clarity": "Selgus igas toimikus.",
-    "connect": "Võta ühendust",
+    "connect": "Kontakt",
     "contact": "Võta ühendust",
     "documentation": "Dokumentatsioon",
     "editor": "Redaktor",
@@ -71,7 +71,7 @@
   },
   "meta": {
     "homeDescription": "Avatud lähtekoodiga õigustööruum dokumentide, toimikute, ülevaatuse ja otsingu jaoks. Majuta ise või kasuta meie pilve. Kasutuspõhine tehisintellekt, tarnijalõksuta.",
-    "homeTitle": "stella | avatud lähtekoodiga õiguslik tööruum"
+    "homeTitle": "stella | avatud lähtekoodiga õigustööruum"
   },
   "nav": {
     "aiFactSheet": "Tehisintellekti teabeleht",
@@ -86,7 +86,7 @@
     "security": "Turvalisus"
   },
   "story": {
-    "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta seda stellas või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
+    "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta seda rakenduses stella või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
     "agentEyebrow": "Agendi töövood",
     "agentTitle": "Küsi üks kord. Iga vastus viitab oma allikale.",
     "controlBody": "stella on avatud lähtekoodiga õigustarkvara, mida saad ise majutada: uuri koodi, käita seda oma moodi ja ekspordi kõik standardvormingutes; tarnijalõksuta.",
@@ -112,7 +112,7 @@
     "proofOpenSourceTitle": "Avatud lähtekood",
     "proofPermissionsBody": "Päringud püsivad kasutaja ja tööruumi piires.",
     "proofPermissionsTitle": "Arvestab õigustega",
-    "proofSelfHostBody": "Käita stellat taristul, mida ise kontrollid.",
+    "proofSelfHostBody": "Käita rakendust stella taristul, mida ise kontrollid.",
     "proofSelfHostTitle": "Ise majutatav",
     "selfHostGuide": "Loe ise majutamise juhendit",
     "sourceOnGitHub": "Lähtekood GitHubis",

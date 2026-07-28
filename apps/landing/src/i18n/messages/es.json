@@ -7,7 +7,7 @@
   "askAi": {
     "copied": "Copiado",
     "copy": "Copiar instrucción",
-    "label": "Pregunta a una IA sobre stella"
+    "label": "Pregunta a la IA sobre stella"
   },
   "common": {
     "startFree": "Empezar gratis"
@@ -24,7 +24,7 @@
     "matters": "Asuntos",
     "notes": "Notas",
     "overview": "Resumen",
-    "sectionBody": "Capturado directamente del producto en funcionamiento. Lo que ve aquí es lo que utiliza.",
+    "sectionBody": "Capturado directamente del producto en funcionamiento. Lo que ves aquí es lo que usas.",
     "sectionLabel": "El producto real",
     "sectionTitle": "stella, tal como es.",
     "sort": "Ordenar",
@@ -121,6 +121,6 @@
     "velocityTitle": "Lo último que hemos lanzado.",
     "workspaceBody": "Documentos, plazos, revisión estructurada y redacción permanecen juntos y son buscables en todos los asuntos. Abre un asunto, ve el trabajo en contexto y pasa de una tabla al documento subyacente sin reconstruir el recorrido.",
     "workspaceEyebrow": "Espacio de trabajo del asunto",
-    "workspaceTitle": "Lleva todo el asunto en un solo lugar."
+    "workspaceTitle": "Gestiona todo el asunto en un solo lugar."
   }
 }

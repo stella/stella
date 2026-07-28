@@ -7,21 +7,21 @@
   "askAi": {
     "copied": "Zkopírováno",
     "copy": "Kopírovat prompt",
-    "label": "Zeptejte se AI na stellu"
+    "label": "Zeptejte se AI na aplikaci stella"
   },
   "common": {
     "startFree": "Začít zdarma"
   },
   "demo": {
     "addView": "Přidat zobrazení",
-    "askStella": "Zeptat se stella",
+    "askStella": "Zeptat se aplikace stella",
     "close": "Zavřít",
     "documentType": "Typ dokumentu",
     "documents": "Dokumenty",
     "dueDate": "Termín",
     "files": "Soubory",
     "filter": "Filtrovat",
-    "matters": "Případy",
+    "matters": "Spisy",
     "notes": "Poznámky",
     "overview": "Přehled",
     "sectionBody": "Zachyceno přímo z běžícího produktu. To, co vidíte, také používáte.",
@@ -33,7 +33,7 @@
     "status": "Stav",
     "statusActive": "Aktivní",
     "statusClosed": "Uzavřeno",
-    "statusInReview": "V kontrole",
+    "statusInReview": "V revizi",
     "statusOnHold": "Pozastaveno",
     "table": "Tabulka",
     "todos": "Úkoly"
@@ -58,20 +58,20 @@
     "tagline": "Otevřený právní pracovní prostor pro práci, na které záleží.",
     "templates": "Vzory",
     "terms": "Podmínky",
-    "workspace": "Pracovní prostředí"
+    "workspace": "Pracovní prostor"
   },
   "hero": {
     "badge": "Aktivně vyvíjeno",
     "selfHost": "Vlastní hosting",
-    "subtitle": "Open source právní pracovní prostředí: spisy, dokumenty, revize a agent, který odpovídá s citacemi.",
+    "subtitle": "Open source právní pracovní prostor: spisy, dokumenty, revize a agent, který odpovídá s citacemi.",
     "title": "Zapojte AI do každého spisu."
   },
   "home": {
-    "ctaTitle": "Přineste AI do své advokátní kanceláře."
+    "ctaTitle": "Nasaďte AI ve své advokátní kanceláři."
   },
   "meta": {
-    "homeDescription": "Open source právní pracovní prostředí pro dokumenty, spisy, revize a rešerše. Provozujte sami či v našem cloudu. AI podle využití, bez závislosti na dodavateli.",
-    "homeTitle": "stella | open source právní pracovní prostředí"
+    "homeDescription": "Open source právní pracovní prostor pro dokumenty, spisy, revize a rešerše. Provozujte sami či v našem cloudu. AI podle využití, bez závislosti na dodavateli.",
+    "homeTitle": "stella | open source právní pracovní prostor"
   },
   "nav": {
     "aiFactSheet": "Přehled pro AI",
@@ -86,7 +86,7 @@
     "security": "Zabezpečení"
   },
   "story": {
-    "agentBody": "Agent prohledá spis, přečte relevantní text a odpoví s citacemi, které otevřou zdroj přesně v dané pasáži. Použijte ho ve stelle nebo přes MCP a CLI; s požadavkem putují stejná oprávnění i zdroje.",
+    "agentBody": "Agent prohledá spis, přečte relevantní text a odpoví s citacemi, které otevřou zdroj přesně v dané pasáži. Použijte ho v aplikaci stella nebo přes MCP a CLI; s požadavkem putují stejná oprávnění i zdroje.",
     "agentEyebrow": "Pracovní postupy agenta",
     "agentTitle": "Zeptejte se jednou. Každá odpověď cituje svůj zdroj.",
     "controlBody": "stella je open source právní software, který si můžete sami hostovat: nahlédněte do kódu, provozujte ho po svém a exportujte vše ve standardních formátech; bez závislosti na dodavateli.",
@@ -102,17 +102,17 @@
     "explorePublicData": "Prozkoumat veřejná data",
     "exploreTabularReview": "Prozkoumat tabulkovou revizi",
     "exploreTemplates": "Prozkoumat vzory",
-    "exploreWorkspace": "Prozkoumat pracovní prostředí",
-    "eyebrow": "Jedno propojené pracovní prostředí",
+    "exploreWorkspace": "Prozkoumat pracovní prostor",
+    "eyebrow": "Jeden propojený pracovní prostor",
     "intro": "Spis prochází jedním propojeným systémem: od zdrojových podkladů přes revizi a přípravu dokumentů až po podloženou odpověď nebo akci.",
     "openEditor": "Otevřít editor",
     "proofByokBody": "Pro AI funkce používejte vlastní klíče od poskytovatelů.",
     "proofByokTitle": "Vlastní AI modely",
     "proofOpenSourceBody": "Nahlédněte do kódu a mějte systém, který si můžete odnést.",
     "proofOpenSourceTitle": "Open source",
-    "proofPermissionsBody": "Požadavky zůstávají omezené na daného uživatele a pracovní prostředí.",
+    "proofPermissionsBody": "Požadavky zůstávají omezené na daného uživatele a pracovní prostor.",
     "proofPermissionsTitle": "Respektuje oprávnění",
-    "proofSelfHostBody": "Provozujte stellu na infrastruktuře, kterou máte pod kontrolou.",
+    "proofSelfHostBody": "Provozujte aplikaci stella na infrastruktuře, kterou máte pod kontrolou.",
     "proofSelfHostTitle": "Možnost vlastního hostingu",
     "selfHostGuide": "Přečíst návod k vlastnímu hostingu",
     "sourceOnGitHub": "Zdrojový kód na GitHubu",
@@ -120,7 +120,7 @@
     "velocityAll": "Celý seznam změn",
     "velocityTitle": "Co jsme nedávno vydali.",
     "workspaceBody": "Dokumenty, termíny, strukturovaná revize i příprava dokumentů zůstávají pohromadě, prohledávatelné napříč všemi spisy. Otevřete spis, vidíte práci v kontextu a z tabulky přejdete rovnou k podkladovému dokumentu, aniž byste museli znovu dohledávat souvislosti.",
-    "workspaceEyebrow": "Pracovní prostředí spisu",
+    "workspaceEyebrow": "Pracovní prostor spisu",
     "workspaceTitle": "Veďte celý spis na jednom místě."
   }
 }

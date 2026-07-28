@@ -6,8 +6,8 @@
   },
   "askAi": {
     "copied": "Copié",
-    "copy": "Copier l'invite",
-    "label": "Interroger l'IA sur stella"
+    "copy": "Copier l’invite",
+    "label": "Interroger l’IA sur stella"
   },
   "common": {
     "startFree": "Commencer gratuitement"
@@ -64,13 +64,13 @@
     "badge": "Développement actif",
     "selfHost": "Auto-hébergement",
     "subtitle": "La plateforme juridique open source : dossiers, documents, revue et un agent qui répond en citant ses sources.",
-    "title": "Mettez l'IA au service de chaque dossier."
+    "title": "Mettez l’IA au service de chaque dossier."
   },
   "home": {
-    "ctaTitle": "Apportez l'IA à votre cabinet d'avocats."
+    "ctaTitle": "Apportez l’IA à votre cabinet d’avocats."
   },
   "meta": {
-    "homeDescription": "Plateforme juridique open source : documents, dossiers, revue et recherche. À héberger vous-même ou dans notre cloud. IA à l'usage, sans dépendance.",
+    "homeDescription": "Plateforme juridique open source : documents, dossiers, revue et recherche. À héberger vous-même ou dans notre cloud. IA à l’usage, sans dépendance.",
     "homeTitle": "stella | espace de travail juridique open source"
   },
   "nav": {
@@ -86,41 +86,41 @@
     "security": "Sécurité"
   },
   "story": {
-    "agentBody": "L'agent recherche dans le dossier, lit le texte pertinent et répond avec des citations qui ouvrent la source exactement au passage concerné. Utilisez-le dans stella ou via MCP et la CLI ; les mêmes permissions et les mêmes sources suivent la demande.",
-    "agentEyebrow": "Flux de travail de l'agent",
+    "agentBody": "L’agent recherche dans le dossier, lit le texte pertinent et répond avec des citations qui ouvrent la source exactement au passage concerné. Utilisez-le dans stella ou via MCP et la CLI ; les mêmes permissions et les mêmes sources suivent la demande.",
+    "agentEyebrow": "Flux de travail de l’agent",
     "agentTitle": "Demandez une fois. Chaque réponse cite sa source.",
     "controlBody": "stella est un logiciel juridique open source que vous pouvez auto-héberger : inspectez le code, exécutez-le à votre façon et exportez tout dans des formats standards ; sans dépendance.",
     "controlEyebrow": "Conçu pour garder le contrôle",
     "controlTitle": "Gardez le contrôle de votre infrastructure.",
-    "dataBody": "Jurisprudence issue de sources officielles avec sa structure préservée, et registres d'entreprises interrogés directement dans le dossier, juridiction par juridiction. L'anonymisation garde les éléments identifiants hors des flux de travail IA.",
+    "dataBody": "Jurisprudence issue de sources officielles avec sa structure préservée, et registres d’entreprises interrogés directement dans le dossier, juridiction par juridiction. L’anonymisation garde les éléments identifiants hors des flux de travail IA.",
     "dataEyebrow": "Données juridiques",
     "dataMainAlt": "Une décision de justice officielle ouverte dans stella",
     "dataTitle": "Emportez le droit et les données avec vous.",
     "discover": "Découvrir",
-    "exploreAgent": "Découvrir l'agent IA",
-    "exploreAnonymization": "Découvrir l'anonymisation",
+    "exploreAgent": "Découvrir l’agent IA",
+    "exploreAnonymization": "Découvrir l’anonymisation",
     "explorePublicData": "Découvrir les données publiques",
     "exploreTabularReview": "Découvrir la revue tabulaire",
     "exploreTemplates": "Découvrir les modèles",
-    "exploreWorkspace": "Découvrir l'espace de travail",
+    "exploreWorkspace": "Découvrir l’espace de travail",
     "eyebrow": "Un espace de travail connecté",
-    "intro": "Un dossier avance dans un même système connecté : des documents sources, en passant par la revue et la rédaction, jusqu'à une réponse ou une action fondée.",
-    "openEditor": "Ouvrir l'éditeur",
+    "intro": "Un dossier avance dans un même système connecté : des documents sources, en passant par la revue et la rédaction, jusqu’à une réponse ou une action fondée.",
+    "openEditor": "Ouvrir l’éditeur",
     "proofByokBody": "Utilisez vos propres clés de fournisseur pour les fonctions IA.",
     "proofByokTitle": "Apportez vos propres modèles",
     "proofOpenSourceBody": "Inspectez le code et conservez un système portable.",
     "proofOpenSourceTitle": "Open source",
-    "proofPermissionsBody": "Les requêtes restent limitées à l'utilisateur et à son espace de travail.",
+    "proofPermissionsBody": "Les requêtes restent limitées à l’utilisateur et à son espace de travail.",
     "proofPermissionsTitle": "Respecte les permissions",
     "proofSelfHostBody": "Exécutez stella sur une infrastructure que vous contrôlez.",
     "proofSelfHostTitle": "Auto-hébergeable",
-    "selfHostGuide": "Lire le guide d'auto-hébergement",
+    "selfHostGuide": "Lire le guide d’auto-hébergement",
     "sourceOnGitHub": "Code source sur GitHub",
     "title": "Un dossier. Chaque étape du travail.",
     "velocityAll": "Journal des modifications complet",
-    "velocityTitle": "Ce qu'on a livré récemment.",
-    "workspaceBody": "Documents, échéances, revue structurée et rédaction restent ensemble et sont recherchables dans tous les dossiers. Ouvrez un dossier, visualisez le travail dans son contexte et passez d'un tableau au document sous-jacent sans reconstituer le fil.",
-    "workspaceEyebrow": "L'espace du dossier",
+    "velocityTitle": "Ce que nous avons livré récemment.",
+    "workspaceBody": "Documents, échéances, revue structurée et rédaction restent ensemble et sont recherchables dans tous les dossiers. Ouvrez un dossier, visualisez le travail dans son contexte et passez d’un tableau au document sous-jacent sans reconstituer le fil.",
+    "workspaceEyebrow": "L’espace du dossier",
     "workspaceTitle": "Gérez tout le dossier au même endroit."
   }
 }

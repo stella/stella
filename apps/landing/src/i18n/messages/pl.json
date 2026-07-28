@@ -7,14 +7,14 @@
   "askAi": {
     "copied": "Skopiowano",
     "copy": "Kopiuj prompt",
-    "label": "Zapytaj AI o stella"
+    "label": "Zapytaj AI o aplikację stella"
   },
   "common": {
     "startFree": "Zacznij za darmo"
   },
   "demo": {
     "addView": "Dodaj widok",
-    "askStella": "Zapytaj stellę",
+    "askStella": "Zapytaj aplikację stella",
     "close": "Zamknij",
     "documentType": "Typ dokumentu",
     "documents": "Dokumenty",
@@ -55,23 +55,23 @@
     "sourceCode": "Kod źródłowy",
     "status": "Status",
     "tabularReview": "Przegląd tabelaryczny",
-    "tagline": "Otwarta przestrzeń do pracy prawnej, która ma znaczenie.",
+    "tagline": "Otwarty prawniczy obszar roboczy do pracy, która ma znaczenie.",
     "templates": "Szablony",
     "terms": "Warunki",
-    "workspace": "Przestrzeń robocza"
+    "workspace": "Obszar roboczy"
   },
   "hero": {
     "badge": "Aktywnie rozwijany",
     "selfHost": "Hostuj samodzielnie",
-    "subtitle": "Środowisko pracy open source dla prawników: sprawy, dokumenty, przegląd i agent, który odpowiada ze wskazaniem źródeł.",
+    "subtitle": "Prawniczy obszar roboczy open source: sprawy, dokumenty, przegląd i agent, który odpowiada ze wskazaniem źródeł.",
     "title": "Zaprzęgnij AI do każdej sprawy."
   },
   "home": {
     "ctaTitle": "Wprowadź AI do Twojej kancelarii."
   },
   "meta": {
-    "homeDescription": "Środowisko pracy open source dla prawników: dokumenty, sprawy, przegląd i orzecznictwo. Hostuj sam albo w naszej chmurze. AI płatna za użycie, bez uzależnienia.",
-    "homeTitle": "stella | środowisko pracy open source dla prawników"
+    "homeDescription": "Prawniczy obszar roboczy open source: dokumenty, sprawy, przegląd i orzecznictwo. Hostuj sam albo w naszej chmurze. AI płatna za użycie, bez uzależnienia.",
+    "homeTitle": "stella | prawniczy obszar roboczy open source"
   },
   "nav": {
     "aiFactSheet": "Karta informacyjna AI",
@@ -86,7 +86,7 @@
     "security": "Bezpieczeństwo"
   },
   "story": {
-    "agentBody": "Agent przeszukuje sprawę, czyta istotny tekst i odpowiada cytatami, które otwierają źródło dokładnie w danym fragmencie. Używaj go w stelli albo przez MCP i CLI; za żądaniem podążają te same uprawnienia i źródła.",
+    "agentBody": "Agent przeszukuje sprawę, czyta istotny tekst i odpowiada cytatami, które otwierają źródło dokładnie w danym fragmencie. Używaj go w aplikacji stella albo przez MCP i CLI; za żądaniem podążają te same uprawnienia i źródła.",
     "agentEyebrow": "Przepływy pracy agenta",
     "agentTitle": "Zapytaj raz. Każda odpowiedź wskazuje swoje źródło.",
     "controlBody": "stella to prawnicze oprogramowanie open source, które możesz hostować samodzielnie: przejrzyj kod, uruchamiaj je po swojemu i eksportuj wszystko w standardowych formatach; bez uzależnienia.",
@@ -102,17 +102,17 @@
     "explorePublicData": "Poznaj dane publiczne",
     "exploreTabularReview": "Poznaj przegląd tabelaryczny",
     "exploreTemplates": "Poznaj szablony",
-    "exploreWorkspace": "Poznaj przestrzeń roboczą",
-    "eyebrow": "Jedna połączona przestrzeń robocza",
+    "exploreWorkspace": "Poznaj obszar roboczy",
+    "eyebrow": "Jeden połączony obszar roboczy",
     "intro": "Sprawa przechodzi przez ten sam połączony system: od materiałów źródłowych, przez przegląd i redagowanie, po ugruntowaną odpowiedź lub działanie.",
     "openEditor": "Otwórz edytor",
     "proofByokBody": "Używaj własnych kluczy dostawców do funkcji AI.",
     "proofByokTitle": "Własne modele",
     "proofOpenSourceBody": "Przejrzyj kod i zachowaj przenośny system.",
     "proofOpenSourceTitle": "Open source",
-    "proofPermissionsBody": "Żądania pozostają ograniczone do użytkownika i przestrzeni roboczej.",
+    "proofPermissionsBody": "Żądania pozostają ograniczone do użytkownika i obszaru roboczego.",
     "proofPermissionsTitle": "Z poszanowaniem uprawnień",
-    "proofSelfHostBody": "Uruchamiaj stellę na infrastrukturze, którą kontrolujesz.",
+    "proofSelfHostBody": "Uruchamiaj aplikację stella na infrastrukturze, którą kontrolujesz.",
     "proofSelfHostTitle": "Możliwość samodzielnego hostowania",
     "selfHostGuide": "Przeczytaj przewodnik po samodzielnym hostingu",
     "sourceOnGitHub": "Kod źródłowy na GitHubie",
@@ -120,7 +120,7 @@
     "velocityAll": "Pełny dziennik zmian",
     "velocityTitle": "Co ostatnio wydaliśmy.",
     "workspaceBody": "Dokumenty, terminy, ustrukturyzowany przegląd i redagowanie pozostają razem, przeszukiwalne we wszystkich sprawach. Otwórz sprawę, zobacz pracę w kontekście i przejdź z tabeli do dokumentu źródłowego bez ponownego odtwarzania ścieżki.",
-    "workspaceEyebrow": "Przestrzeń robocza sprawy",
+    "workspaceEyebrow": "Obszar roboczy sprawy",
     "workspaceTitle": "Prowadź całą sprawę w jednym miejscu."
   }
 }

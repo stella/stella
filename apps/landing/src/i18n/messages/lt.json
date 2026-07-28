@@ -7,14 +7,14 @@
   "askAi": {
     "copied": "Nukopijuota",
     "copy": "Kopijuoti užklausą",
-    "label": "Klauskite DI apie stella"
+    "label": "Klauskite DI apie programą stella"
   },
   "common": {
     "startFree": "Pradėkite nemokamai"
   },
   "demo": {
     "addView": "Pridėti rodinį",
-    "askStella": "Klausti stella",
+    "askStella": "Klausti programos stella",
     "close": "Uždaryti",
     "documentType": "Dokumento tipas",
     "documents": "Dokumentai",
@@ -31,10 +31,10 @@
     "source": "Šaltinis",
     "sources": "Šaltiniai",
     "status": "Būsena",
-    "statusActive": "Aktyvu",
+    "statusActive": "Aktyvi",
     "statusClosed": "Uždaryta",
     "statusInReview": "Peržiūrima",
-    "statusOnHold": "Sulaikyta",
+    "statusOnHold": "Sustabdyta",
     "table": "Lentelė",
     "todos": "Užduotys"
   },
@@ -42,7 +42,7 @@
     "agent": "DI agentas",
     "anonymization": "Anonimizavimas",
     "clarity": "Aiškumas kiekvienai bylai.",
-    "connect": "Susisiekite",
+    "connect": "Kontaktai",
     "contact": "Susisiekite",
     "documentation": "Dokumentacija",
     "editor": "Redaktorius",
@@ -55,23 +55,23 @@
     "sourceCode": "Šaltinio kodas",
     "status": "Būsena",
     "tabularReview": "Lentelinė peržiūra",
-    "tagline": "Atvira teisinė darbo erdvė svarbiam darbui.",
+    "tagline": "Atvira teisinė darbo sritis svarbiam darbui.",
     "templates": "Šablonai",
     "terms": "Sąlygos",
-    "workspace": "Darbo erdvė"
+    "workspace": "Darbo sritis"
   },
   "hero": {
     "badge": "Aktyviai tobulinama",
     "selfHost": "Talpinkite patys",
-    "subtitle": "Atvirojo kodo teisinė darbo erdvė: bylos, dokumentai, peržiūra ir agentas, kuris atsako nurodydamas šaltinius.",
+    "subtitle": "Atvirojo kodo teisinė darbo sritis: bylos, dokumentai, peržiūra ir agentas, kuris atsako nurodydamas šaltinius.",
     "title": "Pasitelkite DI kiekvienoje byloje."
   },
   "home": {
     "ctaTitle": "Atneškite DI į savo advokatų kontorą."
   },
   "meta": {
-    "homeDescription": "Atvirojo kodo teisinė darbo erdvė: dokumentai, bylos, peržiūra ir teisinė paieška. Talpinkite patys arba naudokite mūsų debesį. DI pagal naudojimą, be pririšimo.",
-    "homeTitle": "stella | atvirojo kodo teisinė darbo erdvė"
+    "homeDescription": "Atvirojo kodo teisinė darbo sritis: dokumentai, bylos, peržiūra ir teisinė paieška. Talpinkite patys arba naudokite mūsų debesį. DI pagal naudojimą, be pririšimo.",
+    "homeTitle": "stella | atvirojo kodo teisinė darbo sritis"
   },
   "nav": {
     "aiFactSheet": "DI duomenų lapas",
@@ -86,7 +86,7 @@
     "security": "Saugumas"
   },
   "story": {
-    "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir atsako citatomis, kurios atveria šaltinį tiksliai reikiamoje vietoje. Naudokite jį stella arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
+    "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir atsako citatomis, kurios atveria šaltinį tiksliai reikiamoje vietoje. Naudokite jį programoje stella arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
     "agentEyebrow": "Agento darbo eigos",
     "agentTitle": "Paklauskite kartą. Kiekvienas atsakymas nurodo savo šaltinį.",
     "controlBody": "stella – atvirojo kodo teisinė programinė įranga, kurią galite talpinti patys: peržiūrėkite kodą, paleiskite ją savaip ir eksportuokite viską standartiniais formatais; be pririšimo.",
@@ -102,17 +102,17 @@
     "explorePublicData": "Susipažinti su viešaisiais duomenimis",
     "exploreTabularReview": "Susipažinti su lenteline peržiūra",
     "exploreTemplates": "Susipažinti su šablonais",
-    "exploreWorkspace": "Susipažinti su darbo erdve",
-    "eyebrow": "Viena susieta darbo erdvė",
+    "exploreWorkspace": "Susipažinti su darbo sritimi",
+    "eyebrow": "Viena susieta darbo sritis",
     "intro": "Byla juda per tą pačią susietą sistemą: nuo šaltinių medžiagos per peržiūrą ir rengimą iki pagrįsto atsakymo ar veiksmo.",
     "openEditor": "Atverti redaktorių",
     "proofByokBody": "DI funkcijoms naudokite savo tiekėjų raktus.",
     "proofByokTitle": "Naudokite savo modelius",
     "proofOpenSourceBody": "Peržiūrėkite kodą ir turėkite perkeliamą sistemą.",
     "proofOpenSourceTitle": "Atviras kodas",
-    "proofPermissionsBody": "Užklausos lieka apribotos naudotoju ir darbo erdve.",
+    "proofPermissionsBody": "Užklausos lieka apribotos naudotoju ir darbo sritimi.",
     "proofPermissionsTitle": "Paiso teisių",
-    "proofSelfHostBody": "Paleiskite stella savo valdomoje infrastruktūroje.",
+    "proofSelfHostBody": "Paleiskite programą stella savo valdomoje infrastruktūroje.",
     "proofSelfHostTitle": "Galima talpinti patiems",
     "selfHostGuide": "Skaityti savarankiško talpinimo gidą",
     "sourceOnGitHub": "Šaltinio kodas platformoje GitHub",
@@ -120,7 +120,7 @@
     "velocityAll": "Visas pakeitimų žurnalas",
     "velocityTitle": "Ką neseniai išleidome.",
     "workspaceBody": "Dokumentai, terminai, struktūruota peržiūra ir rengimas lieka kartu, juos galima surasti visose bylose. Atverkite bylą, matykite darbą kontekste ir iš lentelės pereikite prie pirminio dokumento iš naujo neatkurdami sekos.",
-    "workspaceEyebrow": "Bylos darbo erdvė",
+    "workspaceEyebrow": "Bylos darbo sritis",
     "workspaceTitle": "Tvarkykite visą bylą vienoje vietoje."
   }
 }
