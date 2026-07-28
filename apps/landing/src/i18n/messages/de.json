@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Aktiv weiterentwickelt",
     "selfHost": "Selbst hosten",
-    "subtitle": "Akten, Dokumente, Prüfung und ein Agent, der mit Quellenangaben antwortet.",
-    "subtitle2": "Kostenlos nutzbar, offen einsehbar, für immer Ihres.",
-    "titleLine1": "Juristischer Arbeitsbereich.",
-    "titleLine2": "Open Source."
+    "subtitle": "Der juristische Open-Source-Arbeitsbereich: Akten, Dokumente, Prüfung und ein Agent, der mit Quellenangaben antwortet.",
+    "title": "Setzen Sie KI in jeder Akte ein."
   },
   "home": {
     "ctaTitle": "Bringen Sie KI in Ihre Kanzlei."

@@ -63,10 +63,8 @@
   "hero": {
     "badge": "En desarrollo activo",
     "selfHost": "Autoalojar",
-    "subtitle": "Asuntos, documentos, revisión y un agente que responde con citas.",
-    "subtitle2": "Gratis de usar, abierto de inspeccionar, tuyo para conservar.",
-    "titleLine1": "Espacio de trabajo legal.",
-    "titleLine2": "Código abierto."
+    "subtitle": "El espacio de trabajo legal de código abierto: asuntos, documentos, revisión y un agente que responde con citas.",
+    "title": "Pon la IA a trabajar en cada asunto."
   },
   "home": {
     "ctaTitle": "Lleva la IA a tu bufete."

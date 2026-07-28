@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Aktīvi tiek attīstīts",
     "selfHost": "Mitināt pašiem",
-    "subtitle": "Lietas, dokumenti, pārskatīšana un aģents, kas atbild, norādot avotus.",
-    "subtitle2": "Bezmaksas lietošanai, atvērts pārbaudei, paliek jūsu rokās.",
-    "titleLine1": "Juridiska darbvieta.",
-    "titleLine2": "Atvērtā pirmkoda."
+    "subtitle": "Atvērtā pirmkoda juridiskā darba vide: lietas, dokumenti, pārskatīšana un aģents, kas atbild, norādot avotus.",
+    "title": "Lieciet AI strādāt katrā lietā."
   },
   "home": {
     "ctaTitle": "Ienesiet AI savā advokātu birojā."

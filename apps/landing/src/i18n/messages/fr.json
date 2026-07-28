@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Développement actif",
     "selfHost": "Auto-hébergement",
-    "subtitle": "Dossiers, documents, revue et un agent qui répond en citant ses sources.",
-    "subtitle2": "Libre d'utilisation, ouvert à l'inspection, à vous pour toujours.",
-    "titleLine1": "Espace de travail juridique.",
-    "titleLine2": "Open source."
+    "subtitle": "La plateforme juridique open source : dossiers, documents, revue et un agent qui répond en citant ses sources.",
+    "title": "Mettez l'IA au service de chaque dossier."
   },
   "home": {
     "ctaTitle": "Apportez l'IA à votre cabinet d'avocats."

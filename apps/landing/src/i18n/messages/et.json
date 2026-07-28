@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Aktiivses arenduses",
     "selfHost": "Majuta ise",
-    "subtitle": "Toimikud, dokumendid, ülevaatus ja agent, kes vastab allikaviidetega.",
-    "subtitle2": "Tasuta kasutada, avatud uurida, sinu hoida.",
-    "titleLine1": "Õiguslik tööruum.",
-    "titleLine2": "Avatud lähtekood."
+    "subtitle": "Avatud lähtekoodiga õigustööruum: toimikud, dokumendid, ülevaatus ja agent, kes vastab allikaviidetega.",
+    "title": "Pane tehisintellekt igas toimikus tööle."
   },
   "home": {
     "ctaTitle": "Too tehisintellekt oma advokaadibüroosse."

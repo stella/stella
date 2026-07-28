@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Aktywnie rozwijany",
     "selfHost": "Hostuj samodzielnie",
-    "subtitle": "Sprawy, dokumenty, przegląd i agent, który odpowiada ze wskazaniem źródeł.",
-    "subtitle2": "Darmowa w użyciu, otwarta do wglądu, na zawsze Twoja.",
-    "titleLine1": "Środowisko pracy dla prawników.",
-    "titleLine2": "Open source."
+    "subtitle": "Środowisko pracy open source dla prawników: sprawy, dokumenty, przegląd i agent, który odpowiada ze wskazaniem źródeł.",
+    "title": "Zaprzęgnij AI do każdej sprawy."
   },
   "home": {
     "ctaTitle": "Wprowadź AI do Twojej kancelarii."

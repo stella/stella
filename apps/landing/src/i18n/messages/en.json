@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Actively developed",
     "selfHost": "Self-host",
-    "subtitle": "One legal workspace for matters, documents, research, and agents.",
-    "subtitle2": "Grounded in sources, governed by your permissions, and built without lock-in.",
-    "titleLine1": "Put AI to work",
-    "titleLine2": "on every matter."
+    "subtitle": "The open-source legal workspace: matters, documents, review, and an agent that answers with citations.",
+    "title": "Put AI to work on every matter."
   },
   "home": {
     "ctaTitle": "Bring AI to your law firm."

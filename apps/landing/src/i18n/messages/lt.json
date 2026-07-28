@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Aktyviai tobulinama",
     "selfHost": "Talpinkite patys",
-    "subtitle": "Bylos, dokumentai, peržiūra ir agentas, kuris atsako nurodydamas šaltinius.",
-    "subtitle2": "Nemokama naudoti, atvira tikrinti, jūsų pasilikti.",
-    "titleLine1": "Teisinė darbo erdvė.",
-    "titleLine2": "Atvirojo kodo."
+    "subtitle": "Atvirojo kodo teisinė darbo erdvė: bylos, dokumentai, peržiūra ir agentas, kuris atsako nurodydamas šaltinius.",
+    "title": "Pasitelkite DI kiekvienoje byloje."
   },
   "home": {
     "ctaTitle": "Atneškite DI į savo advokatų kontorą."

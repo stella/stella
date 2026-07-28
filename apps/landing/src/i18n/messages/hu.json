@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Aktív fejlesztés alatt",
     "selfHost": "Saját üzemeltetés",
-    "subtitle": "Ügyek, dokumentumok, felülvizsgálat és egy ügynök, amely forráshivatkozásokkal válaszol.",
-    "subtitle2": "Ingyen használható, szabadon átvizsgálható, az öné marad.",
-    "titleLine1": "Jogi munkaterület.",
-    "titleLine2": "Nyílt forráskód."
+    "subtitle": "A nyílt forráskódú jogi munkaterület: ügyek, dokumentumok, felülvizsgálat és egy ügynök, amely forráshivatkozásokkal válaszol.",
+    "title": "Állítsa munkába az AI-t minden ügyben."
   },
   "home": {
     "ctaTitle": "Hozza el az AI-t az Ön ügyvédi irodájába."

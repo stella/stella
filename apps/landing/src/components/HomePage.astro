@@ -10,7 +10,6 @@ import { defaultLocale, isLocale } from "../i18n/config";
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
-const isSourceLocale = locale === defaultLocale;
 // Releases are sorted newest-first; the strip shows the last three feature
 // (non-patch) releases, and the hero badge reuses the newest of them.
 const featureReleases = getChangelogReleases()
@@ -22,7 +21,6 @@ const releaseDateFormatter = new Intl.DateTimeFormat(locale, {
 });
 
 const appUrl = "https://my.stll.app";
-const githubUrl = "https://github.com/stella/stella";
 const selfHostingDocsUrl =
   "https://github.com/stella/stella/blob/main/docs/self-hosting.md";
 ---
@@ -123,44 +121,13 @@ const selfHostingDocsUrl =
           <h1
             class="max-w-[90rem] text-balance text-center font-display text-5xl font-medium leading-[1.02] sm:text-6xl lg:text-7xl xl:text-[5.5rem]"
           >
-            {
-              isSourceLocale ? (
-                <>Put AI to work on every matter.</>
-              ) : (
-                <>
-                  {t("hero.titleLine1")}
-                  <br />
-                  <a
-                    href={githubUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="os-link"
-                    title="View source on GitHub"
-                  >
-                    {t("hero.titleLine2")}
-                  </a>
-                </>
-              )
-            }
+            {t("hero.title")}
           </h1>
           <p
             style="color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground))"
             class="mt-6 max-w-2xl text-balance text-center text-lg leading-[1.55] sm:text-xl"
           >
-            {
-              isSourceLocale ? (
-                <>
-                  The open-source legal workspace: matters, documents, review,
-                  and an agent that answers with citations.
-                </>
-              ) : (
-                <>
-                  {t("hero.subtitle")}
-                  <br />
-                  {t("hero.subtitle2")}
-                </>
-              )
-            }
+            {t("hero.subtitle")}
           </p>
           <div
             data-reveal
@@ -341,18 +308,6 @@ const selfHostingDocsUrl =
   <LandingFooter />
 
   <style>
-    .os-link {
-      text-decoration: none;
-      text-underline-offset: 0.14em;
-      text-decoration-thickness: 0.05em;
-      transition: text-decoration-color 200ms;
-    }
-
-    .os-link:hover {
-      text-decoration: underline;
-      text-decoration-color: color-mix(in srgb, var(--foreground) 45%, transparent);
-    }
-
     .hero-beta-dot {
       animation: hero-beta-pulse 4s var(--ease-out-quint) infinite;
     }

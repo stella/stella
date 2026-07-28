@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Aktivně vyvíjeno",
     "selfHost": "Vlastní hosting",
-    "subtitle": "Spisy, dokumenty, revize a agent, který odpovídá s citacemi.",
-    "subtitle2": "Zdarma k užívání, otevřené k nahlédnutí, vaše napořád.",
-    "titleLine1": "Právní pracovní prostředí.",
-    "titleLine2": "Open source."
+    "subtitle": "Open source právní pracovní prostředí: spisy, dokumenty, revize a agent, který odpovídá s citacemi.",
+    "title": "Zapojte AI do každého spisu."
   },
   "home": {
     "ctaTitle": "Přineste AI do své advokátní kanceláře."

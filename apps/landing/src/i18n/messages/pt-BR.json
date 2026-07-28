@@ -63,10 +63,8 @@
   "hero": {
     "badge": "Em desenvolvimento ativo",
     "selfHost": "Auto-hospedar",
-    "subtitle": "Casos, documentos, revisão e um agente que responde com citações.",
-    "subtitle2": "Grátis para usar, aberto para inspecionar, seu para manter.",
-    "titleLine1": "Espaço de trabalho jurídico.",
-    "titleLine2": "Código aberto."
+    "subtitle": "O espaço de trabalho jurídico de código aberto: casos, documentos, revisão e um agente que responde com citações.",
+    "title": "Coloque a IA para trabalhar em cada caso."
   },
   "home": {
     "ctaTitle": "Traga a IA para o seu escritório de advocacia."

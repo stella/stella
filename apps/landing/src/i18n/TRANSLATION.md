@@ -71,6 +71,14 @@ everywhere it appears — page titles, meta descriptions, the footer tagline,
 hero copy. Consistency here is what makes the phrase recognisable to both
 readers and search engines indexing the localized pages.
 
+Two locales cannot use their usual rendering when the string also carries the
+Matter term, because the glossary forbids the literal "workspace" there
+(et standalone _tööruum_, fr _espace de travail_). `hero.subtitle` therefore
+uses the Estonian compound _õigustööruum_ and the French _plateforme
+juridique open source_ — the renderings those locales' `meta.homeDescription`
+already uses. Reach for an existing lint-safe wording before coining a new
+one; a third synonym costs more than the repetition it avoids.
+
 ### "open source" per locale
 
 The term itself is rendered per locale by whichever form that language's
@@ -100,14 +108,27 @@ everywhere reads foreign in half the markets. A plain "open/otevřené/
 otwarte" adjective is NOT a substitute for the technical term in the
 identity phrase.
 
-## Hero structure differs by locale
+## The hero: one structure, every locale
 
-The English hero carries the identity in its subtitle. The non-English
-heroes already carry it in their **title lines** ("Legal workspace. / Open
-Source." equivalents). Their subtitles must therefore carry the product
-payload (the product nouns, the citations claim) **without repeating the
-identity** — duplicating "open source" in title and subtitle reads as
-padding in every language.
+`hero.title` is the positioning line ("Put AI to work on every matter.");
+`hero.subtitle` carries the identity phrase and the product payload in one
+sentence. Both render from the catalog in every locale, English included.
+The homepage used to inline the English hero and reach for the catalog only
+for other locales; that is precisely how the English headline got rewritten
+while twelve catalogs kept the previous tagline. Source copy that lives in a
+component cannot be seen to have drifted.
+
+Do not split the identity across title and subtitle. The title sells the
+outcome, the subtitle names the category; carrying "open source" in both
+reads as padding in every language.
+
+`hero.title` is an imperative in every locale, built on the verb that
+language actually uses for putting a tool to productive work (cs/sk
+_zapojit_, de _einsetzen_, pl _zaprzęgnąć_, lt _pasitelkti_, hu _munkába
+állítani_, et _tööle panema_), never a literal gloss of "put to work". The
+abbreviation for AI follows the catalog's established choice — cs, sk, hu,
+lv, pl `AI`; de `KI`; es, fr, pt-BR `IA`; lt `DI`; ar الذكاء الاصطناعي — so
+the hero and `home.ctaTitle` name the technology identically.
 
 ## Meta strings are length-budgeted
 
