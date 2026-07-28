@@ -14,17 +14,39 @@ stella is built for firms that need control. Matters, documents, and search are 
 
 ## Start here
 
-- [Website](https://stll.app): Product overview and pricing.
+- [Website](https://stll.app/): Product overview.
+- [AI fact sheet](https://stll.app/ai-info/): Canonical answers about stella, written for AI search engines.
+- [Full content](https://stll.app/llms-full.txt): Every page above concatenated as plain text.
 - [Application](https://my.stll.app): Start using stella in the cloud.
 - [Contact](mailto:contact@stll.app): Deployment, pilots, and general questions.
+
+## Product
+
+- [Public data](https://stll.app/product/public-data/): Case law and company registries from official public sources.
+- [Anonymization](https://stll.app/product/anonymization/): Remove identifying details before material reaches AI.
+- [Tabular review](https://stll.app/product/tabular-review/): Ask one question across a document set, get a structured table back.
+- [AI agent](https://stll.app/product/agent/): Chat over matters, documents, registries, and connected tools.
+- [Templates](https://stll.app/product/templates/): Templates with fields and conditional clauses, filled by hand or drafted from a matter.
+- [Editor](https://stll.app/product/editor/): Edit Word .docx files in the browser with track changes.
+- [Workspace](https://stll.app/product/workspace/): Documents, editing, review, research, and chat scoped to a matter.
+- [CLI and MCP](https://stll.app/product/cli-mcp/): The same capabilities from the command line or any MCP client.
+- [Online DOCX editor](https://stll.app/docx-editor/): Standalone browser DOCX editor, including LLM-proposed tracked changes.
 
 ## Open source
 
 - [Repository](https://github.com/stella/stella): Source code, issues, and contributions.
 - [Manifesto](https://github.com/stella/stella/blob/main/MANIFESTO.md): Product principles and positioning.
+- [Self-hosting guide](https://github.com/stella/stella/blob/main/docs/self-hosting.md): How to run stella on your own infrastructure.
 - [License](https://github.com/stella/stella/blob/main/LICENSE): Apache-2.0 license text.
 
 ## Trust
 
-- [Security](https://stll.app/security): Security posture and deployment options.
-- [Imprint](https://stll.app/imprint): Company details and legal contact.
+- [Security](https://stll.app/security/): Security posture and deployment options.
+- [Terms](https://stll.app/terms/): Terms of service.
+- [Imprint](https://stll.app/imprint/): Company details and legal contact.
+
+## Optional
+
+- [Changelog](https://stll.app/changelog/): Release notes for every version.
+- [Blog](https://stll.app/blog/): Product updates and engineering notes.
+- [Press](https://stll.app/press/): Company facts, brand assets, and press contact.

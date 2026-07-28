@@ -20,9 +20,14 @@ const { post } = Astro.props;
 const { Content } = await render(post);
 const dateFormatter = new Intl.DateTimeFormat("en", { dateStyle: "long" });
 const publishedAtIso = post.data.publishedAt.toISOString();
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site).href;
 
 // BlogPosting structured data, sourced from the same frontmatter the page
-// renders. Posts are published by the organisation, not individual bylines.
+// renders. Posts are published by the organisation, not individual bylines,
+// and `publisher` points at the site-wide Organization node Base emits rather
+// than restating it. No `dateModified`: the frontmatter tracks publication
+// only, and echoing datePublished there would assert an edit history the
+// content does not have.
 const blogPostingJsonLd = {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
@@ -30,16 +35,27 @@ const blogPostingJsonLd = {
   description: post.data.description,
   datePublished: publishedAtIso,
   author: { "@type": "Organization", name: post.data.author },
-  url: new URL(Astro.url.pathname, Astro.site).href,
+  publisher: { "@id": new URL("#organization", Astro.site).href },
+  image: new URL("/images/og-card.png", Astro.site).href,
+  inLanguage: "en",
+  url: canonicalUrl,
+  mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
 };
 ---
 
 <Base
-  title={`stella | ${post.data.title}`}
+  title={`${post.data.title} | stella`}
   description={post.data.description}
   ogType="article"
   publishedTime={publishedAtIso}
   current="blog"
+  breadcrumbTrail={{
+    ancestors: [
+      { name: "stella", path: "/" },
+      { name: "Blog", path: "/blog/" },
+    ],
+    name: post.data.title,
+  }}
 >
   <script
     is:inline

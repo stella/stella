@@ -32,6 +32,10 @@ const faqJsonLd = {
   description={product.metaDescription ?? product.summary}
   socialImage={`/images/og/${product.slug}.png`}
   current="product"
+  breadcrumbTrail={{
+    ancestors: [{ name: "stella", path: "/" }],
+    name: product.eyebrow,
+  }}
 >
   <script
     is:inline

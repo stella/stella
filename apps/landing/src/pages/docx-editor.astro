@@ -64,11 +64,17 @@ const features = [
   },
 ];
 
-const canonicalUrl = new URL("/docx-editor", Astro.site).href;
+// Trailing slash on purpose: `build.format: "directory"` emits the page at
+// /docx-editor/, which is what the <link rel="canonical"> and the sitemap both
+// point at. A slashless URL here would name a second, non-canonical variant.
+const canonicalUrl = new URL("/docx-editor/", Astro.site).href;
 
 const softwareJsonLd = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
+  // Its own @id: this is the DOCX editor, not the stella workspace the
+  // site-wide `#software` node describes.
+  "@id": `${canonicalUrl}#docx-editor`,
   name: "stella DOCX editor",
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web browser",
@@ -90,11 +96,19 @@ const faqJsonLd = {
 ---
 
 <Base
-  title="Online DOCX Editor — Edit Word Files in Your Browser | stella"
-  description="Edit .docx files in your browser: a Word editor with track changes, no install and no format conversion. Or let an LLM propose tracked edits you accept or reject."
+  title="Online DOCX Editor: Edit Word Files in Your Browser | stella"
+  description="Edit .docx files in your browser: a Word editor with track changes, no install and no format conversion. An LLM can propose tracked edits you accept or reject."
 >
-  <script type="application/ld+json" set:html={JSON.stringify(softwareJsonLd)} />
-  <script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify(softwareJsonLd)}
+  />
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify(faqJsonLd)}
+  />
 
   <div class="flex min-h-dvh flex-col">
     <main class="flex-1">

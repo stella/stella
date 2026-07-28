@@ -11,6 +11,21 @@ import {
 import { getAlternates, stripLocale } from "../i18n/utils";
 import SiteHeader from "../components/SiteHeader.astro";
 
+/** One ancestor on the trail from the site root to the current page. */
+type BreadcrumbAncestor = { name: string; path: string };
+
+/**
+ * A page's position in the site hierarchy. The current page's own crumb takes
+ * its URL from the canonical rather than a hand-written path, so the trail
+ * cannot drift from the URL the page actually canonicalizes to; only its
+ * label is supplied. Ancestors and label travel together in one object because
+ * neither is meaningful alone.
+ */
+type BreadcrumbTrail = {
+  ancestors: readonly BreadcrumbAncestor[];
+  name: string;
+};
+
 type Props = {
   title?: string;
   description?: string;
@@ -28,11 +43,23 @@ type Props = {
   ogType?: "website" | "article";
   /** ISO publication timestamp; emits article:published_time for articles. */
   publishedTime?: string;
+  /**
+   * Position in the site hierarchy; emits BreadcrumbList structured data.
+   * Omit on top-level pages, which have no trail to describe.
+   */
+  breadcrumbTrail?: BreadcrumbTrail;
 };
+
+// The product's own description, distinct from the per-page meta description.
+// Every page emits the same `#software` node, so feeding it the page
+// description would give one @id as many conflicting values as there are
+// pages. Doubles as the default meta description on the homepage.
+const PRODUCT_DESCRIPTION =
+  "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.";
 
 const {
   title = "stella | open source legal workspace",
-  description = "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.",
+  description = PRODUCT_DESCRIPTION,
   socialImage = "/images/og-card.png",
   socialImageAlt = description,
   header = true,
@@ -43,11 +70,20 @@ const {
   canonicalPath = undefined,
   ogType = "website",
   publishedTime = undefined,
+  breadcrumbTrail = undefined,
 } = Astro.props;
 
 const robotsContent =
-  robots === "noindex" ? "noindex" : "index, follow, max-image-preview:large";
+  robots === "noindex"
+    ? "noindex"
+    : "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
 const canonicalUrl = new URL(canonicalPath ?? Astro.url.pathname, Astro.site);
+// A noindex page has no index entry to consolidate onto, so it emits a
+// canonical only when it explicitly points at another page (the changelog
+// release stubs). The 404 would otherwise self-canonicalize whichever missing
+// URL the host served it for.
+const canonicalHref =
+  robots === "index" || canonicalPath ? canonicalUrl.href : undefined;
 const socialImageUrl = new URL(socialImage, Astro.site);
 
 const rawLocale = Astro.currentLocale ?? defaultLocale;
@@ -64,6 +100,78 @@ const ogAlternates = hasLocalizedAlternates
       .filter((code) => code !== locale)
       .map((code) => locales[code].og)
   : [];
+
+// Site-wide structured data. Stable @ids let every page contribute to one
+// entity graph instead of restating standalone copies, so node values must be
+// page-independent (see PRODUCT_DESCRIPTION). No WebSite SearchAction: the
+// landing has no site search, and Google retired the sitelinks search box.
+const organizationId = new URL("#organization", Astro.site).href;
+const websiteId = new URL("#website", Astro.site).href;
+const softwareId = new URL("#software", Astro.site).href;
+const siteUrl = new URL("/", Astro.site).href;
+
+const breadcrumbNode = breadcrumbTrail
+  ? {
+      "@type": "BreadcrumbList",
+      "@id": `${canonicalUrl.href}#breadcrumb`,
+      itemListElement: [
+        ...breadcrumbTrail.ancestors.map((ancestor) => ({
+          name: ancestor.name,
+          item: new URL(ancestor.path, Astro.site).href,
+        })),
+        { name: breadcrumbTrail.name, item: canonicalUrl.href },
+      ].map((crumb, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: crumb.name,
+        item: crumb.item,
+      })),
+    }
+  : undefined;
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": organizationId,
+      name: "stella labs, s.r.o.",
+      url: siteUrl,
+      logo: {
+        "@type": "ImageObject",
+        url: new URL("/images/stella-logo.svg", Astro.site).href,
+      },
+      sameAs: [
+        "https://github.com/stella/stella",
+        "https://x.com/stll_app",
+        "https://www.linkedin.com/company/stella-app",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": websiteId,
+      name: "stella",
+      url: siteUrl,
+      publisher: { "@id": organizationId },
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": softwareId,
+      name: "stella",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      description: PRODUCT_DESCRIPTION,
+      url: siteUrl,
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+      },
+      publisher: { "@id": organizationId },
+    },
+    ...(breadcrumbNode ? [breadcrumbNode] : []),
+  ],
+};
 ---
 
 {/*
@@ -79,7 +187,7 @@ const ogAlternates = hasLocalizedAlternates
     <title>{title}</title>
 
     {/* Canonical */}
-    <link rel="canonical" href={canonicalUrl.href} />
+    {canonicalHref && <link rel="canonical" href={canonicalHref} />}
 
     {/* hreflang alternates for multilingual SEO */}
     {
@@ -105,6 +213,7 @@ const ogAlternates = hasLocalizedAlternates
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={socialImageAlt} />
 
     {/* Twitter */}
     <meta name="twitter:card" content="summary_large_image" />
@@ -206,41 +315,11 @@ const ogAlternates = hasLocalizedAlternates
     <ClientRouter />
 
     {/* Structured data */}
-    <script is:inline type="application/ld+json" set:html={JSON.stringify({
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "Organization",
-          "@id": new URL("#organization", Astro.site).href,
-          "name": "stella labs, s.r.o.",
-          "url": new URL("/", Astro.site).href,
-          "logo": {
-            "@type": "ImageObject",
-            "url": new URL("/images/stella-logo.svg", Astro.site).href,
-          },
-          "sameAs": [
-            "https://github.com/stella/stella",
-            "https://x.com/stll_app",
-            "https://www.linkedin.com/company/stella-app",
-          ],
-        },
-        {
-          "@type": "SoftwareApplication",
-          "@id": new URL("#software", Astro.site).href,
-          "name": "stella",
-          "applicationCategory": "BusinessApplication",
-          "operatingSystem": "Web",
-          "description": description,
-          "url": new URL("/", Astro.site).href,
-          "offers": {
-            "@type": "Offer",
-            "price": "0",
-            "priceCurrency": "USD",
-          },
-          "publisher": { "@id": new URL("#organization", Astro.site).href },
-        },
-      ],
-    })} />
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={JSON.stringify(structuredData)}
+    />
 
     <style is:global>
       /* Cabinet Grotesk — display headings */

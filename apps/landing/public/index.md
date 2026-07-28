@@ -14,7 +14,7 @@ stella is built for firms that need control. Matters, documents, and search are 
 
 ## Start here
 
-- [Website](https://stll.app): Product overview and pricing.
+- [Website](https://stll.app/): Product overview.
 - [Application](https://my.stll.app): Start using stella in the cloud.
 - [Self-hosting guide](https://github.com/stella/stella/blob/main/docs/self-hosting.md): How to run stella on your own infrastructure.
 - [Contact](mailto:contact@stll.app): Deployment, pilots, and general questions.
