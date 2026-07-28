@@ -21,10 +21,9 @@ const releaseDateFormatter = new Intl.DateTimeFormat(locale, {
 });
 // Release headings and notes are read from the English changelog markdown
 // (docs/changelog/*.md), so they cannot be keyed and translated per release.
-// Outside the source locale the badge and the velocity strip therefore carry
-// only locale-neutral provenance (date, tag, `stella <version>`) instead of
-// dropping an English, LTR-only prose island into a translated page.
-const showReleaseProse = locale === defaultLocale;
+// The English prose renders on every locale — release notes are engineering
+// artifacts, not marketing copy — isolated with lang="en" dir="ltr" so RTL
+// pages lay the island out correctly.
 
 const appUrl = "https://my.stll.app";
 const selfHostingDocsUrl =
@@ -107,9 +106,9 @@ const selfHostingDocsUrl =
                   </span>
                 )
               }
-              <span class="min-w-0 truncate">
+              <span class="min-w-0 truncate" lang="en" dir="ltr">
                 {
-                  showReleaseProse && latestRelease
+                  latestRelease
                     ? (latestRelease.heading ?? latestRelease.displayName)
                     : t("nav.changelog")
                 }
@@ -220,19 +219,20 @@ const selfHostingDocsUrl =
                     )}
                     <span>{release.tagName}</span>
                   </span>
-                  <span class="font-display text-xl font-medium transition-opacity group-hover:opacity-70">
-                    {showReleaseProse
-                      ? (release.heading ?? release.displayName)
-                      : release.displayName}
+                  <span
+                    class="font-display text-xl font-medium transition-opacity group-hover:opacity-70"
+                    lang="en"
+                    dir="ltr"
+                  >
+                    {release.heading ?? release.displayName}
                   </span>
-                  {showReleaseProse && (
-                    <span
-                      class="text-sm leading-6"
-                      style="color: var(--muted-foreground)"
-                    >
-                      {release.description}
-                    </span>
-                  )}
+                  <span
+                    class="text-sm leading-6"
+                    style="color: var(--muted-foreground)"
+                    lang="en"
+                    dir="ltr"
+                    >{release.description}</span
+                  >
                 </a>
               </li>
             ))
