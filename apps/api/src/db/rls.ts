@@ -522,6 +522,59 @@ export const mcpOAuthStatePolicies = () => [
   }),
 ];
 
+// SharePoint (Microsoft Graph) delegated connections are per user+org, so
+// their rows are visible only to the owning user within the active org —
+// the same fail-closed shape as mcp_user_connections.
+const sharepointConnectionCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+export const sharepointConnectionPolicies = () => [
+  p.pgPolicy("sharepoint_connection_select", {
+    for: "select",
+    to: stella,
+    using: sharepointConnectionCheck,
+  }),
+  p.pgPolicy("sharepoint_connection_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: sharepointConnectionCheck,
+  }),
+  p.pgPolicy("sharepoint_connection_update", {
+    for: "update",
+    to: stella,
+    using: sharepointConnectionCheck,
+  }),
+  p.pgPolicy("sharepoint_connection_delete", {
+    for: "delete",
+    to: stella,
+    using: sharepointConnectionCheck,
+  }),
+];
+
+export const sharepointOAuthStatePolicies = () => [
+  p.pgPolicy("sharepoint_oauth_state_select", {
+    for: "select",
+    to: stella,
+    using: sharepointConnectionCheck,
+  }),
+  p.pgPolicy("sharepoint_oauth_state_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: sharepointConnectionCheck,
+  }),
+  p.pgPolicy("sharepoint_oauth_state_update", {
+    for: "update",
+    to: stella,
+    using: sharepointConnectionCheck,
+  }),
+  p.pgPolicy("sharepoint_oauth_state_delete", {
+    for: "delete",
+    to: stella,
+    using: sharepointConnectionCheck,
+  }),
+];
+
 const workspaceViewTemplateCheck = sql`(
   ${organizationCheck} AND ${userCheck}
 )`;

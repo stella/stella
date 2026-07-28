@@ -60,6 +60,7 @@ import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
+import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
@@ -516,6 +517,7 @@ const api = new Elysia()
       .use(invoicesRoute)
       .use(externalPreviewRoute)
       .use(mcpConnectorsRoute)
+      .use(sharepointRoute)
       .use(catalogueRoute)
       .use(organizationSettingsRoute)
       .use(apiKeysRoute)

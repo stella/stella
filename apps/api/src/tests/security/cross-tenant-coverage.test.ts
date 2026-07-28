@@ -102,6 +102,10 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "hosted-usage-webhook": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
+  // Like mcp-connectors: the only reads are per-user+org connection state
+  // (org+user RLS) and external Microsoft Graph data. Neither is a
+  // workspace-scoped surface the A-vs-B RLS matrix can meaningfully isolate.
+  sharepoint: WAIVER_REASON.noTenantReadSurface,
   smoke: WAIVER_REASON.noTenantReadSurface,
   uploads: WAIVER_REASON.noTenantReadSurface,
   verify: WAIVER_REASON.noTenantReadSurface,

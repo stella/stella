@@ -39,6 +39,7 @@ import {
   DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
+import { DESKTOP_EDIT_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { enqueuePdfDerivativeOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { getS3 } from "@/api/lib/s3";
@@ -429,6 +430,7 @@ export const finalizeDesktopEditSessionHandler = async ({
       await tx.insert(entityVersions).values({
         entityId: editSession.entityId,
         id: nextVersionId,
+        source: DESKTOP_EDIT_DOCUMENT_SOURCE,
         stamp: nextVersionStamp.stamp,
         verificationCode: nextVersionStamp.verificationCode,
         versionNumber: nextVersionNumber,

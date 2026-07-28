@@ -121,6 +121,16 @@ export const organizationSettings = p.pgTable(
       .boolean("prompt_caching_enabled")
       .notNull()
       .default(true),
+    /**
+     * Org-level enablement for the delegated SharePoint / OneDrive
+     * connection. Default-off (fail closed): even where the deployment
+     * feature flag is on, an org must explicitly opt in before its members
+     * can connect a Microsoft account.
+     */
+    sharepointConnectionEnabled: p
+      .boolean("sharepoint_connection_enabled")
+      .notNull()
+      .default(false),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   () => [...orgPolicies()],

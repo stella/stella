@@ -43,6 +43,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueImageThumbnailOrMarkFailed,
@@ -261,6 +262,7 @@ export const finalizeEntityVersion = async function* ({
       createdBy: userId,
       entityId,
       id: nextVersionId,
+      source: UPLOAD_DOCUMENT_SOURCE,
       stamp: nextVersionStamp.stamp,
       verificationCode: nextVersionStamp.verificationCode,
       versionNumber: nextVersionNumber,
