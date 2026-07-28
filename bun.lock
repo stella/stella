@@ -426,7 +426,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.0",
