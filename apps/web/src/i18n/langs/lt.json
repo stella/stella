@@ -976,6 +976,8 @@
     "undo": "Undo",
     "unexpectedError": "Įvyko netikėta klaida. Susisiekite su palaikymo tarnyba.",
     "unpin": "Atsegti",
+    "unverified": "Nepatvirtinta",
+    "unverifiedCitationHint": "Nepavyko susieti šios citatos su šaltinio dokumentu.",
     "uploadFiles": "Įkelti failus",
     "urlIdentifier": "URL identifikatorius",
     "urlIdentifierPlaceholder": "mano-organizacija",

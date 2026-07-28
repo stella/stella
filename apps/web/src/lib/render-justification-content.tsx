@@ -92,17 +92,29 @@ export const renderJustificationContent = ({
       nodes.push(
         <Fragment key={`${statementKey}-text`}>{statement.text} </Fragment>,
       );
-      for (const [
-        citationIndex,
-        { blockId, text },
-      ] of statement.citations.entries()) {
-        const citation: Citation = {
-          kind: "docx-folio",
-          fileFieldId: block.fileFieldId,
-          blockId,
-          text,
-        };
-        consider(citation);
+      for (const [citationIndex, cite] of statement.citations.entries()) {
+        // Legacy rows without `citationStatus` were allow-listed at write
+        // time, so the absence resolves to a verified, navigable citation.
+        const citation: Citation =
+          cite.citationStatus === "unverified"
+            ? {
+                kind: "docx-folio",
+                citationStatus: "unverified",
+                fileFieldId: block.fileFieldId,
+                text: cite.text,
+              }
+            : {
+                kind: "docx-folio",
+                citationStatus: "verified",
+                fileFieldId: block.fileFieldId,
+                blockId: cite.blockId,
+                text: cite.text,
+              };
+        // An unverified citation has no navigable target, so it never
+        // seeds the peek's auto-scroll.
+        if (citation.citationStatus !== "unverified") {
+          consider(citation);
+        }
         const key = `${statementKey}-${citationIndex}`;
         nodes.push(renderCitation({ citation, key }));
       }

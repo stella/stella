@@ -976,6 +976,8 @@
     "undo": "Undo",
     "unexpectedError": "حدث خطأ غير متوقع. يُرجى التواصل مع الدعم.",
     "unpin": "إلغاء التثبيت",
+    "unverified": "غير مُتحقَّق منه",
+    "unverifiedCitationHint": "تعذّر مطابقة هذا الاقتباس مع المستند المصدر.",
     "uploadFiles": "رفع الملفات",
     "urlIdentifier": "المعرّف",
     "urlIdentifierPlaceholder": "my-organization",

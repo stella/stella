@@ -976,6 +976,8 @@
     "undo": "Undo",
     "unexpectedError": "Ilmnes ootamatu viga. Palun pöörduge klienditoe poole.",
     "unpin": "Eemalda kinnitamine",
+    "unverified": "Kontrollimata",
+    "unverifiedCitationHint": "Seda tsitaati ei õnnestunud lähtedokumendiga sobitada.",
     "uploadFiles": "Laadi failid üles",
     "urlIdentifier": "Lühitunnus",
     "urlIdentifierPlaceholder": "minu-organisatsioon",

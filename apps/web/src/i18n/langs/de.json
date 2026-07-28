@@ -976,6 +976,8 @@
     "undo": "Undo",
     "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten. Bitte kontaktieren Sie den Support.",
     "unpin": "Lösen",
+    "unverified": "Nicht verifiziert",
+    "unverifiedCitationHint": "Dieses Zitat konnte dem Quelldokument nicht zugeordnet werden.",
     "uploadFiles": "Dateien hochladen",
     "urlIdentifier": "URL-Kennung",
     "urlIdentifierPlaceholder": "meine-organisation",

@@ -261,8 +261,12 @@ export const DocumentAiSourceBar = ({
     if (scrolledForDocxJustificationRef.current === justificationId) {
       return;
     }
+    // The inferred type predicate narrows the result to a verified docx
+    // citation, the only kind that carries a navigable block id.
     const firstDocxCitation = citations.find(
-      (citation) => citation.kind === "docx-folio",
+      (citation) =>
+        citation.kind === "docx-folio" &&
+        citation.citationStatus === "verified",
     );
     if (!firstDocxCitation) {
       return;
@@ -332,6 +336,11 @@ export const DocumentAiSourceBar = ({
   })();
   const handleCitationClick = (citation: Citation) => {
     if (citation.kind === "docx-folio") {
+      // Unverified citations render non-clickable, but the handler stays
+      // total: a missing block has nowhere to scroll.
+      if (citation.citationStatus === "unverified") {
+        return;
+      }
       requestBlockScroll({
         tabId: activeTab.id,
         blockId: citation.blockId,
@@ -581,6 +590,11 @@ const useFolioBlockPage = (blockId: string): number | null => {
 const SOURCE_CITATION_CHIP_CLASS =
   "border-border bg-muted/64 text-foreground-strong-muted hover:bg-muted hover:text-foreground hover:border-foreground/24 inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 align-middle text-[10.5px] font-medium tracking-tight transition-colors";
 
+// Unverified: no border, no hover affordance, dashed underline so it
+// reads as plain text the reader must not trust as a source anchor.
+const UNVERIFIED_CITATION_CHIP_CLASS =
+  "text-muted-foreground inline-flex shrink-0 items-center gap-1 align-middle text-[10.5px] font-medium tracking-tight italic underline decoration-dotted underline-offset-2";
+
 const SourceCitationChip = ({
   citation,
   onClick,
@@ -588,6 +602,7 @@ const SourceCitationChip = ({
   citation: Citation;
   onClick: () => void;
 }) => {
+  const t = useTranslations();
   if (citation.kind === "pdf-bates") {
     return (
       <button
@@ -597,6 +612,17 @@ const SourceCitationChip = ({
       >
         p.&nbsp;{citation.pageNumber}
       </button>
+    );
+  }
+
+  if (citation.citationStatus === "unverified") {
+    return (
+      <span
+        className={UNVERIFIED_CITATION_CHIP_CLASS}
+        title={t("common.unverifiedCitationHint")}
+      >
+        {t("common.unverified")}
+      </span>
     );
   }
 

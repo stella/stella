@@ -234,6 +234,7 @@ describe("justifications", () => {
               text: "Docx fact.",
               citations: [
                 {
+                  citationStatus: "verified",
                   blockId: deriveBlockId({
                     paraId: null,
                     index: 42,

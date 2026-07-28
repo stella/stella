@@ -97,20 +97,25 @@ export type PdfBatesJustificationBlock = {
   }[];
 };
 
+/** A single DOCX citation, discriminated by whether its quote was
+ *  grounded against an allow-listed source block at extraction time.
+ *
+ *  - `verified`: the quote matched a real block. It carries the block's
+ *    literal text (rendered as the quote without re-parsing the DOCX)
+ *    and the `blockId` a folio editor scrolls to.
+ *  - `unverified`: the model produced a quote that matched no source
+ *    block. There is no navigable block, so only the model's raw text
+ *    is kept and the client renders it as a non-navigable hint. */
+export type DocxFolioJustificationCitation =
+  | { citationStatus: "verified"; blockId: string; text: string }
+  | { citationStatus: "unverified"; text: string };
+
 export type DocxFolioJustificationBlock = {
   kind: "docx-folio";
   fileFieldId: SafeId<"field">;
   statements: {
     text: string;
-    /** Each cite carries the block's literal text captured at
-     *  extraction time so the cell-click peek can render the quoted
-     *  source without re-parsing the DOCX or fetching anything else.
-     *  `blockId` lets a folio editor (Phase 2b) scroll to the same
-     *  paragraph the chat editor would. */
-    citations: {
-      blockId: string;
-      text: string;
-    }[];
+    citations: DocxFolioJustificationCitation[];
   }[];
 };
 

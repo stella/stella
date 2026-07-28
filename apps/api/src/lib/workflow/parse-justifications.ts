@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 
-import { isFolioBlockId } from "@stll/folio-core/server";
-
 import type {
   DocxFolioJustificationBlock,
   JustificationBlock,
@@ -9,6 +7,12 @@ import type {
   PdfBatesJustificationBlock,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { citationTextMatches } from "@/api/lib/workflow/citation-normalize";
+
+// The stored citation shape, derived from the block type so it stays in
+// lockstep without a second import from the schema barrel.
+type DocxFolioJustificationCitation =
+  DocxFolioJustificationBlock["statements"][number]["citations"][number];
 
 export type JustificationFilename = {
   original: string;
@@ -94,6 +98,77 @@ const buildPdfBlock = (
   return { kind: "pdf-bates", fileFieldId: file.fileFieldId, statements };
 };
 
+// Resolve a model-supplied quote to an allow-listed block by normalized
+// text match. A citation is frequently a span of a larger paragraph, so
+// this rescues quotes the model pasted verbatim (rather than by id) even
+// when a non-breaking space, curly quote, dash variant, or decomposed
+// accent differs from the stored block. Returns the FIRST matching block
+// so the resolved id is deterministic given a stable block order.
+type ResolvedBlock = { blockId: string; text: string };
+
+const resolveQuoteToBlock = (
+  quote: string,
+  blocksById: ReadonlyMap<string, string>,
+): ResolvedBlock | null => {
+  for (const [blockId, text] of blocksById) {
+    if (citationTextMatches({ quote, source: text })) {
+      return { blockId, text };
+    }
+  }
+  return null;
+};
+
+// Classify one raw citation string against the DOCX allow-list.
+//   - A string that is itself an allow-listed block id -> verified (embed
+//     the block's literal text so the client renders the quote without a
+//     document round-trip).
+//   - Otherwise, a string that reads as prose (contains whitespace) is
+//     treated as a pasted quote: matched to a block -> verified; matched
+//     to nothing -> unverified, kept as a non-navigable hint so a lawyer
+//     sees the model gestured at a source that isn't grounded.
+//   - A single opaque token that is neither an allow-listed id nor prose
+//     (a hallucinated/malformed id like `seq-9999`) carries no readable
+//     quote and cannot be grounded, so it is dropped.
+//
+// Note: `isFolioBlockId` is a structural refinement that accepts almost
+// any non-empty string as a possible paraId, so it cannot separate a real
+// id from a pasted quote. Allow-list membership is the true gate; a raw
+// blockId that is not in the map is exactly a hallucinated reference.
+type ClassifiedCitation = DocxFolioJustificationCitation | null;
+
+const classifyDocxCitation = (
+  raw: string,
+  blocksById: ReadonlyMap<string, string>,
+): ClassifiedCitation => {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const directText = blocksById.get(trimmed);
+  if (directText !== undefined) {
+    return { citationStatus: "verified", blockId: trimmed, text: directText };
+  }
+
+  // A prose gate (contains whitespace) keeps a short opaque token from
+  // spuriously matching a block via substring containment and from being
+  // surfaced as an ungrounded "quote".
+  if (!/\s/u.test(trimmed)) {
+    return null;
+  }
+
+  const resolved = resolveQuoteToBlock(trimmed, blocksById);
+  if (resolved) {
+    return {
+      citationStatus: "verified",
+      blockId: resolved.blockId,
+      text: resolved.text,
+    };
+  }
+
+  return { citationStatus: "unverified", text: trimmed };
+};
+
 const buildDocxBlock = (
   file: Extract<JustificationFilename, { kind: "docx-folio" }>,
   rawStatements: AIJustificationOutput[number]["statements"],
@@ -106,29 +181,31 @@ const buildDocxBlock = (
       continue;
     }
 
-    // Citations on a DOCX file are folio block IDs minted by
-    // `deriveBlockId` (paraId verbatim, or `seq-NNNN` fallback).
-    // Drop ids the model invented or that don't structurally pass
-    // the runtime check, then dedupe; embed the literal block text
-    // alongside each id so the frontend can render the quote
-    // without a round-trip to the document.
-    const seen = new Set<string>();
+    // Dedupe verified citations by resolved block id and unverified ones
+    // by their normalized-but-displayed raw text, so a statement never
+    // repeats the same source anchor or the same ungrounded hint.
+    const seenBlockIds = new Set<string>();
+    const seenUnverified = new Set<string>();
     const citations: DocxFolioJustificationBlock["statements"][number]["citations"] =
       [];
     for (const raw of statement.citations) {
-      const trimmed = raw.trim();
-      if (!isFolioBlockId(trimmed)) {
+      const classified = classifyDocxCitation(raw, file.blocksById);
+      if (classified === null) {
         continue;
       }
-      if (seen.has(trimmed)) {
+      if (classified.citationStatus === "verified") {
+        if (seenBlockIds.has(classified.blockId)) {
+          continue;
+        }
+        seenBlockIds.add(classified.blockId);
+        citations.push(classified);
         continue;
       }
-      const blockText = file.blocksById.get(trimmed);
-      if (blockText === undefined) {
+      if (seenUnverified.has(classified.text)) {
         continue;
       }
-      seen.add(trimmed);
-      citations.push({ blockId: trimmed, text: blockText });
+      seenUnverified.add(classified.text);
+      citations.push(classified);
     }
 
     if (citations.length === 0) {

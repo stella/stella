@@ -976,6 +976,8 @@
     "undo": "Undo",
     "unexpectedError": "Došlo k neočekávané chybě. Kontaktujte podporu.",
     "unpin": "Odepnout",
+    "unverified": "Neověřeno",
+    "unverifiedCitationHint": "Tuto citaci se nepodařilo spárovat se zdrojovým dokumentem.",
     "uploadFiles": "Nahrát soubory",
     "urlIdentifier": "Slug",
     "urlIdentifierPlaceholder": "moje-organizace",
