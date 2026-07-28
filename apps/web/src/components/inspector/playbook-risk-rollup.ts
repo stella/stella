@@ -24,16 +24,18 @@ export type OverallRisk = "critical" | "high" | "medium" | "low" | "none";
 
 // A compliant, not-applicable, or unset (extract-only positions carry no
 // verdict) finding has nothing worth raising with the counterparty; only these
-// three verdicts are ever "flagged".
-const FLAGGED_VERDICTS = ["deviation", "fallback", "missing"] as const;
+// three verdicts are ever "flagged". Frozen readonly array (not a `Set`) so the
+// membership check reads a widened `PlaybookVerdict`, matching the file's
+// original immutable-collection shape.
+const FLAGGED_VERDICTS: readonly PlaybookVerdict[] = Object.freeze([
+  "deviation",
+  "fallback",
+  "missing",
+]);
 
-// Derive the flagged set from the tuple rather than `Exclude<..., "compliant">`:
-// the latter would wrongly pull in `not-applicable`, which is not a flag.
-type FlaggedVerdict = (typeof FLAGGED_VERDICTS)[number];
-
-const FLAGGED_VERDICT_SET: ReadonlySet<PlaybookVerdict> = new Set(
-  FLAGGED_VERDICTS,
-);
+// The flagged verdicts as a type. `not-applicable` is excluded alongside
+// `compliant`: neither is a flag.
+type FlaggedVerdict = Exclude<PlaybookVerdict, "compliant" | "not-applicable">;
 
 export type FlaggedPlaybookFinding = PlaybookFinding & {
   verdict: FlaggedVerdict;
@@ -63,14 +65,6 @@ export type ComplianceScore = {
   ratio: number | null;
 };
 
-const MET_VERDICTS: ReadonlySet<PlaybookVerdict> = new Set<PlaybookVerdict>([
-  "compliant",
-  "fallback",
-]);
-const NOT_MET_VERDICTS: ReadonlySet<PlaybookVerdict> = new Set<PlaybookVerdict>(
-  ["deviation", "missing"],
-);
-
 export type RiskRollup = {
   overallRisk: OverallRisk;
   totalPositions: number;
@@ -86,20 +80,27 @@ const computeCompliance = (
   let met = 0;
   let notMet = 0;
   let notApplicable = 0;
+  // A switch (not module-level Set membership) classifies each verdict, so the
+  // exhaustiveness check forces every future verdict to declare which bucket it
+  // falls in and no long-lived mutable collection is created at module scope.
   for (const { verdict } of findings) {
-    if (verdict === null) {
-      continue;
-    }
-    if (verdict === "not-applicable") {
-      notApplicable += 1;
-      continue;
-    }
-    if (MET_VERDICTS.has(verdict)) {
-      met += 1;
-      continue;
-    }
-    if (NOT_MET_VERDICTS.has(verdict)) {
-      notMet += 1;
+    switch (verdict) {
+      // Extract-only positions carry no verdict; excluded from the score.
+      case null:
+        break;
+      case "compliant":
+      case "fallback":
+        met += 1;
+        break;
+      case "deviation":
+      case "missing":
+        notMet += 1;
+        break;
+      case "not-applicable":
+        notApplicable += 1;
+        break;
+      default:
+        verdict satisfies never;
     }
   }
   const scored = met + notMet;
@@ -117,7 +118,7 @@ const TOP_ISSUES_LIMIT = 5;
 export const isFlaggedPlaybookFinding = (
   finding: PlaybookFinding,
 ): finding is FlaggedPlaybookFinding =>
-  finding.verdict !== null && FLAGGED_VERDICT_SET.has(finding.verdict);
+  finding.verdict !== null && FLAGGED_VERDICTS.includes(finding.verdict);
 
 export const computeRiskRollup = (
   findings: readonly PlaybookFinding[],
