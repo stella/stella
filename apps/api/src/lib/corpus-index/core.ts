@@ -386,6 +386,13 @@ export const createCorpusIndexer = <
       readConcurrency = INDEX_CONCURRENCY,
     }: LoadDocsForBatchOptions<TBrand, TRow>,
   ): Promise<LoadedBatch<TBrand, TRow>> => {
+    // The stride drives the chunk loop; anything below 1 (or non-finite)
+    // would stall or skip rows, so it is clamped rather than trusted.
+    // Counted in rows: a passage row issues up to two object reads, so the
+    // in-flight request ceiling is twice this value.
+    const stride = Number.isFinite(readConcurrency)
+      ? Math.max(1, Math.floor(readConcurrency))
+      : INDEX_CONCURRENCY;
     const loadRowPayload =
       readPayload ??
       (async (row: TRow): Promise<CorpusDocumentPayload> => {
@@ -408,8 +415,8 @@ export const createCorpusIndexer = <
       });
     const built: LoadedBatch<TBrand, TRow>["built"] = [];
     const readFailures: LoadedBatch<TBrand, TRow>["readFailures"] = [];
-    for (let i = 0; i < rows.length; i += readConcurrency) {
-      const slice = rows.slice(i, i + readConcurrency);
+    for (let i = 0; i < rows.length; i += stride) {
+      const slice = rows.slice(i, i + stride);
       // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
       const loaded = await Promise.all(
         slice.map(async (row) => {
@@ -561,10 +568,14 @@ export const createCorpusIndexer = <
     // backlog full indefinitely, so every STALE_SCAN_DUTY_CYCLEth batch
     // still runs the scan with its reserve, bounding staleness instead of
     // trading it away.
+    // A due duty batch always grants the stale scan at least one slot —
+    // batchSize 1 would otherwise leave staleLimit at zero on the due
+    // batch and the counter would grow without the scan ever running.
+    const dutyDue = staleSkips >= STALE_SCAN_DUTY_CYCLE - 1;
     const staleLimit =
-      missing.length >= missingLimit && staleSkips < STALE_SCAN_DUTY_CYCLE - 1
+      missing.length >= missingLimit && !dutyDue
         ? 0
-        : batchSize - missing.length;
+        : Math.max(batchSize - missing.length, dutyDue ? 1 : 0);
     staleSkips = staleLimit === 0 ? staleSkips + 1 : 0;
     const stale =
       staleLimit <= 0

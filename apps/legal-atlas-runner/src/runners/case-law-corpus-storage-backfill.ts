@@ -439,12 +439,17 @@ const backfillCaseLawIndex = async (
 
 const backfillLegislationIndex = async (
   limit: number | null,
+  bulk: { indexBatchSize: number | null; indexReadConcurrency: number | null },
 ): Promise<IndexBackfillResult> => {
   const generation = corpusGeneration("legislation");
   let indexed = 0;
 
   while (true) {
-    const batchSize = nextBatchSize(limit, indexed);
+    const batchSize = nextBatchSize(
+      limit,
+      indexed,
+      bulk.indexBatchSize ?? BATCH_SIZE,
+    );
     if (batchSize === 0) {
       break;
     }
@@ -456,6 +461,9 @@ const backfillLegislationIndex = async (
       ingestionDb,
       batchSize,
       generation,
+      bulk.indexReadConcurrency === null
+        ? {}
+        : { readConcurrency: bulk.indexReadConcurrency },
     );
     if (count === 0) {
       break;
@@ -521,6 +529,10 @@ export const runLegalCorpusIndexBackfill = async (
     });
     const legislation = await backfillLegislationIndex(
       parsed.options.legislationLimit,
+      {
+        indexBatchSize: parsed.options.indexBatchSize,
+        indexReadConcurrency: parsed.options.indexReadConcurrency,
+      },
     );
 
     logInfo(
