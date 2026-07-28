@@ -67,7 +67,7 @@
     "title": "Zapojte AI do každého spisu."
   },
   "home": {
-    "ctaTitle": "Nasaďte AI ve své advokátní kanceláři."
+    "ctaTitle": "Využijte AI ve své advokátní kanceláři."
   },
   "meta": {
     "homeDescription": "Open source právní pracovní prostor pro dokumenty, spisy, revize a rešerše. Provozujte sami či v našem cloudu. AI podle využití, bez závislosti na dodavateli.",
@@ -145,7 +145,7 @@
     "dataBody": "Judikatura z oficiálních zdrojů se zachovanou strukturou a obchodní rejstříky načítané přímo do spisu, jurisdikci po jurisdikci. Anonymizace udržuje identifikační údaje mimo pracovní postupy s AI.",
     "dataEyebrow": "Právní data",
     "dataMainAlt": "Oficiální soudní rozhodnutí otevřené v aplikaci stella",
-    "dataTitle": "Vezměte si právo i data s sebou.",
+    "dataTitle": "Judikatura a rejstříky po ruce.",
     "discover": "Objevte",
     "exploreAgent": "Prozkoumat AI agenta",
     "exploreAnonymization": "Prozkoumat anonymizaci",
