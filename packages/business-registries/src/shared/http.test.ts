@@ -28,11 +28,15 @@ const isShape = (value: unknown): value is Shape =>
   isRecord(value) && value["ok"] === true;
 
 const installFetchStub = (
-  handler: (input: URL | Request | string) => Promise<Response>,
+  handler: (
+    input: URL | Request | string,
+    init?: RequestInit,
+  ) => Promise<Response>,
 ): (() => void) => {
   const original = globalThis.fetch;
   globalThis.fetch = Object.assign(
-    async (input: URL | Request | string) => handler(input),
+    async (input: URL | Request | string, init?: RequestInit) =>
+      handler(input, init),
     { preconnect: original.preconnect },
   );
   return () => {
@@ -45,6 +49,27 @@ const jsonResponse = (body: unknown, status = 200): Response =>
     status,
     headers: { "Content-Type": "application/json" },
   });
+
+const rejectWithSignalReason = (
+  signal: AbortSignal,
+  reject: (reason: Error) => void,
+): void => {
+  const reason: unknown = signal.reason;
+  reject(
+    reason instanceof Error
+      ? reason
+      : new Error("The request was aborted", { cause: reason }),
+  );
+};
+
+const captureThrown = async (promise: Promise<unknown>): Promise<unknown> => {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+};
 
 let restore: (() => void) | null = null;
 afterEach(() => {
@@ -73,13 +98,14 @@ describe("performRegistryRequest", () => {
     restore = installFetchStub(async () => {
       throw new Error("The operation timed out");
     });
-    expect(
+    const error = await captureThrown(
       performRegistryRequest({
         url: "https://example.test",
         wrapRequestError: (cause) =>
           new RequestMarkerError("wrapped", { cause }),
       }),
-    ).rejects.toBeInstanceOf(RequestMarkerError);
+    );
+    expect(error).toBeInstanceOf(RequestMarkerError);
   });
 
   test("returns the raw response on success", async () => {
@@ -89,6 +115,87 @@ describe("performRegistryRequest", () => {
       wrapRequestError: (cause) => new RequestMarkerError("wrapped", { cause }),
     });
     expect(response.status).toBe(200);
+  });
+
+  test("composes caller cancellation with the mandatory timeout", async () => {
+    const controller = new AbortController();
+    const reason = new DOMException("cancelled", "AbortError");
+    let requestSignal: AbortSignal | null | undefined;
+    restore = installFetchStub(async (_input, init) => {
+      const signal = init?.signal;
+      if (!signal) {
+        throw new Error("Missing request signal");
+      }
+      requestSignal = signal;
+      await new Promise<void>((_resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => rejectWithSignalReason(signal, reject),
+          { once: true },
+        );
+      });
+      return jsonResponse({ ok: true });
+    });
+
+    const request = performRegistryRequest({
+      url: "https://example.test",
+      signal: controller.signal,
+      wrapRequestError: (cause) => new RequestMarkerError("wrapped", { cause }),
+    });
+
+    expect(requestSignal).toBeInstanceOf(AbortSignal);
+    expect(requestSignal?.aborted).toBe(false);
+    controller.abort(reason);
+    expect(requestSignal?.aborted).toBe(true);
+    expect(await captureThrown(request)).toBe(reason);
+  });
+
+  test("removes caller listeners after the request settles", async () => {
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | null | undefined;
+    restore = installFetchStub(async (_input, init) => {
+      requestSignal = init?.signal;
+      return jsonResponse({ ok: true });
+    });
+
+    await performRegistryRequest({
+      url: "https://example.test",
+      signal: controller.signal,
+      wrapRequestError: (cause) => new RequestMarkerError("wrapped", { cause }),
+    });
+
+    controller.abort();
+    expect(requestSignal?.aborted).toBe(false);
+  });
+
+  test("retains the timeout and maps it as a transport failure", async () => {
+    restore = installFetchStub(async (_input, init) => {
+      const signal = init?.signal;
+      if (!signal) {
+        throw new Error("Missing request signal");
+      }
+      await new Promise<void>((_resolve, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => rejectWithSignalReason(signal, reject),
+          { once: true },
+        );
+      });
+      return jsonResponse({ ok: true });
+    });
+
+    const error = await captureThrown(
+      performRegistryRequest({
+        url: "https://example.test",
+        timeoutMs: 1,
+        wrapRequestError: (cause) =>
+          new RequestMarkerError("wrapped", { cause }),
+      }),
+    );
+    expect(error).toMatchObject({
+      name: "RequestMarkerError",
+      cause: { name: "TimeoutError" },
+    });
   });
 });
 
@@ -103,26 +210,28 @@ describe("readRegistryJson", () => {
     expect(body).toEqual({ ok: true });
   });
 
-  test("maps a non-JSON body to the parse error", () => {
-    expect(
+  test("maps a non-JSON body to the parse error", async () => {
+    const error = await captureThrown(
       readRegistryJson({
         response: new Response("<html>not json</html>", { status: 200 }),
         isExpectedShape: isShape,
         wrapParseError: (cause) => new ParseMarkerError("parse", { cause }),
         wrapShapeError: () => new ShapeMarkerError("shape"),
       }),
-    ).rejects.toBeInstanceOf(ParseMarkerError);
+    );
+    expect(error).toBeInstanceOf(ParseMarkerError);
   });
 
-  test("maps an unexpected shape to the shape error", () => {
-    expect(
+  test("maps an unexpected shape to the shape error", async () => {
+    const error = await captureThrown(
       readRegistryJson({
         response: jsonResponse({ nope: 1 }),
         isExpectedShape: isShape,
         wrapParseError: (cause) => new ParseMarkerError("parse", { cause }),
         wrapShapeError: () => new ShapeMarkerError("shape"),
       }),
-    ).rejects.toBeInstanceOf(ShapeMarkerError);
+    );
+    expect(error).toBeInstanceOf(ShapeMarkerError);
   });
 });
 
@@ -133,53 +242,57 @@ describe("registryFetch", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  test("wraps a transport failure via wrapRequestError", () => {
+  test("wraps a transport failure via wrapRequestError", async () => {
     restore = installFetchStub(async () => {
       throw new Error("timed out");
     });
-    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(
-      RequestMarkerError,
-    );
+    const error = await captureThrown(registryFetch(baseOptions));
+    expect(error).toBeInstanceOf(RequestMarkerError);
   });
 
-  test("delegates a non-OK status to onErrorResponse (throws)", () => {
+  test("delegates a non-OK status to onErrorResponse (throws)", async () => {
     restore = installFetchStub(async () => jsonResponse({ error: true }, 500));
-    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(ApiMarkerError);
+    const error = await captureThrown(registryFetch(baseOptions));
+    expect(error).toBeInstanceOf(ApiMarkerError);
   });
 
-  test("lets onErrorResponse resolve a not-found status to null", () => {
+  test("lets onErrorResponse resolve a not-found status to null", async () => {
     restore = installFetchStub(async () => jsonResponse({ error: true }, 404));
-    expect(registryFetch(baseOptions)).resolves.toBeNull();
+    expect(await registryFetch(baseOptions)).toBeNull();
   });
 
-  test("maps a malformed 2xx JSON body to the parse error", () => {
+  test("maps a malformed 2xx JSON body to the parse error", async () => {
     restore = installFetchStub(async () => new Response("}{", { status: 200 }));
-    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(ParseMarkerError);
+    const error = await captureThrown(registryFetch(baseOptions));
+    expect(error).toBeInstanceOf(ParseMarkerError);
   });
 
-  test("maps an unexpected 2xx shape to the shape error", () => {
+  test("maps an unexpected 2xx shape to the shape error", async () => {
     restore = installFetchStub(async () => jsonResponse({ nope: true }));
-    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(ShapeMarkerError);
+    const error = await captureThrown(registryFetch(baseOptions));
+    expect(error).toBeInstanceOf(ShapeMarkerError);
   });
 
-  test("routes a 429 to onRateLimited when provided, before onErrorResponse", () => {
+  test("routes a 429 to onRateLimited when provided, before onErrorResponse", async () => {
     restore = installFetchStub(async () => jsonResponse({ error: true }, 429));
     class RateMarkerError extends Error {
       override name = "RateMarkerError";
     }
-    expect(
+    const error = await captureThrown(
       registryFetch({
         ...baseOptions,
         onRateLimited: () => {
           throw new RateMarkerError("rate limited");
         },
       }),
-    ).rejects.toBeInstanceOf(RateMarkerError);
+    );
+    expect(error).toBeInstanceOf(RateMarkerError);
   });
 
-  test("falls back to onErrorResponse for a 429 when onRateLimited is absent", () => {
+  test("falls back to onErrorResponse for a 429 when onRateLimited is absent", async () => {
     restore = installFetchStub(async () => jsonResponse({ error: true }, 429));
-    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(ApiMarkerError);
+    const error = await captureThrown(registryFetch(baseOptions));
+    expect(error).toBeInstanceOf(ApiMarkerError);
   });
 });
 

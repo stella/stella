@@ -28,11 +28,15 @@ const urlString = (input: URL | Request | string): string => {
 };
 
 const installFetchStub = (
-  handler: (input: URL | Request | string) => Promise<Response>,
+  handler: (
+    input: URL | Request | string,
+    init?: RequestInit,
+  ) => Promise<Response>,
 ) => {
   const original = globalThis.fetch;
   globalThis.fetch = Object.assign(
-    async (input: URL | Request | string) => handler(input),
+    async (input: URL | Request | string, init?: RequestInit) =>
+      handler(input, init),
     { preconnect: original.preconnect },
   );
   return () => {
@@ -85,16 +89,25 @@ describe("lookupByKrsNumber (fixture)", () => {
   test("parses the live CD Projekt payload via the RejP probe", async () => {
     const body = await readFixture("lookup-cd-projekt.json");
     const seen: string[] = [];
-    restore = installFetchStub(async (input) => {
+    let signal: AbortSignal | null | undefined;
+    restore = installFetchStub(async (input, init) => {
       const url = urlString(input);
       seen.push(url);
+      signal = init?.signal;
       return new Response(JSON.stringify(body), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     });
 
-    const entity = await lookupByKrsNumber("0000006865");
+    const controller = new AbortController();
+    const lookup = lookupByKrsNumber("0000006865", {
+      signal: controller.signal,
+    });
+    expect(signal?.aborted).toBe(false);
+    controller.abort();
+    expect(signal?.aborted).toBe(true);
+    const entity = await lookup;
     expect(entity).not.toBeNull();
     expect(entity?.name).toBe("CD PROJEKT SPÓŁKA AKCYJNA");
     // Pin the URL shape so a refactor cannot silently drift the

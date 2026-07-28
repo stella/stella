@@ -14,11 +14,15 @@ const requestUrl = (input: URL | Request | string): string => {
 };
 
 const installFetchStub = (
-  handler: (input: URL | Request | string) => Promise<Response>,
+  handler: (
+    input: URL | Request | string,
+    init?: RequestInit,
+  ) => Promise<Response>,
 ) => {
   const original = globalThis.fetch;
   globalThis.fetch = Object.assign(
-    async (input: URL | Request | string) => handler(input),
+    async (input: URL | Request | string, init?: RequestInit) =>
+      handler(input, init),
     { preconnect: original.preconnect },
   );
   return () => {
@@ -50,15 +54,24 @@ describe("SUDREG client", () => {
   test("fetches and parses a company page", async () => {
     const fixture = await Bun.file(FIXTURE).text();
     let url = "";
-    restore = installFetchStub(async (input) => {
+    let signal: AbortSignal | null | undefined;
+    restore = installFetchStub(async (input, init) => {
       url = requestUrl(input);
+      signal = init?.signal;
       return new Response(fixture, {
         status: 200,
         headers: { "Content-Type": "text/html" },
       });
     });
 
-    const company = await lookupByMbs("080 000 014");
+    const controller = new AbortController();
+    const lookup = lookupByMbs("080 000 014", {
+      signal: controller.signal,
+    });
+    expect(signal?.aborted).toBe(false);
+    controller.abort();
+    expect(signal?.aborted).toBe(true);
+    const company = await lookup;
     expect(company?.name).toContain("PRIMJER");
     expect(url).toContain("p28_sbt_mbs=080000014");
   });

@@ -23,11 +23,15 @@ const readFixture = async (
 };
 
 const installFetchStub = (
-  handler: (input: URL | Request | string) => Promise<Response>,
+  handler: (
+    input: URL | Request | string,
+    init?: RequestInit,
+  ) => Promise<Response>,
 ) => {
   const original = globalThis.fetch;
   globalThis.fetch = Object.assign(
-    async (input: URL | Request | string) => handler(input),
+    async (input: URL | Request | string, init?: RequestInit) =>
+      handler(input, init),
     { preconnect: original.preconnect },
   );
   return () => {
@@ -83,15 +87,23 @@ describe("lookupBySiren (fixture)", () => {
 
   test("parses the live RENAULT SAS SIREN payload", async () => {
     const body = await readFixture("lookup-siren-renault.json");
-    restore = installFetchStub(
-      async () =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-    );
+    let signal: AbortSignal | null | undefined;
+    restore = installFetchStub(async (_input, init) => {
+      signal = init?.signal;
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
 
-    const company = await lookupBySiren("780129987");
+    const controller = new AbortController();
+    const lookup = lookupBySiren("780129987", {
+      signal: controller.signal,
+    });
+    expect(signal?.aborted).toBe(false);
+    controller.abort();
+    expect(signal?.aborted).toBe(true);
+    const company = await lookup;
     expect(company).not.toBeNull();
     expect(company?.siren).toBe("780129987");
     expect(company?.name).toBe("RENAULT SAS");

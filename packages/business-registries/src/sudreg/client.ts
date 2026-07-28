@@ -1,4 +1,7 @@
-import { performRegistryRequest } from "../shared/http.js";
+import {
+  performRegistryRequest,
+  type RegistryClientOptions,
+} from "../shared/http.js";
 import {
   SudregAPIError,
   SudregRequestError,
@@ -11,8 +14,11 @@ import { normalizeMbs, validateMbs } from "./validation.js";
 const companyUrl = (mbs: string): string =>
   `https://sudreg.pravosudje.hr/ords/r/esudreg/public/28?p28_sbt_mbs=${encodeURIComponent(mbs)}`;
 
+export type LookupOptions = RegistryClientOptions;
+
 export const lookupByMbs = async (
   mbsInput: string,
+  options?: LookupOptions,
 ): Promise<SudregCompany | null> => {
   const mbs = normalizeMbs(mbsInput);
   if (!validateMbs(mbs)) {
@@ -22,6 +28,7 @@ export const lookupByMbs = async (
   const response = await performRegistryRequest({
     url,
     init: { headers: { Accept: "text/html" } },
+    signal: options?.signal,
     wrapRequestError: (cause) =>
       new SudregRequestError(url, "SUDREG request failed", { cause }),
   });

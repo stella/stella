@@ -7,13 +7,17 @@ const SKIP_LIVE = process.env["SMOKE_TEST"] !== "1";
 
 type SearchRequestCapture = {
   pocet: unknown;
+  signal: AbortSignal | null | undefined;
 };
 
 const captureSearchRequest = (): {
   captured: SearchRequestCapture;
   restore: () => void;
 } => {
-  const captured: SearchRequestCapture = { pocet: undefined };
+  const captured: SearchRequestCapture = {
+    pocet: undefined,
+    signal: undefined,
+  };
   const originalFetch = globalThis.fetch;
   const stub = async (
     _input: URL | RequestInfo,
@@ -24,6 +28,7 @@ const captureSearchRequest = (): {
       // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- request body built by client.ts's own JSON.stringify(payload); shape asserted by the expectations below
       JSON.parse(rawBody) as Record<string, unknown>;
     captured.pocet = payload["pocet"];
+    captured.signal = init?.signal;
     return new Response(
       JSON.stringify({ pocetCelkem: 0, ekonomickeSubjekty: [] }),
       { status: 200, headers: { "Content-Type": "application/json" } },
@@ -164,5 +169,17 @@ describe("searchByName limit clamping", () => {
 
     await searchByName("Alza", { limit: 0 });
     expect(ctx.captured.pocet).toBe(1);
+  });
+
+  test("forwards caller cancellation", async () => {
+    const ctx = captureSearchRequest();
+    restore = ctx.restore;
+    const controller = new AbortController();
+
+    const search = searchByName("Alza", { signal: controller.signal });
+    expect(ctx.captured.signal?.aborted).toBe(false);
+    controller.abort();
+    expect(ctx.captured.signal?.aborted).toBe(true);
+    await search;
   });
 });

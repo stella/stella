@@ -12,6 +12,7 @@ export {
   RegistryValidationError,
 } from "./errors.js";
 export type { EntityNotFound } from "./errors.js";
+export type { RegistryClientOptions } from "./http.js";
 export { clampSearchLimit } from "./search.js";
 export type {
   NormalizedRegistryAddress,

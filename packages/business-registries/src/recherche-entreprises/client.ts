@@ -1,5 +1,9 @@
 import { isRecord } from "../shared/guards.js";
-import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
+import {
+  performRegistryRequest,
+  readRegistryJson,
+  type RegistryClientOptions,
+} from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   RechercheEntreprisesAPIError,
@@ -73,10 +77,12 @@ const parseErrorBody = (value: unknown): RechercheEntreprisesErrorResponse => {
 
 const rechercheEntreprisesGet = async (
   url: string,
+  signal?: AbortSignal,
 ): Promise<RechercheEntreprisesSearchResponse> => {
   const response = await performRegistryRequest({
     url,
     init: { headers: { Accept: "application/json" } },
+    signal,
     wrapRequestError: (cause) =>
       new RechercheEntreprisesRequestError(
         url,
@@ -137,8 +143,11 @@ const rechercheEntreprisesGet = async (
  * @throws {RechercheEntreprisesAPIError} on upstream errors
  * @throws {RechercheEntreprisesRequestError} on network failures
  */
+export type LookupOptions = RegistryClientOptions;
+
 export const lookupBySiren = async (
   siren: string,
+  options?: LookupOptions,
 ): Promise<RechercheEntreprisesCompany | null> => {
   const normalized = normalizeSiren(siren);
   if (!validateSiren(normalized)) {
@@ -147,6 +156,7 @@ export const lookupBySiren = async (
   const params = new URLSearchParams({ q: normalized });
   const data = await rechercheEntreprisesGet(
     `${SEARCH_URL}?${params.toString()}`,
+    options?.signal,
   );
   const hit = data.results.at(0);
   // Belt-and-braces: the search endpoint matches `q` against any
@@ -177,6 +187,7 @@ export const lookupBySiren = async (
  */
 export const lookupBySiret = async (
   siret: string,
+  options?: LookupOptions,
 ): Promise<RechercheEntreprisesCompany | null> => {
   const normalized = normalizeSiren(siret);
   if (!validateSiret(normalized)) {
@@ -185,6 +196,7 @@ export const lookupBySiret = async (
   const params = new URLSearchParams({ q: normalized });
   const data = await rechercheEntreprisesGet(
     `${SEARCH_URL}?${params.toString()}`,
+    options?.signal,
   );
   // SIRET = SIREN (first 9) + NIC (last 5). Require BOTH the unité
   // légale's SIREN to match the SIRET prefix AND the establishment
@@ -206,7 +218,7 @@ export const lookupBySiret = async (
   return parseCompany(hit, normalized);
 };
 
-export type SearchOptions = {
+export type SearchOptions = RegistryClientOptions & {
   /**
    * Maximum number of results. Upstream caps each page at 25 — values
    * above are silently clamped down. @default 25
@@ -241,6 +253,7 @@ export const searchByName = async (
   });
   const data = await rechercheEntreprisesGet(
     `${SEARCH_URL}?${params.toString()}`,
+    options?.signal,
   );
   return data.results.slice(0, perPage).map(parseSearchEntry);
 };

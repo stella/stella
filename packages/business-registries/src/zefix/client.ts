@@ -1,5 +1,8 @@
 import { isRecord } from "../shared/guards.js";
-import { performRegistryRequest } from "../shared/http.js";
+import {
+  performRegistryRequest,
+  type RegistryClientOptions,
+} from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   ZefixAPIError,
@@ -50,10 +53,16 @@ const getErrorCode = (value: unknown): string | null => {
     : null;
 };
 
-const zefixSearch = async (
-  nameOrId: string,
-  maxEntries: number,
-): Promise<ZefixSuccessfulSearchResponse | null> => {
+type ZefixSearchOptions = RegistryClientOptions & {
+  nameOrId: string;
+  maxEntries: number;
+};
+
+const zefixSearch = async ({
+  nameOrId,
+  maxEntries,
+  signal,
+}: ZefixSearchOptions): Promise<ZefixSuccessfulSearchResponse | null> => {
   const response = await performRegistryRequest({
     url: SEARCH_URL,
     init: {
@@ -70,6 +79,7 @@ const zefixSearch = async (
         searchType: "exact",
       }),
     },
+    signal,
     wrapRequestError: (cause) =>
       new ZefixRequestError(SEARCH_URL, "Zefix request failed", { cause }),
   });
@@ -105,15 +115,22 @@ const zefixSearch = async (
   return body;
 };
 
+export type LookupOptions = RegistryClientOptions;
+
 export const lookupByUid = async (
   uidInput: string,
+  options?: LookupOptions,
 ): Promise<ZefixCompany | null> => {
   const uid = normalizeUid(uidInput);
   if (!validateUid(uid)) {
     throw new ZefixValidationError(`Invalid Swiss UID: ${uidInput}`);
   }
 
-  const response = await zefixSearch(uid, 2);
+  const response = await zefixSearch({
+    nameOrId: uid,
+    maxEntries: 2,
+    signal: options?.signal,
+  });
   if (!response) {
     return null;
   }
@@ -126,7 +143,7 @@ export const lookupByUid = async (
   return null;
 };
 
-export type SearchOptions = {
+export type SearchOptions = RegistryClientOptions & {
   /** Maximum number of results. @default 50 */
   limit?: number;
 };
@@ -143,7 +160,11 @@ export const searchByName = async (
     options?.limit ?? DEFAULT_SEARCH_LIMIT,
     MAX_SEARCH_LIMIT,
   );
-  const response = await zefixSearch(trimmed, limit);
+  const response = await zefixSearch({
+    nameOrId: trimmed,
+    maxEntries: limit,
+    signal: options?.signal,
+  });
   if (!response) {
     return [];
   }

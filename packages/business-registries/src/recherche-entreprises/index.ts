@@ -1,5 +1,5 @@
 export { lookupBySiren, lookupBySiret, searchByName } from "./client.js";
-export type { SearchOptions } from "./client.js";
+export type { LookupOptions, SearchOptions } from "./client.js";
 export {
   RechercheEntreprisesAPIError,
   RechercheEntreprisesError,
