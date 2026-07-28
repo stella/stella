@@ -127,6 +127,52 @@ describe("computeRawUsageMicroUnits", () => {
       }),
     ).toThrow();
   });
+
+  test("rejects every token field outside the non-negative safe-integer domain", () => {
+    const invalidCounts = [
+      -1,
+      0.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      Number.MAX_SAFE_INTEGER + 1,
+    ];
+    const fields = ["inputTokens", "outputTokens", "cacheReadTokens"] as const;
+
+    for (const field of fields) {
+      for (const invalidCount of invalidCounts) {
+        expect(() =>
+          computeRawUsageMicroUnits({
+            modelId: "gemini-2.5-flash",
+            inputTokens: 100,
+            outputTokens: 100,
+            cacheReadTokens: 0,
+            [field]: invalidCount,
+          }),
+        ).toThrow();
+      }
+    }
+  });
+
+  test("rejects a computed amount outside the safe-integer domain", () => {
+    expect(() =>
+      computeRawUsageMicroUnits({
+        modelId: "unknown-model-name",
+        inputTokens: 0,
+        outputTokens: Number.MAX_SAFE_INTEGER,
+      }),
+    ).toThrow();
+  });
+
+  test("keeps rate scaling exact when the intermediate product is unsafe", () => {
+    expect(
+      computeRawUsageMicroUnits({
+        modelId: "unknown-model-name",
+        inputTokens: 9_007_199_254_740_938,
+        outputTokens: 0,
+      }),
+    ).toBe(4_503_599_627_370_469);
+  });
 });
 
 describe("usageUnitsFromTokens", () => {
