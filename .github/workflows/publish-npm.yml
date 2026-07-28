@@ -20,6 +20,8 @@ on:
     paths:
       # Changesets owns these files, so ordinary manifest maintenance cannot
       # accidentally start a release transaction.
+      - packages/business-registries/CHANGELOG.md
+      - packages/country-codes/CHANGELOG.md
       - packages/conditions/CHANGELOG.md
       - packages/template-conditions/CHANGELOG.md
       - packages/docx-utils/CHANGELOG.md
@@ -33,6 +35,8 @@ on:
         type: choice
         options:
           - all
+          - business-registries
+          - country-codes
           - conditions
           - template-conditions
           - docx-utils
@@ -163,10 +167,10 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
             pkgs=(cli)
           elif [[ "$EVENT_NAME" == "push" ]]; then
-            pkgs=(conditions template-conditions docx-utils)
+            pkgs=(country-codes business-registries conditions template-conditions docx-utils)
           else
             case "$MANUAL_PACKAGE" in
-              all) pkgs=(conditions template-conditions docx-utils cli) ;;
+              all) pkgs=(country-codes business-registries conditions template-conditions docx-utils cli) ;;
               *) pkgs=("$MANUAL_PACKAGE") ;;
             esac
           fi
@@ -284,6 +288,24 @@ jobs:
         with:
           name: npm-tarball-conditions
           path: release-artifacts/conditions/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload business-registries tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'business-registries')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-business-registries
+          path: release-artifacts/business-registries/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload country-codes tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'country-codes')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-country-codes
+          path: release-artifacts/country-codes/
           retention-days: 1
           if-no-files-found: error
 

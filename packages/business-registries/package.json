@@ -47,81 +47,21 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "bun": "./src/index.ts",
-      "types": "./src/index.ts",
-      "import": "./dist/index.js"
-    },
-    "./ares": {
-      "bun": "./src/ares/index.ts",
-      "types": "./src/ares/index.ts",
-      "import": "./dist/ares/index.js"
-    },
-    "./brreg": {
-      "bun": "./src/brreg/index.ts",
-      "types": "./src/brreg/index.ts",
-      "import": "./dist/brreg/index.js"
-    },
-    "./companies-house": {
-      "bun": "./src/companies-house/index.ts",
-      "types": "./src/companies-house/index.ts",
-      "import": "./dist/companies-house/index.js"
-    },
-    "./denue": {
-      "bun": "./src/denue/index.ts",
-      "types": "./src/denue/index.ts",
-      "import": "./dist/denue/index.js"
-    },
-    "./edgar": {
-      "bun": "./src/edgar/index.ts",
-      "types": "./src/edgar/index.ts",
-      "import": "./dist/edgar/index.js"
-    },
-    "./gcis": {
-      "bun": "./src/gcis/index.ts",
-      "types": "./src/gcis/index.ts",
-      "import": "./dist/gcis/index.js"
-    },
-    "./krs": {
-      "bun": "./src/krs/index.ts",
-      "types": "./src/krs/index.ts",
-      "import": "./dist/krs/index.js"
-    },
-    "./orsr": {
-      "bun": "./src/orsr/index.ts",
-      "types": "./src/orsr/index.ts",
-      "import": "./dist/orsr/index.js"
-    },
-    "./prh": {
-      "bun": "./src/prh/index.ts",
-      "types": "./src/prh/index.ts",
-      "import": "./dist/prh/index.js"
-    },
-    "./recherche-entreprises": {
-      "bun": "./src/recherche-entreprises/index.ts",
-      "types": "./src/recherche-entreprises/index.ts",
-      "import": "./dist/recherche-entreprises/index.js"
-    },
-    "./vies": {
-      "bun": "./src/vies/index.ts",
-      "types": "./src/vies/index.ts",
-      "import": "./dist/vies/index.js"
-    },
-    "./shared": {
-      "bun": "./src/shared/index.ts",
-      "types": "./src/shared/index.ts",
-      "import": "./dist/shared/index.js"
-    },
-    "./sudreg": {
-      "bun": "./src/sudreg/index.ts",
-      "types": "./src/sudreg/index.ts",
-      "import": "./dist/sudreg/index.js"
-    },
-    "./zefix": {
-      "bun": "./src/zefix/index.ts",
-      "types": "./src/zefix/index.ts",
-      "import": "./dist/zefix/index.js"
-    }
+    ".": "./src/index.ts",
+    "./ares": "./src/ares/index.ts",
+    "./brreg": "./src/brreg/index.ts",
+    "./companies-house": "./src/companies-house/index.ts",
+    "./denue": "./src/denue/index.ts",
+    "./edgar": "./src/edgar/index.ts",
+    "./gcis": "./src/gcis/index.ts",
+    "./krs": "./src/krs/index.ts",
+    "./orsr": "./src/orsr/index.ts",
+    "./prh": "./src/prh/index.ts",
+    "./recherche-entreprises": "./src/recherche-entreprises/index.ts",
+    "./vies": "./src/vies/index.ts",
+    "./shared": "./src/shared/index.ts",
+    "./sudreg": "./src/sudreg/index.ts",
+    "./zefix": "./src/zefix/index.ts"
   },
   "publishConfig": {
     "access": "public"
