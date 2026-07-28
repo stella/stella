@@ -3,11 +3,6 @@ import type { SudregAddress, SudregCompany, SudregWarning } from "./types.js";
 
 const NOT_FOUND_TEXT =
   "U sudskom registru nije evidentirano društvo sa zadanim matičnim brojem";
-const SECTION_HEADING_PATTERN =
-  /<h2\b[^>]*class=["'][^"']*\bsrn-kat-title\b[^"']*["'][^>]*>(?<title>[\s\S]*?)<\/h2>/giu;
-const TABLE_CELL_PATTERN = /<td\b[^>]*>(?<value>[\s\S]*?)<\/td>/iu;
-const TAG_PATTERN = /<[^>]+>/gu;
-const BREAK_PATTERN = /<br\s*\/?\s*>/giu;
 const NAMED_ENTITIES: Record<string, string> = {
   amp: "&",
   apos: "'",
@@ -40,38 +35,97 @@ const decodeHtmlEntities = (value: string): string => {
   return decoded + value.slice(cursor);
 };
 
+const withoutHtmlTags = (value: string): string => {
+  let text = "";
+  let cursor = 0;
+  while (cursor < value.length) {
+    const tagStart = value.indexOf("<", cursor);
+    if (tagStart === -1) {
+      return text + value.slice(cursor);
+    }
+    text += value.slice(cursor, tagStart);
+    const tagEnd = value.indexOf(">", tagStart + 1);
+    if (tagEnd === -1) {
+      return text + value.slice(tagStart);
+    }
+    const tag = value
+      .slice(tagStart + 1, tagEnd)
+      .trim()
+      .toLowerCase();
+    if (tag === "br" || tag === "br/" || tag.startsWith("br ")) {
+      text += "\n";
+    }
+    cursor = tagEnd + 1;
+  }
+  return text;
+};
+
 const htmlToText = (value: string): string =>
-  decodeHtmlEntities(
-    value.replaceAll(BREAK_PATTERN, "\n").replaceAll(TAG_PATTERN, ""),
-  )
+  decodeHtmlEntities(withoutHtmlTags(value))
     .split("\n")
     .map((line) => line.replaceAll(/\s+/gu, " ").trim())
     .filter((line) => line.length > 0)
     .join("\n");
 
-const extractSection = (
-  html: string,
-  titles: string | readonly string[],
-): string | null => {
-  const acceptedTitles = new Set(
-    typeof titles === "string" ? [titles] : titles,
-  );
-  SECTION_HEADING_PATTERN.lastIndex = 0;
-  for (const match of html.matchAll(SECTION_HEADING_PATTERN)) {
-    const rawTitle = match.groups?.["title"];
-    if (!rawTitle || !acceptedTitles.has(htmlToText(rawTitle))) {
+const attributeValue = (openingTag: string, name: string): string | null => {
+  const lower = openingTag.toLowerCase();
+  const marker = `${name.toLowerCase()}=`;
+  const markerStart = lower.indexOf(marker);
+  if (markerStart === -1) {
+    return null;
+  }
+  const valueStart = markerStart + marker.length;
+  const quote = openingTag[valueStart];
+  if (quote !== '"' && quote !== "'") {
+    return null;
+  }
+  const valueEnd = openingTag.indexOf(quote, valueStart + 1);
+  return valueEnd === -1 ? null : openingTag.slice(valueStart + 1, valueEnd);
+};
+
+const hasClass = (openingTag: string, className: string): boolean =>
+  attributeValue(openingTag, "class")?.split(/\s+/u).includes(className) ??
+  false;
+
+const extractSections = (html: string): ReadonlyMap<string, string> => {
+  const sections = new Map<string, string>();
+  const lower = html.toLowerCase();
+  let cursor = 0;
+  while (cursor < html.length) {
+    const headingStart = lower.indexOf("<h2", cursor);
+    if (headingStart === -1) {
+      break;
+    }
+    const openingEnd = html.indexOf(">", headingStart + 3);
+    if (openingEnd === -1) {
+      break;
+    }
+    const closingStart = lower.indexOf("</h2>", openingEnd + 1);
+    if (closingStart === -1) {
+      break;
+    }
+    cursor = closingStart + 5;
+    if (!hasClass(html.slice(headingStart, openingEnd + 1), "srn-kat-title")) {
       continue;
     }
-    const sectionStart = match.index + match[0].length;
-    const sectionEnd = html.indexOf("</div>", sectionStart);
-    const section = html.slice(
-      sectionStart,
-      sectionEnd === -1 ? html.length : sectionEnd,
-    );
-    const cell = TABLE_CELL_PATTERN.exec(section);
-    return cell?.groups?.["value"] ? htmlToText(cell.groups["value"]) : null;
+    const title = htmlToText(html.slice(openingEnd + 1, closingStart));
+    const sectionEnd = lower.indexOf("</div>", cursor);
+    const boundedEnd = sectionEnd === -1 ? html.length : sectionEnd;
+    const cellStart = lower.indexOf("<td", cursor);
+    if (cellStart === -1 || cellStart >= boundedEnd) {
+      continue;
+    }
+    const cellOpeningEnd = html.indexOf(">", cellStart + 3);
+    if (cellOpeningEnd === -1 || cellOpeningEnd >= boundedEnd) {
+      continue;
+    }
+    const cellEnd = lower.indexOf("</td>", cellOpeningEnd + 1);
+    if (cellEnd === -1 || cellEnd > boundedEnd) {
+      continue;
+    }
+    sections.set(title, htmlToText(html.slice(cellOpeningEnd + 1, cellEnd)));
   }
-  return null;
+  return sections;
 };
 
 const parseStreet = (
@@ -80,10 +134,16 @@ const parseStreet = (
   SudregAddress,
   "street" | "houseNumber" | "orientationNumber" | "orientationLetter"
 > => {
-  const numberMatch =
-    /(?:^|\s)(?<houseNumber>\d+)(?:(?:\s*\/\s*(?<orientationNumber>\d+)(?:\s*(?<orientationLetter>[a-z]))?)|(?:\s*\/\s*(?<slashLetter>[a-z]))|(?:\s*(?<houseLetter>[a-z])))?$/iu.exec(
-      line,
-    );
+  const suffixMatch = /^(?<houseNumber>\d+)(?:\/(?<orientation>[\da-z]+))?$/iu;
+  const words = line.split(/\s+/u);
+  const lastWord = words.at(-1) ?? "";
+  const precedingWord = words.at(-2) ?? "";
+  const separateLetter = /^[a-z]$/iu.test(lastWord);
+  const suffix = (separateLetter ? precedingWord : lastWord).replaceAll(
+    /\s/gu,
+    "",
+  );
+  const numberMatch = suffixMatch.exec(suffix);
   if (!numberMatch?.groups) {
     return {
       street: line || null,
@@ -92,16 +152,23 @@ const parseStreet = (
       orientationLetter: null,
     };
   }
-  const street = line.slice(0, numberMatch.index).trim();
+  const suffixStart = line.lastIndexOf(
+    separateLetter ? precedingWord : lastWord,
+  );
+  const street = line.slice(0, suffixStart).trim();
+  const orientation = numberMatch.groups["orientation"] ?? null;
+  let orientationLetter: string | null = null;
+  if (separateLetter) {
+    orientationLetter = lastWord;
+  } else if (orientation && /^[a-z]+$/iu.test(orientation)) {
+    orientationLetter = orientation;
+  }
   return {
     street: street || null,
     houseNumber: numberMatch.groups["houseNumber"] ?? null,
-    orientationNumber: numberMatch.groups["orientationNumber"] ?? null,
-    orientationLetter:
-      numberMatch.groups["orientationLetter"] ??
-      numberMatch.groups["slashLetter"] ??
-      numberMatch.groups["houseLetter"] ??
-      null,
+    orientationNumber:
+      orientation && /^\d+$/u.test(orientation) ? orientation : null,
+    orientationLetter,
   };
 };
 
@@ -117,15 +184,23 @@ export const parseAddress = (
     return { address: null, warnings: [] };
   }
 
-  const municipalityMatch =
-    /^(?<part>.*?)\s*\((?:Grad|Općina)\s+(?<municipality>[^)]+)\)$/u.exec(
-      municipalityLine,
-    );
-  const municipality =
-    municipalityMatch?.groups?.["municipality"] ?? municipalityLine;
-  const municipalityPart = municipalityMatch?.groups?.["part"] || null;
+  const wrapperStart = municipalityLine.lastIndexOf(" (");
+  const wrapper =
+    wrapperStart === -1 || !municipalityLine.endsWith(")")
+      ? null
+      : municipalityLine.slice(wrapperStart + 2, -1);
+  let municipality = municipalityLine;
+  if (wrapper?.startsWith("Grad ") === true) {
+    municipality = wrapper.slice(5);
+  } else if (wrapper?.startsWith("Općina ") === true) {
+    municipality = wrapper.slice(7);
+  }
+  const municipalityPart =
+    municipality === municipalityLine
+      ? null
+      : municipalityLine.slice(0, wrapperStart).trim() || null;
   const unexpectedMunicipality =
-    municipalityLine.includes("(") && municipalityMatch === null;
+    municipalityLine.includes("(") && municipality === municipalityLine;
   const street = parseStreet(lines.at(1) ?? "");
 
   return {
@@ -152,19 +227,20 @@ export const parseCompanyPage = (
     return null;
   }
 
-  const mbs = extractSection(html, "MBS") ?? requestedMbs;
+  const sections = extractSections(html);
+  const mbs = sections.get("MBS") ?? requestedMbs;
   if (mbs !== requestedMbs) {
     throw new SudregParseError(
       `SUDREG returned MBS ${mbs} for requested MBS ${requestedMbs}`,
     );
   }
-  const name = extractSection(html, ["Tvrtka", "Naziv"]);
+  const name = sections.get("Tvrtka") ?? sections.get("Naziv");
   if (!name) {
     throw new SudregParseError(
       "SUDREG response did not contain a company name",
     );
   }
-  const addressText = extractSection(html, "Sjedište/adresa");
+  const addressText = sections.get("Sjedište/adresa") ?? null;
   const parsedAddress = addressText
     ? parseAddress(addressText)
     : { address: null, warnings: [] };
@@ -173,8 +249,8 @@ export const parseCompanyPage = (
     mbs,
     name,
     address: parsedAddress.address,
-    shareCapital: extractSection(html, "Temeljni kapital"),
-    legalForm: extractSection(html, "Pravni oblik"),
+    shareCapital: sections.get("Temeljni kapital") ?? null,
+    legalForm: sections.get("Pravni oblik") ?? null,
     warnings: parsedAddress.warnings,
     registryUrl: buildRegistryUrl(mbs),
   };
