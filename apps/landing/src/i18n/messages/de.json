@@ -133,7 +133,7 @@
     "security": "Sicherheit"
   },
   "story": {
-    "agentBody": "Der Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Fundstellen, die die Quelle exakt an der richtigen Textstelle öffnen. Nutzen Sie ihn in stella oder über MCP und die CLI; dieselben Berechtigungen und Quellen gelten für jede Anfrage.",
+    "agentBody": "Der Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Zitaten, die die Quelle an der genauen Stelle öffnen. Nutzen Sie ihn direkt in stella oder verbinden Sie ihn mit den Werkzeugen, mit denen Sie ohnehin arbeiten.",
     "agentEyebrow": "Agenten-Workflows",
     "agentTitle": "Einmal fragen genügt. Jede Antwort nennt ihre Quelle.",
     "bringEditorToFront": "Editor von stella in den Vordergrund holen",

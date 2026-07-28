@@ -133,7 +133,7 @@
     "security": "Security"
   },
   "story": {
-    "agentBody": "The agent searches the matter, reads the relevant text, and answers with citations that open the source at the exact passage. Use it in stella or through MCP and the CLI; the same permissions and sources follow the request.",
+    "agentBody": "The agent searches the matter, reads the relevant text, and answers with citations that open the source at the exact passage. Use it in stella, or connect it to the tools you already work in.",
     "agentEyebrow": "Agent workflows",
     "agentTitle": "Ask once. Every answer cites its source.",
     "bringEditorToFront": "Bring stella Editor to front",

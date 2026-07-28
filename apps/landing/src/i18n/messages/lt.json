@@ -133,7 +133,7 @@
     "security": "Saugumas"
   },
   "story": {
-    "agentBody": "Agentas ieško byloje, perskaito aktualų tekstą ir atsako citatomis, kurios atveria šaltinį tiksliai reikiamoje vietoje. Naudokite jį programoje stella arba per MCP ir komandinę eilutę; su užklausa keliauja tos pačios teisės ir šaltiniai.",
+    "agentBody": "Agentas peržiūri bylą, perskaito aktualų tekstą ir atsako su citatomis, kurios atveria šaltinį tiksliai toje vietoje. Naudokite jį tiesiog programoje stella arba prijunkite prie įrankių, kuriais jau dirbate.",
     "agentEyebrow": "Agento darbo eigos",
     "agentTitle": "Užtenka paklausti. Kiekvienas atsakymas nurodo šaltinį.",
     "bringEditorToFront": "Perkelti programos stella redaktorių į priekinį planą",

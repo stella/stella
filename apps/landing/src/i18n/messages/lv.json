@@ -133,7 +133,7 @@
     "security": "Drošība"
   },
   "story": {
-    "agentBody": "Aģents meklē lietā, izlasa būtisko tekstu un atbild ar citātiem, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to lietotnē stella vai ar MCP un komandrindas palīdzību; pieprasījumam seko tās pašas atļaujas un avoti.",
+    "agentBody": "Aģents pārmeklē lietu, izlasa būtisko tekstu un atbild ar atsaucēm, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to tieši lietotnē stella vai savienojiet ar rīkiem, ar kuriem jau strādājat.",
     "agentEyebrow": "Aģenta darbplūsmas",
     "agentTitle": "Pietiek pajautāt. Katra atbilde norāda avotu.",
     "bringEditorToFront": "Pārvietot lietotnes stella redaktoru priekšplānā",

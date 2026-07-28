@@ -133,7 +133,7 @@
     "security": "Biztonság"
   },
   "story": {
-    "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és hivatkozásokkal válaszol, amelyek a pontos szövegrésznél nyitják meg a forrást. Használja a stella alkalmazásban vagy MCP-n és parancssoron keresztül; a kérést ugyanazok a jogosultságok és források kísérik.",
+    "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és olyan hivatkozásokkal válaszol, amelyek pontosan a megfelelő szövegrésznél nyitják meg a forrást. Használja közvetlenül a stella alkalmazásban, vagy kapcsolja össze a már használt eszközeivel.",
     "agentEyebrow": "Ügynöki munkafolyamatok",
     "agentTitle": "Egy kérdés elég. Minden válasz megjelöli a forrását.",
     "bringEditorToFront": "A stella alkalmazás szerkesztőjének előtérbe hozása",

@@ -133,7 +133,7 @@
     "security": "Segurança"
   },
   "story": {
-    "agentBody": "O agente pesquisa no caso, lê o texto relevante e responde com citações que abrem a fonte exatamente na passagem correspondente. Use-o na stella ou via MCP e CLI; as mesmas permissões e fontes acompanham cada solicitação.",
+    "agentBody": "O agente pesquisa o caso, lê o texto relevante e responde com citações que abrem a fonte na passagem exata. Use-o diretamente na stella ou conecte-o às ferramentas com as quais você já trabalha.",
     "agentEyebrow": "Fluxos de trabalho do agente",
     "agentTitle": "Basta perguntar. Cada resposta cita a fonte.",
     "bringEditorToFront": "Trazer o editor da stella para a frente",

@@ -133,7 +133,7 @@
     "security": "Bezpečnosť"
   },
   "story": {
-    "agentBody": "Agent prehľadá spis, prečíta relevantný text a odpovie s citáciami, ktoré otvoria zdroj presne v danej pasáži. Použite ho v aplikácii stella alebo cez MCP a CLI; s požiadavkou putujú rovnaké oprávnenia aj zdroje.",
+    "agentBody": "Agent prehľadá spis, prečíta relevantný text a odpovie s citáciami, ktoré otvoria zdroj presne v danej pasáži. Použijete ho priamo v aplikácii stella, alebo si ho pripojíte k nástrojom, ktoré už používate.",
     "agentEyebrow": "Pracovné postupy agenta",
     "agentTitle": "Stačí sa spýtať. Každá odpoveď uvádza svoj zdroj.",
     "bringEditorToFront": "Preniesť do popredia editor aplikácie stella",

@@ -133,7 +133,7 @@
     "security": "Turvalisus"
   },
   "story": {
-    "agentBody": "Agent otsib toimikust, loeb asjakohast teksti ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta seda rakenduses stella või MCP ja käsurea kaudu; iga päringuga liiguvad kaasa samad õigused ja allikad.",
+    "agentBody": "Agent otsib toimikust, loeb asjakohase teksti läbi ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta teda otse stella rakenduses või ühenda tööriistadega, mida juba kasutad.",
     "agentEyebrow": "Agendi töövood",
     "agentTitle": "Piisab ühest küsimusest. Iga vastus viitab allikale.",
     "bringEditorToFront": "Too rakenduse stella redaktor esiplaanile",
