@@ -28,7 +28,8 @@ scoped to the API host, and a `127.0.0.1` cookie never reaches the
 cd apps/web && E2E_WEB_URL=http://localhost:3223 E2E_API_URL=http://localhost:3224 bun run capture:product-story
 ```
 
-The capture suite selects the deterministic `Test Firm`, resolves seeded
+The capture suite selects the deterministic `Harbrook & Partners` organization
+(`apps/api/scripts/seed-test-user.ts`), resolves seeded
 workspace view IDs from the API, waits for real route content, and writes
 light and dark files for every product in this directory.
 

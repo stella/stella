@@ -78,6 +78,9 @@ const COMMON_WATCHED_PATHS = [
   "apps/web/e2e/marketing/captures.ts",
   "apps/web/e2e/marketing/record-product-story.ts",
   "apps/api/scripts/seed-dev.ts",
+  // Owns the filmed organization and primary-user display names, which the
+  // sidebar chrome and every authored-by surface render.
+  "apps/api/scripts/seed-test-user.ts",
   "apps/web/src/components/app-sidebar.tsx",
   "apps/web/src/components/app-sidebar.logic.ts",
   "apps/web/src/components/breadcrumbs",

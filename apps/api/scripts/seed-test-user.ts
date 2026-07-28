@@ -3,7 +3,7 @@
  *
  * Creates:
  *  - A user (test@stella.dev)
- *  - An organization ("Test Firm")
+ *  - An organization ("Harbrook & Partners")
  *  - A membership linking the two
  *  - A session with a known token
  *  - A Playwright storage-state JSON for browser automation
@@ -37,9 +37,15 @@ import {
   getSeedColleagues,
 } from "./seed-utils";
 
+// Display names belong to the same fictional world as the rest of the dev
+// seed (Novák & Partners, Česká Energie, Meridian Capital Partners in
+// seed-dev.ts): the marketing captures film these surfaces, so a placeholder
+// like "Test User"/"Test Firm" would ship in the recordings. `id` and `email`
+// stay as they are — they are the stable keys the seeds, the Playwright
+// storage state, and the e2e sign-in all join on.
 const TEST_USER = {
   id: DEFAULT_USER_ID,
-  name: "Test User",
+  name: "Petra Harbrook",
   email: "test@stella.dev",
 } as const;
 
@@ -47,8 +53,8 @@ const COLLEAGUES = getSeedColleagues(DEFAULT_TEST_USER_COLLEAGUE_COUNT);
 
 const TEST_ORG = {
   id: DEFAULT_ORG_ID,
-  name: "Test Firm",
-  slug: "test-firm",
+  name: "Harbrook & Partners",
+  slug: "harbrook-partners",
 } as const;
 
 // Token that Playwright will send as a cookie.
@@ -87,6 +93,12 @@ const buildMemberId = (organizationId: string, userId: string): string => {
   return `seed-member-${hash.slice(0, 24)}`;
 };
 
+// Upsert rather than insert-if-missing: the dev database is long-lived and
+// shared, so an insert-only seed would leave a renamed identity stale on every
+// existing row (and therefore on screen in a re-shot marketing capture). Only
+// the display fields are reconciled; the id and email are the stable keys.
+// Drizzle drops undefined values from the update set, so a colleague-less
+// `image` never blanks an existing avatar.
 const ensureUserExists = async ({
   id,
   name,
@@ -98,37 +110,44 @@ const ensureUserExists = async ({
   email: string;
   image?: string;
 }) => {
-  if (
-    await rootDb.query.user.findFirst({
-      where: { id },
-      columns: { id: true },
+  await rootDb
+    .insert(user)
+    .values({
+      id,
+      name,
+      email,
+      image,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
     })
-  ) {
-    return;
-  }
-
-  await rootDb.insert(user).values({
-    id,
-    name,
-    email,
-    image,
-    emailVerified: true,
-    createdAt: now,
-    updatedAt: now,
-  });
+    .onConflictDoUpdate({
+      target: user.id,
+      set: { name, image, updatedAt: now },
+    });
 };
 
 export const ensureOrganizationExists = async (organizationId: string) => {
+  const org = getSeedOrganizationIdentity(organizationId);
+
   if (
     await rootDb.query.organization.findFirst({
       where: { id: { eq: organizationId } },
       columns: { id: true },
     })
   ) {
+    // Reconcile the display name in place so a re-seed renames an existing
+    // row (see ensureUserExists). Scoped to the seed's own deterministic org:
+    // an operator-supplied STELLA_SEED_ORG_ID points at a real organization
+    // whose name and slug are not this script's to rewrite.
+    if (organizationId === TEST_ORG.id) {
+      await rootDb
+        .update(organization)
+        .set({ name: org.name, slug: org.slug })
+        .where(eq(organization.id, organizationId));
+    }
     return;
   }
-
-  const org = getSeedOrganizationIdentity(organizationId);
 
   await rootDb.insert(organization).values({
     id: org.id,

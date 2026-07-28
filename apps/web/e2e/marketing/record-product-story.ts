@@ -1284,7 +1284,12 @@ const selectMarketingOrganization = async (
   const page = await context.newPage();
   configurePage(page);
   await page.goto("/auth/organization", { waitUntil: "commit" });
-  const organization = page.getByRole("button", { name: /Test Firm/u });
+  // The seeded organization's display name (apps/api/scripts/seed-test-user.ts
+  // TEST_ORG); it is filmed in the sidebar chrome, so it is a real-sounding
+  // firm name rather than a placeholder.
+  const organization = page.getByRole("button", {
+    name: /Harbrook & Partners/u,
+  });
   await organization.waitFor({ state: "visible" });
   const initialViewsRequest = page
     .waitForResponse(

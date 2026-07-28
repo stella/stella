@@ -20,8 +20,17 @@ import { registerBatchGenerator } from "@/api/lib/workflow/generate-batch-provid
 // `generate-batch-mock` and `@faker-js/faker` out of the production build — both
 // the compiled binary and the knip `--production` graph.
 
+// The reply every mocked chat turn streams. It carries no "mock"/"stub"
+// scaffolding prefix on purpose: the marketing captures film this text
+// verbatim whenever a scene sends a live message, so it has to read like a
+// plausible answer. Nothing asserts on the string — the chat specs key on the
+// assistant message's rendered affordances (its Copy/Retry actions) instead,
+// which is what actually proves a reply painted. `USE_MOCK_AI` remains the
+// only signal that the model is stubbed.
 const MOCK_REPLY =
-  "Mock assistant reply: streaming is stubbed because USE_MOCK_AI is set.";
+  "Based on the documents in this workspace, the notice periods, governing " +
+  "law, and liability caps are the provisions that differ most. Ask a " +
+  "follow-up to open any of them at the cited passage.";
 
 // A user message containing this marker makes the mock adapter stream its
 // reply as many small delayed chunks instead of one instant chunk, giving an

@@ -16,7 +16,8 @@ const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 // never lands on the empty /chat/new composer.
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 // The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
-// Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Test Firm"), seeded by
+// Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
+// apps/api/scripts/seed-test-user.ts), seeded by
 // db:seed-test-user then populated by db:seed-dev. A fresh email-OTP sign-in
 // starts with no active organization, so we set it server-side (below) instead
 // of driving the org-picker UI, which the workspace routes below depend on.
