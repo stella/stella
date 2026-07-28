@@ -15,10 +15,10 @@
  */
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
-import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
+import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
+import { getChatSkillMetadata } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 /**
  * Mirrors `SKILL_CHIP_HREF_PREFIX` on the web side (the prompt inputs serialize

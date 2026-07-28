@@ -1,5 +1,5 @@
 /** Registries the lookup affordance offers; mirrors the manifest's supported
- *  set (`LOOKUP_REGISTRIES` in apps/api/src/handlers/docx/types.ts, itself the
+ *  set (`LOOKUP_REGISTRIES` in apps/api/src/lib/docx/types.ts, itself the
  *  full `BUSINESS_REGISTRY_SLUGS`). Eden exposes types only, so the slugs are
  *  mirrored here — extend together with the API. */
 const LOOKUP_REGISTRIES = [

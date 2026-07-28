@@ -1,13 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import {
-  readManifest,
-  writeManifest,
-} from "@/api/handlers/docx/template-manifest";
-import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type {
   TemplateCheckClauseLink,
   TemplateCheckFinding,
@@ -16,6 +9,10 @@ import {
   buildTemplateCheckFindings,
   MAX_CHECK_FINDINGS,
 } from "@/api/handlers/templates/check-template";
+import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { readManifest, writeManifest } from "@/api/lib/docx/template-manifest";
+import type { TemplateManifest } from "@/api/lib/docx/types";
 
 // ── Helpers ──────────────────────────────────────────────
 

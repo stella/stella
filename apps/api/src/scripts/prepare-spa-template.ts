@@ -8,13 +8,11 @@ import { panic } from "better-result";
  */
 import JSZip from "jszip";
 
-const INPUT = new URL(
-  "../handlers/docx/fixtures/spa-template.docx",
-  import.meta.url,
-).pathname;
+const INPUT = new URL("../lib/docx/fixtures/spa-template.docx", import.meta.url)
+  .pathname;
 
 const OUTPUT = new URL(
-  "../handlers/docx/fixtures/spa-template-with-placeholders.docx",
+  "../lib/docx/fixtures/spa-template-with-placeholders.docx",
   import.meta.url,
 ).pathname;
 

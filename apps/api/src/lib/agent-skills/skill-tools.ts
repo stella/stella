@@ -9,22 +9,22 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin } from "@/api/db/schema";
 import {
+  RESOURCE_PATH_PATTERN,
+  inferResourceKind,
+} from "@/api/lib/agent-skills/resource-path";
+import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
   listAvailableChatSkillResources,
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
-} from "@/api/handlers/chat/skills";
-import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import {
-  RESOURCE_PATH_PATTERN,
-  inferResourceKind,
-} from "@/api/handlers/skills/resources/resource-path";
+} from "@/api/lib/agent-skills/skills";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { toTanStackValibotSchema as toTanStackToolSchema } from "@/api/lib/tanstack-ai-schema";
 
 type CreateSkillToolsProps = {
   activeSkillContext?: ActiveChatSkillContext | null | undefined;

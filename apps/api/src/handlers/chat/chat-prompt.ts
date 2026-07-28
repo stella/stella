@@ -28,18 +28,18 @@ import type {
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import { estimateTextTokens } from "@/api/handlers/chat/compaction";
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@/api/handlers/chat/thread-title";
+import { CHAT_CODE_MODE_SYSTEM_PROMPT } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
+import type { ChatMessage } from "@/api/handlers/chat/types";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
   getChatSkillMetadata,
   listAvailableChatSkillMetadata,
   resolveActiveChatSkillContext,
-} from "@/api/handlers/chat/skills";
-import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@/api/handlers/chat/thread-title";
-import { CHAT_CODE_MODE_SYSTEM_PROMPT } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
-import type { ChatMessage } from "@/api/handlers/chat/types";
+} from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";

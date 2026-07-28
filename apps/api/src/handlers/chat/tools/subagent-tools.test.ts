@@ -2,10 +2,6 @@ import { toolDefinition } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import type {
-  ChatTool,
-  ChatToolMap,
-} from "@/api/handlers/chat/tools/chat-tool-types";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   createSubagentProposalBuffer,
@@ -18,6 +14,7 @@ import {
   type ChatToolPolicyKind,
   getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 const inputSchema = toTanStackToolSchema(v.strictObject({}));
 

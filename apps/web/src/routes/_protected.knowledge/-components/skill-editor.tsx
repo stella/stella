@@ -66,7 +66,7 @@ import {
 
 const SKILL_BODY_FILE_NAME = "SKILL.md";
 
-// Mirrors apps/api/src/handlers/skills/resources/resource-path.ts.
+// Mirrors apps/api/src/lib/agent-skills/resource-path.ts.
 // Keep the two in sync.
 const RESOURCE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   clauseBodyToPlainText,
   clauseBodyToRichPatch,
-} from "@/api/handlers/clauses/clause-to-patch";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/clauses/clause-to-patch";
 import {
   isOutdatedLink,
   isVariantDeleted,

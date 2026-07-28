@@ -1,5 +1,5 @@
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 /**
  * Test-only adapter for TanStack chat tool maps.

@@ -1,8 +1,8 @@
+import { isClauseBody } from "@/api/lib/clauses/types";
+import type { ClauseBody } from "@/api/lib/clauses/types";
 import { isRecord } from "@/api/lib/type-guards";
 
 import type { ClauseMetadata } from "./metadata";
-import { isClauseBody } from "./types";
-import type { ClauseBody } from "./types";
 
 export type ClauseExportVariant = {
   label: string;

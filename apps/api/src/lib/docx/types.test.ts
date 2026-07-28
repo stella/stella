@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { isFieldMeta, isTemplateDataValue } from "@/api/handlers/docx/types";
+import { isFieldMeta, isTemplateDataValue } from "@/api/lib/docx/types";
 
 const createNestedObject = (depth: number): unknown => {
   let value: unknown = "leaf";

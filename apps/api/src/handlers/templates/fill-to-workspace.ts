@@ -4,11 +4,6 @@ import { t } from "elysia";
 
 import { entities, templateFills } from "@/api/db/schema";
 import { clauseBodySchema } from "@/api/handlers/clauses/shared-schemas";
-import {
-  buildAiConditionDecider,
-  buildAiFieldGenerator,
-  buildAiOccurrenceAdapter,
-} from "@/api/handlers/docx/ai-field-generator";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { containsNull } from "@/api/handlers/templates/fill";
 import { fillStoredTemplateDocx } from "@/api/handlers/templates/template-fill-service";
@@ -21,6 +16,11 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  buildAiConditionDecider,
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/lib/docx/ai-field-generator";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";

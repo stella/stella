@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { FieldMeta } from "@/api/handlers/docx/types";
+import type { FieldMeta } from "@/api/lib/docx/types";
 
 import { hasDerivedValueSource, hasLiveMarker } from "./save-document";
 

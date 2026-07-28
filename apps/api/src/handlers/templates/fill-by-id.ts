@@ -3,27 +3,7 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
-import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
 import { clauseBodySchema } from "@/api/handlers/clauses/shared-schemas";
-import type { ClauseBody } from "@/api/handlers/clauses/types";
-import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
-import {
-  buildAiConditionDecider,
-  buildAiFieldGenerator,
-  buildAiOccurrenceAdapter,
-} from "@/api/handlers/docx/ai-field-generator";
-import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
-import { documentTextForAiFields } from "@/api/handlers/docx/extract-text";
-import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
-import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
-import { fillTemplate } from "@/api/handlers/docx/patch-template";
-import { buildIsRegistryEnabledForOrg } from "@/api/handlers/docx/registry-org-gate";
-import { resolveAiConditions } from "@/api/handlers/docx/resolve-ai-conditions";
-import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
-import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
-import { readManifest } from "@/api/handlers/docx/template-manifest";
-import { isTemplateData } from "@/api/handlers/docx/types";
-import type { RichPatchValue } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { recordTemplateUse } from "@/api/handlers/templates/record-use";
 import { isTemplateOutputValid } from "@/api/handlers/templates/validate-template-output";
@@ -34,8 +14,28 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
+import type { ClauseBody } from "@/api/lib/clauses/types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
+import {
+  buildAiConditionDecider,
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/lib/docx/ai-field-generator";
+import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
+import { documentTextForAiFields } from "@/api/lib/docx/extract-text";
+import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
+import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
+import { fillTemplate } from "@/api/lib/docx/patch-template";
+import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
+import { resolveAiConditions } from "@/api/lib/docx/resolve-ai-conditions";
+import { resolveAiFields } from "@/api/lib/docx/resolve-ai-fields";
+import { resolveClauseSlots } from "@/api/lib/docx/resolve-clause-slots";
+import { readManifest } from "@/api/lib/docx/template-manifest";
+import { isTemplateData } from "@/api/lib/docx/types";
+import type { RichPatchValue } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";

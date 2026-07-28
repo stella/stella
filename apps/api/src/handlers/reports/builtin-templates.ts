@@ -12,7 +12,7 @@
  * picker read surface and the generation script.
  */
 
-import type { TemplateManifest } from "@/api/handlers/docx/types";
+import type { TemplateManifest } from "@/api/lib/docx/types";
 
 export type BuiltinReportTemplate = {
   key: string;

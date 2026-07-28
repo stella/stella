@@ -9,7 +9,7 @@
  * propose. Composite fields are flattened to one target per part.
  */
 
-import type { ResolvedField } from "@/api/handlers/docx/types";
+import type { ResolvedField } from "@/api/lib/docx/types";
 
 export type PrefillTarget = {
   /** Simple mapped id used in the model conversation (f1, f2, …). */

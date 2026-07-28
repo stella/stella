@@ -2,13 +2,13 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import { extractText } from "@/api/handlers/docx/extract-text";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { extractText } from "@/api/lib/docx/extract-text";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 

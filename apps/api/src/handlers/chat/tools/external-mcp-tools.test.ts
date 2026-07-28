@@ -2,7 +2,6 @@ import { toolDefinition } from "@tanstack/ai";
 import type { ServerTool } from "@tanstack/ai";
 import { describe, expect, mock, test } from "bun:test";
 
-import type { ChatTool } from "@/api/handlers/chat/tools/chat-tool-types";
 import { selectAllowedExternalMcpToolDefinitions } from "@/api/handlers/chat/tools/external-mcp-tool-definitions";
 import {
   createLazyExternalMcpToolsLoader,
@@ -10,6 +9,7 @@ import {
 } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type { LoadedExternalMcpTools } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { normalizeExternalMcpToolsForChat } from "@/api/handlers/chat/tools/external-mcp-tools-normalization";
+import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
 
 const tool = (name: string): ChatTool => ({
   name,

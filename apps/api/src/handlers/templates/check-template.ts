@@ -9,13 +9,13 @@
 import type { NamedCondition } from "@stll/template-conditions";
 import { scanInvalidMarkers } from "@stll/template-conditions";
 
-import type { ClauseSlot } from "@/api/handlers/docx/discover-clause-slots";
-import { manifestNamedConditions } from "@/api/handlers/docx/manifest-conditions";
+import { arrayOrEmpty } from "@/api/lib/array";
+import type { ClauseSlot } from "@/api/lib/docx/discover-clause-slots";
+import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import type {
   DiscoveredTemplate,
   TemplateManifest,
-} from "@/api/handlers/docx/types";
-import { arrayOrEmpty } from "@/api/lib/array";
+} from "@/api/lib/docx/types";
 
 // ── Findings ─────────────────────────────────────────────
 

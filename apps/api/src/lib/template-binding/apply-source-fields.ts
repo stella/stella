@@ -24,7 +24,7 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
-import type { FieldMeta } from "@/api/handlers/docx/types";
+import type { FieldMeta } from "@/api/lib/docx/types";
 
 import type {
   AttorneyRef,

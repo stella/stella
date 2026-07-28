@@ -16,12 +16,11 @@ import {
   agentSkills,
   type AgentSkillOrigin,
 } from "@/api/db/schema";
+import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isMemberRole } from "@/api/lib/member-roles";
-
-import { requireEditableSkillOrigin } from "../skills/origin";
 
 type AvailableChatSkill = SkillMetadata & {
   displayName?: string | undefined;

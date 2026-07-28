@@ -9,7 +9,7 @@ import {
   loadAvailableChatSkill,
   readAvailableChatSkillResource,
   resolveActiveChatSkillContext,
-} from "@/api/handlers/chat/skills";
+} from "@/api/lib/agent-skills/skills";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

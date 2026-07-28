@@ -79,10 +79,6 @@ import {
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
-import {
-  resolveActiveChatSkillContext,
-  type ActiveChatSkillContext,
-} from "@/api/handlers/chat/skills";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
@@ -119,7 +115,10 @@ import type {
 } from "@/api/handlers/chat/types";
 import { createRawChatFilePart } from "@/api/handlers/chat/upload-files";
 import { createFileKey } from "@/api/handlers/files/utils";
-import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
+import {
+  resolveActiveChatSkillContext,
+  type ActiveChatSkillContext,
+} from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -133,6 +132,7 @@ import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { detached } from "@/api/lib/detached";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";

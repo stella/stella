@@ -1,17 +1,17 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import type { LookupOutcome } from "@/api/handlers/docx/lookup-fields";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { LookupOutcome } from "@/api/lib/docx/lookup-fields";
 import {
   createDispatchLookupResolver,
   isPlausibleLookupValue,
   LOOKUP_REGISTRY_NAMES,
   renderLookupOutput,
-} from "@/api/handlers/docx/lookup-fields";
-import { buildIsRegistryEnabledForOrg } from "@/api/handlers/docx/registry-org-gate";
-import { LOOKUP_REGISTRIES } from "@/api/handlers/docx/types";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+} from "@/api/lib/docx/lookup-fields";
+import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
+import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const lookupPreviewBodySchema = t.Object({

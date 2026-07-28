@@ -2,12 +2,12 @@ import { toolDefinition } from "@tanstack/ai";
 import { describe, expect, it } from "bun:test";
 import * as v from "valibot";
 
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   CHAT_TOOL_SCOPE,
   restrictChatToolsToScope,
 } from "@/api/handlers/chat/tools/tool-scope";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 const makeTool = (name: string) =>
   toolDefinition({

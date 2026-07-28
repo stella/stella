@@ -2,18 +2,18 @@ import { Result } from "better-result";
 import { desc, eq, isNull, or } from "drizzle-orm";
 
 import { mcpConnectors } from "@/api/db/schema";
-import {
-  getNativeToolCatalog,
-  isMcpConnectorRecommendedForPractice,
-  isNativeToolEnabledForOrg,
-  mcpConnectorCatalogMetadata,
-} from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { mcpConnectorUrlIdentity } from "@/api/handlers/mcp-connectors/url-normalization";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  getNativeToolCatalog,
+  isMcpConnectorRecommendedForPractice,
+  isNativeToolEnabledForOrg,
+  mcpConnectorCatalogMetadata,
+} from "@/api/lib/mcp-connectors/catalog-metadata";
 
 const config = {
   permissions: { workspace: ["read"] },

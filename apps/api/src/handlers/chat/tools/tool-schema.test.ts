@@ -22,10 +22,6 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import {
-  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
-  type ActiveChatSkillContext,
-} from "@/api/handlers/chat/skills";
 import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
@@ -48,6 +44,11 @@ import {
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import { COMPARE_VERSIONS_TOOL_NAME } from "@/api/handlers/chat/tools/version-compare-tools";
+import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
+import {
+  ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
+  type ActiveChatSkillContext,
+} from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -59,7 +60,6 @@ import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 import { createOrgTools } from "./org-tools";
-import { createSkillTools } from "./skill-tools";
 import { toTanStackToolSchema } from "./tanstack-tool-schema";
 import {
   buildCreatedDocumentToolOutput,

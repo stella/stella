@@ -4,11 +4,6 @@ import { t } from "elysia";
 import * as v from "valibot";
 
 import { entities, extractedContent, workspaces } from "@/api/db/schema";
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-} from "@/api/handlers/docx/template-manifest";
 import {
   buildPrefillTargets,
   mapPrefillResults,
@@ -26,6 +21,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import {
+  mergeManifestWithDiscovery,
+  readManifest,
+} from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";

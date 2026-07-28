@@ -8,7 +8,6 @@ import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
-import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
@@ -16,6 +15,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { enabledRegistryHandlersForOrg } from "@/api/lib/business-registries/dispatch";
 import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
+import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {

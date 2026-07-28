@@ -7,9 +7,9 @@ import {
   createStellaStyleDocumentPreset,
 } from "@stll/folio-core/server";
 
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { readManifest } from "@/api/lib/docx/template-manifest";
 
 // The blank-create handler's only logic on top of the shared
 // `createStoredTemplate` recipe is generating the source buffer from a

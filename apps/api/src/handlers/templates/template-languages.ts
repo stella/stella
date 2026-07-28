@@ -14,7 +14,7 @@ import { Result } from "better-result";
 import { toLanguageCode } from "@stll/locales";
 import type { LanguageCode } from "@stll/locales";
 
-import { extractText } from "@/api/handlers/docx/extract-text";
+import { extractText } from "@/api/lib/docx/extract-text";
 
 export const MAX_TEMPLATE_LANGUAGES = 4;
 

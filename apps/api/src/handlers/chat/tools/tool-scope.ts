@@ -1,8 +1,8 @@
 import { CHAT_TOOL_SCOPE } from "@stll/api-contract";
 
 import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/template-tools";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 /**
  * Named per-message tool scopes. A scoped send (for example the

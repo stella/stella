@@ -6,7 +6,6 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createChatTextPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import {
   createSubagentProposalBuffer,
   SPAWN_SUBAGENTS_TOOL_NAME,
@@ -17,6 +16,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { runSubagent } from "@/api/lib/tanstack-ai-agent";
 import {
   getTanStackTextModelInfoForRole,

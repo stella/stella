@@ -3,19 +3,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { templates, templateVersions } from "@/api/db/schema";
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/handlers/docx/template-manifest";
-import type {
-  DiscoveredField,
-  DiscoveredTemplate,
-  FieldMeta,
-  TemplateManifest,
-} from "@/api/handlers/docx/types";
-import { isTemplateManifest } from "@/api/handlers/docx/types";
 import { buildTemplateVersionS3Key } from "@/api/handlers/templates/storage-keys";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -23,6 +10,19 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import {
+  mergeManifestWithDiscovery,
+  readManifest,
+  writeManifest,
+} from "@/api/lib/docx/template-manifest";
+import type {
+  DiscoveredField,
+  DiscoveredTemplate,
+  FieldMeta,
+  TemplateManifest,
+} from "@/api/lib/docx/types";
+import { isTemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";

@@ -231,7 +231,7 @@ export type EditableField = TemplateEditableField & {
  *  (`required`/`minLength`/`maxLength`/`min`/`max`/`pattern`) are carried
  *  verbatim so manifest validation authored elsewhere (prepare/suggest/import)
  *  round-trips through a Studio save instead of being dropped. Mirrors the
- *  backend `FieldValidation` (apps/api/src/handlers/docx/types.ts). */
+ *  backend `FieldValidation` (apps/api/src/lib/docx/types.ts). */
 export type FieldValidation = {
   required?: boolean | undefined;
   minLength?: number | undefined;
@@ -1053,7 +1053,7 @@ const preferredRegistry = (locale: string): LookupRegistry =>
 
 /** The cross-registry baseline tokens every registry hit exposes, mapped onto
  *  the backend's baseline token names (see `lookupTemplateTokens` in
- *  apps/api/src/handlers/docx/lookup-fields.ts). */
+ *  apps/api/src/lib/docx/lookup-fields.ts). */
 const REGISTRY_BASE_RETURN_FIELDS = [
   "company name",
   "legal form",

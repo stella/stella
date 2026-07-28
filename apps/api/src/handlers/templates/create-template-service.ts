@@ -17,13 +17,6 @@ import { eq, sql } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates, templateVersions } from "@/api/db/schema";
 import type { TemplateKind } from "@/api/db/schema";
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/handlers/docx/template-manifest";
-import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import { buildTemplateS3Key } from "@/api/handlers/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/handlers/templates/template-languages";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -32,6 +25,13 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import {
+  mergeManifestWithDiscovery,
+  readManifest,
+  writeManifest,
+} from "@/api/lib/docx/template-manifest";
+import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";

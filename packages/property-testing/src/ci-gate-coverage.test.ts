@@ -58,7 +58,9 @@ const UNWIRED_TEST_FILES = new Set<string>([
   "packages/business-registries/src/orsr/client.test.ts",
   "packages/business-registries/src/prh/client.test.ts",
   "packages/business-registries/src/recherche-entreprises/client.test.ts",
+  "packages/business-registries/src/sudreg/client.test.ts",
   "packages/business-registries/src/vies/client.test.ts",
+  "packages/business-registries/src/zefix/client.test.ts",
 ]);
 
 const TEST_FILE_GLOB = "{apps,packages}/**/*.test.{ts,tsx}";

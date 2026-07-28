@@ -21,11 +21,11 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type { ClauseBody } from "@/api/lib/clauses/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 import { clauseBodySchema } from "./shared-schemas";
-import type { ClauseBody } from "./types";
 
 const REWRITE_TIMEOUT_MS = 45_000;
 

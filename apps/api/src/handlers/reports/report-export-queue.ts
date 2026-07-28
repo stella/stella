@@ -20,11 +20,6 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
 import type { ReportTemplateRef } from "@/api/db/schema";
-import {
-  buildAiConditionDecider,
-  buildAiFieldGenerator,
-  buildAiOccurrenceAdapter,
-} from "@/api/handlers/docx/ai-field-generator";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { buildReportData } from "@/api/handlers/reports/build-report-data";
@@ -42,6 +37,11 @@ import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import {
+  buildAiConditionDecider,
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/lib/docx/ai-field-generator";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";

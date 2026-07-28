@@ -4,8 +4,8 @@ import { status } from "elysia";
 import { member, user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateVersions } from "@/api/db/schema";
-import { extractText } from "@/api/handlers/docx/extract-text";
 import type { SafeId } from "@/api/lib/branded-types";
+import { extractText } from "@/api/lib/docx/extract-text";
 import {
   createCursorPage,
   decodePaginationCursor,

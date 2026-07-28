@@ -111,8 +111,11 @@ jobs:
         run: >-
           bun test --preload ./src/tests/setup-env.ts
           src/db/root.test.ts
+          src/handlers/case-law/decisions/get-document-state.db.test.ts
           src/handlers/case-law/ingestion/pipeline.db.test.ts
+          src/handlers/case-law/ingestion/pipeline-refresh.db.test.ts
           src/handlers/case-law/ingestion/sk-document-backfill.db.test.ts
+          src/handlers/case-law/ingestion/sk-document-backfill-corpus.db.test.ts
 
   # Upstream-API drift canary for the CJEU adapter. Hits live Cellar SPARQL +
   # EUR-Lex endpoints, so a failure most often means an upstream schema/endpoint

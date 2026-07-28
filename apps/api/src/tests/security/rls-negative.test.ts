@@ -40,9 +40,9 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
-import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ClauseBody } from "@/api/lib/clauses/types";
 import { cents } from "@/api/lib/money";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {

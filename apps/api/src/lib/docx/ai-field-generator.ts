@@ -13,22 +13,22 @@ import { chat, maxIterations } from "@tanstack/ai";
 import type { ModelMessage } from "@tanstack/ai";
 import * as v from "valibot";
 
-import {
-  chatToolMapToArray,
-  type ChatToolMap,
-} from "@/api/handlers/chat/tools/chat-tool-types";
-import type { AiOccurrenceAdapter } from "@/api/handlers/docx/adapt-ai-fields";
-import {
-  maybeSkillTools,
-  SKILL_REF_GENERATOR_GUIDANCE,
-  type SkillToolsContext,
-} from "@/api/handlers/docx/ai-skill-tools";
-import type { AiConditionDecider } from "@/api/handlers/docx/resolve-ai-conditions";
-import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  chatToolMapToArray,
+  type ChatToolMap,
+} from "@/api/lib/chat/chat-tool-types";
+import type { AiOccurrenceAdapter } from "@/api/lib/docx/adapt-ai-fields";
+import {
+  maybeSkillTools,
+  SKILL_REF_GENERATOR_GUIDANCE,
+  type SkillToolsContext,
+} from "@/api/lib/docx/ai-skill-tools";
+import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
+import type { AiFieldGenerator } from "@/api/lib/docx/resolve-ai-fields";
 import {
   abortControllerFromSignal,
   mergeGenerationOptions,

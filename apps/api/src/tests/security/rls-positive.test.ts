@@ -35,8 +35,8 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import type { ClauseBody } from "@/api/handlers/clauses/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ClauseBody } from "@/api/lib/clauses/types";
 import { cents } from "@/api/lib/money";
 import {
   getRlsFixture,

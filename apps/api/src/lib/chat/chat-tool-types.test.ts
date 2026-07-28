@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatTool } from "@/api/handlers/chat/tools/chat-tool-types";
-import { chatToolMapToArray } from "@/api/handlers/chat/tools/chat-tool-types";
+import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
+import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
 
 const tool = (name: string): ChatTool => ({
   name,

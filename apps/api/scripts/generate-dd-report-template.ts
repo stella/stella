@@ -20,8 +20,8 @@
  * block, and AI-drafted `{{execSummary}}` / `{{contracts.summary}}` fields.
  */
 
-import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import { DD_REPORT_MANIFEST } from "@/api/handlers/reports/builtin-templates";
+import { writeManifest } from "@/api/lib/docx/template-manifest";
 
 const escXml = (value: string): string =>
   value

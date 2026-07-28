@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { writeManifest } from "@/api/handlers/docx/template-manifest";
-import type { TemplateManifest } from "@/api/handlers/docx/types";
-import { isFieldMeta } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { writeManifest } from "@/api/lib/docx/template-manifest";
+import type { TemplateManifest } from "@/api/lib/docx/types";
+import { isFieldMeta } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";

@@ -1,7 +1,3 @@
-import type {
-  ChatTool,
-  ChatToolMap,
-} from "@/api/handlers/chat/tools/chat-tool-types";
 import {
   createSubagentProposalBuffer,
   SPAWN_SUBAGENTS_TOOL_NAME,
@@ -13,6 +9,7 @@ import {
   copyChatToolPolicy,
   getChatToolPolicy,
 } from "@/api/handlers/chat/tools/tool-policy";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 // Re-exported for callers that only need the proposal-buffer primitives
 // (`spawn-subagents-tool.ts`, tests); the canonical definitions live in

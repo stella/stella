@@ -6,8 +6,8 @@ import {
   formatDateExample,
   formatIsoDate,
   resolveDateFields,
-} from "@/api/handlers/docx/date-fields";
-import type { FieldMeta } from "@/api/handlers/docx/types";
+} from "@/api/lib/docx/date-fields";
+import type { FieldMeta } from "@/api/lib/docx/types";
 
 const dateField = (
   path: string,

@@ -5,9 +5,6 @@ import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates, templateVersions } from "@/api/db/schema";
-import { writeManifest } from "@/api/handlers/docx/template-manifest";
-import type { TemplateManifest } from "@/api/handlers/docx/types";
-import { isTemplateManifest } from "@/api/handlers/docx/types";
 import { buildTemplateVersionS3Key } from "@/api/handlers/templates/storage-keys";
 import {
   MAX_TEMPLATE_LANGUAGES,
@@ -20,6 +17,9 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { writeManifest } from "@/api/lib/docx/template-manifest";
+import type { TemplateManifest } from "@/api/lib/docx/types";
+import { isTemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";

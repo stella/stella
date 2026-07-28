@@ -1,5 +1,5 @@
 import type { PracticeJurisdiction } from "@/api/db/schema";
-import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
+import { isNativeToolEnabledForOrg } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 export type CatalogueInstallState = "installed" | "available" | "unavailable";
 

@@ -20,7 +20,6 @@ import { load } from "cheerio";
 
 import { FolioDocxReviewer } from "@stll/folio-core/server";
 
-import { extractText as extractDocxText } from "@/api/handlers/docx/extract-text";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
@@ -29,6 +28,7 @@ import {
   parsedEmailToText,
   type EmailAttachment,
 } from "@/api/handlers/files/email-to-html";
+import { extractText as extractDocxText } from "@/api/lib/docx/extract-text";
 import { LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
