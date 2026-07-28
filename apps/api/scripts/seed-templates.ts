@@ -32,10 +32,10 @@ import {
   templates,
   templateVersions,
 } from "@/api/db/schema";
-import type { ClauseBody, ClauseParagraph } from "@/api/handlers/clauses/types";
-import { writeManifest } from "@/api/handlers/docx/template-manifest";
-import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ClauseBody, ClauseParagraph } from "@/api/lib/clauses/types";
+import { writeManifest } from "@/api/lib/docx/template-manifest";
+import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { getS3 } from "@/api/lib/s3";
 
 import { ensureTestUsers } from "./seed-test-user";

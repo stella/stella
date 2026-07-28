@@ -16,17 +16,17 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates, templateVersions } from "@/api/db/schema";
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/handlers/docx/template-manifest";
-import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import {
+  mergeManifestWithDiscovery,
+  readManifest,
+  writeManifest,
+} from "@/api/lib/docx/template-manifest";
+import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 

@@ -14,14 +14,14 @@ import JSZip from "jszip";
 import {
   applyFieldSuggestions,
   type FieldSuggestion,
-} from "@/api/handlers/docx/apply-field-suggestions";
-import { extractText } from "@/api/handlers/docx/extract-text";
+} from "@/api/lib/docx/apply-field-suggestions";
+import { extractText } from "@/api/lib/docx/extract-text";
 import {
   MAIN_DOCUMENT_PART_PATH,
   templateContentPartPaths,
-} from "@/api/handlers/docx/ooxml";
-import { writeManifest } from "@/api/handlers/docx/template-manifest";
-import type { FieldMeta } from "@/api/handlers/docx/types";
+} from "@/api/lib/docx/ooxml";
+import { writeManifest } from "@/api/lib/docx/template-manifest";
+import type { FieldMeta } from "@/api/lib/docx/types";
 
 export type SuggestFields = (
   documentText: string,

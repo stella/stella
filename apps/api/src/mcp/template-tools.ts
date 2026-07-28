@@ -5,13 +5,6 @@ import * as v from "valibot";
 import { roles } from "@stll/permissions";
 
 import { templates } from "@/api/db/schema";
-import {
-  buildAiConditionDecider,
-  buildAiFieldGenerator,
-  buildAiOccurrenceAdapter,
-} from "@/api/handlers/docx/ai-field-generator";
-import type { FieldMeta, FieldPart } from "@/api/handlers/docx/types";
-import { INPUT_TYPES, isFieldMeta } from "@/api/handlers/docx/types";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import { createStoredTemplate } from "@/api/handlers/templates/create-template-service";
 import { recordTemplateFill } from "@/api/handlers/templates/record-use";
@@ -30,6 +23,13 @@ import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import {
+  buildAiConditionDecider,
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/lib/docx/ai-field-generator";
+import type { FieldMeta, FieldPart } from "@/api/lib/docx/types";
+import { INPUT_TYPES, isFieldMeta } from "@/api/lib/docx/types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {

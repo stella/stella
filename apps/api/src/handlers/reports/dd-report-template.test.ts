@@ -7,13 +7,13 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
-import { fillTemplate } from "@/api/handlers/docx/patch-template";
-import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
-import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
-import { isTemplateData } from "@/api/handlers/docx/types";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { buildExportColumns } from "@/api/handlers/views/table-export";
 import { toSafeId } from "@/api/lib/branded-types";
+import { fillTemplate } from "@/api/lib/docx/patch-template";
+import type { AiFieldGenerator } from "@/api/lib/docx/resolve-ai-fields";
+import { resolveAiFields } from "@/api/lib/docx/resolve-ai-fields";
+import { isTemplateData } from "@/api/lib/docx/types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
 import { assembleReportData } from "./build-report-data";

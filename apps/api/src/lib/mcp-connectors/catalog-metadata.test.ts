@@ -6,7 +6,7 @@ import {
   isMcpConnectorRecommendedForPractice,
   isNativeToolEnabledForOrg,
   mcpConnectorCatalogMetadata,
-} from "@/api/handlers/mcp-connectors/catalog-metadata";
+} from "@/api/lib/mcp-connectors/catalog-metadata";
 
 describe("mcpConnectorCatalogMetadata", () => {
   it("does not recommend third-party MCP connectors by name alone", () => {

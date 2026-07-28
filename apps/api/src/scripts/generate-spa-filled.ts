@@ -8,10 +8,10 @@
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { fillTemplate } from "../handlers/docx/patch-template";
+import { fillTemplate } from "../lib/docx/patch-template";
 
 const TEMPLATE = new URL(
-  "../handlers/docx/fixtures/spa-template-with-placeholders.docx",
+  "../lib/docx/fixtures/spa-template-with-placeholders.docx",
   import.meta.url,
 ).pathname;
 

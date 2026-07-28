@@ -1,15 +1,15 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import { manifestNamedConditions } from "@/api/handlers/docx/manifest-conditions";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-} from "@/api/handlers/docx/template-manifest";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
+import {
+  mergeManifestWithDiscovery,
+  readManifest,
+} from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";

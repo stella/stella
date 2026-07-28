@@ -5,8 +5,8 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";
 import type {
   RunSubagentOptions,

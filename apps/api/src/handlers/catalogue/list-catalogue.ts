@@ -18,13 +18,13 @@ import {
   computeCatalogueInstallState,
   type CatalogueInstallState,
 } from "@/api/handlers/catalogue/install-state";
-import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";
+import { NATIVE_TOOL_SLUGS } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 import { resolveCatalogueSkillHandleMaps } from "./skill-handles";

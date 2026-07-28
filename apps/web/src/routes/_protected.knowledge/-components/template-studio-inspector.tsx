@@ -596,7 +596,7 @@ const LOOKUP_PREVIEW_NUMBER_RE = /^[A-Za-z0-9-]{5,20}$/u;
 const normalizeLookupNumber = (value: string): string =>
   value.replaceAll(/\s/gu, "");
 
-/** Mirrors LOOKUP_MARKDOWN_RE in apps/api/src/handlers/docx/lookup-fields.ts
+/** Mirrors LOOKUP_MARKDOWN_RE in apps/api/src/lib/docx/lookup-fields.ts
  *  (the source of truth for the lookup format's inline markdown): `**bold**`
  *  and `*italic*` spans, non-nesting, asterisk-free content, unmatched
  *  asterisks stay literal. */

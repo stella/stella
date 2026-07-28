@@ -8,8 +8,7 @@
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
-
-import { clauseBodyToPlainText } from "./clause-to-patch";
+import { clauseBodyToPlainText } from "@/api/lib/clauses/clause-to-patch";
 
 type ClauseVersionDiffSources =
   | { type: "not-found" }

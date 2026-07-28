@@ -6,12 +6,12 @@
  */
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   clauseBodyToPlainText,
   clauseBodyToRichPatch,
-} from "@/api/handlers/clauses/clause-to-patch";
-import type { ClauseBody } from "@/api/handlers/clauses/types";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/clauses/clause-to-patch";
+import type { ClauseBody } from "@/api/lib/clauses/types";
 import { isVariantDeleted } from "@/api/lib/template-clause-links";
 
 import type { ClauseSlot } from "./discover-clause-slots";

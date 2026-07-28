@@ -57,7 +57,7 @@ void mock.module("@/api/lib/tanstack-ai-models", () => ({
 }));
 
 const { buildAiFieldGenerator, buildAiOccurrenceAdapter } =
-  await import("@/api/handlers/docx/ai-field-generator");
+  await import("@/api/lib/docx/ai-field-generator");
 
 afterAll(() => {
   mock.restore();

@@ -1,4 +1,4 @@
-import type { RichRun, RichPatchValue } from "@/api/handlers/docx/types";
+import type { RichRun, RichPatchValue } from "@/api/lib/docx/types";
 
 import type { ClauseListKind, ClauseParagraph, ClauseBody } from "./types";
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { resolvePath } from "@stll/template-conditions";
 
-import type { FieldMeta, FieldSource } from "@/api/handlers/docx/types";
+import type { FieldMeta, FieldSource } from "@/api/lib/docx/types";
 
 import {
   applySourceFields,

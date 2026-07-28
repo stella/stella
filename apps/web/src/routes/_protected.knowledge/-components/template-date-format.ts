@@ -10,7 +10,7 @@
 
 import { formatDate } from "@stll/template-conditions";
 
-/** Mirrors `DATE_FORMAT_STYLES` from apps/api/src/handlers/docx/types.ts. */
+/** Mirrors `DATE_FORMAT_STYLES` from apps/api/src/lib/docx/types.ts. */
 export const DATE_FORMAT_STYLES = ["long", "medium", "short", "iso"] as const;
 
 export type DateFormatStyle = (typeof DATE_FORMAT_STYLES)[number];

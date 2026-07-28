@@ -8,11 +8,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
-import { resolveClauseSlotBodies } from "@/api/handlers/docx/resolve-clause-slots";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
+import { resolveClauseSlotBodies } from "@/api/lib/docx/resolve-clause-slots";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 

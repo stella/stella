@@ -2,13 +2,13 @@ import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { clauses, clauseVariants, clauseVersions } from "@/api/db/schema";
-import { clauseBodyToPlainText } from "@/api/handlers/clauses/clause-to-patch";
 import type { GradedPosition } from "@/api/handlers/playbooks/position-runtime";
 import type {
   Position,
   ResolvedTiers,
 } from "@/api/handlers/playbooks/positions";
 import type { SafeId } from "@/api/lib/branded-types";
+import { clauseBodyToPlainText } from "@/api/lib/clauses/clause-to-patch";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
 

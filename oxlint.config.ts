@@ -1755,7 +1755,7 @@ export default defineConfig({
       rules: { "no-body-ownership-ids/no-body-ownership-ids": "off" },
     },
     {
-      files: ["apps/api/src/handlers/docx/**/*.ts"],
+      files: ["apps/api/src/lib/docx/**/*.ts"],
       rules: {
         "no-untyped-updates/no-untyped-updates": "off",
         "unicorn/prefer-modern-dom-apis": "off",

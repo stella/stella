@@ -5,10 +5,10 @@ import * as v from "valibot";
 import type { SafeDb } from "@/api/db/safe-db";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toUserFileUrl } from "@/api/handlers/user-files/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 

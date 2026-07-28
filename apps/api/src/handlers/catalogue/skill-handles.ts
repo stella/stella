@@ -1,9 +1,8 @@
 import { Result } from "better-result";
 
 import type { AgentSkillOrigin } from "@/api/db/schema";
+import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";
-
-import { requireEditableSkillOrigin } from "../skills/origin";
 
 type CatalogueSkillHandleRow = {
   enabled: boolean;

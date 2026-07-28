@@ -3,21 +3,6 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
-import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
-import {
-  buildAiConditionDecider,
-  buildAiFieldGenerator,
-  buildAiOccurrenceAdapter,
-} from "@/api/handlers/docx/ai-field-generator";
-import { documentTextForAiFields } from "@/api/handlers/docx/extract-text";
-import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
-import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
-import { fillTemplate } from "@/api/handlers/docx/patch-template";
-import { buildIsRegistryEnabledForOrg } from "@/api/handlers/docx/registry-org-gate";
-import { resolveAiConditions } from "@/api/handlers/docx/resolve-ai-conditions";
-import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
-import { readManifest } from "@/api/handlers/docx/template-manifest";
-import { isTemplateData, type TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { isTemplateOutputValid } from "@/api/handlers/templates/validate-template-output";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -31,6 +16,21 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
+import { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
+import {
+  buildAiConditionDecider,
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/lib/docx/ai-field-generator";
+import { documentTextForAiFields } from "@/api/lib/docx/extract-text";
+import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
+import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
+import { fillTemplate } from "@/api/lib/docx/patch-template";
+import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
+import { resolveAiConditions } from "@/api/lib/docx/resolve-ai-conditions";
+import { resolveAiFields } from "@/api/lib/docx/resolve-ai-fields";
+import { readManifest } from "@/api/lib/docx/template-manifest";
+import { isTemplateData, type TemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";

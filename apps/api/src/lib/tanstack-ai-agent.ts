@@ -13,15 +13,15 @@ import {
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
-import {
-  chatToolMapToArray,
-  type ChatToolMap,
-} from "@/api/handlers/chat/tools/chat-tool-types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  chatToolMapToArray,
+  type ChatToolMap,
+} from "@/api/lib/chat/chat-tool-types";
 import { ChatEmptyCompletionError } from "@/api/lib/errors/tagged-errors";
 import {
   abortControllerFromSignal,

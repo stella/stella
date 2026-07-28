@@ -3,11 +3,6 @@ import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import {
-  buildAiConditionDecider,
-  buildAiFieldGenerator,
-  buildAiOccurrenceAdapter,
-} from "@/api/handlers/docx/ai-field-generator";
 import { recordTemplateFill } from "@/api/handlers/templates/record-use";
 import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
 import {
@@ -19,6 +14,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  buildAiConditionDecider,
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/lib/docx/ai-field-generator";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";

@@ -11,8 +11,6 @@ import {
   getClauseVersionHandler,
   listClausesHandler,
 } from "@/api/handlers/clauses/read";
-import type { ClauseBody, ClauseRun } from "@/api/handlers/clauses/types";
-import { isClauseBody } from "@/api/handlers/clauses/types";
 import { updateClauseHandler } from "@/api/handlers/clauses/update";
 import { materializePlaybookRun } from "@/api/handlers/playbooks/materialize-run";
 import type { Position } from "@/api/handlers/playbooks/positions";
@@ -23,6 +21,8 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ClauseBody, ClauseRun } from "@/api/lib/clauses/types";
+import { isClauseBody } from "@/api/lib/clauses/types";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedClauseCategoryId,

@@ -1,4 +1,4 @@
-import type { BlockDirectiveKind } from "@/api/handlers/docx/types";
+import type { BlockDirectiveKind } from "@/api/lib/docx/types";
 import { isRecord } from "@/api/lib/type-guards";
 
 export type ClauseRun = {

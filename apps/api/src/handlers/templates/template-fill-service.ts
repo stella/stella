@@ -9,41 +9,41 @@
 import { panic } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
-import type { ClauseBody } from "@/api/handlers/clauses/types";
+import { recordTemplateUse } from "@/api/handlers/templates/record-use";
+import type { SafeId } from "@/api/lib/branded-types";
+import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
+import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
   adaptAiFields,
   type AiOccurrenceAdapter,
-} from "@/api/handlers/docx/adapt-ai-fields";
-import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
+} from "@/api/lib/docx/adapt-ai-fields";
+import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
   documentTextForAiFields,
   extractText,
-} from "@/api/handlers/docx/extract-text";
-import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
-import { manifestNamedConditions } from "@/api/handlers/docx/manifest-conditions";
-import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
-import { fillTemplate } from "@/api/handlers/docx/patch-template";
-import { buildIsRegistryEnabledForOrg } from "@/api/handlers/docx/registry-org-gate";
+} from "@/api/lib/docx/extract-text";
+import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
+import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
+import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
+import { fillTemplate } from "@/api/lib/docx/patch-template";
+import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
 import {
   type AiConditionDecider,
   resolveAiConditions,
-} from "@/api/handlers/docx/resolve-ai-conditions";
+} from "@/api/lib/docx/resolve-ai-conditions";
 import {
   type AiFieldGenerator,
   resolveAiFields,
-} from "@/api/handlers/docx/resolve-ai-fields";
-import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
-import { readManifest } from "@/api/handlers/docx/template-manifest";
+} from "@/api/lib/docx/resolve-ai-fields";
+import { resolveClauseSlots } from "@/api/lib/docx/resolve-clause-slots";
+import { readManifest } from "@/api/lib/docx/template-manifest";
 import type {
   FieldDateFormat,
   FieldPart,
   InputType,
-} from "@/api/handlers/docx/types";
-import { isTemplateData } from "@/api/handlers/docx/types";
-import { recordTemplateUse } from "@/api/handlers/templates/record-use";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/docx/types";
+import { isTemplateData } from "@/api/lib/docx/types";
 import { getS3 } from "@/api/lib/s3";
 import { buildBindingContext } from "@/api/lib/template-binding/build-binding-context";
 

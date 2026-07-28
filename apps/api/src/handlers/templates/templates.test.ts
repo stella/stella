@@ -2,19 +2,19 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { discoverTemplate } from "@/api/handlers/docx/discover-template";
-import { extractText } from "@/api/handlers/docx/extract-text";
-import { fillTemplate } from "@/api/handlers/docx/patch-template";
-import {
-  mergeManifestWithDiscovery,
-  readManifest,
-  writeManifest,
-} from "@/api/handlers/docx/template-manifest";
-import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { discoverHandler } from "@/api/handlers/templates/discover";
 import { fillHandler } from "@/api/handlers/templates/fill";
 import { manifestHandler } from "@/api/handlers/templates/manifest";
 import { toSafeId } from "@/api/lib/branded-types";
+import { discoverTemplate } from "@/api/lib/docx/discover-template";
+import { extractText } from "@/api/lib/docx/extract-text";
+import { fillTemplate } from "@/api/lib/docx/patch-template";
+import {
+  mergeManifestWithDiscovery,
+  readManifest,
+  writeManifest,
+} from "@/api/lib/docx/template-manifest";
+import type { TemplateManifest } from "@/api/lib/docx/types";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 // ── Helpers ──────────────────────────────────────────────

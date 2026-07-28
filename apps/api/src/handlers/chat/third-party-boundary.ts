@@ -21,7 +21,6 @@ import {
   getChatAttachmentUrl,
   isChatAttachmentPart,
 } from "@/api/handlers/chat/chat-message-parts";
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import {
   CHAT_TOOL_POLICY_KIND,
   getChatToolPolicy,
@@ -33,6 +32,7 @@ import type {
 import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-blacklist";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";

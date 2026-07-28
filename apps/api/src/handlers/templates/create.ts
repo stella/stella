@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { isFieldMeta } from "@/api/handlers/docx/types";
 import {
   type ClientTemplateManifest,
   type CreatedTemplate,
@@ -20,6 +19,7 @@ import {
   tSafeId,
   withDescription,
 } from "@/api/lib/custom-schema";
+import { isFieldMeta } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";

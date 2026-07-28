@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { readManifest } from "@/api/handlers/docx/template-manifest";
+import { readManifest } from "@/api/lib/docx/template-manifest";
 
 import { prepareTemplateFromDocument } from "./prepare-template";
 

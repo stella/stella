@@ -9,8 +9,6 @@ import {
   type ChatEditApplyMode,
   type DocxEditRepresentation,
 } from "@/api/handlers/chat/chat-schema";
-import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
-import type { ActiveChatSkillContext } from "@/api/handlers/chat/skills";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
@@ -27,10 +25,6 @@ import {
   createChatHistoryTools,
   SEARCH_CHAT_HISTORY_TOOL_NAME,
 } from "@/api/handlers/chat/tools/chat-history-tools";
-import type {
-  ChatToolMap,
-  ChatUIToolsFor,
-} from "@/api/handlers/chat/tools/chat-tool-types";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -64,7 +58,6 @@ import {
   buildChatWriteTools,
   type ChatRegistryWriteToolMap,
 } from "@/api/handlers/chat/tools/registry-write-tools";
-import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
 import {
   createSpawnSubagentsTool,
   SPAWN_SUBAGENTS_TOOL_NAME,
@@ -89,11 +82,18 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
+import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
+import { getChatSkillMetadata } from "@/api/lib/agent-skills/skills";
+import type { ActiveChatSkillContext } from "@/api/lib/agent-skills/skills";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { enabledRegistryHandlersForOrg } from "@/api/lib/business-registries/dispatch";
+import type {
+  ChatToolMap,
+  ChatUIToolsFor,
+} from "@/api/lib/chat/chat-tool-types";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";

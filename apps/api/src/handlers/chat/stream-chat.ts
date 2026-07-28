@@ -55,10 +55,6 @@ import {
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
-import {
-  chatToolMapToArray,
-  type ChatToolMap,
-} from "@/api/handlers/chat/tools/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import type {
@@ -78,6 +74,10 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  chatToolMapToArray,
+  type ChatToolMap,
+} from "@/api/lib/chat/chat-tool-types";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,

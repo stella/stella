@@ -20,7 +20,6 @@ import {
   isChatPart,
   isChatTextPart,
 } from "@/api/handlers/chat/chat-message-parts";
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMention,
@@ -30,6 +29,7 @@ import type {
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";

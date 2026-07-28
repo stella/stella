@@ -5,7 +5,6 @@ import {
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   buildMcpContextFromChat,
@@ -15,6 +14,7 @@ import type { RegistryWriteToolName } from "@/api/handlers/chat/tools/registry-a
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryWriteTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-write-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
+import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,

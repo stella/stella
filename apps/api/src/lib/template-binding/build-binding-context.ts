@@ -21,8 +21,8 @@ import type {
   ContactPersistedMetadata,
   ContactPhone,
 } from "@/api/db/schema-validators";
-import type { FieldMeta } from "@/api/handlers/docx/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { FieldMeta } from "@/api/lib/docx/types";
 import { LIMITS } from "@/api/lib/limits";
 
 import type {

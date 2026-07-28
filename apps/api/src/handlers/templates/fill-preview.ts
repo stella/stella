@@ -2,32 +2,32 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
-import {
-  buildAiConditionDecider,
-  buildAiFieldGenerator,
-  buildAiOccurrenceAdapter,
-} from "@/api/handlers/docx/ai-field-generator";
-import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
-import {
-  documentTextForAiFields,
-  extractText,
-} from "@/api/handlers/docx/extract-text";
-import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
-import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
-import { fillTemplate } from "@/api/handlers/docx/patch-template";
-import { buildIsRegistryEnabledForOrg } from "@/api/handlers/docx/registry-org-gate";
-import { resolveAiConditions } from "@/api/handlers/docx/resolve-ai-conditions";
-import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
-import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
-import { readManifest } from "@/api/handlers/docx/template-manifest";
-import { isTemplateData } from "@/api/handlers/docx/types";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
+import {
+  buildAiConditionDecider,
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/lib/docx/ai-field-generator";
+import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
+import {
+  documentTextForAiFields,
+  extractText,
+} from "@/api/lib/docx/extract-text";
+import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
+import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
+import { fillTemplate } from "@/api/lib/docx/patch-template";
+import { buildIsRegistryEnabledForOrg } from "@/api/lib/docx/registry-org-gate";
+import { resolveAiConditions } from "@/api/lib/docx/resolve-ai-conditions";
+import { resolveAiFields } from "@/api/lib/docx/resolve-ai-fields";
+import { resolveClauseSlots } from "@/api/lib/docx/resolve-clause-slots";
+import { readManifest } from "@/api/lib/docx/template-manifest";
+import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";

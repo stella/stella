@@ -1,7 +1,4 @@
-import type {
-  ChatTool,
-  ChatToolMap,
-} from "@/api/handlers/chat/tools/chat-tool-types";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 export const CHAT_TOOL_POLICY_KIND = {
   external: "external",

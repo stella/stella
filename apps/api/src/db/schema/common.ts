@@ -59,8 +59,6 @@ import type {
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
-import type { ClauseBody } from "@/api/handlers/clauses/types";
-import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type {
   PlaybookDefinitionStatus,
   PlaybookPositions,
@@ -69,6 +67,8 @@ import type {
 import type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import type { ClauseBody } from "@/api/lib/clauses/types";
+import type { TemplateManifest } from "@/api/lib/docx/types";
 import type { CentsAmount } from "@/api/lib/money";
 import { unsafeCents } from "@/api/lib/money";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";

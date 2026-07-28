@@ -9,7 +9,7 @@ import {
   LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH,
   LOOKUP_FORMATS_MAX,
   LOOKUP_REGISTRIES,
-} from "@/api/handlers/docx/types";
+} from "@/api/lib/docx/types";
 import { LIMITS } from "@/api/lib/limits";
 
 /**
@@ -19,7 +19,7 @@ import { LIMITS } from "@/api/lib/limits";
  * and registers these field configs in the authoring session.
  *
  * Validated with Valibot at the API boundary; the constraints mirror
- * `isFieldMeta` in `@/api/handlers/docx/types` (paths and part keys must
+ * `isFieldMeta` in `@/api/lib/docx/types` (paths and part keys must
  * satisfy the marker grammar's `isFieldPath`, `parts` and `format` describe
  * one composite value together).
  */

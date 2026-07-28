@@ -11,11 +11,11 @@
  */
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import type { LookupRegistry } from "@/api/handlers/docx/types";
-import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import type { LookupRegistry } from "@/api/lib/docx/types";
+import { isNativeToolEnabledForOrg } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 /** Synchronous registry-enabled predicate the boundary builds once per request
  *  (the org read is done up front), assignable to the resolver's broader

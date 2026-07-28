@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -16,6 +15,7 @@ import type {
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isNativeToolEnabledForOrg } from "@/api/lib/mcp-connectors/catalog-metadata";
 
 const querySchema = t.Object({
   registry: t.UnionEnum(BUSINESS_REGISTRY_SLUGS, {

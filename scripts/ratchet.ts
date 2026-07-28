@@ -525,6 +525,7 @@ const MODULE_SPECIFIER =
   /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']([^"']+)["']/gu;
 
 const API_HANDLERS_PREFIX = "apps/api/src/handlers/";
+const API_LIB_PREFIX = "apps/api/src/lib/";
 const WEB_ROUTES_PREFIX = "apps/web/src/routes/";
 const WEB_FEATURES_PREFIX = "apps/web/src/features/";
 const WEB_ALIAS_PREFIX = "@/";
@@ -609,6 +610,9 @@ const crossesHandlerDomain: CrossSliceRule = (file, resolved) => {
   }
   return restWithinSlice(resolved, API_HANDLERS_PREFIX, to).length > 0;
 };
+
+const crossesLibToHandler: CrossSliceRule = (file, resolved) =>
+  file.startsWith(API_LIB_PREFIX) && resolved.startsWith(API_HANDLERS_PREFIX);
 
 // `-`-prefixed segments are route-private by TanStack convention; reaching
 // one from outside its TOP-LEVEL route dir (nested dirs like
@@ -921,6 +925,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/api/src/handlers/**/*.ts"],
     exclude: isExcludedSource,
     count: countCrossSliceImports(crossesHandlerDomain),
+  },
+  {
+    id: "lib-to-handler-imports",
+    description:
+      "imports from shared API lib code into handler slices; dependency direction must flow from handlers to lib",
+    include: ["apps/api/src/lib/**/*.ts"],
+    exclude: isExcludedSource,
+    count: countCrossSliceImports(crossesLibToHandler),
   },
   {
     id: "cross-route-private-imports",
@@ -1408,6 +1420,17 @@ const SELF_TEST_CROSS_HANDLER = `${CROSS_HANDLER_FIXTURE_LINES.join("\n")}\n`;
 // don't count.
 const EXPECTED_CROSS_HANDLER = 3;
 
+const LIB_TO_HANDLER_FIXTURE_LINES = [
+  'import { fileKey } from "../../handlers/files/utils";',
+  'import { chat } from "@/api/handlers/chat/send-message";',
+  'import { own } from "./own-helper";',
+  'import { shared } from "@/api/lib/object";',
+  'import { packageValue } from "@stll/shared";',
+  '// import { ignored } from "@/api/handlers/entities/read";',
+];
+const SELF_TEST_LIB_TO_HANDLER = `${LIB_TO_HANDLER_FIXTURE_LINES.join("\n")}\n`;
+const EXPECTED_LIB_TO_HANDLER = 2;
+
 const CROSS_ROUTE_FIXTURE_LINES = [
   'import { w } from "@/routes/_protected.alpha/-components/widget";',
   'import { q } from "../_protected.alpha/-queries";',
@@ -1589,6 +1612,11 @@ const runSelfTest = (): number => {
       root,
       "apps/api/src/handlers/catalogue/uses-skills.ts",
       SELF_TEST_CROSS_HANDLER,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lib/shared/uses-handlers.ts",
+      SELF_TEST_LIB_TO_HANDLER,
     );
     writeFixture(
       root,
@@ -1795,6 +1823,16 @@ const runSelfTest = (): number => {
     if (crossHandlerMetric.count !== EXPECTED_CROSS_HANDLER) {
       failures.push(
         `cross-handler-imports counted ${crossHandlerMetric.count}, expected ${EXPECTED_CROSS_HANDLER}`,
+      );
+    }
+
+    const libToHandlerMetric = requireSnapshot(
+      snapshot,
+      "lib-to-handler-imports",
+    );
+    if (libToHandlerMetric.count !== EXPECTED_LIB_TO_HANDLER) {
+      failures.push(
+        `lib-to-handler-imports counted ${libToHandlerMetric.count}, expected ${EXPECTED_LIB_TO_HANDLER}`,
       );
     }
 

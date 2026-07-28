@@ -19,10 +19,10 @@ import * as v from "valibot";
 
 import { isFieldPath } from "@stll/template-conditions";
 
-import type { FieldSuggestion } from "@/api/handlers/docx/apply-field-suggestions";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { FieldSuggestion } from "@/api/lib/docx/apply-field-suggestions";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const SUGGEST_TIMEOUT_MS = 45_000;

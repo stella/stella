@@ -1,11 +1,8 @@
-import type {
-  ChatTool,
-  ChatToolMap,
-} from "@/api/handlers/chat/tools/chat-tool-types";
 import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
+import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { namespaceMcpToolName } from "@/api/lib/mcp-upstream/namespace";
 import { logger } from "@/api/lib/observability/logger";
 import type { NullUnionStrategy } from "@/api/lib/provider-safe-json-schema";

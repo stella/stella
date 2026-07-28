@@ -11,6 +11,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
   tDefaultVarchar,
   tSafeId,
@@ -22,7 +23,6 @@ import { LIMITS } from "@/api/lib/limits";
 import { normalizeClauseMetadata } from "./metadata";
 import { updateSearchVector } from "./search-vector";
 import { clauseBodySchema } from "./shared-schemas";
-import type { ClauseBody } from "./types";
 
 const createClauseBodySchema = t.Object({
   title: withDescription(
