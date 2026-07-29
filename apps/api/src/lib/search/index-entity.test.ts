@@ -141,7 +141,7 @@ test("does not advance matter activity when a stale projection is rejected", asy
   expect(syncWorkspaceSearchActivityMock).not.toHaveBeenCalled();
 });
 
-test("rolls back the projection when workspace activity cannot sync", async () => {
+test("propagates workspace activity failures from the projection transaction", async () => {
   const activityFailure = new Error("workspace activity unavailable");
   syncWorkspaceSearchActivityMock.mockRejectedValueOnce(activityFailure);
   const { upsertSearchDocument } =

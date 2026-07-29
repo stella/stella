@@ -17,14 +17,21 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - drops only this
--- migration's own index by name before recreating it. A cancelled concurrent
--- build can leave an INVALID index that IF NOT EXISTS would otherwise retain.
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_updated_id_idx";
+-- stella-migration-safety: reviewed destructive-change - retry cleanup targets
+-- only this migration's temporary replacement index. A cancelled concurrent
+-- build can leave an INVALID index that blocks recreation by name.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_updated_id_idx_replacement";
 --> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "case_law_decisions_updated_id_idx"
+CREATE INDEX CONCURRENTLY "case_law_decisions_updated_id_idx_replacement"
   ON "case_law_decisions" ("updated_at" DESC, "id" DESC);
+--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - replace only this
+-- migration's previous index after its successor has finished building.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_updated_id_idx";
+--> statement-breakpoint
+ALTER INDEX "case_law_decisions_updated_id_idx_replacement"
+  RENAME TO "case_law_decisions_updated_id_idx";
 --> statement-breakpoint
 
 SET statement_timeout = '5s';
