@@ -267,18 +267,12 @@ export const resolveExportCitations = (
  */
 export const trustedSourceDocumentsForExport = (
   metadata: Pick<ChatMessageMetadata, "serverProvenance" | "sourceDocuments">,
-) => {
-  const provenance = metadata.serverProvenance;
-  if (provenance === undefined) {
-    return undefined;
-  }
-  switch (provenance.type) {
-    case "search-summary":
-      return metadata.sourceDocuments;
-    default:
-      return provenance satisfies never;
-  }
-};
+) =>
+  // Fail closed: any future provenance kind must opt in here before its
+  // documents can become verified export sources.
+  metadata.serverProvenance?.type === "search-summary"
+    ? metadata.sourceDocuments
+    : undefined;
 
 export const sourceDocumentsToCitations = (
   metadata: Pick<ChatMessageMetadata, "serverProvenance" | "sourceDocuments">,
