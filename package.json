@@ -146,8 +146,7 @@
     "ultracite": "7.9.4",
     "use-intl": "4.13.4",
     "valibot": "1.4.2",
-    "vite": "8.1.5",
-    "zod": "4.4.3"
+    "vite": "8.1.5"
   },
   "catalogs": {
     "react19": {

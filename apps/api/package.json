@@ -104,8 +104,7 @@
     "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0",
     "slimdom": "^4.3.5",
-    "valibot": "catalog:",
-    "zod": "catalog:"
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",

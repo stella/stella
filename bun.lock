@@ -107,7 +107,6 @@
         "quickjs-emscripten-core": "^0.32.0",
         "slimdom": "^4.3.5",
         "valibot": "catalog:",
-        "zod": "catalog:",
       },
       "devDependencies": {
         "@electric-sql/pglite": "^0.5.4",
@@ -340,7 +339,6 @@
         "vite": "catalog:",
         "y-prosemirror": "^1.3.7",
         "yjs": "^13.6.31",
-        "zod": "catalog:",
         "zustand": "^5.0.14",
       },
       "devDependencies": {
@@ -769,7 +767,6 @@
     "use-intl": "4.13.4",
     "valibot": "1.4.2",
     "vite": "8.1.5",
-    "zod": "4.4.3",
   },
   "catalogs": {
     "react19": {
