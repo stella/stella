@@ -75,11 +75,17 @@ const PL_SYGN_PREFIX = String.raw`[Ss]ygn\.\s{0,3}(?::\s{0,3})?(?:[Aa]kt\.?:?\s{
 // ("III A Ua 2389/02" labor-appellate panels, "VI SA/Wa" handled by the
 // dedicated NSA/WSA pattern instead), with a bounded whitespace/slash run
 // (not a single character) between the two division tokens so a double
-// space or a line-wrap still matches ("sygn. akt III  A Ua 2389/02").
-// Group `caseNumber` captures the bare case number to deduplicate against
-// the unprefixed pattern below.
+// space or a line-wrap still matches ("sygn. akt III  A Ua 2389/02"). The
+// gap between the roman numeral and the division code is likewise a
+// bounded run (0-3 characters, not unbounded `\s*`): it must match
+// PL_TK_PATTERN/PL_TK_BARE_PATTERN's phantom-duplicate lookbehind exactly,
+// or a whitespace run this pattern still combines into one citation but
+// the lookbehind no longer recognizes lets the Tribunal symbol at the
+// tail phantom-duplicate as a second, separate citation. Group
+// `caseNumber` captures the bare case number to deduplicate against the
+// unprefixed pattern below.
 const PL_PREFIXED_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s*[A-Za-z]{1,5}(?:[\s/]{1,3}[A-Za-z]{1,5})?\s*\d{1,6}\/\d{2,4})`,
+  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[IVX]{1,6}\s{0,3}[A-Za-z]{1,5}(?:[\s/]{1,3}[A-Za-z]{1,5})?\s*\d{1,6}\/\d{2,4})`,
   "gu",
 );
 
@@ -97,37 +103,48 @@ const PL_THREE_TOKEN_PATTERN =
 // competence dispute), "SK" (constitutional complaint), "P" (legal
 // question), "U" (competence dispute), "Tw" (citizens' petition), "Pp",
 // "Ts" (preliminary examination). Symbols may carry a trailing dot ("K.
-// 23/98"). Longer symbols are listed first in the alternation so
-// "Kp"/"Kpt"/"SK"/"Ts" are never shadowed by the bare "K". Multi- and
-// single-letter symbols alike are cited fully bare in running prose, with
-// no "sygn." anywhere nearby, so the "sygn." anchor is optional; the
-// negative lookbehind (unbounded roman run, bounded 1-3 whitespace run so
-// a double space between the roman numeral and the symbol -- "II  SK
-// 12/20" -- still trips the guard) stops a single-letter symbol from
-// phantom-duplicating the tail of an ordinary Roman-numeral-prefixed
+// 23/98"), separated from the docket by a bounded whitespace run (0-3
+// characters, not unbounded `\s*`) so an OCR whitespace run is rejected
+// rather than preserved verbatim in the stored citation text. Longer
+// symbols are listed first in the alternation so "Kp"/"Kpt"/"SK"/"Ts" are
+// never shadowed by the bare "K". Multi- and single-letter symbols alike
+// are cited fully bare in running prose, with no "sygn." anywhere nearby,
+// so the "sygn." anchor is optional; the negative lookbehind (unbounded
+// roman run, bounded 1-3 whitespace run) stops a single-letter symbol
+// from phantom-duplicating the tail of an ordinary Roman-numeral-prefixed
 // citation immediately before it ("sygn. akt II K 796/13" is one citation,
-// not also a bare "K 796/13").
+// not also a bare "K 796/13"), including after a double space ("II  SK
+// 12/20"). The lookbehind's 1-3 bound (not 0-3: an unanchored 0-width
+// option here trips scslre's superlinear-suffix-matching check) still
+// closes the gap with PL_PREFIXED_PATTERN and the bare Polish pattern,
+// both themselves bounded to reject a four-or-more-space roman-to-symbol
+// gap as one ambient citation -- a gap too wide for either matcher to
+// combine never reaches this guard as an ambient citation to
+// phantom-duplicate in the first place, and the roman-numeral-glued case
+// this guard need not cover at zero spacing never satisfies the leading
+// `\b` on the symbol capture below anyway.
 // Single-letter symbols (K, P, U) require the "sygn." anchor: bare they
 // collide with ordinary prose and district-court registries (an
 // SAOS-quantified precision trade-off). Multi-letter symbols are
 // distinctive enough to match bare, still guarded against
 // phantom-duplicating a Roman-numeral-prefixed citation's tail.
 const PL_TK_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<!\b[IVX]+\s{1,3})\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp|K|P|U)\.?\s*\d{1,4}\/\d{2,4})(?!\d)`,
+  String.raw`${PL_SYGN_PREFIX}(?<!\b[IVX]+\s{1,3})\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp|K|P|U)\.?\s{0,3}\d{1,4}\/\d{2,4})(?!\d)`,
   "gu",
 );
 
 const PL_TK_BARE_PATTERN =
-  /(?<!\b[IVX]+\s{1,3})\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp)\.?\s*\d{1,4}\/\d{2,4})(?!\d)/gu;
+  /(?<!\b[IVX]+\s{1,3})\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp)\.?\s{0,3}\d{1,4}\/\d{2,4})(?!\d)/gu;
 
 // Polish bare-symbol pattern: other tribunals and disciplinary registries
 // cite by a 1-3 letter symbol with no Roman-numeral chamber at all --
 // "sygn. T. 20/97", "sygn. SNO 45/06" (Sąd Najwyższy disciplinary
-// chamber). Anchored on the "sygn." (optionally "akt") prefix, unlike
-// PL_TK_PATTERN, since these symbols are not on the closed Tribunal list
-// and would otherwise be too collision-prone to match bare.
+// chamber), separated from the docket by the same bounded whitespace run
+// as PL_TK_PATTERN. Anchored on the "sygn." (optionally "akt") prefix,
+// unlike PL_TK_PATTERN, since these symbols are not on the closed
+// Tribunal list and would otherwise be too collision-prone to match bare.
 const PL_BARE_SYMBOL_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[A-Z]{1,3}\.?\s*\d{1,4}\/\d{2,4})(?!\d)`,
+  String.raw`${PL_SYGN_PREFIX}(?<caseNumber>[A-Z]{1,3}\.?\s{0,3}\d{1,4}\/\d{2,4})(?!\d)`,
   "gu",
 );
 
@@ -299,8 +316,15 @@ const CITATION_PATTERNS: RegExp[] = [
   // KK, CSKP) or an uppercase code with an appellate suffix (ACa, ACz,
   // AKa); requiring that shape (and requiring a space before a
   // multi-purpose single letter) stops ordinary mixed-case prose like
-  // "Article XV See 12/20" from being captured as a phantom citation.
-  /\b[IVX]{1,4}(?:\s+(?:[A-Z]{2,5}|[A-Z]{1,4}[az])|[A-Z])\s+\d{1,6}\/\d{2,4}\b/gu,
+  // "Article XV See 12/20" from being captured as a phantom citation. The
+  // gap before a multi-letter division is bounded (1-3 characters, not
+  // unbounded `\s+`), matching PL_TK_PATTERN/PL_TK_BARE_PATTERN's
+  // phantom-duplicate lookbehind exactly: this bare (no "sygn.") form
+  // combines a Tribunal-symbol-shaped division ("II SK 12/20") into one
+  // citation the same way the prefixed pattern does, so it must stop
+  // combining beyond the same gap the lookbehind can still recognize, or
+  // the symbol at the tail phantom-duplicates as a second citation.
+  /\b[IVX]{1,4}(?:\s{1,3}(?:[A-Z]{2,5}|[A-Z]{1,4}[az])|[A-Z])\s+\d{1,6}\/\d{2,4}\b/gu,
 ];
 
 /**

@@ -1629,6 +1629,19 @@ describe("extractCitations", () => {
     expect(extractCitations([{ index: 0, text }])).toHaveLength(1);
   });
 
+  test("does not phantom-duplicate a bare TK citation after a four-space gap", () => {
+    // The phantom-duplicate lookbehind's whitespace run must match
+    // exactly what the combining patterns (PL_PREFIXED_PATTERN and the
+    // bare Polish pattern) themselves accept between the roman numeral
+    // and the division code. Before this bound was mirrored, a four-space
+    // gap still combined into one ambient citation via the unbounded
+    // matcher, but the guard (capped at three) could no longer recognize
+    // the roman numeral immediately before the symbol, so the Tribunal
+    // symbol at the tail phantom-duplicated as a second citation.
+    const text = "sygn. akt II    SK 12/20";
+    expect(extractCitations([{ index: 0, text }])).toHaveLength(1);
+  });
+
   test("extracts a bare Polish Constitutional Tribunal citation list", () => {
     // Verbatim from a Trybunał Konstytucyjny opinion citing its own prior
     // case law as a bare comma-separated run, with no "sygn." anywhere
@@ -1662,6 +1675,15 @@ describe("extractCitations", () => {
     // unrealistically long run simply fails to match rather than being
     // captured with the whitespace baked in.
     const text = "orzeczenie sygn.     K 20/03 Trybunału Konstytucyjnego";
+    expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
+  });
+
+  test("does not capture a Tribunal citation across an over-long whitespace run before the docket", () => {
+    // The whitespace between a Tribunal symbol and its own docket is
+    // bounded the same way; an unrealistically long run between "SK" and
+    // the docket digits fails to match rather than being captured with
+    // the whitespace baked into citationText.
+    const text = "sygn. SK     12/20";
     expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
   });
 
