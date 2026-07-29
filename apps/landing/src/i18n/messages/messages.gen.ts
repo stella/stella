@@ -875,8 +875,8 @@ type Messages = {
     "exploreTabularReview": "Explore Tabular Review";
     "exploreTemplates": "Explore Templates";
     "exploreWorkspace": "Explore Workspace";
-    "eyebrow": "One connected workspace";
-    "intro": "A matter moves through the same connected system: from source material, through review and drafting, to a grounded answer or action.";
+    "eyebrow": "A connected workspace";
+    "intro": "Source material, review, and finalized documents stay in the matter and build on each other. You and the AI work on the same matter, and every answer points to the exact passage in its source.";
     "openEditor": "Open Editor";
     "proofByokBody": "Use your own provider keys for AI features.";
     "proofByokTitle": "Bring your own models";

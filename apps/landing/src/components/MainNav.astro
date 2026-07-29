@@ -330,6 +330,20 @@ const compactMenus = [
               dd.removeAttribute("open");
             }, 180);
           });
+          // On hover-capable devices the menu is already open when the
+          // pointer reaches the summary, so the natural follow-up click
+          // would toggle it closed the instant before the user tries to
+          // pick an item. Swallow that close; hover-out, Escape, and
+          // outside clicks still dismiss, and touch keeps the toggle.
+          const summary = dd.querySelector("summary");
+          summary?.addEventListener("click", (event) => {
+            if (
+              dd.open &&
+              window.matchMedia("(hover: hover) and (pointer: fine)").matches
+            ) {
+              event.preventDefault();
+            }
+          });
         }
 
         const triggers = dd.querySelectorAll("[data-mega-trigger]");
