@@ -161,11 +161,12 @@ const unsafeComposedPrivateRead = (() => {
   return sql`SELECT * ${privateFrom}`;
 })();
 
-const privateFrom = () => sql`FROM search_documents sd`;
+const privateFromHelper = () => sql`FROM search_documents sd`;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a local zero-argument helper cannot hide a private projection
-const unsafeLocalHelperPrivateRead = sql`SELECT * ${privateFrom()}`;
+const unsafeLocalHelperPrivateRead = sql`SELECT * ${privateFromHelper()}`;
 
+// oxlint-disable-next-line arrow-body-style -- block body exercises block-return helper analysis
 const privateFromBlock = () => {
   return sql`FROM search_documents sd`;
 };
@@ -526,6 +527,7 @@ const scopedPrivateFrom = () =>
   sql`FROM search_documents sd WHERE true ${entityWorkspaceFilter}`;
 const scopedLocalHelperPrivateRead = sql`SELECT * ${scopedPrivateFrom()}`;
 
+// oxlint-disable-next-line arrow-body-style -- block body exercises block-return helper analysis
 const scopedPrivateFromBlock = () => {
   return sql`FROM search_documents sd`;
 };
