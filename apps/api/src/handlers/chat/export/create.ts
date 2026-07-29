@@ -54,6 +54,9 @@ const CHAT_EXPORT_URL_TTL_SECONDS = 300;
 const CHAT_EXPORT_MAX_SOURCE_DOCUMENTS = 50;
 
 const config = {
+  description:
+    "Export one assistant chat message as a DOCX document with the selected " +
+    "citation style. Returns a short-lived download URL.",
   permissions: { chat: ["create"] },
   access: "write",
   mcp: { type: "capability", reason: "assistant_chat" },
