@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 
 import { renderManifest } from "../scripts/render-manifest";
 import {
@@ -10,11 +10,11 @@ import {
 } from "../scripts/validate-manifest";
 
 const validateXml = (xml: string): void => {
-  const dir = mkdtempSync(join(tmpdir(), "stella-manifest-"));
-  const path = join(dir, "manifest.xml");
-  writeFileSync(path, xml);
+  const dir = mkdtempSync(path.join(tmpdir(), "stella-manifest-"));
+  const manifestPath = path.join(dir, "manifest.xml");
+  writeFileSync(manifestPath, xml);
   try {
-    validateManifestFile(path);
+    validateManifestFile(manifestPath);
   } finally {
     rmSync(dir, { force: true, recursive: true });
   }

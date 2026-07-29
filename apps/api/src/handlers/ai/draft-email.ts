@@ -1,14 +1,13 @@
-import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const INTENT_MAX_CHARS = 2000;
 const ORIGINAL_SUBJECT_MAX_CHARS = 500;
@@ -30,6 +29,8 @@ const draftEmailBodySchema = t.Object({
 
 const config = {
   permissions: { chat: ["create"] },
+  mcp: { type: "internal", reason: "native_tool_ui" },
+  access: "write",
   body: draftEmailBodySchema,
   // User-clicked from the Outlook add-in and latency-sensitive, so it
   // runs on the standard tier rather than the discounted flex queue.
@@ -92,6 +93,7 @@ const buildUserMessage = ({
 
 const draftEmail = createSafeRootHandler(
   config,
+  // eslint-disable-next-line require-yield -- createSafeRootHandler requires an AsyncGenerator; this handler has no safeDb Result to yield.
   async function* ({
     body,
     orgAIConfig,
@@ -101,9 +103,7 @@ const draftEmail = createSafeRootHandler(
     safeDb,
     user,
   }) {
-    yield* requireAIAvailable(orgAIConfig);
-
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -121,19 +121,23 @@ const draftEmail = createSafeRootHandler(
 
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateText({
+        await generateTanStackObjectForRole({
           abortSignal: AbortSignal.any([
             request.signal,
             AbortSignal.timeout(DRAFT_TIMEOUT_MS),
           ]),
-          maxOutputTokens: DRAFT_MAX_OUTPUT_TOKENS,
-          model: getModelForRole("chat", orgAIConfig, {
+          analytics: aiAnalytics,
+          caching: resolveCaching({
             promptCachingEnabled,
+            role: "chat",
             scopeKey: null,
-            organizationId: session.activeOrganizationId,
-            serviceTier: "standard",
           }),
-          output: Output.object({ schema: strictOutputSchema(draftSchema) }),
+          maxOutputTokens: DRAFT_MAX_OUTPUT_TOKENS,
+          organizationId: session.activeOrganizationId,
+          orgAIConfig,
+          outputSchema: draftSchema,
+          role: "chat",
+          serviceTier: "standard",
           system: SYSTEM_PROMPT,
           messages: [
             {
@@ -147,7 +151,6 @@ const draftEmail = createSafeRootHandler(
               }),
             },
           ],
-          ...aiAnalytics.stepCallbacks,
         }),
       catch: (cause) => {
         aiAnalytics.captureError(cause);
@@ -162,7 +165,7 @@ const draftEmail = createSafeRootHandler(
       return Result.err(generation.error);
     }
 
-    return Result.ok({ draft: generation.value.output.draft.trim() });
+    return Result.ok({ draft: generation.value.draft.trim() });
   },
 );
 

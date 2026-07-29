@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
-const APP_ROOT = resolve(import.meta.dirname, "..");
-const TEMPLATE_PATH = resolve(APP_ROOT, "manifest.template.xml");
+const APP_ROOT = path.resolve(import.meta.dirname, "..");
+const TEMPLATE_PATH = path.resolve(APP_ROOT, "manifest.template.xml");
 
 export type ManifestEnv = "dev" | "prod";
 
@@ -72,7 +72,7 @@ export const renderManifest = (env: ManifestEnv): string => {
   const placeholders = resolvePlaceholders(env);
   let output = template;
   for (const [key, value] of Object.entries(placeholders)) {
-    output = output.replaceAll(`{{${key}}}`, value);
+    output = output.replaceAll(`{{${key}}}`, () => value);
   }
   const unresolved = UNRESOLVED_PATTERN.exec(output);
   if (unresolved) {

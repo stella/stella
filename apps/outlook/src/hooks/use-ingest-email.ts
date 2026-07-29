@@ -34,10 +34,11 @@ export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
   const save = async ({ attachments, snapshot, workspaceId }: IngestArgs) => {
     setState({ type: "saving" });
     const result = await Result.tryPromise(async () => {
-      const downloaded: AttachmentDownloadResult[] = [];
-      for (const attachment of attachments) {
-        downloaded.push(await downloadAttachment(attachment));
-      }
+      const downloaded: AttachmentDownloadResult[] = await Promise.all(
+        attachments.map(
+          async (attachment) => await downloadAttachment(attachment),
+        ),
+      );
       return await ingestEmailToMatter({
         attachments: downloaded,
         snapshot,

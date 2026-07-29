@@ -1,12 +1,12 @@
 import { panic } from "better-result";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
-const APP_ROOT = resolve(import.meta.dirname, "..");
-const CERT_DIR = resolve(APP_ROOT, ".certs");
-const CONFIG_PATH = resolve(CERT_DIR, "localhost-openssl.cnf");
-const CERT_PATH = resolve(CERT_DIR, "localhost-cert.pem");
-const KEY_PATH = resolve(CERT_DIR, "localhost-key.pem");
+const APP_ROOT = path.resolve(import.meta.dirname, "..");
+const CERT_DIR = path.resolve(APP_ROOT, ".certs");
+const CONFIG_PATH = path.resolve(CERT_DIR, "localhost-openssl.cnf");
+const CERT_PATH = path.resolve(CERT_DIR, "localhost-cert.pem");
+const KEY_PATH = path.resolve(CERT_DIR, "localhost-key.pem");
 
 const OPENSSL_CONFIG = `
 [req]

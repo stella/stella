@@ -1,4 +1,4 @@
-import { OutlookError } from "@/lib/errors";
+import { OutlookError } from "@/lib/outlook-error";
 import type {
   AttachmentDownloadResult,
   MailAddress,

@@ -5,7 +5,6 @@ import { panic } from "better-result";
 
 import { App } from "@/app";
 import { OutlookIntlProvider } from "@/i18n";
-import { initAuth } from "@/lib/auth";
 import { waitForOffice } from "@/outlook";
 
 const rootElement = document.querySelector("#root");
@@ -15,7 +14,6 @@ if (!rootElement) {
 }
 
 const render = () => {
-  initAuth();
   createRoot(rootElement).render(
     <StrictMode>
       <OutlookIntlProvider>

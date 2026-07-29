@@ -25,7 +25,6 @@ type ActionPanelProps = {
   draftIntent: string;
   draftPlacement: DraftPlacement | null;
   draftState: AIDraftState;
-  onCheckDraft: () => void;
   onDraftChange: (value: string) => void;
   onDraftReply: () => void;
   onIntentChange: (value: string) => void;
@@ -41,7 +40,6 @@ export const ActionPanel = ({
   draftIntent,
   draftPlacement,
   draftState,
-  onCheckDraft,
   onDraftChange,
   onDraftReply,
   onIntentChange,
@@ -69,7 +67,7 @@ export const ActionPanel = ({
 
     <Separator />
 
-    <CheckSection checks={checks} onCheckDraft={onCheckDraft} t={t} />
+    <CheckSection checks={checks} t={t} />
   </Panel>
 );
 
@@ -197,21 +195,13 @@ const DraftSection = ({
 
 const CheckSection = ({
   checks,
-  onCheckDraft,
   t,
 }: {
   checks: DraftCheck[];
-  onCheckDraft: () => void;
   t: Translate;
 }) => (
   <div className="grid gap-2">
-    <div className="flex items-center justify-between gap-2">
-      <PanelTitle icon={<ShieldCheckIcon />} title={t("checked")} />
-      <Button onClick={onCheckDraft} size="sm" variant="outline">
-        <ShieldCheckIcon />
-        {t("checkDraft")}
-      </Button>
-    </div>
+    <PanelTitle icon={<ShieldCheckIcon />} title={t("checked")} />
     <div className="grid gap-2">
       {checks.map((check) => (
         <CheckRow check={check} key={`${check.type}-${check.title}`} />

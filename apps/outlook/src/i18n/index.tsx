@@ -1,113 +1,65 @@
 import type { PropsWithChildren } from "react";
-import { useEffect, useState } from "react";
 
 import { IntlProvider } from "use-intl";
 import { createTranslator } from "use-intl/core";
 
-import {
-  en,
-  type LocaleMessages,
-  messageLoaders,
-  type SupportedLanguage,
-  supportedLanguages,
-} from "@stll/i18n";
+const OUTLOOK_LOCALE = "en";
+const messages = {
+  outlook: {
+    aiUnavailable: "AI is unavailable right now",
+    attachmentSelection: "Attachments",
+    attachmentsSaved: "{count} attachment(s) saved.",
+    attachmentsSkipped: "Some attachments were skipped",
+    browserMode: "Browser preview",
+    checkDraft: "Check draft",
+    checked: "Checked",
+    chooseMatter: "Choose matter",
+    composeMode: "Compose mode",
+    copiedToClipboard: "Copied to clipboard.",
+    copyOrInsertDraft: "Insert or copy draft",
+    draftIntentPlaceholder:
+      "e.g. Acknowledge receipt and say we will review by Friday.",
+    draftReply: "Draft reply",
+    handoffDescription: "Sign in to continue using stella in Outlook.",
+    handoffMissingDialog: "Open this page from the stella Outlook task pane.",
+    handoffSignInCta: "Sign in with Microsoft",
+    handoffSuccess: "Signed in. You can close this window.",
+    handoffTitle: "Sign in to stella",
+    insertedIntoDraft: "Inserted into draft.",
+    loadError: "Could not load the Outlook item.",
+    loading: "Loading email",
+    matterLoadError: "Could not load matters",
+    matterSearch: "Search matters",
+    noAttachments: "No ordinary attachments detected.",
+    noBody: "No body text available.",
+    noMatterResults: "No matters matched.",
+    openStella: "Open stella",
+    openedReplyDraft: "Opened a reply draft.",
+    readMode: "Read mode",
+    refresh: "Refresh",
+    saveButtonLabel: "Save to matter: {matterName}",
+    saveEmail: "Save to matter",
+    saveErrorFallback: "Could not save email",
+    saveFailed: "Save failed",
+    saveSuccess: "Saved to matter",
+    saving: "Saving...",
+    signInHint: "Sign in to stella in the browser, then return to Outlook.",
+    stellaForOutlook: "stella for Outlook",
+    subjectFallback: "(No subject)",
+    suggested: "Suggested",
+    summarize: "Summarize",
+    summarizing: "Summarizing email",
+    summary: "Summary",
+  },
+} as const;
 
-const supportedSet: ReadonlySet<string> = new Set(supportedLanguages);
-
-const isSupportedLanguage = (value: string): value is SupportedLanguage =>
-  supportedSet.has(value);
-
-const resolveSupportedLanguage = (
-  candidate: string,
-): SupportedLanguage | null => {
-  const normalized = candidate.replace("_", "-");
-  if (isSupportedLanguage(normalized)) {
-    return normalized;
-  }
-
-  const prefix = normalized.split("-").at(0);
-  if (prefix && isSupportedLanguage(prefix)) {
-    return prefix;
-  }
-
-  if (prefix === "pt") {
-    return "pt-BR";
-  }
-
-  return null;
-};
-
-// Outlook's own UI language is the strongest signal for an add-in; fall
-// back to the browser locales when the host does not expose it.
-const readOfficeDisplayLanguage = (): string | null => {
-  const office: unknown = Reflect.get(globalThis, "Office");
-  if (typeof office !== "object" || office === null || !("context" in office)) {
-    return null;
-  }
-  const { context } = office;
-  if (
-    typeof context !== "object" ||
-    context === null ||
-    !("displayLanguage" in context)
-  ) {
-    return null;
-  }
-  return typeof context.displayLanguage === "string"
-    ? context.displayLanguage
-    : null;
-};
-
-const detectLanguage = (): SupportedLanguage => {
-  const candidates: string[] = [];
-  const officeLanguage = readOfficeDisplayLanguage();
-  if (officeLanguage) {
-    candidates.push(officeLanguage);
-  }
-  if (typeof navigator !== "undefined" && "languages" in navigator) {
-    candidates.push(...navigator.languages);
-  }
-
-  for (const candidate of candidates) {
-    const language = resolveSupportedLanguage(candidate);
-    if (language) {
-      return language;
-    }
-  }
-
-  return "en";
-};
-
-const detectedLanguage = detectLanguage();
-
-// Non-React surfaces (e.g. command handlers) translate through this
-// instance. It stays on the bundled English catalog; only the task
-// pane swaps in the detected locale's messages once they load.
 export const translator = createTranslator({
-  locale: detectedLanguage,
-  messages: en,
+  locale: OUTLOOK_LOCALE,
+  messages,
 });
 
-export const OutlookIntlProvider = ({ children }: PropsWithChildren) => {
-  const [messages, setMessages] = useState<LocaleMessages>(en);
-
-  useEffect(() => {
-    if (detectedLanguage === "en") {
-      return;
-    }
-
-    void (async () => {
-      const loaded = await messageLoaders[detectedLanguage]();
-      setMessages(loaded);
-    })();
-  }, []);
-
-  return (
-    <IntlProvider
-      locale={detectedLanguage}
-      messages={messages}
-      timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
-    >
-      {children}
-    </IntlProvider>
-  );
-};
+export const OutlookIntlProvider = ({ children }: PropsWithChildren) => (
+  <IntlProvider locale={OUTLOOK_LOCALE} messages={messages}>
+    {children}
+  </IntlProvider>
+);

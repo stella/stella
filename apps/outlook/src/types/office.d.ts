@@ -125,14 +125,10 @@ declare namespace Office {
       options: DisplayDialogOptions,
       callback: AsyncCallback<Dialog>,
     ): void;
-    messageParent?: (message: string) => void;
-  };
-
-  type RoamingSettings = {
-    get(name: string): unknown;
-    remove(name: string): void;
-    saveAsync(callback: AsyncCallback<undefined>): void;
-    set(name: string, value: unknown): void;
+    messageParent?: (
+      message: string,
+      options: { targetOrigin: string },
+    ) => void;
   };
 
   const context: {
@@ -141,7 +137,6 @@ declare namespace Office {
       platform?: string;
     };
     mailbox: Mailbox;
-    roamingSettings?: RoamingSettings;
     ui: DialogUi;
   };
 

@@ -12,13 +12,12 @@
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/outlook",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/outlook",
     "test": "bun test src",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
     "@elysiajs/eden": "^1.4.9",
     "@stll/api": "workspace:*",
-    "@stll/i18n": "workspace:*",
     "@stll/ui": "workspace:*",
     "better-result": "catalog:",
     "class-variance-authority": "^0.7.1",
@@ -37,7 +36,6 @@
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "libxml2-wasm": "^0.7.1",
-    "tailwindcss": "catalog:",
-    "typescript": "catalog:"
+    "tailwindcss": "catalog:"
   }
 }
