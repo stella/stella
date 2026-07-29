@@ -16,6 +16,37 @@ export type SearchFilters = {
   time?: TimeFilter;
 };
 
+type ResolveActiveSearchTypesParams = {
+  availableTypes: readonly GlobalSearchResultType[];
+  kinds: readonly EntityKind[];
+  selectedTypes: readonly GlobalSearchResultType[];
+};
+
+export const resolveActiveSearchTypes = ({
+  availableTypes,
+  kinds,
+  selectedTypes,
+}: ResolveActiveSearchTypesParams): GlobalSearchResultType[] => {
+  if (selectedTypes.length > 0) {
+    return [...selectedTypes];
+  }
+  if (kinds.length > 0) {
+    return [...kinds];
+  }
+  return [...availableTypes];
+};
+
+type CanShowSearchSummaryParams = {
+  canSummarizeSearch: boolean;
+  query: string;
+};
+
+export const canShowSearchSummary = ({
+  canSummarizeSearch,
+  query,
+}: CanShowSearchSummaryParams): boolean =>
+  canSummarizeSearch && query.trim().length > 0;
+
 export const resolveUpdatedFrom = (
   time: TimeFilter | undefined,
 ): string | undefined => {

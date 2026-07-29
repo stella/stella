@@ -3,7 +3,9 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as search from "@/lib/search";
 
 import {
+  canShowSearchSummary,
   clearTime,
+  resolveActiveSearchTypes,
   resolveUpdatedFrom,
   resolveUpdatedTo,
   setCustomTime,
@@ -21,6 +23,61 @@ const baseFilters = (
   editedByUserIds: [],
   mimeTypes: [],
   ...overrides,
+});
+
+describe("active search types", () => {
+  test("uses saved kinds when no explicit result types are selected", () => {
+    expect(
+      resolveActiveSearchTypes({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: ["document"],
+        selectedTypes: [],
+      }),
+    ).toEqual(["document"]);
+  });
+
+  test("prefers explicit result types over saved kinds", () => {
+    expect(
+      resolveActiveSearchTypes({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: ["document"],
+        selectedTypes: ["contact"],
+      }),
+    ).toEqual(["contact"]);
+  });
+
+  test("falls back to every available type only without a type or kind filter", () => {
+    expect(
+      resolveActiveSearchTypes({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: [],
+        selectedTypes: [],
+      }),
+    ).toEqual(["matter", "contact", "document"]);
+  });
+});
+
+describe("search summary visibility", () => {
+  test("requires both permission and a nonempty query", () => {
+    expect(
+      canShowSearchSummary({
+        canSummarizeSearch: true,
+        query: "agreement",
+      }),
+    ).toBe(true);
+    expect(
+      canShowSearchSummary({
+        canSummarizeSearch: true,
+        query: "   ",
+      }),
+    ).toBe(false);
+    expect(
+      canShowSearchSummary({
+        canSummarizeSearch: false,
+        query: "agreement",
+      }),
+    ).toBe(false);
+  });
 });
 
 afterEach(() => {

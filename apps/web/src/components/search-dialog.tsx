@@ -50,7 +50,9 @@ import {
 } from "@/components/saved-searches.logic";
 import { getChatHitRoute } from "@/components/search-dialog.logic";
 import {
+  canShowSearchSummary,
   clearTime,
+  resolveActiveSearchTypes,
   resolveUpdatedFrom,
   resolveUpdatedTo,
   setCustomTime,
@@ -324,12 +326,13 @@ export const SearchDialog = ({
       isSearchKindOption(type) &&
       isAvailableSearchKind(type, publicLawPreviewEnabled),
   );
-  const activeSearchTypes =
-    selectedSearchTypes.length > 0
-      ? selectedSearchTypes
-      : SEARCH_KIND_TYPES.filter((type) =>
-          isAvailableSearchKind(type, publicLawPreviewEnabled),
-        );
+  const activeSearchTypes = resolveActiveSearchTypes({
+    availableTypes: SEARCH_KIND_TYPES.filter((type) =>
+      isAvailableSearchKind(type, publicLawPreviewEnabled),
+    ),
+    kinds: filters.kinds,
+    selectedTypes: selectedSearchTypes,
+  });
   const hasQuery = searchQuery.trim().length > 0;
   const hasActiveSearch = hasSearchQueryOrSelectiveFilter({
     query: searchQuery,
@@ -440,6 +443,10 @@ export const SearchDialog = ({
   // require chat:create; hide the AI summary control for roles that
   // lack it instead of surfacing a 403 on click.
   const canSummarizeSearch = usePermissions({ chat: ["create"] });
+  const showSearchSummary = canShowSearchSummary({
+    canSummarizeSearch,
+    query: searchQuery,
+  });
 
   const summarizeSearchMutation = useMutation({
     mutationFn: async (params: SearchAISummaryParams) => {
@@ -1073,7 +1080,7 @@ export const SearchDialog = ({
                       count: totalCount,
                     })}
                   </p>
-                  {canSummarizeSearch && (
+                  {showSearchSummary && (
                     <SearchSummaryItem
                       isOpeningChat={createSummaryChatMutation.isPending}
                       onCitationClick={(citationId) => {
