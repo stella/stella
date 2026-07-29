@@ -17,6 +17,15 @@ describe("parseMobileApiUrl", () => {
     expect(parseMobileApiUrl(value)).toBe(`${value}/`);
   });
 
+  test("allows the Android emulator host alias only when explicitly in development", () => {
+    expect(
+      parseMobileApiUrl("http://10.0.2.2:3001", {
+        allowAndroidEmulatorHttp: true,
+      }),
+    ).toBe("http://10.0.2.2:3001/");
+    expect(() => parseMobileApiUrl("http://10.0.2.2:3001")).toThrow();
+  });
+
   test("preserves a self-hosted path prefix", () => {
     expect(parseMobileApiUrl("https://example.com/stella/api/")).toBe(
       "https://example.com/stella/api/",

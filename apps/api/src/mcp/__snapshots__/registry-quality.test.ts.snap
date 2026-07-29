@@ -2326,7 +2326,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_capabilities",
     "scope": "stella:read",
     "access": "read",
-    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \\"time-entries\\") or access (read/write). Each item gives the capability id, a one-line summary, and the OAuth scope it needs. Use describe_capability for the full input schema.",
+    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \\"time-entries\\") or access (read/write). Each item gives the capability id, a one-line summary, and every OAuth scope it needs. Use describe_capability for the full input schema.",
     "annotations": {
       "openWorldHint": false
     },
@@ -2364,7 +2364,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "describe_capability",
     "scope": "stella:read",
     "access": "read",
-    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scope, member permissions, whether it is destructive, its handler kind (workspace/root), and its disposition. Call this before invoke_capability to learn exactly what input to pass.",
+    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scopes, member permissions, whether it is destructive, its handler kind (workspace/root), and its disposition. Call this before invoke_capability to learn exactly what input to pass.",
     "annotations": {
       "openWorldHint": false
     },

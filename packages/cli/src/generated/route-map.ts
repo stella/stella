@@ -57754,6 +57754,7 @@ export const generatedRouteMap: RouteNode = {
                 paginated: false,
                 destructive: false,
                 scope: "documents_write",
+                additionalScopes: ["templates"],
                 inputSchema: {
                   type: "object",
                   additionalProperties: false,

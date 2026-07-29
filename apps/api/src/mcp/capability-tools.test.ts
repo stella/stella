@@ -360,6 +360,19 @@ describe("invoke_capability gates", () => {
     expect(error.message).toContain("stella:knowledge_write");
   });
 
+  test("compound capability scope rejects a document-only grant", async () => {
+    const result = await handleMcpToolCall({
+      args: { capability: "templates.fill-to-workspace", input: {} },
+      context: createContext({
+        grantedScopes: ["stella:read", "stella:documents_write"],
+      }),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("missing_scope");
+    expect(error.message).toContain("stella:templates");
+  });
+
   // Scope-gate outcome for a read capability under a given granted-scope set.
   // validateOnly stops after the scope + destructive gates, so the result is
   // never the handler's DB execution: it is `missing_scope` when the gate

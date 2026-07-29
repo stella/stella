@@ -483,7 +483,7 @@ export const ConfigureStep = ({
       : [f.path],
   );
 
-  const handleSave = async (e: React.SubmitEvent<HTMLFormElement>) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const trimmed = name.trim();

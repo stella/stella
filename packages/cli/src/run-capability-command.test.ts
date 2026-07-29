@@ -95,10 +95,12 @@ const makeTtyContext = ({
   serverUrl,
   stdinData,
   isTTY,
+  token = "header.payload.sig",
 }: {
   serverUrl: string;
   stdinData: string;
   isTTY: boolean;
+  token?: string;
 }): FakeTty => {
   const stdin = Object.assign(new PassThrough(), { isTTY });
   if (stdinData.length > 0) {
@@ -121,7 +123,7 @@ const makeTtyContext = ({
     process: proc as unknown as NodeJS.Process,
     configDir: "/tmp/stella-test",
     serverUrl,
-    token: "header.payload.sig",
+    token,
   };
   return {
     context,
@@ -129,6 +131,16 @@ const makeTtyContext = ({
     stderrText: () => stderrChunks.join(""),
     stdoutText: () => stdoutChunks.join(""),
   };
+};
+
+const makeToken = (scopes: readonly string[]): string => {
+  const encode = (value: object): string =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "none", typ: "JWT" })}.${encode({
+    sub: "user-1",
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    scope: scopes.map((scope) => `stella:${scope}`).join(" "),
+  })}.sig`;
 };
 
 const stringFlag = (
@@ -434,6 +446,31 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     expect(tty.exitCode()).toBe(EXIT_CODES.validation);
     expect(server.calls).toHaveLength(0);
     expect(tty.stderrText()).toContain("--workspace");
+  });
+});
+
+describe("runCapabilityCommand: compound scope preflight", () => {
+  test("rejects a document-only token before invoking a template capability", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+      token: makeToken(["documents_write"]),
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: {},
+      spec: capSpec({
+        capabilityId: "templates.fill-to-workspace",
+        scope: "documents_write",
+        additionalScopes: ["templates"],
+      }),
+    });
+    server.stop();
+    expect(tty.exitCode()).toBe(EXIT_CODES.auth);
+    expect(tty.stderrText()).toContain("stella:templates");
+    expect(server.calls).toHaveLength(0);
   });
 });
 

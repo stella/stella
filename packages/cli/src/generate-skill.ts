@@ -95,7 +95,11 @@ const commandRows = (tree: RouteNode): readonly CommandRow[] => {
     return {
       domain: spec.commandPath[0] ?? command,
       command: `stella ${command}`,
-      access: spec.scope ?? "—",
+      access:
+        [
+          ...(spec.scope === undefined ? [] : [spec.scope]),
+          ...(spec.additionalScopes ?? []),
+        ].join(" + ") || "—",
       notes: notesFor(spec),
     };
   });

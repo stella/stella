@@ -345,9 +345,13 @@ export const runCapabilityCommand = async ({
   }
 
   // Client-side scope precheck (spec S3): fail before any server call.
-  if (spec.scope !== undefined && !scopeGranted({ token, scope: spec.scope })) {
+  const missingScope = [
+    ...(spec.scope === undefined ? [] : [spec.scope]),
+    ...(spec.additionalScopes ?? []),
+  ].find((scope) => !scopeGranted({ token, scope }));
+  if (missingScope !== undefined) {
     writers.stderr(
-      `Missing scope stella:${spec.scope}. Re-run 'stella auth login' to grant stella:${spec.scope}.\n`,
+      `Missing scope stella:${missingScope}. Re-run 'stella auth login' to grant stella:${missingScope}.\n`,
     );
     setExit(context, EXIT_CODES.auth);
     return;

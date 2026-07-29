@@ -166,6 +166,7 @@ export type CapabilityLeafSpec = {
   itemsKey?: string;
   destructive: boolean;
   scope?: ToolScope;
+  additionalScopes?: readonly ToolScope[];
   /**
    * Synthesized `{ body?, params?, query? }` wrapper schema validated against
    * the `--input` payload. Absent when the catalog entry's schema was truncated

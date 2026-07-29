@@ -70,6 +70,9 @@ describe("generateCliSkill (TanStack Intent)", () => {
     expect(skill).toContain(
       "`stella organization remove-member` | admin_write | destructive (needs `--yes` off a TTY) |",
     );
+    expect(skill).toContain(
+      "`stella template save-filled new-document` | documents_write + templates |",
+    );
     // Compat shims are excluded from the tree.
     expect(skill).not.toContain("`stella fetch`");
   });

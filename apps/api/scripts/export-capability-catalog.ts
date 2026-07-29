@@ -428,6 +428,8 @@ type CapabilityEntry = {
   access: "read" | "write";
   destructive: boolean;
   scope: string;
+  /** Additional OAuth grants required by a compound covering tool. */
+  additionalScopes?: readonly string[];
   /** REST route uses `validateWorkspaceAccessIncludingArchived` (fix-4). */
   allowsArchivedWorkspace?: true;
   /** Success payload is a file: a `Response` or raw binary bytes (fix-6). */
@@ -616,6 +618,7 @@ type BuildCatalogEntryOptions = {
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
   scope: string;
+  additionalScopes: readonly string[];
   hasPermissions: boolean;
   permissions: unknown;
   /** Live (pre-cap) input schema; flag derivation must see the full schema. */
@@ -637,6 +640,7 @@ const buildCatalogEntry = ({
   kind,
   access,
   scope,
+  additionalScopes,
   hasPermissions,
   permissions,
   inputSchema,
@@ -650,6 +654,7 @@ const buildCatalogEntry = ({
   access: access.access,
   destructive: access.destructive,
   scope,
+  ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
   ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
     ? { allowsArchivedWorkspace: true as const }
     : {}),
@@ -826,6 +831,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const toolDefinitions: readonly McpToolDefinition[] = narrowToolDefinitions;
   const toolScopeByName = new Map<string, string>(
     toolDefinitions.map((tool) => [tool.name, tool.scope]),
+  );
+  const toolAdditionalScopesByName = new Map<string, readonly string[]>(
+    toolDefinitions.map((tool) => [tool.name, tool.additionalScopes ?? []]),
   );
   // Covering-tool feature flags: a tool/covered entry inherits its covering
   // tool's deployment gate mechanically (see DOMAIN_FEATURE for the rest).
@@ -1079,6 +1087,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       : scopeResolution.writeScope;
 
     let scope = accessBaseScope;
+    let additionalScopes: readonly string[] = [];
     if (
       endpoint.exposure.type === "tool" ||
       endpoint.exposure.type === "covered"
@@ -1098,6 +1107,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
         continue;
       }
       scope = entryScope.scope;
+      const coveringAdditionalScopes = toolAdditionalScopesByName.get(toolName);
+      if (coveringAdditionalScopes === undefined) {
+        errors.push(
+          `capability "${id}" references unknown covering tool "${toolName}"`,
+        );
+        continue;
+      }
+      additionalScopes = [...new Set(coveringAdditionalScopes)].filter(
+        (requiredScope) => requiredScope !== scope,
+      );
       if (override !== undefined) {
         // The pin is "used" only when it changed the outcome; a pin the domain
         // scope would have resolved identically without is stale.
@@ -1137,6 +1156,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         kind: kindResolution.kind,
         access: accessResolution,
         scope,
+        additionalScopes,
         hasPermissions,
         permissions,
         inputSchema,

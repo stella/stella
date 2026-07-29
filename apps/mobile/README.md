@@ -14,9 +14,12 @@ bun --filter @stll/mobile android
 bun --filter @stll/mobile web
 ```
 
-`EXPO_PUBLIC_API_URL` is the API base URL. A simulator can normally use the
-example's loopback HTTP value. A physical device needs an HTTPS address
-reachable from the device; non-loopback HTTP is rejected so authentication
+`EXPO_PUBLIC_API_URL` is the API base URL. iOS simulators and web previews can
+use the example's loopback HTTP value. For an Android emulator, either run
+`adb reverse tcp:3001 tcp:3001` and keep `localhost`, or set the value to
+`http://10.0.2.2:3001`; that emulator-only cleartext alias is accepted only in
+development builds. A physical device needs an HTTPS address reachable from
+the device. Other non-loopback HTTP addresses are rejected so authentication
 cookies and API data are never sent over a cleartext network. This is public
 runtime configuration, never a place for secrets.
 
@@ -33,11 +36,10 @@ bun --filter @stll/mobile lint
 bun --filter @stll/mobile build
 ```
 
-The app intentionally shares the repository's React 19 patch release. React
-Native 0.86 supports that range, and using one copy prevents Metro and native
-autolinking from seeing duplicate React runtimes. Expo's exact bundled React
-pin is therefore excluded from its package-version comparison; all native
-module versions remain checked.
+The app intentionally shares the repository's single React runtime, pinned to
+React 19.1.0 because the React Native 0.81 renderer bundled by Expo 54 requires
+that exact version. Expo Doctor checks the React packages along with the other
+native modules so a renderer/runtime mismatch cannot be hidden.
 
 Expo Metro requires Babel 7 while the web build uses Babel 8. Both workspaces
 declare their required major directly, and the workspace-hygiene check ratchets

@@ -11,6 +11,7 @@ describe("template persistence capability scope parity", () => {
     );
 
     expect(fillToWorkspace?.scope).toBe("stella:documents_write");
+    expect(fillToWorkspace?.additionalScopes).toEqual(["stella:templates"]);
     expect(fillToWorkspace?.mcp).toEqual({
       type: "covered",
       by: "save_filled_template",

@@ -2201,7 +2201,7 @@ export const TemplateForm = ({
     setMatterDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (saveTarget?.kind === "matter") {
       // Validate + gate here so the empty-fields warning can interpose
