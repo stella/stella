@@ -30,7 +30,8 @@ export const chatThreadScopeSql = ({
         )`
       : sql``;
   return sql`
-    t.user_id = ${userId}
+    t.id = cst.thread_id
+    AND t.user_id = ${userId}
     AND t.organization_id = ${organizationId}
     AND (t.workspace_id IS NULL OR t.workspace_id = ANY(${accessArray}))
     AND (

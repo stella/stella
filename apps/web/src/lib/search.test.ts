@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { GlobalSearchHit } from "@stll/api/types";
 
 import {
+  getSearchPreviewDate,
   getSearchPreviewTarget,
   normalizeSearchQuery,
   selectSearchPreviewHit,
@@ -198,5 +199,57 @@ describe("search preview targets", () => {
       { resultId: "thread_1", type: "chat" },
       { resultId: "entity_1", type: "document" },
     ]);
+  });
+});
+
+describe("search preview dates", () => {
+  const base = {
+    headline: null,
+    id: "case-law:decision_1",
+    type: "case-law",
+    title: "1 T 1/2026 - Court",
+    updatedAt: "2026-07-29T12:00:00.000Z",
+    decisionId: "decision_1",
+    caseNumber: "1 T 1/2026",
+    court: "Court",
+    country: "CZ",
+  } as const;
+
+  test("uses the ruling date for case-law metadata", () => {
+    const hit = {
+      ...base,
+      decisionDate: "2024-02-15",
+    } satisfies GlobalSearchHit;
+
+    expect(getSearchPreviewDate(hit)).toEqual({
+      type: "calendar-date",
+      value: "2024-02-15",
+    });
+  });
+
+  test("omits case-law metadata when the ruling date is absent", () => {
+    const hit = {
+      ...base,
+      decisionDate: null,
+    } satisfies GlobalSearchHit;
+
+    expect(getSearchPreviewDate(hit)).toBeNull();
+  });
+
+  test("uses the update instant for other result types", () => {
+    const hit = {
+      headline: null,
+      id: "contact:contact_1",
+      type: "contact",
+      title: "Contact",
+      updatedAt: "2026-07-29T12:00:00.000Z",
+      contactId: "contact_1",
+      contactType: "person",
+    } as const satisfies GlobalSearchHit;
+
+    expect(getSearchPreviewDate(hit)).toEqual({
+      type: "instant",
+      value: hit.updatedAt,
+    });
   });
 });

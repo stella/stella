@@ -110,6 +110,7 @@ import type {
   SearchRecentsScope,
 } from "@/lib/search-recents";
 import {
+  getSearchPreviewDate,
   getSearchPreviewTarget,
   normalizeSearchQuery,
   selectSearchPreviewHit,
@@ -1391,13 +1392,18 @@ const SearchPreviewContent = ({
     hit.type === "contact" || hit.type === "case-law"
       ? null
       : hit.workspaceName;
+  const previewDate = getSearchPreviewDate(hit);
+  const formattedPreviewDate = previewDate
+    ? format.dateTime(new Date(previewDate.value), {
+        month: "short",
+        year: "numeric",
+        ...(previewDate.type === "calendar-date" ? { timeZone: "UTC" } : {}),
+      })
+    : null;
   const meta = compactMeta([
     t(KIND_TRANSLATION_KEYS[hit.type]),
     location,
-    format.dateTime(new Date(hit.updatedAt), {
-      month: "short",
-      year: "numeric",
-    }),
+    formattedPreviewDate,
   ]);
 
   return (

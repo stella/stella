@@ -108,14 +108,17 @@ describe("projection-specific workspace scopes", () => {
 
 describe("chatThreadScopeSql reproduces the private-thread RLS scope", () => {
   test("always constrains owner, organization, and accessible workspaces", () => {
-    const serialized = JSON.stringify(
-      chatThreadScopeSql({
-        userId,
-        organizationId,
-        accessibleWorkspaceIds: [wsA],
-        selectedWorkspaceIds: [],
-      }),
-    );
+    const fragment = chatThreadScopeSql({
+      userId,
+      organizationId,
+      accessibleWorkspaceIds: [wsA],
+      selectedWorkspaceIds: [],
+    });
+    const serialized = JSON.stringify(fragment);
+    const compiled = new PgDialect().sqlToQuery(fragment);
+    // The helper must bind the authorized thread to the protected projection;
+    // otherwise any visible thread could authorize every search row.
+    expect(compiled.sql).toContain("t.id = cst.thread_id");
     // A chat thread is private to its owner within its org; the fragment must
     // bind all three or a search could surface another user's threads.
     expect(serialized).toContain("user_id");

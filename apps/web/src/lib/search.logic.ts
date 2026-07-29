@@ -26,6 +26,21 @@ type SearchPreviewTarget = {
   type: GlobalSearchResultType;
 };
 
+export type SearchPreviewDate =
+  | { type: "calendar-date"; value: string }
+  | { type: "instant"; value: string };
+
+export const getSearchPreviewDate = (
+  hit: GlobalSearchHit,
+): SearchPreviewDate | null => {
+  if (hit.type === "case-law") {
+    return hit.decisionDate
+      ? { type: "calendar-date", value: hit.decisionDate }
+      : null;
+  }
+  return { type: "instant", value: hit.updatedAt };
+};
+
 export const getSearchPreviewTarget = (
   hit: GlobalSearchHit,
 ): SearchPreviewTarget => {
