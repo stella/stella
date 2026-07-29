@@ -554,6 +554,17 @@ const interpolationMayIntroduceReadRelation = (
   return /\bselect\s+(?:distinct\s+)?\*\s*$/iu.test(precedingText);
 };
 
+const interpolationHasFollowingTokenBoundary = (
+  tokens: readonly SqlTemplateToken[],
+  expressionIndex: number,
+): boolean => {
+  const nextToken = tokens.at(expressionIndex + 1);
+  if (nextToken === undefined || nextToken.type !== "text") {
+    return true;
+  }
+  return nextToken.value.length === 0 || /^(?:\s|[,;)])/u.test(nextToken.value);
+};
+
 const interpolationIsDeleteTarget = (
   tokens: readonly SqlTemplateToken[],
   expressionIndex: number,
@@ -1534,6 +1545,27 @@ export default {
               projection.tableImports,
             ),
           );
+
+        const isImportBackedInterpolation = (expression: unknown): boolean => {
+          const unwrapped = unwrapExpression(expression);
+          if (!isAstNode(unwrapped)) {
+            return false;
+          }
+          if (isIdentifier(unwrapped)) {
+            return (
+              resolveVariable(unwrapped)?.defs.some(
+                (definition) => definition.type === "ImportBinding",
+              ) === true
+            );
+          }
+          if (unwrapped.type === "CallExpression") {
+            return isImportBackedInterpolation(unwrapped.callee);
+          }
+          if (unwrapped.type === "MemberExpression") {
+            return isImportBackedInterpolation(unwrapped.object);
+          }
+          return false;
+        };
 
         const constIdentifierInitializer = (
           identifier: AstNode & { name: string },
@@ -2527,6 +2559,8 @@ export default {
                 (token, index) =>
                   token.type === "expression" &&
                   interpolationMayIntroduceReadRelation(tokens, index) &&
+                  (isImportBackedInterpolation(token.value) ||
+                    interpolationHasFollowingTokenBoundary(tokens, index)) &&
                   !interpolationIsDeleteTarget(tokens, index) &&
                   !isKnownPrivateProjectionInterpolation(token.value),
               ),

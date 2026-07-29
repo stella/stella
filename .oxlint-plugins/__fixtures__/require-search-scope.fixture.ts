@@ -470,17 +470,12 @@ separatedAppendPrivateRead.append(sql`SELECT * FROM `);
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture conservatively rejects a protected relation split across separate mutations
 separatedAppendPrivateRead.append(sql`search_documents sd`);
 
-const unrelatedAppender = {
-  append(fragment: unknown) {
-    return fragment;
-  },
-};
-const unrelatedAppendControl = unrelatedAppender.append(
-  sql`search_documents sd`,
-);
+const unrelatedAppendControl = {
+  append: (fragment: unknown) => fragment,
+}.append(sql`search_documents sd`);
 
 declare const opaqueAppendReceiver: {
-  append(fragment: unknown): unknown;
+  append: (fragment: unknown) => unknown;
 };
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an opaque append receiver cannot hide a private relation fragment
