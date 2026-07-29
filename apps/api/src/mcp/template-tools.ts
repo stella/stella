@@ -26,6 +26,7 @@ import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -873,7 +874,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
 
 const saveFilledTemplateArgsSchema = v.strictObject({
   action: v.picklist(["create_document", "create_version"]),
-  template_id: v.pipe(v.string(), v.minLength(1)),
+  template_id: v.pipe(v.string(), v.uuid()),
   matter_id: v.pipe(v.string(), v.minLength(1)),
   entity_id: v.optional(v.pipe(v.string(), v.uuid())),
   parent_id: v.optional(v.pipe(v.string(), v.uuid())),
@@ -1117,7 +1118,13 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     requested: input.name,
     fallback: filled.fileName,
   });
-  const recordPersistedFill = async (tx: Transaction): Promise<void> =>
+  const recordPersistedFill = async (
+    tx: Transaction,
+    output: {
+      entityId: SafeId<"entity">;
+      entityVersionId?: SafeId<"entityVersion"> | undefined;
+    },
+  ): Promise<void> =>
     await recordTemplateFill({
       tx,
       templateId,
@@ -1128,6 +1135,8 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
       unusedCount: filled.unusedValues.length,
       structureErrors: filled.structureErrors,
       workspaceId,
+      entityId: output.entityId,
+      entityVersionId: output.entityVersionId,
       recordAuditEvent,
     });
   type StoredFilledTemplate = {
@@ -1155,7 +1164,8 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
             input.parent_id === undefined
               ? undefined
               : brandPersistedEntityId(input.parent_id),
-          afterCreate: async (tx) => await recordPersistedFill(tx),
+          afterCreate: async (tx, persisted) =>
+            await recordPersistedFill(tx, { entityId: persisted.entityId }),
         });
         return Result.isError(created)
           ? { status: "error", message: created.error.message }
@@ -1175,7 +1185,14 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
         fileName,
         mimeType: DOCX_MIME_TYPE,
         source: null,
-        afterWrite: async (tx) => await recordPersistedFill(tx),
+        afterWrite: async (tx, persisted) =>
+          await recordPersistedFill(tx, {
+            entityId: brandPersistedEntityId(
+              input.entity_id ??
+                panic("create_version callback reached without an entity_id"),
+            ),
+            entityVersionId: persisted.entityVersionId,
+          }),
       });
       return Result.isError(created)
         ? { status: "error", message: created.error.message }

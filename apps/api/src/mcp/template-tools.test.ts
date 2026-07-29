@@ -196,6 +196,7 @@ const createContext = ({
 });
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const TEMPLATE_ID = "00000000-0000-4000-8000-000000000000";
 const ENTITY_ID = "00000000-0000-4000-8000-000000000001";
 const FOLDER_ID = "00000000-0000-4000-8000-000000000002";
 const MISSING_FOLDER_ID = "00000000-0000-4000-8000-000000000003";
@@ -759,18 +760,19 @@ describe("MCP template tools", () => {
       unusedValues: ["unused"],
     });
     createEntityFromBufferMock.mockImplementation(async (input) => {
-      await input.afterCreate(fakeTransaction);
-      return Result.ok({
+      const created = {
         entityId: "entity_new",
         fieldId: "field_new",
         fileName: "Example Lease.docx",
-      });
+      };
+      await input.afterCreate(fakeTransaction, created);
+      return Result.ok(created);
     });
 
     const result = await handleMcpToolCall({
       args: {
         action: "create_document",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         parent_id: FOLDER_ID,
         name: "Example Lease",
@@ -788,7 +790,9 @@ describe("MCP template tools", () => {
         afterCreate: expect.any(Function),
       }),
     );
-    expect(recordTemplateFillMock).toHaveBeenCalledTimes(1);
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({ entityId: "entity_new" }),
+    );
     expect(parseToolPayload(result)).toEqual({
       action: "create_document",
       entityId: "entity_new",
@@ -814,20 +818,22 @@ describe("MCP template tools", () => {
       ],
     });
     createEntityVersionFromBufferMock.mockImplementation(async (input) => {
-      await input.afterWrite(fakeTransaction);
-      return Result.ok({
+      const created = {
+        status: "ok",
         entityId: ENTITY_ID,
         entityVersionId: "version_2",
         fieldId: "field_2",
         fileName: "lease.docx",
         versionNumber: 2,
-      });
+      };
+      await input.afterWrite(fakeTransaction, created);
+      return Result.ok(created);
     });
 
     const result = await handleMcpToolCall({
       args: {
         action: "create_version",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         entity_id: ENTITY_ID,
         values: { "tenant.name": "ACME" },
@@ -854,6 +860,8 @@ describe("MCP template tools", () => {
             paragraphIndex: 4,
           },
         ],
+        entityId: ENTITY_ID,
+        entityVersionId: "version_2",
         workspaceId: "ws_1",
       }),
     );
@@ -872,7 +880,7 @@ describe("MCP template tools", () => {
     const missingEntity = await handleMcpToolCall({
       args: {
         action: "create_version",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         values: {},
       },
@@ -882,7 +890,7 @@ describe("MCP template tools", () => {
     const archived = await handleMcpToolCall({
       args: {
         action: "create_document",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         values: {},
       },
@@ -892,17 +900,27 @@ describe("MCP template tools", () => {
     const forbidden = await handleMcpToolCall({
       args: {
         action: "create_document",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         values: {},
       },
       context: createContext({ memberRole: "intern" }),
       toolName: "save_filled_template",
     });
+    const malformedTemplate = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: "not-a-uuid",
+        matter_id: "ws_1",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
     const malformedParent = await handleMcpToolCall({
       args: {
         action: "create_document",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         parent_id: "not-a-uuid",
         values: {},
@@ -913,7 +931,7 @@ describe("MCP template tools", () => {
     const malformedEntity = await handleMcpToolCall({
       args: {
         action: "create_version",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         entity_id: "not-a-uuid",
         values: {},
@@ -935,6 +953,9 @@ describe("MCP template tools", () => {
     expect(forbidden.content.at(0)).toMatchObject({
       type: "text",
       text: "Forbidden",
+    });
+    expect(validationEnvelope(malformedTemplate)).toMatchObject({
+      code: "validation_error",
     });
     expect(validationEnvelope(malformedParent)).toMatchObject({
       code: "validation_error",
@@ -966,7 +987,7 @@ describe("MCP template tools", () => {
     const missingParent = await handleMcpToolCall({
       args: {
         action: "create_document",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         parent_id: MISSING_FOLDER_ID,
         values: {},
@@ -977,7 +998,7 @@ describe("MCP template tools", () => {
     const nonFolderParent = await handleMcpToolCall({
       args: {
         action: "create_document",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         parent_id: NON_FOLDER_ID,
         values: {},
@@ -988,7 +1009,7 @@ describe("MCP template tools", () => {
     const missingVersionTarget = await handleMcpToolCall({
       args: {
         action: "create_version",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         entity_id: MISSING_VERSION_ID,
         values: {},
@@ -999,7 +1020,7 @@ describe("MCP template tools", () => {
     const readOnlyVersionTarget = await handleMcpToolCall({
       args: {
         action: "create_version",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         entity_id: READ_ONLY_VERSION_ID,
         values: {},
@@ -1010,7 +1031,7 @@ describe("MCP template tools", () => {
     const nonFileVersionTarget = await handleMcpToolCall({
       args: {
         action: "create_version",
-        template_id: "t1",
+        template_id: TEMPLATE_ID,
         matter_id: "ws_1",
         entity_id: NON_FILE_VERSION_ID,
         values: {},
