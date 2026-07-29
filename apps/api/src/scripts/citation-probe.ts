@@ -31,10 +31,37 @@ if (!bucket) {
   process.exit(2);
 }
 const sampleTarget = Number(argValue("--sample") ?? "18");
-if (!Number.isInteger(sampleTarget) || sampleTarget <= 0) {
-  console.error("citation-probe: --sample must be a positive integer");
+if (!Number.isInteger(sampleTarget) || sampleTarget <= 0 || sampleTarget > 60) {
+  console.error("citation-probe: --sample must be an integer between 1 and 60");
   process.exit(2);
 }
+
+/** Run thunks with bounded concurrency, tolerating individual failures. */
+const settleInBatches = async <T>(
+  thunks: readonly (() => Promise<T>)[],
+): Promise<T[]> => {
+  const results: T[] = [];
+  let failures = 0;
+  for (let i = 0; i < thunks.length; i += 8) {
+    // oxlint-disable-next-line no-await-in-loop -- bounded batches: each 8-wide slice settles before the next to cap S3 pressure
+    const settled = await Promise.allSettled(
+      thunks.slice(i, i + 8).map((thunk) => thunk()),
+    );
+    for (const outcome of settled) {
+      if (outcome.status === "fulfilled") {
+        results.push(outcome.value);
+      } else {
+        failures += 1;
+      }
+    }
+  }
+  if (failures > 0) {
+    console.error(
+      `citation-probe: ${failures} S3 operations failed; continuing`,
+    );
+  }
+  return results;
+};
 
 /** Race an S3 operation against a deadline so a stall cannot hang the probe. */
 const withDeadline = async <T>(work: Promise<T>, label: string): Promise<T> => {
@@ -80,6 +107,9 @@ const resolveCredentials = async (): Promise<ResolvedCredentials | null> => {
   const response = await fetch(`http://169.254.170.2${relativeUri}`, {
     signal: AbortSignal.timeout(5000),
   });
+  if (!response.ok) {
+    return null;
+  }
   const body: unknown = await response.json();
   if (
     !isRecord(body) ||
@@ -163,9 +193,9 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
   const cursors = Array.from({ length: want * 3 }, (_, i) =>
     i % 2 === 0 ? randomHexUuid() : `019${randomHexUuid().slice(3)}`,
   );
-  const listings = await Promise.all(
+  const listings = await settleInBatches(
     cursors.map(
-      async (cursor) =>
+      (cursor) => async () =>
         await withDeadline(
           s3.list({ prefix, startAfter: `${prefix}${cursor}`, maxKeys: 8 }),
           "s3.list",
@@ -184,9 +214,13 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
     const textEntries = contents.filter((entry) =>
       entry.key.endsWith("/text.zst"),
     );
-    // A backfilled document can leave an orphaned older content-addressed
-    // payload beside the live one; the most recent write is the version
-    // the database points at.
+    // A backfilled document can leave an orphaned content-addressed
+    // payload beside the live one. Newest-write is a heuristic, not a
+    // guarantee (a compare-and-set-rejected write can be newer than the
+    // live payload); resolving the truly live key would need the
+    // database, which this probe deliberately avoids — and a superseded
+    // payload is still real court prose, which is all pattern-mining
+    // needs.
     const docOf = (key: string): string => key.split("/").at(3) ?? key;
     const first = textEntries.at(0);
     if (first) {
@@ -287,8 +321,8 @@ const docs = (
         return [];
       }
       const keys = await sampleKeys(jurisdiction, want);
-      return await Promise.all(
-        keys.map(async (key) => await probeKey(jurisdiction, key)),
+      return await settleInBatches(
+        keys.map((key) => async () => await probeKey(jurisdiction, key)),
       );
     }),
   )
