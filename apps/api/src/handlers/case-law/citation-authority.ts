@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import type { CourtWeightEntry } from "@/api/handlers/case-law/court-weights";
-import { redistributableCaseLawSourceSqlFor } from "@/api/handlers/case-law/redistribution";
+import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { isRecord } from "@/api/lib/type-guards";
 

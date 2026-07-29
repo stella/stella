@@ -8,9 +8,9 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
-import { redistributableSourceJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
 import { compareCodepoint } from "@/api/lib/collation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {

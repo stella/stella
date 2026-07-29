@@ -2,8 +2,8 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { redistributableSourceJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import type { SafeId } from "@/api/lib/branded-types";
+import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,

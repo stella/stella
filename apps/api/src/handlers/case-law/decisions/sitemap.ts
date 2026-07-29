@@ -4,9 +4,9 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";

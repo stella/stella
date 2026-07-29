@@ -10,8 +10,8 @@ import {
   readCorpusText,
 } from "@/api/handlers/case-law/corpus-storage";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
-import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { SafeId } from "@/api/lib/branded-types";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import type { CorpusChunk } from "@/api/lib/corpus-index/chunking";
 import {
   chunkDocument,

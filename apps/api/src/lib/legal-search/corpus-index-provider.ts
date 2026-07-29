@@ -2,9 +2,9 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
+import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { isUuid } from "@/api/lib/custom-schema";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";

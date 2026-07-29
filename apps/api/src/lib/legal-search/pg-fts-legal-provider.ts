@@ -1,11 +1,11 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
 import {
   bodyPreviewJoin,
   redistributableSourceJoin,
-} from "@/api/handlers/case-law/decisions/search-sql";
-import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
+} from "@/api/lib/case-law/search-sql";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import type {
