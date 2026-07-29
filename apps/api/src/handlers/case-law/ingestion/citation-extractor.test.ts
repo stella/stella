@@ -163,6 +163,25 @@ describe("extractCitations", () => {
     expect(texts).not.toContain("679/18");
   });
 
+  test("extracts a CJEU number written with an en dash", () => {
+    // normalizeDashes already canonicalizes en/em dashes for the dedup
+    // key, but the matcher itself only accepted a hyphen or the
+    // non-breaking hyphen; an en-dash spelling was silently dropped.
+    const text = "rozsudok Súdneho dvora C–128/22 z 5. 3. 2020";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("C–128/22");
+  });
+
+  test("does not capture a CJEU citation across an over-long whitespace run around the separator", () => {
+    // The whitespace around the CJEU separator is bounded (0-3
+    // characters) so a stray OCR whitespace run never leaks into the
+    // stored citation text; an unrealistically long run simply fails to
+    // match rather than being captured with the whitespace baked in.
+    const text = "rozsudek C     -679/18 ze dne 5. 3. 2020";
+    expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
+  });
+
   test("extracts letter-first registries without a senate number", () => {
     const text =
       "usnesení sp. zn. Nt 408/2023 a rozhodnutí sp. zn. A 9/2003, " +
@@ -293,6 +312,23 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(1);
   });
 
+  test("dedupes a consolidated docket cited with a comma and with a slash", () => {
+    // "36 Co 52,53/2023" (comma-joined) and "36 Co 52/53/2023"
+    // (slash-joined) name the same consolidated appeal; the canonicalizer
+    // must fold both join spellings to one key regardless of which
+    // separator the source uses.
+    const citations = extractCitations([
+      {
+        index: 0,
+        text:
+          "Městského soudu v Praze ze dne 11. května 2023, č. j. " +
+          "36 Co 52,53/2023-116, k tomu opětovně č. j. 36 Co 52/53/2023-116, " +
+          "za účasti Nejvyššího soudu",
+      },
+    ]);
+    expect(citations).toHaveLength(1);
+  });
+
   test("extracts a letter-first č.j. registry without a senate number", () => {
     // Verbatim from a prod decision: "Nad 224/2014" (Nejvyšší soud,
     // jurisdiction-delegation register) has no leading senate digit,
@@ -409,6 +445,18 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("Pl. ÚS – st. 59/23");
+  });
+
+  test("extracts a plenary standpoint citation with a non-breaking hyphen before the infix", () => {
+    // "Pl. ÚS‑st. 45/16" with a non-breaking hyphen (U+2011) before "st."
+    // must match the standpoint pattern the same way the plain hyphen and
+    // en/em dash spellings already do.
+    const text =
+      "stanovisko pléna Ústavního soudu Pl. ÚS‑st. 45/16 ze dne " +
+      "28. 11. 2017";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("Pl. ÚS‑st. 45/16");
   });
 
   test("extracts Slovak Constitutional Court citations with a slash before the number", () => {
@@ -825,13 +873,27 @@ describe("extractCitations", () => {
     expect(combined).toHaveLength(1);
   });
 
-  test("dedupes the same case number in differing letter case", () => {
-    // An all-caps header citation and a normal-case body citation of the
-    // same decision must resolve to one dedup key, not two.
-    const text =
-      "SP. ZN. 21 CDO 1234/2020\nSoud se odchýlil od sp. zn. 21 Cdo 1234/2020 a rozhodl jinak.";
-    const citations = extractCitations([{ index: 0, text }]);
-    expect(citations).toHaveLength(1);
+  test("dedupes the same case number in differing registry letter case", () => {
+    // The registry code's own letter case can vary between an all-caps
+    // header citation and an ordinary mixed-case body citation; both must
+    // resolve to one dedup key. The "sp. zn." prefix literal itself stays
+    // lowercase in both mentions -- the prefix matcher is intentionally
+    // case-sensitive, so an all-caps "SP. ZN." header is never extracted
+    // in the first place, which would make a dedup assertion here
+    // vacuous (it would pass merely because only one mention is ever
+    // found). Each mention is checked in isolation first to prove the
+    // dedup claim below is not vacuous.
+    const header = { index: 0, text: "sp. zn. 21 CDO 1234/2020" };
+    const body = {
+      index: 1,
+      text: "Soud se odchýlil od sp. zn. 21 Cdo 1234/2020 a rozhodl jinak.",
+    };
+    expect(extractCitations([header])).toHaveLength(1);
+    expect(extractCitations([body])).toHaveLength(1);
+
+    const combined = extractCitations([header, body]);
+    expect(combined).toHaveLength(1);
+    expect(combined[0]?.sectionIndex).toBe(1);
   });
 
   test("dedupes a case number split across a line wrap", () => {
@@ -1138,6 +1200,21 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(1);
   });
 
+  test("matches a two-token division split by a double space or line wrap", () => {
+    // The gap between the two division tokens ("A" and "Ua") is a bounded
+    // whitespace/slash run, not a single character, so a double space or
+    // a line-wrap still matches, mirroring the bound already used for the
+    // shared Czech/Slovak case-number body.
+    const doubleSpace =
+      "Sądu Apelacyjnego we Wrocławiu z 7 listopada 2003 r., sygn. akt " +
+      "III A  Ua 2389/02";
+    const lineWrap =
+      "Sądu Apelacyjnego we Wrocławiu z 7 listopada 2003 r., sygn. akt " +
+      "III A\nUa 2389/02";
+    expect(extractCitations([{ index: 0, text: doubleSpace }])).toHaveLength(1);
+    expect(extractCitations([{ index: 0, text: lineWrap }])).toHaveLength(1);
+  });
+
   test("extracts Polish fused division+department case numbers", () => {
     // Verbatim prose quoted from a prod Polish labour-court decision:
     // "X Wydział Pracy" (10th labour division) case numbers fuse the
@@ -1193,6 +1270,22 @@ describe("extractCitations", () => {
     expect(texts).toContain("sygn. akt: IV P648/03");
   });
 
+  test("dedupes a Polish citation cited with the division glued and spaced to the docket", () => {
+    // "sygn. akt: IV P648/03" (division letter glued directly to the
+    // docket digits) and "sygn. akt IV P 648/03" (spaced) name the same
+    // case; the dedup key must fold the division-to-docket boundary the
+    // same way it already folds the roman-to-division boundary.
+    const citations = extractCitations([
+      {
+        index: 0,
+        text:
+          "wyrok z 2001 r. sygn. akt: IV P648/03 został uchylony, " +
+          "ponownie sygn. akt IV P 648/03 w uzasadnieniu",
+      },
+    ]);
+    expect(citations).toHaveLength(1);
+  });
+
   test("extracts a Polish administrative-court case number with a city code", () => {
     // Verbatim from a prod decision: Wojewódzki Sąd Administracyjny case
     // numbers join the court and city codes with a slash ("SA/Wa").
@@ -1216,6 +1309,16 @@ describe("extractCitations", () => {
     );
     expect(texts).toContain("II SA/Wa 2016/05");
     expect(texts).toContain("sygn. akt SA/Po 4584/01");
+  });
+
+  test("extracts an NSA/WSA citation with a non-ASCII location code", () => {
+    // "SA/Łd" (WSA Łódź) contains "Ł", outside the ASCII-only [A-Za-z]
+    // class the location-code alternation previously used.
+    const text =
+      "wyrok Wojewódzkiego Sądu Administracyjnego w Łodzi, II SA/Łd 123/20";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("II SA/Łd 123/20");
   });
 
   test("extracts Polish division + proceeding-type case numbers", () => {
