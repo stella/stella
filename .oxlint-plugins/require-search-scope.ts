@@ -418,18 +418,26 @@ const splitAtSqlQueryBoundaries = (
   return parts;
 };
 
+type SqlScopeClause = "inner-join-on" | "non-filtering" | "query-filter";
+
 type SqlScopeContext = {
-  clause: "filtering" | "non-filtering";
+  aggregateFilterDepth: number;
+  aggregateFilterOuterClause: SqlScopeClause | null;
+  clause: SqlScopeClause;
   currentJoinIsOuter: boolean;
   hasNonConjunctiveFilter: boolean;
   pendingJoinIsOuter: boolean;
+  pendingAggregateFilter: boolean;
 };
 
 const INITIAL_SQL_SCOPE_CONTEXT: SqlScopeContext = {
+  aggregateFilterDepth: 0,
+  aggregateFilterOuterClause: null,
   clause: "non-filtering",
   currentJoinIsOuter: false,
   hasNonConjunctiveFilter: false,
   pendingJoinIsOuter: false,
+  pendingAggregateFilter: false,
 };
 
 type ProjectionQueryState = {
@@ -461,6 +469,18 @@ const projectionQueryBranchIsUnscoped = (
   state.unscopedReadCount > 0 ||
   (state.protectedReadCount > 0 && state.scopeContext.hasNonConjunctiveFilter);
 
+const finishProjectionQuery = (
+  queryStates: Map<number, ProjectionQueryState>,
+  queryId: number,
+): boolean => {
+  const queryState = queryStates.get(queryId);
+  if (!queryState) {
+    return false;
+  }
+  queryStates.delete(queryId);
+  return projectionQueryBranchIsUnscoped(queryState);
+};
+
 const SQL_CLAUSE_KEYWORDS = [
   "cross",
   "from",
@@ -491,14 +511,14 @@ const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
   SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
 
 const SQL_SCOPE_CONTEXT_TOKEN =
-  /\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:cross|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
+  /[()]|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:cross|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
 
 const sqlScopeContextAfter = (
   text: string,
   initialLexState: SqlLexState,
   initialContext: SqlScopeContext,
 ): SqlScopeContext => {
-  let context = initialContext;
+  const context = { ...initialContext };
   let scanCursor = 0;
   let scanState = initialLexState;
   for (const match of text.matchAll(SQL_SCOPE_CONTEXT_TOKEN)) {
@@ -512,12 +532,37 @@ const sqlScopeContextAfter = (
     if (scanState.type !== "normal") {
       continue;
     }
+    if (matchText === "filter") {
+      context.pendingAggregateFilter = true;
+      continue;
+    }
+    if (matchText === "(") {
+      if (context.pendingAggregateFilter) {
+        Object.assign(context, {
+          aggregateFilterDepth: 1,
+          aggregateFilterOuterClause: context.clause,
+          clause: "non-filtering",
+          pendingAggregateFilter: false,
+        });
+      } else if (context.aggregateFilterDepth > 0) {
+        context.aggregateFilterDepth += 1;
+      }
+      continue;
+    }
+    if (matchText === ")") {
+      if (context.aggregateFilterDepth === 1) {
+        Object.assign(context, {
+          aggregateFilterDepth: 0,
+          aggregateFilterOuterClause: null,
+          clause: context.aggregateFilterOuterClause ?? "non-filtering",
+        });
+      } else if (context.aggregateFilterDepth > 1) {
+        context.aggregateFilterDepth -= 1;
+      }
+      continue;
+    }
     if (!isSqlClauseKeyword(matchText)) {
-      context = {
-        ...context,
-        hasNonConjunctiveFilter:
-          context.hasNonConjunctiveFilter || context.clause === "filtering",
-      };
+      context.hasNonConjunctiveFilter ||= context.clause !== "non-filtering";
       continue;
     }
     const keyword = matchText;
@@ -525,47 +570,40 @@ const sqlScopeContextAfter = (
       case "left":
       case "right":
       case "full":
-        context = {
+        Object.assign(context, {
           clause: "non-filtering",
-          currentJoinIsOuter: context.currentJoinIsOuter,
-          hasNonConjunctiveFilter: context.hasNonConjunctiveFilter,
           pendingJoinIsOuter: true,
-        };
+        });
         break;
       case "inner":
       case "cross":
-        context = {
+        Object.assign(context, {
           clause: "non-filtering",
-          currentJoinIsOuter: context.currentJoinIsOuter,
-          hasNonConjunctiveFilter: context.hasNonConjunctiveFilter,
           pendingJoinIsOuter: false,
-        };
+        });
         break;
       case "join":
-        context = {
+        Object.assign(context, {
           clause: "non-filtering",
           currentJoinIsOuter: context.pendingJoinIsOuter,
-          hasNonConjunctiveFilter: context.hasNonConjunctiveFilter,
           pendingJoinIsOuter: false,
-        };
+        });
         break;
       case "on":
-        context = {
-          ...context,
-          clause: context.currentJoinIsOuter ? "non-filtering" : "filtering",
-        };
+        context.clause = context.currentJoinIsOuter
+          ? "non-filtering"
+          : "inner-join-on";
+        break;
+      case "having":
+        context.clause = "non-filtering";
         break;
       case "where":
-      case "having":
-        context = { ...context, clause: "filtering" };
+        context.clause =
+          context.aggregateFilterDepth > 0 ? "non-filtering" : "query-filter";
         break;
       case "or":
       case "not":
-        context = {
-          ...context,
-          hasNonConjunctiveFilter:
-            context.hasNonConjunctiveFilter || context.clause === "filtering",
-        };
+        context.hasNonConjunctiveFilter ||= context.clause !== "non-filtering";
         break;
       case "from":
       case "group":
@@ -577,7 +615,7 @@ const sqlScopeContextAfter = (
       case "set":
       case "values":
       case "window":
-        context = { ...context, clause: "non-filtering" };
+        context.clause = "non-filtering";
         break;
       default: {
         const exhaustive: never = keyword;
@@ -695,18 +733,10 @@ export default {
           );
         };
 
-        const resolveConstSqlTemplate = (
-          expression: unknown,
-        ): AstNode | null => {
+        const resolveConstInitializer = (expression: unknown): unknown => {
           const unwrapped = unwrapExpression(expression);
-          if (
-            isAstNode(unwrapped) &&
-            unwrapped.type === "TaggedTemplateExpression"
-          ) {
-            return unwrapped;
-          }
           if (!isIdentifier(unwrapped)) {
-            return null;
+            return unwrapped;
           }
           const variable = resolveVariable(unwrapped);
           for (const definition of variable?.defs ?? []) {
@@ -720,18 +750,15 @@ export default {
             ) {
               continue;
             }
-            const init = unwrapExpression(definition.node.init);
-            if (isAstNode(init) && init.type === "TaggedTemplateExpression") {
-              return init;
-            }
+            return unwrapExpression(definition.node.init);
           }
-          return null;
+          return unwrapped;
         };
 
         const flattenSqlTemplate = (
           node: AstNode,
           ancestors: ReadonlySet<unknown> = new Set(),
-        ): SqlTemplateToken[] => {
+        ): SqlTemplateToken[][] => {
           if (ancestors.has(node)) {
             return [];
           }
@@ -739,21 +766,87 @@ export default {
           nextAncestors.add(node);
           const quasiTexts = templateQuasiTexts(node);
           const expressions = templateExpressions(node);
-          const tokens: SqlTemplateToken[] = [];
+          let paths: SqlTemplateToken[][] = [[]];
           for (const [index, quasiText] of quasiTexts.entries()) {
-            tokens.push({ type: "text", value: quasiText });
+            paths = paths.map((path): SqlTemplateToken[] => [
+              ...path,
+              { type: "text", value: quasiText },
+            ]);
             const expression = expressions.at(index);
             if (expression === undefined) {
               continue;
             }
-            const nestedTemplate = resolveConstSqlTemplate(expression);
-            if (nestedTemplate) {
-              tokens.push(...flattenSqlTemplate(nestedTemplate, nextAncestors));
-              continue;
-            }
-            tokens.push({ type: "expression", value: expression });
+            const nestedPaths = flattenSqlExpression(
+              expression,
+              nextAncestors,
+            ) ?? [
+              [
+                {
+                  type: "expression",
+                  value: expression,
+                } satisfies SqlTemplateToken,
+              ],
+            ];
+            paths = paths.flatMap((path) =>
+              nestedPaths.map((nestedPath) => path.concat(nestedPath)),
+            );
           }
-          return tokens;
+          return paths;
+        };
+
+        const flattenSqlExpression = (
+          expression: unknown,
+          ancestors: ReadonlySet<unknown>,
+        ): SqlTemplateToken[][] | null => {
+          const unwrapped = unwrapExpression(expression);
+          if (!isAstNode(unwrapped) || ancestors.has(unwrapped)) {
+            return null;
+          }
+          const resolved = resolveConstInitializer(unwrapped);
+          if (resolved !== unwrapped) {
+            const nextAncestors = new Set(ancestors);
+            nextAncestors.add(unwrapped);
+            return flattenSqlExpression(resolved, nextAncestors);
+          }
+          if (!isAstNode(resolved)) {
+            return null;
+          }
+          if (resolved.type === "TaggedTemplateExpression") {
+            return flattenSqlTemplate(resolved, ancestors);
+          }
+          if (
+            resolved.type === "SequenceExpression" &&
+            Array.isArray(resolved.expressions)
+          ) {
+            const finalExpression = resolved.expressions.at(-1);
+            return finalExpression === undefined
+              ? null
+              : flattenSqlExpression(finalExpression, ancestors);
+          }
+          if (
+            resolved.type !== "ConditionalExpression" &&
+            resolved.type !== "LogicalExpression"
+          ) {
+            return null;
+          }
+
+          const nextAncestors = new Set(ancestors);
+          nextAncestors.add(resolved);
+          const branches =
+            resolved.type === "ConditionalExpression"
+              ? [resolved.consequent, resolved.alternate]
+              : [resolved.left, resolved.right];
+          return branches.flatMap(
+            (branch) =>
+              flattenSqlExpression(branch, nextAncestors) ?? [
+                [
+                  {
+                    type: "expression",
+                    value: branch,
+                  } satisfies SqlTemplateToken,
+                ],
+              ],
+          );
         };
 
         return {
@@ -761,8 +854,9 @@ export default {
             if (!isAstNode(node)) {
               return;
             }
-            const tokens = flattenSqlTemplate(node);
-            const text = tokens
+            const tokenPaths = flattenSqlTemplate(node);
+            const text = tokenPaths
+              .flat()
               .filter(
                 (token): token is Extract<SqlTemplateToken, { type: "text" }> =>
                   token.type === "text",
@@ -777,106 +871,109 @@ export default {
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
               let hasUnscopedQuery = false;
-              const queryStates = new Map<number, ProjectionQueryState>();
-              const queryNestingState: SqlQueryNestingState = {
-                currentQueryId: 0,
-                lexState: { type: "normal" },
-                nextQueryId: 1,
-                parentheses: [],
-              };
-              const queryStateFor = (queryId: number): ProjectionQueryState => {
-                const existing = queryStates.get(queryId);
-                if (existing) {
-                  return existing;
-                }
-                const created = createProjectionQueryState();
-                queryStates.set(queryId, created);
-                return created;
-              };
-              const finishQuery = (queryId: number): void => {
-                const queryState = queryStates.get(queryId);
-                if (!queryState) {
-                  return;
-                }
-                hasUnscopedQuery ||=
-                  projectionQueryBranchIsUnscoped(queryState);
-                queryStates.delete(queryId);
-              };
-
-              for (const [index, token] of tokens.entries()) {
-                if (token.type === "text") {
-                  for (const event of sqlQueryNestingEvents(
-                    token.value,
-                    queryNestingState,
-                  )) {
-                    if (event.type === "end-query") {
-                      finishQuery(event.queryId);
-                      continue;
-                    }
-                    const queryState = queryStateFor(event.queryId);
-                    for (const part of splitAtSqlQueryBoundaries(
-                      event.text,
-                      queryState.sqlLexState,
+              for (const tokens of tokenPaths) {
+                const queryStates = new Map<number, ProjectionQueryState>();
+                const queryNestingState: SqlQueryNestingState = {
+                  currentQueryId: 0,
+                  lexState: { type: "normal" },
+                  nextQueryId: 1,
+                  parentheses: [],
+                };
+                const queryStateFor = (
+                  queryId: number,
+                ): ProjectionQueryState => {
+                  const existing = queryStates.get(queryId);
+                  if (existing) {
+                    return existing;
+                  }
+                  const created = createProjectionQueryState();
+                  queryStates.set(queryId, created);
+                  return created;
+                };
+                for (const [index, token] of tokens.entries()) {
+                  if (token.type === "text") {
+                    for (const event of sqlQueryNestingEvents(
+                      token.value,
+                      queryNestingState,
                     )) {
-                      const aliases = projectionReadAliases(part.text, table);
-                      queryState.protectedReadCount += aliases.length;
-                      queryState.unscopedReadCount += aliases.length;
-                      queryState.scopeEligibleReadCount += aliases.filter(
-                        (alias) => alias === projection.expectedAlias,
-                      ).length;
-                      queryState.scopeContext = sqlScopeContextAfter(
-                        part.text,
+                      if (event.type === "end-query") {
+                        hasUnscopedQuery ||= finishProjectionQuery(
+                          queryStates,
+                          event.queryId,
+                        );
+                        continue;
+                      }
+                      const queryState = queryStateFor(event.queryId);
+                      for (const part of splitAtSqlQueryBoundaries(
+                        event.text,
                         queryState.sqlLexState,
-                        queryState.scopeContext,
-                      );
-                      queryState.sqlLexState = sqlLexStateAfter(
-                        part.text,
-                        queryState.sqlLexState,
-                      );
-                      if (part.endsBranch) {
-                        hasUnscopedQuery ||=
-                          projectionQueryBranchIsUnscoped(queryState);
-                        resetProjectionQueryBranch(queryState);
+                      )) {
+                        const aliases = projectionReadAliases(part.text, table);
+                        queryState.protectedReadCount += aliases.length;
+                        queryState.unscopedReadCount += aliases.length;
+                        queryState.scopeEligibleReadCount += aliases.filter(
+                          (alias) => alias === projection.expectedAlias,
+                        ).length;
+                        queryState.scopeContext = sqlScopeContextAfter(
+                          part.text,
+                          queryState.sqlLexState,
+                          queryState.scopeContext,
+                        );
+                        queryState.sqlLexState = sqlLexStateAfter(
+                          part.text,
+                          queryState.sqlLexState,
+                        );
+                        if (part.endsBranch) {
+                          hasUnscopedQuery ||=
+                            projectionQueryBranchIsUnscoped(queryState);
+                          resetProjectionQueryBranch(queryState);
+                        }
                       }
                     }
+                    continue;
                   }
-                  continue;
-                }
-                const queryState = queryStateFor(
-                  queryNestingState.currentQueryId,
-                );
-                if (
-                  queryState.sqlLexState.type === "normal" &&
-                  isPrivateProjectionInterpolation(
-                    token.value,
-                    projection.tableImports,
-                  )
-                ) {
-                  queryState.protectedReadCount += 1;
-                  queryState.unscopedReadCount += 1;
-                  const nextToken = tokens.at(index + 1);
+                  const queryState = queryStateFor(
+                    queryNestingState.currentQueryId,
+                  );
                   if (
-                    nextToken?.type === "text" &&
-                    leadingProjectionAlias(nextToken.value) ===
-                      projection.expectedAlias
+                    queryState.sqlLexState.type === "normal" &&
+                    isPrivateProjectionInterpolation(
+                      token.value,
+                      projection.tableImports,
+                    )
                   ) {
-                    queryState.scopeEligibleReadCount += 1;
+                    queryState.protectedReadCount += 1;
+                    queryState.unscopedReadCount += 1;
+                    const nextToken = tokens.at(index + 1);
+                    if (
+                      nextToken?.type === "text" &&
+                      leadingProjectionAlias(nextToken.value) ===
+                        projection.expectedAlias
+                    ) {
+                      queryState.scopeEligibleReadCount += 1;
+                    }
+                  }
+                  if (
+                    queryState.unscopedReadCount > 0 &&
+                    queryState.scopeEligibleReadCount > 0 &&
+                    queryState.scopeContext.clause !== "non-filtering" &&
+                    !queryState.scopeContext.hasNonConjunctiveFilter &&
+                    queryState.sqlLexState.type === "normal" &&
+                    isApprovedScopeFragment(
+                      token.value,
+                      projection.scopeImports,
+                    )
+                  ) {
+                    queryState.unscopedReadCount -= 1;
+                    queryState.scopeEligibleReadCount -= 1;
                   }
                 }
-                if (
-                  queryState.unscopedReadCount > 0 &&
-                  queryState.scopeEligibleReadCount > 0 &&
-                  queryState.scopeContext.clause === "filtering" &&
-                  !queryState.scopeContext.hasNonConjunctiveFilter &&
-                  queryState.sqlLexState.type === "normal" &&
-                  isApprovedScopeFragment(token.value, projection.scopeImports)
-                ) {
-                  queryState.unscopedReadCount -= 1;
-                  queryState.scopeEligibleReadCount -= 1;
+                for (const queryId of [...queryStates.keys()]) {
+                  hasUnscopedQuery ||= finishProjectionQuery(
+                    queryStates,
+                    queryId,
+                  );
                 }
-              }
-              for (const queryId of [...queryStates.keys()]) {
-                finishQuery(queryId);
               }
               if (!hasUnscopedQuery) {
                 continue;

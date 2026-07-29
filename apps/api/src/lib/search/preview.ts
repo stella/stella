@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import { redistributableSourceJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import type { SafeId } from "@/api/lib/branded-types";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
@@ -148,6 +149,8 @@ export const buildSearchPreviewQuery = ({
           tsQuery,
         )}
         FROM case_law_search_documents clsd
+        JOIN case_law_decisions d ON d.id = clsd.decision_id
+        ${redistributableSourceJoin}
         WHERE clsd.decision_id = ${resultId}
           AND clsd.tsv @@ ${tsQuery}
         LIMIT 1

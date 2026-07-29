@@ -10,6 +10,7 @@ declare const sql: (
   strings: TemplateStringsArray,
   ...values: unknown[]
 ) => unknown;
+declare const enabled: boolean;
 declare const organizationId: string;
 
 const entityWorkspaceFilter = searchDocumentsAccessSql({});
@@ -81,6 +82,42 @@ const unsafeComposedPrivateRead = (() => {
   return sql`SELECT * ${privateFrom}`;
 })();
 
+const unsafeConditionalPrivateFragment = (() => {
+  const privateFrom = enabled
+    ? sql`FROM search_documents sd`
+    : sql`FROM entities e`;
+  const aliasedPrivateFrom = privateFrom;
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a conditional SQL fragment cannot hide a private projection
+  return sql`SELECT * ${aliasedPrivateFrom}`;
+})();
+
+const unsafeLogicalPrivateFragment = (() => {
+  const privateFrom = enabled && sql`FROM search_documents sd`;
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a logical SQL fragment cannot hide a private projection
+  return sql`SELECT * ${privateFrom}`;
+})();
+
+const unsafeSequencePrivateFragment = (() => {
+  // oxlint-disable-next-line no-sequences -- fixture proves the final sequence expression is inspected as the composed SQL value
+  const privateFrom = (enabled, sql`FROM search_documents sd`);
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a sequence SQL fragment cannot hide a private projection
+  return sql`SELECT * ${privateFrom}`;
+})();
+
+const unsafeScopeInConditionalSibling = (() => {
+  const privateFrom = enabled
+    ? sql`FROM search_documents sd`
+    : sql`FROM search_documents sd WHERE true ${entityWorkspaceFilter}`;
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves one conditional branch cannot authorize another
+  return sql`SELECT * ${privateFrom}`;
+})();
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves conditional table interpolation cannot hide a private projection
+const unsafeConditionalInterpolatedEntity = sql`
+  SELECT *
+  FROM ${enabled ? searchDocuments : sql`entities`} sd
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a fixed scope alias cannot authorize a differently aliased private projection
 const unsafeWrongProjectionAlias = sql`
   SELECT private_sd.*
@@ -115,6 +152,22 @@ const unsafeScopeInOuterJoin = sql`
   SELECT sd.*
   FROM search_documents sd
   LEFT JOIN entities e ON true ${entityWorkspaceFilter}
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves aggregate FILTER predicates do not constrain projected rows
+const unsafeScopeInAggregateFilter = sql`
+  SELECT json_agg(sd.title)
+  FROM search_documents sd
+  ORDER BY count(*) FILTER (WHERE true ${entityWorkspaceFilter})
+`;
+
+const aggregateFilterStart = sql`ORDER BY count(*) FILTER (WHERE true`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves aggregate FILTER context survives composed fragments
+const unsafeComposedAggregateFilterScope = sql`
+  SELECT json_agg(sd.title)
+  FROM search_documents sd
+  ${aggregateFilterStart} ${entityWorkspaceFilter})
 `;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a scope beneath OR is not a dominating conjunct
@@ -216,6 +269,13 @@ const scopedComposedRead = (() => {
   return sql`SELECT * ${privateFrom} ${scopedWhere}`;
 })();
 
+const scopedConditionalPrivateFragment = (() => {
+  const privateFrom = enabled
+    ? sql`FROM search_documents sd`
+    : sql`FROM search_documents AS sd`;
+  return sql`SELECT * ${privateFrom} WHERE true ${entityWorkspaceFilter}`;
+})();
+
 const scopedMultiBranch = sql`
   SELECT * FROM search_documents sd WHERE true ${entityWorkspaceFilter}
   UNION ALL
@@ -259,11 +319,18 @@ void [
   unsafeDollarQuotedScope,
   unsafeTableRead,
   unsafeComposedPrivateRead,
+  unsafeConditionalPrivateFragment,
+  unsafeLogicalPrivateFragment,
+  unsafeSequencePrivateFragment,
+  unsafeScopeInConditionalSibling,
+  unsafeConditionalInterpolatedEntity,
   unsafeWrongProjectionAlias,
   unsafeMultiBranch,
   unsafeScopeInLaterBranch,
   unsafeScopeInLaterStatement,
   unsafeScopeInOuterJoin,
+  unsafeScopeInAggregateFilter,
+  unsafeComposedAggregateFilterScope,
   unsafeScopeInOrBranch,
   unsafeScopeTestedAsFalse,
   unsafeScopeComparedToFalse,
@@ -280,6 +347,7 @@ void [
   scopedTestedAsTrue,
   scopedNestedPrivateRead,
   scopedComposedRead,
+  scopedConditionalPrivateFragment,
   scopedMultiBranch,
   scopedMatter,
   scopedContact,

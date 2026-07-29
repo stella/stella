@@ -111,6 +111,13 @@ describe("search preview authorization scope", () => {
   test("case-law preview stays on the intentionally public corpus", () => {
     const compiled = compilePreview("case-law");
     expect(compiled.sql).toContain("FROM case_law_search_documents clsd");
+    expect(compiled.sql).toContain(
+      "JOIN case_law_decisions d ON d.id = clsd.decision_id",
+    );
+    expect(compiled.sql).toContain(
+      "JOIN case_law_sources\n    ON case_law_sources.id = d.source_id",
+    );
+    expect(compiled.sql).toContain("allowsRedistribution");
     expect(compiled.sql).not.toContain("organization_id");
     expect(compiled.sql).not.toContain("workspace_id");
   });

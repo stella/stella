@@ -8,6 +8,7 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
+import { redistributableSourceJoin } from "@/api/handlers/case-law/decisions/search-sql";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { compareCodepoint } from "@/api/lib/collation";
@@ -678,6 +679,7 @@ export const searchGlobal = async ({
         d.updated_at
       FROM case_law_search_documents clsd
       JOIN case_law_decisions d ON d.id = clsd.decision_id
+      ${redistributableSourceJoin}
       ${caseLawBodyPreviewJoin}
       WHERE TRUE
         ${caseLawTextSearchFilter}
@@ -725,6 +727,7 @@ export const searchGlobal = async ({
       SELECT 1
       FROM case_law_search_documents clsd
       JOIN case_law_decisions d ON d.id = clsd.decision_id
+      ${redistributableSourceJoin}
       WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}
