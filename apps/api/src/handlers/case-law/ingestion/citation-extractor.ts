@@ -118,7 +118,11 @@ const stripPrefix = (text: string): string => {
  * of the same case number share one key.
  */
 export const bareCitationKey = (text: string): string =>
-  normalizeDashes(stripPrefix(text.trim())).toLowerCase().trim();
+  normalizeDashes(stripPrefix(text.trim()))
+    .toLowerCase()
+    .replaceAll(/\s+/gu, " ")
+    .replaceAll(/\s*\/\s*/gu, "/")
+    .trim();
 
 type DecisionIdentity = {
   caseNumber: string;

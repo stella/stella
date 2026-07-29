@@ -673,16 +673,32 @@ export const processDecision = async (
   // commits (a replayed decision must not re-count) — and emitted for
   // zero-gap decisions too, or aggregated events could not produce a
   // recall denominator.
-  const publisherRecall =
-    result.publisherCitedCases && result.publisherCitedCases.length > 0
-      ? {
-          publisherCitedCount: result.publisherCitedCases.length,
-          missed: publisherCitationGap({
-            extracted: citations.map((c) => c.citationText),
-            publisherCited: result.publisherCitedCases,
-          }),
-        }
-      : null;
+  // Skipped on a document-preserving refresh: the stored document and its
+  // citations are retained, so measuring the empty incoming payload would
+  // report every publisher citation as missed. Emitted here rather than
+  // after the write because an ambiguous timeout can commit the row yet
+  // throw, and the replay dedup-skips before re-measuring; the source
+  // hash is the identity a consumer deduplicates retries on.
+  if (
+    !preserveStoredDocument &&
+    result.publisherCitedCases &&
+    result.publisherCitedCases.length > 0
+  ) {
+    const recall = publisherCitationGap({
+      extracted: citations.map((c) => c.citationText),
+      publisherCited: result.publisherCitedCases,
+    });
+    const level = recall.missed.length > 0 ? "warn" : "info";
+    logger[level]("case_law.ingestion.citation_recall", {
+      caseNumber: result.caseNumber,
+      language: result.language,
+      url: result.sourceUrl ?? "",
+      sourceHash: result.rawHash,
+      publisherCitedCount: recall.publisherCitedCount,
+      missedCount: recall.missed.length,
+      missed: recall.missed.slice(0, 10).join("; "),
+    });
+  }
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
@@ -912,19 +928,6 @@ export const processDecision = async (
       await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
     }
     throw rowWrite.error;
-  }
-
-  if (publisherRecall) {
-    const level = publisherRecall.missed.length > 0 ? "warn" : "info";
-    logger[level]("case_law.ingestion.citation_recall", {
-      caseNumber: result.caseNumber,
-      language: result.language,
-      url: result.sourceUrl ?? "",
-      sourceHash: result.rawHash,
-      publisherCitedCount: publisherRecall.publisherCitedCount,
-      missedCount: publisherRecall.missed.length,
-      missed: publisherRecall.missed.slice(0, 10).join("; "),
-    });
   }
 
   // Mirror text/sections/AST to object storage, then record the keys +

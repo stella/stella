@@ -15,10 +15,24 @@ export const publisherCitationGap = ({
 }: {
   extracted: readonly string[];
   publisherCited: readonly string[];
-}): string[] => {
+}): { publisherCitedCount: number; missed: string[] } => {
   const have = new Set(extracted.map(bareCitationKey));
-  return publisherCited.filter((cited) => {
+  // Publisher lists repeat the same decision under spelling variants
+  // ("U 1/86" vs "U 1 /86"); the canonical key deduplicates them so the
+  // denominator counts decisions, not spellings.
+  const canonical = new Map<string, string>();
+  for (const cited of publisherCited) {
     const trimmed = cited.trim();
-    return trimmed.length > 0 && !have.has(bareCitationKey(trimmed));
-  });
+    if (trimmed.length === 0) {
+      continue;
+    }
+    const key = bareCitationKey(trimmed);
+    if (!canonical.has(key)) {
+      canonical.set(key, trimmed);
+    }
+  }
+  const missed = [...canonical.entries()]
+    .filter(([key]) => !have.has(key))
+    .map(([, spelling]) => spelling);
+  return { publisherCitedCount: canonical.size, missed };
 };
