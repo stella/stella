@@ -669,24 +669,20 @@ export const processDecision = async (
 
   // Where the publisher supplies its own cited-decisions list, it is the
   // one ground truth extraction can be measured against without measuring
-  // it against itself: a gap here is a citation shape the patterns do not
-  // cover, escalated for the citation-quality routine to pick up.
-  if (result.publisherCitedCases && result.publisherCitedCases.length > 0) {
-    const missedPublisherCitations = publisherCitationGap({
-      extracted: citations.map((c) => c.citationText),
-      publisherCited: result.publisherCitedCases,
-    });
-    if (missedPublisherCitations.length > 0) {
-      logger.warn("case_law.ingestion.citation_recall_gap", {
-        caseNumber: result.caseNumber,
-        language: result.language,
-        url: result.sourceUrl ?? "",
-        publisherCitedCount: result.publisherCitedCases.length,
-        missedCount: missedPublisherCitations.length,
-        missed: missedPublisherCitations.slice(0, 10).join("; "),
-      });
-    }
-  }
+  // it against itself. Computed here, emitted only after the row write
+  // commits (a replayed decision must not re-count) — and emitted for
+  // zero-gap decisions too, or aggregated events could not produce a
+  // recall denominator.
+  const publisherRecall =
+    result.publisherCitedCases && result.publisherCitedCases.length > 0
+      ? {
+          publisherCitedCount: result.publisherCitedCases.length,
+          missed: publisherCitationGap({
+            extracted: citations.map((c) => c.citationText),
+            publisherCited: result.publisherCitedCases,
+          }),
+        }
+      : null;
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
@@ -916,6 +912,19 @@ export const processDecision = async (
       await discardOrphanedCorpusObjects(corpusPlan.written, decisionId);
     }
     throw rowWrite.error;
+  }
+
+  if (publisherRecall) {
+    const level = publisherRecall.missed.length > 0 ? "warn" : "info";
+    logger[level]("case_law.ingestion.citation_recall", {
+      caseNumber: result.caseNumber,
+      language: result.language,
+      url: result.sourceUrl ?? "",
+      sourceHash: result.rawHash,
+      publisherCitedCount: publisherRecall.publisherCitedCount,
+      missedCount: publisherRecall.missed.length,
+      missed: publisherRecall.missed.slice(0, 10).join("; "),
+    });
   }
 
   // Mirror text/sections/AST to object storage, then record the keys +
