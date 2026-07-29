@@ -109,7 +109,10 @@ import type {
   RecentSearch,
   SearchRecentsScope,
 } from "@/lib/search-recents";
-import { getSearchPreviewTarget } from "@/lib/search.logic";
+import {
+  getSearchPreviewTarget,
+  normalizeSearchQuery,
+} from "@/lib/search.logic";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 type SearchSummaryCitation = {
@@ -1338,7 +1341,7 @@ const SearchPreviewPanel = ({
       {hit ? (
         <SearchPreviewContent
           hit={hit}
-          key={`${hit.type}:${hit.id}:${hit.updatedAt}`}
+          key={`${hit.type}:${hit.id}:${hit.updatedAt}:${normalizeSearchQuery(query)}`}
           onOpen={onOpen}
           organizationId={organizationId}
           query={query}

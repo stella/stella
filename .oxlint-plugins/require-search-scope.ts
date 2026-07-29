@@ -149,6 +149,69 @@ const templateExpressions = (node: Record<string, unknown>): unknown[] => {
 const projectionReadCount = (text: string, table: string): number =>
   text.match(new RegExp(`\\b${table}\\b`, "giu"))?.length ?? 0;
 
+type SqlLexState =
+  | "block-comment"
+  | "double-quote"
+  | "line-comment"
+  | "normal"
+  | "single-quote";
+
+const sqlLexStateAfter = (
+  text: string,
+  initialState: SqlLexState,
+): SqlLexState => {
+  let state = initialState;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    switch (state) {
+      case "normal":
+        if (char === "-" && next === "-") {
+          state = "line-comment";
+          index += 1;
+        } else if (char === "/" && next === "*") {
+          state = "block-comment";
+          index += 1;
+        } else if (char === "'") {
+          state = "single-quote";
+        } else if (char === '"') {
+          state = "double-quote";
+        }
+        break;
+      case "line-comment":
+        if (char === "\n" || char === "\r") {
+          state = "normal";
+        }
+        break;
+      case "block-comment":
+        if (char === "*" && next === "/") {
+          state = "normal";
+          index += 1;
+        }
+        break;
+      case "single-quote":
+        if (char === "'" && next === "'") {
+          index += 1;
+        } else if (char === "'") {
+          state = "normal";
+        }
+        break;
+      case "double-quote":
+        if (char === '"' && next === '"') {
+          index += 1;
+        } else if (char === '"') {
+          state = "normal";
+        }
+        break;
+      default: {
+        const exhaustive: never = state;
+        return exhaustive;
+      }
+    }
+  }
+  return state;
+};
+
 export default {
   meta: { name: "require-search-scope" },
   rules: {
@@ -268,6 +331,12 @@ export default {
 
             const expressions = templateExpressions(node);
             const quasiTexts = templateQuasiTexts(node);
+            const expressionIsSqlCode: boolean[] = [];
+            let sqlLexState: SqlLexState = "normal";
+            for (const quasiText of quasiTexts) {
+              sqlLexState = sqlLexStateAfter(quasiText, sqlLexState);
+              expressionIsSqlCode.push(sqlLexState === "normal");
+            }
             for (const [table, projection] of Object.entries(
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
@@ -276,6 +345,7 @@ export default {
                 unscopedReadCount += projectionReadCount(quasiText, table);
                 const expression = expressions.at(index);
                 if (
+                  expressionIsSqlCode[index] === true &&
                   expression !== undefined &&
                   isPrivateProjectionInterpolation(
                     expression,
@@ -286,6 +356,7 @@ export default {
                 }
                 if (
                   unscopedReadCount > 0 &&
+                  expressionIsSqlCode[index] === true &&
                   expression !== undefined &&
                   isApprovedScopeFragment(expression, projection.scopeImports)
                 ) {

@@ -50,6 +50,16 @@ const unsafeShadowedHelper = (() => {
   return sql`SELECT * FROM search_documents sd WHERE true ${searchDocumentsAccessSql({})}`;
 })();
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves line-comment interpolation cannot authorize a private read
+const unsafeLineCommentScope = sql`
+  SELECT * FROM search_documents sd -- ${entityWorkspaceFilter}
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves block-comment interpolation cannot authorize a private read
+const unsafeBlockCommentScope = sql`
+  SELECT * FROM search_documents sd /* ${entityWorkspaceFilter} */
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves every UNION branch needs its own verified scope
 const unsafeMultiBranch = sql`
   SELECT * FROM search_documents sd
@@ -74,6 +84,12 @@ const scopedSingleWorkspace = sql`
 
 const scopedInterpolatedEntity = sql`
   SELECT * FROM ${searchDocuments} sd WHERE true ${entityWorkspaceFilter}
+`;
+
+const scopedAfterLineComment = sql`
+  SELECT * FROM search_documents sd
+  -- explanatory comment
+  WHERE true ${entityWorkspaceFilter}
 `;
 
 const scopedMultiBranch = sql`
@@ -113,10 +129,13 @@ void [
   unsafeConditionalScope,
   unsafeNestedHelper,
   unsafeShadowedHelper,
+  unsafeLineCommentScope,
+  unsafeBlockCommentScope,
   unsafeMultiBranch,
   scopedEntity,
   scopedSingleWorkspace,
   scopedInterpolatedEntity,
+  scopedAfterLineComment,
   scopedMultiBranch,
   scopedMatter,
   scopedContact,

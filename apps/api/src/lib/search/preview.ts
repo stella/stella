@@ -35,7 +35,36 @@ const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT =
   SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT -
   SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT -
   1;
+const SEARCH_PREVIEW_BODY_CHUNK_STEP = 24_000;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
+
+const previewBodyExcerpt = (body: SQL, tsQuery: SQL) => sql`
+  coalesce(
+    (
+      SELECT substring(
+        ${body}
+        FROM chunk_start
+        FOR ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}
+      )
+      FROM generate_series(
+        1,
+        greatest(char_length(${body}), 1),
+        ${SEARCH_PREVIEW_BODY_CHUNK_STEP}
+      ) AS chunks(chunk_start)
+      WHERE to_tsvector(
+        'public.stella_unaccent'::regconfig,
+        substring(
+          ${body}
+          FROM chunk_start
+          FOR ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}
+        )
+      ) @@ ${tsQuery}
+      ORDER BY chunk_start
+      LIMIT 1
+    ),
+    left(${body}, ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT})
+  )
+`;
 
 const previewHeadline = (title: SQL, body: SQL, tsQuery: SQL) => sql`
   left(
@@ -43,7 +72,7 @@ const previewHeadline = (title: SQL, body: SQL, tsQuery: SQL) => sql`
       'public.stella_unaccent'::regconfig,
       left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
         || ' ' ||
-      left(${body}, ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}),
+      ${previewBodyExcerpt(body, tsQuery)},
       ${tsQuery},
       ${SEARCH_PREVIEW_HEADLINE_CONFIG}
     ),
