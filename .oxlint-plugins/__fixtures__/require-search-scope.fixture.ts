@@ -12,6 +12,8 @@ declare const enabled: boolean;
 declare const organizationId: string;
 declare const pickFirst: (...values: unknown[]) => unknown;
 
+const opaqueFragment = <Value>({ fragment }: { fragment: Value }) => fragment;
+
 const entityWorkspaceFilter = searchDocumentsAccessSql({});
 const privateSearchTable = searchDocuments;
 const singleWorkspaceFilter = searchDocumentsAccessSql({});
@@ -273,6 +275,13 @@ const unsafeJoinedMultiBranch = (() => {
 const unsafeRootJoinedPrivateRead = sql.join([
   sql`SELECT * FROM search_`,
   sql`documents sd`,
+]);
+
+const unsafeOpaqueRootJoinedPrivateRead = sql.join([
+  opaqueFragment({
+    // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an opaque join element cannot suppress standalone fragment inspection
+    fragment: sql`SELECT * FROM search_documents sd`,
+  }),
 ]);
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.raw cannot bypass private projection detection
@@ -957,6 +966,18 @@ const scopedRootJoinedPrivateRead = sql.join([
   entityWorkspaceFilter,
 ]);
 
+const scopedInterpolatedRootJoinedPrivateRead = sql`
+  ${sql.join([
+    sql`SELECT * FROM search_documents sd WHERE true `,
+    entityWorkspaceFilter,
+  ])}
+`;
+
+const scopedNestedRootJoinedPrivateRead = sql.join([
+  sql`SELECT * `,
+  sql.join([sql`FROM search_documents sd WHERE true `, entityWorkspaceFilter]),
+]);
+
 const publicRootJoinedRead = sql.join([
   sql`SELECT * FROM entities e`,
   sql` WHERE e.id IS NOT NULL`,
@@ -1079,6 +1100,7 @@ void [
   unsafeSplitJoinedPrivateFragment,
   unsafeJoinedMultiBranch,
   unsafeRootJoinedPrivateRead,
+  unsafeOpaqueRootJoinedPrivateRead,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
   unsafeRawRelationFragment,
@@ -1181,6 +1203,8 @@ void [
   scopedJoinedMultiBranch,
   scopedRawJoinedMultiBranch,
   scopedRootJoinedPrivateRead,
+  scopedInterpolatedRootJoinedPrivateRead,
+  scopedNestedRootJoinedPrivateRead,
   publicRootJoinedRead,
   scopedOpaquePrivateFragment,
   scopedConditionalPrivateFragment,

@@ -2184,9 +2184,77 @@ export default {
           }
         };
 
+        const isVerifiedSqlCompositionParent = (
+          child: AstNode,
+          parent: AstNode,
+        ): boolean => {
+          // Deferral is safe only through shapes the SQL flattener is
+          // guaranteed to consume on its way to the enclosing join.
+          switch (parent.type) {
+            case "ArrayExpression":
+              return (
+                Array.isArray(parent.elements) &&
+                parent.elements.some((element) => element === child)
+              );
+            case "ChainExpression":
+            case "TSAsExpression":
+            case "TSSatisfiesExpression":
+              return parent.expression === child;
+            case "ConditionalExpression":
+              return parent.consequent === child || parent.alternate === child;
+            case "LogicalExpression":
+              return parent.left === child || parent.right === child;
+            case "SequenceExpression":
+              return (
+                Array.isArray(parent.expressions) &&
+                parent.expressions.at(-1) === child
+              );
+            case "SpreadElement":
+              return parent.argument === child;
+            case "TaggedTemplateExpression":
+              return parent.quasi === child;
+            case "TemplateLiteral":
+              return (
+                Array.isArray(parent.expressions) &&
+                parent.expressions.some((expression) => expression === child)
+              );
+            default:
+              return false;
+          }
+        };
+
+        const hasVerifiedEnclosingSqlJoin = (node: AstNode): boolean => {
+          const visited = new Set<unknown>([node]);
+          let child = node;
+          let parent = isAstNode(node.parent) ? node.parent : null;
+          while (parent !== null && !visited.has(parent)) {
+            visited.add(parent);
+            if (isSqlMethodCall(parent, "join")) {
+              if (
+                !Array.isArray(parent.arguments) ||
+                !parent.arguments.some((argument) => argument === child)
+              ) {
+                return false;
+              }
+              // The sql.join visitor inspects this same flattened composition.
+              // An opaque join leaves the child to be inspected independently.
+              return flattenSqlExpression(parent, new Set()) !== null;
+            }
+            if (!isVerifiedSqlCompositionParent(child, parent)) {
+              return false;
+            }
+            child = parent;
+            parent = isAstNode(parent.parent) ? parent.parent : null;
+          }
+          return false;
+        };
+
         return {
           TaggedTemplateExpression(node: unknown) {
             if (!isAstNode(node)) {
+              return;
+            }
+            if (hasVerifiedEnclosingSqlJoin(node)) {
               return;
             }
             inspectSqlTokenPaths(node, flattenSqlTemplate(node));
