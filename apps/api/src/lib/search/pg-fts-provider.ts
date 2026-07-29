@@ -56,10 +56,9 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const { organizationId, limit } = query;
 
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
-  const accessibleWorkspaceIds =
-    query.workspaceIds === undefined ? [query.workspaceId] : query.workspaceIds;
   const selectedWorkspaceIds =
     query.workspaceId === undefined ? [] : [query.workspaceId];
+  const accessibleWorkspaceIds = query.workspaceIds ?? selectedWorkspaceIds;
   const workspaceAccessFilter = workspaceAccessSql({
     column: sql`sd.workspace_id`,
     accessibleWorkspaceIds,
