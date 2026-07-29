@@ -1094,7 +1094,7 @@ const discoverGithubSkillPackages = async (
     tree,
   });
   const entries = await mapWithConcurrency({
-    callback: async (skillPath): Promise<DiscoveredSkillPackage | null> => {
+    transform: async (skillPath): Promise<DiscoveredSkillPackage | null> => {
       const source = await fetchGithubSkillSource({
         commitSha,
         owner: target.owner,
@@ -1314,13 +1314,13 @@ const assertGithubRepositoryCoordinates = ({
 };
 
 const mapWithConcurrency = async <R>({
-  callback,
   items,
   limit,
+  transform,
 }: {
-  callback: (item: string) => Promise<R>;
   items: readonly string[];
   limit: number;
+  transform: (item: string) => Promise<R>;
 }): Promise<R[]> => {
   const results: R[] = [];
   let nextIndex = 0;
@@ -1333,7 +1333,7 @@ const mapWithConcurrency = async <R>({
         const item = items.at(index);
         if (item !== undefined) {
           // oxlint-disable-next-line no-await-in-loop -- each worker claims one bounded queue item at a time
-          results[index] = await callback(item);
+          results[index] = await transform(item);
         }
       }
       return undefined;
