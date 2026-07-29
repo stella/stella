@@ -56,17 +56,15 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const { organizationId, limit } = query;
 
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
-  const workspaceAccessFilter = query.workspaceIds
-    ? workspaceAccessSql({
-        column: sql`sd.workspace_id`,
-        accessibleWorkspaceIds: query.workspaceIds,
-        selectedWorkspaceIds: query.workspaceId ? [query.workspaceId] : [],
-      })
-    : workspaceAccessSql({
-        column: sql`sd.workspace_id`,
-        accessibleWorkspaceIds: [query.workspaceId],
-        selectedWorkspaceIds: [],
-      });
+  const accessibleWorkspaceIds =
+    query.workspaceIds === undefined ? [query.workspaceId] : query.workspaceIds;
+  const selectedWorkspaceIds =
+    query.workspaceId === undefined ? [] : [query.workspaceId];
+  const workspaceAccessFilter = workspaceAccessSql({
+    column: sql`sd.workspace_id`,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+  });
   const kindFilter =
     query.kinds && query.kinds.length > 0
       ? sql`AND sd.kind = ANY(${typedPgArray(query.kinds, "text")})`
