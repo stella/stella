@@ -7,7 +7,13 @@ export const decodeCursor = (
   cursor: string,
 ): { score: number; id: string } | null => {
   const decoded = Buffer.from(cursor, "base64").toString();
-  const [scoreStr, id] = decoded.split(":");
+  const separatorIndex = decoded.indexOf(":");
+  if (separatorIndex < 0) {
+    return null;
+  }
+
+  const scoreStr = decoded.slice(0, separatorIndex);
+  const id = decoded.slice(separatorIndex + 1);
   const score = Number(scoreStr);
   if (!Number.isFinite(score) || !id) {
     return null;

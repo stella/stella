@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
+import { encodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import {
@@ -164,5 +165,78 @@ describe("global search SQL scope", () => {
       lastEditedByName: "Clara Novak",
       lastEditedByImage: "https://example.test/clara.png",
     });
+  });
+
+  test("applies the score/id cursor and bounded lookahead to every source", async () => {
+    const sourceCases = [
+      { type: "document", idSql: "'entity:' || sd.entity_id::text" },
+      { type: "matter", idSql: "'matter:' || wsd.workspace_id::text" },
+      { type: "contact", idSql: "'contact:' || csd.contact_id::text" },
+      {
+        type: "case-law",
+        idSql: "'case-law:' || clsd.decision_id::text",
+      },
+      { type: "chat", idSql: "'chat:' || cst.thread_id::text" },
+    ] as const;
+    const dialect = new PgDialect();
+
+    for (const source of sourceCases) {
+      clearRootDbMocks();
+      await searchGlobal({
+        query: "contract",
+        organizationId: toSafeId<"organization">("org_1"),
+        userId: toSafeId<"user">("user_1"),
+        accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+        selectedWorkspaceIds: [],
+        types: [source.type],
+        editedByUserIds: [],
+        mimeTypes: [],
+        updatedTo: "2026-07-29T08:00:00.000Z",
+        cursor: encodeCursor(0.75, "entity:boundary"),
+        limit: 3,
+      });
+
+      expect(rootDbExecuteMock).toHaveBeenCalledTimes(1);
+      const query = rootDbExecuteMock.mock.calls.at(0)?.at(0);
+      if (query === undefined) {
+        throw new Error(`Missing ${source.type} search query`);
+      }
+      const compiled = dialect.sqlToQuery(query);
+      expect(compiled.sql).toContain(source.idSql);
+      expect(compiled.sql).toContain('COLLATE "C" <');
+      expect(compiled.params).toContain(0.75);
+      expect(compiled.params.at(-1)).toBe(4);
+    }
+  });
+
+  test("uses updated time as the keyset value for empty-query search", async () => {
+    const cursorValue = Date.parse("2026-07-29T08:00:00.000Z");
+    const dialect = new PgDialect();
+
+    await searchGlobal({
+      query: "",
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+      accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+      selectedWorkspaceIds: [],
+      types: ["document"],
+      editedByUserIds: [],
+      mimeTypes: [],
+      cursor: encodeCursor(cursorValue, "entity:boundary"),
+      limit: 3,
+    });
+
+    expect(rootDbExecuteMock).toHaveBeenCalledTimes(1);
+    const query = rootDbExecuteMock.mock.calls.at(0)?.at(0);
+    if (query === undefined) {
+      throw new Error("Missing empty-query document search query");
+    }
+    const compiled = dialect.sqlToQuery(query);
+    expect(compiled.sql).toContain(
+      "extract(epoch from sd.updated_at)::float8 * 1000",
+    );
+    expect(compiled.sql).not.toContain("sd.tsv @@");
+    expect(compiled.params).toContain(cursorValue);
+    expect(compiled.params.at(-1)).toBe(4);
   });
 });

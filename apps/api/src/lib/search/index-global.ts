@@ -18,15 +18,16 @@ import {
   searchDocumentsAccessSql,
   workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
-import { decodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 import {
-  GLOBAL_SEARCH_MAX_OFFSET,
-  resolveGlobalSearchNextCursor,
+  compareScoredSearchHits,
+  decodeGlobalSearchCursor,
+  globalSearchCursorSql,
+  paginateScoredSearchHits,
 } from "@/api/lib/search/pagination";
 import {
   buildSearchPreviewPassages,
@@ -47,6 +48,7 @@ import type {
 const REINDEX_BATCH_SIZE = 100;
 const WORKSPACE_REINDEX_CONCURRENCY = 4;
 const GLOBAL_SEARCH_FACET_LIMIT = 20;
+const GLOBAL_SEARCH_COUNT_LIMIT = 1000;
 
 type RawRow = Record<string, unknown>;
 type CountRow = { total?: unknown };
@@ -239,7 +241,7 @@ const mapMatterHit = (row: RawRow): ScoredGlobalSearchHit => {
     color: toNullableString(row["color"]),
   };
 
-  return { hit, score: Number(row["score"]) + 0.15 };
+  return { hit, score: Number(row["score"]) };
 };
 
 const mapContactHit = (row: RawRow): ScoredGlobalSearchHit => {
@@ -366,18 +368,6 @@ const toMimeTypeFacetMap = (
   return map;
 };
 
-const globalSearchOffset = (cursor: string | undefined): number => {
-  const parsedCursor = cursor ? decodeCursor(cursor) : null;
-  if (parsedCursor?.id !== "global") {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    Math.min(GLOBAL_SEARCH_MAX_OFFSET, Math.floor(parsedCursor.score)),
-  );
-};
-
 type FilterFragmentInput = {
   query: string;
   types: readonly GlobalSearchResultType[];
@@ -473,6 +463,16 @@ const buildSearchFilterFragments = ({
     hasSearchQuery
       ? sql`ts_rank(${tsv}, ${tsQuery})::float8 AS score`
       : sql`0::float8 AS score`;
+  const searchCursorValue = ({
+    tsv,
+    updatedAt,
+  }: {
+    tsv: SQL;
+    updatedAt: SQL;
+  }): SQL =>
+    hasSearchQuery
+      ? sql`ts_rank(${tsv}, ${tsQuery})::float8`
+      : sql`extract(epoch from ${updatedAt})::float8 * 1000`;
   const searchOrderBy = ({
     id,
     updatedAt,
@@ -512,6 +512,7 @@ const buildSearchFilterFragments = ({
     chatTextSearchFilter,
     searchHeadline,
     searchScore,
+    searchCursorValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -533,12 +534,12 @@ export const searchGlobal = async ({
   cursor,
   limit,
 }: GlobalSearchQuery): Promise<GlobalSearchResult> => {
-  const offset = globalSearchOffset(cursor);
-  const fetchLimit = offset + limit;
+  const searchCursor = decodeGlobalSearchCursor(cursor);
+  const fetchLimit = limit + 1;
   // Counts and facets are computed only on the first page. Subsequent
   // pages reuse the values the client already has, saving ~7 of the
   // 15 SQL round-trips per request.
-  const isFirstPage = offset === 0;
+  const isFirstPage = searchCursor === null;
   const {
     selected,
     restrictToEntities,
@@ -556,6 +557,7 @@ export const searchGlobal = async ({
     chatTextSearchFilter,
     searchHeadline,
     searchScore,
+    searchCursorValue,
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
@@ -618,6 +620,14 @@ export const searchGlobal = async ({
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${entityWorkspaceFilter}
+        ${globalSearchCursorSql({
+          cursor: searchCursor,
+          score: searchCursorValue({
+            tsv: sql`sd.tsv`,
+            updatedAt: sql`sd.updated_at`,
+          }),
+          id: sql`'entity:' || sd.entity_id::text`,
+        })}
       ORDER BY ${searchOrderBy({ id: sql`sd.entity_id`, updatedAt: sql`sd.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -640,6 +650,14 @@ export const searchGlobal = async ({
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
         ${matterWorkspaceFilter}
+        ${globalSearchCursorSql({
+          cursor: searchCursor,
+          score: searchCursorValue({
+            tsv: sql`wsd.tsv`,
+            updatedAt: sql`wsd.updated_at`,
+          }),
+          id: sql`'matter:' || wsd.workspace_id::text`,
+        })}
       ORDER BY ${searchOrderBy({ id: sql`wsd.workspace_id`, updatedAt: sql`wsd.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -663,6 +681,14 @@ export const searchGlobal = async ({
         ${contactUpdatedFilter}
         ${contactTextSearchFilter}
         ${contactWorkspaceFilter}
+        ${globalSearchCursorSql({
+          cursor: searchCursor,
+          score: searchCursorValue({
+            tsv: sql`csd.tsv`,
+            updatedAt: sql`csd.updated_at`,
+          }),
+          id: sql`'contact:' || csd.contact_id::text`,
+        })}
       ORDER BY ${searchOrderBy({ id: sql`csd.contact_id`, updatedAt: sql`csd.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -688,6 +714,14 @@ export const searchGlobal = async ({
       WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}
+        ${globalSearchCursorSql({
+          cursor: searchCursor,
+          score: searchCursorValue({
+            tsv: sql`clsd.tsv`,
+            updatedAt: sql`d.updated_at`,
+          }),
+          id: sql`'case-law:' || clsd.decision_id::text`,
+        })}
       ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -719,6 +753,14 @@ export const searchGlobal = async ({
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
         AND ${chatScope}
+        ${globalSearchCursorSql({
+          cursor: searchCursor,
+          score: searchCursorValue({
+            tsv: sql`cst.tsv`,
+            updatedAt: sql`t.updated_at`,
+          }),
+          id: sql`'chat:' || cst.thread_id::text`,
+        })}
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -736,7 +778,7 @@ export const searchGlobal = async ({
       WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}
-      LIMIT ${GLOBAL_SEARCH_MAX_OFFSET}
+      LIMIT ${GLOBAL_SEARCH_COUNT_LIMIT}
     ) bounded_case_law
   `;
 
@@ -1033,12 +1075,16 @@ export const searchGlobal = async ({
     // hit.id tiebreak for deterministic ranking, not display text
   ].sort((a, b) =>
     hasSearchQuery
-      ? b.score - a.score || compareCodepoint(b.hit.id, a.hit.id)
+      ? compareScoredSearchHits(a, b)
       : compareCodepoint(b.hit.updatedAt, a.hit.updatedAt) ||
         compareCodepoint(b.hit.id, a.hit.id),
   );
 
-  const hits = scoredHits.slice(offset, offset + limit).map(({ hit }) => hit);
+  const paginationHits = scoredHits.map(({ hit, score }) => ({
+    hit,
+    score: hasSearchQuery ? score : new Date(hit.updatedAt).getTime(),
+  }));
+  const page = paginateScoredSearchHits(paginationHits, limit);
   const totalEntities = totalFrom(entityCount);
   const totalMatters = totalFrom(matterCount);
   const totalContacts = totalFrom(contactCount);
@@ -1081,7 +1127,7 @@ export const searchGlobal = async ({
   const mimeTypeFacetMap = toMimeTypeFacetMap(mimeTypeFacetRows);
 
   return {
-    hits,
+    hits: page.items,
     facets: {
       type: facetBuckets(typeFacetMap),
       workspace: facetBuckets(workspaceFacetMap),
@@ -1089,15 +1135,7 @@ export const searchGlobal = async ({
       mimeType: facetBuckets(mimeTypeFacetMap),
     },
     totalCount,
-    nextCursor: resolveGlobalSearchNextCursor({
-      limit,
-      offset,
-      // Counts are skipped on paginated requests; signal with `null`
-      // so the cursor decision falls back to the hit count instead of
-      // misreading a zeroed total as "no more results".
-      totalCount: isFirstPage ? totalCount : null,
-      hitsLength: hits.length,
-    }),
+    nextCursor: page.nextCursor,
   };
 };
 

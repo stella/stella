@@ -28,11 +28,8 @@ describe("search cursor encoding", () => {
 });
 
 describe("search cursor encoding — properties", () => {
-  // The decoder splits on ":" and takes only the first two parts, so ids containing ":"
-  // cannot round-trip. -0 is excluded because String(-0) === "0" loses the sign.
-  const arbId = fc
-    .string({ minLength: 1, maxLength: 32 })
-    .filter((s) => !s.includes(":"));
+  // -0 is excluded because String(-0) === "0" loses the sign.
+  const arbId = fc.string({ minLength: 1, maxLength: 32 });
   const arbScore = fc
     .double({ noNaN: true, noDefaultInfinity: true })
     .filter((n) => !Object.is(n, -0));
