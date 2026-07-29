@@ -40,6 +40,22 @@ describe("resolveInvokeRateLimit", () => {
       DEFAULT_INVOKE_RATE_LIMIT,
     );
   });
+
+  test("mirrors the source-fetch REST limit for skill capabilities", () => {
+    for (const capabilityId of [
+      "skills.discover",
+      "skills.import",
+      "skills.import-url",
+    ]) {
+      expect(resolveInvokeRateLimit(capabilityId)).toEqual({
+        windowMs: 60_000,
+        max: 10,
+      });
+      expect(resolveInvokeRateLimit(capabilityId)).not.toBe(
+        DEFAULT_INVOKE_RATE_LIMIT,
+      );
+    }
+  });
 });
 
 describe("consumeInvokeCapabilityRateLimit", () => {

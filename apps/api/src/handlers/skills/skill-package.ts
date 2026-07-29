@@ -941,6 +941,25 @@ export const resolveGithubRefAndPath = async ({
   refExists?: GithubRefExists;
   repo: string;
 }): Promise<Pick<GithubSkillPath, "ref" | "rootPath"> | null> => {
+  // Commit-pinned URLs are unambiguous: the SHA is always one path segment.
+  // Resolve it before trying longest-first branch/tag candidates so a nested
+  // path does not trigger one GitHub ref probe per ancestor.
+  const pinnedCommit = parts[0];
+  if (
+    pinnedCommit !== undefined &&
+    GITHUB_COMMIT_SHA_PATTERN.test(pinnedCommit) &&
+    parts.length - 1 >= minPathParts
+  ) {
+    const path = parts.slice(1);
+    return {
+      ref: pinnedCommit,
+      rootPath:
+        path.at(-1) === SKILL_FILE_NAME
+          ? path.slice(0, -1).join("/")
+          : path.join("/"),
+    };
+  }
+
   const firstRefPartCount = Math.min(
     parts.length - minPathParts,
     GITHUB_REF_CANDIDATE_LIMIT,

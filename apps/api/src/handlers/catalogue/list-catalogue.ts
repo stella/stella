@@ -530,7 +530,7 @@ type AppendCustomSkillsArgs = {
   organizationId: SafeId<"organization">;
 };
 
-const appendCustomSkillEntries = ({
+export const appendCustomSkillEntries = ({
   response,
   skills,
   curatedSlugs,
@@ -546,23 +546,35 @@ const appendCustomSkillEntries = ({
     if (curatedSlugs.has(row.slug)) {
       continue;
     }
-    if (row.scope === "team" && !canDeleteTeamSkills) {
-      continue;
-    }
     const existing = bySlug.get(row.slug);
-    if (!existing || row.scope === "team") {
+    if (
+      !existing ||
+      (existing.scope !== row.scope &&
+        (canDeleteTeamSkills ? row.scope === "team" : row.scope === "private"))
+    ) {
       bySlug.set(row.slug, row);
     }
   }
   for (const row of bySlug.values()) {
-    response.push(buildCustomSkillCatalogueEntry(row, organizationId));
+    response.push(
+      buildCustomSkillCatalogueEntry({
+        canDeleteTeamSkills,
+        organizationId,
+        skill: row,
+      }),
+    );
   }
 };
 
-const buildCustomSkillCatalogueEntry = (
-  skill: CustomSkillRow,
-  organizationId: SafeId<"organization">,
-): CatalogueEntryResponse => ({
+const buildCustomSkillCatalogueEntry = ({
+  canDeleteTeamSkills,
+  organizationId,
+  skill,
+}: {
+  canDeleteTeamSkills: boolean;
+  organizationId: SafeId<"organization">;
+  skill: CustomSkillRow;
+}): CatalogueEntryResponse => ({
   kind: "skill",
   slug: skill.slug,
   displayName: skill.name,
@@ -579,8 +591,12 @@ const buildCustomSkillCatalogueEntry = (
   isLocked: false,
   isRecommendedForOrg: false,
   installState: "installed",
-  installedSkillId: skill.id,
-  chatSkillId: skill.id,
+  installedSkillId:
+    skill.scope === "private" || canDeleteTeamSkills ? skill.id : null,
+  chatSkillId:
+    skill.scope === "private" || canDeleteTeamSkills || skill.enabled
+      ? skill.id
+      : null,
   installedConnectorSlug: null,
   enabled: skill.enabled,
 });

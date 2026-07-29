@@ -61,6 +61,21 @@ export const INVOKE_RATE_LIMIT_OVERRIDES: Record<string, InvokeRateLimit> = {
     windowMs: API_RATE_LIMITS.upload.duration,
     max: API_RATE_LIMITS.upload.max,
   },
+  // Skill discovery/import fetches third-party URLs. Their REST routes share
+  // the dedicated source-fetch budget; generic capability invocation must not
+  // fall back to the looser default budget and amplify outbound traffic.
+  "skills.discover": {
+    windowMs: API_RATE_LIMITS.skillSource.duration,
+    max: API_RATE_LIMITS.skillSource.max,
+  },
+  "skills.import": {
+    windowMs: API_RATE_LIMITS.skillSource.duration,
+    max: API_RATE_LIMITS.skillSource.max,
+  },
+  "skills.import-url": {
+    windowMs: API_RATE_LIMITS.skillSource.duration,
+    max: API_RATE_LIMITS.skillSource.max,
+  },
 };
 
 export const resolveInvokeRateLimit = (capabilityId: string): InvokeRateLimit =>

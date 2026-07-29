@@ -409,11 +409,15 @@ Instructions.`,
 
   test("resolves GitHub skill paths pinned to commit SHAs", async () => {
     const commitSha = "0123456789abcdef0123456789abcdef01234567";
+    let refProbeCount = 0;
     const result = await resolveGithubRefAndPath({
       minPathParts: 1,
       owner: "org",
       parts: [commitSha, "skills", "review", "SKILL.md"],
-      refExists: async () => false,
+      refExists: async () => {
+        refProbeCount += 1;
+        return false;
+      },
       repo: "repo",
     });
 
@@ -421,6 +425,7 @@ Instructions.`,
       ref: commitSha,
       rootPath: "skills/review",
     });
+    expect(refProbeCount).toBe(0);
   });
 
   test("prefers the longest matching GitHub ref before deriving the skill path", async () => {
