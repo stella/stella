@@ -50,6 +50,10 @@ type RuleContext = {
           node: unknown;
         }
       | {
+          messageId: "unavailableRelation";
+          node: unknown;
+        }
+      | {
           messageId: "unavailableCooked";
           node: unknown;
         },
@@ -530,6 +534,24 @@ const hasProjectionReadIntroducer = (
   return (
     commaIndex >= 0 && commaIntroducesReadRelation(precedingText, commaIndex)
   );
+};
+
+const interpolationMayIntroduceReadRelation = (
+  tokens: readonly SqlTemplateToken[],
+  expressionIndex: number,
+): boolean => {
+  if (hasProjectionReadIntroducer(tokens, expressionIndex)) {
+    return true;
+  }
+  let precedingText = "";
+  for (let index = expressionIndex - 1; index >= 0; index -= 1) {
+    const token = tokens.at(index);
+    if (token?.type !== "text") {
+      break;
+    }
+    precedingText = token.value + precedingText;
+  }
+  return /\bselect\s+(?:distinct\s+)?\*\s*$/iu.test(precedingText);
 };
 
 const interpolationIsDeleteTarget = (
@@ -1309,6 +1331,9 @@ export default {
           unavailableRaw:
             "Dynamic sql.raw text cannot be verified for private search " +
             "projection authorization. Use a static SQL fragment or bind a value.",
+          unavailableRelation:
+            "Opaque SQL interpolation in a relation position cannot be " +
+            "verified. Compose a statically analyzable relation fragment.",
           unavailableCooked:
             "SQL template text must have a statically available cooked value " +
             "so authorization scope can be verified.",
@@ -1499,6 +1524,16 @@ export default {
             isIdentifier(unwrapped) && isApprovedImport(unwrapped, tableImports)
           );
         };
+
+        const isKnownPrivateProjectionInterpolation = (
+          expression: unknown,
+        ): boolean =>
+          Object.values(PRIVATE_SEARCH_PROJECTIONS).some((projection) =>
+            isPrivateProjectionInterpolation(
+              expression,
+              projection.tableImports,
+            ),
+          );
 
         const constIdentifierInitializer = (
           identifier: AstNode & { name: string },
@@ -2441,10 +2476,24 @@ export default {
             return SQL_READ_CAPABLE_ROOT.test(text)
               ? [...tokenPath]
               : concatenateSqlTokenPaths(
-                  [{ type: "text", value: "SELECT * FROM " }],
+                  [
+                    {
+                      type: "text",
+                      value: /\b(?:from|join|using)\b/iu.test(text)
+                        ? "SELECT * "
+                        : "SELECT * FROM ",
+                    },
+                  ],
                   tokenPath,
                 );
           });
+
+        const isDefinitelyNonSqlAppendReceiver = (
+          expression: unknown,
+        ): boolean => {
+          const resolved = resolveConstInitializer(expression);
+          return isAstNode(resolved) && resolved.type === "ObjectExpression";
+        };
 
         const inspectSqlTokenPaths = (
           node: AstNode,
@@ -2470,6 +2519,22 @@ export default {
             context.report({
               node,
               messageId: "unavailableRaw",
+            });
+          }
+          if (
+            mergedTokenPaths.some((tokens) =>
+              tokens.some(
+                (token, index) =>
+                  token.type === "expression" &&
+                  interpolationMayIntroduceReadRelation(tokens, index) &&
+                  !interpolationIsDeleteTarget(tokens, index) &&
+                  !isKnownPrivateProjectionInterpolation(token.value),
+              ),
+            )
+          ) {
+            context.report({
+              node,
+              messageId: "unavailableRelation",
             });
           }
           if (
@@ -2802,6 +2867,16 @@ export default {
                 new Set(),
               );
               if (receiverPaths === null) {
+                if (isDefinitelyNonSqlAppendReceiver(appendParts.receiver)) {
+                  return;
+                }
+                const fragmentPaths =
+                  flattenSqlExpression(appendParts.fragment, new Set()) ??
+                  expressionTokenPaths(appendParts.fragment);
+                inspectSqlTokenPaths(
+                  node,
+                  sqlAppendInspectionPaths(fragmentPaths),
+                );
                 return;
               }
               const tokenPaths = flattenSqlExpression(node, new Set());

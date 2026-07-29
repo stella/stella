@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 
 import { searchDocuments } from "@/api/db/schema";
+import { redistributableCaseLawSource as importedOpaqueRelationFragment } from "@/api/lib/case-law/redistribution";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
@@ -478,6 +479,28 @@ const unrelatedAppendControl = unrelatedAppender.append(
   sql`search_documents sd`,
 );
 
+declare const opaqueAppendReceiver: {
+  append(fragment: unknown): unknown;
+};
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an opaque append receiver cannot hide a private relation fragment
+const unsafeOpaqueReceiverPrivateAppend = opaqueAppendReceiver.append(
+  sql`FROM search_documents sd`,
+);
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves opaque append inspection also rejects an unresolved imported relation fragment
+const unsafeOpaqueReceiverImportedAppend = opaqueAppendReceiver.append(
+  importedOpaqueRelationFragment,
+);
+
+const scopedOpaqueReceiverPrivateAppend = opaqueAppendReceiver.append(
+  sql`FROM search_documents sd WHERE true ${entityWorkspaceFilter}`,
+);
+
+const publicOpaqueReceiverAppend = opaqueAppendReceiver.append(
+  sql`FROM entities e`,
+);
+
 const unsafeOpaqueRootJoinedPrivateRead = sql.join([
   opaqueFragment({
     // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an opaque join element cannot suppress standalone fragment inspection
@@ -542,6 +565,17 @@ const scopedStaticIdentifierEntity = sql`
 
 const publicStaticIdentifierEntity = sql`
   SELECT * FROM ${sql.identifier("entities")} e
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves even a currently public imported fragment fails closed because its SQL definition is unavailable here
+const unsafeImportedOpaqueRelation = sql`
+  SELECT * ${importedOpaqueRelationFragment}
+`;
+
+const staticPublicRelationControl = sql`SELECT * FROM entities e`;
+
+const importedOpaqueNonRootControl = sql`
+  (${importedOpaqueRelationFragment})
 `;
 
 declare const dynamicRelationName: string;
@@ -1484,6 +1518,8 @@ void [
   unsafeRootFromListPrivateRead,
   unsafeAppendedPrivateRead,
   separatedAppendPrivateRead,
+  unsafeOpaqueReceiverPrivateAppend,
+  unsafeOpaqueReceiverImportedAppend,
   unsafeOpaqueRootJoinedPrivateRead,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
@@ -1493,6 +1529,7 @@ void [
   unsafeComposedDynamicRawEntity,
   unsafeDynamicRawSelectExpression,
   unsafeStaticIdentifierEntity,
+  unsafeImportedOpaqueRelation,
   unsafeDynamicIdentifierRelation,
   unsafeUnicodeEscapedEntity,
   unsafeCustomUnicodeEscapedEntity,
@@ -1637,6 +1674,10 @@ void [
   writeOnlyInterpolatedDeleteEntityProjection,
   writeOnlyMergeEntityProjection,
   unrelatedAppendControl,
+  scopedOpaqueReceiverPrivateAppend,
+  publicOpaqueReceiverAppend,
+  staticPublicRelationControl,
+  importedOpaqueNonRootControl,
   nonSqlUnavailableCooked,
   nonSqlPrivateText,
   nonSqlNestedPrivateText,
