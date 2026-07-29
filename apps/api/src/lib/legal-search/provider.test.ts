@@ -13,11 +13,12 @@ test("every pg-fts case-law projection read rechecks redistribution", async () =
   const source = await Bun.file(
     `${import.meta.dir}/pg-fts-legal-provider.ts`,
   ).text();
-  const projectionReads =
-    source.match(/\bFROM case_law_search_documents\b/gu) ?? [];
-  const redistributionGates =
-    source.match(/\$\{redistributableSourceJoin\}/gu) ?? [];
+  const projectionSegments = source
+    .split(/\bFROM case_law_search_documents\b/gu)
+    .slice(1);
 
-  expect(projectionReads.length).toBeGreaterThan(0);
-  expect(redistributionGates).toHaveLength(projectionReads.length);
+  expect(projectionSegments.length).toBeGreaterThan(0);
+  for (const segment of projectionSegments) {
+    expect(segment).toContain("${redistributableSourceJoin}");
+  }
 });
