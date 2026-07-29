@@ -9,6 +9,24 @@ import type { ChatMessageContent } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 
 describe("persisted chat message parts", () => {
+  test("preserves server-owned search-summary provenance", () => {
+    const message = chatMessageFromPersisted({
+      id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda78"),
+      role: "assistant",
+      content: {
+        version: 2,
+        data: [{ type: "text", content: "Summary" }],
+        metadata: {
+          serverProvenance: { type: "search-summary", version: 1 },
+        },
+      } satisfies ChatMessageContent,
+    });
+
+    expect(message.metadata).toEqual({
+      serverProvenance: { type: "search-summary", version: 1 },
+    });
+  });
+
   test("preserves usage-only metadata", () => {
     const message = chatMessageFromPersisted({
       id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda79"),

@@ -101,7 +101,11 @@ const isAwsS3Endpoint = (endpoint: string): boolean => {
 type CachedClient = { client: AwsS3Client; createdAt: number };
 type CachedStsClient = { client: STSClient; createdAt: number };
 type CachedScopedClient = { client: AwsS3Client; expiresAt: number };
+export const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
+export type S3SigningKeyspace = (typeof S3_SIGNING_KEYSPACES)[number];
+
 export type S3SigningScope = {
+  keyspace?: S3SigningKeyspace;
   organizationId: string;
   workspaceId?: string | null;
 };
@@ -114,6 +118,7 @@ let _scopedClientPromises = new Map<string, Promise<CachedScopedClient>>();
 const CLIENT_MAX_AGE_MS = 50 * 60 * 1000;
 const SCOPED_SESSION_SECONDS = 3600;
 const SCOPED_CLIENT_REFRESH_SKEW_MS = 60 * 1000;
+const AWS_SDK_REQUEST_TIMEOUT_MS = 30_000;
 const TEMP_UPLOAD_TAG_KEY = "stella-upload-stage";
 const TEMP_UPLOAD_TAG_VALUE = "tmp";
 const TEMP_UPLOAD_TAGGING = `${TEMP_UPLOAD_TAG_KEY}=${TEMP_UPLOAD_TAG_VALUE}`;
@@ -194,10 +199,15 @@ const shouldUseScopedSigning = (): boolean =>
   !!envBase.S3_SCOPED_SIGNING_ROLE_ARN && isAwsS3Endpoint(envBase.S3_ENDPOINT);
 
 const s3SigningScopePrefix = ({
+  keyspace = "tenant",
   organizationId,
   workspaceId,
-}: S3SigningScope): string =>
-  workspaceId ? `${organizationId}/${workspaceId}/` : `${organizationId}/`;
+}: S3SigningScope): string => {
+  const tenantPrefix = workspaceId
+    ? `${organizationId}/${workspaceId}/`
+    : `${organizationId}/`;
+  return keyspace === "exports" ? `exports/${tenantPrefix}` : tenantPrefix;
+};
 
 export const isS3KeyInSigningScope = (
   key: string,
@@ -291,6 +301,7 @@ const buildScopedAwsS3Client = async (
       DurationSeconds: SCOPED_SESSION_SECONDS,
       Policy: scopedSessionPolicy(scope, actions),
     }),
+    { abortSignal: AbortSignal.timeout(AWS_SDK_REQUEST_TIMEOUT_MS) },
   );
   const credentials = assumed.Credentials;
   if (
@@ -551,6 +562,7 @@ export const headObject = async (
           Key: key,
           ChecksumMode: "ENABLED",
         }),
+        { abortSignal: AbortSignal.timeout(AWS_SDK_REQUEST_TIMEOUT_MS) },
       );
       return {
         contentLength: response.ContentLength ?? 0,
@@ -589,6 +601,7 @@ export const copyObject = async (
           TaggingDirective: "REPLACE",
           Tagging: "",
         }),
+        { abortSignal: AbortSignal.timeout(AWS_SDK_REQUEST_TIMEOUT_MS) },
       );
     },
     catch: (cause) =>

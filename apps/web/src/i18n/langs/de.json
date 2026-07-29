@@ -857,6 +857,14 @@
     "enterKey": "↵",
     "error": "Fehler",
     "expenses": "Ausgaben",
+    "export": {
+      "citations": "Zitate",
+      "failed": "Nachricht konnte nicht exportiert werden",
+      "footnotes": "Fußnoten",
+      "formatDocx": "Word-Dokument (<docx>.docx</docx>)",
+      "inline": "Im Text",
+      "title": "Nachricht exportieren"
+    },
     "filter": "Filtern",
     "formula": "Formel",
     "goBack": "Zurück",

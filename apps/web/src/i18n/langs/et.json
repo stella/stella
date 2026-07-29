@@ -857,6 +857,14 @@
     "enterKey": "↵",
     "error": "Viga",
     "expenses": "Kulud",
+    "export": {
+      "citations": "Viited",
+      "failed": "Sõnumit ei õnnestunud eksportida",
+      "footnotes": "Allmärkused",
+      "formatDocx": "Wordi dokument (<docx>.docx</docx>)",
+      "inline": "Tekstisisene",
+      "title": "Ekspordi sõnum"
+    },
     "filter": "Filter",
     "formula": "Valem",
     "goBack": "Mine tagasi",

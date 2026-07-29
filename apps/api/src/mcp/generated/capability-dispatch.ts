@@ -56,6 +56,9 @@ export const CAPABILITY_DISPATCH = {
   "chat.delete-thread": {
     load: async () => await import("@/api/handlers/chat/delete-thread"),
   },
+  "chat.export.create": {
+    load: async () => await import("@/api/handlers/chat/export/create"),
+  },
   "chat.get-messages": {
     load: async () => await import("@/api/handlers/chat/get-messages"),
   },
