@@ -1415,11 +1415,6 @@ const SearchPreviewContent = ({
         ...(previewDate.type === "calendar-date" ? { timeZone: "UTC" } : {}),
       })
     : null;
-  const meta = compactMeta([
-    t(KIND_TRANSLATION_KEYS[hit.type]),
-    location,
-    formattedPreviewDate,
-  ]);
 
   return (
     <>
@@ -1431,7 +1426,19 @@ const SearchPreviewContent = ({
               {hit.title || hit.id}
             </BidiText>
             <p className="text-muted-foreground mt-0.5 truncate text-xs">
-              {meta}
+              <BidiText>{t(KIND_TRANSLATION_KEYS[hit.type])}</BidiText>
+              {location && (
+                <>
+                  <span aria-hidden="true">{" · "}</span>
+                  <BidiText>{location}</BidiText>
+                </>
+              )}
+              {formattedPreviewDate && (
+                <>
+                  <span aria-hidden="true">{" · "}</span>
+                  <BidiText>{formattedPreviewDate}</BidiText>
+                </>
+              )}
             </p>
           </div>
           <Button
@@ -1472,7 +1479,7 @@ const SearchPreviewContent = ({
             </Button>
           </div>
         )}
-        {data && (
+        {data && !isError && (
           <div
             className="text-foreground/90 [&_mark]:bg-highlight [&_mark]:text-highlight-foreground text-sm leading-6 whitespace-pre-wrap [&_mark]:font-medium"
             dir={contentDir(stripSearchMarkup(data.content))}
