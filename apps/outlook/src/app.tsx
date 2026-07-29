@@ -22,15 +22,10 @@ import { useIngestEmail } from "@/hooks/use-ingest-email";
 import { useMailSnapshot } from "@/hooks/use-mail-snapshot";
 import { useWorkspaceSelection } from "@/hooks/use-workspace-selection";
 import { useWorkspaces } from "@/hooks/use-workspaces";
-import {
-  clearAuthToken,
-  getAuthToken,
-  signInViaDialog,
-  subscribeAuthToken,
-} from "@/lib/auth";
+import { getAuthToken, signInViaDialog, subscribeAuthToken } from "@/lib/auth";
 import { placeDraft } from "@/outlook";
 import type { DraftPlacement } from "@/outlook";
-import type { DraftCheck } from "@/types";
+import type { MailSnapshot } from "@/types";
 
 export const App = () => {
   const t = useTranslations("outlook");
@@ -42,7 +37,7 @@ export const App = () => {
   const handleSignIn = async () => {
     setSignInState({ type: "signing-in" });
     try {
-      await signInViaDialog(env.signInOrigin);
+      await signInViaDialog(env.signInOrigin, env.taskpaneOrigin);
       setSignInState({ type: "idle" });
     } catch (error) {
       setSignInState({
@@ -62,16 +57,25 @@ export const App = () => {
     );
   }
 
-  return <AuthedApp onSignOut={() => void clearAuthToken()} t={t} />;
+  return <AuthedApp t={t} />;
 };
 
-const AuthedApp = ({
-  onSignOut: _onSignOut,
-  t,
-}: {
-  onSignOut: () => void;
-  t: Translate;
-}) => {
+type AttachmentSelection = {
+  ids: Set<string>;
+  source: MailSnapshot;
+};
+
+type DraftEdit = {
+  source: ReturnType<typeof useAIDraft>["state"] | null;
+  value: string;
+};
+
+type DraftPlacementState = {
+  source: string;
+  value: DraftPlacement;
+};
+
+const AuthedApp = ({ t }: { t: Translate }) => {
   const { refresh, state: loadState } = useMailSnapshot(t("loadError"));
   const { error: workspaceError, workspaces } = useWorkspaces(
     t("matterLoadError"),
@@ -93,48 +97,40 @@ const AuthedApp = ({
   const aiDraft = useAIDraft(t("saveErrorFallback"));
   const ingest = useIngestEmail(t("saveErrorFallback"));
 
-  const [selectedAttachmentIds, setSelectedAttachmentIds] = useState<
-    Set<string>
-  >(() => new Set());
+  const [attachmentSelection, setAttachmentSelection] =
+    useState<AttachmentSelection | null>(null);
   const [draftIntent, setDraftIntent] = useState("");
-  const [draft, setDraft] = useState("");
-  const [draftPlacement, setDraftPlacement] = useState<DraftPlacement | null>(
-    null,
-  );
-  const [checks, setChecks] = useState<DraftCheck[]>([]);
+  const [draftEdit, setDraftEdit] = useState<DraftEdit | null>(null);
+  const [placementState, setPlacementState] =
+    useState<DraftPlacementState | null>(null);
 
-  useEffect(() => {
-    if (!snapshot) {
-      return;
-    }
-    setSelectedAttachmentIds(
-      new Set(
+  const defaultAttachmentIds = snapshot
+    ? new Set(
         snapshot.attachments
           .filter((attachment) => !attachment.isInline)
           .map((attachment) => attachment.id),
-      ),
-    );
-  }, [snapshot]);
-
-  useEffect(() => {
-    if (!snapshot) {
-      return;
-    }
-    setChecks(runDraftChecks({ selectedWorkspaceId, snapshot }));
-  }, [selectedWorkspaceId, snapshot]);
-
-  useEffect(() => {
-    if (aiDraft.state.type === "ready") {
-      setDraft(aiDraft.state.draft);
-      setDraftPlacement(null);
-    }
-  }, [aiDraft.state]);
+      )
+    : new Set<string>();
+  const selectedAttachmentIds =
+    attachmentSelection?.source === snapshot
+      ? attachmentSelection.ids
+      : defaultAttachmentIds;
+  const draftSource = aiDraft.state.type === "ready" ? aiDraft.state : null;
+  const draft =
+    draftEdit?.source === draftSource
+      ? draftEdit.value
+      : (draftSource?.draft ?? "");
+  const draftPlacement =
+    placementState?.source === draft ? placementState.value : null;
+  const checks = snapshot
+    ? runDraftChecks({ selectedWorkspaceId, snapshot })
+    : [];
 
   const handlePlaceDraft = async () => {
     if (!draft) {
       return;
     }
-    setDraftPlacement(await placeDraft(draft));
+    setPlacementState({ source: draft, value: await placeDraft(draft) });
   };
 
   const handleSave = () => {
@@ -151,15 +147,16 @@ const AuthedApp = ({
   };
 
   const toggleAttachment = (attachmentId: string) => {
-    setSelectedAttachmentIds((current) => {
-      const next = new Set(current);
-      if (next.has(attachmentId)) {
-        next.delete(attachmentId);
-      } else {
-        next.add(attachmentId);
-      }
-      return next;
-    });
+    if (!snapshot) {
+      return;
+    }
+    const ids = new Set(selectedAttachmentIds);
+    if (ids.has(attachmentId)) {
+      ids.delete(attachmentId);
+    } else {
+      ids.add(attachmentId);
+    }
+    setAttachmentSelection({ ids, source: snapshot });
   };
 
   return (
@@ -210,10 +207,9 @@ const AuthedApp = ({
               draftIntent={draftIntent}
               draftPlacement={draftPlacement}
               draftState={aiDraft.state}
-              onCheckDraft={() =>
-                setChecks(runDraftChecks({ selectedWorkspaceId, snapshot }))
+              onDraftChange={(value) =>
+                setDraftEdit({ source: draftSource, value })
               }
-              onDraftChange={setDraft}
               onDraftReply={() =>
                 aiDraft.draftReply({ intent: draftIntent, snapshot })
               }

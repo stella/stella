@@ -11,26 +11,32 @@ import {
 } from "@/api/lib/document-reference";
 
 /**
- * Atomically allocate the next document sequence number for
- * a workspace. Uses upsert + increment to avoid race conditions.
+ * Atomically allocate the next block of document sequence numbers for
+ * a workspace. Uses one upsert + increment to avoid race conditions and
+ * input-sized query growth.
  *
- * Returns the newly allocated sequence number.
+ * Returns the allocated sequence numbers in ascending order.
  */
-const allocateDocSequence = async (
+const allocateDocSequences = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
-): Promise<number> => {
+  count: number,
+): Promise<number[]> => {
+  if (!Number.isSafeInteger(count) || count <= 0) {
+    panic("Document sequence allocation count must be a positive integer");
+  }
+
   const rows = await tx
     .insert(documentCounters)
     .values({
       id: createSafeId<"documentCounter">(),
       workspaceId,
-      lastValue: 1,
+      lastValue: count,
     })
     .onConflictDoUpdate({
       target: [documentCounters.workspaceId],
       set: {
-        lastValue: sql`${documentCounters.lastValue} + 1`,
+        lastValue: sql`${documentCounters.lastValue} + ${count}`,
       },
     })
     .returning({ lastValue: documentCounters.lastValue });
@@ -40,7 +46,8 @@ const allocateDocSequence = async (
     panic("Document counter upsert returned no rows");
   }
 
-  return counter.lastValue;
+  const firstValue = counter.lastValue - count + 1;
+  return Array.from({ length: count }, (_, index) => firstValue + index);
 };
 
 type EntityStamp = {
@@ -50,15 +57,16 @@ type EntityStamp = {
 };
 
 /**
- * Allocate a document sequence number and generate a frozen
- * stamp + verification code for a new entity. Returns null
- * stamp/code if the workspace has no reference pattern.
+ * Allocate a sequence block and generate frozen stamps + verification
+ * codes for new entities. Returns null stamp/code values if the workspace
+ * has no reference pattern.
  */
-export const allocateEntityStamp = async (
+export const allocateEntityStamps = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
-): Promise<EntityStamp> => {
-  const docSequence = await allocateDocSequence(tx, workspaceId);
+  count: number,
+): Promise<EntityStamp[]> => {
+  const docSequences = await allocateDocSequences(tx, workspaceId, count);
 
   const ws = await tx.query.workspaces.findFirst({
     where: { id: { eq: workspaceId } },
@@ -66,10 +74,14 @@ export const allocateEntityStamp = async (
   });
 
   if (!ws?.reference) {
-    return { docSequence, stamp: null, verificationCode: null };
+    return docSequences.map((docSequence) => ({
+      docSequence,
+      stamp: null,
+      verificationCode: null,
+    }));
   }
 
-  return {
+  return docSequences.map((docSequence) => ({
     docSequence,
     stamp: toDocumentReference({
       matterReference: ws.reference,
@@ -77,5 +89,16 @@ export const allocateEntityStamp = async (
       versionNumber: 1,
     }),
     verificationCode: generateVerificationCode(),
-  };
+  }));
+};
+
+export const allocateEntityStamp = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+): Promise<EntityStamp> => {
+  const stamp = (await allocateEntityStamps(tx, workspaceId, 1)).at(0);
+  if (!stamp) {
+    panic("Single entity stamp allocation returned no stamp");
+  }
+  return stamp;
 };
