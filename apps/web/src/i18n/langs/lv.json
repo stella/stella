@@ -991,7 +991,6 @@
     "allow": "Atļaut",
     "completeSetup": "Pabeigt iestatīšanu",
     "defaultClientName": "Lietojumprogramma",
-    "deny": "Liegt",
     "description": "{clientName} vēlas piekļūt jūsu stella darbvietai",
     "error": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
     "missingJurisdictions": "Jūsu stella organizācija vēl nav iestatījusi savas prakses jurisdikcijas. Daži ar jurisdikciju saistīti rīki nebūs pieejami, līdz pabeigsiet iestatīšanu.",

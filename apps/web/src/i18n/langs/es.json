@@ -991,7 +991,6 @@
     "allow": "Permitir",
     "completeSetup": "Completar configuración",
     "defaultClientName": "Una aplicación",
-    "deny": "Denegar",
     "description": "{clientName} quiere acceder a su espacio de trabajo de stella",
     "error": "Algo salió mal. Inténtelo de nuevo.",
     "missingJurisdictions": "Su organización de stella todavía no ha configurado sus jurisdicciones de práctica. Algunas herramientas que dependen de la jurisdicción no estarán disponibles hasta que complete la configuración.",

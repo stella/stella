@@ -991,7 +991,6 @@
     "allow": "Zulassen",
     "completeSetup": "Einrichtung abschließen",
     "defaultClientName": "Eine Anwendung",
-    "deny": "Ablehnen",
     "description": "{clientName} möchte auf Ihre stella-Akte zugreifen",
     "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
     "missingJurisdictions": "Ihre stella-Organisation hat ihre Tätigkeitsgebiete noch nicht eingerichtet. Einige gebietsabhängige Tools sind erst verfügbar, wenn Sie die Einrichtung abschließen.",

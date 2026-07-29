@@ -20,6 +20,7 @@ import {
 } from "@stll/ui/components/frame";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { StellaMark } from "@/components/stella-mark";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
@@ -188,17 +189,24 @@ function ConsentPage() {
   };
 
   return (
-    <div className="flex flex-1 items-center justify-center">
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <FrameTitle>{t("consent.title")}</FrameTitle>
-          <FrameDescription>
-            {t("consent.description", { clientName })}
-          </FrameDescription>
+    <main className="flex flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-10">
+      <Frame className="m-auto w-full max-w-2xl">
+        <FrameHeader className="gap-4 sm:flex-row sm:items-start">
+          <div className="bg-background outline-foreground/8 flex size-11 shrink-0 items-center justify-center rounded-xl shadow-xs outline outline-1">
+            <StellaMark className="text-foreground size-6" />
+          </div>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <FrameTitle className="text-base">
+              <h1>{t("consent.title")}</h1>
+            </FrameTitle>
+            <FrameDescription className="text-pretty">
+              {t("consent.description", { clientName })}
+            </FrameDescription>
+          </div>
         </FrameHeader>
-        <FramePanel className="flex flex-col gap-4">
+        <FramePanel className="flex flex-col gap-5 p-4 sm:p-5">
           {organizationName ? (
-            <div className="flex flex-col gap-1">
+            <div className="bg-muted/50 flex flex-col gap-1 rounded-lg px-3 py-2.5">
               <p className="text-muted-foreground text-sm">
                 {t("common.organization")}
               </p>
@@ -210,13 +218,16 @@ function ConsentPage() {
               <p className="text-muted-foreground text-sm">
                 {t("consent.permissions")}
               </p>
-              <ul className="flex flex-col gap-1.5">
+              <ul className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
                 {scopeEntries.map((entry) => (
                   <li
                     className="text-foreground flex items-start gap-2 text-sm"
                     key={entry.type === "known" ? entry.label : entry.scope}
                   >
-                    <span className="text-muted-foreground mt-0.5">&bull;</span>
+                    <span
+                      aria-hidden="true"
+                      className="bg-muted-foreground mt-2 size-1 shrink-0 rounded-full"
+                    />
                     <ScopeLabel entry={entry} />
                   </li>
                 ))}
@@ -241,9 +252,20 @@ function ConsentPage() {
           {hasError ? (
             <p className="text-destructive text-sm">{t("consent.error")}</p>
           ) : null}
-          <div className="flex flex-col gap-2">
+          <div className="border-border/64 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end">
             <Button
-              className="w-full"
+              className="w-full sm:w-auto"
+              disabled={isPending}
+              onClick={() => {
+                detached(handleConsent(false), "ConsentPage");
+              }}
+              type="button"
+              variant="ghost"
+            >
+              {t("common.decline")}
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
               disabled={isPending}
               loading={isPending}
               onClick={() => {
@@ -253,21 +275,10 @@ function ConsentPage() {
             >
               {t("consent.allow")}
             </Button>
-            <Button
-              className="w-full"
-              disabled={isPending}
-              onClick={() => {
-                detached(handleConsent(false), "ConsentPage");
-              }}
-              type="button"
-              variant="outline"
-            >
-              {t("consent.deny")}
-            </Button>
           </div>
         </FramePanel>
       </Frame>
-    </div>
+    </main>
   );
 }
 

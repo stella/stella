@@ -991,7 +991,6 @@
     "allow": "Leisti",
     "completeSetup": "Užbaigti sąranką",
     "defaultClientName": "Programa",
-    "deny": "Atmesti",
     "description": "{clientName} nori pasiekti jūsų stella darbo sritį",
     "error": "Įvyko klaida. Bandykite dar kartą.",
     "missingJurisdictions": "Jūsų stella organizacija dar nenustatė savo praktikos jurisdikcijų. Kol neužbaigsite sąrankos, kai kurie jurisdikciją vertinantys įrankiai bus nepasiekiami.",

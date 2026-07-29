@@ -994,7 +994,6 @@ type Messages = {
     "allow": "Allow";
     "completeSetup": "Complete setup";
     "defaultClientName": "An application";
-    "deny": "Deny";
     "description": "{clientName} wants to access your stella workspace";
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
