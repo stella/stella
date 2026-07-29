@@ -178,10 +178,13 @@ const createMessageExport = createSafeRootHandler(
       citationLabels,
     );
 
-    const exportBody =
-      citationStyle === "none" && persistedSearchSources !== null
-        ? persistedSearchSources.bodyWithoutSources
-        : body;
+    let exportBody = body;
+    if (persistedSearchSources !== null) {
+      exportBody =
+        citationStyle === "none"
+          ? persistedSearchSources.bodyWithoutSources
+          : persistedSearchSources.bodyWithSources;
+    }
     const markdown = composeExportMarkdown(exportBody, section);
 
     const docxResult = yield* Result.await(
@@ -198,6 +201,7 @@ const createMessageExport = createSafeRootHandler(
                 internalCitationFallback: citationLabels.citation,
                 internalReferenceMode:
                   persistedSearchSources === null ? "references" : "citations",
+                unverifiedCitationLabel: citationLabels.unverifiedCitation,
               },
             ),
           ),

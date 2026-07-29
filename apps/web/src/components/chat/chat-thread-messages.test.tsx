@@ -10,6 +10,7 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
@@ -139,6 +140,41 @@ describe("chat thread messages", () => {
     expect(html).toContain("Draft answer");
     expect(html).toContain('aria-label="Copy"');
     expect(html).toContain(">Copy</button>");
+  });
+
+  test("keeps historical exports available while the latest answer streams", () => {
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-old",
+        parts: [{ type: "text", content: "Completed answer" }],
+        role: "assistant",
+      },
+      {
+        id: "message-latest",
+        parts: [{ type: "text", content: "Streaming answer" }],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        isGenerating
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+        threadRef={{
+          scope: "global",
+          threadId: toChatThreadId("thread"),
+        }}
+      />,
+    );
+
+    expect(html.match(/aria-label="Export message"/gu)).toHaveLength(1);
   });
 
   test("renders assistant reasoning separately from the final answer", () => {

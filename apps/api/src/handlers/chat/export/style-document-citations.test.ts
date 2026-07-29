@@ -87,6 +87,7 @@ const options = {
   folioSourceTitle: "Agreement.docx",
   internalCitationFallback: "Citation",
   internalReferenceMode: "references",
+  unverifiedCitationLabel: "Unverified citation",
 } as const;
 
 describe("styleDocumentCitations", () => {
@@ -158,10 +159,10 @@ describe("styleDocumentCitations", () => {
         collectText(footnote.content),
       ),
     ).toEqual([
-      "https://example.com/source",
-      "Agreement.docx: folio",
-      "decision",
-      "https://example.com/table",
+      "Unverified citation: external",
+      "Unverified citation: Agreement.docx: folio",
+      "Unverified citation: decision",
+      "Unverified citation: table citation",
     ]);
   });
 
@@ -200,6 +201,7 @@ describe("styleDocumentCitations", () => {
     expect(footnotesXml).toContain('<w:footnote w:type="separator" w:id="-1">');
     expect(footnotesXml).toContain('<w:footnote w:id="1">');
     expect(footnotesXml).toContain("<w:footnoteRef/>");
-    expect(footnotesXml).toContain("https://example.com/source");
+    expect(footnotesXml).toContain("Unverified citation: supported claim");
+    expect(footnotesXml).not.toContain("https://example.com/source");
   });
 });

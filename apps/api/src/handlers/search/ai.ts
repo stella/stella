@@ -27,6 +27,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { SEARCH_SUMMARY_SOURCES_MARKER } from "@/api/lib/chat/search-summary-provenance";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -825,7 +826,13 @@ const buildChatSummaryText = ({
     }`;
   });
 
-  return [`## ${title}`, summary, "### Sources", ...sourceLines].join("\n\n");
+  return [
+    `## ${title}`,
+    summary,
+    SEARCH_SUMMARY_SOURCES_MARKER,
+    "### Sources",
+    ...sourceLines,
+  ].join("\n\n");
 };
 
 const extractHitWorkspaceId = (

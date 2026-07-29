@@ -48,6 +48,7 @@ type ChatExportCitationLabels = {
   citation: string;
   locale: UiLocale;
   sources: string;
+  unverifiedCitation: string;
   unverifiedCitationsOmitted: string;
 };
 
@@ -55,66 +56,79 @@ const CHAT_EXPORT_CITATION_LABELS = {
   ar: {
     citation: "استشهاد",
     sources: "المصادر",
+    unverifiedCitation: "استشهاد غير متحقق منه",
     unverifiedCitationsOmitted: "تم حذف الاستشهادات غير المتحقق منها",
   },
   cs: {
     citation: "Citace",
     sources: "Zdroje",
+    unverifiedCitation: "Neověřená citace",
     unverifiedCitationsOmitted: "Vynechané neověřené citace",
   },
   de: {
     citation: "Quellenangabe",
     sources: "Quellen",
+    unverifiedCitation: "Nicht verifizierte Quellenangabe",
     unverifiedCitationsOmitted: "Ausgelassene nicht verifizierte Zitate",
   },
   en: {
     citation: "Citation",
     sources: "Sources",
+    unverifiedCitation: "Unverified citation",
     unverifiedCitationsOmitted: "Unverified citations omitted",
   },
   es: {
     citation: "Cita",
     sources: "Fuentes",
+    unverifiedCitation: "Cita no verificada",
     unverifiedCitationsOmitted: "Citas no verificadas omitidas",
   },
   et: {
     citation: "Viide",
     sources: "Allikad",
+    unverifiedCitation: "Kontrollimata viide",
     unverifiedCitationsOmitted: "Välja jäetud kontrollimata viited",
   },
   fr: {
     citation: "Citation",
     sources: "Sources",
+    unverifiedCitation: "Citation non vérifiée",
     unverifiedCitationsOmitted: "Citations non vérifiées omises",
   },
   hu: {
     citation: "Hivatkozás",
     sources: "Források",
+    unverifiedCitation: "Nem ellenőrzött hivatkozás",
     unverifiedCitationsOmitted: "Kihagyott, nem ellenőrzött hivatkozások",
   },
   lt: {
     citation: "Citata",
     sources: "Šaltiniai",
+    unverifiedCitation: "Nepatvirtinta citata",
     unverifiedCitationsOmitted: "Praleistos nepatvirtintos citatos",
   },
   lv: {
     citation: "Atsauce",
     sources: "Avoti",
+    unverifiedCitation: "Nepārbaudīta atsauce",
     unverifiedCitationsOmitted: "Izlaistas nepārbaudītas atsauces",
   },
   pl: {
     citation: "Cytowanie",
     sources: "Źródła",
+    unverifiedCitation: "Niezweryfikowane cytowanie",
     unverifiedCitationsOmitted: "Pominięte niezweryfikowane cytowania",
   },
   "pt-BR": {
     citation: "Citação",
     sources: "Fontes",
+    unverifiedCitation: "Citação não verificada",
     unverifiedCitationsOmitted: "Citações não verificadas omitidas",
   },
   sk: {
     citation: "Citácia",
     sources: "Zdroje",
+    unverifiedCitation: "Neoverená citácia",
     unverifiedCitationsOmitted: "Vynechané neoverené citácie",
   },
 } satisfies Record<UiLocale, Omit<ChatExportCitationLabels, "locale">>;

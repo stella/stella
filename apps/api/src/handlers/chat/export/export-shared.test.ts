@@ -9,6 +9,7 @@ import {
   extractPersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import { SEARCH_SUMMARY_SOURCES_MARKER } from "@/api/lib/chat/search-summary-provenance";
 
 const textPart = (content: string): ChatPart => ({ type: "text", content });
 
@@ -66,6 +67,8 @@ describe("extractPersistedSearchSummarySources", () => {
         "## Result\n\nSummary.\n\n### Sources\n\n- Matter\n\n- Decision",
       ),
     ).toEqual({
+      bodyWithSources:
+        "## Result\n\nSummary.\n\n### Sources\n\n- Matter\n\n- Decision",
       bodyWithoutSources: "## Result\n\nSummary.",
       sourceCount: 2,
     });
@@ -77,6 +80,7 @@ describe("extractPersistedSearchSummarySources", () => {
         "## Result\n\nSummary.\n\n### Sources",
       ),
     ).toEqual({
+      bodyWithSources: "## Result\n\nSummary.\n\n### Sources",
       bodyWithoutSources: "## Result\n\nSummary.",
       sourceCount: 0,
     });
@@ -86,6 +90,31 @@ describe("extractPersistedSearchSummarySources", () => {
     expect(
       extractPersistedSearchSummarySources(
         "Answer.\n\n### Sources\n\nThis is explanatory prose.",
+      ),
+    ).toBeNull();
+  });
+
+  test("extracts marked provenance without leaking the marker", () => {
+    expect(
+      extractPersistedSearchSummarySources(
+        `## Result\n\nSummary.\n\n${SEARCH_SUMMARY_SOURCES_MARKER}\n\n### Sources\n\n- Matter`,
+      ),
+    ).toEqual({
+      bodyWithSources: "## Result\n\nSummary.\n\n### Sources\n\n- Matter",
+      bodyWithoutSources: "## Result\n\nSummary.",
+      sourceCount: 1,
+    });
+  });
+
+  test("rejects a legacy Sources list followed by more answer content", () => {
+    expect(
+      extractPersistedSearchSummarySources(
+        "Answer.\n\n### Sources\n\n- Matter\n\n### Conclusion\n\nStill part of the answer.",
+      ),
+    ).toBeNull();
+    expect(
+      extractPersistedSearchSummarySources(
+        "Answer.\n\n### Sources\n\n- Matter\n\nStill part of the answer.",
       ),
     ).toBeNull();
   });

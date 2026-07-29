@@ -86,33 +86,39 @@ type CitationTransformContext = {
   internalReferenceMode: InternalReferenceMode;
   nextFootnoteId: number;
   style: Exclude<ChatExportCitationStyle, "inline">;
+  unverifiedCitationLabel: string;
 };
+
+const isVerifiedSearchSummaryTarget = (
+  target: string,
+  internalReferenceMode: InternalReferenceMode,
+): boolean =>
+  internalReferenceMode === "citations" &&
+  (target.startsWith(DECISION_CITATION_PREFIX) ||
+    target.startsWith(ENTITY_REFERENCE_PREFIX) ||
+    target.startsWith(WORKSPACE_REFERENCE_PREFIX));
 
 const citationFootnoteText = (
   hyperlink: Hyperlink,
   context: CitationTransformContext,
 ): string => {
   const target = citationTarget(hyperlink);
-  const isInternalTarget =
-    target.startsWith(FOLIO_CITATION_PREFIX) ||
-    target.startsWith(DECISION_CITATION_PREFIX) ||
-    target.startsWith(ENTITY_REFERENCE_PREFIX) ||
-    target.startsWith(WORKSPACE_REFERENCE_PREFIX);
-  if (!isInternalTarget) {
-    return target;
+  const visibleText = hyperlinkVisibleText(hyperlink);
+  if (isVerifiedSearchSummaryTarget(target, context.internalReferenceMode)) {
+    return visibleText || context.internalCitationFallback;
   }
 
-  const visibleText = hyperlinkVisibleText(hyperlink);
+  let description = visibleText || context.internalCitationFallback;
   if (
     target.startsWith(FOLIO_CITATION_PREFIX) &&
     context.folioSourceTitle !== undefined
   ) {
-    if (visibleText.length === 0) {
-      return context.folioSourceTitle;
-    }
-    return `${context.folioSourceTitle}: ${visibleText}`;
+    description =
+      visibleText.length === 0
+        ? context.folioSourceTitle
+        : `${context.folioSourceTitle}: ${visibleText}`;
   }
-  return visibleText || context.internalCitationFallback;
+  return `${context.unverifiedCitationLabel}: ${description}`;
 };
 
 const transformHyperlink = (
@@ -222,10 +228,12 @@ export const styleDocumentCitations = (
     folioSourceTitle,
     internalCitationFallback,
     internalReferenceMode,
+    unverifiedCitationLabel,
   }: {
     folioSourceTitle: string | undefined;
     internalCitationFallback: string;
     internalReferenceMode: InternalReferenceMode;
+    unverifiedCitationLabel: string;
   },
 ): Document => {
   if (style === "inline") {
@@ -245,6 +253,7 @@ export const styleDocumentCitations = (
     internalReferenceMode,
     nextFootnoteId: nextFootnoteId(footnotes),
     style,
+    unverifiedCitationLabel,
   };
   const content = document.package.document.content.map((block) =>
     transformBlock(block, context),

@@ -7,8 +7,13 @@
 import { chatPartText } from "@/api/handlers/chat/chat-message-parts";
 import type { CitationSection } from "@/api/handlers/chat/export/citation-footnotes";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import { SEARCH_SUMMARY_SOURCES_MARKER } from "@/api/lib/chat/search-summary-provenance";
 
 const SEARCH_SUMMARY_SOURCES_HEADING = "\n\n### Sources";
+const MARKED_SEARCH_SUMMARY_SOURCES_HEADING = `\n\n${SEARCH_SUMMARY_SOURCES_MARKER}${SEARCH_SUMMARY_SOURCES_HEADING}`;
+
+const isLegacySearchSummarySourceLine = (line: string): boolean =>
+  line.length === 0 || line.startsWith("- ") || line.startsWith("  Excerpt: ");
 
 /**
  * Concatenate a message's text parts into a markdown body, verbatim (no
@@ -44,6 +49,7 @@ export const composeExportMarkdown = (
 };
 
 export type PersistedSearchSummarySources = {
+  bodyWithSources: string;
   bodyWithoutSources: string;
   sourceCount: number;
 };
@@ -59,7 +65,13 @@ export type PersistedSearchSummarySources = {
 export const extractPersistedSearchSummarySources = (
   body: string,
 ): PersistedSearchSummarySources | null => {
-  const headingIndex = body.lastIndexOf(SEARCH_SUMMARY_SOURCES_HEADING);
+  const markedHeadingIndex = body.lastIndexOf(
+    MARKED_SEARCH_SUMMARY_SOURCES_HEADING,
+  );
+  const isMarked = markedHeadingIndex !== -1;
+  const headingIndex = isMarked
+    ? markedHeadingIndex + `\n\n${SEARCH_SUMMARY_SOURCES_MARKER}`.length
+    : body.lastIndexOf(SEARCH_SUMMARY_SOURCES_HEADING);
   if (headingIndex === -1) {
     return null;
   }
@@ -70,13 +82,24 @@ export const extractPersistedSearchSummarySources = (
   if (sources.length > 0 && !sources.startsWith("\n\n- ")) {
     return null;
   }
+  if (
+    !isMarked &&
+    sources.split("\n").some((line) => !isLegacySearchSummarySourceLine(line))
+  ) {
+    return null;
+  }
 
   const sourceCount =
     sources.length === 0
       ? 0
       : sources.split("\n").filter((line) => line.startsWith("- ")).length;
   return {
-    bodyWithoutSources: body.slice(0, headingIndex).trimEnd(),
+    bodyWithSources: isMarked
+      ? `${body.slice(0, markedHeadingIndex)}${body.slice(headingIndex)}`
+      : body,
+    bodyWithoutSources: body
+      .slice(0, isMarked ? markedHeadingIndex : headingIndex)
+      .trimEnd(),
     sourceCount,
   };
 };
