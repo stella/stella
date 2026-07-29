@@ -853,7 +853,7 @@
   },
   "story": {
     "agentBody": "Aģents pārmeklē lietu, izlasa būtisko tekstu un atbild ar atsaucēm, kas atver avotu tieši vajadzīgajā vietā. Izmantojiet to tieši lietotnē stella vai savienojiet ar rīkiem, ar kuriem jau strādājat.",
-    "agentEyebrow": "Aģenta darbplūsmas",
+    "agentEyebrow": "AI aģents",
     "agentTitle": "Pietiek pajautāt. Katra atbilde norāda avotu.",
     "bringEditorToFront": "Pārvietot lietotnes stella redaktoru priekšplānā",
     "bringTerminalToFront": "Pārvietot lietotnes stella termināli priekšplānā",
@@ -861,7 +861,7 @@
     "controlBody": "stella ir atvērtā pirmkoda juridiskā programmatūra, ko varat mitināt paši: pārbaudiet kodu, darbiniet to pēc saviem noteikumiem un eksportējiet visu standarta formātos; bez piesaistes.",
     "controlEyebrow": "Radīts kontrolei",
     "controlTitle": "Saglabājiet kontroli pār infrastruktūru.",
-    "dataBody": "Tiesu prakse no oficiāliem avotiem ar saglabātu struktūru, kā arī uzņēmumu reģistru dati, kas tiek ienesti tieši lietā, katrai jurisdikcijai atsevišķi. Anonimizācija neļauj identificējošai informācijai nonākt AI darbplūsmās.",
+    "dataBody": "Oficiālā tiesu prakse un uzņēmumu reģistri tieši lietā, katrā jurisdikcijā, kurā strādājat. Anonimizācija tikmēr tur identificējošos datus prom no AI.",
     "dataEyebrow": "Juridiskie dati",
     "dataMainAlt": "Oficiāls tiesas nolēmums, atvērts lietotnē stella",
     "dataTitle": "Tiesu prakse un reģistri pa rokai.",

@@ -853,7 +853,7 @@
   },
   "story": {
     "agentBody": "Der Agent durchsucht die Akte, liest den relevanten Text und antwortet mit Zitaten, die die Quelle an der genauen Stelle öffnen. Nutzen Sie ihn direkt in stella oder verbinden Sie ihn mit den Werkzeugen, mit denen Sie ohnehin arbeiten.",
-    "agentEyebrow": "Agenten-Workflows",
+    "agentEyebrow": "KI-Agent",
     "agentTitle": "Einmal fragen genügt. Jede Antwort nennt ihre Quelle.",
     "bringEditorToFront": "Editor von stella in den Vordergrund holen",
     "bringTerminalToFront": "Terminal von stella in den Vordergrund holen",
@@ -861,7 +861,7 @@
     "controlBody": "stella ist juristische Open-Source-Software, die Sie selbst hosten können: Prüfen Sie den Code, betreiben Sie sie auf Ihre Weise und exportieren Sie alles in Standardformaten; ohne Lock-in.",
     "controlEyebrow": "Auf Kontrolle ausgelegt",
     "controlTitle": "Behalten Sie die Kontrolle über Ihren Stack.",
-    "dataBody": "Rechtsprechung aus offiziellen Quellen mit erhaltener Struktur sowie Handelsregisterdaten, die Jurisdiktion für Jurisdiktion direkt in die Akte einfließen. Die Anonymisierung hält identifizierende Angaben aus KI-Workflows heraus.",
+    "dataBody": "Amtliche Rechtsprechung und Register, direkt in die Akte geladen, in jeder Jurisdiktion, in der Sie arbeiten. Die Anonymisierung hält identifizierende Angaben von der KI fern.",
     "dataEyebrow": "Juristische Daten",
     "dataMainAlt": "Eine offizielle Gerichtsentscheidung, geöffnet in stella",
     "dataTitle": "Rechtsprechung und Register griffbereit.",

@@ -853,7 +853,7 @@
   },
   "story": {
     "agentBody": "El agente busca en el asunto, lee el texto relevante y responde con citas que abren la fuente en el pasaje exacto. Úsalo directamente en stella o conéctalo a las herramientas con las que ya trabajas.",
-    "agentEyebrow": "Flujos de trabajo del agente",
+    "agentEyebrow": "Agente de IA",
     "agentTitle": "Basta con preguntar. Cada respuesta cita su fuente.",
     "bringEditorToFront": "Traer al frente el editor de stella",
     "bringTerminalToFront": "Traer al frente el terminal de stella",
@@ -861,7 +861,7 @@
     "controlBody": "stella es software legal de código abierto que puedes autoalojar: inspecciona el código, ejecútalo a tu manera y exporta todo en formatos estándar; sin dependencia del proveedor.",
     "controlEyebrow": "Diseñado para el control",
     "controlTitle": "Mantén el control de la infraestructura.",
-    "dataBody": "Jurisprudencia de fuentes oficiales con su estructura preservada, y registros mercantiles consultados directamente en el asunto, jurisdicción por jurisdicción. La anonimización mantiene los datos identificativos fuera de los flujos de trabajo con IA.",
+    "dataBody": "Jurisprudencia oficial y registros mercantiles cargados directamente en el asunto, en cada jurisdicción donde trabajas. La anonimización mantiene los datos identificativos lejos de la IA.",
     "dataEyebrow": "Datos jurídicos",
     "dataMainAlt": "Una resolución judicial oficial abierta en stella",
     "dataTitle": "Jurisprudencia y registros al alcance.",

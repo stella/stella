@@ -853,7 +853,7 @@
   },
   "story": {
     "agentBody": "The agent searches the matter, reads the relevant text, and answers with citations that open the source at the exact passage. Use it in stella, or connect it to the tools you already work in.",
-    "agentEyebrow": "Agent workflows",
+    "agentEyebrow": "AI agent",
     "agentTitle": "Ask once. Every answer cites its source.",
     "bringEditorToFront": "Bring stella Editor to front",
     "bringTerminalToFront": "Bring stella terminal to front",
@@ -861,7 +861,7 @@
     "controlBody": "stella is open-source legal software you can self-host: inspect the code, run it your way, and export everything in standard formats; no lock-in.",
     "controlEyebrow": "Built for control",
     "controlTitle": "Keep control of the stack.",
-    "dataBody": "Case law from official sources with its structure preserved, and company registries queried straight into the matter, jurisdiction by jurisdiction. Anonymization keeps identifying details out of AI workflows.",
+    "dataBody": "Official case law and company registries, loaded straight into the matter in every jurisdiction you work in. Anonymization keeps identifying details away from the AI.",
     "dataEyebrow": "Legal data",
     "dataMainAlt": "An official court decision open in stella",
     "dataTitle": "Bring the law and the data with you.",

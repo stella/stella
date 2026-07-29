@@ -19,7 +19,8 @@
     "nav.products.workspace.eyebrow",
     "nav.products.workspace.title",
     "products.cli-mcp.adjacent.0.body",
-    "products.workspace.capabilities.0.title"
+    "products.workspace.capabilities.0.title",
+    "story.agentEyebrow"
   ],
   "identicalToSource": {
     "demo.documents": [
@@ -107,6 +108,10 @@
       "de",
       "es",
       "pt-BR",
+      "sk"
+    ],
+    "story.agentEyebrow": [
+      "cs",
       "sk"
     ],
     "story.proofOpenSourceTitle": [

@@ -853,7 +853,7 @@
   },
   "story": {
     "agentBody": "Agent otsib toimikust, loeb asjakohase teksti läbi ja vastab viidetega, mis avavad allika täpselt õiges lõigus. Kasuta teda otse stella rakenduses või ühenda tööriistadega, mida juba kasutad.",
-    "agentEyebrow": "Agendi töövood",
+    "agentEyebrow": "Tehisintellekti agent",
     "agentTitle": "Piisab ühest küsimusest. Iga vastus viitab allikale.",
     "bringEditorToFront": "Too rakenduse stella redaktor esiplaanile",
     "bringTerminalToFront": "Too rakenduse stella terminal esiplaanile",
@@ -861,7 +861,7 @@
     "controlBody": "stella on avatud lähtekoodiga õigustarkvara, mida saad ise majutada: uuri koodi, käita seda oma moodi ja ekspordi kõik standardvormingutes; tarnijalõksuta.",
     "controlEyebrow": "Loodud kontrolli hoidmiseks",
     "controlTitle": "Hoia taristu enda kontrolli all.",
-    "dataBody": "Ametlikest allikatest pärit kohtupraktika säilinud struktuuriga ning ettevõtete registriandmed otse toimikusse, jurisdiktsioon jurisdiktsiooni haaval. Anonüümimine hoiab tuvastavad andmed tehisintellekti töövoogudest eemal.",
+    "dataBody": "Ametlik kohtupraktika ja äriregistrid otse toimikus, igas jurisdiktsioonis, kus töötad. Anonüümimine hoiab tuvastavad andmed tehisintellektist eemal.",
     "dataEyebrow": "Õigusandmed",
     "dataMainAlt": "Kohtu ametlik lahend, avatud rakenduses stella",
     "dataTitle": "Kohtupraktika ja registrid käepärast.",

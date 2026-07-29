@@ -853,7 +853,7 @@
   },
   "story": {
     "agentBody": "Agentas peržiūri bylą, perskaito aktualų tekstą ir atsako su citatomis, kurios atveria šaltinį tiksliai toje vietoje. Naudokite jį tiesiog programoje stella arba prijunkite prie įrankių, kuriais jau dirbate.",
-    "agentEyebrow": "Agento darbo eigos",
+    "agentEyebrow": "DI agentas",
     "agentTitle": "Užtenka paklausti. Kiekvienas atsakymas nurodo šaltinį.",
     "bringEditorToFront": "Perkelti programos stella redaktorių į priekinį planą",
     "bringTerminalToFront": "Perkelti programos stella terminalą į priekinį planą",
@@ -861,7 +861,7 @@
     "controlBody": "stella – atvirojo kodo teisinė programinė įranga, kurią galite talpinti patys: peržiūrėkite kodą, paleiskite ją savaip ir eksportuokite viską standartiniais formatais; be pririšimo.",
     "controlEyebrow": "Sukurta kontrolei",
     "controlTitle": "Išlaikykite infrastruktūros kontrolę.",
-    "dataBody": "Teismų praktika iš oficialių šaltinių su išsaugota struktūra ir įmonių registrų duomenys, tiesiogiai įtraukiami į bylą, jurisdikcija po jurisdikcijos. Anonimizavimas neleidžia identifikuojantiems duomenims patekti į DI darbo eigas.",
+    "dataBody": "Oficiali teismų praktika ir įmonių registrai tiesiai byloje, kiekvienoje jurisdikcijoje, kurioje dirbate. Anonimizavimas tuo metu saugo identifikuojančius duomenis nuo DI.",
     "dataEyebrow": "Teisiniai duomenys",
     "dataMainAlt": "Oficialus teismo sprendimas, atvertas programoje stella",
     "dataTitle": "Teismų praktika ir registrai po ranka.",

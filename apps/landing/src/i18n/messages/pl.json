@@ -853,7 +853,7 @@
   },
   "story": {
     "agentBody": "Agent przeszukuje sprawę, czyta istotny tekst i odpowiada z cytatami, które otwierają źródło dokładnie we wskazanym fragmencie. Korzystaj z niego w aplikacji stella albo połącz go z narzędziami, z których już korzystasz.",
-    "agentEyebrow": "Przepływy pracy agenta",
+    "agentEyebrow": "Agent AI",
     "agentTitle": "Wystarczy zapytać. Każda odpowiedź wskazuje źródło.",
     "bringEditorToFront": "Przenieś na wierzch edytor aplikacji stella",
     "bringTerminalToFront": "Przenieś na wierzch terminal aplikacji stella",
@@ -861,7 +861,7 @@
     "controlBody": "stella to prawnicze oprogramowanie open source, które możesz hostować samodzielnie: przejrzyj kod, uruchamiaj je po swojemu i eksportuj wszystko w standardowych formatach; bez uzależnienia.",
     "controlEyebrow": "Zbudowane z myślą o kontroli",
     "controlTitle": "Zachowaj kontrolę nad infrastrukturą.",
-    "dataBody": "Orzecznictwo z oficjalnych źródeł z zachowaną strukturą oraz rejestry firm wczytywane wprost do sprawy, jurysdykcja po jurysdykcji. Anonimizacja utrzymuje dane identyfikujące poza przepływami pracy z AI.",
+    "dataBody": "Oficjalne orzecznictwo i rejestry wprost w sprawie, w każdej jurysdykcji, w której pracujesz. Anonimizacja trzyma przy tym dane identyfikujące z dala od AI.",
     "dataEyebrow": "Dane prawne",
     "dataMainAlt": "Oficjalne orzeczenie sądu otwarte w aplikacji stella",
     "dataTitle": "Orzecznictwo i rejestry pod ręką.",

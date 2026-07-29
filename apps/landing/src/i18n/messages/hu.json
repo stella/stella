@@ -853,7 +853,7 @@
   },
   "story": {
     "agentBody": "Az ügynök átkutatja az ügyet, elolvassa a releváns szöveget, és olyan hivatkozásokkal válaszol, amelyek pontosan a megfelelő szövegrésznél nyitják meg a forrást. Használja közvetlenül a stella alkalmazásban, vagy kapcsolja össze a már használt eszközeivel.",
-    "agentEyebrow": "Ügynöki munkafolyamatok",
+    "agentEyebrow": "AI-ügynök",
     "agentTitle": "Egy kérdés elég. Minden válasz megjelöli a forrását.",
     "bringEditorToFront": "A stella alkalmazás szerkesztőjének előtérbe hozása",
     "bringTerminalToFront": "A stella alkalmazás termináljának előtérbe hozása",
@@ -861,7 +861,7 @@
     "controlBody": "A stella nyílt forráskódú jogi szoftver, amelyet saját maga is üzemeltethet: vizsgálja meg a kódot, futtassa a maga módján, és exportáljon mindent szabványos formátumokban; bezártság nélkül.",
     "controlEyebrow": "Irányításra tervezve",
     "controlTitle": "Tartsa kézben a rendszerét.",
-    "dataBody": "Hivatalos forrásokból származó ítélkezési gyakorlat megőrzött szerkezettel, valamint cégnyilvántartási adatok közvetlenül az ügybe, joghatóságonként. Az anonimizálás távol tartja az azonosító adatokat az AI-munkafolyamatoktól.",
+    "dataBody": "Hivatalos ítélkezési gyakorlat és cégnyilvántartások közvetlenül az ügyben, minden joghatóságban, ahol dolgozik. Az anonimizálás közben távol tartja az azonosító adatokat az AI-tól.",
     "dataEyebrow": "Jogi adatok",
     "dataMainAlt": "Egy hivatalos bírósági határozat a stella alkalmazásban megnyitva",
     "dataTitle": "Ítélkezési gyakorlat és nyilvántartások kéznél.",

@@ -853,7 +853,7 @@
   },
   "story": {
     "agentBody": "Agent prehľadá spis, prečíta relevantný text a odpovie s citáciami, ktoré otvoria zdroj presne v danej pasáži. Použijete ho priamo v aplikácii stella, alebo si ho pripojíte k nástrojom, ktoré už používate.",
-    "agentEyebrow": "Pracovné postupy agenta",
+    "agentEyebrow": "AI agent",
     "agentTitle": "Stačí sa spýtať. Každá odpoveď uvádza svoj zdroj.",
     "bringEditorToFront": "Preniesť do popredia editor aplikácie stella",
     "bringTerminalToFront": "Preniesť do popredia terminál aplikácie stella",
@@ -861,7 +861,7 @@
     "controlBody": "stella je open source právny softvér, ktorý si môžete hostovať sami: nahliadnite do kódu, prevádzkujte ho po svojom a exportujte všetko v štandardných formátoch; bez viazanosti.",
     "controlEyebrow": "Navrhnuté pre plnú kontrolu",
     "controlTitle": "Majte technológie pod kontrolou.",
-    "dataBody": "Judikatúra z oficiálnych zdrojov so zachovanou štruktúrou a dáta z obchodných registrov prúdiace priamo do spisu, jurisdikciu po jurisdikcii. Anonymizácia udržiava identifikačné údaje mimo pracovných postupov s AI.",
+    "dataBody": "Oficiálna judikatúra a obchodné registre priamo v spise, v každej jurisdikcii, kde pracujete. Anonymizácia pritom drží identifikačné údaje mimo dosahu AI.",
     "dataEyebrow": "Právne dáta",
     "dataMainAlt": "Oficiálne súdne rozhodnutie otvorené v aplikácii stella",
     "dataTitle": "Judikatúra a registre po ruke.",
