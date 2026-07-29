@@ -43,9 +43,17 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { MatterIcon } from "@/components/matter-icon";
+import { SavedSearches } from "@/components/saved-searches";
+import {
+  toSearchFilters,
+  type SavedSearchCriteria,
+} from "@/components/saved-searches.logic";
 import { getChatHitRoute } from "@/components/search-dialog.logic";
 import {
+  canShowSearchSummary,
   clearTime,
+  hasUnavailableSearchType,
+  resolveActiveSearchTypes,
   resolveUpdatedFrom,
   resolveUpdatedTo,
   setCustomTime,
@@ -76,6 +84,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   searchFacetOptions,
+  hasSearchQueryOrSelectiveFilter,
   searchInfiniteOptions,
   TIME_PRESETS,
 } from "@/lib/search";
@@ -259,6 +268,16 @@ type SearchDialogProps = {
   initialWorkspaceId?: string | undefined;
 };
 
+const initialSearchFilters = (
+  initialWorkspaceId: string | undefined,
+): SearchFilters => ({
+  editedByUserIds: [],
+  kinds: [],
+  mimeTypes: [],
+  types: [],
+  workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
+});
+
 // eslint-disable-next-line react/react-compiler -- useVirtualizer returns functions that cannot be safely memoized, so React Compiler intentionally skips this component
 export const SearchDialog = ({
   open,
@@ -287,12 +306,10 @@ export const SearchDialog = ({
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
-  const [filters, setFilters] = useState<SearchFilters>({
-    editedByUserIds: [],
-    mimeTypes: [],
-    types: [],
-    workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
-  });
+  const [filters, setFilters] = useState<SearchFilters>(() =>
+    initialSearchFilters(initialWorkspaceId),
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const debouncedSetQuery = useDebouncedCallback((value: string) => {
     setDebouncedQuery(value);
@@ -312,30 +329,61 @@ export const SearchDialog = ({
     [filters.time, searchQuery],
   );
   const updatedTo = resolveUpdatedTo(filters.time);
-  const selectedSearchTypes = filters.types.filter(
-    (type) =>
-      isSearchKindOption(type) &&
-      isAvailableSearchKind(type, publicLawPreviewEnabled),
+  const availableSearchTypes = SEARCH_KIND_TYPES.filter((type) =>
+    isAvailableSearchKind(type, publicLawPreviewEnabled),
   );
-  const activeSearchTypes =
-    selectedSearchTypes.length > 0
-      ? selectedSearchTypes
-      : SEARCH_KIND_TYPES.filter((type) =>
-          isAvailableSearchKind(type, publicLawPreviewEnabled),
-        );
+  const selectedSearchTypes = filters.types.filter(isSearchKindOption);
+  const hasUnavailableSelectedType = hasUnavailableSearchType({
+    availableTypes: availableSearchTypes,
+    kinds: filters.kinds,
+    selectedTypes: selectedSearchTypes,
+  });
+  const activeSearchTypes = resolveActiveSearchTypes({
+    availableTypes: availableSearchTypes,
+    kinds: filters.kinds,
+    selectedTypes: selectedSearchTypes,
+  });
+  const hasQuery = searchQuery.trim().length > 0;
+  const hasSearchCriteria = hasSearchQueryOrSelectiveFilter({
+    query: searchQuery,
+    types: filters.types,
+    kinds: filters.kinds,
+    editedByUserIds: filters.editedByUserIds,
+    mimeTypes: filters.mimeTypes,
+    updatedFrom,
+    updatedTo,
+  });
+  const hasExplicitSearchFilters = hasSearchQueryOrSelectiveFilter({
+    query: "",
+    types: filters.types,
+    kinds: filters.kinds,
+    editedByUserIds: filters.editedByUserIds,
+    mimeTypes: filters.mimeTypes,
+    updatedFrom,
+    updatedTo,
+  });
+  const hasActiveSearch = hasSearchCriteria && !hasUnavailableSelectedType;
+  const hasTypedQuery = query.trim().length > 0;
+  const hasVisibleSearch = hasTypedQuery || hasExplicitSearchFilters;
 
   const {
     data,
+    error: searchError,
+    isError: isSearchError,
     isLoading,
     isFetching,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
+    refetch: refetchSearch,
   } = useInfiniteQuery(
     searchInfiniteOptions({
+      enabled: hasActiveSearch,
+      organizationId: searchRecentsScope.organizationId,
+      userId: searchRecentsScope.userId,
       query: searchQuery,
       workspaceIds: filters.workspaceIds,
-      kinds: [],
+      kinds: filters.kinds,
       types: activeSearchTypes,
       editedByUserIds: filters.editedByUserIds,
       mimeTypes: filters.mimeTypes,
@@ -355,7 +403,8 @@ export const SearchDialog = ({
   // Counts and facets are computed only on the first page (see backend);
   // ignore them entirely while the query is empty so a cleared input
   // doesn't leave stale numbers in the sidebar.
-  const firstPage = searchQuery.length > 0 ? data?.pages.at(0) : undefined;
+  const firstPage =
+    hasActiveSearch && !isSearchError ? data?.pages.at(0) : undefined;
   const facets = firstPage?.facets;
   const typeBuckets = facets ? facets.type : EMPTY_FACET_BUCKETS;
   const mimeTypeBuckets = facets ? facets.mimeType : EMPTY_FACET_BUCKETS;
@@ -363,6 +412,7 @@ export const SearchDialog = ({
   const workspaceBuckets = facets ? facets.workspace : EMPTY_FACET_BUCKETS;
   const totalCount = firstPage?.totalCount ?? 0;
   const filterTypesKey = filters.types.join("|");
+  const filterKindsKey = filters.kinds.join("|");
   const filterMimeTypesKey = filters.mimeTypes.join("|");
   const filterWorkspaceIdsKey = filters.workspaceIds.join("|");
 
@@ -407,17 +457,30 @@ export const SearchDialog = ({
   };
 
   const facetSearchParams = {
+    enabled: hasActiveSearch,
+    organizationId: searchRecentsScope.organizationId,
+    userId: searchRecentsScope.userId,
     query: searchQuery,
-    kinds: [] satisfies EntityKind[],
+    kinds: filters.kinds,
     ...searchFilterParams,
   };
 
   const analytics = useAnalytics();
+  useExternalSyncEffect(() => {
+    if (searchError) {
+      analytics.captureError(searchError);
+    }
+  }, [analytics, searchError]);
+
   // summarizeSearchEndpoint (POST /search/summary) and the follow-up
   // "Ask about these results" chat (POST /search/summary/chat) both
   // require chat:create; hide the AI summary control for roles that
   // lack it instead of surfacing a 403 on click.
   const canSummarizeSearch = usePermissions({ chat: ["create"] });
+  const showSearchSummary = canShowSearchSummary({
+    canSummarizeSearch,
+    query: searchQuery,
+  });
 
   const summarizeSearchMutation = useMutation({
     mutationFn: async (params: SearchAISummaryParams) => {
@@ -494,9 +557,14 @@ export const SearchDialog = ({
     summarizeSearchMutation.reset();
   };
 
+  const clearSearch = () => {
+    clearSearchQuery();
+    setFilters(initialSearchFilters(initialWorkspaceId));
+  };
+
   const handleEscapeAction = () => {
-    if (query.trim() || debouncedQuery.trim()) {
-      clearSearchQuery();
+    if (hasVisibleSearch) {
+      clearSearch();
       return;
     }
     onOpenChange(false);
@@ -729,20 +797,13 @@ export const SearchDialog = ({
     });
   };
 
-  const handleCommandInputKeyDownCapture = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-  ) => {
-    if (e.key === "Escape" && (query.trim() || debouncedQuery.trim())) {
-      e.preventDefault();
-      e.stopPropagation();
-      handleEscapeAction();
-    }
-  };
-
   const hasResults = allHits.length > 0;
-  const hasQuery = searchQuery.length > 0;
-  const hasTypedQuery = query.trim().length > 0;
-  const commandHits = hasTypedQuery && hasResults ? allHits : [];
+  const shouldShowResults =
+    hasVisibleSearch &&
+    !hasUnavailableSelectedType &&
+    !isSearchError &&
+    hasResults;
+  const commandHits = shouldShowResults ? allHits : [];
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
   // Clear any prior AI summary whenever the effective search changes. The
@@ -760,6 +821,7 @@ export const SearchDialog = ({
     resetSummarizeSearch();
   }, [
     filterEditorIdsKey,
+    filterKindsKey,
     filterMimeTypesKey,
     filterTypesKey,
     filterWorkspaceIdsKey,
@@ -771,7 +833,7 @@ export const SearchDialog = ({
   const loadMoreRef = useCallback(
     (target: HTMLDivElement | null) => {
       const root = resultsElement;
-      if (!hasQuery || !hasNextPage || !root || !target) {
+      if (!hasActiveSearch || !hasNextPage || !root || !target) {
         return undefined;
       }
 
@@ -789,11 +851,48 @@ export const SearchDialog = ({
       observer.observe(target);
       return () => observer.disconnect();
     },
-    [fetchNextPage, hasNextPage, hasQuery, isFetchingNextPage, resultsElement],
+    [
+      fetchNextPage,
+      hasActiveSearch,
+      hasNextPage,
+      isFetchingNextPage,
+      resultsElement,
+    ],
   );
 
+  const applySavedSearch = (criteria: SavedSearchCriteria) => {
+    const savedFilters = toSearchFilters(criteria);
+    debouncedSetQuery.cancel();
+    setQuery(criteria.query);
+    setDebouncedQuery(criteria.query);
+    setFilters({
+      workspaceIds: savedFilters.workspaceIds,
+      types: savedFilters.types,
+      kinds: savedFilters.kinds,
+      editedByUserIds: savedFilters.editedByUserIds,
+      mimeTypes: savedFilters.mimeTypes,
+      ...(savedFilters.time !== undefined && { time: savedFilters.time }),
+    });
+    summarizeSearchMutation.reset();
+    searchInputRef.current?.focus();
+  };
+
   return (
-    <CommandDialog onOpenChange={onOpenChange} open={open}>
+    <CommandDialog
+      onOpenChange={(nextOpen, eventDetails) => {
+        if (
+          !nextOpen &&
+          eventDetails.reason === "escape-key" &&
+          hasVisibleSearch
+        ) {
+          eventDetails.cancel();
+          clearSearch();
+          return;
+        }
+        onOpenChange(nextOpen);
+      }}
+      open={open}
+    >
       <CommandDialogPopup
         className="flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-hidden sm:h-[min(720px,calc(100dvh-96px))] sm:w-[min(960px,calc(100vw-32px))]"
         showCloseButton={false}
@@ -826,8 +925,8 @@ export const SearchDialog = ({
               autoFocus
               className="text-sm"
               dir={contentDir(query)}
-              onKeyDownCapture={handleCommandInputKeyDownCapture}
               placeholder={t("search.placeholder")}
+              ref={searchInputRef}
             />
             {isFetching && !isFetchingNextPage && (
               <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
@@ -849,6 +948,23 @@ export const SearchDialog = ({
                 <WandSparklesIcon className="size-4" />
               )}
             </Button>
+            <SavedSearches
+              filters={filters}
+              isOpen={open}
+              onApply={applySavedSearch}
+              query={query}
+              showList={false}
+            />
+            {hasVisibleSearch && (
+              <Button
+                className="min-h-11 shrink-0 sm:hidden"
+                onClick={clearSearch}
+                size="sm"
+                variant="ghost"
+              >
+                {t("common.reset")}
+              </Button>
+            )}
             <Button
               aria-keyshortcuts="Escape"
               aria-label={t("search.escKey")}
@@ -880,7 +996,7 @@ export const SearchDialog = ({
                 time={filters.time}
               />
 
-              {hasQuery && (
+              {hasSearchCriteria && (
                 <>
                   {(facets?.type.length ?? 0) + filters.types.length > 0 && (
                     <div className="mt-4">
@@ -967,45 +1083,90 @@ export const SearchDialog = ({
               className="max-h-none min-w-0 flex-1 overflow-y-auto"
               ref={setResultsElement}
             >
-              {!hasTypedQuery && (
-                <SearchRecents
-                  onFileClick={openRecentFile}
-                  onSearchClick={applyRecentSearch}
-                  recentFiles={recentFiles}
-                  recentSearches={recentSearches}
-                />
+              {!hasVisibleSearch && (
+                <>
+                  <SavedSearches
+                    filters={filters}
+                    isOpen={open}
+                    onApply={applySavedSearch}
+                    query={query}
+                    showTrigger={false}
+                  />
+                  <SearchRecents
+                    onFileClick={openRecentFile}
+                    onSearchClick={applyRecentSearch}
+                    recentFiles={recentFiles}
+                    recentSearches={recentSearches}
+                  />
+                </>
               )}
 
-              {hasTypedQuery && !hasResults && (!hasQuery || isLoading) && (
-                <div className="space-y-3 px-4 py-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    // eslint-disable-next-line react/no-array-index-key -- static skeleton-loader placeholder, never reorders
-                    <div className="space-y-2" key={`skeleton-${i}`}>
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {hasTypedQuery && hasQuery && !isLoading && !hasResults && (
+              {hasVisibleSearch && hasUnavailableSelectedType && (
                 <div className="flex h-full items-center justify-center px-4 py-8">
                   <p className="text-muted-foreground text-sm">
-                    {t("search.noResults", {
-                      query: searchQuery,
-                    })}
+                    {t("common.comingSoon")}
                   </p>
                 </div>
               )}
 
-              {hasTypedQuery && hasResults && (
+              {hasVisibleSearch &&
+                !hasUnavailableSelectedType &&
+                hasActiveSearch &&
+                isSearchError && (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-8">
+                    <p className="text-muted-foreground text-sm">
+                      {t("common.somethingWentWrong")}
+                    </p>
+                    <Button
+                      onClick={() => {
+                        detached(refetchSearch(), "SearchDialog");
+                      }}
+                      size="sm"
+                      variant="outline"
+                    >
+                      {t("common.retry")}
+                    </Button>
+                  </div>
+                )}
+
+              {hasVisibleSearch &&
+                !hasUnavailableSelectedType &&
+                !isSearchError &&
+                !hasResults &&
+                (!hasActiveSearch || isLoading) && (
+                  <div className="space-y-3 px-4 py-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      // eslint-disable-next-line react/no-array-index-key -- static skeleton-loader placeholder, never reorders
+                      <div className="space-y-2" key={`skeleton-${i}`}>
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+              {hasVisibleSearch &&
+                hasActiveSearch &&
+                !isSearchError &&
+                !isLoading &&
+                !hasResults && (
+                  <div className="flex h-full items-center justify-center px-4 py-8">
+                    <p className="text-muted-foreground text-sm">
+                      {hasQuery
+                        ? t("search.noResults", { query: searchQuery })
+                        : t("common.noResults")}
+                    </p>
+                  </div>
+                )}
+
+              {shouldShowResults && (
                 <div className="px-2 py-2">
                   <p className="text-muted-foreground px-2 pb-2 text-xs">
                     {t("search.resultCount", {
                       count: totalCount,
                     })}
                   </p>
-                  {canSummarizeSearch && (
+                  {showSearchSummary && (
                     <SearchSummaryItem
                       isOpeningChat={createSummaryChatMutation.isPending}
                       onCitationClick={(citationId) => {
@@ -1535,6 +1696,9 @@ type SearchableFacetGroupProps = {
   selected: string[];
   onChange: (value: string) => void;
   searchParams: {
+    enabled: boolean;
+    organizationId: string;
+    userId: string;
     query: string;
     workspaceIds: string[];
     types: GlobalSearchResultType[];
@@ -1573,7 +1737,7 @@ const SearchableFacetGroup = ({
       limit: FACET_SEARCH_LIMIT,
       ...searchParams,
     }),
-    enabled: isSearching && searchParams.query.length > 0,
+    enabled: isSearching && searchParams.enabled,
   });
 
   const resolveLabel = (bucket: FacetBucket): string =>

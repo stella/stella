@@ -151,6 +151,10 @@ export const brandPersistedRateTableId = (
   rateTableId: string,
 ): SafeId<"rateTable"> => toSafeId<"rateTable">(rateTableId);
 
+export const brandPersistedSavedSearchId = (
+  savedSearchId: string,
+): SafeId<"savedSearch"> => toSafeId<"savedSearch">(savedSearchId);
+
 export const brandPersistedTimeEntryId = (
   timeEntryId: string,
 ): SafeId<"timeEntry"> => toSafeId<"timeEntry">(timeEntryId);

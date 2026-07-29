@@ -464,9 +464,10 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui         | 3     |
 | provider_secret        | 20    |
 | realtime_stream        | 2     |
+| search_ui              | 4     |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 5     |
 | upload_mechanics       | 4     |
 | url_preview            | 2     |
 
-Total: 94
+Total: 98

@@ -1,4 +1,4 @@
-import type { GlobalSearchResultType } from "@stll/api/types";
+import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 
 import { presetUpdatedFrom } from "@/lib/search";
 import type { TimePreset } from "@/lib/search";
@@ -10,10 +10,49 @@ export type TimeFilter =
 export type SearchFilters = {
   workspaceIds: string[];
   types: GlobalSearchResultType[];
+  kinds: EntityKind[];
   editedByUserIds: string[];
   mimeTypes: string[];
   time?: TimeFilter;
 };
+
+type ResolveActiveSearchTypesParams = {
+  availableTypes: readonly GlobalSearchResultType[];
+  kinds: readonly EntityKind[];
+  selectedTypes: readonly GlobalSearchResultType[];
+};
+
+export const hasUnavailableSearchType = ({
+  availableTypes,
+  kinds,
+  selectedTypes,
+}: ResolveActiveSearchTypesParams): boolean =>
+  [...selectedTypes, ...kinds].some((type) => !availableTypes.includes(type));
+
+export const resolveActiveSearchTypes = ({
+  availableTypes,
+  kinds,
+  selectedTypes,
+}: ResolveActiveSearchTypesParams): GlobalSearchResultType[] => {
+  if (selectedTypes.length > 0) {
+    return [...selectedTypes];
+  }
+  if (kinds.length > 0) {
+    return [...kinds];
+  }
+  return [...availableTypes];
+};
+
+type CanShowSearchSummaryParams = {
+  canSummarizeSearch: boolean;
+  query: string;
+};
+
+export const canShowSearchSummary = ({
+  canSummarizeSearch,
+  query,
+}: CanShowSearchSummaryParams): boolean =>
+  canSummarizeSearch && query.trim().length > 0;
 
 export const resolveUpdatedFrom = (
   time: TimeFilter | undefined,

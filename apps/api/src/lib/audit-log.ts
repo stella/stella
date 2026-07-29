@@ -56,6 +56,7 @@ export const AUDIT_RESOURCE_TYPE = {
   RATE_ENTRY: "rate_entry",
   REPORT_EXPORT: "report_export",
   RATE_TABLE: "rate_table",
+  SAVED_SEARCH: "saved_search",
   STYLE_SET: "style_set",
   TEMPLATE: "template",
   TIME_ENTRY: "time_entry",

@@ -12,10 +12,9 @@ const realDateNow = Date.now;
 
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
-const accessibleWorkspaceIds = [
-  toSafeId<"workspace">("ws_1"),
-  toSafeId<"workspace">("ws_2"),
-];
+const workspaceOneId = toSafeId<"workspace">("ws_1");
+const workspaceTwoId = toSafeId<"workspace">("ws_2");
+const accessibleWorkspaceIds = [workspaceOneId, workspaceTwoId];
 
 const unusedScopedDb: ScopedDb = async () => {
   throw new Error("scopedDb should not be called");
@@ -28,6 +27,34 @@ const emptySearchFilters = () => ({
   types: [],
   workspaceIds: [],
 });
+
+type SearchBody = Parameters<typeof searchHandler>[0]["body"];
+
+const filterOnlySearchCases = [
+  { name: "a result type", values: { types: ["document"] } },
+  { name: "an editor", values: { editedByUserIds: ["user_2"] } },
+  { name: "a MIME type", values: { mimeTypes: ["application/pdf"] } },
+  {
+    name: "an updated-from timestamp",
+    values: { updatedFrom: "2026-04-23T12:00:00.000Z" },
+  },
+  {
+    name: "an updated-to timestamp",
+    values: { updatedTo: "2026-04-30T12:00:00.000Z" },
+  },
+] satisfies {
+  name: string;
+  values: Partial<
+    Pick<
+      SearchBody,
+      "types" | "editedByUserIds" | "mimeTypes" | "updatedFrom" | "updatedTo"
+    >
+  >;
+}[];
+
+const blankQueryFilterOnlyCases = filterOnlySearchCases.flatMap(
+  ({ name, values }) => ["", "  "].map((query) => ({ name, query, values })),
+);
 
 const createWorkspaceLookupScopedDb =
   (findMany: (query: unknown) => Promise<unknown>): ScopedDb =>
@@ -87,6 +114,73 @@ describe("search handler workspace scoping", () => {
       selectedWorkspaceIds: [],
     });
   });
+
+  test("rejects a blank query scoped only to a workspace", async () => {
+    const result = await searchHandler({
+      accessibleWorkspaceIds,
+      body: {
+        ...emptySearchFilters(),
+        query: "  ",
+        workspaceIds: [workspaceOneId],
+      },
+      organizationId,
+      userId,
+      search: searchMock,
+      scopedDb: unusedScopedDb,
+    });
+
+    expect(result).toMatchObject({
+      code: 400,
+      response: {
+        message: "Provide a search query or at least one filter",
+      },
+    });
+    expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  test("runs a blank query when an entity-kind filter is selected", async () => {
+    await searchHandler({
+      accessibleWorkspaceIds,
+      body: {
+        ...emptySearchFilters(),
+        kinds: ["document"],
+        query: "",
+      },
+      organizationId,
+      userId,
+      search: searchMock,
+      scopedDb: unusedScopedDb,
+    });
+
+    expect(searchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: "",
+        types: ["document"],
+      }),
+    );
+  });
+
+  test.each(blankQueryFilterOnlyCases)(
+    "runs a blank or whitespace query with $name",
+    async ({ query, values }) => {
+      await searchHandler({
+        accessibleWorkspaceIds,
+        body: {
+          ...emptySearchFilters(),
+          ...values,
+          query,
+        },
+        organizationId,
+        userId,
+        search: searchMock,
+        scopedDb: unusedScopedDb,
+      });
+
+      expect(searchMock).toHaveBeenCalledWith(
+        expect.objectContaining({ query, ...values }),
+      );
+    },
+  );
 
   test("validates and forwards the user's workspace selection", async () => {
     const workspaceId = toSafeId<"workspace">("ws_1");

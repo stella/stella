@@ -8,6 +8,7 @@ import {
 } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { savedSearches } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import readContactById from "@/api/handlers/contacts/get";
@@ -19,10 +20,13 @@ import readExpenses from "@/api/handlers/expenses/list";
 import { readFileHandler } from "@/api/handlers/files/get";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import readRateEntries from "@/api/handlers/rates/entries-read";
+import listSavedSearches from "@/api/handlers/saved-searches/list";
 import getTemplate from "@/api/handlers/templates/get";
 import readTimeEntryById from "@/api/handlers/time-entries/get";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -77,6 +81,25 @@ let testDb: TestDatabase;
 let ids: TestIds;
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+const savedSearchA = toSafeId<"savedSearch">(
+  "11111111-1111-4111-8111-111111111145",
+);
+const savedSearchB = toSafeId<"savedSearch">(
+  "22222222-2222-4222-8222-222222222245",
+);
+
+const savedSearchCriteria = (
+  workspaceId: SafeId<"workspace">,
+): SavedSearchCriteria => ({
+  version: 1,
+  query: "agreement",
+  workspaceIds: [workspaceId],
+  types: ["document"],
+  kinds: [],
+  editedByUserIds: [],
+  mimeTypes: [],
+  sort: "relevance",
+});
 
 const isolationCases: IsolationCase[] = [
   {
@@ -270,6 +293,19 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.billingCodeB1),
   },
   {
+    name: "saved search list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listSavedSearches, workspaceA, {
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listSavedSearches, workspaceB, {
+        query: { limit: 100 },
+      }),
+    expectDenied: (result) => expectPageExcludesId(result, savedSearchB),
+    expectPositive: (result) => expectPageContainsId(result, savedSearchB),
+  },
+  {
     name: "organization contact read by id",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(readContactById, workspaceA, {
@@ -303,6 +339,22 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb.insert(savedSearches).values([
+    {
+      id: savedSearchA,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      name: "Workspace A agreements",
+      criteria: savedSearchCriteria(ids.wsA1),
+    },
+    {
+      id: savedSearchB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      name: "Workspace B agreements",
+      criteria: savedSearchCriteria(ids.wsB1),
+    },
+  ]);
 });
 
 afterAll(async () => {

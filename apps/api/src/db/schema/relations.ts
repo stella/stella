@@ -82,6 +82,7 @@ import {
   propertyDependencies,
 } from "./properties";
 import { reportExports } from "./reports";
+import { savedSearches } from "./saved-searches";
 import { agentSkillResources, agentSkills } from "./skills";
 import { styleSets } from "./style-sets";
 import {
@@ -103,6 +104,7 @@ export const relations = defineRelations(
   {
     agentSkills,
     agentSkillResources,
+    savedSearches,
     styleSets,
     user,
     contacts,
@@ -1045,6 +1047,12 @@ export const relations = defineRelations(
       skill: r.one.agentSkills({
         from: r.agentSkillResources.skillId,
         to: r.agentSkills.id,
+      }),
+    },
+    savedSearches: {
+      user: r.one.user({
+        from: r.savedSearches.userId,
+        to: r.user.id,
       }),
     },
   }),

@@ -2,18 +2,28 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import { entities } from "@/api/db/schema";
 import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { compareCodepoint } from "@/api/lib/collation";
 import { decryptContent } from "@/api/lib/content-encryption";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import { fileNameSearchText } from "@/api/lib/search/query";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
+type BuiltSearchDocument = SearchDocumentRow & {
+  semanticUpdatedAtToken: TimestampCasToken;
+  sourceVersionId: SafeId<"entityVersion">;
+};
+
+type IndexedSearchDocument = {
+  entityId: SafeId<"entity">;
+};
 
 const linkMetadataSearchText = (metadata: LinkMetadata | null): string => {
   if (!metadata) {
@@ -58,7 +68,7 @@ const extractFieldText = (content: FieldContent): string => {
 
 const buildSearchDocument = async (
   entityId: SafeId<"entity">,
-): Promise<SearchDocumentRow | null> => {
+): Promise<BuiltSearchDocument | null> => {
   const entity = await rootDb.query.entities.findFirst({
     where: { id: { eq: entityId } },
     columns: {
@@ -67,7 +77,13 @@ const buildSearchDocument = async (
       kind: true,
       name: true,
       metadata: true,
+      createdAt: true,
       updatedAt: true,
+    },
+    extras: {
+      semanticUpdatedAtToken: sql<TimestampCasToken>`
+        COALESCE(${entities.updatedAt}, ${entities.createdAt})::text
+      `.as("semantic_updated_at_token"),
     },
     with: {
       workspace: {
@@ -146,8 +162,9 @@ const buildSearchDocument = async (
     } catch (error) {
       // Decryption fails when CONTENT_ENCRYPTION_KEY was
       // added or rotated after this content was stored.
-      // Skip extracted content; re-extract to fix.
+      // Keep the last complete projection until re-extraction fixes it.
       captureError(error, { entityId });
+      throw error;
     }
   }
 
@@ -159,7 +176,9 @@ const buildSearchDocument = async (
     title,
     searchableText: fieldTexts.join(" "),
     language,
-    updatedAt: entity.updatedAt ?? new Date(),
+    sourceVersionId: version.id,
+    semanticUpdatedAtToken: entity.semanticUpdatedAtToken,
+    updatedAt: entity.updatedAt ?? entity.createdAt,
   };
 };
 
@@ -177,38 +196,55 @@ export const upsertSearchDocument = async (
 
   const regconfig = doc.language ?? "simple";
 
-  await rootDb.execute(sql`
-    INSERT INTO search_documents (
-      entity_id, organization_id, workspace_id,
-      kind, title, searchable_text, language,
-      updated_at, tsv
-    ) VALUES (
-      ${doc.entityId},
-      ${doc.organizationId},
-      ${doc.workspaceId},
-      ${doc.kind},
-      ${doc.title},
-      ${doc.searchableText},
-      ${doc.language},
-      now(),
-      to_tsvector(
-        ${regconfig}::regconfig,
-        unaccent(arabic_normalize(
-          coalesce(${doc.title}, '') || ' ' ||
-          coalesce(${doc.searchableText}, '')
-        ))
+  await rootDb.transaction(async (tx) => {
+    const indexed = await tx.execute<IndexedSearchDocument>(sql`
+      WITH authoritative_source AS MATERIALIZED (
+        SELECT e.id
+        FROM entities e
+        WHERE e.id = ${doc.entityId}
+          AND e.current_version_id = ${doc.sourceVersionId}
+          AND COALESCE(e.updated_at, e.created_at)
+            IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamp
+        FOR UPDATE
       )
-    )
-    ON CONFLICT (entity_id) DO UPDATE SET
-      organization_id = EXCLUDED.organization_id,
-      workspace_id = EXCLUDED.workspace_id,
-      kind = EXCLUDED.kind,
-      title = EXCLUDED.title,
-      searchable_text = EXCLUDED.searchable_text,
-      language = EXCLUDED.language,
-      updated_at = EXCLUDED.updated_at,
-      tsv = EXCLUDED.tsv
-  `);
+      INSERT INTO search_documents (
+        entity_id, organization_id, workspace_id,
+        kind, title, searchable_text, language,
+        updated_at, tsv
+      )
+      SELECT
+        ${doc.entityId},
+        ${doc.organizationId},
+        ${doc.workspaceId},
+        ${doc.kind},
+        ${doc.title},
+        ${doc.searchableText},
+        ${doc.language},
+        ${doc.semanticUpdatedAtToken}::timestamp,
+        to_tsvector(
+          ${regconfig}::regconfig,
+          unaccent(arabic_normalize(
+            coalesce(${doc.title}, '') || ' ' ||
+            coalesce(${doc.searchableText}, '')
+          ))
+        )
+      FROM authoritative_source
+      ON CONFLICT (entity_id) DO UPDATE SET
+        organization_id = EXCLUDED.organization_id,
+        workspace_id = EXCLUDED.workspace_id,
+        kind = EXCLUDED.kind,
+        title = EXCLUDED.title,
+        searchable_text = EXCLUDED.searchable_text,
+        language = EXCLUDED.language,
+        updated_at = EXCLUDED.updated_at,
+        tsv = EXCLUDED.tsv
+      WHERE EXISTS (SELECT 1 FROM authoritative_source)
+      RETURNING entity_id AS "entityId"
+    `);
 
-  await syncWorkspaceSearchActivity(doc.workspaceId);
+    if (!indexed.at(0)) {
+      return;
+    }
+    await syncWorkspaceSearchActivity(doc.workspaceId, tx);
+  });
 };

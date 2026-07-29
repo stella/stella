@@ -1,8 +1,4 @@
-import {
-  infiniteQueryOptions,
-  keepPreviousData,
-  queryOptions,
-} from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 import { DAY_IN_MS } from "@stll/time";
@@ -34,6 +30,10 @@ export const presetUpdatedFrom = (preset: TimePreset): string =>
 export type SearchableFacet = "editor" | "workspace" | "mimeType";
 
 export type SearchParams = {
+  /** UI-owned gate derived from the raw query and explicit user filters. */
+  enabled: boolean;
+  organizationId: string;
+  userId: string;
   query: string;
   workspaceIds: string[];
   types: GlobalSearchResultType[];
@@ -45,19 +45,43 @@ export type SearchParams = {
   limit?: number | undefined;
 };
 
+type SearchEnablementParams = Pick<
+  SearchParams,
+  | "query"
+  | "types"
+  | "kinds"
+  | "editedByUserIds"
+  | "mimeTypes"
+  | "updatedFrom"
+  | "updatedTo"
+> & { workspaceIds?: readonly string[] };
+
+// Keep this aligned with `hasSearchQueryOrSelectiveFilter` in the API.
+// A workspace is authorization/scope, not a selective enough filter to load
+// every document in a matter when the dialog opens with an initial workspace.
+export const hasSearchQueryOrSelectiveFilter = ({
+  query,
+  types,
+  kinds,
+  editedByUserIds,
+  mimeTypes,
+  updatedFrom,
+  updatedTo,
+}: SearchEnablementParams): boolean =>
+  query.trim().length > 0 ||
+  types.length > 0 ||
+  kinds.length > 0 ||
+  editedByUserIds.length > 0 ||
+  mimeTypes.length > 0 ||
+  updatedFrom !== undefined ||
+  updatedTo !== undefined;
+
 type SearchFacetParams = {
   facet: SearchableFacet;
   search: string;
-  query: string;
-  workspaceIds: string[];
-  types: GlobalSearchResultType[];
-  kinds: EntityKind[];
-  editedByUserIds: string[];
-  mimeTypes: string[];
-  updatedFrom?: string | undefined;
-  updatedTo?: string | undefined;
-  limit?: number | undefined;
-};
+} & SearchParams;
+
+type SearchOwner = Pick<SearchParams, "organizationId" | "userId">;
 
 export type SearchAISummaryParams = {
   query: string;
@@ -77,9 +101,18 @@ export type SearchAISummaryParams = {
 // identity and trigger spurious refetches.
 const searchKeys = {
   all: ["search"] as const,
-  query: (params: SearchParams) =>
+  owner: (params: SearchOwner) =>
     [
       ...searchKeys.all,
+      {
+        organizationId: params.organizationId,
+        userId: params.userId,
+      },
+    ] as const,
+  query: (params: SearchParams) =>
+    [
+      ...searchKeys.owner(params),
+      "query",
       {
         query: params.query,
         workspaceIds: params.workspaceIds,
@@ -94,7 +127,7 @@ const searchKeys = {
     ] as const,
   facet: (params: SearchFacetParams) =>
     [
-      ...searchKeys.all,
+      ...searchKeys.owner(params),
       "facet",
       {
         facet: params.facet,
@@ -111,6 +144,20 @@ const searchKeys = {
       },
     ] as const,
 };
+
+const belongsToSearchOwner = (
+  queryKey: readonly unknown[] | undefined,
+  owner: SearchOwner,
+): boolean =>
+  queryKey?.some(
+    (part) =>
+      typeof part === "object" &&
+      part !== null &&
+      "organizationId" in part &&
+      part.organizationId === owner.organizationId &&
+      "userId" in part &&
+      part.userId === owner.userId,
+  ) ?? false;
 
 export const searchInfiniteOptions = (params: SearchParams) =>
   infiniteQueryOptions({
@@ -138,8 +185,11 @@ export const searchInfiniteOptions = (params: SearchParams) =>
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
-    enabled: params.query.length > 0,
+    placeholderData: (previousData, previousQuery) =>
+      belongsToSearchOwner(previousQuery?.queryKey, params)
+        ? previousData
+        : undefined,
+    enabled: params.enabled,
   });
 
 export const searchFacetOptions = (params: SearchFacetParams) =>
@@ -167,6 +217,9 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
 
       return unwrapEden(response);
     },
-    enabled: params.query.length > 0,
-    placeholderData: keepPreviousData,
+    enabled: params.enabled,
+    placeholderData: (previousData, previousQuery) =>
+      belongsToSearchOwner(previousQuery?.queryKey, params)
+        ? previousData
+        : undefined,
   });

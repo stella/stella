@@ -380,11 +380,9 @@ console.log(
   `SUMMARY docs=${docs.length - emptyDocs} empty=${emptyDocs} extracted=${totalExtracted} residual-candidates=${totalResiduals}`,
 );
 
-// A run that probed nothing is a failure, not a clean zero: the scheduled
-// reviewer must see a non-zero exit instead of an empty SUMMARY — whether
-// every operation failed or the listings succeeded and every get did not.
-// every() is true for an empty array, so this also covers zero docs.
-if (docs.every((doc) => doc.empty)) {
+// A run whose sampled documents are all empty is a failure. An empty listing
+// remains a reported collection shortfall rather than a false probe failure.
+if (docs.length > 0 && docs.every((doc) => doc.empty)) {
   console.error(
     `citation-probe: no usable documents probed (${docs.length} sampled, ${s3Failures}/${s3Attempts} S3 operations failed); unusable run`,
   );

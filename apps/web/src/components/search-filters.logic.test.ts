@@ -3,7 +3,10 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as search from "@/lib/search";
 
 import {
+  canShowSearchSummary,
   clearTime,
+  hasUnavailableSearchType,
+  resolveActiveSearchTypes,
   resolveUpdatedFrom,
   resolveUpdatedTo,
   setCustomTime,
@@ -17,9 +20,92 @@ const baseFilters = (
 ): SearchFilters => ({
   workspaceIds: [],
   types: [],
+  kinds: [],
   editedByUserIds: [],
   mimeTypes: [],
   ...overrides,
+});
+
+describe("active search types", () => {
+  test("detects a persisted result type that is no longer available", () => {
+    expect(
+      hasUnavailableSearchType({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: [],
+        selectedTypes: ["case-law"],
+      }),
+    ).toBe(true);
+    expect(
+      hasUnavailableSearchType({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: [],
+        selectedTypes: ["contact"],
+      }),
+    ).toBe(false);
+  });
+
+  test("detects a saved kind that is no longer available", () => {
+    expect(
+      hasUnavailableSearchType({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: ["task"],
+        selectedTypes: [],
+      }),
+    ).toBe(true);
+  });
+
+  test("uses saved kinds when no explicit result types are selected", () => {
+    expect(
+      resolveActiveSearchTypes({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: ["document"],
+        selectedTypes: [],
+      }),
+    ).toEqual(["document"]);
+  });
+
+  test("prefers explicit result types over saved kinds", () => {
+    expect(
+      resolveActiveSearchTypes({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: ["document"],
+        selectedTypes: ["contact"],
+      }),
+    ).toEqual(["contact"]);
+  });
+
+  test("falls back to every available type only without a type or kind filter", () => {
+    expect(
+      resolveActiveSearchTypes({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: [],
+        selectedTypes: [],
+      }),
+    ).toEqual(["matter", "contact", "document"]);
+  });
+});
+
+describe("search summary visibility", () => {
+  test("requires both permission and a nonempty query", () => {
+    expect(
+      canShowSearchSummary({
+        canSummarizeSearch: true,
+        query: "agreement",
+      }),
+    ).toBe(true);
+    expect(
+      canShowSearchSummary({
+        canSummarizeSearch: true,
+        query: "   ",
+      }),
+    ).toBe(false);
+    expect(
+      canShowSearchSummary({
+        canSummarizeSearch: false,
+        query: "agreement",
+      }),
+    ).toBe(false);
+  });
 });
 
 afterEach(() => {

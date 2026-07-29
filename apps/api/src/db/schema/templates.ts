@@ -158,6 +158,9 @@ export const searchDocuments = p.pgTable(
     p
       .index("search_documents_org_workspace_idx")
       .on(table.organizationId, table.workspaceId),
+    p
+      .index("search_documents_org_updated_id_idx")
+      .on(table.organizationId, table.updatedAt.desc(), table.entityId.desc()),
     p.index("search_documents_tsv_idx").using("gin", table.tsv),
     ...wsPolicies(),
   ],
@@ -187,6 +190,9 @@ export const contactSearchDocuments = p.pgTable(
     p
       .index("contact_search_docs_org_type_idx")
       .on(table.organizationId, table.contactType),
+    p
+      .index("contact_search_docs_org_updated_id_idx")
+      .on(table.organizationId, table.updatedAt.desc(), table.contactId.desc()),
     p.index("contact_search_docs_tsv_idx").using("gin", table.tsv),
     ...orgPolicies(),
   ],
@@ -208,6 +214,13 @@ export const workspaceSearchDocuments = p.pgTable(
   },
   (table) => [
     p.index("workspace_search_docs_org_idx").on(table.organizationId),
+    p
+      .index("workspace_search_docs_org_updated_id_idx")
+      .on(
+        table.organizationId,
+        table.updatedAt.desc(),
+        table.workspaceId.desc(),
+      ),
     p.index("workspace_search_docs_tsv_idx").using("gin", table.tsv),
     ...wsPolicies(),
   ],
