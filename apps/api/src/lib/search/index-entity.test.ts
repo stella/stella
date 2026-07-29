@@ -11,10 +11,10 @@ process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
 
 const semanticUpdatedAt = new Date("2026-04-30T08:00:00.000Z");
-// SAFETY: tests fabricate the branded token the relational query normally
-// selects as `COALESCE(updated_at, created_at)::text`.
-// eslint-disable-next-line typescript/no-unsafe-type-assertion
 const semanticUpdatedAtToken =
+  // SAFETY: tests fabricate the branded token the relational query normally
+  // selects as `COALESCE(updated_at, created_at)::text`.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
   "2026-04-30 08:00:00.000123" as TimestampCasToken;
 const executeMock = mock(async (_query: SQL) => [
   { entityId: toSafeId<"entity">("entity_1") },
