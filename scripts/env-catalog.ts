@@ -88,6 +88,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "E2E_DISABLE_AUTH_RATE_LIMIT",
   "EMAIL_PROVIDER",
   "EXTENSION_ORIGIN",
+  "OUTLOOK_ORIGIN",
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_CALENDAR",
   "FEATURE_CASE_LAW",
@@ -196,6 +197,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_POSTHOG_KEY: "phc_",
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
+  VITE_OUTLOOK_ORIGIN: "https://localhost:3002",
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
@@ -325,6 +327,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Allow browser PostHog capture from localhost when using a real key.",
   VITE_PUBLIC_APP_URL:
     "Public web origin used for canonical URLs, Open Graph metadata, and sitemaps.",
+  VITE_OUTLOOK_ORIGIN:
+    "Exact task-pane origin accepted by the Outlook sign-in handoff.",
+  OUTLOOK_ORIGIN:
+    "Trusted origin for the separately hosted Outlook task pane.",
   VITE_SELFHOST: "Enable the release-update notice for self-hosted operators.",
   VITE_SEO_INDEXABLE: "Allow search engines to index this deployment.",
   VITE_TERMS_URL: "Absolute or root-relative Terms of Service link.",
@@ -373,6 +379,7 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "VITE_API_URL",
   "VITE_POSTHOG_KEY",
   "VITE_PUBLIC_APP_URL",
+  "VITE_OUTLOOK_ORIGIN",
 ]);
 
 const HIDDEN_SCHEMA_KEYS = new Set(["isDev"]);

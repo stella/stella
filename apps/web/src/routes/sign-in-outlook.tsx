@@ -5,16 +5,15 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
+import { env } from "@/env";
 import { useMountEffect } from "@/hooks/use-effect";
 import { authClient } from "@/lib/auth";
+import { detached } from "@/lib/detached";
 
 const OFFICE_JS_URL =
   "https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js";
 const MESSAGE_TYPE = "stella:auth";
-const ALLOWED_PARENT_ORIGINS = new Set([
-  "https://outlook.stll.app",
-  "https://localhost:3002",
-]);
+const ALLOWED_PARENT_ORIGIN = new URL(env.VITE_OUTLOOK_ORIGIN).origin;
 
 type HandoffState =
   | { type: "loading" }
@@ -62,7 +61,10 @@ const loadOfficeJs = async (): Promise<OfficeRuntime | null> => {
         resolve(null);
         return;
       }
-      void office.onReady().finally(() => resolve(office));
+      detached(
+        office.onReady().finally(() => resolve(office)),
+        "SignInOutlook.loadOfficeJs",
+      );
     });
     script.addEventListener("error", () => resolve(null));
     document.head.append(script);
@@ -79,7 +81,7 @@ const SignInOutlook = () => {
       const parentOrigin = new URLSearchParams(window.location.search).get(
         "parentOrigin",
       );
-      if (!parentOrigin || !ALLOWED_PARENT_ORIGINS.has(parentOrigin)) {
+      if (parentOrigin !== ALLOWED_PARENT_ORIGIN) {
         setState({
           message: t("outlookHandoffMissingDialog"),
           type: "error",
@@ -111,7 +113,7 @@ const SignInOutlook = () => {
       setState({ type: "delivered" });
     };
 
-    void tryDeliverToken();
+    detached(tryDeliverToken(), "SignInOutlook.tryDeliverToken");
   });
 
   const handleSignIn = async () => {
@@ -145,7 +147,11 @@ const SignInOutlook = () => {
         <p className="text-muted-foreground">{t("outlookHandoffSuccess")}</p>
       )}
       {state.type === "signed-out" && (
-        <Button onClick={() => void handleSignIn()}>{t("signIn")}</Button>
+        <Button
+          onClick={() => detached(handleSignIn(), "SignInOutlook.handleSignIn")}
+        >
+          {t("signIn")}
+        </Button>
       )}
       {state.type === "error" && (
         <p className="text-destructive">{state.message}</p>

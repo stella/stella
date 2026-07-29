@@ -20,6 +20,7 @@ import type { DraftPlacement } from "@/outlook";
 import type { DraftCheck } from "@/types";
 
 type ActionPanelProps = {
+  canSummarize: boolean;
   checks: DraftCheck[];
   draft: string;
   draftIntent: string;
@@ -35,6 +36,7 @@ type ActionPanelProps = {
 };
 
 export const ActionPanel = ({
+  canSummarize,
   checks,
   draft,
   draftIntent,
@@ -49,7 +51,14 @@ export const ActionPanel = ({
   t,
 }: ActionPanelProps) => (
   <Panel>
-    <SummarySection onSummarize={onSummarize} state={summaryState} t={t} />
+    <p className="text-muted-foreground text-xs/4.5">{t("aiDataNotice")}</p>
+
+    <SummarySection
+      canSummarize={canSummarize}
+      onSummarize={onSummarize}
+      state={summaryState}
+      t={t}
+    />
 
     <Separator />
 
@@ -72,10 +81,12 @@ export const ActionPanel = ({
 );
 
 const SummarySection = ({
+  canSummarize,
   onSummarize,
   state,
   t,
 }: {
+  canSummarize: boolean;
   onSummarize: () => void;
   state: AISummaryState;
   t: Translate;
@@ -84,6 +95,7 @@ const SummarySection = ({
     <div className="flex items-center justify-between gap-2">
       <PanelTitle icon={<FileTextIcon />} title={t("summary")} />
       <Button
+        disabled={!canSummarize}
         loading={state.type === "loading"}
         onClick={onSummarize}
         size="sm"
