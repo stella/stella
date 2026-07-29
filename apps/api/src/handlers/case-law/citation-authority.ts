@@ -52,6 +52,58 @@ type RecomputeCitationAuthorityOptions = {
 
 const SECONDS_PER_YEAR = 365.25 * 86_400;
 
+/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
+const executedRows = (result: unknown): unknown[] => {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (isRecord(result) && Array.isArray(result["rows"])) {
+    return result["rows"];
+  }
+  return [];
+};
+
+/**
+ * Whether any citation has resolved to a target decision. Until one has, a
+ * recompute scans the whole citation table to update nothing; the daemon
+ * sleeps through that regime instead. Served by the partial cited-decision
+ * index, so the probe is O(1).
+ */
+export const hasResolvedCitations = async (
+  tx: CitationAuthorityTx,
+): Promise<boolean> => {
+  const result = await tx.execute(
+    sql`SELECT 1 AS one FROM case_law_citations WHERE cited_decision_id IS NOT NULL LIMIT 1`,
+  );
+  return executedRows(result).length > 0;
+};
+
+/**
+ * When the last full recompute committed. The whole-corpus statement stamps
+ * every cited row with the same per-statement now(), so the max is the last
+ * run's time. This is a sequential scan; callers probe once per process
+ * start, not per iteration.
+ */
+export const latestCitationAuthorityRecomputeAt = async (
+  tx: CitationAuthorityTx,
+): Promise<Date | null> => {
+  const result = await tx.execute(
+    sql`SELECT max(citation_authority_computed_at) AS latest FROM case_law_decisions`,
+  );
+  const row = executedRows(result).at(0);
+  if (!isRecord(row)) {
+    return null;
+  }
+  const latest = row["latest"];
+  if (latest instanceof Date) {
+    return latest;
+  }
+  if (typeof latest === "string" && latest.length > 0) {
+    return new Date(latest);
+  }
+  return null;
+};
+
 export const recomputeCitationAuthorityForAll = async (
   tx: CitationAuthorityTx,
   options: RecomputeCitationAuthorityOptions = {},
