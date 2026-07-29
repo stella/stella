@@ -98,7 +98,6 @@ const unsafeLogicalPrivateFragment = (() => {
 })();
 
 const unsafeSequencePrivateFragment = (() => {
-  // oxlint-disable-next-line no-sequences -- fixture proves the final sequence expression is inspected as the composed SQL value
   const privateFrom = (enabled, sql`FROM search_documents sd`);
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a sequence SQL fragment cannot hide a private projection
   return sql`SELECT * ${privateFrom}`;
