@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
 import {
+  CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
   DEFAULT_MODELS,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
@@ -331,6 +332,22 @@ type CanaryContext = {
   provider: CanaryProvider;
 };
 
+type PdfCanarySelection = {
+  modelId: string;
+  role: "chat" | "pdf";
+};
+
+export const pdfCanarySelection = (
+  provider: CanaryProvider,
+): PdfCanarySelection | null => {
+  if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
+    return { modelId: DEFAULT_MODELS[provider].pdf, role: "pdf" };
+  }
+
+  const modelId = CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider].at(0);
+  return modelId === undefined ? null : { modelId, role: "chat" };
+};
+
 type WeeklyCanaryContext = CanaryContext & {
   rotatedConfig: OrgAIConfig;
   rotation: WeeklyCanaryRotation;
@@ -442,14 +459,34 @@ const runModelRoleProbe = async ({
   role,
   signal,
 }: RunModelRoleProbeOptions): Promise<void> => {
+  const selection =
+    role === "pdf"
+      ? pdfCanarySelection(provider)
+      : { modelId: DEFAULT_MODELS[provider][role], role };
+  if (selection === null) {
+    throw new TypeError("Canary resolved an unexpected provider model.");
+  }
+  const probeConfig =
+    selection.role === role
+      ? config
+      : {
+          ...config,
+          overrideModels: {
+            ...config.overrideModels,
+            [selection.role]: {
+              modelId: selection.modelId,
+              provider,
+            },
+          },
+        };
   const model = resolveTanStackTextModel({
     organizationId: null,
-    orgAIConfig: config,
-    role,
+    orgAIConfig: probeConfig,
+    role: selection.role,
   });
   if (
     model.provider !== provider ||
-    model.modelId !== DEFAULT_MODELS[provider][role]
+    model.modelId !== selection.modelId
   ) {
     throw new TypeError("Canary resolved an unexpected provider model.");
   }
@@ -462,8 +499,8 @@ const runModelRoleProbe = async ({
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
-    orgAIConfig: config,
-    role,
+    orgAIConfig: probeConfig,
+    role: selection.role,
     serviceTier: "standard",
   });
   requireExpectedRoleOutput(output, role);
@@ -825,7 +862,11 @@ const probeLabel = (context: CanaryContext, probe: Probe): string => {
     return probe.name;
   }
 
-  return `role-${probe.role}:${DEFAULT_MODELS[context.provider][probe.role]}`;
+  const modelId =
+    probe.role === "pdf"
+      ? pdfCanarySelection(context.provider)?.modelId
+      : DEFAULT_MODELS[context.provider][probe.role];
+  return `role-${probe.role}:${modelId ?? "unsupported"}`;
 };
 
 const run = async (): Promise<void> => {
@@ -884,10 +925,12 @@ const runProbes = async (
   const label = probeLabel(context, probe);
   if (
     probe.type === "model-role" &&
-    !isBYOKProviderRoleSupported({
-      provider: context.provider,
-      role: probe.role,
-    })
+    (probe.role === "pdf"
+      ? pdfCanarySelection(context.provider) === null
+      : !isBYOKProviderRoleSupported({
+          provider: context.provider,
+          role: probe.role,
+        }))
   ) {
     console.log(
       `[ai-canary] ${context.provider}/${label}: skipped (unsupported role)`,

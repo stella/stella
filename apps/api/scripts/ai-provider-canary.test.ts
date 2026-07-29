@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import {
+  CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
+  DEFAULT_MODELS,
+  isBYOKProviderRoleSupported,
+} from "@stll/ai-catalog";
+
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 
 import {
@@ -8,10 +14,12 @@ import {
   createPdfCanaryMessages,
   errorSummary,
   PDF_CANARY_TOKEN,
+  pdfCanarySelection,
   toolRoundTripInputSchema,
   toolRoundTripInputSchemaForProvider,
   toolRoundTripPromptForProvider,
 } from "./ai-provider-canary";
+import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
 
 describe("AI provider PDF canary contract", () => {
   test("sends a real inline PDF rather than a text-only pdf-role probe", () => {
@@ -33,6 +41,32 @@ describe("AI provider PDF canary contract", () => {
     const bytes = Buffer.from(document.source.value, "base64");
     expect(bytes.subarray(0, 8).toString()).toBe("%PDF-1.4");
     expect(bytes.toString()).toContain(PDF_CANARY_TOKEN);
+  });
+
+  test("covers every provider with an available PDF attachment path", () => {
+    for (const provider of CANARY_PROVIDERS) {
+      const selection = pdfCanarySelection(provider);
+      if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
+        expect(selection).toEqual({
+          modelId: DEFAULT_MODELS[provider].pdf,
+          role: "pdf",
+        });
+        continue;
+      }
+
+      const chatAttachmentModel =
+        CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider].at(0);
+      expect(selection).toEqual(
+        chatAttachmentModel === undefined
+          ? null
+          : { modelId: chatAttachmentModel, role: "chat" },
+      );
+    }
+
+    expect(pdfCanarySelection("mistral")).toEqual({
+      modelId: "mistral-medium-latest",
+      role: "chat",
+    });
   });
 });
 
