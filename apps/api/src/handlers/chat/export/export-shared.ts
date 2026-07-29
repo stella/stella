@@ -7,10 +7,8 @@
 import { chatPartText } from "@/api/handlers/chat/chat-message-parts";
 import type { CitationSection } from "@/api/handlers/chat/export/citation-footnotes";
 import type { ChatPart } from "@/api/handlers/chat/types";
-import { SEARCH_SUMMARY_SOURCES_MARKER } from "@/api/lib/chat/search-summary-provenance";
 
 const SEARCH_SUMMARY_SOURCES_HEADING = "\n\n### Sources";
-const MARKED_SEARCH_SUMMARY_SOURCES_HEADING = `\n\n${SEARCH_SUMMARY_SOURCES_MARKER}${SEARCH_SUMMARY_SOURCES_HEADING}`;
 
 const isLegacySearchSummarySourceLine = (line: string): boolean =>
   line.length === 0 || line.startsWith("- ") || line.startsWith("  Excerpt: ");
@@ -50,7 +48,6 @@ export const composeExportMarkdown = (
 
 export type PersistedSearchSummarySources = {
   bodyWithoutSources: string;
-  provenance: "legacy" | "marked";
   sourceCount: number;
   sourcesMarkdown: string;
 };
@@ -64,21 +61,15 @@ export const composePersistedSearchSummaryMarkdown = (
 /**
  * Recognize the trailing Sources block written by `/search/summary/chat`.
  *
- * The producer owns this exact shape: a level-three English heading followed
- * by zero or more unordered-list items. Requiring the block to be trailing and
- * list-shaped avoids treating an ordinary answer's prose section as generated
- * search provenance.
+ * This recognizes layout only: a level-three English heading followed by zero
+ * or more unordered-list items. The caller must use server-owned message
+ * metadata, never this model-readable Markdown shape, to decide whether links
+ * have trusted search provenance.
  */
 export const extractPersistedSearchSummarySources = (
   body: string,
 ): PersistedSearchSummarySources | null => {
-  const markedHeadingIndex = body.lastIndexOf(
-    MARKED_SEARCH_SUMMARY_SOURCES_HEADING,
-  );
-  const isMarked = markedHeadingIndex !== -1;
-  const headingIndex = isMarked
-    ? markedHeadingIndex + `\n\n${SEARCH_SUMMARY_SOURCES_MARKER}`.length
-    : body.lastIndexOf(SEARCH_SUMMARY_SOURCES_HEADING);
+  const headingIndex = body.lastIndexOf(SEARCH_SUMMARY_SOURCES_HEADING);
   if (headingIndex === -1) {
     return null;
   }
@@ -90,7 +81,6 @@ export const extractPersistedSearchSummarySources = (
     return null;
   }
   if (
-    !isMarked &&
     sources.split("\n").some((line) => !isLegacySearchSummarySourceLine(line))
   ) {
     return null;
@@ -101,10 +91,7 @@ export const extractPersistedSearchSummarySources = (
       ? 0
       : sources.split("\n").filter((line) => line.startsWith("- ")).length;
   return {
-    bodyWithoutSources: body
-      .slice(0, isMarked ? markedHeadingIndex : headingIndex)
-      .trimEnd(),
-    provenance: isMarked ? "marked" : "legacy",
+    bodyWithoutSources: body.slice(0, headingIndex).trimEnd(),
     sourceCount,
     sourcesMarkdown: sources,
   };

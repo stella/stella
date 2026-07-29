@@ -622,6 +622,7 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.anonRestorations === undefined &&
   metadata.docxEditPreferences === undefined &&
   metadata.mentions === undefined &&
+  metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.usage === undefined;
 

@@ -107,6 +107,14 @@ export type ChatMessageMetadata = {
       }
     | undefined;
   mentions?: ChatMentionsData | undefined;
+  /** Server-owned provenance. Incoming client metadata validation deliberately
+   *  does not accept this field. */
+  serverProvenance?:
+    | {
+        type: "search-summary";
+        version: 1;
+      }
+    | undefined;
   sourceDocuments?: ChatSourceDocument[] | undefined;
   usage?: ChatMessageUsage | undefined;
 };

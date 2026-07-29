@@ -10,7 +10,6 @@ import {
   extractPersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
 import type { ChatPart } from "@/api/handlers/chat/types";
-import { SEARCH_SUMMARY_SOURCES_MARKER } from "@/api/lib/chat/search-summary-provenance";
 
 const textPart = (content: string): ChatPart => ({ type: "text", content });
 
@@ -69,7 +68,6 @@ describe("extractPersistedSearchSummarySources", () => {
       ),
     ).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
-      provenance: "legacy",
       sourceCount: 2,
       sourcesMarkdown: "\n\n- Matter\n\n- Decision",
     });
@@ -82,7 +80,6 @@ describe("extractPersistedSearchSummarySources", () => {
       ),
     ).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
-      provenance: "legacy",
       sourceCount: 0,
       sourcesMarkdown: "",
     });
@@ -96,13 +93,12 @@ describe("extractPersistedSearchSummarySources", () => {
     ).toBeNull();
   });
 
-  test("extracts marked provenance without leaking the marker", () => {
+  test("recomposes the generated block with a localized heading", () => {
     const sources = extractPersistedSearchSummarySources(
-      `## Result\n\nSummary.\n\n${SEARCH_SUMMARY_SOURCES_MARKER}\n\n### Sources\n\n- Matter`,
+      "## Result\n\nSummary.\n\n### Sources\n\n- Matter",
     );
     expect(sources).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
-      provenance: "marked",
       sourceCount: 1,
       sourcesMarkdown: "\n\n- Matter",
     });

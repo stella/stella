@@ -90,6 +90,8 @@ type CitationTransformContext = {
   nextFootnoteId: number;
   style: Exclude<ChatExportCitationStyle, "inline">;
   unverifiedCitationLabel: string;
+  verifiedCitationCount: number;
+  unverifiedCitationCount: number;
 };
 
 const isVerifiedSearchSummaryTarget = (
@@ -144,6 +146,11 @@ const transformHyperlink = (
   const id = context.nextFootnoteId;
   context.nextFootnoteId += 1;
   context.footnoteByTarget.set(target, id);
+  if (isVerifiedSearchSummaryTarget(target, context.internalReferenceMode)) {
+    context.verifiedCitationCount += 1;
+  } else {
+    context.unverifiedCitationCount += 1;
+  }
   context.footnotes.push(
     createFootnote(id, citationFootnoteText(hyperlink, context)),
   );
@@ -224,7 +231,22 @@ const nextFootnoteId = (footnotes: readonly Footnote[]): number => {
  * hyperlinks are either preserved inline, unwrapped without losing their
  * visible text, or converted to real, destination-deduplicated Word footnotes.
  */
-export const styleDocumentCitations = (
+type StyleDocumentCitationsOptions = {
+  folioSourceTitle: string | undefined;
+  internalCitationFallback: string;
+  internalReferenceMode: InternalReferenceMode;
+  unverifiedCitationLabel: string;
+};
+
+type StyleDocumentCitationsResult = {
+  citationCounts: {
+    unverified: number;
+    verified: number;
+  };
+  document: Document;
+};
+
+export const styleDocumentCitationsWithCounts = (
   document: Document,
   style: ChatExportCitationStyle,
   {
@@ -232,15 +254,13 @@ export const styleDocumentCitations = (
     internalCitationFallback,
     internalReferenceMode,
     unverifiedCitationLabel,
-  }: {
-    folioSourceTitle: string | undefined;
-    internalCitationFallback: string;
-    internalReferenceMode: InternalReferenceMode;
-    unverifiedCitationLabel: string;
-  },
-): Document => {
+  }: StyleDocumentCitationsOptions,
+): StyleDocumentCitationsResult => {
   if (style === "inline") {
-    return document;
+    return {
+      citationCounts: { unverified: 0, verified: 0 },
+      document,
+    };
   }
 
   const footnotes: Footnote[] = [];
@@ -257,20 +277,35 @@ export const styleDocumentCitations = (
     nextFootnoteId: nextFootnoteId(footnotes),
     style,
     unverifiedCitationLabel,
+    verifiedCitationCount: 0,
+    unverifiedCitationCount: 0,
   };
   const content = document.package.document.content.map((block) =>
     transformBlock(block, context),
   );
 
   return {
-    ...document,
-    package: {
-      ...document.package,
-      document: {
-        ...document.package.document,
-        content,
+    citationCounts: {
+      unverified: context.unverifiedCitationCount,
+      verified: context.verifiedCitationCount,
+    },
+    document: {
+      ...document,
+      package: {
+        ...document.package,
+        document: {
+          ...document.package.document,
+          content,
+        },
+        footnotes: context.footnotes,
       },
-      footnotes: context.footnotes,
     },
   };
 };
+
+export const styleDocumentCitations = (
+  document: Document,
+  style: ChatExportCitationStyle,
+  options: StyleDocumentCitationsOptions,
+): Document =>
+  styleDocumentCitationsWithCounts(document, style, options).document;

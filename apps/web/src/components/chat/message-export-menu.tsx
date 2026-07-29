@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/components/button";
 import {
   Popover,
   PopoverPopup,
+  PopoverTitle,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import {
@@ -121,7 +122,9 @@ export const MessageExportMenu = ({
       />
       <PopoverPopup align="end" className="w-64 p-3" side="top">
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium">{t("common.export.title")}</p>
+          <PopoverTitle className="text-sm font-medium">
+            {t("common.export.title")}
+          </PopoverTitle>
           <p className="text-muted-foreground text-xs">
             {t.rich("common.export.formatDocx", {
               docx: (chunks) => <bdi dir="ltr">{chunks}</bdi>,

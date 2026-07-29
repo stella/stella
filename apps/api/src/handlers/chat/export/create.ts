@@ -38,7 +38,7 @@ import {
   extractPersistedSearchSummarySources,
   type PersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
-import { styleDocumentCitations } from "@/api/handlers/chat/export/style-document-citations";
+import { styleDocumentCitationsWithCounts } from "@/api/handlers/chat/export/style-document-citations";
 import { markdownToStellaDocument } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -63,11 +63,12 @@ const CHAT_EXPORT_MAX_SOURCE_DOCUMENTS = 50;
 
 const internalReferenceModeFor = (
   sources: PersistedSearchSummarySources | null,
+  hasTrustedSearchSummaryProvenance: boolean,
 ) => {
   if (sources === null) {
     return "references";
   }
-  if (sources.provenance === "marked") {
+  if (hasTrustedSearchSummaryProvenance) {
     return "verified-citations";
   }
   return "unverified-citations";
@@ -204,25 +205,29 @@ const createMessageExport = createSafeRootHandler(
     }
     const markdown = composeExportMarkdown(exportBody, section);
 
-    const docxResult = yield* Result.await(
+    const renderedExport = yield* Result.await(
       Result.tryPromise({
-        try: async () =>
-          await createChatExportDocx(
-            styleDocumentCitations(
-              markdownToStellaDocument(markdown),
-              citationStyle,
-              {
-                folioSourceTitle: onlySourceDocumentTitle(
-                  metadata.sourceDocuments,
-                ),
-                internalCitationFallback: citationLabels.citation,
-                internalReferenceMode: internalReferenceModeFor(
-                  persistedSearchSources,
-                ),
-                unverifiedCitationLabel: citationLabels.unverifiedCitation,
-              },
-            ),
-          ),
+        try: async () => {
+          const styled = styleDocumentCitationsWithCounts(
+            markdownToStellaDocument(markdown),
+            citationStyle,
+            {
+              folioSourceTitle: onlySourceDocumentTitle(
+                metadata.sourceDocuments,
+              ),
+              internalCitationFallback: citationLabels.citation,
+              internalReferenceMode: internalReferenceModeFor(
+                persistedSearchSources,
+                metadata.serverProvenance?.type === "search-summary",
+              ),
+              unverifiedCitationLabel: citationLabels.unverifiedCitation,
+            },
+          );
+          return {
+            citationCounts: styled.citationCounts,
+            docx: await createChatExportDocx(styled.document),
+          };
+        },
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -247,7 +252,9 @@ const createMessageExport = createSafeRootHandler(
         try: async () =>
           await withTimeout(
             async () =>
-              await getS3().write(key, docxResult, { type: DOCX_MIME_TYPE }),
+              await getS3().write(key, renderedExport.docx, {
+                type: DOCX_MIME_TYPE,
+              }),
             {
               label: "chat-export-object-write",
               timeoutMs: LIMITS.chatExportObjectIoTimeoutMs,
@@ -284,7 +291,9 @@ const createMessageExport = createSafeRootHandler(
                   ? 0
                   : (persistedSearchSources?.sourceCount ??
                     section.verifiedCount),
-              unverifiedCitations: section.unverifiedCount,
+              unverifiedCitations:
+                section.unverifiedCount +
+                renderedExport.citationCounts.unverified,
             },
           }),
       ),

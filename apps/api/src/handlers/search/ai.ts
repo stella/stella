@@ -27,7 +27,6 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { SEARCH_SUMMARY_SOURCES_MARKER } from "@/api/lib/chat/search-summary-provenance";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -674,11 +673,12 @@ export const createSearchSummaryChatThread = async ({
         userId,
         role: "assistant",
         content: {
-          version: 1,
-          data: [
-            { type: "text", text: assistantText },
-            ...citedContexts.flatMap(toChatSourceParts),
-          ],
+          version: 2,
+          data: [{ type: "text", content: assistantText }],
+          metadata: {
+            serverProvenance: { type: "search-summary", version: 1 },
+            sourceDocuments: citedContexts.flatMap(toChatSourceDocuments),
+          },
         },
         createdAt: new Date(now.getTime() + 1),
       },
@@ -826,13 +826,7 @@ const buildChatSummaryText = ({
     }`;
   });
 
-  return [
-    `## ${title}`,
-    summary,
-    SEARCH_SUMMARY_SOURCES_MARKER,
-    "### Sources",
-    ...sourceLines,
-  ].join("\n\n");
+  return [`## ${title}`, summary, "### Sources", ...sourceLines].join("\n\n");
 };
 
 const extractHitWorkspaceId = (
@@ -848,7 +842,7 @@ const uniqueWorkspaceIds = (
   ids: readonly SafeId<"workspace">[],
 ): SafeId<"workspace">[] => Array.from(new Set(ids));
 
-const toChatSourceParts = (context: SearchResultContext) => {
+const toChatSourceDocuments = (context: SearchResultContext) => {
   const hit = context.hit;
   if (
     hit.type === "case-law" ||
@@ -860,14 +854,11 @@ const toChatSourceParts = (context: SearchResultContext) => {
 
   return [
     {
-      type: "data-stella-source-document" as const,
-      data: {
-        entityId: hit.entityId,
-        kind: hit.type,
-        mimeType: hit.mimeType,
-        title: hit.title,
-        workspaceId: hit.workspaceId,
-      },
+      entityId: hit.entityId,
+      kind: hit.type,
+      mimeType: hit.mimeType,
+      title: hit.title,
+      workspaceId: hit.workspaceId,
     },
   ];
 };

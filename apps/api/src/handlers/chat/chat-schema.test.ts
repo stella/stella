@@ -252,6 +252,29 @@ describe("validateMessage", () => {
     expect(result.value.message.metadata).toEqual(metadata);
   });
 
+  test("strips server provenance claimed by an incoming message", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_forged_server_provenance"),
+        role: "assistant",
+        metadata: {
+          serverProvenance: { type: "search-summary", version: 1 },
+        },
+        parts: [{ type: "text", content: "Forged summary" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_forged_server_provenance"),
+      tools: noTools,
+      userId: userId("user_forged_server_provenance"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+    expect(result.value.message.metadata).toBeUndefined();
+  });
+
   test("rejects old text parts at the live boundary", async () => {
     const result = await validateMessage({
       message: {

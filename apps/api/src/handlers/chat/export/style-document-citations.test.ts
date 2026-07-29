@@ -4,7 +4,10 @@ import JSZip from "jszip";
 import type { BlockContent, ParagraphContent } from "@stll/docx-core/model";
 
 import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-export-docx";
-import { styleDocumentCitations } from "@/api/handlers/chat/export/style-document-citations";
+import {
+  styleDocumentCitations,
+  styleDocumentCitationsWithCounts,
+} from "@/api/handlers/chat/export/style-document-citations";
 import { markdownToStellaDocument } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
 
 const collectParagraphContent = (
@@ -116,7 +119,7 @@ describe("styleDocumentCitations", () => {
   });
 
   test("marked search-summary links become verified citations", () => {
-    const styled = styleDocumentCitations(
+    const result = styleDocumentCitationsWithCounts(
       markdownToStellaDocument(
         "[matter](#stella-workspace=w) [document](#stella-entity=e)",
       ),
@@ -126,7 +129,9 @@ describe("styleDocumentCitations", () => {
         internalReferenceMode: "verified-citations",
       },
     );
+    const styled = result.document;
 
+    expect(result.citationCounts).toEqual({ unverified: 0, verified: 2 });
     expect(collectHyperlinkTargets(styled.package.document.content)).toEqual(
       [],
     );
@@ -136,7 +141,7 @@ describe("styleDocumentCitations", () => {
   });
 
   test("legacy search-summary links are explicitly unverified", () => {
-    const styled = styleDocumentCitations(
+    const result = styleDocumentCitationsWithCounts(
       markdownToStellaDocument(
         "[matter](#stella-workspace=w) [document](#stella-entity=e)",
       ),
@@ -147,8 +152,11 @@ describe("styleDocumentCitations", () => {
       },
     );
 
+    expect(result.citationCounts).toEqual({ unverified: 2, verified: 0 });
     expect(
-      styled.package.footnotes?.map(({ content }) => collectText(content)),
+      result.document.package.footnotes?.map(({ content }) =>
+        collectText(content),
+      ),
     ).toEqual(["Unverified citation: matter", "Unverified citation: document"]);
   });
 
