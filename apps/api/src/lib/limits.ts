@@ -227,6 +227,8 @@ export const LIMITS = {
    *  folio conversion of a single document. Mirrors `extractionTimeoutMs`'s
    *  budget for the same class of work (one document-sized file). */
   docxMarkdownConversionTimeoutMs: 30_000,
+  /** Wall-clock ceiling for writing one generated chat export to object storage. */
+  chatExportObjectIoTimeoutMs: 30_000,
   clauseExportLimit: 500,
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,

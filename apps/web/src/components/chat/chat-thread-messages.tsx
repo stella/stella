@@ -1000,7 +1000,7 @@ const AssistantMessageActions = ({
           {t("common.retry")}
         </Button>
       )}
-      {text && threadRef && (
+      {!isGenerating && text && threadRef && (
         <MessageExportMenu messageId={message.id} threadRef={threadRef} />
       )}
     </div>

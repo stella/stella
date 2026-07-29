@@ -39,8 +39,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { getS3, presignDownloadUrl } from "@/api/lib/s3";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** How long the presigned download stays valid (seconds). Short: the URL is
@@ -53,8 +55,8 @@ const CHAT_EXPORT_MAX_SOURCE_DOCUMENTS = 50;
 
 const config = {
   permissions: { chat: ["create"] },
-  access: "read",
-  mcp: { type: "internal", reason: "assistant_chat" },
+  access: "write",
+  mcp: { type: "capability", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
   body: t.Object({
@@ -70,7 +72,7 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-const exportMessage = createSafeRootHandler(
+const createMessageExport = createSafeRootHandler(
   config,
   async function* ({
     body: { messageId, citationStyle },
@@ -85,11 +87,18 @@ const exportMessage = createSafeRootHandler(
     const scope = yield* resolveChatScope({ getWorkspaceAccess, workspaceId });
 
     const thread = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.chatThreads.findFirst({
-          where: { id: { eq: threadId }, userId: { eq: user.id } },
-          columns: { title: true, workspaceId: true },
-        }),
+      safeDb(
+        async (tx) =>
+          await tx.query.chatThreads.findFirst({
+            where: { id: { eq: threadId }, userId: { eq: user.id } },
+            columns: { title: true, workspaceId: true },
+            with: {
+              messages: {
+                where: { id: { eq: messageId } },
+                columns: { content: true, role: true },
+              },
+            },
+          }),
       ),
     );
     if (!thread) {
@@ -102,15 +111,8 @@ const exportMessage = createSafeRootHandler(
       scope,
     });
 
-    const message = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.chatMessages.findFirst({
-          where: { id: { eq: messageId }, threadId: { eq: threadId } },
-          columns: { content: true },
-        }),
-      ),
-    );
-    if (!message) {
+    const message = thread.messages.at(0);
+    if (!message || message.role !== "assistant") {
       return Result.err(
         new HandlerError({ status: 404, message: "Message not found" }),
       );
@@ -154,7 +156,9 @@ const exportMessage = createSafeRootHandler(
       }),
     );
 
-    const fileName = sanitizeFilename(`${thread.title}.docx`);
+    const fileName = sanitizeFilenamePreservingExtension(
+      `${thread.title}.docx`,
+    );
     // `exports/` must lead the key so object-lifecycle prefix filters anchor at
     // the key start; org + thread keep it tenant-scoped, the random suffix
     // avoids collisions across concurrent exports of the same message.
@@ -162,7 +166,14 @@ const exportMessage = createSafeRootHandler(
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await getS3().write(key, docxResult, { type: DOCX_MIME_TYPE }),
+          await withTimeout(
+            async () =>
+              await getS3().write(key, docxResult, { type: DOCX_MIME_TYPE }),
+            {
+              label: "chat-export-object-write",
+              timeoutMs: LIMITS.chatExportObjectIoTimeoutMs,
+            },
+          ),
         catch: (cause) =>
           new HandlerError({
             status: 502,
@@ -183,6 +194,7 @@ const exportMessage = createSafeRootHandler(
           action: AUDIT_ACTION.DOWNLOAD,
           resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
           resourceId: messageId,
+          workspaceId: thread.workspaceId ?? null,
           metadata: {
             format: "docx",
             citationStyle,
@@ -204,4 +216,4 @@ const exportMessage = createSafeRootHandler(
   },
 );
 
-export default exportMessage;
+export default createMessageExport;

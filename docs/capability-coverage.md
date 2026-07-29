@@ -47,6 +47,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | Capability                | Access             | Scope       | Feature | Reachable via                                                |
 | ------------------------- | ------------------ | ----------- | ------- | ------------------------------------------------------------ |
 | `chat.delete-thread`      | write, destructive | stella:chat | —       | generic invoke → `stella capability chat delete-thread`      |
+| `chat.export.create`      | write              | stella:chat | —       | generic invoke → `stella capability chat export-create`      |
 | `chat.get-messages`       | read               | stella:chat | —       | generic invoke → `stella capability chat get-messages`       |
 | `chat.get-older-messages` | read               | stella:chat | —       | generic invoke → `stella capability chat get-older-messages` |
 | `chat.get-threads`        | read               | stella:chat | —       | generic invoke → `stella capability chat get-threads`        |

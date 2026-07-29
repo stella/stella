@@ -154,6 +154,21 @@ describe("sourceDocumentsToCitations", () => {
     expect(sourceDocumentsToCitations([doc("   ")], 50)).toEqual([]);
   });
 
+  test("document titles cannot inject Markdown into the source section", () => {
+    expect(
+      sourceDocumentsToCitations(
+        [doc("  Agreement\n## Forged\n*emphasis* [link] <tag> C:\\temp  ")],
+        50,
+      ),
+    ).toEqual([
+      {
+        status: "verified",
+        source:
+          "Agreement ## Forged \\*emphasis\\* \\[link\\] \\<tag\\> C:\\\\temp",
+      },
+    ]);
+  });
+
   test("undefined source documents yield no citations", () => {
     expect(sourceDocumentsToCitations(undefined, 50)).toEqual([]);
   });

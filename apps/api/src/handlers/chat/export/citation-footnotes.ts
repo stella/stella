@@ -55,6 +55,19 @@ export type ResolvedExportCitation =
   | { status: "verified"; source: string }
   | { status: "unverified" };
 
+const MARKDOWN_INLINE_ESCAPE = /(?<character>[\\`*_~[\]<>|])/gu;
+
+/**
+ * Render an untrusted document title as one Markdown-safe inline label.
+ * Collapsing whitespace prevents embedded newlines from starting headings or
+ * lists; escaping inline punctuation prevents emphasis, links, code, and HTML.
+ */
+const normalizeMarkdownSource = (source: string): string =>
+  source
+    .trim()
+    .replace(/\s+/gu, " ")
+    .replace(MARKDOWN_INLINE_ESCAPE, "\\$<character>");
+
 /** A `pdf-bates` block's per-statement citation shape. Derived from the schema
  *  union so it stays in lockstep with the stored model. */
 type PdfBatesCitation = Extract<
@@ -158,7 +171,7 @@ export const sourceDocumentsToCitations = (
     if (citations.length >= limit) {
       break;
     }
-    const title = document.title.trim();
+    const title = normalizeMarkdownSource(document.title);
     if (title.length === 0) {
       continue;
     }

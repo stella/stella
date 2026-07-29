@@ -1,7 +1,7 @@
 import Elysia from "elysia";
 
 import deleteThread from "@/api/handlers/chat/delete-thread";
-import exportMessage from "@/api/handlers/chat/export/export-message";
+import createMessageExport from "@/api/handlers/chat/export/create";
 import getMessages from "@/api/handlers/chat/get-messages";
 import getModelOptions from "@/api/handlers/chat/get-model-options";
 import getOlderMessages from "@/api/handlers/chat/get-older-messages";
@@ -103,9 +103,9 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     permissions: getSuggestedPrompts.config.permissions,
     query: getSuggestedPrompts.config.query,
   })
-  .post("/threads/:threadId/export", exportMessage.handler, {
-    body: exportMessage.config.body,
-    params: exportMessage.config.params,
-    permissions: exportMessage.config.permissions,
-    query: exportMessage.config.query,
+  .post("/threads/:threadId/export", createMessageExport.handler, {
+    body: createMessageExport.config.body,
+    params: createMessageExport.config.params,
+    permissions: createMessageExport.config.permissions,
+    query: createMessageExport.config.query,
   });

@@ -123,8 +123,10 @@ export const MessageExportMenu = ({
               {t("common.export.citations")}
             </span>
             <Select
-              onValueChange={(value: CitationStyle) => {
-                setCitationStyle(value);
+              onValueChange={(value) => {
+                if (value !== null) {
+                  setCitationStyle(value);
+                }
               }}
               value={citationStyle}
             >
