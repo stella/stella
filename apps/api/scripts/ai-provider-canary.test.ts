@@ -19,7 +19,7 @@ describe("AI provider PDF canary contract", () => {
     expect(message?.role).toBe("user");
     const content = message?.content;
     if (!Array.isArray(content)) {
-      throw new Error("Expected multimodal PDF canary message");
+      throw new TypeError("Expected multimodal PDF canary message");
     }
 
     const text = content.find((part) => part.type === "text");
