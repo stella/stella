@@ -36,6 +36,7 @@ import {
   composePersistedSearchSummaryMarkdown,
   composeExportMarkdown,
   extractPersistedSearchSummarySources,
+  type PersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
 import { styleDocumentCitations } from "@/api/handlers/chat/export/style-document-citations";
 import { markdownToStellaDocument } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
@@ -59,6 +60,18 @@ const CHAT_EXPORT_URL_TTL_SECONDS = 300;
 /** Bound the referenced-document set a single export folds into its Sources
  *  section, so one export can never assemble an unbounded citation list. */
 const CHAT_EXPORT_MAX_SOURCE_DOCUMENTS = 50;
+
+const internalReferenceModeFor = (
+  sources: PersistedSearchSummarySources | null,
+) => {
+  if (sources === null) {
+    return "references";
+  }
+  if (sources.provenance === "marked") {
+    return "verified-citations";
+  }
+  return "unverified-citations";
+};
 
 const onlySourceDocumentTitle = (
   sourceDocuments: readonly { title: string }[] | undefined,
@@ -203,8 +216,9 @@ const createMessageExport = createSafeRootHandler(
                   metadata.sourceDocuments,
                 ),
                 internalCitationFallback: citationLabels.citation,
-                internalReferenceMode:
-                  persistedSearchSources === null ? "references" : "citations",
+                internalReferenceMode: internalReferenceModeFor(
+                  persistedSearchSources,
+                ),
                 unverifiedCitationLabel: citationLabels.unverifiedCitation,
               },
             ),

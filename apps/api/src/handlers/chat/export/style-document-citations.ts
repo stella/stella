@@ -17,7 +17,10 @@ const DECISION_CITATION_PREFIX = "#stella-decision=";
 const ENTITY_REFERENCE_PREFIX = "#stella-entity=";
 const WORKSPACE_REFERENCE_PREFIX = "#stella-workspace=";
 
-type InternalReferenceMode = "citations" | "references";
+type InternalReferenceMode =
+  | "references"
+  | "unverified-citations"
+  | "verified-citations";
 
 const isCitationHyperlink = (
   { href }: Hyperlink,
@@ -31,7 +34,7 @@ const isCitationHyperlink = (
     href.startsWith("http://") ||
     href.startsWith(FOLIO_CITATION_PREFIX) ||
     href.startsWith(DECISION_CITATION_PREFIX) ||
-    (internalReferenceMode === "citations" &&
+    (internalReferenceMode !== "references" &&
       (href.startsWith(ENTITY_REFERENCE_PREFIX) ||
         href.startsWith(WORKSPACE_REFERENCE_PREFIX)))
   );
@@ -93,7 +96,7 @@ const isVerifiedSearchSummaryTarget = (
   target: string,
   internalReferenceMode: InternalReferenceMode,
 ): boolean =>
-  internalReferenceMode === "citations" &&
+  internalReferenceMode === "verified-citations" &&
   (target.startsWith(DECISION_CITATION_PREFIX) ||
     target.startsWith(ENTITY_REFERENCE_PREFIX) ||
     target.startsWith(WORKSPACE_REFERENCE_PREFIX));

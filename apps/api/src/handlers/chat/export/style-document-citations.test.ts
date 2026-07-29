@@ -115,7 +115,7 @@ describe("styleDocumentCitations", () => {
     expect(styled.package.footnotes).toEqual([]);
   });
 
-  test("search-summary mode treats entity and workspace links as citations", () => {
+  test("marked search-summary links become verified citations", () => {
     const styled = styleDocumentCitations(
       markdownToStellaDocument(
         "[matter](#stella-workspace=w) [document](#stella-entity=e)",
@@ -123,7 +123,7 @@ describe("styleDocumentCitations", () => {
       "footnotes",
       {
         ...options,
-        internalReferenceMode: "citations",
+        internalReferenceMode: "verified-citations",
       },
     );
 
@@ -133,6 +133,23 @@ describe("styleDocumentCitations", () => {
     expect(
       styled.package.footnotes?.map(({ content }) => collectText(content)),
     ).toEqual(["matter", "document"]);
+  });
+
+  test("legacy search-summary links are explicitly unverified", () => {
+    const styled = styleDocumentCitations(
+      markdownToStellaDocument(
+        "[matter](#stella-workspace=w) [document](#stella-entity=e)",
+      ),
+      "footnotes",
+      {
+        ...options,
+        internalReferenceMode: "unverified-citations",
+      },
+    );
+
+    expect(
+      styled.package.footnotes?.map(({ content }) => collectText(content)),
+    ).toEqual(["Unverified citation: matter", "Unverified citation: document"]);
   });
 
   test("footnotes are real, destination-deduplicated, and recursive", () => {

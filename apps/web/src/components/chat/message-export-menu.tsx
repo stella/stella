@@ -20,6 +20,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
@@ -94,6 +95,7 @@ export const MessageExportMenu = ({
     setIsExportPending(false);
 
     if (Result.isError(result)) {
+      getAnalytics().captureError(result.error);
       stellaToast.add({ title: t("common.export.failed"), type: "error" });
       return;
     }

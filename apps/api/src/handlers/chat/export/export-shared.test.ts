@@ -69,6 +69,7 @@ describe("extractPersistedSearchSummarySources", () => {
       ),
     ).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
+      provenance: "legacy",
       sourceCount: 2,
       sourcesMarkdown: "\n\n- Matter\n\n- Decision",
     });
@@ -81,6 +82,7 @@ describe("extractPersistedSearchSummarySources", () => {
       ),
     ).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
+      provenance: "legacy",
       sourceCount: 0,
       sourcesMarkdown: "",
     });
@@ -100,6 +102,7 @@ describe("extractPersistedSearchSummarySources", () => {
     );
     expect(sources).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
+      provenance: "marked",
       sourceCount: 1,
       sourcesMarkdown: "\n\n- Matter",
     });

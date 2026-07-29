@@ -50,6 +50,7 @@ export const composeExportMarkdown = (
 
 export type PersistedSearchSummarySources = {
   bodyWithoutSources: string;
+  provenance: "legacy" | "marked";
   sourceCount: number;
   sourcesMarkdown: string;
 };
@@ -103,6 +104,7 @@ export const extractPersistedSearchSummarySources = (
     bodyWithoutSources: body
       .slice(0, isMarked ? markedHeadingIndex : headingIndex)
       .trimEnd(),
+    provenance: isMarked ? "marked" : "legacy",
     sourceCount,
     sourcesMarkdown: sources,
   };
