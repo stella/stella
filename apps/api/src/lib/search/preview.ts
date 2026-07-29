@@ -114,6 +114,8 @@ const previewBodyExcerpt = ({
   END
 `;
 
+// Passage selection mirrors the normalized index, but rendering keeps the
+// original source text so a legal preview never rewrites its content.
 const previewHeadline = (options: PreviewHeadlineOptions) => sql`
   left(
     ts_headline(
