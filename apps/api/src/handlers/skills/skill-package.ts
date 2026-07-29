@@ -116,13 +116,28 @@ export type GithubTreeItem = {
 
 type GithubRequestBudget = {
   deadlineAt: number;
+  remainingRequests?: number;
+  timeoutMessage?: string;
 };
 
 export type SkillPackageFetchContext = {
+  githubRequestBudget?: GithubRequestBudget;
   githubTrees: Map<string, Promise<GithubTreeItem[]>>;
 };
 
-export const createSkillPackageFetchContext = (): SkillPackageFetchContext => ({
+export const createSkillPackageFetchContext = (limits?: {
+  deadlineAt: number;
+  maxGithubRequests: number;
+}): SkillPackageFetchContext => ({
+  ...(limits
+    ? {
+        githubRequestBudget: {
+          deadlineAt: limits.deadlineAt,
+          remainingRequests: limits.maxGithubRequests,
+          timeoutMessage: "GitHub skill import timed out",
+        },
+      }
+    : {}),
   githubTrees: new Map(),
 });
 
@@ -172,7 +187,10 @@ export const fetchSkillPackageFromUrl = async (
 ): Promise<Result<ParsedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      const githubPath = await parseGithubSkillPath(rawUrl);
+      const githubPath = await parseGithubSkillPath(
+        rawUrl,
+        context.githubRequestBudget,
+      );
       if (githubPath) {
         return await fetchGithubSkillPackage(
           githubPath,
@@ -523,7 +541,10 @@ const fetchGithubSkillFiles = async (
   const files: SkillFile[] = [];
   let totalFileBytes = 0;
   let resourceCount = 0;
-  const commitSha = await resolveGithubCommitSha(target);
+  const commitSha = await resolveGithubCommitSha(
+    target,
+    context.githubRequestBudget,
+  );
   const tree = await fetchGithubTreeOnce({
     commitSha,
     context,
@@ -574,6 +595,7 @@ const fetchGithubSkillFiles = async (
         repo: target.repo,
       }),
       GITHUB_SKILL_FILE_MAX_BYTES,
+      context.githubRequestBudget,
     );
     totalFileBytes += raw.body.byteLength;
     assertGithubTotalFileBytes(totalFileBytes);
@@ -605,6 +627,9 @@ const fetchGithubTreeOnce = async ({
     context,
     load: async () =>
       await fetchGithubTree({
+        ...(context.githubRequestBudget
+          ? { budget: context.githubRequestBudget }
+          : {}),
         commitSha,
         owner,
         repo,
@@ -868,6 +893,7 @@ const fetchSafeBytes = async (
   maxBytes = FILE_SIZE_LIMIT_BYTES.skillPack,
   budget?: GithubRequestBudget,
 ) => {
+  consumeGithubRequestBudget(budget);
   const response = await safeOutboundFetchBytes({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes,
@@ -890,6 +916,21 @@ const fetchSafeBytes = async (
   return response.value;
 };
 
+const consumeGithubRequestBudget = (
+  budget: GithubRequestBudget | undefined,
+): void => {
+  if (budget?.remainingRequests === undefined) {
+    return;
+  }
+  if (budget.remainingRequests <= 0) {
+    throw new HandlerError({
+      status: 400,
+      message: "GitHub skill import exceeded its outbound request limit",
+    });
+  }
+  budget.remainingRequests -= 1;
+};
+
 const githubRequestTimeoutMs = (
   budget: GithubRequestBudget | undefined,
 ): number => {
@@ -900,7 +941,7 @@ const githubRequestTimeoutMs = (
   if (remainingMs <= 0) {
     throw new HandlerError({
       status: 400,
-      message: "GitHub skill discovery timed out",
+      message: budget.timeoutMessage ?? "GitHub skill discovery timed out",
     });
   }
   return Math.min(GITHUB_API_TIMEOUT_MS, remainingMs);
@@ -926,6 +967,7 @@ const githubRefKindExists = async ({
   ref: string;
   repo: string;
 }): Promise<boolean> => {
+  consumeGithubRequestBudget(budget);
   const response = await safeOutboundFetchBytes({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,

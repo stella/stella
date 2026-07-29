@@ -8,6 +8,7 @@ import {
 } from "@/api/lib/safe-outbound-fetch";
 
 const COMMIT_SHA = "a".repeat(40);
+let outboundRequestCount = 0;
 
 const response = (body: unknown): Result<SafeOutboundFetchResponse, never> => {
   const bytes = new TextEncoder().encode(
@@ -24,6 +25,7 @@ const response = (body: unknown): Result<SafeOutboundFetchResponse, never> => {
 void mock.module("@/api/lib/safe-outbound-fetch", () => ({
   ...realSafeFetch,
   safeOutboundFetchBytes: async ({ url }: { url: URL }) => {
+    outboundRequestCount += 1;
     if (url.hostname === "raw.githubusercontent.com") {
       if (url.pathname.endsWith("/invalid/SKILL.md")) {
         return Result.err(
@@ -61,7 +63,11 @@ Instructions.`);
   },
 }));
 
-const { discoverSkillPackagesFromUrl } = await import("./skill-package");
+const {
+  createSkillPackageFetchContext,
+  discoverSkillPackagesFromUrl,
+  fetchSkillPackageFromUrl,
+} = await import("./skill-package");
 
 describe("GitHub skill package discovery", () => {
   test("keeps valid siblings when one skill source cannot be fetched", async () => {
@@ -93,5 +99,43 @@ describe("GitHub skill package discovery", () => {
     expect(result.value.skills.map((skill) => skill.name)).toEqual([
       "root-skill",
     ]);
+  });
+
+  test("stops a batch before exceeding its GitHub request budget", async () => {
+    outboundRequestCount = 0;
+    const result = await fetchSkillPackageFromUrl(
+      `https://github.com/example/skills/tree/${COMMIT_SHA}`,
+      createSkillPackageFetchContext({
+        deadlineAt: Date.now() + 30_000,
+        maxGithubRequests: 1,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected the request budget to reject the import");
+    }
+    expect(result.error.message).toBe(
+      "GitHub skill import exceeded its outbound request limit",
+    );
+    expect(outboundRequestCount).toBe(1);
+  });
+
+  test("rejects an expired batch deadline before outbound I/O", async () => {
+    outboundRequestCount = 0;
+    const result = await fetchSkillPackageFromUrl(
+      `https://github.com/example/skills/tree/${COMMIT_SHA}`,
+      createSkillPackageFetchContext({
+        deadlineAt: Date.now() - 1,
+        maxGithubRequests: 10,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected the expired deadline to reject the import");
+    }
+    expect(result.error.message).toBe("GitHub skill import timed out");
+    expect(outboundRequestCount).toBe(0);
   });
 });

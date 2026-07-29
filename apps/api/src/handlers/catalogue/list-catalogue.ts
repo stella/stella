@@ -543,7 +543,10 @@ export const appendCustomSkillEntries = ({
   // and the caller can delete it.
   const bySlug = new Map<string, CustomSkillRow>();
   for (const row of skills) {
-    if (curatedSlugs.has(row.slug)) {
+    if (
+      curatedSlugs.has(row.slug) ||
+      (row.scope === "team" && !row.enabled && !canDeleteTeamSkills)
+    ) {
       continue;
     }
     const existing = bySlug.get(row.slug);

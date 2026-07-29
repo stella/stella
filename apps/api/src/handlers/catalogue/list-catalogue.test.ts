@@ -75,4 +75,59 @@ describe("appendCustomSkillEntries", () => {
       slug: "review",
     });
   });
+
+  test("hides disabled team skills from members", () => {
+    const response: Parameters<typeof appendCustomSkillEntries>[0]["response"] =
+      [];
+
+    appendCustomSkillEntries({
+      canDeleteTeamSkills: false,
+      curatedSlugs: new Set(),
+      organizationId,
+      response,
+      skills: [
+        {
+          description: "Unavailable team version.",
+          enabled: false,
+          id: "skill-team",
+          license: null,
+          name: "Review",
+          scope: "team",
+          slug: "review",
+        },
+      ],
+    });
+
+    expect(response).toEqual([]);
+  });
+
+  test("shows disabled team skills to managers", () => {
+    const response: Parameters<typeof appendCustomSkillEntries>[0]["response"] =
+      [];
+
+    appendCustomSkillEntries({
+      canDeleteTeamSkills: true,
+      curatedSlugs: new Set(),
+      organizationId,
+      response,
+      skills: [
+        {
+          description: "Manageable team version.",
+          enabled: false,
+          id: "skill-team",
+          license: null,
+          name: "Review",
+          scope: "team",
+          slug: "review",
+        },
+      ],
+    });
+
+    expect(response).toHaveLength(1);
+    expect(response[0]).toMatchObject({
+      enabled: false,
+      installedSkillId: "skill-team",
+      slug: "review",
+    });
+  });
 });

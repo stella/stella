@@ -14,6 +14,11 @@ import {
 } from "./skill-package";
 
 const MAX_SKILL_IMPORTS = 20;
+// Bound the whole batch, not each raw file independently. The request cap
+// accommodates typical multi-skill repositories while preventing a maximal
+// 20-skill selection from issuing more than a small fixed number of requests.
+const GITHUB_IMPORT_TIMEOUT_MS = 30_000;
+const GITHUB_IMPORT_MAX_REQUESTS = 128;
 const CONTENT_HASH_PATTERN = "^[a-f0-9]{64}$";
 const GITHUB_COMMIT_SHA_PATTERN = "^[a-f0-9]{40}$";
 
@@ -72,7 +77,10 @@ const importSkillsFromUrls = createSafeRootHandler(
     const deduplicated = deduplicateSkillImportItems(body.items);
     const failed = [...deduplicated.failed];
     const { items } = deduplicated;
-    const fetchContext = createSkillPackageFetchContext();
+    const fetchContext = createSkillPackageFetchContext({
+      deadlineAt: Date.now() + GITHUB_IMPORT_TIMEOUT_MS,
+      maxGithubRequests: GITHUB_IMPORT_MAX_REQUESTS,
+    });
     const importAt = async (index: number): Promise<void> => {
       const item = items.at(index);
       if (item === undefined) {
