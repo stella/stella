@@ -212,11 +212,19 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
     if (keys.size >= want) {
       break;
     }
-    const contents = listed.contents;
-    if (!contents) {
+    const landed = listed.contents?.at(0)?.key;
+    if (!landed) {
       continue;
     }
-    const textEntries = contents.filter((entry) =>
+    const docPrefix = landed.split("/").slice(0, 4).join("/") + "/";
+    // Enumerate the landed document's own prefix: three objects per
+    // content version means a short window can miss the newest text
+    // object entirely.
+    const docListing = await withDeadline(
+      s3.list({ prefix: docPrefix, maxKeys: 64 }),
+      "s3.list-doc",
+    );
+    const textEntries = (docListing.contents ?? []).filter((entry) =>
       entry.key.endsWith("/text.zst"),
     );
     // A backfilled document can leave an orphaned content-addressed
@@ -226,14 +234,10 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
     // database, which this probe deliberately avoids — and a superseded
     // payload is still real court prose, which is all pattern-mining
     // needs.
-    const docOf = (key: string): string => key.split("/").at(3) ?? key;
     const first = textEntries.at(0);
     if (first) {
-      const sameDoc = textEntries.filter(
-        (entry) => docOf(entry.key) === docOf(first.key),
-      );
       let newest = first;
-      for (const entry of sameDoc) {
+      for (const entry of textEntries) {
         if ((entry.lastModified ?? "") > (newest.lastModified ?? "")) {
           newest = entry;
         }
@@ -355,9 +359,12 @@ console.log(
   `SUMMARY docs=${docs.length - emptyDocs} empty=${emptyDocs} extracted=${totalExtracted} residual-candidates=${totalResiduals}`,
 );
 
-// A run that could not read anything is a failure, not a clean zero: the
-// scheduled reviewer must see a non-zero exit instead of an empty SUMMARY.
-if (s3Attempts > 0 && s3Failures >= s3Attempts) {
-  console.error("citation-probe: every S3 operation failed; unusable run");
+// A run that probed nothing is a failure, not a clean zero: the scheduled
+// reviewer must see a non-zero exit instead of an empty SUMMARY — whether
+// every operation failed or the listings succeeded and every get did not.
+if (docs.length === 0) {
+  console.error(
+    `citation-probe: no documents probed (${s3Failures}/${s3Attempts} S3 operations failed); unusable run`,
+  );
   process.exit(1);
 }
