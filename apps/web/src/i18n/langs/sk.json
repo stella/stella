@@ -991,7 +991,6 @@
     "allow": "Povoliť",
     "completeSetup": "Dokončiť nastavenie",
     "defaultClientName": "Aplikácia",
-    "deny": "Zamietnuť",
     "description": "{clientName} chce získať prístup k vášmu pracovnému priestoru stella",
     "error": "Niečo sa pokazilo. Skúste to znova.",
     "missingJurisdictions": "Vaša organizácia v stelle si zatiaľ nenastavila jurisdikcie svojej praxe. Niektoré nástroje závislé od jurisdikcie nebudú dostupné, kým nastavenie nedokončíte.",

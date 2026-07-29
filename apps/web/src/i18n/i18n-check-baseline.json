@@ -82,7 +82,6 @@
     "clauses.body",
     "clauses.deleteClause",
     "clauses.versionRestored",
-    "consent.deny",
     "consent.error",
     "contacts.customFields.value",
     "contacts.customFields.valuePlaceholder",

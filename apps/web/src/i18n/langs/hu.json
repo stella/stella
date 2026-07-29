@@ -991,7 +991,6 @@
     "allow": "Engedélyezés",
     "completeSetup": "Beállítás befejezése",
     "defaultClientName": "Egy alkalmazás",
-    "deny": "Elutasítás",
     "description": "A(z) {clientName} hozzá szeretne férni a stella munkaterületéhez",
     "error": "Hiba történt. Kérjük, próbálja újra.",
     "missingJurisdictions": "A stella-szervezete még nem állította be a praxis joghatóságait. Egyes joghatóságfüggő eszközök addig nem lesznek elérhetők, amíg be nem fejezi a beállítást.",
