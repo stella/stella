@@ -608,12 +608,12 @@ export const searchGlobal = async ({
       LEFT JOIN "user" editor ON editor.id = e.last_edited_by
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFilter}
       ORDER BY ${searchOrderBy({ id: sql`sd.entity_id`, updatedAt: sql`sd.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -633,9 +633,9 @@ export const searchGlobal = async ({
       FROM workspace_search_documents wsd
       JOIN workspaces w ON w.id = wsd.workspace_id
       WHERE wsd.organization_id = ${organizationId}
-        ${matterWorkspaceFilter}
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
+        ${matterWorkspaceFilter}
       ORDER BY ${searchOrderBy({ id: sql`wsd.workspace_id`, updatedAt: sql`wsd.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -656,9 +656,9 @@ export const searchGlobal = async ({
         csd.updated_at
       FROM contact_search_documents csd
       WHERE csd.organization_id = ${organizationId}
-        ${contactWorkspaceFilter}
         ${contactUpdatedFilter}
         ${contactTextSearchFilter}
+        ${contactWorkspaceFilter}
       ORDER BY ${searchOrderBy({ id: sql`csd.contact_id`, updatedAt: sql`csd.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -711,9 +711,10 @@ export const searchGlobal = async ({
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
       LEFT JOIN workspaces w ON w.id = t.workspace_id
-      WHERE ${chatScope}
+      WHERE TRUE
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
+        AND ${chatScope}
       ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
       LIMIT ${fetchLimit}
     `),
@@ -745,12 +746,12 @@ export const searchGlobal = async ({
           AND e.workspace_id = sd.workspace_id
         ${fileFieldJoin}
         WHERE sd.organization_id = ${organizationId}
-          ${entityWorkspaceFilter}
           ${entityTypeFilter}
           ${entityEditorFilter}
           ${entityMimeFilter}
           ${entityUpdatedFilter}
           ${entityTextSearchFilter}
+          ${entityWorkspaceFilter}
       `),
     ),
     countWhen(
@@ -762,9 +763,9 @@ export const searchGlobal = async ({
         SELECT count(*)::int AS total
         FROM workspace_search_documents wsd
         WHERE wsd.organization_id = ${organizationId}
-          ${matterWorkspaceFilter}
           ${matterUpdatedFilter}
           ${matterTextSearchFilter}
+          ${matterWorkspaceFilter}
       `),
     ),
     countWhen(
@@ -777,9 +778,9 @@ export const searchGlobal = async ({
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
-          ${contactWorkspaceFilter}
           ${contactUpdatedFilter}
           ${contactTextSearchFilter}
+          ${contactWorkspaceFilter}
       `),
     ),
     countWhen(
@@ -795,9 +796,10 @@ export const searchGlobal = async ({
         SELECT count(*)::int AS total
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
-        WHERE ${chatScope}
+        WHERE TRUE
           ${chatUpdatedFilter}
           ${chatTextSearchFilter}
+          AND ${chatScope}
       `),
     ),
   ] as const;
@@ -813,12 +815,12 @@ export const searchGlobal = async ({
         AND e.workspace_id = sd.workspace_id
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFacetFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFilter}
       GROUP BY sd.kind
       ORDER BY count DESC, sd.kind ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
@@ -844,9 +846,9 @@ export const searchGlobal = async ({
       SELECT count(*)::int AS total
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
-        ${matterWorkspaceFilter}
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
+        ${matterWorkspaceFilter}
     `),
   );
 
@@ -858,9 +860,9 @@ export const searchGlobal = async ({
         SELECT count(*)::int AS total
         FROM contact_search_documents csd
         WHERE csd.organization_id = ${organizationId}
-          ${contactWorkspaceFilter}
           ${contactUpdatedFilter}
           ${contactTextSearchFilter}
+          ${contactWorkspaceFilter}
       `),
   );
 
@@ -876,9 +878,10 @@ export const searchGlobal = async ({
       SELECT count(*)::int AS total
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
-      WHERE ${chatScope}
+      WHERE TRUE
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
+        AND ${chatScope}
     `),
   );
 
@@ -892,12 +895,12 @@ export const searchGlobal = async ({
         AND e.workspace_id = sd.workspace_id
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFacetFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFacetFilter}
     `
     : emptyWorkspaceFacetQuery;
 
@@ -907,9 +910,9 @@ export const searchGlobal = async ({
       SELECT wsd.workspace_id AS value, wsd.title AS label
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
-        ${matterWorkspaceFacetFilter}
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
+        ${matterWorkspaceFacetFilter}
     `
       : emptyWorkspaceFacetQuery;
 
@@ -944,11 +947,11 @@ export const searchGlobal = async ({
       JOIN "user" editor ON editor.id = e.last_edited_by
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFilter}
       GROUP BY editor.id, editor.name
       ORDER BY count DESC, editor.name ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
@@ -970,11 +973,11 @@ export const searchGlobal = async ({
         coalesce(file_field.mime_types, ARRAY[]::text[])
       ) AS mime_type(value)
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFilter}
       GROUP BY mime_type.value
       ORDER BY count DESC, mime_type.value ASC
       LIMIT ${GLOBAL_SEARCH_FACET_LIMIT}
@@ -1189,12 +1192,12 @@ export const searchGlobalFacet = async ({
       JOIN "user" editor ON editor.id = e.last_edited_by
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${labelLikeFilter(sql`editor.name`, search)}
+        ${entityWorkspaceFilter}
       GROUP BY editor.id, editor.name
       ORDER BY count DESC, editor.name ASC
       LIMIT ${limit}
@@ -1217,12 +1220,12 @@ export const searchGlobalFacet = async ({
         coalesce(file_field.mime_types, ARRAY[]::text[])
       ) AS mime_type(value)
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
         ${labelLikeFilter(sql`mime_type.value`, search)}
+        ${entityWorkspaceFilter}
       GROUP BY mime_type.value
       ORDER BY count DESC, mime_type.value ASC
       LIMIT ${limit}
@@ -1248,12 +1251,12 @@ export const searchGlobalFacet = async ({
         AND e.workspace_id = sd.workspace_id
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
-        ${entityWorkspaceFacetFilter}
         ${entityTypeFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
         ${entityTextSearchFilter}
+        ${entityWorkspaceFacetFilter}
     `
     : emptyWorkspaceFacetQuery;
 
@@ -1262,9 +1265,9 @@ export const searchGlobalFacet = async ({
       SELECT wsd.workspace_id AS value, wsd.title AS label
       FROM workspace_search_documents wsd
       WHERE wsd.organization_id = ${organizationId}
-        ${matterWorkspaceFacetFilter}
         ${matterUpdatedFilter}
         ${matterTextSearchFilter}
+        ${matterWorkspaceFacetFilter}
     `
     : emptyWorkspaceFacetQuery;
 
