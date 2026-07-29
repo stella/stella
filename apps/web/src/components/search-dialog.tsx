@@ -394,7 +394,6 @@ export const SearchDialog = ({
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
-    isFetchNextPageError,
     isPlaceholderData,
     refetch: refetchSearch,
   } = useInfiniteQuery(
@@ -412,9 +411,6 @@ export const SearchDialog = ({
       updatedTo,
     }),
   );
-  const retryNextSearchPage = () => {
-    detached(fetchNextPage(), "SearchDialog");
-  };
 
   const allHits = useMemo(() => {
     if (!data) {
@@ -1285,24 +1281,15 @@ export const SearchDialog = ({
                       );
                     })}
                   </div>
-                  {(hasNextPage || isFetchNextPageError) && (
+                  {hasNextPage && (
                     <div
                       className="flex h-10 items-center justify-center px-2 pt-2"
                       ref={loadMoreRef}
                     >
-                      {isFetchNextPageError && (
-                        <Button
-                          onClick={retryNextSearchPage}
-                          size="sm"
-                          variant="outline"
-                        >
-                          {t("common.retry")}
-                        </Button>
-                      )}
-                      {!isFetchNextPageError && isFetchingNextPage && (
+                      {isFetchingNextPage && (
                         <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
                       )}
-                      {!isFetchNextPageError && !isFetchingNextPage && (
+                      {!isFetchingNextPage && (
                         <span className="sr-only">{t("common.loadMore")}</span>
                       )}
                     </div>
