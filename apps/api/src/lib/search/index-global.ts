@@ -374,9 +374,6 @@ const globalSearchOffset = (cursor: string | undefined): number => {
 
 type FilterFragmentInput = {
   query: string;
-  organizationId: SafeId<"organization">;
-  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
-  selectedWorkspaceIds: readonly SafeId<"workspace">[];
   types: readonly GlobalSearchResultType[];
   editedByUserIds: readonly string[];
   mimeTypes: readonly string[];
@@ -393,9 +390,6 @@ type FilterFragmentInput = {
  */
 const buildSearchFilterFragments = ({
   query,
-  organizationId,
-  accessibleWorkspaceIds,
-  selectedWorkspaceIds,
   types,
   editedByUserIds,
   mimeTypes,
@@ -412,31 +406,6 @@ const buildSearchFilterFragments = ({
     updatedFrom === undefined ? undefined : new Date(updatedFrom).toISOString();
   const normalizedUpdatedTo =
     updatedTo === undefined ? undefined : new Date(updatedTo).toISOString();
-
-  const workspaceScope = { accessibleWorkspaceIds, selectedWorkspaceIds };
-  // Workspace-facet variants ignore the user's workspace selection so all
-  // accessible workspaces stay visible (you can always tick a sibling).
-  const accessOnlyScope = { accessibleWorkspaceIds, selectedWorkspaceIds: [] };
-  const entityWorkspaceFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
-    ...workspaceScope,
-  });
-  const entityWorkspaceFacetFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
-    ...accessOnlyScope,
-  });
-  const matterWorkspaceFilter = workspaceAccessSql({
-    column: sql`wsd.workspace_id`,
-    ...workspaceScope,
-  });
-  const matterWorkspaceFacetFilter = workspaceAccessSql({
-    column: sql`wsd.workspace_id`,
-    ...accessOnlyScope,
-  });
-  const contactWorkspaceFilter = contactWorkspaceAccessSql({
-    organizationId,
-    ...workspaceScope,
-  });
 
   const entityTypes = [...selected].filter(
     (type) => !NON_ENTITY_TYPES.has(type),
@@ -523,11 +492,6 @@ const buildSearchFilterFragments = ({
     hasMimeTypeFilter,
     restrictToEntities,
     tsQuery,
-    entityWorkspaceFilter,
-    entityWorkspaceFacetFilter,
-    matterWorkspaceFilter,
-    matterWorkspaceFacetFilter,
-    contactWorkspaceFilter,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
@@ -572,11 +536,6 @@ export const searchGlobal = async ({
   const {
     selected,
     restrictToEntities,
-    entityWorkspaceFilter,
-    entityWorkspaceFacetFilter,
-    matterWorkspaceFilter,
-    matterWorkspaceFacetFilter,
-    contactWorkspaceFilter,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
@@ -597,14 +556,36 @@ export const searchGlobal = async ({
     entityTypeFacetFilter,
   } = buildSearchFilterFragments({
     query,
-    organizationId,
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds,
     types,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
     updatedTo,
+  });
+  const entityWorkspaceFilter = workspaceAccessSql({
+    column: sql`sd.workspace_id`,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+  });
+  const entityWorkspaceFacetFilter = workspaceAccessSql({
+    column: sql`sd.workspace_id`,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
+  });
+  const matterWorkspaceFilter = workspaceAccessSql({
+    column: sql`wsd.workspace_id`,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+  });
+  const matterWorkspaceFacetFilter = workspaceAccessSql({
+    column: sql`wsd.workspace_id`,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
+  });
+  const contactWorkspaceFilter = contactWorkspaceAccessSql({
+    organizationId,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
   });
 
   const entityPromise = rowsWhen(hasSelectedEntityType(selected), () =>
@@ -1165,9 +1146,6 @@ export const searchGlobalFacet = async ({
   const {
     selected,
     restrictToEntities,
-    entityWorkspaceFilter,
-    entityWorkspaceFacetFilter,
-    matterWorkspaceFacetFilter,
     entityEditorFilter,
     entityMimeFilter,
     entityUpdatedFilter,
@@ -1177,14 +1155,28 @@ export const searchGlobalFacet = async ({
     entityTypeFilter,
   } = buildSearchFilterFragments({
     query,
-    organizationId,
-    accessibleWorkspaceIds,
-    selectedWorkspaceIds,
     types,
     editedByUserIds,
     mimeTypes,
     updatedFrom,
     updatedTo,
+  });
+  const entityWorkspaceFilter = workspaceAccessSql({
+    column: sql`sd.workspace_id`,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds,
+  });
+  // Workspace facets intentionally ignore the current workspace selection so
+  // every accessible sibling remains available as a bucket.
+  const entityWorkspaceFacetFilter = workspaceAccessSql({
+    column: sql`sd.workspace_id`,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
+  });
+  const matterWorkspaceFacetFilter = workspaceAccessSql({
+    column: sql`wsd.workspace_id`,
+    accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
   });
 
   if (facet === "editor") {
