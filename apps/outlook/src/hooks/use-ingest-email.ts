@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Result } from "better-result";
 
 import { ingestEmailToMatter } from "@/api";
+import { APIError, userErrorMessage } from "@/lib/api-error";
 import { downloadAttachment } from "@/outlook";
 import type {
   AttachmentDownloadResult,
@@ -13,7 +14,13 @@ import type {
 export type IngestState =
   | { type: "idle" }
   | { type: "saving" }
-  | { attachmentCount: number; skippedAttachments: string[]; type: "saved" }
+  | {
+      attachmentCount: number;
+      entityId: string;
+      skippedAttachments: string[];
+      type: "saved";
+      workspaceId: string;
+    }
   | { message: string; type: "error" };
 
 type IngestArgs = {
@@ -49,7 +56,10 @@ export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
     if (Result.isError(result)) {
       const { error } = result;
       setState({
-        message: error instanceof Error ? error.message : errorFallback,
+        message:
+          error instanceof APIError
+            ? userErrorMessage(error, errorFallback)
+            : errorFallback,
         type: "error",
       });
       return;
@@ -57,8 +67,10 @@ export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
 
     setState({
       attachmentCount: result.value.attachmentCount,
+      entityId: result.value.entityId,
       skippedAttachments: result.value.skippedAttachments,
       type: "saved",
+      workspaceId,
     });
   };
 
