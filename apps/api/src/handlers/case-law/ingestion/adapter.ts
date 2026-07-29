@@ -46,6 +46,12 @@ export type IngestionResult = {
    * stored verbatim for future re-parsing without re-downloading.
    */
   sourceRaw?: string | undefined;
+  /**
+   * The publisher's own cited-decisions list, where the source supplies
+   * one (case numbers as published). Not stored on the row: it is the
+   * ground truth the pipeline measures citation extraction against.
+   */
+  publisherCitedCases?: readonly string[] | undefined;
   /** Binary raw source (e.g., PDF bytes) for S3 upload. */
   sourceRawBytes?: Uint8Array | undefined;
   /** MIME type of sourceRaw/sourceRawBytes for S3 storage. */

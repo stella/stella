@@ -39,6 +39,7 @@ import {
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import { storedDecisionSignal } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import {
@@ -665,6 +666,27 @@ export const processDecision = async (
         ecli: result.ecli ?? null,
       }),
   );
+
+  // Where the publisher supplies its own cited-decisions list, it is the
+  // one ground truth extraction can be measured against without measuring
+  // it against itself: a gap here is a citation shape the patterns do not
+  // cover, escalated for the citation-quality routine to pick up.
+  if (result.publisherCitedCases && result.publisherCitedCases.length > 0) {
+    const missedPublisherCitations = publisherCitationGap({
+      extracted: citations.map((c) => c.citationText),
+      publisherCited: result.publisherCitedCases,
+    });
+    if (missedPublisherCitations.length > 0) {
+      logger.warn("case_law.ingestion.citation_recall_gap", {
+        caseNumber: result.caseNumber,
+        language: result.language,
+        url: result.sourceUrl ?? "",
+        publisherCitedCount: result.publisherCitedCases.length,
+        missedCount: missedPublisherCitations.length,
+        missed: missedPublisherCitations.slice(0, 10).join("; "),
+      });
+    }
+  }
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
