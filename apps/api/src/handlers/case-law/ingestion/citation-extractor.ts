@@ -386,14 +386,17 @@ const canonicalizeDedupKey = (text: string): string => {
   }
 
   const romanDivision = POLISH_ROMAN_DIVISION_RE.exec(cleaned);
-  if (romanDivision?.groups) {
-    const twoWord = POLISH_TWO_WORD_DIVISION_RE.exec(
-      romanDivision.groups["division"],
-    );
-    const division = twoWord?.groups
-      ? `${twoWord.groups["div1"]}${twoWord.groups["div2"]}${twoWord.groups["rest"]}`
-      : romanDivision.groups["division"];
-    return `${romanDivision.groups["roman"]}${division}`.toLowerCase();
+  const roman = romanDivision?.groups?.["roman"];
+  const divisionRaw = romanDivision?.groups?.["division"];
+  if (roman !== undefined && divisionRaw !== undefined) {
+    const twoWord = POLISH_TWO_WORD_DIVISION_RE.exec(divisionRaw)?.groups;
+    const division =
+      twoWord?.["div1"] !== undefined &&
+      twoWord["div2"] !== undefined &&
+      twoWord["rest"] !== undefined
+        ? `${twoWord["div1"]}${twoWord["div2"]}${twoWord["rest"]}`
+        : divisionRaw;
+    return `${roman}${division}`.toLowerCase();
   }
 
   const canonical = cleaned;
