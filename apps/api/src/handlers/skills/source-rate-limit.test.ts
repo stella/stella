@@ -15,9 +15,7 @@ describe("skill source rate-limit routing", () => {
       ),
     ).toBe(true);
     expect(
-      isSkillSourceRateLimitedRequest(
-        request("POST", "/v1/skills/import-url"),
-      ),
+      isSkillSourceRateLimitedRequest(request("POST", "/v1/skills/import-url")),
     ).toBe(true);
     expect(
       isSkillSourceRateLimitedRequest(
@@ -27,9 +25,9 @@ describe("skill source rate-limit routing", () => {
   });
 
   test("leaves other skill requests outside the source-fetch budget", () => {
-    expect(
-      isSkillSourceRateLimitedRequest(request("POST", "/v1/skills")),
-    ).toBe(false);
+    expect(isSkillSourceRateLimitedRequest(request("POST", "/v1/skills"))).toBe(
+      false,
+    );
     expect(
       isSkillSourceRateLimitedRequest(
         request("GET", "/v1/skills/discover-url"),

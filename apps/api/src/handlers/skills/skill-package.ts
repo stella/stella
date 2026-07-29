@@ -119,7 +119,7 @@ export const createSkillPackageFetchContext = (): SkillPackageFetchContext => ({
   githubTrees: new Map(),
 });
 
-export const getOrCreateGithubTreeRequest = ({
+export const getOrCreateGithubTreeRequest = async ({
   cacheKey,
   context,
   load,
@@ -580,7 +580,7 @@ const fetchGithubSkillFiles = async (
   return files;
 };
 
-const fetchGithubTreeOnce = ({
+const fetchGithubTreeOnce = async ({
   commitSha,
   context,
   owner,
@@ -595,8 +595,8 @@ const fetchGithubTreeOnce = ({
   return getOrCreateGithubTreeRequest({
     cacheKey,
     context,
-    load: () =>
-      fetchGithubTree({
+    load: async () =>
+      await fetchGithubTree({
         commitSha,
         owner,
         repo,
@@ -999,7 +999,7 @@ const parseGithubSkillPath = async (
     }
     assertGithubRepositoryCoordinates({ owner, repo });
     const resolved = await resolveGithubRefAndPath({
-      refExists: (options) => githubRefExists(options, budget),
+      refExists: async (options) => await githubRefExists(options, budget),
       minPathParts: 1,
       owner,
       parts,
@@ -1019,7 +1019,7 @@ const parseGithubSkillPath = async (
   }
 
   const resolved = await resolveGithubRefAndPath({
-    refExists: (options) => githubRefExists(options, budget),
+    refExists: async (options) => await githubRefExists(options, budget),
     minPathParts: kind === "tree" ? 0 : 1,
     owner,
     parts,
@@ -1074,7 +1074,7 @@ const parseGithubDiscoveryPath = async (
   }
 
   const resolved = await resolveGithubRefAndPath({
-    refExists: (options) => githubRefExists(options, budget),
+    refExists: async (options) => await githubRefExists(options, budget),
     minPathParts: kind === "tree" ? 0 : 1,
     owner,
     parts,

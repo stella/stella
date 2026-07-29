@@ -327,8 +327,10 @@ Instructions.`,
       load,
     });
 
-    expect(second).toBe(first);
-    expect(await second).toEqual([{ path: "review/SKILL.md", type: "blob" }]);
+    expect(await Promise.all([first, second])).toEqual([
+      [{ path: "review/SKILL.md", type: "blob" }],
+      [{ path: "review/SKILL.md", type: "blob" }],
+    ]);
     expect(loadCount).toBe(1);
   });
 
