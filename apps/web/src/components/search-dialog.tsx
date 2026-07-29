@@ -412,6 +412,9 @@ export const SearchDialog = ({
       updatedTo,
     }),
   );
+  const retryNextSearchPage = () => {
+    detached(fetchNextPage(), "SearchDialog");
+  };
 
   const allHits = useMemo(() => {
     if (!data) {
@@ -1289,9 +1292,7 @@ export const SearchDialog = ({
                     >
                       {isFetchNextPageError && (
                         <Button
-                          onClick={() => {
-                            detached(fetchNextPage(), "SearchDialog");
-                          }}
+                          onClick={retryNextSearchPage}
                           size="sm"
                           variant="outline"
                         >
