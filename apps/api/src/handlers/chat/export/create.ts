@@ -26,21 +26,26 @@ import {
 } from "@/api/handlers/chat/chat-scope";
 import {
   buildCitationSection,
+  getChatExportCitationLabels,
   sourceDocumentsToCitations,
 } from "@/api/handlers/chat/export/citation-footnotes";
+import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-export-docx";
 import {
   assembleMessageMarkdown,
   buildChatExportDownload,
   composeExportMarkdown,
 } from "@/api/handlers/chat/export/export-shared";
-import { markdownToStellaDocx } from "@/api/handlers/chat/tools/create-workspace-document-tools";
+import { styleDocumentCitations } from "@/api/handlers/chat/export/style-document-citations";
+import { markdownToStellaDocument } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3, presignDownloadUrl } from "@/api/lib/s3";
+import { extractLangFromRequest } from "@/api/lib/locale";
+import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -83,6 +88,7 @@ const createMessageExport = createSafeRootHandler(
     params: { threadId },
     query: { workspaceId },
     recordAuditEvent,
+    request,
     safeDb,
     session,
     user,
@@ -143,13 +149,20 @@ const createMessageExport = createSafeRootHandler(
         CHAT_EXPORT_MAX_SOURCE_DOCUMENTS,
       ),
       citationStyle,
+      getChatExportCitationLabels(extractLangFromRequest(request)),
     );
 
     const markdown = composeExportMarkdown(body, section);
 
     const docxResult = yield* Result.await(
       Result.tryPromise({
-        try: async () => await markdownToStellaDocx(markdown),
+        try: async () =>
+          await createChatExportDocx(
+            styleDocumentCitations(
+              markdownToStellaDocument(markdown),
+              citationStyle,
+            ),
+          ),
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -186,26 +199,27 @@ const createMessageExport = createSafeRootHandler(
       }),
     );
 
-    const downloadUrl = presignDownloadUrl(key, {
-      expiresIn: CHAT_EXPORT_URL_TTL_SECONDS,
-      fileName,
-    });
-
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.DOWNLOAD,
-          resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
-          resourceId: messageId,
-          workspaceId: thread.workspaceId ?? null,
-          metadata: {
-            format: "docx",
-            citationStyle,
-            verifiedCitations: section.verifiedCount,
-            unverifiedCitations: section.unverifiedCount,
-          },
-        });
-      }),
+    const downloadUrl = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await auditedPresignDownload({
+            tx,
+            recordAuditEvent,
+            resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
+            resourceId: messageId,
+            s3Key: key,
+            expiresInSeconds: CHAT_EXPORT_URL_TTL_SECONDS,
+            fileName,
+            organizationId: session.activeOrganizationId,
+            workspaceId: thread.workspaceId ?? null,
+            metadata: {
+              format: "docx",
+              citationStyle,
+              verifiedCitations: section.verifiedCount,
+              unverifiedCitations: section.unverifiedCount,
+            },
+          }),
+      ),
     );
 
     return Result.ok(

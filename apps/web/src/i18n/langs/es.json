@@ -861,7 +861,7 @@
       "citations": "Citas",
       "failed": "No se pudo exportar el mensaje",
       "footnotes": "Notas al pie",
-      "formatDocx": "Documento de Word (.docx)",
+      "formatDocx": "Documento de Word (<docx>.docx</docx>)",
       "inline": "En línea",
       "title": "Exportar mensaje"
     },

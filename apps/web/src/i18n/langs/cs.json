@@ -861,7 +861,7 @@
       "citations": "Citace",
       "failed": "Zprávu se nepodařilo exportovat",
       "footnotes": "Poznámky pod čarou",
-      "formatDocx": "Dokument Word (.docx)",
+      "formatDocx": "Dokument Word (<docx>.docx</docx>)",
       "inline": "V textu",
       "title": "Exportovat zprávu"
     },

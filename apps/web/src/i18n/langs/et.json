@@ -861,7 +861,7 @@
       "citations": "Viited",
       "failed": "Sõnumit ei õnnestunud eksportida",
       "footnotes": "Allmärkused",
-      "formatDocx": "Wordi dokument (.docx)",
+      "formatDocx": "Wordi dokument (<docx>.docx</docx>)",
       "inline": "Tekstisisene",
       "title": "Ekspordi sõnum"
     },

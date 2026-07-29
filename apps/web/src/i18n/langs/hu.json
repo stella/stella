@@ -861,7 +861,7 @@
       "citations": "Hivatkozások",
       "failed": "Az üzenetet nem sikerült exportálni",
       "footnotes": "Lábjegyzetek",
-      "formatDocx": "Word-dokumentum (.docx)",
+      "formatDocx": "Word-dokumentum (<docx>.docx</docx>)",
       "inline": "Szövegközi",
       "title": "Üzenet exportálása"
     },

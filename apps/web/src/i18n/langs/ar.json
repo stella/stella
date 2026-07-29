@@ -861,7 +861,7 @@
       "citations": "الاستشهادات",
       "failed": "تعذّر تصدير الرسالة",
       "footnotes": "الحواشي السفلية",
-      "formatDocx": "مستند Word (.docx)",
+      "formatDocx": "مستند Word (<docx>.docx</docx>)",
       "inline": "مضمّنة",
       "title": "تصدير الرسالة"
     },

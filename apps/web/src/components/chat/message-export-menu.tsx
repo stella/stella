@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { DownloadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -22,6 +22,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
@@ -58,9 +59,11 @@ export const MessageExportMenu = ({
   const [open, setOpen] = useState(false);
   const [citationStyle, setCitationStyle] =
     useState<CitationStyle>("footnotes");
+  const [isExportPending, setIsExportPending] = useState(false);
 
-  const exportMutation = useMutation({
-    mutationFn: async () => {
+  const handleExport = async () => {
+    setIsExportPending(true);
+    const result = await Result.tryPromise(async () => {
       const response = await api.chat
         .threads({ threadId: threadRef.threadId })
         .export.post(
@@ -87,14 +90,16 @@ export const MessageExportMenu = ({
         });
       }
       downloadFile(await file.blob(), fileName);
-    },
-    onSuccess: () => {
-      setOpen(false);
-    },
-    onError: () => {
+    });
+    setIsExportPending(false);
+
+    if (Result.isError(result)) {
       stellaToast.add({ title: t("common.export.failed"), type: "error" });
-    },
-  });
+      return;
+    }
+
+    setOpen(false);
+  };
 
   return (
     <Popover onOpenChange={setOpen} open={open}>
@@ -116,7 +121,9 @@ export const MessageExportMenu = ({
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium">{t("common.export.title")}</p>
           <p className="text-muted-foreground text-xs">
-            {t("common.export.formatDocx")}
+            {t.rich("common.export.formatDocx", {
+              docx: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+            })}
           </p>
           <label className="flex flex-col gap-1.5 text-xs">
             <span className="text-muted-foreground">
@@ -143,9 +150,9 @@ export const MessageExportMenu = ({
             </Select>
           </label>
           <Button
-            disabled={exportMutation.isPending}
+            disabled={isExportPending}
             onClick={() => {
-              exportMutation.mutate();
+              detached(handleExport(), "MessageExportMenu");
             }}
             size="sm"
           >

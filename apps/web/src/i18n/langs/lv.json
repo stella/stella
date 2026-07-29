@@ -861,7 +861,7 @@
       "citations": "Atsauces",
       "failed": "Neizdevās eksportēt ziņojumu",
       "footnotes": "Vēres",
-      "formatDocx": "Word dokuments (.docx)",
+      "formatDocx": "Word dokuments (<docx>.docx</docx>)",
       "inline": "Tekstā",
       "title": "Eksportēt ziņojumu"
     },

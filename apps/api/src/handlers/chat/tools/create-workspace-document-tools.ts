@@ -2,16 +2,9 @@ import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import {
-  createDocx,
-  createEmptyDocument,
-  createStellaStyleDocumentPreset,
-  mergeDocumentContent,
-} from "@stll/folio-core";
-import { fromMarkdown } from "@stll/folio-core/markdown";
-
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { markdownToStellaDocx } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { buildCreatedDocumentToolOutput } from "@/api/handlers/chat/tools/workspace-tools";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
@@ -22,6 +15,8 @@ import { ChatToolError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+export { markdownToStellaDocx } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
 
 export const CREATE_WORKSPACE_DOCUMENT_TOOL_NAME = "create_workspace_document";
 
@@ -69,37 +64,6 @@ const createWorkspaceDocumentOutputSchema = v.strictObject({
   href: v.string(),
   mention: v.string(),
 });
-
-/**
- * Compose a Markdown body into a Stella-styled DOCX byte buffer.
- *
- * `fromMarkdown` (browser/DOM-free `@stll/folio-core/markdown` entry) parses
- * the markdown into its own `createEmptyDocument()` — no style preset, and
- * its page geometry is flattened to a continuous band (see the folio-core
- * doc comment: that flattening targets the skills markdown bridge, where a
- * skill body is not a paginated Word page). We only want its parsed content
- * blocks, not that document shell.
- *
- * So the target document is built separately via
- * `createEmptyDocument({ preset: createStellaStyleDocumentPreset() })` —
- * the same call `create-template-buffer.ts` uses for the blank-document
- * tools — which carries Stella's style set, numbering, font table, and A4
- * section/page geometry. `mergeDocumentContent` appends the parsed markdown
- * blocks onto that document's body, renumbering their lists strictly above
- * Stella's preset numbering (which reserves `numId` 1-5 for its own legal
- * clause / definitions / recitals / parties / bullet lists) so a markdown
- * list never collides with and silently renders as Stella's clause
- * numbering.
- */
-export const markdownToStellaDocx = async (
-  markdown: string,
-): Promise<ArrayBuffer> => {
-  const target = createEmptyDocument({
-    preset: createStellaStyleDocumentPreset(),
-  });
-  const merged = mergeDocumentContent(target, fromMarkdown(markdown));
-  return await createDocx(merged);
-};
 
 type CreateWorkspaceDocumentToolsProps = {
   scopedDb: ScopedDb;

@@ -18,6 +18,8 @@
  * (`export-message.ts`) fetches the blocks and feeds them here.
  */
 
+import type { UiLocale } from "@stll/locales";
+
 import type { JustificationBlock } from "@/api/db/schema";
 import type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 import { unreachable } from "@/api/lib/errors/tagged-errors";
@@ -42,17 +44,81 @@ export const CHAT_EXPORT_CITATION_STYLES = [
 export type ChatExportCitationStyle =
   (typeof CHAT_EXPORT_CITATION_STYLES)[number];
 
-/** Heading for the appended citation section (Heading 2 in the DOCX). */
-export const CHAT_EXPORT_SOURCES_HEADING = "Sources";
+type ChatExportCitationLabels = {
+  locale: UiLocale;
+  sources: string;
+  unverifiedCitationsOmitted: string;
+};
 
-/** Marker rendered in place of a source for an ungrounded citation. */
-export const CHAT_EXPORT_UNVERIFIED_MARKER = "(unverified)";
+const CHAT_EXPORT_CITATION_LABELS = {
+  ar: {
+    sources: "المصادر",
+    unverifiedCitationsOmitted: "تم حذف الاستشهادات غير المتحقق منها",
+  },
+  cs: {
+    sources: "Zdroje",
+    unverifiedCitationsOmitted: "Vynechané neověřené citace",
+  },
+  de: {
+    sources: "Quellen",
+    unverifiedCitationsOmitted: "Ausgelassene nicht verifizierte Zitate",
+  },
+  en: {
+    sources: "Sources",
+    unverifiedCitationsOmitted: "Unverified citations omitted",
+  },
+  es: {
+    sources: "Fuentes",
+    unverifiedCitationsOmitted: "Citas no verificadas omitidas",
+  },
+  et: {
+    sources: "Allikad",
+    unverifiedCitationsOmitted: "Välja jäetud kontrollimata viited",
+  },
+  fr: {
+    sources: "Sources",
+    unverifiedCitationsOmitted: "Citations non vérifiées omises",
+  },
+  hu: {
+    sources: "Források",
+    unverifiedCitationsOmitted: "Kihagyott, nem ellenőrzött hivatkozások",
+  },
+  lt: {
+    sources: "Šaltiniai",
+    unverifiedCitationsOmitted: "Praleistos nepatvirtintos citatos",
+  },
+  lv: {
+    sources: "Avoti",
+    unverifiedCitationsOmitted: "Izlaistas nepārbaudītas atsauces",
+  },
+  pl: {
+    sources: "Źródła",
+    unverifiedCitationsOmitted: "Pominięte niezweryfikowane cytowania",
+  },
+  "pt-BR": {
+    sources: "Fontes",
+    unverifiedCitationsOmitted: "Citações não verificadas omitidas",
+  },
+  sk: {
+    sources: "Zdroje",
+    unverifiedCitationsOmitted: "Vynechané neoverené citácie",
+  },
+} satisfies Record<UiLocale, Omit<ChatExportCitationLabels, "locale">>;
+
+export const getChatExportCitationLabels = (
+  locale: UiLocale,
+): ChatExportCitationLabels => ({
+  locale,
+  ...CHAT_EXPORT_CITATION_LABELS[locale],
+});
+
+const DEFAULT_CITATION_LABELS = getChatExportCitationLabels("en");
 
 /** A citation resolved for export: either a grounded source (which becomes a
  *  numbered/inline source entry) or an ungrounded marker that carries NO
  *  source text. */
 export type ResolvedExportCitation =
-  | { status: "verified"; source: string }
+  | { status: "verified"; source: string; sourceId: string }
   | { status: "unverified" };
 
 const MARKDOWN_INLINE_ESCAPE = /(?<character>[\\`*_~[\]<>|])/gu;
@@ -89,12 +155,14 @@ export const isUnverifiedDocxCitation = (citation: {
 /** A Bates locator is grounded by construction, so it is always a source. */
 const resolvePdfBatesCitation = (
   citation: PdfBatesCitation,
+  fileFieldId: string,
   fileName: string | undefined,
 ): ResolvedExportCitation => {
   const locator = `${citation.bates} (p. ${citation.pageNumber})`;
   return {
     status: "verified",
     source: fileName ? `${fileName}, ${locator}` : locator,
+    sourceId: `pdf-bates:${fileFieldId}:${citation.bates}:${citation.pageNumber}`,
   };
 };
 
@@ -102,10 +170,16 @@ const resolvePdfBatesCitation = (
  *  carries only the model's hint, so it never becomes a source. */
 const resolveDocxFolioCitation = (
   citation: DocxFolioJustificationCitation,
-): ResolvedExportCitation =>
-  isUnverifiedDocxCitation(citation)
-    ? { status: "unverified" }
-    : { status: "verified", source: citation.text };
+): ResolvedExportCitation => {
+  if (citation.citationStatus === "unverified") {
+    return { status: "unverified" };
+  }
+  return {
+    status: "verified",
+    source: citation.text,
+    sourceId: `docx-folio:${citation.blockId}`,
+  };
+};
 
 type FileNameByFieldId = ReadonlyMap<string, string>;
 
@@ -126,7 +200,9 @@ export const resolveExportCitations = (
         const fileName = fileNameByFieldId.get(block.fileFieldId);
         for (const statement of block.statements) {
           for (const citation of statement.citations) {
-            resolved.push(resolvePdfBatesCitation(citation, fileName));
+            resolved.push(
+              resolvePdfBatesCitation(citation, block.fileFieldId, fileName),
+            );
           }
         }
         break;
@@ -164,18 +240,28 @@ export const sourceDocumentsToCitations = (
   limit: number,
 ): ResolvedExportCitation[] => {
   const citations: ResolvedExportCitation[] = [];
+  const seen = new Set<string>();
   if (sourceDocuments === undefined) {
     return citations;
   }
   for (const document of sourceDocuments) {
-    if (citations.length >= limit) {
-      break;
-    }
     const title = normalizeMarkdownSource(document.title);
     if (title.length === 0) {
       continue;
     }
-    citations.push({ status: "verified", source: title });
+    const sourceId = `document:${document.workspaceId ?? "organization"}:${document.entityId}`;
+    if (seen.has(sourceId)) {
+      continue;
+    }
+    if (citations.length >= limit) {
+      break;
+    }
+    seen.add(sourceId);
+    citations.push({
+      status: "verified",
+      source: title,
+      sourceId,
+    });
   }
   return citations;
 };
@@ -203,7 +289,7 @@ const tallyCitations = (
   citations: readonly ResolvedExportCitation[],
 ): CitationCounts => {
   const seen = new Set<string>();
-  const verifiedSources: string[] = [];
+  const uniqueSources: { source: string; sourceId: string }[] = [];
   let unverifiedCount = 0;
   for (const citation of citations) {
     if (citation.status === "unverified") {
@@ -211,26 +297,46 @@ const tallyCitations = (
       continue;
     }
     const source = citation.source.trim();
-    if (source.length === 0 || seen.has(source)) {
+    if (source.length === 0 || seen.has(citation.sourceId)) {
       continue;
     }
-    seen.add(source);
-    verifiedSources.push(source);
+    seen.add(citation.sourceId);
+    uniqueSources.push({ source, sourceId: citation.sourceId });
   }
+  const sourceCounts = new Map<string, number>();
+  for (const { source } of uniqueSources) {
+    sourceCounts.set(source, (sourceCounts.get(source) ?? 0) + 1);
+  }
+  const sourceOrdinals = new Map<string, number>();
+  const verifiedSources = uniqueSources.map(({ source }) => {
+    const count = sourceCounts.get(source);
+    if (count === undefined || count === 1) {
+      return source;
+    }
+    const ordinal = (sourceOrdinals.get(source) ?? 0) + 1;
+    sourceOrdinals.set(source, ordinal);
+    return `${source} (${ordinal})`;
+  });
   return { verifiedSources, unverifiedCount };
 };
 
-const unverifiedNote = (count: number): string =>
-  count === 1
-    ? "1 citation could not be verified against a source and is omitted."
-    : `${count} citations could not be verified against a source and are omitted.`;
+const unverifiedNote = (
+  count: number,
+  labels: ChatExportCitationLabels,
+): string =>
+  `${labels.unverifiedCitationsOmitted}: ${new Intl.NumberFormat(
+    labels.locale,
+  ).format(count)}`;
 
 /** Render verified sources as a numbered list under a "Sources" heading, with a
  *  trailing note when ungrounded citations were dropped. */
-const renderFootnotesSection = (counts: CitationCounts): string => {
+const renderFootnotesSection = (
+  counts: CitationCounts,
+  labels: ChatExportCitationLabels,
+): string => {
   const lines: string[] = [];
   if (counts.verifiedSources.length > 0) {
-    lines.push(`## ${CHAT_EXPORT_SOURCES_HEADING}`, "");
+    lines.push(`## ${labels.sources}`, "");
     for (const [index, source] of counts.verifiedSources.entries()) {
       lines.push(`${index + 1}. ${source}`);
     }
@@ -239,23 +345,22 @@ const renderFootnotesSection = (counts: CitationCounts): string => {
     if (lines.length > 0) {
       lines.push("");
     }
-    lines.push(`*${unverifiedNote(counts.unverifiedCount)}*`);
+    lines.push(`*${unverifiedNote(counts.unverifiedCount, labels)}*`);
   }
   return lines.join("\n");
 };
 
 /** Render verified sources inline as one compact "Sources: …" paragraph. */
-const renderInlineSection = (counts: CitationCounts): string => {
+const renderInlineSection = (
+  counts: CitationCounts,
+  labels: ChatExportCitationLabels,
+): string => {
   const parts: string[] = [];
   if (counts.verifiedSources.length > 0) {
-    parts.push(
-      `**${CHAT_EXPORT_SOURCES_HEADING}:** ${counts.verifiedSources.join("; ")}`,
-    );
+    parts.push(`**${labels.sources}:** ${counts.verifiedSources.join("; ")}`);
   }
   if (counts.unverifiedCount > 0) {
-    parts.push(
-      `${CHAT_EXPORT_UNVERIFIED_MARKER} ${unverifiedNote(counts.unverifiedCount)}`,
-    );
+    parts.push(unverifiedNote(counts.unverifiedCount, labels));
   }
   return parts.join(" ");
 };
@@ -272,6 +377,7 @@ const renderInlineSection = (counts: CitationCounts): string => {
 export const buildCitationSection = (
   citations: readonly ResolvedExportCitation[],
   style: ChatExportCitationStyle,
+  labels: ChatExportCitationLabels = DEFAULT_CITATION_LABELS,
 ): CitationSection => {
   if (style === "none") {
     return EMPTY_SECTION;
@@ -282,8 +388,8 @@ export const buildCitationSection = (
   }
   const markdown =
     style === "footnotes"
-      ? renderFootnotesSection(counts)
-      : renderInlineSection(counts);
+      ? renderFootnotesSection(counts, labels)
+      : renderInlineSection(counts, labels);
   return {
     markdown,
     verifiedCount: counts.verifiedSources.length,

@@ -861,7 +861,7 @@
       "citations": "Cytowania",
       "failed": "Nie udało się wyeksportować wiadomości",
       "footnotes": "Przypisy dolne",
-      "formatDocx": "Dokument Word (.docx)",
+      "formatDocx": "Dokument Word (<docx>.docx</docx>)",
       "inline": "W tekście",
       "title": "Eksportuj wiadomość"
     },

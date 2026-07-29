@@ -864,7 +864,7 @@ type Messages = {
       "citations": "Citations";
       "failed": "Couldn't export the message";
       "footnotes": "Footnotes";
-      "formatDocx": "Word document (.docx)";
+      "formatDocx": "Word document (<docx>.docx</docx>)";
       "inline": "Inline";
       "title": "Export message";
     };

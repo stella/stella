@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { JustificationBlock } from "@/api/db/schema";
 import {
   buildCitationSection,
+  getChatExportCitationLabels,
   isUnverifiedDocxCitation,
   resolveExportCitations,
   sourceDocumentsToCitations,
@@ -50,7 +51,11 @@ describe("resolveExportCitations — union switch per citation kind", () => {
       ],
     };
     expect(resolveExportCitations([block])).toEqual([
-      { status: "verified", source: "Buyer shall indemnify Seller." },
+      {
+        status: "verified",
+        source: "Buyer shall indemnify Seller.",
+        sourceId: "docx-folio:seq-1",
+      },
     ]);
   });
 
@@ -84,7 +89,11 @@ describe("resolveExportCitations — union switch per citation kind", () => {
     expect(
       resolveExportCitations([block], new Map([["file-1", "Notice.pdf"]])),
     ).toEqual([
-      { status: "verified", source: "Notice.pdf, ACME-000123 (p. 4)" },
+      {
+        status: "verified",
+        source: "Notice.pdf, ACME-000123 (p. 4)",
+        sourceId: "pdf-bates:file-1:ACME-000123:4",
+      },
     ]);
   });
 
@@ -100,7 +109,11 @@ describe("resolveExportCitations — union switch per citation kind", () => {
       ],
     };
     expect(resolveExportCitations([block])).toEqual([
-      { status: "verified", source: "ACME-000123 (p. 4)" },
+      {
+        status: "verified",
+        source: "ACME-000123 (p. 4)",
+        sourceId: "pdf-bates:file-1:ACME-000123:4",
+      },
     ]);
   });
 
@@ -129,15 +142,19 @@ describe("resolveExportCitations — union switch per citation kind", () => {
       },
     ];
     expect(resolveExportCitations(blocks)).toEqual([
-      { status: "verified", source: "quote A" },
+      {
+        status: "verified",
+        source: "quote A",
+        sourceId: "docx-folio:seq-1",
+      },
       { status: "unverified" },
     ]);
   });
 });
 
 describe("sourceDocumentsToCitations", () => {
-  const doc = (title: string): ChatSourceDocument => ({
-    entityId: "e1",
+  const doc = (title: string, entityId = "e1"): ChatSourceDocument => ({
+    entityId,
     kind: "document",
     mimeType: null,
     title,
@@ -147,7 +164,13 @@ describe("sourceDocumentsToCitations", () => {
   test("each referenced document becomes a verified source titled by name", () => {
     expect(
       sourceDocumentsToCitations([doc("Share Purchase Agreement")], 50),
-    ).toEqual([{ status: "verified", source: "Share Purchase Agreement" }]);
+    ).toEqual([
+      {
+        status: "verified",
+        source: "Share Purchase Agreement",
+        sourceId: "document:w1:e1",
+      },
+    ]);
   });
 
   test("blank titles are skipped", () => {
@@ -165,6 +188,7 @@ describe("sourceDocumentsToCitations", () => {
         status: "verified",
         source:
           "Agreement ## Forged \\*emphasis\\* \\[link\\] \\<tag\\> C:\\\\temp",
+        sourceId: "document:w1:e1",
       },
     ]);
   });
@@ -175,17 +199,50 @@ describe("sourceDocumentsToCitations", () => {
 
   test("the limit caps how many documents are cited", () => {
     expect(
-      sourceDocumentsToCitations([doc("A"), doc("B"), doc("C")], 2),
+      sourceDocumentsToCitations(
+        [doc("A", "e1"), doc("B", "e2"), doc("C", "e3")],
+        2,
+      ),
     ).toEqual([
-      { status: "verified", source: "A" },
-      { status: "verified", source: "B" },
+      { status: "verified", source: "A", sourceId: "document:w1:e1" },
+      { status: "verified", source: "B", sourceId: "document:w1:e2" },
     ]);
+  });
+
+  test("document identity is de-duplicated before applying the limit", () => {
+    expect(
+      sourceDocumentsToCitations(
+        [doc("First title", "e1"), doc("Renamed", "e1"), doc("B", "e2")],
+        2,
+      ),
+    ).toEqual([
+      {
+        status: "verified",
+        source: "First title",
+        sourceId: "document:w1:e1",
+      },
+      { status: "verified", source: "B", sourceId: "document:w1:e2" },
+    ]);
+  });
+
+  test("documents with the same title retain distinct identities", () => {
+    const section = buildCitationSection(
+      sourceDocumentsToCitations(
+        [doc("Agreement.docx", "e1"), doc("Agreement.docx", "e2")],
+        50,
+      ),
+      "footnotes",
+    );
+    expect(section.markdown).toBe(
+      "## Sources\n\n1. Agreement.docx (1)\n2. Agreement.docx (2)",
+    );
+    expect(section.verifiedCount).toBe(2);
   });
 });
 
 describe("buildCitationSection", () => {
-  const verified = (source: string) =>
-    ({ status: "verified", source }) as const;
+  const verified = (source: string, sourceId = source) =>
+    ({ status: "verified", source, sourceId }) as const;
   const unverified = () => ({ status: "unverified" }) as const;
 
   test("none style renders nothing", () => {
@@ -216,7 +273,7 @@ describe("buildCitationSection", () => {
       "footnotes",
     );
     expect(section.markdown).toBe(
-      "## Sources\n\n1. Source A\n\n*2 citations could not be verified against a source and are omitted.*",
+      "## Sources\n\n1. Source A\n\n*Unverified citations omitted: 2*",
     );
     expect(section.unverifiedCount).toBe(2);
     // The ungrounded citations never appear as a source line.
@@ -232,6 +289,16 @@ describe("buildCitationSection", () => {
     expect(section.verifiedCount).toBe(1);
   });
 
+  test("source identity, not display text, controls de-duplication", () => {
+    const section = buildCitationSection(
+      [verified("Agreement.docx", "e1"), verified("Agreement.docx", "e2")],
+      "footnotes",
+    );
+    expect(section.markdown).toBe(
+      "## Sources\n\n1. Agreement.docx (1)\n2. Agreement.docx (2)",
+    );
+  });
+
   test("inline style joins verified sources into one paragraph", () => {
     const section = buildCitationSection(
       [verified("Source A"), verified("Source B")],
@@ -242,10 +309,19 @@ describe("buildCitationSection", () => {
 
   test("an all-unverified footnotes export renders only the omission note", () => {
     const section = buildCitationSection([unverified()], "footnotes");
-    expect(section.markdown).toBe(
-      "*1 citation could not be verified against a source and is omitted.*",
-    );
+    expect(section.markdown).toBe("*Unverified citations omitted: 1*");
     expect(section.verifiedCount).toBe(0);
     expect(section.unverifiedCount).toBe(1);
+  });
+
+  test("citation labels follow the request locale", () => {
+    const section = buildCitationSection(
+      [verified("Zdroj A"), unverified()],
+      "footnotes",
+      getChatExportCitationLabels("cs"),
+    );
+    expect(section.markdown).toBe(
+      "## Zdroje\n\n1. Zdroj A\n\n*Vynechané neověřené citace: 1*",
+    );
   });
 });

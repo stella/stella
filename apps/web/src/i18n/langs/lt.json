@@ -861,7 +861,7 @@
       "citations": "Citatos",
       "failed": "Nepavyko eksportuoti žinutės",
       "footnotes": "Išnašos",
-      "formatDocx": "„Word“ dokumentas (.docx)",
+      "formatDocx": "„Word“ dokumentas (<docx>.docx</docx>)",
       "inline": "Tekste",
       "title": "Eksportuoti žinutę"
     },
