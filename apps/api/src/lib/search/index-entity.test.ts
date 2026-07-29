@@ -19,7 +19,9 @@ const semanticUpdatedAtToken =
 const executeMock = mock(async (_query: SQL) => [
   { entityId: toSafeId<"entity">("entity_1") },
 ]);
-const syncWorkspaceSearchActivityMock = mock(async () => undefined);
+const syncWorkspaceSearchActivityMock = mock(
+  async (_workspaceId: unknown, _db: unknown) => undefined,
+);
 const decryptContentMock = mock(async () => "Extracted text");
 const captureErrorMock = mock(() => undefined);
 const entityRow = {
@@ -41,8 +43,9 @@ const entityRow = {
 };
 const findFirstMock = mock(async () => entityRow);
 const transactionMock = mock(
-  async (callback: (tx: { execute: typeof executeMock }) => Promise<unknown>) =>
-    await callback({ execute: executeMock }),
+  async (
+    runTransaction: (tx: { execute: typeof executeMock }) => Promise<unknown>,
+  ) => await runTransaction({ execute: executeMock }),
 );
 
 void mock.module("@/api/db/root", () => ({

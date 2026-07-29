@@ -1509,7 +1509,7 @@ export const upsertWorkspaceSearchDocument = async (
 };
 
 type SearchActivityDatabase = {
-  execute(query: SQL): Promise<unknown>;
+  execute: (query: SQL) => Promise<unknown>;
 };
 
 export const syncWorkspaceSearchActivity = async (
