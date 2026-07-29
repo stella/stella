@@ -400,6 +400,7 @@ const sqlScopeContextAfter = (
         context = {
           clause: "non-filtering",
           currentJoinIsOuter: context.currentJoinIsOuter,
+          hasNonConjunctiveFilter: context.hasNonConjunctiveFilter,
           pendingJoinIsOuter: true,
         };
         break;
@@ -408,6 +409,7 @@ const sqlScopeContextAfter = (
         context = {
           clause: "non-filtering",
           currentJoinIsOuter: context.currentJoinIsOuter,
+          hasNonConjunctiveFilter: context.hasNonConjunctiveFilter,
           pendingJoinIsOuter: false,
         };
         break;
@@ -415,6 +417,7 @@ const sqlScopeContextAfter = (
         context = {
           clause: "non-filtering",
           currentJoinIsOuter: context.pendingJoinIsOuter,
+          hasNonConjunctiveFilter: context.hasNonConjunctiveFilter,
           pendingJoinIsOuter: false,
         };
         break;
