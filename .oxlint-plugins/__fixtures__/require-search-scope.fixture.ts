@@ -13,6 +13,7 @@ declare const organizationId: string;
 declare const pickFirst: (...values: unknown[]) => unknown;
 
 const opaqueFragment = <Value>({ fragment }: { fragment: Value }) => fragment;
+const drizzleSqlAlias = sql;
 
 const entityWorkspaceFilter = searchDocumentsAccessSql({});
 const privateSearchTable = searchDocuments;
@@ -134,6 +135,15 @@ const unsafeUnavailableCookedSql = sql`
   WHERE true \unicode ${entityWorkspaceFilter}
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a const alias of the approved SQL tag also fails closed
+const unsafeUnavailableCookedSqlAlias = drizzleSqlAlias`\unicode`;
+
+const nonSqlUnavailableCooked = String.raw`\unicode`;
+const nonSqlPrivateText = String.raw`SELECT * FROM search_documents sd`;
+const nonSqlNestedPrivateText = sql`
+  SELECT ${String.raw`FROM search_documents sd`}
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves block-comment interpolation cannot authorize a private read
 const unsafeBlockCommentScope = sql`
   SELECT * FROM search_documents sd /* ${entityWorkspaceFilter} */
@@ -149,6 +159,18 @@ const unsafeNestedBlockCommentScope = sql`
 const unsafeDollarQuotedScope = sql`
   SELECT * FROM search_documents sd
   WHERE $guard$${entityWorkspaceFilter}$guard$ <> ''
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves ordinary PostgreSQL strings do not backslash-escape their closing quote
+const unsafeOrdinaryBackslashQuote = sql`
+  SELECT '\\' AS slash
+  FROM search_documents sd
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL escape strings retain backslash-quote escaping
+const unsafeEscapeStringRead = sql`
+  SELECT E'masked \\' quote' AS note
+  FROM search_documents sd
 `;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL TABLE shorthand is also a protected read
@@ -361,6 +383,28 @@ const unsafeRootJoinedPrivateRead = sql.join([
   sql`SELECT * FROM search_`,
   sql`documents sd`,
 ]);
+
+const unsafeAppendRoot = sql`SELECT * FROM `;
+const unsafeAppendAlias = unsafeAppendRoot;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a const-aliased SQL append cannot hide a private projection
+const unsafeAppendedPrivateRead = unsafeAppendAlias.append(
+  sql`search_documents sd`,
+);
+
+const separatedAppendPrivateRead = sql``;
+separatedAppendPrivateRead.append(sql`SELECT * FROM `);
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture conservatively rejects a protected relation split across separate mutations
+separatedAppendPrivateRead.append(sql`search_documents sd`);
+
+const unrelatedAppender = {
+  append(fragment: unknown) {
+    return fragment;
+  },
+};
+const unrelatedAppendControl = unrelatedAppender.append(
+  sql`search_documents sd`,
+);
 
 const unsafeOpaqueRootJoinedPrivateRead = sql.join([
   opaqueFragment({
@@ -1064,6 +1108,33 @@ const scopedRootJoinedPrivateRead = sql.join([
   entityWorkspaceFilter,
 ]);
 
+const scopedOrdinaryDoubledQuote = sql`
+  SELECT 'masked '' FROM search_documents sd' AS note
+  FROM search_documents sd
+  WHERE true ${entityWorkspaceFilter}
+`;
+
+const scopedEscapeStringRead = sql`
+  SELECT E'masked \\' FROM search_documents sd' AS note
+  FROM search_documents sd
+  WHERE true ${entityWorkspaceFilter}
+`;
+
+const scopedSplitEscapeStringRead = sql.join([
+  sql`SELECT E`,
+  sql`'masked \\' FROM search_documents sd' AS note
+      FROM search_documents sd
+      WHERE true `,
+  entityWorkspaceFilter,
+]);
+
+const scopedAppendedPrivateRead = sql`SELECT * FROM `
+  .append(sql`search_`)
+  .append(sql`documents sd WHERE true `)
+  .append(entityWorkspaceFilter);
+
+const publicAppendedRead = sql`SELECT * FROM `.append(sql`entities e`);
+
 const scopedEscapedKeyword = sql`
   SELECT * FROM search_documents sd
   WHERE tr\x75e ${entityWorkspaceFilter}
@@ -1195,9 +1266,12 @@ void [
   unsafeLineCommentScope,
   unsafeEscapedLineCommentScope,
   unsafeUnavailableCookedSql,
+  unsafeUnavailableCookedSqlAlias,
   unsafeBlockCommentScope,
   unsafeNestedBlockCommentScope,
   unsafeDollarQuotedScope,
+  unsafeOrdinaryBackslashQuote,
+  unsafeEscapeStringRead,
   unsafeTableRead,
   unsafeOnlyEntity,
   unsafeQualifiedOnlyEntity,
@@ -1224,6 +1298,8 @@ void [
   unsafeSplitJoinedPrivateFragment,
   unsafeJoinedMultiBranch,
   unsafeRootJoinedPrivateRead,
+  unsafeAppendedPrivateRead,
+  separatedAppendPrivateRead,
   unsafeOpaqueRootJoinedPrivateRead,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
@@ -1332,6 +1408,11 @@ void [
   scopedJoinedMultiBranch,
   scopedRawJoinedMultiBranch,
   scopedRootJoinedPrivateRead,
+  scopedOrdinaryDoubledQuote,
+  scopedEscapeStringRead,
+  scopedSplitEscapeStringRead,
+  scopedAppendedPrivateRead,
+  publicAppendedRead,
   scopedEscapedKeyword,
   scopedEscapedCommentMarkerString,
   scopedInterpolatedRootJoinedPrivateRead,
@@ -1350,5 +1431,9 @@ void [
   writeOnlyDeleteEntityProjection,
   writeOnlyInterpolatedDeleteEntityProjection,
   writeOnlyMergeEntityProjection,
+  unrelatedAppendControl,
+  nonSqlUnavailableCooked,
+  nonSqlPrivateText,
+  nonSqlNestedPrivateText,
   publicCaseLaw,
 ];

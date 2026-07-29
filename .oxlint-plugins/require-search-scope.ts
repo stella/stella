@@ -233,6 +233,8 @@ const concatenateSqlTokenPaths = (
   ];
 };
 
+const SQL_READ_CAPABLE_ROOT = /\b(?:delete|merge|select|table|update)\b/iu;
+
 const SQL_ALIAS_STOP_WORDS = new Set([
   "cross",
   "except",
@@ -427,11 +429,22 @@ type SqlLexState =
   | { type: "block-comment"; depth: number }
   | { type: "dollar-quote"; delimiter: string }
   | { type: "double-quote" }
+  | { type: "escape-string" }
   | { type: "line-comment" }
   | { type: "normal" }
   | { type: "single-quote" };
 
 const DOLLAR_QUOTE_START = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/u;
+const SQL_IDENTIFIER_CONTINUATION = /[A-Za-z0-9_$]/u;
+
+const startsPostgresEscapeString = (text: string, index: number): boolean => {
+  const prefix = text[index];
+  if ((prefix !== "E" && prefix !== "e") || text[index + 1] !== "'") {
+    return false;
+  }
+  const previous = text[index - 1];
+  return previous === undefined || !SQL_IDENTIFIER_CONTINUATION.test(previous);
+};
 
 const sqlLexStateAfter = (
   text: string,
@@ -448,6 +461,9 @@ const sqlLexStateAfter = (
           index += 1;
         } else if (char === "/" && next === "*") {
           state = { type: "block-comment", depth: 1 };
+          index += 1;
+        } else if (startsPostgresEscapeString(text, index)) {
+          state = { type: "escape-string" };
           index += 1;
         } else if (char === "'") {
           state = { type: "single-quote" };
@@ -479,6 +495,13 @@ const sqlLexStateAfter = (
         }
         break;
       case "single-quote":
+        if (char === "'" && next === "'") {
+          index += 1;
+        } else if (char === "'") {
+          state = { type: "normal" };
+        }
+        break;
+      case "escape-string":
         if (char === "\\" && next !== undefined) {
           index += 1;
         } else if (char === "'" && next === "'") {
@@ -488,9 +511,7 @@ const sqlLexStateAfter = (
         }
         break;
       case "double-quote":
-        if (char === "\\" && next !== undefined) {
-          index += 1;
-        } else if (char === '"' && next === '"') {
+        if (char === '"' && next === '"') {
           index += 1;
         } else if (char === '"') {
           state = { type: "normal" };
@@ -526,6 +547,10 @@ const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
         } else if (char === "/" && next === "*") {
           structuralText += "  ";
           state = { type: "block-comment", depth: 1 };
+          index += 1;
+        } else if (startsPostgresEscapeString(text, index)) {
+          structuralText += "  ";
+          state = { type: "escape-string" };
           index += 1;
         } else if (char === "'") {
           structuralText += " ";
@@ -569,6 +594,15 @@ const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
         break;
       case "single-quote":
         structuralText += " ";
+        if (char === "'" && next === "'") {
+          structuralText += " ";
+          index += 1;
+        } else if (char === "'") {
+          state = { type: "normal" };
+        }
+        break;
+      case "escape-string":
+        structuralText += " ";
         if (char === "\\" && next !== undefined) {
           structuralText += " ";
           index += 1;
@@ -581,10 +615,7 @@ const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
         break;
       case "double-quote":
         structuralText += char;
-        if (char === "\\" && next !== undefined) {
-          structuralText += next;
-          index += 1;
-        } else if (char === '"' && next === '"') {
+        if (char === '"' && next === '"') {
           structuralText += next;
           index += 1;
         } else if (char === '"') {
@@ -1211,6 +1242,42 @@ export default {
           );
         };
 
+        type SqlAppendCallParts = {
+          fragment: unknown;
+          receiver: unknown;
+        };
+
+        const sqlAppendCallParts = (
+          expression: unknown,
+        ): SqlAppendCallParts | null => {
+          const unwrapped = unwrapExpression(expression);
+          if (
+            !isAstNode(unwrapped) ||
+            unwrapped.type !== "CallExpression" ||
+            !Array.isArray(unwrapped.arguments) ||
+            unwrapped.arguments.length !== 1 ||
+            !isAstNode(unwrapped.callee) ||
+            unwrapped.callee.type !== "MemberExpression"
+          ) {
+            return null;
+          }
+          const property = unwrapped.callee.property;
+          const isAppend =
+            (isIdentifier(property) &&
+              unwrapped.callee.computed !== true &&
+              property.name === "append") ||
+            (unwrapped.callee.computed === true &&
+              isStringLiteral(property) &&
+              property.value === "append");
+          if (!isAppend) {
+            return null;
+          }
+          const fragment = unwrapped.arguments.at(0);
+          return fragment === undefined
+            ? null
+            : { fragment, receiver: unwrapped.callee.object };
+        };
+
         const isApprovedScopeCall = (
           expression: unknown,
           approvedImports: readonly ApprovedImport[],
@@ -1484,6 +1551,16 @@ export default {
 
         const resolveConstInitializer = (expression: unknown): unknown =>
           resolveStaticConstValue(expression, new Set());
+
+        const isApprovedSqlTaggedTemplate = (node: AstNode): boolean => {
+          if (node.type !== "TaggedTemplateExpression") {
+            return false;
+          }
+          const tag = resolveConstInitializer(node.tag);
+          return (
+            isIdentifier(tag) && isApprovedImport(tag, DRIZZLE_SQL_IMPORTS)
+          );
+        };
 
         const FUNCTION_NODE_TYPES = new Set([
           "ArrowFunctionExpression",
@@ -1840,7 +1917,9 @@ export default {
             return null;
           }
           if (resolved.type === "TaggedTemplateExpression") {
-            return flattenSqlTemplate(resolved, ancestors, parameterBindings);
+            return isApprovedSqlTaggedTemplate(resolved)
+              ? flattenSqlTemplate(resolved, ancestors, parameterBindings)
+              : null;
           }
           if (resolved.type === "SpreadElement") {
             return flattenSqlExpression(
@@ -1921,6 +2000,27 @@ export default {
                 separatorPaths,
                 textBoundary: "exact",
               });
+            }
+            const appendParts = sqlAppendCallParts(resolved);
+            if (appendParts !== null) {
+              const receiverPaths = flattenSqlExpression(
+                appendParts.receiver,
+                nextAncestors,
+                parameterBindings,
+              );
+              if (receiverPaths !== null) {
+                const fragmentPaths =
+                  flattenSqlExpression(
+                    appendParts.fragment,
+                    nextAncestors,
+                    parameterBindings,
+                  ) ?? expressionTokenPaths(appendParts.fragment);
+                return receiverPaths.flatMap((receiverPath) =>
+                  fragmentPaths.map((fragmentPath) =>
+                    concatenateSqlTokenPaths(receiverPath, fragmentPath),
+                  ),
+                );
+              }
             }
             const localHelpers = resolveLocalSqlHelpers(
               resolved,
@@ -2073,6 +2173,25 @@ export default {
           return hasSqlStructure ? paths : null;
         };
 
+        const sqlAppendInspectionPaths = (
+          tokenPaths: readonly SqlTemplateToken[][],
+        ): SqlTemplateToken[][] =>
+          tokenPaths.map((tokenPath) => {
+            const text = tokenPath
+              .filter(
+                (token): token is Extract<SqlTemplateToken, { type: "text" }> =>
+                  token.type === "text",
+              )
+              .map((token) => token.value)
+              .join(" ");
+            return SQL_READ_CAPABLE_ROOT.test(text)
+              ? [...tokenPath]
+              : concatenateSqlTokenPaths(
+                  [{ type: "text", value: "SELECT * FROM " }],
+                  tokenPath,
+                );
+          });
+
         const inspectSqlTokenPaths = (
           node: AstNode,
           tokenPaths: SqlTemplateToken[][],
@@ -2086,7 +2205,7 @@ export default {
             )
             .map((token) => token.value)
             .join(" ");
-          if (!/\b(?:delete|merge|select|table|update)\b/iu.test(text)) {
+          if (!SQL_READ_CAPABLE_ROOT.test(text)) {
             return;
           }
 
@@ -2312,9 +2431,25 @@ export default {
           return false;
         };
 
+        const hasEnclosingSqlAppend = (node: AstNode): boolean => {
+          const member = isAstNode(node.parent) ? node.parent : null;
+          if (member?.type !== "MemberExpression" || member.object !== node) {
+            return false;
+          }
+          const call = isAstNode(member.parent) ? member.parent : null;
+          return (
+            call?.type === "CallExpression" &&
+            call.callee === member &&
+            sqlAppendCallParts(call) !== null
+          );
+        };
+
         return {
           TaggedTemplateExpression(node: unknown) {
             if (!isAstNode(node)) {
+              return;
+            }
+            if (!isApprovedSqlTaggedTemplate(node)) {
               return;
             }
             const tokenPaths = flattenSqlTemplate(node);
@@ -2332,6 +2467,27 @@ export default {
           },
           CallExpression(node: unknown) {
             if (!isAstNode(node)) {
+              return;
+            }
+            const appendParts = sqlAppendCallParts(node);
+            if (appendParts !== null) {
+              if (hasEnclosingSqlAppend(node)) {
+                return;
+              }
+              const receiverPaths = flattenSqlExpression(
+                appendParts.receiver,
+                new Set(),
+              );
+              if (receiverPaths === null) {
+                return;
+              }
+              const tokenPaths = flattenSqlExpression(node, new Set());
+              if (tokenPaths !== null) {
+                inspectSqlTokenPaths(
+                  node,
+                  sqlAppendInspectionPaths(tokenPaths),
+                );
+              }
               return;
             }
             if (isSqlMethodCall(node, "raw")) {
