@@ -1,5 +1,5 @@
 diff --git a/dist/esm/tools/tool-converter.js b/dist/esm/tools/tool-converter.js
-index c595d3f078f0ac3fe43299718b260e7de3208c08..6ea7f7e1e7ab8b9167cae5b1db2fbab711852ce6 100644
+index c595d3f..6ea7f7e 100644
 --- a/dist/esm/tools/tool-converter.js
 +++ b/dist/esm/tools/tool-converter.js
 @@ -6,6 +6,10 @@ import { convertMemoryToolToAdapterFormat } from "./memory-tool.js";
