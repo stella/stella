@@ -6,7 +6,9 @@ import {
   getSearchPreviewDate,
   getSearchPreviewTarget,
   normalizeSearchQuery,
+  selectAuthorizedSearchPreviewData,
   selectSearchPreviewHit,
+  shouldShowSearchPreview,
 } from "@/lib/search.logic";
 
 process.env["VITE_API_URL"] ??= "http://localhost:3001";
@@ -152,6 +154,52 @@ describe("search preview targets", () => {
 
     expect(options.refetchOnMount).toBe("always");
     expect(options.staleTime).toBe(0);
+  });
+
+  test("shows the preview only when enabled on a non-mobile viewport", () => {
+    for (const testCase of [
+      { expected: true, isMobile: false, previewEnabled: true },
+      { expected: false, isMobile: true, previewEnabled: true },
+      { expected: false, isMobile: false, previewEnabled: false },
+      { expected: false, isMobile: true, previewEnabled: false },
+    ]) {
+      expect(shouldShowSearchPreview(testCase)).toBe(testCase.expected);
+    }
+  });
+
+  test("retains authorized data during background refetches", () => {
+    const data = { content: "Privileged preview" };
+
+    expect(
+      selectAuthorizedSearchPreviewData({
+        data,
+        isError: false,
+        isFetchedAfterMount: true,
+        isFetching: true,
+      }),
+    ).toBe(data);
+  });
+
+  test("withholds cached data until mount reauthorization succeeds", () => {
+    expect(
+      selectAuthorizedSearchPreviewData({
+        data: { content: "Cached preview" },
+        isError: false,
+        isFetchedAfterMount: false,
+        isFetching: true,
+      }),
+    ).toBeUndefined();
+  });
+
+  test("withholds stale data after a preview authorization error", () => {
+    expect(
+      selectAuthorizedSearchPreviewData({
+        data: { content: "Previously authorized preview" },
+        isError: true,
+        isFetchedAfterMount: true,
+        isFetching: false,
+      }),
+    ).toBeUndefined();
   });
 
   test("withholds previews while hits belong to the previous query", () => {

@@ -2,6 +2,30 @@ import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
 
 export const normalizeSearchQuery = (query: string): string => query.trim();
 
+type SearchPreviewVisibilityArgs = {
+  isMobile: boolean;
+  previewEnabled: boolean;
+};
+
+export const shouldShowSearchPreview = ({
+  isMobile,
+  previewEnabled,
+}: SearchPreviewVisibilityArgs): boolean => previewEnabled && !isMobile;
+
+type AuthorizedSearchPreviewDataArgs<T> = {
+  data: T | undefined;
+  isError: boolean;
+  isFetchedAfterMount: boolean;
+  isFetching: boolean;
+};
+
+export const selectAuthorizedSearchPreviewData = <T>({
+  data,
+  isError,
+  isFetchedAfterMount,
+}: AuthorizedSearchPreviewDataArgs<T>): T | undefined =>
+  isFetchedAfterMount && !isError ? data : undefined;
+
 type SelectSearchPreviewHitArgs = {
   highlightedHitId: string | null;
   hits: readonly GlobalSearchHit[];

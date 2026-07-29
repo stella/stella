@@ -113,7 +113,9 @@ import {
   getSearchPreviewDate,
   getSearchPreviewTarget,
   normalizeSearchQuery,
+  selectAuthorizedSearchPreviewData,
   selectSearchPreviewHit,
+  shouldShowSearchPreview,
 } from "@/lib/search.logic";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
@@ -426,7 +428,7 @@ export const SearchDialog = ({
     hits: allHits,
     isPlaceholderData,
   });
-  const showPreview = previewEnabled && !isMobile;
+  const showPreview = shouldShowSearchPreview({ isMobile, previewEnabled });
 
   // Counts and facets are computed only on the first page (see backend);
   // ignore them entirely while the query is empty so a cleared input
@@ -924,7 +926,7 @@ export const SearchDialog = ({
       <CommandDialogPopup
         className={cn(
           "flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-hidden sm:h-[min(720px,calc(100dvh-96px))]",
-          previewEnabled
+          showPreview
             ? "sm:w-[min(1120px,calc(100vw-32px))] xl:w-[min(1280px,calc(100vw-48px))]"
             : "sm:w-[min(960px,calc(100vw-32px))]",
         )}
@@ -1402,8 +1404,12 @@ const SearchPreviewContent = ({
       userId,
     }),
   );
-  const authorizedData =
-    isFetchedAfterMount && !isError && !isFetching ? data : undefined;
+  const authorizedData = selectAuthorizedSearchPreviewData({
+    data,
+    isError,
+    isFetchedAfterMount,
+    isFetching,
+  });
   const location =
     hit.type === "contact" || hit.type === "case-law"
       ? null
