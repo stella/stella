@@ -21,9 +21,9 @@
  * objects remain.
  */
 import { Result, panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import type {
   PendingUploadFinalizedResult,
   PendingUploadPurposeData,
@@ -48,12 +48,12 @@ import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { isEncryptedPdf } from "@/api/handlers/files/pdf-utils";
 import { createFileKey } from "@/api/handlers/files/utils";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { allocateEntityStamps } from "@/api/lib/document-counter";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
@@ -85,6 +85,8 @@ const FALLBACK_ATTACHMENT_NAME = "attachment";
 
 /** Fallback message-entity name when the email has no subject. */
 const NO_SUBJECT_NAME = "(No subject)";
+
+const ATTACHMENT_ENTITY_KIND = "document" as const;
 
 type EmailIngestPurposeData = Extract<
   PendingUploadPurposeData,
@@ -129,6 +131,16 @@ type AcceptedAttachment = {
 
 type SkippedAttachment = { name: string; reason: string };
 
+type MaterializedAttachment =
+  | { attachment: AcceptedAttachment; type: "accepted" }
+  | { skipped: SkippedAttachment; type: "skipped" }
+  | {
+      error: unknown;
+      finalKey: string;
+      mimeType: string;
+      type: "write-failed";
+    };
+
 /** One derivative/extraction kickoff issued after the ingest commits. */
 type DerivativeKickoff = {
   entityId: SafeId<"entity">;
@@ -166,6 +178,103 @@ const toArrayBuffer = (view: Uint8Array): ArrayBuffer => {
   const copy = new ArrayBuffer(view.byteLength);
   new Uint8Array(copy).set(view);
   return copy;
+};
+
+type MaterializeAttachmentOptions = {
+  attachment: EmailAttachment;
+  messageEntityId: SafeId<"entity">;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const materializeAttachment = async ({
+  attachment,
+  messageEntityId,
+  organizationId,
+  workspaceId,
+}: MaterializeAttachmentOptions): Promise<MaterializedAttachment> => {
+  const fileName = attachmentFileName(attachment);
+  const mimeType = attachmentMimeType(attachment);
+  const buffer = attachment.bytes;
+
+  const scanResult = await scanFile({
+    buffer,
+    declaredMimeType: mimeType,
+    fileName,
+  });
+  if (Result.isError(scanResult)) {
+    captureError(scanResult.error, { messageEntityId, mimeType });
+    return {
+      skipped: { name: fileName, reason: "scan-error" },
+      type: "skipped",
+    };
+  }
+  if (scanResult.value.verdict === "reject") {
+    const reason = scanResult.value.findings
+      .filter((finding) => finding.severity === "reject")
+      .map((finding) => finding.message)
+      .join("; ");
+    return {
+      skipped: { name: fileName, reason: reason || "scan-rejected" },
+      type: "skipped",
+    };
+  }
+  const scanWarnings =
+    scanResult.value.verdict === "warn"
+      ? scanResult.value.findings
+          .filter((finding) => finding.severity === "warn")
+          .map((finding) => finding.message)
+      : undefined;
+
+  let encrypted = false;
+  if (mimeType === PDF_MIME_TYPE) {
+    const encryptedResult = await isEncryptedPdf(toArrayBuffer(buffer));
+    if (Result.isError(encryptedResult)) {
+      captureError(encryptedResult.error, { messageEntityId, mimeType });
+      return {
+        skipped: { name: fileName, reason: "pdf-open-failed" },
+        type: "skipped",
+      };
+    }
+    encrypted = encryptedResult.value;
+  }
+
+  const fileId = allocateFileObject();
+  const finalKey = createFileKey({
+    organizationId,
+    workspaceId,
+    fileId,
+    mimeType,
+  });
+  const sha256Hex = new Bun.CryptoHasher("sha256").update(buffer).digest("hex");
+  const writeResult = await Result.tryPromise(
+    async () => await getS3().write(finalKey, buffer),
+  );
+  if (Result.isError(writeResult)) {
+    return {
+      error: writeResult.error,
+      finalKey,
+      mimeType,
+      type: "write-failed",
+    };
+  }
+
+  return {
+    attachment: {
+      entityId: createSafeId<"entity">(),
+      entityVersionId: createSafeId<"entityVersion">(),
+      fieldId: createSafeId<"field">(),
+      fileId,
+      finalKey,
+      fileName,
+      mimeType,
+      sizeBytes: buffer.byteLength,
+      sha256Hex,
+      encrypted,
+      scanWarnings,
+    },
+    type: "accepted",
+  };
 };
 
 /**
@@ -245,13 +354,16 @@ export const finalizeEmailIngest = async function* ({
   const writtenKeys: string[] = [messageFinalKey];
 
   const cleanupFinalObjects = async (stage: string) => {
-    for (const key of writtenKeys) {
-      await getS3()
-        .delete(key)
-        .catch((deleteError: unknown) =>
-          captureError(deleteError, { key, stage, messageEntityId }),
-        );
-    }
+    await Promise.all(
+      writtenKeys.map(
+        async (key) =>
+          await getS3()
+            .delete(key)
+            .catch((deleteError: unknown) =>
+              captureError(deleteError, { key, stage, messageEntityId }),
+            ),
+      ),
+    );
   };
 
   const promoteResult = await promoteTmpObject(messageFinalKey);
@@ -264,89 +376,43 @@ export const finalizeEmailIngest = async function* ({
   // a reason) and never abort the ingest. Accepted bytes are written to
   // their final key here because server-extracted attachments have no
   // tmp object to promote.
-  const accepted: AcceptedAttachment[] = [];
-  const skipped: SkippedAttachment[] = [];
+  const materialized = await Promise.all(
+    parsed.attachments.slice(0, MAX_EMAIL_ATTACHMENTS).map(
+      async (attachment) =>
+        await materializeAttachment({
+          attachment,
+          messageEntityId,
+          organizationId,
+          workspaceId,
+        }),
+    ),
+  );
+  const accepted = materialized
+    .filter((result) => result.type === "accepted")
+    .map(({ attachment }) => attachment);
+  const skipped = materialized
+    .filter((result) => result.type === "skipped")
+    .map(({ skipped: skippedAttachment }) => skippedAttachment);
+  const writeFailures = materialized.filter(
+    (result) => result.type === "write-failed",
+  );
+  writtenKeys.push(
+    ...accepted.map((attachment) => attachment.finalKey),
+    ...writeFailures.map((failure) => failure.finalKey),
+  );
 
-  for (const attachment of parsed.attachments.slice(0, MAX_EMAIL_ATTACHMENTS)) {
-    const fileName = attachmentFileName(attachment);
-    const mimeType = attachmentMimeType(attachment);
-    const buffer = attachment.bytes;
-
-    const scanResult = await scanFile({
-      buffer,
-      declaredMimeType: mimeType,
-      fileName,
-    });
-    if (Result.isError(scanResult)) {
-      skipped.push({ name: fileName, reason: "scan-error" });
-      captureError(scanResult.error, { messageEntityId, mimeType });
-      continue;
-    }
-    if (scanResult.value.verdict === "reject") {
-      const reason = scanResult.value.findings
-        .filter((finding) => finding.severity === "reject")
-        .map((finding) => finding.message)
-        .join("; ");
-      skipped.push({ name: fileName, reason: reason || "scan-rejected" });
-      continue;
-    }
-    const attachmentScanWarnings =
-      scanResult.value.verdict === "warn"
-        ? scanResult.value.findings
-            .filter((finding) => finding.severity === "warn")
-            .map((finding) => finding.message)
-        : undefined;
-
-    let encrypted = false;
-    if (mimeType === PDF_MIME_TYPE) {
-      const encryptedResult = await isEncryptedPdf(toArrayBuffer(buffer));
-      if (Result.isError(encryptedResult)) {
-        skipped.push({ name: fileName, reason: "pdf-open-failed" });
-        captureError(encryptedResult.error, { messageEntityId, mimeType });
-        continue;
-      }
-      encrypted = encryptedResult.value;
-    }
-
-    const fileId = allocateFileObject();
-    const finalKey = createFileKey({
-      organizationId,
-      workspaceId,
-      fileId,
-      mimeType,
-    });
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(buffer)
-      .digest("hex");
-
-    const writeResult = await Result.tryPromise(
-      async () => await getS3().write(finalKey, buffer),
-    );
-    if (Result.isError(writeResult)) {
-      // We could not stage the attachment; treat as a hard failure so
-      // we do not leave a partial ingest behind.
-      captureError(writeResult.error, { messageEntityId, mimeType });
-      await cleanupFinalObjects("attachment-write-failed");
-      return finalizeErr({
-        status: 500,
-        message: "Failed to store an email attachment",
-        rejectReason: "attachment-write-failed",
+  if (writeFailures.length > 0) {
+    for (const failure of writeFailures) {
+      captureError(failure.error, {
+        messageEntityId,
+        mimeType: failure.mimeType,
       });
     }
-    writtenKeys.push(finalKey);
-
-    accepted.push({
-      entityId: createSafeId<"entity">(),
-      entityVersionId: createSafeId<"entityVersion">(),
-      fieldId: createSafeId<"field">(),
-      fileId,
-      finalKey,
-      fileName,
-      mimeType,
-      sizeBytes: buffer.byteLength,
-      sha256Hex,
-      encrypted,
-      scanWarnings: attachmentScanWarnings,
+    await cleanupFinalObjects("attachment-write-failed");
+    return finalizeErr({
+      status: 500,
+      message: "Failed to store an email attachment",
+      rejectReason: "attachment-write-failed",
     });
   }
 
@@ -406,7 +472,22 @@ export const finalizeEmailIngest = async function* ({
       parentId,
       name: messageName,
     });
-    const messageStamp = await allocateEntityStamp(tx, workspaceId);
+    const stamps = await allocateEntityStamps(
+      tx,
+      workspaceId,
+      accepted.length + 1,
+    );
+    const messageStamp = stamps.at(0);
+    if (!messageStamp) {
+      panic("Email ingest stamp allocation returned no message stamp");
+    }
+    const attachmentRows = accepted.map((attachment, index) => {
+      const stamp = stamps.at(index + 1);
+      if (!stamp) {
+        panic("Email ingest stamp allocation returned too few stamps");
+      }
+      return { attachment, stamp };
+    });
 
     await tx.insert(entities).values({
       id: messageEntityId,
@@ -457,101 +538,123 @@ export const finalizeEmailIngest = async function* ({
       }),
     });
 
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-      resourceId: messageEntityId,
-      changes: {
-        created: {
-          old: null,
-          new: {
-            kind: "message",
-            fileName: renamed.value,
-            mimeType: declaredMime,
-            sizeBytes: declaredSize,
-            propertyId,
-            parentId,
-          },
-        },
-      },
-    });
-
-    // Attachment children hang off the message entity we just created.
-    // The message is a valid container, so children skip the
-    // folder-only parent check.
-    for (const attachment of accepted) {
-      const attachmentStamp = await allocateEntityStamp(tx, workspaceId);
-
-      await tx.insert(entities).values({
-        id: attachment.entityId,
-        workspaceId,
-        kind: "document",
-        parentId: messageEntityId,
-        name: attachment.fileName,
-        createdBy: userId,
-        docSequence: attachmentStamp.docSequence,
-      });
-      await tx.insert(entityVersions).values({
-        id: attachment.entityVersionId,
-        workspaceId,
-        entityId: attachment.entityId,
-        versionNumber: 1,
-        stamp: attachmentStamp.stamp,
-        verificationCode: attachmentStamp.verificationCode,
-      });
-      await tx
-        .update(entities)
-        .set({ currentVersionId: attachment.entityVersionId })
-        .where(eq(entities.id, attachment.entityId));
-      await tx.insert(fields).values({
-        id: attachment.fieldId,
-        workspaceId,
-        propertyId,
-        entityVersionId: attachment.entityVersionId,
-        content: fileContentWithMintedObject({
-          type: "file",
-          version: 1,
-          id: attachment.fileId,
-          fileName: attachment.fileName,
-          mimeType: attachment.mimeType,
-          sizeBytes: attachment.sizeBytes,
-          encrypted: attachment.encrypted,
-          sha256Hex: attachment.sha256Hex,
-          pdfFileId: null,
-          pdfDerivative: pdfDerivativeStateForFile({
-            encrypted: attachment.encrypted,
-            mimeType: attachment.mimeType,
-          }),
-          thumbnailFileId: null,
-          thumbnailDerivative: thumbnailDerivativeStateForFile({
-            encrypted: attachment.encrypted,
-            mimeType: attachment.mimeType,
-          }),
-          ...(attachment.scanWarnings !== undefined && {
-            scanWarnings: attachment.scanWarnings,
-          }),
-        }),
-      });
-
-      await recordAuditEvent(tx, {
+    const auditEvents: AuditEvent[] = [
+      {
         action: AUDIT_ACTION.CREATE,
         resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: attachment.entityId,
+        resourceId: messageEntityId,
         changes: {
           created: {
             old: null,
             new: {
-              kind: "document",
-              fileName: attachment.fileName,
-              mimeType: attachment.mimeType,
-              sizeBytes: attachment.sizeBytes,
+              kind: "message",
+              fileName: renamed.value,
+              mimeType: declaredMime,
+              sizeBytes: declaredSize,
               propertyId,
-              parentId: messageEntityId,
+              parentId,
             },
           },
         },
-      });
+      },
+    ];
+
+    // Attachment children hang off the message entity we just created.
+    // The message is a valid container, so children skip the
+    // folder-only parent check.
+    if (attachmentRows.length > 0) {
+      await tx.insert(entities).values(
+        attachmentRows.map(({ attachment, stamp }) => ({
+          id: attachment.entityId,
+          workspaceId,
+          kind: ATTACHMENT_ENTITY_KIND,
+          parentId: messageEntityId,
+          name: attachment.fileName,
+          createdBy: userId,
+          docSequence: stamp.docSequence,
+        })),
+      );
+      await tx.insert(entityVersions).values(
+        attachmentRows.map(({ attachment, stamp }) => ({
+          id: attachment.entityVersionId,
+          workspaceId,
+          entityId: attachment.entityId,
+          versionNumber: 1,
+          stamp: stamp.stamp,
+          verificationCode: stamp.verificationCode,
+        })),
+      );
+      const currentVersionCases = attachmentRows.map(
+        ({ attachment }) =>
+          sql`when ${attachment.entityId} then ${attachment.entityVersionId}`,
+      );
+      await tx
+        .update(entities)
+        .set({
+          currentVersionId: sql`case ${entities.id} ${sql.join(currentVersionCases, sql` `)} else ${entities.currentVersionId} end`,
+        })
+        .where(
+          inArray(
+            entities.id,
+            attachmentRows.map(({ attachment }) => attachment.entityId),
+          ),
+        );
+      await tx.insert(fields).values(
+        attachmentRows.map(({ attachment }) => ({
+          id: attachment.fieldId,
+          workspaceId,
+          propertyId,
+          entityVersionId: attachment.entityVersionId,
+          content: fileContentWithMintedObject({
+            type: "file",
+            version: 1,
+            id: attachment.fileId,
+            fileName: attachment.fileName,
+            mimeType: attachment.mimeType,
+            sizeBytes: attachment.sizeBytes,
+            encrypted: attachment.encrypted,
+            sha256Hex: attachment.sha256Hex,
+            pdfFileId: null,
+            pdfDerivative: pdfDerivativeStateForFile({
+              encrypted: attachment.encrypted,
+              mimeType: attachment.mimeType,
+            }),
+            thumbnailFileId: null,
+            thumbnailDerivative: thumbnailDerivativeStateForFile({
+              encrypted: attachment.encrypted,
+              mimeType: attachment.mimeType,
+            }),
+            ...(attachment.scanWarnings !== undefined && {
+              scanWarnings: attachment.scanWarnings,
+            }),
+          }),
+        })),
+      );
+
+      auditEvents.push(
+        ...attachmentRows.map(
+          ({ attachment }): AuditEvent => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: attachment.entityId,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  kind: "document",
+                  fileName: attachment.fileName,
+                  mimeType: attachment.mimeType,
+                  sizeBytes: attachment.sizeBytes,
+                  propertyId,
+                  parentId: messageEntityId,
+                },
+              },
+            },
+          }),
+        ),
+      );
     }
+    await recordAuditEvent(tx, auditEvents);
 
     await tx
       .update(workspaces)

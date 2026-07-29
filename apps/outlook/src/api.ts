@@ -2,8 +2,8 @@ import type { SafeId } from "@stll/api/types";
 import { toSafeId } from "@stll/api/types";
 
 import { api, withTimeout } from "@/lib/api";
+import { APIError, toAPIError } from "@/lib/api-error";
 import { buildEmlFile } from "@/lib/eml";
-import { APIError, toAPIError } from "@/lib/errors";
 import type {
   AttachmentDownloadResult,
   MailSnapshot,
