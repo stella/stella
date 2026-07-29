@@ -56,6 +56,11 @@ import {
   cycleMadeProgress,
   cycleWasIdle,
 } from "./cycle-progress";
+import {
+  RECOMPUTE_OUTCOME,
+  type RecomputeOutcome,
+  nextRecomputeDelayMs,
+} from "./recompute-schedule";
 
 const formatLogDetail = (detail: unknown): string => {
   if (detail === undefined) {
@@ -186,10 +191,11 @@ const CORPUS_INDEX_INTERVAL_MS = 15_000;
 // quickly after boot from adding a whole-corpus recompute to every start.
 const CITATION_AUTHORITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const CITATION_AUTHORITY_STARTUP_DELAY_MS = 5 * 60 * 1000;
-// After a skipped (lock held elsewhere) or failed recompute, retry on a
-// short delay instead of waiting a full interval: the holder may have
-// exited before committing, and its replacement should not inherit a
-// six-hour gap.
+// After a skipped recompute (lock held elsewhere), retry on a short delay
+// instead of waiting a full interval: the holder may have exited before
+// committing, and its replacement should not inherit a six-hour gap. A
+// failed recompute starts here too but backs off from it; see
+// `nextRecomputeDelayMs`.
 const CITATION_AUTHORITY_RETRY_DELAY_MS = 10 * 60 * 1000;
 
 // Idle backoff: once an adapter is caught up (no new decisions
@@ -1022,11 +1028,12 @@ export const runCaseLawIngest = async (
   // deployment) skip instead of queueing duplicate whole-corpus updates.
   const citationAuthorityLoop = (async () => {
     await Bun.sleep(CITATION_AUTHORITY_STARTUP_DELAY_MS);
+    let consecutiveFailures = 0;
     while (true) {
       if (isDraining()) {
         return;
       }
-      let recomputed = false;
+      let outcome: RecomputeOutcome = RECOMPUTE_OUTCOME.FAILED;
       try {
         // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
         const courtWeightEntries = await loadCourtWeightEntries();
@@ -1038,11 +1045,12 @@ export const runCaseLawIngest = async (
           return count;
         });
         if (updated === null) {
+          outcome = RECOMPUTE_OUTCOME.SKIPPED;
           logInfo(
             "[citation-authority] Skipped (recompute already running in another process)",
           );
         } else {
-          recomputed = true;
+          outcome = RECOMPUTE_OUTCOME.RECOMPUTED;
           logInfo(
             `[citation-authority] Recomputed (${updated} cited decisions)`,
           );
@@ -1057,11 +1065,16 @@ export const runCaseLawIngest = async (
           logError("[citation-authority] Recompute error:", error);
         }
       }
-      // oxlint-disable-next-line no-await-in-loop -- fixed-interval recompute poll; the loop must wait between recomputes, so this await is intentionally sequential
+      consecutiveFailures =
+        outcome === RECOMPUTE_OUTCOME.FAILED ? consecutiveFailures + 1 : 0;
+      // oxlint-disable-next-line no-await-in-loop -- scheduled recompute poll; the loop must wait between recomputes, so this await is intentionally sequential
       await Bun.sleep(
-        recomputed
-          ? CITATION_AUTHORITY_INTERVAL_MS
-          : CITATION_AUTHORITY_RETRY_DELAY_MS,
+        nextRecomputeDelayMs({
+          outcome,
+          consecutiveFailures,
+          retryDelayMs: CITATION_AUTHORITY_RETRY_DELAY_MS,
+          intervalMs: CITATION_AUTHORITY_INTERVAL_MS,
+        }),
       );
     }
   })();
