@@ -606,7 +606,7 @@ const parseItemWithDetail = async (
     item.referencedCourtCases,
     dumpItem.referencedCourtCases,
   )
-    ?.map((referenced) => referenced.caseNumber?.trim() ?? "")
+    .map((referenced) => referenced.caseNumber?.trim() ?? "")
     .filter((caseNo) => caseNo.length > 0);
 
   return {
