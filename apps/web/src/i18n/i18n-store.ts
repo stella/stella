@@ -550,12 +550,11 @@ const waitForHydration = async (): Promise<void> => {
     return;
   }
 
-  await new Promise<void>((resolve) => {
-    const unsubscribe = useI18nStore.persist.onFinishHydration(() => {
-      unsubscribe();
-      resolve();
-    });
-  });
+  // onFinishHydration only fires after successful persistence reads. Await an
+  // explicit attempt so malformed browser storage settles instead of blocking
+  // React hydration forever; the following loadMessages call persists a valid
+  // default state.
+  await useI18nStore.persist.rehydrate();
 };
 
 export const initializeI18n = async (): Promise<void> => {
