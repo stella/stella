@@ -123,6 +123,24 @@ const unsafeScopeInOrBranch = sql`
   WHERE true OR (false ${entityWorkspaceFilter})
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a postfix false test cannot invert an approved scope
+const unsafeScopeTestedAsFalse = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) IS FALSE
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a prefix false comparison cannot invert an approved scope
+const unsafeScopeComparedToFalse = sql`
+  SELECT * FROM search_documents sd
+  WHERE FALSE = (true ${entityWorkspaceFilter})
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a distinctness test cannot invert an approved scope
+const unsafeScopeDistinctFromTrue = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) IS DISTINCT FROM TRUE
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a nested query cannot authorize an outer private read through an alias shadow
 const unsafeScopeInNestedQuery = sql`
   SELECT sd.*
@@ -177,6 +195,11 @@ const scopedAfterDollarQuote = sql`
 const scopedParenthesizedFilter = sql`
   SELECT * FROM search_documents sd
   WHERE (true AND (${entityWorkspaceFilter}))
+`;
+
+const scopedTestedAsTrue = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) IS TRUE
 `;
 
 const scopedNestedPrivateRead = sql`
@@ -242,6 +265,9 @@ void [
   unsafeScopeInLaterStatement,
   unsafeScopeInOuterJoin,
   unsafeScopeInOrBranch,
+  unsafeScopeTestedAsFalse,
+  unsafeScopeComparedToFalse,
+  unsafeScopeDistinctFromTrue,
   unsafeScopeInNestedQuery,
   unsafeScopeInSiblingQuery,
   scopedEntity,
@@ -251,6 +277,7 @@ void [
   scopedAfterLineComment,
   scopedAfterDollarQuote,
   scopedParenthesizedFilter,
+  scopedTestedAsTrue,
   scopedNestedPrivateRead,
   scopedComposedRead,
   scopedMultiBranch,

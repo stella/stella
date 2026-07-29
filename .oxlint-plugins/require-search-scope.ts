@@ -490,8 +490,8 @@ type SqlClauseKeyword = (typeof SQL_CLAUSE_KEYWORDS)[number];
 const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
   SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
 
-const SQL_CLAUSE_KEYWORD =
-  /\b(?:cross|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
+const SQL_SCOPE_CONTEXT_TOKEN =
+  /\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:cross|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
 
 const sqlScopeContextAfter = (
   text: string,
@@ -501,21 +501,26 @@ const sqlScopeContextAfter = (
   let context = initialContext;
   let scanCursor = 0;
   let scanState = initialLexState;
-  for (const match of text.matchAll(SQL_CLAUSE_KEYWORD)) {
+  for (const match of text.matchAll(SQL_SCOPE_CONTEXT_TOKEN)) {
     const matchIndex = match.index;
-    const keyword = match.at(0)?.toLowerCase();
-    if (
-      matchIndex === undefined ||
-      keyword === undefined ||
-      !isSqlClauseKeyword(keyword)
-    ) {
+    const matchText = match.at(0)?.toLowerCase();
+    if (matchIndex === undefined || matchText === undefined) {
       continue;
     }
     scanState = sqlLexStateAfter(text.slice(scanCursor, matchIndex), scanState);
-    scanCursor = matchIndex + keyword.length;
+    scanCursor = matchIndex + matchText.length;
     if (scanState.type !== "normal") {
       continue;
     }
+    if (!isSqlClauseKeyword(matchText)) {
+      context = {
+        ...context,
+        hasNonConjunctiveFilter:
+          context.hasNonConjunctiveFilter || context.clause === "filtering",
+      };
+      continue;
+    }
+    const keyword = matchText;
     switch (keyword) {
       case "left":
       case "right":
