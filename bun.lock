@@ -723,8 +723,8 @@
     "@better-auth/api-key": "1.6.25",
     "@better-auth/oauth-provider": "1.6.25",
     "@libpdf/core": "0.4.1",
-    "@stll/anonymize-data": "0.0.6",
-    "@stll/anonymize-wasm": "2.3.0",
+    "@stll/anonymize-data": "0.0.9",
+    "@stll/anonymize-wasm": "2.7.3",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",
@@ -2044,9 +2044,9 @@
 
     "@stll/anonymize-chat": ["@stll/anonymize-chat@workspace:packages/anonymize-chat"],
 
-    "@stll/anonymize-data": ["@stll/anonymize-data@0.0.6", "", {}, "sha512-lyhYWgwDTeofwrvHSVfvqhJny/8Goss3IiA49+8+RyJmry4s9PnexkPDuLIrtOuJiUZhhxZW+HzL6wrcPRUE8Q=="],
+    "@stll/anonymize-data": ["@stll/anonymize-data@0.0.9", "", {}, "sha512-15frKBbGsM4RhWHqqbSOs11umcXzEtnYR+OH4j1xosMh3HfrvIrqkJSk57HKyu2YgFr8LWYQ5d4dCQoU5Eu/Sg=="],
 
-    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@2.3.0", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.6" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-wu5JDDqCCrju/owkG+fzvEy4qFqOQmTrAWOLOCMdf6uSqPFBcqAqwzgoJYWdSp/YyLSepVwSI/pOKH9enPTMyQ=="],
+    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@2.7.3", "", { "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-Tq3EyM1nOAsw9HJpaaOCA+ZLJ3n9rVbMMkhcxYq4bGNZItpIQu01GsGCprDqvcfs0TFNUzB5hUMN6jUnMj/T0Q=="],
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
 
