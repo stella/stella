@@ -120,7 +120,10 @@ describe("extractCitations", () => {
     ).toHaveLength(0);
   });
 
-  test("dedupes a CJEU number written with spaced and unspaced hyphens", () => {
+  test("extracts CJEU numbers written with unspaced and spaced hyphens", () => {
+    // Three distinct case numbers, each with a different real-world hyphen
+    // spacing; this proves extraction of every spacing variant, not
+    // dedup (see the next test for that).
     const text =
       "rozsudky Súdneho dvora Európskej únie C-679/18, tiež C-449/13, " +
       "C- 303/20";
@@ -130,6 +133,19 @@ describe("extractCitations", () => {
     expect(texts).toContain("C-679/18");
     expect(texts).toContain("C-449/13");
     expect(texts).toContain("C- 303/20");
+  });
+
+  test("dedupes a CJEU number cited with an unspaced and a spaced hyphen", () => {
+    // The same case, "C-679/18", is cited once with the plain hyphen and
+    // once with the OCR-noisy spaced hyphen; the dedup key must collapse
+    // the whitespace around the hyphen so both resolve to one citation.
+    const citations = extractCitations([
+      {
+        index: 0,
+        text: "rozsudok C-679/18 a znovu rozsudok C- 679/18 v odôvodnení",
+      },
+    ]);
+    expect(citations).toHaveLength(1);
   });
 
   test("does not re-extract a bare CJEU number after a spaced hyphen prefix", () => {
@@ -159,10 +175,11 @@ describe("extractCitations", () => {
     expect(texts).toHaveLength(2);
   });
 
-  test("extracts a letter-first registry with a trailing dot", () => {
-    // Verbatim: "sp. zn. Spr. 2158/03" is the court-administration
-    // agenda (správa súdu), not adjudication — deliberately excluded
-    // even though it wears the sp. zn. prefix.
+  test("excludes the Spr court-administration agenda alongside an ordinary letter-first registry", () => {
+    // Verbatim: "sp. zn. Spr. 2158/03" is the court-administration agenda
+    // (správa súdu), not adjudication (deliberately excluded, even though
+    // it wears the sp. zn. prefix), while an ordinary letter-first
+    // registry in the same text ("Nt 408/2023") is still extracted.
     const text =
       "odpoveď okresného súdu sp. zn. Spr. 2158/03 z 31. júla 2003 na " +
       "jej sťažnosť, viz sp. zn. Nt 408/2023";
@@ -170,6 +187,16 @@ describe("extractCitations", () => {
       (c) => c.citationText,
     );
     expect(texts).toEqual(["sp. zn. Nt 408/2023"]);
+  });
+
+  test("excludes the Spr court-administration agenda regardless of casing", () => {
+    // The Spr exclusion guard must be case-insensitive: "SPR." and
+    // "spr." are both real registrar spellings and must escape a
+    // case-sensitive literal exclusion just as much as "Spr." does.
+    const upper = "sp. zn. SPR. 2158/03 nie je citáciou judikatúry";
+    const lower = "sp. zn. spr. 2158/03 nie je citáciou judikatúry";
+    expect(extractCitations([{ index: 0, text: upper }])).toHaveLength(0);
+    expect(extractCitations([{ index: 0, text: lower }])).toHaveLength(0);
   });
 
   test("extracts č. j. with the senate number and chamber code joined", () => {
@@ -247,6 +274,23 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("č. j. 36 Co 52,53/2023");
+  });
+
+  test("dedupes a consolidated docket comma cited with and without a space", () => {
+    // "36 Co 52,53/2023" (no space after the comma) and "36 Co 52,
+    // 53/2023" (spaced) name the same consolidated appeal; the dedup key
+    // must strip the whitespace after the comma so both resolve to one
+    // citation.
+    const citations = extractCitations([
+      {
+        index: 0,
+        text:
+          "Městského soudu v Praze ze dne 11. května 2023, č. j. " +
+          "36 Co 52,53/2023-116, k tomu opětovně č. j. 36 Co 52, " +
+          "53/2023-116, za účasti Nejvyššího soudu",
+      },
+    ]);
+    expect(citations).toHaveLength(1);
   });
 
   test("extracts a letter-first č.j. registry without a senate number", () => {
@@ -392,6 +436,38 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("III.US 364/2017");
+  });
+
+  test("dedupes Constitutional Court citations across the slash/space/dot spelling family", () => {
+    // "II.ÚS/251/04" (slash, no space), "II.ÚS 251/04" (space, no slash),
+    // and "II. ÚS 251/04" (dot then a second space) all name the same
+    // case; the dedup key must fold them to one key regardless of the
+    // dot/space/slash boundary after the roman numeral.
+    const citations = extractCitations([
+      {
+        index: 0,
+        text:
+          "porovnaj rozhodnutia ÚS SR II.ÚS/251/04 a znovu II. ÚS 251/04 " +
+          "v odôvodnení",
+      },
+    ]);
+    expect(citations).toHaveLength(1);
+  });
+
+  test("dedupes a diacritic-dropped Constitutional Court citation against the accented spelling", () => {
+    // "III.US 364/2017" (diacritic dropped) and "III. ÚS 364/2017"
+    // (accented) name the same case; the dedup key must fold the
+    // diacritic so both resolve to one key, even though the stored
+    // citationText for each mention stays verbatim.
+    const citations = extractCitations([
+      {
+        index: 0,
+        text:
+          "Z uznesenia Ústavného súdu sp. zn.: III.US 364/2017 vyplýva, " +
+          "a znovu sp. zn. III. ÚS 364/2017 sa uvádza v odôvodnení",
+      },
+    ]);
+    expect(citations).toHaveLength(1);
   });
 
   test("extracts an all-caps PL ÚS plenary citation (Slovak spelling)", () => {
@@ -798,6 +874,17 @@ describe("extractCitations", () => {
     expect(texts).toContain("C‑147/96");
   });
 
+  test("does not double-extract a full CJEU ECLI as also its own abbreviated suffix", () => {
+    // The CJEU's own ECLI country code is "EU" ("ECLI:EU:C:2020:123"), so
+    // without a negative lookbehind the abbreviated EU:C:YYYY:NNN pattern
+    // would also match the tail of a full ECLI already captured by the
+    // dedicated ECLI pattern, producing two entries for one identifier.
+    const text = "ve smyslu ECLI:EU:C:2020:123 Soudní dvůr rozhodl";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("ECLI:EU:C:2020:123");
+  });
+
   test("extracts a pre-1989 bare CJEU case number anchored by its ECLI", () => {
     // Verbatim, Hungarian: pre-1989 CJEU numbers carry no C-/T- prefix
     // (the Court introduced it in 1989), so "14/83" is only safe to
@@ -1033,6 +1120,22 @@ describe("extractCitations", () => {
     expect(
       extractCitations([{ index: 0, text: merged }])[0]?.citationText,
     ).toBe("sygn. akt III AUa 2296/05");
+  });
+
+  test("dedupes a Polish two-word division code cited both spaced and merged", () => {
+    // The same appellate-labor case is cited once with the two-word
+    // division spaced ("A Ua") and once merged ("AUa") elsewhere in the
+    // document; the dedup key must normalize the internal division
+    // boundary the same way it does for the roman-to-registry boundary.
+    const citations = extractCitations([
+      {
+        index: 0,
+        text:
+          "Sądu Apelacyjnego we Wrocławiu z 7 listopada 2003 r., sygn. akt " +
+          "III A Ua 2389/02, ponownie sygn. akt III AUa 2389/02 w uzasadnieniu",
+      },
+    ]);
+    expect(citations).toHaveLength(1);
   });
 
   test("extracts Polish fused division+department case numbers", () => {
@@ -1342,7 +1445,7 @@ describe("extractCitations", () => {
     );
     expect(texts).toContain("SK 19/02");
     // Bare single-letter Tribunal symbols stay unextracted without a
-    // sygn. anchor — the documented precision trade-off (they collide
+    // sygn. anchor (the documented precision trade-off: they collide
     // with prose and district-court registries).
     expect(texts).not.toContain("K 36/98");
     expect(texts).not.toContain("P 13/11");
@@ -1362,6 +1465,15 @@ describe("extractCitations", () => {
     ]) {
       expect(extractCitations([{ index: 0, text }])).toHaveLength(1);
     }
+  });
+
+  test("does not phantom-duplicate a bare TK citation after a double space", () => {
+    // The phantom-duplicate lookbehind must tolerate the same bounded
+    // whitespace run the prefixed pattern itself accepts, not just a
+    // single space, or a double-spaced roman+symbol run ("II  SK 12/20")
+    // slips through the guard and produces a phantom bare "SK 12/20".
+    const text = "sygn. akt II  SK 12/20";
+    expect(extractCitations([{ index: 0, text }])).toHaveLength(1);
   });
 
   test("extracts a bare Polish Constitutional Tribunal citation list", () => {

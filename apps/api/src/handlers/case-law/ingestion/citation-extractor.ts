@@ -94,8 +94,9 @@ const PL_THREE_TOKEN_PATTERN =
 // "Kp"/"Kpt"/"SK"/"Ts" are never shadowed by the bare "K". Multi- and
 // single-letter symbols alike are cited fully bare in running prose, with
 // no "sygn." anywhere nearby, so the "sygn." anchor is optional; the
-// negative lookbehind (unbounded, so it covers a Roman numeral of any
-// length, e.g. "XVIII") stops a single-letter symbol from
+// negative lookbehind (unbounded roman run, bounded 1-3 whitespace run so
+// a double space between the roman numeral and the symbol -- "II  SK
+// 12/20" -- still trips the guard) stops a single-letter symbol from
 // phantom-duplicating the tail of an ordinary Roman-numeral-prefixed
 // citation immediately before it ("sygn. akt II K 796/13" is one citation,
 // not also a bare "K 796/13").
@@ -105,12 +106,12 @@ const PL_THREE_TOKEN_PATTERN =
 // distinctive enough to match bare, still guarded against
 // phantom-duplicating a Roman-numeral-prefixed citation's tail.
 const PL_TK_PATTERN = new RegExp(
-  String.raw`${PL_SYGN_PREFIX}(?<!\b[IVX]+\s)\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp|K|P|U)\.?\s*\d{1,4}\/\d{2,4})(?!\d)`,
+  String.raw`${PL_SYGN_PREFIX}(?<!\b[IVX]+\s{1,3})\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp|K|P|U)\.?\s*\d{1,4}\/\d{2,4})(?!\d)`,
   "gu",
 );
 
 const PL_TK_BARE_PATTERN =
-  /(?<!\b[IVX]+\s)\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp)\.?\s*\d{1,4}\/\d{2,4})(?!\d)/gu;
+  /(?<!\b[IVX]+\s{1,3})\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp)\.?\s*\d{1,4}\/\d{2,4})(?!\d)/gu;
 
 // Polish bare-symbol pattern: other tribunals and disciplinary registries
 // cite by a 1-3 letter symbol with no Roman-numeral chamber at all --
@@ -175,8 +176,9 @@ const CITATION_PATTERNS: RegExp[] = [
   // administrative). The registry run is short with an optional trailing
   // dot, then a space and digits, which keeps agency file numbers
   // ("MSP-725/2022") out; "Spr"/"Spr." is the court-administration
-  // agenda, not adjudication, and stays excluded.
-  /sp\.\s*zn\.:?\s*(?!Spr\.?\s)(?<caseNumber>\p{L}{1,4}\.?\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  // agenda, not adjudication, and stays excluded regardless of casing
+  // ("SPR.", "spr.").
+  /sp\.\s*zn\.:?\s*(?![Ss][Pp][Rr]\.?\s)(?<caseNumber>\p{L}{1,4}\.?\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Czech Supreme Court plenary/collegium opinions ("stanoviska"), civil
   // (Cpjn) and criminal (Tpjn), are routinely cited bare after the first
@@ -216,8 +218,12 @@ const CITATION_PATTERNS: RegExp[] = [
   // EU:C:1981:264". This is the form the Court's own text actually uses
   // (the literal "ECLI:" prefix above appears in database identifiers,
   // not in judgment prose), so it is captured as its own citation
-  // regardless of whether a case number precedes it.
-  /\bEU:[CTF]:\d{4}:\d+\b/gu,
+  // regardless of whether a case number precedes it. The CJEU's own ECLI
+  // country code is "EU" ("ECLI:EU:C:2020:123"), so without the negative
+  // lookbehind this would also match the tail of a full ECLI already
+  // captured by the pattern above, producing two entries for one
+  // identifier.
+  /(?<!ECLI:)\bEU:[CTF]:\d{4}:\d+\b/gu,
 
   // Pre-1989 CJEU case numbers carry no C-/T- prefix (the Court introduced
   // it in 1989): "60/81", or joined as "169/83 e 136/84" / "15/76 and
@@ -295,6 +301,20 @@ const SEPARATOR_NORMALIZE_RE =
   /^(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/u;
 
 /**
+ * Matches a Czech/Slovak Constitutional Court case number (chamber,
+ * "ÚS" or the diacritic-dropped "US", optional plenary "-st." infix,
+ * then the docket) after whitespace/dot normalization, so the dedup key
+ * can rebuild it with one canonical (glued, diacritic-restored) spelling:
+ * "II.ÚS/251/04", "II.ÚS 251/04", and "II. ÚS 251/04" (the dot before
+ * a space is already stripped upstream) all resolve to the same key, and
+ * the diacritic-dropped "III.US 364/2017" folds to the same key as
+ * "III. ÚS 364/2017". Stored citationText is never touched by this --
+ * only the dedup key folds the diacritic.
+ */
+const US_CASE_RE =
+  /^(?<chamber>[IVX]{1,4}|Pl|PL)\.?\s?[ÚU]S(?<infix>-st\.)?[\s/](?<docket>\d{1,5}\/\d{2,4})$/u;
+
+/**
  * Matches a Polish roman-numeral-chamber case number after whitespace
  * normalization, splitting off the chamber from the division code so the
  * dedup key can rebuild the boundary with one canonical (glued) spelling:
@@ -302,6 +322,19 @@ const SEPARATOR_NORMALIZE_RE =
  */
 const POLISH_ROMAN_DIVISION_RE =
   /^(?<roman>[IVX]{1,6})\s?(?<division>[A-Za-z]{1,5}\s.*)$/u;
+
+/**
+ * Some Polish division codes are themselves two space-separated tokens
+ * (an appellate/labor qualifier plus the base code, e.g. "A Ua"), which
+ * courts also glue together ("AUa"). Applied to the `division` group of
+ * `POLISH_ROMAN_DIVISION_RE`, this collapses the first two-token gap to
+ * the same glued spelling so "III A Ua 2389/02" and "III AUa 2389/02"
+ * resolve to one dedup key. The second token is a letter run, never
+ * digits, so this never matches an ordinary single-token division
+ * directly followed by the docket number ("CSK 123/20").
+ */
+const POLISH_TWO_WORD_DIVISION_RE =
+  /^(?<div1>[A-Za-z]{1,4})\s(?<div2>[A-Za-z]{1,5})(?<rest>\s\d.*)$/u;
 
 /**
  * Collapse spelling variants that would otherwise fracture one real
@@ -313,6 +346,8 @@ const POLISH_ROMAN_DIVISION_RE =
  *  - whitespace around a hyphen ("C - 679/18", "C- 679/18" -> "C-679/18",
  *    "ÚS – st." -> "ÚS-st.");
  *  - whitespace around a slash ("U 1 /86" -> "U 1/86");
+ *  - whitespace after a comma in a consolidated docket ("52, 53/2023" ->
+ *    "52,53/2023");
  *  - a trailing dot on a registry abbreviation ("Spr." vs "Spr", "K." vs
  *    "K");
  *  - letter-case differences between an all-caps header and body text;
@@ -321,7 +356,11 @@ const POLISH_ROMAN_DIVISION_RE =
  *    260/2008" vs "5Cdo/260/2008", "10C 84/97" vs "10C/84/97", "6CoE
  *    14/2007" vs "6 CoE 14/2007" vs "6CoE/14/2007");
  *  - the boundary between a Polish roman-numeral chamber and its division
- *    code, glued or spaced ("IC 1523/96" vs "I C 1523/96").
+ *    code, glued or spaced ("IC 1523/96" vs "I C 1523/96"), including a
+ *    two-token division code ("III A Ua 2389/02" vs "III AUa 2389/02");
+ *  - the dot/space/slash boundary and diacritic in a Constitutional Court
+ *    citation ("II.ÚS/251/04", "II.ÚS 251/04", "II. ÚS 251/04", and the
+ *    diacritic-dropped "III.US 364/2017" all fold to one key).
  */
 const canonicalizeDedupKey = (text: string): string => {
   const cleaned = normalizeDashes(text)
@@ -330,6 +369,7 @@ const canonicalizeDedupKey = (text: string): string => {
     .replace(/\s+/gu, " ") // collapse line-wraps and repeated spaces
     .replace(/\s{0,4}-\s{0,4}/gu, "-") // collapse whitespace around a hyphen
     .replace(/\s{0,4}\/\s{0,4}/gu, "/") // collapse whitespace around a slash
+    .replace(/,\s{0,3}/gu, ",") // "52, 53/2023" -> "52,53/2023"
     .replace(/(\p{L})\.(?=[\s/]|$)/gu, "$1") // "Spr." / "K." -> "Spr" / "K"
     .trim();
 
@@ -339,10 +379,24 @@ const canonicalizeDedupKey = (text: string): string => {
     return canonical.toLowerCase();
   }
 
+  const usCase = US_CASE_RE.exec(cleaned);
+  if (usCase?.groups) {
+    const canonical = `${usCase.groups["chamber"]}ÚS${usCase.groups["infix"] ?? ""}${usCase.groups["docket"]}`;
+    return canonical.toLowerCase();
+  }
+
   const romanDivision = POLISH_ROMAN_DIVISION_RE.exec(cleaned);
-  const canonical = romanDivision?.groups
-    ? `${romanDivision.groups["roman"]}${romanDivision.groups["division"]}`
-    : cleaned;
+  if (romanDivision?.groups) {
+    const twoWord = POLISH_TWO_WORD_DIVISION_RE.exec(
+      romanDivision.groups["division"],
+    );
+    const division = twoWord?.groups
+      ? `${twoWord.groups["div1"]}${twoWord.groups["div2"]}${twoWord.groups["rest"]}`
+      : romanDivision.groups["division"];
+    return `${romanDivision.groups["roman"]}${division}`.toLowerCase();
+  }
+
+  const canonical = cleaned;
 
   return canonical.toLowerCase();
 };
