@@ -110,6 +110,13 @@ const unsafeScopeInLaterStatement = sql`
   SELECT sd.* FROM entities sd WHERE true ${entityWorkspaceFilter}
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an outer-join ON predicate cannot authorize protected left-side rows
+const unsafeScopeInOuterJoin = sql`
+  SELECT sd.*
+  FROM search_documents sd
+  LEFT JOIN entities e ON true ${entityWorkspaceFilter}
+`;
+
 const scopedEntity = sql`
   SELECT *
   FROM search_documents sd
@@ -196,6 +203,7 @@ void [
   unsafeMultiBranch,
   unsafeScopeInLaterBranch,
   unsafeScopeInLaterStatement,
+  unsafeScopeInOuterJoin,
   scopedEntity,
   scopedSingleWorkspace,
   scopedInterpolatedEntity,

@@ -324,6 +324,127 @@ const splitAtSqlQueryBoundaries = (
   return parts;
 };
 
+type SqlScopeContext = {
+  clause: "filtering" | "non-filtering";
+  currentJoinIsOuter: boolean;
+  pendingJoinIsOuter: boolean;
+};
+
+const INITIAL_SQL_SCOPE_CONTEXT: SqlScopeContext = {
+  clause: "non-filtering",
+  currentJoinIsOuter: false,
+  pendingJoinIsOuter: false,
+};
+
+const SQL_CLAUSE_KEYWORDS = [
+  "cross",
+  "from",
+  "full",
+  "group",
+  "having",
+  "inner",
+  "join",
+  "left",
+  "limit",
+  "offset",
+  "on",
+  "order",
+  "returning",
+  "right",
+  "select",
+  "set",
+  "values",
+  "where",
+  "window",
+] as const;
+
+type SqlClauseKeyword = (typeof SQL_CLAUSE_KEYWORDS)[number];
+
+const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
+  SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
+
+const SQL_CLAUSE_KEYWORD =
+  /\b(?:cross|from|full|group|having|inner|join|left|limit|offset|on|order|returning|right|select|set|values|where|window)\b/giu;
+
+const sqlScopeContextAfter = (
+  text: string,
+  initialLexState: SqlLexState,
+  initialContext: SqlScopeContext,
+): SqlScopeContext => {
+  let context = initialContext;
+  let scanCursor = 0;
+  let scanState = initialLexState;
+  for (const match of text.matchAll(SQL_CLAUSE_KEYWORD)) {
+    const matchIndex = match.index;
+    const keyword = match.at(0)?.toLowerCase();
+    if (
+      matchIndex === undefined ||
+      keyword === undefined ||
+      !isSqlClauseKeyword(keyword)
+    ) {
+      continue;
+    }
+    scanState = sqlLexStateAfter(text.slice(scanCursor, matchIndex), scanState);
+    scanCursor = matchIndex + keyword.length;
+    if (scanState.type !== "normal") {
+      continue;
+    }
+    switch (keyword) {
+      case "left":
+      case "right":
+      case "full":
+        context = {
+          clause: "non-filtering",
+          currentJoinIsOuter: context.currentJoinIsOuter,
+          pendingJoinIsOuter: true,
+        };
+        break;
+      case "inner":
+      case "cross":
+        context = {
+          clause: "non-filtering",
+          currentJoinIsOuter: context.currentJoinIsOuter,
+          pendingJoinIsOuter: false,
+        };
+        break;
+      case "join":
+        context = {
+          clause: "non-filtering",
+          currentJoinIsOuter: context.pendingJoinIsOuter,
+          pendingJoinIsOuter: false,
+        };
+        break;
+      case "on":
+        context = {
+          ...context,
+          clause: context.currentJoinIsOuter ? "non-filtering" : "filtering",
+        };
+        break;
+      case "where":
+      case "having":
+        context = { ...context, clause: "filtering" };
+        break;
+      case "from":
+      case "group":
+      case "limit":
+      case "offset":
+      case "order":
+      case "returning":
+      case "select":
+      case "set":
+      case "values":
+      case "window":
+        context = { ...context, clause: "non-filtering" };
+        break;
+      default: {
+        const exhaustive: never = keyword;
+        return exhaustive;
+      }
+    }
+  }
+  return context;
+};
+
 export default {
   meta: { name: "require-search-scope" },
   rules: {
@@ -516,6 +637,7 @@ export default {
               let unscopedReadCount = 0;
               let scopeEligibleReadCount = 0;
               let sqlLexState: SqlLexState = { type: "normal" };
+              let sqlScopeContext = INITIAL_SQL_SCOPE_CONTEXT;
               for (const [index, token] of tokens.entries()) {
                 if (token.type === "text") {
                   for (const part of splitAtSqlQueryBoundaries(
@@ -527,11 +649,17 @@ export default {
                     scopeEligibleReadCount += aliases.filter(
                       (alias) => alias === projection.expectedAlias,
                     ).length;
+                    sqlScopeContext = sqlScopeContextAfter(
+                      part.text,
+                      sqlLexState,
+                      sqlScopeContext,
+                    );
                     sqlLexState = sqlLexStateAfter(part.text, sqlLexState);
                     if (part.endsBranch) {
                       hasUnscopedBranch ||= unscopedReadCount > 0;
                       unscopedReadCount = 0;
                       scopeEligibleReadCount = 0;
+                      sqlScopeContext = INITIAL_SQL_SCOPE_CONTEXT;
                     }
                   }
                   continue;
@@ -556,6 +684,7 @@ export default {
                 if (
                   unscopedReadCount > 0 &&
                   scopeEligibleReadCount > 0 &&
+                  sqlScopeContext.clause === "filtering" &&
                   sqlLexState.type === "normal" &&
                   isApprovedScopeFragment(token.value, projection.scopeImports)
                 ) {
