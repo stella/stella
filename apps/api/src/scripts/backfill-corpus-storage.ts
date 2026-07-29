@@ -98,6 +98,7 @@ console.log(
 
 let lastId: SafeId<"caseLawDecision"> | null = null;
 let written = 0;
+let skipped = 0;
 let failed = 0;
 
 const backfillRow = async (row: BackfillRow): Promise<void> => {
@@ -109,7 +110,7 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
       sections: row.sections,
       ast: row.documentAst,
     });
-    await ingestionDb((tx) =>
+    const recorded = await ingestionDb((tx) =>
       tx
         .update(caseLawDecisions)
         .set({
@@ -133,9 +134,16 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
               row.updatedAtToken,
             ),
           ),
-        ),
+        )
+        .returning({ id: caseLawDecisions.id }),
     );
-    written += 1;
+    // A refused CAS is not success: the row changed under the scan and
+    // still points at its own payload, so nothing was recorded.
+    if (recorded.length > 0) {
+      written += 1;
+    } else {
+      skipped += 1;
+    }
   } catch (error) {
     failed += 1;
     captureError(error, { decisionId: row.id, step: "backfillCorpusStorage" });
@@ -177,10 +185,12 @@ while (true) {
   }
 
   lastId = rows.at(-1)?.id ?? lastId;
-  console.log(`  written=${written} failed=${failed}`);
+  console.log(`  written=${written} skipped=${skipped} failed=${failed}`);
 }
 
-console.log(`Done. Wrote ${written} decisions, ${failed} failed.`);
+console.log(
+  `Done. Wrote ${written} decisions, skipped ${skipped}, ${failed} failed.`,
+);
 
 // Non-zero on partial failure: the cutover checklist treats this run as
 // green only when every decision has its corpus objects.
