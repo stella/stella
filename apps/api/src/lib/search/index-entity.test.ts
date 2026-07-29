@@ -40,6 +40,10 @@ const entityRow = {
   workspaceId: toSafeId<"workspace">("ws_1"),
 };
 const findFirstMock = mock(async () => entityRow);
+const transactionMock = mock(
+  async (callback: (tx: { execute: typeof executeMock }) => Promise<unknown>) =>
+    await callback({ execute: executeMock }),
+);
 
 void mock.module("@/api/db/root", () => ({
   rootDb: {
@@ -49,6 +53,7 @@ void mock.module("@/api/db/root", () => ({
         findFirst: findFirstMock,
       },
     },
+    transaction: transactionMock,
   },
 }));
 
@@ -72,6 +77,7 @@ beforeEach(() => {
   decryptContentMock.mockResolvedValue("Extracted text");
   captureErrorMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
+  transactionMock.mockClear();
 });
 
 test("persists an entity's semantic updated timestamp when indexing", async () => {
@@ -92,6 +98,9 @@ test("persists an entity's semantic updated timestamp when indexing", async () =
   expect(compiled.params).toContain(semanticUpdatedAtToken);
   expect(compiled.params).not.toContain(semanticUpdatedAt);
   expect(syncWorkspaceSearchActivityMock).toHaveBeenCalledTimes(1);
+  expect(syncWorkspaceSearchActivityMock.mock.calls.at(0)?.at(1)).toEqual({
+    execute: executeMock,
+  });
 });
 
 test("rejects an out-of-order projection against the authoritative entity", async () => {
@@ -127,6 +136,24 @@ test("does not advance matter activity when a stale projection is rejected", asy
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
   expect(syncWorkspaceSearchActivityMock).not.toHaveBeenCalled();
+});
+
+test("rolls back the projection when workspace activity cannot sync", async () => {
+  const activityFailure = new Error("workspace activity unavailable");
+  syncWorkspaceSearchActivityMock.mockRejectedValueOnce(activityFailure);
+  const { upsertSearchDocument } =
+    await import("@/api/lib/search/index-entity");
+
+  const rejection: unknown = await upsertSearchDocument(
+    toSafeId<"entity">("entity_1"),
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(rejection).toBe(activityFailure);
+  expect(transactionMock).toHaveBeenCalledTimes(1);
+  expect(executeMock).toHaveBeenCalledTimes(1);
 });
 
 test("keeps the last complete projection when extracted content cannot decrypt", async () => {

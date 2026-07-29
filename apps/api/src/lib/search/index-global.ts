@@ -1508,10 +1508,15 @@ export const upsertWorkspaceSearchDocument = async (
   `);
 };
 
+type SearchActivityDatabase = {
+  execute(query: SQL): Promise<unknown>;
+};
+
 export const syncWorkspaceSearchActivity = async (
   workspaceId: SafeId<"workspace">,
+  db: SearchActivityDatabase = rootDb,
 ): Promise<void> => {
-  await rootDb.execute(sql`
+  await db.execute(sql`
     UPDATE workspace_search_documents wsd
     SET updated_at = w.last_activity_at
     FROM workspaces w

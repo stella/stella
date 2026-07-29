@@ -196,53 +196,55 @@ export const upsertSearchDocument = async (
 
   const regconfig = doc.language ?? "simple";
 
-  const indexed = await rootDb.execute<IndexedSearchDocument>(sql`
-    WITH authoritative_source AS MATERIALIZED (
-      SELECT e.id
-      FROM entities e
-      WHERE e.id = ${doc.entityId}
-        AND e.current_version_id = ${doc.sourceVersionId}
-        AND COALESCE(e.updated_at, e.created_at)
-          IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamp
-      FOR UPDATE
-    )
-    INSERT INTO search_documents (
-      entity_id, organization_id, workspace_id,
-      kind, title, searchable_text, language,
-      updated_at, tsv
-    )
-    SELECT
-      ${doc.entityId},
-      ${doc.organizationId},
-      ${doc.workspaceId},
-      ${doc.kind},
-      ${doc.title},
-      ${doc.searchableText},
-      ${doc.language},
-      ${doc.semanticUpdatedAtToken}::timestamp,
-      to_tsvector(
-        ${regconfig}::regconfig,
-        unaccent(arabic_normalize(
-          coalesce(${doc.title}, '') || ' ' ||
-          coalesce(${doc.searchableText}, '')
-        ))
+  await rootDb.transaction(async (tx) => {
+    const indexed = await tx.execute<IndexedSearchDocument>(sql`
+      WITH authoritative_source AS MATERIALIZED (
+        SELECT e.id
+        FROM entities e
+        WHERE e.id = ${doc.entityId}
+          AND e.current_version_id = ${doc.sourceVersionId}
+          AND COALESCE(e.updated_at, e.created_at)
+            IS NOT DISTINCT FROM ${doc.semanticUpdatedAtToken}::timestamp
+        FOR UPDATE
       )
-    FROM authoritative_source
-    ON CONFLICT (entity_id) DO UPDATE SET
-      organization_id = EXCLUDED.organization_id,
-      workspace_id = EXCLUDED.workspace_id,
-      kind = EXCLUDED.kind,
-      title = EXCLUDED.title,
-      searchable_text = EXCLUDED.searchable_text,
-      language = EXCLUDED.language,
-      updated_at = EXCLUDED.updated_at,
-      tsv = EXCLUDED.tsv
-    WHERE EXISTS (SELECT 1 FROM authoritative_source)
-    RETURNING entity_id AS "entityId"
-  `);
+      INSERT INTO search_documents (
+        entity_id, organization_id, workspace_id,
+        kind, title, searchable_text, language,
+        updated_at, tsv
+      )
+      SELECT
+        ${doc.entityId},
+        ${doc.organizationId},
+        ${doc.workspaceId},
+        ${doc.kind},
+        ${doc.title},
+        ${doc.searchableText},
+        ${doc.language},
+        ${doc.semanticUpdatedAtToken}::timestamp,
+        to_tsvector(
+          ${regconfig}::regconfig,
+          unaccent(arabic_normalize(
+            coalesce(${doc.title}, '') || ' ' ||
+            coalesce(${doc.searchableText}, '')
+          ))
+        )
+      FROM authoritative_source
+      ON CONFLICT (entity_id) DO UPDATE SET
+        organization_id = EXCLUDED.organization_id,
+        workspace_id = EXCLUDED.workspace_id,
+        kind = EXCLUDED.kind,
+        title = EXCLUDED.title,
+        searchable_text = EXCLUDED.searchable_text,
+        language = EXCLUDED.language,
+        updated_at = EXCLUDED.updated_at,
+        tsv = EXCLUDED.tsv
+      WHERE EXISTS (SELECT 1 FROM authoritative_source)
+      RETURNING entity_id AS "entityId"
+    `);
 
-  if (!indexed.at(0)) {
-    return;
-  }
-  await syncWorkspaceSearchActivity(doc.workspaceId);
+    if (!indexed.at(0)) {
+      return;
+    }
+    await syncWorkspaceSearchActivity(doc.workspaceId, tx);
+  });
 };
