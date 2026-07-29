@@ -193,7 +193,8 @@ const projectionReadAliases = (
 ): (string | null)[] => {
   const matches = text.matchAll(
     new RegExp(
-      `\\b${table}\\b(?:\\s+(?:as\\s+)?([A-Za-z_][A-Za-z0-9_]*))?`,
+      `\\b(?:from|join|table)\\s+${table}\\b` +
+        `(?:\\s+(?:as\\s+)?([A-Za-z_][A-Za-z0-9_]*))?`,
       "giu",
     ),
   );
@@ -203,6 +204,21 @@ const projectionReadAliases = (
 const leadingProjectionAlias = (text: string): string | null => {
   const match = text.match(/^\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*)\b/iu);
   return normalizeProjectionAlias(match?.at(1));
+};
+
+const hasProjectionReadIntroducer = (
+  tokens: readonly SqlTemplateToken[],
+  expressionIndex: number,
+): boolean => {
+  let precedingText = "";
+  for (let index = expressionIndex - 1; index >= 0; index -= 1) {
+    const token = tokens.at(index);
+    if (token?.type !== "text") {
+      break;
+    }
+    precedingText = token.value + precedingText;
+  }
+  return /\b(?:from|join|table)\s*$/iu.test(precedingText);
 };
 
 type SqlLexState =
@@ -1085,6 +1101,7 @@ export default {
                 );
                 if (
                   queryState.sqlLexState.type === "normal" &&
+                  hasProjectionReadIntroducer(tokens, index) &&
                   isPrivateProjectionInterpolation(
                     token.value,
                     projection.tableImports,

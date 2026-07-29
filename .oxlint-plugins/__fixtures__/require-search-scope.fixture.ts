@@ -354,6 +354,16 @@ const scopedChat = sql`
   WHERE ${chatThreadScopeSql({})}
 `;
 
+const writeOnlyEntityProjection = sql`
+  INSERT INTO search_documents (entity_id)
+  SELECT id FROM entities
+`;
+
+const writeOnlyInterpolatedEntityProjection = sql`
+  INSERT INTO ${searchDocuments} (entity_id)
+  SELECT id FROM entities
+`;
+
 // Public case law is intentionally organization-independent.
 const publicCaseLaw = sql`SELECT * FROM case_law_search_documents clsd`;
 
@@ -412,5 +422,7 @@ void [
   scopedMatter,
   scopedContact,
   scopedChat,
+  writeOnlyEntityProjection,
+  writeOnlyInterpolatedEntityProjection,
   publicCaseLaw,
 ];
