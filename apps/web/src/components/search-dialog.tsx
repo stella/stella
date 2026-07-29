@@ -52,6 +52,7 @@ import { getChatHitRoute } from "@/components/search-dialog.logic";
 import {
   canShowSearchSummary,
   clearTime,
+  hasUnavailableSearchType,
   resolveActiveSearchTypes,
   resolveUpdatedFrom,
   resolveUpdatedTo,
@@ -321,20 +322,21 @@ export const SearchDialog = ({
     [filters.time, searchQuery],
   );
   const updatedTo = resolveUpdatedTo(filters.time);
-  const selectedSearchTypes = filters.types.filter(
-    (type) =>
-      isSearchKindOption(type) &&
-      isAvailableSearchKind(type, publicLawPreviewEnabled),
+  const availableSearchTypes = SEARCH_KIND_TYPES.filter((type) =>
+    isAvailableSearchKind(type, publicLawPreviewEnabled),
   );
+  const selectedSearchTypes = filters.types.filter(isSearchKindOption);
+  const hasUnavailableSelectedType = hasUnavailableSearchType({
+    availableTypes: availableSearchTypes,
+    selectedTypes: selectedSearchTypes,
+  });
   const activeSearchTypes = resolveActiveSearchTypes({
-    availableTypes: SEARCH_KIND_TYPES.filter((type) =>
-      isAvailableSearchKind(type, publicLawPreviewEnabled),
-    ),
+    availableTypes: availableSearchTypes,
     kinds: filters.kinds,
     selectedTypes: selectedSearchTypes,
   });
   const hasQuery = searchQuery.trim().length > 0;
-  const hasActiveSearch = hasSearchQueryOrSelectiveFilter({
+  const hasSearchCriteria = hasSearchQueryOrSelectiveFilter({
     query: searchQuery,
     types: filters.types,
     kinds: filters.kinds,
@@ -343,8 +345,9 @@ export const SearchDialog = ({
     updatedFrom,
     updatedTo,
   });
+  const hasActiveSearch = hasSearchCriteria && !hasUnavailableSelectedType;
   const hasTypedQuery = query.trim().length > 0;
-  const hasVisibleSearch = hasTypedQuery || hasActiveSearch;
+  const hasVisibleSearch = hasTypedQuery || hasSearchCriteria;
 
   const {
     data,
@@ -769,7 +772,9 @@ export const SearchDialog = ({
   };
 
   const hasResults = allHits.length > 0;
-  const commandHits = hasVisibleSearch && hasResults ? allHits : [];
+  const shouldShowResults =
+    hasVisibleSearch && !hasUnavailableSelectedType && hasResults;
+  const commandHits = hasActiveSearch && hasResults ? allHits : [];
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
   // Clear any prior AI summary whenever the effective search changes. The
@@ -833,9 +838,7 @@ export const SearchDialog = ({
     setDebouncedQuery(criteria.query);
     setFilters({
       workspaceIds: savedFilters.workspaceIds,
-      types: savedFilters.types.filter((type) =>
-        isAvailableSearchKind(type, publicLawPreviewEnabled),
-      ),
+      types: savedFilters.types,
       kinds: savedFilters.kinds,
       editedByUserIds: savedFilters.editedByUserIds,
       mimeTypes: savedFilters.mimeTypes,
@@ -939,7 +942,7 @@ export const SearchDialog = ({
                 time={filters.time}
               />
 
-              {hasActiveSearch && (
+              {hasSearchCriteria && (
                 <>
                   {(facets?.type.length ?? 0) + filters.types.length > 0 && (
                     <div className="mt-4">
@@ -1044,7 +1047,16 @@ export const SearchDialog = ({
                 </>
               )}
 
+              {hasVisibleSearch && hasUnavailableSelectedType && (
+                <div className="flex h-full items-center justify-center px-4 py-8">
+                  <p className="text-muted-foreground text-sm">
+                    {t("common.unavailable")}
+                  </p>
+                </div>
+              )}
+
               {hasVisibleSearch &&
+                !hasUnavailableSelectedType &&
                 !hasResults &&
                 (!hasActiveSearch || isLoading) && (
                   <div className="space-y-3 px-4 py-3">
@@ -1071,7 +1083,7 @@ export const SearchDialog = ({
                   </div>
                 )}
 
-              {hasVisibleSearch && hasResults && (
+              {shouldShowResults && (
                 <div className="px-2 py-2">
                   <p className="text-muted-foreground px-2 pb-2 text-xs">
                     {t("search.resultCount", {

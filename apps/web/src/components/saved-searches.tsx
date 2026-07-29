@@ -191,6 +191,7 @@ export const SavedSearches = ({
     analytics.captureError(savedSearchesError);
   }, [analytics, savedSearchesError, showList]);
   const isSaving = createMutation.isPending || renameMutation.isPending;
+  const isMutatingSavedSearch = isSaving || deleteMutation.isPending;
   const dialogName =
     dialog.type === "create" || dialog.type === "rename" ? dialog.name : "";
 
@@ -226,7 +227,7 @@ export const SavedSearches = ({
         <Button
           aria-label={t("search.saveSearch")}
           className="size-11 shrink-0"
-          disabled={!hasActiveCriteria}
+          disabled={!hasActiveCriteria || isMutatingSavedSearch}
           onClick={() => setDialog({ type: "create", name: "" })}
           size="icon"
           title={t("search.saveSearch")}
@@ -271,6 +272,7 @@ export const SavedSearches = ({
               <Button
                 aria-label={t("common.rename")}
                 className="size-11 shrink-0"
+                disabled={isMutatingSavedSearch}
                 onClick={() =>
                   setDialog({
                     type: "rename",
@@ -287,6 +289,7 @@ export const SavedSearches = ({
               <Button
                 aria-label={t("common.delete")}
                 className="size-11 shrink-0"
+                disabled={isMutatingSavedSearch}
                 onClick={() =>
                   setDialog({ type: "delete", search: savedSearch })
                 }
@@ -324,7 +327,7 @@ export const SavedSearches = ({
 
       <Dialog
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && !isSaving) {
             setDialog({ type: "closed" });
           }
         }}
@@ -350,6 +353,7 @@ export const SavedSearches = ({
               </label>
               <Input
                 autoFocus
+                disabled={isSaving}
                 id="saved-search-name"
                 onChange={(event) => updateDialogName(event.target.value)}
                 placeholder={t("search.saveSearchNamePlaceholder")}
@@ -359,6 +363,7 @@ export const SavedSearches = ({
             <DialogFooter>
               <Button
                 className="min-h-11"
+                disabled={isSaving}
                 onClick={() => setDialog({ type: "closed" })}
                 type="button"
                 variant="ghost"
@@ -380,7 +385,7 @@ export const SavedSearches = ({
 
       <AlertDialog
         onOpenChange={(open) => {
-          if (!open) {
+          if (!open && !deleteMutation.isPending) {
             setDialog({ type: "closed" });
           }
         }}
@@ -401,7 +406,14 @@ export const SavedSearches = ({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose
-              render={<Button className="min-h-11" variant="ghost" />}
+              disabled={deleteMutation.isPending}
+              render={
+                <Button
+                  className="min-h-11"
+                  disabled={deleteMutation.isPending}
+                  variant="ghost"
+                />
+              }
             >
               {t("common.cancel")}
             </AlertDialogClose>

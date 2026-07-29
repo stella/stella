@@ -5,6 +5,7 @@ import * as search from "@/lib/search";
 import {
   canShowSearchSummary,
   clearTime,
+  hasUnavailableSearchType,
   resolveActiveSearchTypes,
   resolveUpdatedFrom,
   resolveUpdatedTo,
@@ -26,6 +27,21 @@ const baseFilters = (
 });
 
 describe("active search types", () => {
+  test("detects a persisted result type that is no longer available", () => {
+    expect(
+      hasUnavailableSearchType({
+        availableTypes: ["matter", "contact", "document"],
+        selectedTypes: ["case-law"],
+      }),
+    ).toBe(true);
+    expect(
+      hasUnavailableSearchType({
+        availableTypes: ["matter", "contact", "document"],
+        selectedTypes: ["contact"],
+      }),
+    ).toBe(false);
+  });
+
   test("uses saved kinds when no explicit result types are selected", () => {
     expect(
       resolveActiveSearchTypes({

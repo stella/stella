@@ -47,6 +47,33 @@ test("filter-only global search skips full-text matching and projections", async
   expect(hitQuery).toContain("ORDER BY sd.updated_at DESC, sd.entity_id DESC");
 });
 
+test("orders filter-only chat hits on the tenant-leading thread key", async () => {
+  await searchGlobal({
+    accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+    editedByUserIds: [],
+    limit: 10,
+    mimeTypes: [],
+    organizationId: toSafeId<"organization">("org_1"),
+    query: "",
+    selectedWorkspaceIds: [],
+    types: ["chat"],
+    userId: toSafeId<"user">("user_1"),
+  });
+
+  const dialect = new PgDialect();
+  const hitQuery = rootDbExecuteMock.mock.calls
+    .map(([query]) => dialect.sqlToQuery(query).sql)
+    .find(
+      (query) =>
+        query.includes("FROM chat_thread_search_documents") &&
+        query.includes("cst.title"),
+    );
+
+  expect(hitQuery).toContain("t.user_id =");
+  expect(hitQuery).toContain("t.organization_id =");
+  expect(hitQuery).toContain("ORDER BY t.updated_at DESC, t.id DESC");
+});
+
 test("sorts filter-only hits newest first across result types", async () => {
   const dialect = new PgDialect();
   rootDbExecuteMock.mockImplementation(async (query: SQL) => {

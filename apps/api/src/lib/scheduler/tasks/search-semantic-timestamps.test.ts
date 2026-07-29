@@ -57,21 +57,33 @@ test("repairs one bounded batch and checkpoints after the update", async () => {
   expect(checkpointQuery.params).toContain(entityId);
 });
 
-test("disables the versioned repair job after reaching a fixed point", async () => {
+test("requires a clean verification pass before disabling the job", async () => {
   executeMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
-  const outcome = await repairSearchSemanticTimestamps({
+  const restartOutcome = await repairSearchSemanticTimestamps({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
     payload: { cursor: "11111111-1111-4111-8111-111111111111" },
     signal: new AbortController().signal,
   });
 
-  expect(outcome).toEqual({ status: "complete" });
-  expect(executeMock).toHaveBeenCalledTimes(2);
-
-  const disableQuery = new PgDialect().sqlToQuery(
+  expect(restartOutcome).toEqual({ status: "restart" });
+  const restartQuery = new PgDialect().sqlToQuery(
     executeMock.mock.calls.at(1)?.at(0) ?? sql``,
+  );
+  expect(restartQuery.sql).toContain("SET payload = jsonb_build_object('pass'");
+
+  const completeOutcome = await repairSearchSemanticTimestamps({
+    jobId: "search.repairSemanticTimestamps.v1",
+    leaseToken: "runner#lease-1",
+    payload: { pass: "verify" },
+    signal: new AbortController().signal,
+  });
+
+  expect(completeOutcome).toEqual({ status: "complete" });
+  expect(executeMock).toHaveBeenCalledTimes(4);
+  const disableQuery = new PgDialect().sqlToQuery(
+    executeMock.mock.calls.at(3)?.at(0) ?? sql``,
   );
   expect(disableQuery.sql).toContain("SET enabled = false");
 });

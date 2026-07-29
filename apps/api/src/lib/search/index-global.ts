@@ -511,7 +511,7 @@ const buildSearchFilterFragments = ({
   const matterUpdatedFilter = updatedRangeFilter(sql`wsd.updated_at`);
   const contactUpdatedFilter = updatedRangeFilter(sql`csd.updated_at`);
   const caseLawUpdatedFilter = updatedRangeFilter(sql`clsd.updated_at`);
-  const chatUpdatedFilter = updatedRangeFilter(sql`cst.updated_at`);
+  const chatUpdatedFilter = updatedRangeFilter(sql`t.updated_at`);
   const entityTextSearchFilter = sqlWhen(
     hasSearchQuery,
     () => sql`AND sd.tsv @@ ${tsQuery}`,
@@ -768,14 +768,14 @@ export const searchGlobal = async ({
         cst.title,
         ${searchHeadline(sql`cst.title || ' ' || left(cst.searchable_text, 2000)`)},
         ${searchScore(sql`cst.tsv`)},
-        cst.updated_at
+        t.updated_at
       FROM chat_thread_search_documents cst
       JOIN chat_threads t ON t.id = cst.thread_id
       LEFT JOIN workspaces w ON w.id = t.workspace_id
       WHERE ${chatScope}
         ${chatUpdatedFilter}
         ${chatTextSearchFilter}
-      ORDER BY ${searchOrderBy({ id: sql`cst.thread_id`, updatedAt: sql`cst.updated_at` })}
+      ORDER BY ${searchOrderBy({ id: sql`t.id`, updatedAt: sql`t.updated_at` })}
       LIMIT ${fetchLimit}
     `),
   );

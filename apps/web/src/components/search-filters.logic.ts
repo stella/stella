@@ -22,6 +22,14 @@ type ResolveActiveSearchTypesParams = {
   selectedTypes: readonly GlobalSearchResultType[];
 };
 
+export const hasUnavailableSearchType = ({
+  availableTypes,
+  selectedTypes,
+}: Pick<
+  ResolveActiveSearchTypesParams,
+  "availableTypes" | "selectedTypes"
+>): boolean => selectedTypes.some((type) => !availableTypes.includes(type));
+
 export const resolveActiveSearchTypes = ({
   availableTypes,
   kinds,
