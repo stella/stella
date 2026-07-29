@@ -109,6 +109,12 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("č. j.: 137 Ex 1850/23");
+    expect(
+      isSelfCitation("č. j.: 137 Ex 1850/23", {
+        caseNumber: "137 Ex 1850/23",
+        ecli: null,
+      }),
+    ).toBe(true);
   });
 
   test("does not treat statute references as citations", () => {

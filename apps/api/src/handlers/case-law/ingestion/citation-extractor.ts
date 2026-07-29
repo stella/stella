@@ -91,8 +91,8 @@ const stripPrefix = (text: string): string => {
     return spZn.groups["caseNumber"].trim();
   }
 
-  // Czech: "č. j. 5 As 123/2020" or "č.j. 5 As 123/2020"
-  const cj = /^[čc]\.\s*j\.\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  // Czech: "č. j. 5 As 123/2020", "č.j. 5 As 123/2020", "č. j.: 5 As 123/2020"
+  const cj = /^[čc]\.\s*j\.:?\s*(?<caseNumber>.+)/iu.exec(trimmed);
   if (cj?.groups?.["caseNumber"]) {
     return cj.groups["caseNumber"].trim();
   }
