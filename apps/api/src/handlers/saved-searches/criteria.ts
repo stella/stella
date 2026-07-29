@@ -30,7 +30,11 @@ const mimeTypeSchema = v.pipe(
   v.minLength(1),
   v.maxLength(128),
 );
-const timestampSchema = v.pipe(v.string(), v.isoTimestamp());
+const timestampSchema = v.pipe(
+  v.string(),
+  v.isoTimestamp(),
+  v.transform((timestamp) => new Date(timestamp).toISOString()),
+);
 
 const customTimeFilterSchema = v.strictObject({
   type: v.literal("custom"),

@@ -804,8 +804,7 @@ export const SearchDialog = ({
     !hasUnavailableSelectedType &&
     !isSearchError &&
     hasResults;
-  const commandHits =
-    hasActiveSearch && !isSearchError && hasResults ? allHits : [];
+  const commandHits = shouldShowResults ? allHits : [];
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
   // Clear any prior AI summary whenever the effective search changes. The

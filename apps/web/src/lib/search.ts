@@ -81,6 +81,8 @@ type SearchFacetParams = {
   search: string;
 } & SearchParams;
 
+type SearchOwner = Pick<SearchParams, "organizationId" | "userId">;
+
 export type SearchAISummaryParams = {
   query: string;
   locale: string;
@@ -99,11 +101,18 @@ export type SearchAISummaryParams = {
 // identity and trigger spurious refetches.
 const searchKeys = {
   all: ["search"] as const,
-  query: (params: SearchParams) =>
+  owner: (params: SearchOwner) =>
     [
       ...searchKeys.all,
-      params.organizationId,
-      params.userId,
+      {
+        organizationId: params.organizationId,
+        userId: params.userId,
+      },
+    ] as const,
+  query: (params: SearchParams) =>
+    [
+      ...searchKeys.owner(params),
+      "query",
       {
         query: params.query,
         workspaceIds: params.workspaceIds,
@@ -118,9 +127,7 @@ const searchKeys = {
     ] as const,
   facet: (params: SearchFacetParams) =>
     [
-      ...searchKeys.all,
-      params.organizationId,
-      params.userId,
+      ...searchKeys.owner(params),
       "facet",
       {
         facet: params.facet,
@@ -137,6 +144,20 @@ const searchKeys = {
       },
     ] as const,
 };
+
+const belongsToSearchOwner = (
+  queryKey: readonly unknown[] | undefined,
+  owner: SearchOwner,
+): boolean =>
+  queryKey?.some(
+    (part) =>
+      typeof part === "object" &&
+      part !== null &&
+      "organizationId" in part &&
+      part.organizationId === owner.organizationId &&
+      "userId" in part &&
+      part.userId === owner.userId,
+  ) ?? false;
 
 export const searchInfiniteOptions = (params: SearchParams) =>
   infiniteQueryOptions({
@@ -165,8 +186,7 @@ export const searchInfiniteOptions = (params: SearchParams) =>
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     placeholderData: (previousData, previousQuery) =>
-      previousQuery?.queryKey.at(1) === params.organizationId &&
-      previousQuery.queryKey.at(2) === params.userId
+      belongsToSearchOwner(previousQuery?.queryKey, params)
         ? previousData
         : undefined,
     enabled: params.enabled,
@@ -199,8 +219,7 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
     },
     enabled: params.enabled,
     placeholderData: (previousData, previousQuery) =>
-      previousQuery?.queryKey.at(1) === params.organizationId &&
-      previousQuery.queryKey.at(2) === params.userId
+      belongsToSearchOwner(previousQuery?.queryKey, params)
         ? previousData
         : undefined,
   });

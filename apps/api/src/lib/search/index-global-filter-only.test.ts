@@ -46,9 +46,58 @@ test("filter-only global search skips full-text matching and projections", async
   const hitQuery = searchDocumentQueries.find((query) =>
     query.includes("sd.entity_id AS id"),
   );
+  const typeFacetQuery = searchDocumentQueries.find((query) =>
+    query.includes("GROUP BY sd.kind"),
+  );
   expect(hitQuery).toContain("WHERE sd.organization_id =");
   expect(hitQuery).toContain("sd.workspace_id = ANY(");
   expect(hitQuery).toContain("ORDER BY sd.updated_at DESC, sd.entity_id DESC");
+  expect(typeFacetQuery).toContain("sd.kind = ANY(");
+});
+
+test("skips alternative corpus counts for an upper-bound-only search", async () => {
+  await searchGlobal({
+    accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+    editedByUserIds: [],
+    limit: 10,
+    mimeTypes: [],
+    organizationId: toSafeId<"organization">("org_1"),
+    query: "",
+    selectedWorkspaceIds: [],
+    types: ["document"],
+    updatedTo: "2026-07-29T23:59:59.999Z",
+    userId: toSafeId<"user">("user_1"),
+  });
+
+  const dialect = new PgDialect();
+  const caseLawQueries = rootDbExecuteMock.mock.calls
+    .map(([query]) => dialect.sqlToQuery(query).sql)
+    .filter((query) => query.includes("FROM case_law_search_documents"));
+
+  expect(caseLawQueries).toHaveLength(0);
+});
+
+test("normalizes numeric-offset filters to UTC before binding SQL", async () => {
+  await searchGlobal({
+    accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+    editedByUserIds: [],
+    limit: 10,
+    mimeTypes: [],
+    organizationId: toSafeId<"organization">("org_1"),
+    query: "",
+    selectedWorkspaceIds: [],
+    types: ["document"],
+    updatedFrom: "2026-07-29T12:00:00+02:00",
+    userId: toSafeId<"user">("user_1"),
+  });
+
+  const dialect = new PgDialect();
+  const params = rootDbExecuteMock.mock.calls.flatMap(
+    ([query]) => dialect.sqlToQuery(query).params,
+  );
+
+  expect(params).toContain("2026-07-29T10:00:00.000Z");
+  expect(params).not.toContain("2026-07-29T12:00:00+02:00");
 });
 
 test("orders filter-only chat hits on the tenant-leading thread key", async () => {
@@ -113,6 +162,28 @@ test("uses authoritative decision timestamps for filter-only case law", async ()
   expect(hitQuery).toContain(
     "ORDER BY d.updated_at DESC, clsd.decision_id DESC",
   );
+});
+
+test("caps corpus-wide case-law counts at the pagination horizon", async () => {
+  await searchGlobal({
+    accessibleWorkspaceIds: [],
+    editedByUserIds: [],
+    limit: 10,
+    mimeTypes: [],
+    organizationId: toSafeId<"organization">("org_1"),
+    query: "",
+    selectedWorkspaceIds: [],
+    types: ["case-law"],
+    userId: toSafeId<"user">("user_1"),
+  });
+
+  const dialect = new PgDialect();
+  const boundedCountQuery = rootDbExecuteMock.mock.calls
+    .map(([query]) => dialect.sqlToQuery(query))
+    .find(({ sql: query }) => query.includes("bounded_case_law"));
+
+  expect(boundedCountQuery?.sql).toContain("LIMIT");
+  expect(boundedCountQuery?.params).toContain(1000);
 });
 
 test("sorts filter-only hits newest first across result types", async () => {

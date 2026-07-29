@@ -109,6 +109,12 @@ describe("saved search criteria", () => {
     );
 
     expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value.time).toEqual({
+        type: "custom",
+        updatedFrom: "2026-07-29T10:00:00.000Z",
+      });
+    }
   });
 
   test("accepts only active workspace scopes", () => {

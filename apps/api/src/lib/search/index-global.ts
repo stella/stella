@@ -459,6 +459,10 @@ const buildSearchFilterFragments = ({
   const hasSearchQuery = query.trim().length > 0;
   const restrictToEntities = hasEditorFilter || hasMimeTypeFilter;
   const tsQuery = buildSearchTsQuery(query);
+  const normalizedUpdatedFrom =
+    updatedFrom === undefined ? undefined : new Date(updatedFrom).toISOString();
+  const normalizedUpdatedTo =
+    updatedTo === undefined ? undefined : new Date(updatedTo).toISOString();
 
   const workspaceScope = { accessibleWorkspaceIds, selectedWorkspaceIds };
   // Workspace-facet variants ignore the user's workspace selection so all
@@ -499,11 +503,11 @@ const buildSearchFilterFragments = ({
   );
   const updatedRangeFilter = (column: SQL): SQL => {
     const fragments: SQL[] = [];
-    if (updatedFrom !== undefined) {
-      fragments.push(sql`AND ${column} >= ${updatedFrom}`);
+    if (normalizedUpdatedFrom !== undefined) {
+      fragments.push(sql`AND ${column} >= ${normalizedUpdatedFrom}`);
     }
-    if (updatedTo !== undefined) {
-      fragments.push(sql`AND ${column} <= ${updatedTo}`);
+    if (normalizedUpdatedTo !== undefined) {
+      fragments.push(sql`AND ${column} <= ${normalizedUpdatedTo}`);
     }
     return fragments.length > 0 ? sql.join(fragments, sql` `) : sql``;
   };
@@ -559,6 +563,10 @@ const buildSearchFilterFragments = ({
     selected.size > 0,
     () => sql`AND sd.kind = ANY(${typedPgArray(entityTypes, "text")})`,
   );
+  const entityTypeFacetFilter =
+    selected.size > 0 && !hasSearchQuery && normalizedUpdatedFrom === undefined
+      ? entityTypeFilter
+      : sql``;
 
   return {
     selected,
@@ -588,6 +596,7 @@ const buildSearchFilterFragments = ({
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
+    entityTypeFacetFilter,
   };
 };
 
@@ -636,6 +645,7 @@ export const searchGlobal = async ({
     searchOrderBy,
     hasSearchQuery,
     entityTypeFilter,
+    entityTypeFacetFilter,
   } = buildSearchFilterFragments({
     query,
     organizationId,
@@ -780,6 +790,28 @@ export const searchGlobal = async ({
     `),
   );
 
+  const hasBoundedCorpusPredicate = hasSearchQuery || updatedFrom !== undefined;
+  const caseLawCountQuery = hasBoundedCorpusPredicate
+    ? sql`
+        SELECT count(*)::int AS total
+        FROM case_law_search_documents clsd
+        JOIN case_law_decisions d ON d.id = clsd.decision_id
+        WHERE TRUE
+          ${caseLawTextSearchFilter}
+          ${caseLawUpdatedFilter}
+      `
+    : sql`
+        SELECT count(*)::int AS total
+        FROM (
+          SELECT 1
+          FROM case_law_search_documents clsd
+          JOIN case_law_decisions d ON d.id = clsd.decision_id
+          WHERE TRUE
+            ${caseLawUpdatedFilter}
+          LIMIT ${GLOBAL_SEARCH_MAX_OFFSET}
+        ) bounded_case_law
+      `;
+
   const countPromises = [
     countWhen(isFirstPage && hasSelectedEntityType(selected), () =>
       rootDb.execute(sql`
@@ -831,15 +863,7 @@ export const searchGlobal = async ({
       isFirstPage &&
         !restrictToEntities &&
         shouldSearchType(selected, "case-law"),
-      () =>
-        rootDb.execute(sql`
-        SELECT count(*)::int AS total
-        FROM case_law_search_documents clsd
-        JOIN case_law_decisions d ON d.id = clsd.decision_id
-        WHERE TRUE
-          ${caseLawTextSearchFilter}
-          ${caseLawUpdatedFilter}
-      `),
+      () => rootDb.execute(caseLawCountQuery),
     ),
     countWhen(
       isFirstPage && !restrictToEntities && shouldSearchType(selected, "chat"),
@@ -867,6 +891,7 @@ export const searchGlobal = async ({
       ${fileFieldJoin}
       WHERE sd.organization_id = ${organizationId}
         ${entityWorkspaceFilter}
+        ${entityTypeFacetFilter}
         ${entityEditorFilter}
         ${entityMimeFilter}
         ${entityUpdatedFilter}
@@ -887,7 +912,7 @@ export const searchGlobal = async ({
     isFirstPage &&
     !restrictToEntities &&
     !shouldSearchType(selected, type) &&
-    (hasSearchQuery || updatedFrom !== undefined || updatedTo !== undefined);
+    hasBoundedCorpusPredicate;
 
   const matterTypeFacetCountPromise = countWhen(
     shouldCountAlternativeTypeFacet("matter"),
