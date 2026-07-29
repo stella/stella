@@ -1064,7 +1064,7 @@ export const SearchDialog = ({
               {hasVisibleSearch && hasUnavailableSelectedType && (
                 <div className="flex h-full items-center justify-center px-4 py-8">
                   <p className="text-muted-foreground text-sm">
-                    {t("ai.unavailable")}
+                    {t("common.comingSoon")}
                   </p>
                 </div>
               )}

@@ -14,6 +14,13 @@ import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import { fileNameSearchText } from "@/api/lib/search/query";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
+type BuiltSearchDocument = SearchDocumentRow & {
+  sourceVersionId: SafeId<"entityVersion">;
+};
+
+type IndexedSearchDocument = {
+  entityId: SafeId<"entity">;
+};
 
 const linkMetadataSearchText = (metadata: LinkMetadata | null): string => {
   if (!metadata) {
@@ -58,7 +65,7 @@ const extractFieldText = (content: FieldContent): string => {
 
 const buildSearchDocument = async (
   entityId: SafeId<"entity">,
-): Promise<SearchDocumentRow | null> => {
+): Promise<BuiltSearchDocument | null> => {
   const entity = await rootDb.query.entities.findFirst({
     where: { id: { eq: entityId } },
     columns: {
@@ -160,6 +167,7 @@ const buildSearchDocument = async (
     title,
     searchableText: fieldTexts.join(" "),
     language,
+    sourceVersionId: version.id,
     updatedAt: entity.updatedAt ?? entity.createdAt,
   };
 };
@@ -178,12 +186,21 @@ export const upsertSearchDocument = async (
 
   const regconfig = doc.language ?? "simple";
 
-  await rootDb.execute(sql`
+  const indexed = await rootDb.execute<IndexedSearchDocument>(sql`
+    WITH authoritative_source AS MATERIALIZED (
+      SELECT e.id
+      FROM entities e
+      WHERE e.id = ${doc.entityId}
+        AND e.current_version_id = ${doc.sourceVersionId}
+        AND COALESCE(e.updated_at, e.created_at) = ${doc.updatedAt}
+      FOR UPDATE
+    )
     INSERT INTO search_documents (
       entity_id, organization_id, workspace_id,
       kind, title, searchable_text, language,
       updated_at, tsv
-    ) VALUES (
+    )
+    SELECT
       ${doc.entityId},
       ${doc.organizationId},
       ${doc.workspaceId},
@@ -199,7 +216,7 @@ export const upsertSearchDocument = async (
           coalesce(${doc.searchableText}, '')
         ))
       )
-    )
+    FROM authoritative_source
     ON CONFLICT (entity_id) DO UPDATE SET
       organization_id = EXCLUDED.organization_id,
       workspace_id = EXCLUDED.workspace_id,
@@ -209,7 +226,12 @@ export const upsertSearchDocument = async (
       language = EXCLUDED.language,
       updated_at = EXCLUDED.updated_at,
       tsv = EXCLUDED.tsv
+    WHERE EXISTS (SELECT 1 FROM authoritative_source)
+    RETURNING entity_id AS "entityId"
   `);
 
+  if (!indexed.at(0)) {
+    return;
+  }
   await syncWorkspaceSearchActivity(doc.workspaceId);
 };

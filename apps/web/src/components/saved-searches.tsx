@@ -50,6 +50,7 @@ import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
 const SAVED_SEARCHES_PAGE_SIZE = 25;
+const SAVED_SEARCH_NAME_MAX_LENGTH = 256;
 
 type SavedSearchPage = NonNullable<
   Awaited<ReturnType<(typeof api)["saved-searches"]["get"]>>["data"]
@@ -357,6 +358,7 @@ export const SavedSearches = ({
                 autoFocus
                 disabled={isSaving}
                 id="saved-search-name"
+                maxLength={SAVED_SEARCH_NAME_MAX_LENGTH}
                 onChange={(event) => updateDialogName(event.target.value)}
                 placeholder={t("search.saveSearchNamePlaceholder")}
                 value={dialogName}

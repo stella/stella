@@ -8,9 +8,14 @@ import { toSafeId } from "@/api/lib/branded-types";
 const executeMock = mock(
   async (_query: SQL): Promise<Record<string, unknown>[]> => [],
 );
+const upsertSearchDocumentMock = mock(async () => undefined);
 
 void mock.module("@/api/db/root", () => ({
   rootDb: { execute: executeMock },
+}));
+
+void mock.module("@/api/lib/search/index-entity", () => ({
+  upsertSearchDocument: upsertSearchDocumentMock,
 }));
 
 const { repairSearchSemanticTimestamps } =
@@ -18,11 +23,20 @@ const { repairSearchSemanticTimestamps } =
 
 beforeEach(() => {
   executeMock.mockClear();
+  upsertSearchDocumentMock.mockClear();
 });
 
 test("repairs one bounded batch and checkpoints after the update", async () => {
   const entityId = toSafeId<"entity">("11111111-1111-4111-8111-111111111111");
-  executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
+  executeMock
+    .mockResolvedValueOnce([
+      {
+        entityId,
+        repairedEntityId: entityId,
+        searchDocumentMissing: false,
+      },
+    ])
+    .mockResolvedValueOnce([]);
 
   const outcome = await repairSearchSemanticTimestamps({
     jobId: "search.repairSemanticTimestamps.v1",
@@ -47,8 +61,11 @@ test("repairs one bounded batch and checkpoints after the update", async () => {
   );
 
   expect(repairQuery.sql).toContain("LIMIT");
+  expect(repairQuery.sql.indexOf("LIMIT")).toBeLessThan(
+    repairQuery.sql.indexOf("IS DISTINCT FROM"),
+  );
   expect(repairQuery.sql).toContain(
-    "sd.updated_at IS DISTINCT FROM COALESCE(e.updated_at, e.created_at)",
+    "sd.updated_at IS DISTINCT FROM page.semantic_updated_at",
   );
   expect(repairQuery.params).toContain(500);
   expect(checkpointQuery.sql).toContain("SET payload = jsonb_build_object(");
@@ -56,8 +73,70 @@ test("repairs one bounded batch and checkpoints after the update", async () => {
   expect(checkpointQuery.params).toContain(entityId);
 });
 
+test("checkpoints the last scanned row when a clean page needs no repair", async () => {
+  const entityId = toSafeId<"entity">("11111111-1111-4111-8111-111111111111");
+  executeMock
+    .mockResolvedValueOnce([
+      {
+        entityId,
+        repairedEntityId: null,
+        searchDocumentMissing: false,
+      },
+    ])
+    .mockResolvedValueOnce([]);
+
+  const outcome = await repairSearchSemanticTimestamps({
+    jobId: "search.repairSemanticTimestamps.v1",
+    leaseToken: "runner#lease-1",
+    payload: { pass: "verify" },
+    signal: new AbortController().signal,
+  });
+
+  expect(outcome).toEqual({
+    status: "progress",
+    cursor: entityId,
+    repaired: 0,
+  });
+  const checkpointQuery = new PgDialect().sqlToQuery(
+    executeMock.mock.calls.at(1)?.at(0) ?? sql``,
+  );
+  expect(checkpointQuery.params).toContain(entityId);
+  expect(checkpointQuery.params).toContain("verify");
+});
+
+test("rebuilds a missing projection before checkpointing its entity", async () => {
+  const entityId = toSafeId<"entity">("11111111-1111-4111-8111-111111111111");
+  executeMock
+    .mockResolvedValueOnce([
+      {
+        entityId,
+        repairedEntityId: null,
+        searchDocumentMissing: true,
+      },
+    ])
+    .mockResolvedValueOnce([]);
+
+  const outcome = await repairSearchSemanticTimestamps({
+    jobId: "search.repairSemanticTimestamps.v1",
+    leaseToken: "runner#lease-1",
+    payload: null,
+    signal: new AbortController().signal,
+  });
+
+  expect(outcome).toEqual({
+    status: "progress",
+    cursor: entityId,
+    repaired: 1,
+  });
+  expect(upsertSearchDocumentMock).toHaveBeenCalledWith(entityId);
+});
+
 test("requires a clean verification pass before disabling the job", async () => {
-  executeMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+  executeMock
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([]);
 
   const restartOutcome = await repairSearchSemanticTimestamps({
     jobId: "search.repairSemanticTimestamps.v1",

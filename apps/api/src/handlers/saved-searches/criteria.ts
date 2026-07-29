@@ -91,6 +91,23 @@ const hasValidCustomTimeRange = (
   time.updatedTo === undefined ||
   time.updatedFrom <= time.updatedTo;
 
+const normalizeSavedSearchTime = (
+  time: v.InferOutput<typeof savedSearchTimeFilterSchema> | undefined,
+): SavedSearchTimeFilter | undefined => {
+  if (time?.type === "preset") {
+    return { type: "preset", preset: time.preset };
+  }
+  if (!time) {
+    return undefined;
+  }
+
+  return {
+    type: "custom",
+    ...(time.updatedFrom !== undefined && { updatedFrom: time.updatedFrom }),
+    ...(time.updatedTo !== undefined && { updatedTo: time.updatedTo }),
+  };
+};
+
 /**
  * Parses and normalizes persisted criteria for every write path. Workspace-only
  * searches are deliberately rejected: the UI preloads a workspace and such a
@@ -103,6 +120,7 @@ export const validateSavedSearchCriteria = (
   if (!parsed.success) {
     return criteriaError("Invalid saved search criteria");
   }
+  const time = normalizeSavedSearchTime(parsed.output.time);
 
   const criteria: SavedSearchCriteria = {
     version: parsed.output.version,
@@ -112,7 +130,7 @@ export const validateSavedSearchCriteria = (
     kinds: [...parsed.output.kinds],
     editedByUserIds: parsed.output.editedByUserIds.map(brandPersistedUserId),
     mimeTypes: [...parsed.output.mimeTypes],
-    ...(parsed.output.time !== undefined && { time: parsed.output.time }),
+    ...(time !== undefined && { time }),
     sort: parsed.output.sort,
   };
 

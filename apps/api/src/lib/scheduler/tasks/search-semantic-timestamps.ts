@@ -5,12 +5,14 @@ import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 
 export const REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK =
   "search.repairSemanticTimestamps" as const;
 
 /** Keep every repair transaction small while the versioned job drains. */
 const REPAIR_BATCH_SIZE = 500;
+const MISSING_INDEX_CONCURRENCY = 4;
 const REPAIR_PASS = {
   repair: "repair",
   verify: "verify",
@@ -18,8 +20,10 @@ const REPAIR_PASS = {
 
 type RepairPass = (typeof REPAIR_PASS)[keyof typeof REPAIR_PASS];
 
-type RepairedSearchDocument = {
+type RepairPageRow = {
   entityId: SafeId<"entity">;
+  repairedEntityId: SafeId<"entity"> | null;
+  searchDocumentMissing: boolean;
 };
 
 type RepairSearchSemanticTimestampsOptions = {
@@ -45,15 +49,14 @@ type RepairState = {
 };
 
 const repairState = (payload: SchedulerPayload | null): RepairState => {
-  if (payload?.["pass"] === REPAIR_PASS.verify) {
-    return { cursor: null, pass: REPAIR_PASS.verify };
-  }
-
   const cursor = payload?.["cursor"];
-  if (typeof cursor === "string") {
-    return { cursor, pass: REPAIR_PASS.repair };
-  }
-  return { cursor: null, pass: REPAIR_PASS.repair };
+  return {
+    cursor: typeof cursor === "string" ? cursor : null,
+    pass:
+      payload?.["pass"] === REPAIR_PASS.verify
+        ? REPAIR_PASS.verify
+        : REPAIR_PASS.repair,
+  };
 };
 
 export const repairSearchSemanticTimestamps = async ({
@@ -69,33 +72,42 @@ export const repairSearchSemanticTimestamps = async ({
   const state = repairState(payload);
   // audit: skip — this changes only a derived search projection; the
   // scheduler run and versioned job cursor are the durable operator trail.
-  const repaired = await rootDb.execute<RepairedSearchDocument>(sql`
-    WITH candidates AS (
+  const pageRows = await rootDb.execute<RepairPageRow>(sql`
+    WITH page AS MATERIALIZED (
       SELECT
-        sd.entity_id,
-        COALESCE(e.updated_at, e.created_at) AS semantic_updated_at
-      FROM search_documents sd
-      INNER JOIN entities e ON e.id = sd.entity_id
-      WHERE (${state.cursor}::uuid IS NULL OR sd.entity_id > ${state.cursor}::uuid)
-        AND sd.updated_at IS DISTINCT FROM COALESCE(e.updated_at, e.created_at)
-      ORDER BY sd.entity_id
+        e.id AS entity_id,
+        COALESCE(e.updated_at, e.created_at) AS semantic_updated_at,
+        sd.entity_id IS NULL AS search_document_missing
+      FROM entities e
+      LEFT JOIN search_documents sd ON sd.entity_id = e.id
+      WHERE (${state.cursor}::uuid IS NULL OR e.id > ${state.cursor}::uuid)
+        AND e.current_version_id IS NOT NULL
+      ORDER BY e.id
       LIMIT ${REPAIR_BATCH_SIZE}
-      FOR UPDATE OF sd
+    ),
+    repaired AS (
+      UPDATE search_documents sd
+      SET updated_at = page.semantic_updated_at
+      FROM page
+      WHERE sd.entity_id = page.entity_id
+        AND sd.updated_at IS DISTINCT FROM page.semantic_updated_at
+      RETURNING sd.entity_id
     )
-    UPDATE search_documents sd
-    SET updated_at = candidates.semantic_updated_at
-    FROM candidates
-    WHERE sd.entity_id = candidates.entity_id
-    RETURNING sd.entity_id AS "entityId"
+    SELECT
+      page.entity_id AS "entityId",
+      repaired.entity_id AS "repairedEntityId",
+      page.search_document_missing AS "searchDocumentMissing"
+    FROM page
+    LEFT JOIN repaired ON repaired.entity_id = page.entity_id
+    ORDER BY page.entity_id
   `);
+  const last = pageRows.at(-1);
 
-  const last = repaired.at(-1);
   if (!last) {
     if (state.pass === REPAIR_PASS.repair) {
-      // A rolling deployment can still contain an older indexer that writes
-      // reindex time after this cursor has passed an entity. Start a clean
-      // verification pass before disabling so every repaired range is
-      // revisited after old writers have had a chance to drain.
+      // The database write guard rejects legacy indexers that still send
+      // reindex time during a rolling deployment. A clean second pass can
+      // therefore prove this fixed point before the one-shot job disables.
       await rootDb.execute(sql`
         UPDATE scheduler_jobs
         SET payload = jsonb_build_object('pass', ${REPAIR_PASS.verify})
@@ -116,13 +128,32 @@ export const repairSearchSemanticTimestamps = async ({
     return { status: "complete" };
   }
 
+  const missingEntityIds = pageRows.flatMap((row) =>
+    row.searchDocumentMissing ? [row.entityId] : [],
+  );
+  for (
+    let start = 0;
+    start < missingEntityIds.length;
+    start += MISSING_INDEX_CONCURRENCY
+  ) {
+    if (signal.aborted) {
+      return { status: "aborted" };
+    }
+    // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- bounded repair: each four-entity chunk drains before the next so decrypt and projection work cannot overwhelm Postgres
+    await Promise.all(
+      missingEntityIds
+        .slice(start, start + MISSING_INDEX_CONCURRENCY)
+        .map(upsertSearchDocument),
+    );
+  }
+
   // Checkpoint last: a replay after the projection update but before this
   // write safely finds no mismatch and advances again.
   await rootDb.execute(sql`
     UPDATE scheduler_jobs
     SET payload = jsonb_build_object(
       'cursor', ${last.entityId}::text,
-      'pass', ${REPAIR_PASS.repair}
+      'pass', ${state.pass}
     )
     WHERE id = ${jobId}
       AND locked_by = ${leaseToken}
@@ -131,7 +162,9 @@ export const repairSearchSemanticTimestamps = async ({
   return {
     status: "progress",
     cursor: last.entityId,
-    repaired: repaired.length,
+    repaired:
+      pageRows.filter((row) => row.repairedEntityId !== null).length +
+      missingEntityIds.length,
   };
 };
 

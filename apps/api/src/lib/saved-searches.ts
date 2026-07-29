@@ -12,8 +12,8 @@ export type SavedSearchTimeFilter =
   | { type: "preset"; preset: "day" | "week" | "month" | "year" }
   | {
       type: "custom";
-      updatedFrom?: string | undefined;
-      updatedTo?: string | undefined;
+      updatedFrom?: string;
+      updatedTo?: string;
     };
 
 /** Versioned, portable subset of the global-search request (no pagination). */
