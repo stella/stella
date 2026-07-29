@@ -66,6 +66,32 @@ describe("nextRecomputeDelayMs", () => {
     ).toBe(RETRY_DELAY_MS);
   });
 
+  test("idle waits the full interval", () => {
+    expect(
+      nextRecomputeDelayMs({
+        outcome: RECOMPUTE_OUTCOME.IDLE,
+        consecutiveFailures: 0,
+        retryDelayMs: RETRY_DELAY_MS,
+        intervalMs: INTERVAL_MS,
+      }),
+    ).toBe(INTERVAL_MS);
+  });
+
+  test("fresh waits out the remainder, clamped into the schedule's range", () => {
+    const freshDelay = (freshRemainingMs: number): number =>
+      nextRecomputeDelayMs({
+        outcome: RECOMPUTE_OUTCOME.FRESH,
+        consecutiveFailures: 0,
+        freshRemainingMs,
+        retryDelayMs: RETRY_DELAY_MS,
+        intervalMs: INTERVAL_MS,
+      });
+
+    expect(freshDelay(2 * 60 * 60 * 1000)).toBe(2 * 60 * 60 * 1000);
+    expect(freshDelay(1)).toBe(RETRY_DELAY_MS);
+    expect(freshDelay(INTERVAL_MS * 2)).toBe(INTERVAL_MS);
+  });
+
   test("a recompute that succeeded waits the full interval", () => {
     expect(
       nextRecomputeDelayMs({

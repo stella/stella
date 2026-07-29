@@ -21,7 +21,11 @@ import { panic } from "better-result";
 
 import { caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode, envBase } from "@/api/env-base";
-import { tryRecomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
+import {
+  hasResolvedCitations,
+  latestCitationAuthorityRecomputeAt,
+  tryRecomputeCitationAuthorityForAll,
+} from "@/api/handlers/case-law/citation-authority";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
@@ -1029,31 +1033,63 @@ export const runCaseLawIngest = async (
   const citationAuthorityLoop = (async () => {
     await Bun.sleep(CITATION_AUTHORITY_STARTUP_DELAY_MS);
     let consecutiveFailures = 0;
+    // Deployments restart the daemon well inside the recompute interval; a
+    // recompute committed by the previous process must count, so the first
+    // real attempt is gated on a one-time freshness probe.
+    let startupFreshnessPending = true;
     while (true) {
       if (isDraining()) {
         return;
       }
       let outcome: RecomputeOutcome = RECOMPUTE_OUTCOME.FAILED;
+      let freshRemainingMs = 0;
       try {
-        // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
-        const courtWeightEntries = await loadCourtWeightEntries();
-        // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
-        const updated = await ingestionDb(async (tx) => {
-          const count = await tryRecomputeCitationAuthorityForAll(tx, {
-            courtWeightEntries,
+        // oxlint-disable-next-line no-await-in-loop -- O(1) partial-index probe once per scheduled attempt
+        const rankable = await ingestionDb(hasResolvedCitations);
+        if (!rankable) {
+          // A recompute would scan every citation to update nothing.
+          outcome = RECOMPUTE_OUTCOME.IDLE;
+          logInfo(
+            "[citation-authority] Idle (no resolved citations to rank yet)",
+          );
+        } else if (startupFreshnessPending) {
+          startupFreshnessPending = false;
+          // oxlint-disable-next-line no-await-in-loop -- one-time probe per process start
+          const latest = await ingestionDb(latestCitationAuthorityRecomputeAt);
+          const ageMs = latest
+            ? Date.now() - latest.getTime()
+            : Number.POSITIVE_INFINITY;
+          if (ageMs < CITATION_AUTHORITY_INTERVAL_MS) {
+            outcome = RECOMPUTE_OUTCOME.FRESH;
+            freshRemainingMs = CITATION_AUTHORITY_INTERVAL_MS - ageMs;
+            logInfo(
+              `[citation-authority] Fresh (last recompute ${Math.round(ageMs / 60_000)}m ago); waiting out the interval`,
+            );
+          }
+        }
+        // Still at its FAILED initialization = no gate fired; attempt the
+        // recompute (which then reports skipped/recomputed/failed itself).
+        if (outcome === RECOMPUTE_OUTCOME.FAILED) {
+          // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
+          const courtWeightEntries = await loadCourtWeightEntries();
+          // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
+          const updated = await ingestionDb(async (tx) => {
+            const count = await tryRecomputeCitationAuthorityForAll(tx, {
+              courtWeightEntries,
+            });
+            return count;
           });
-          return count;
-        });
-        if (updated === null) {
-          outcome = RECOMPUTE_OUTCOME.SKIPPED;
-          logInfo(
-            "[citation-authority] Skipped (recompute already running in another process)",
-          );
-        } else {
-          outcome = RECOMPUTE_OUTCOME.RECOMPUTED;
-          logInfo(
-            `[citation-authority] Recomputed (${updated} cited decisions)`,
-          );
+          if (updated === null) {
+            outcome = RECOMPUTE_OUTCOME.SKIPPED;
+            logInfo(
+              "[citation-authority] Skipped (recompute already running in another process)",
+            );
+          } else {
+            outcome = RECOMPUTE_OUTCOME.RECOMPUTED;
+            logInfo(
+              `[citation-authority] Recomputed (${updated} cited decisions)`,
+            );
+          }
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
@@ -1072,6 +1108,7 @@ export const runCaseLawIngest = async (
         nextRecomputeDelayMs({
           outcome,
           consecutiveFailures,
+          freshRemainingMs,
           retryDelayMs: CITATION_AUTHORITY_RETRY_DELAY_MS,
           intervalMs: CITATION_AUTHORITY_INTERVAL_MS,
         }),

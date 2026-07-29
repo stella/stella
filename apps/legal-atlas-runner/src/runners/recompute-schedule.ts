@@ -10,6 +10,10 @@ export const RECOMPUTE_OUTCOME = {
   RECOMPUTED: "recomputed",
   SKIPPED: "skipped",
   FAILED: "failed",
+  /** Nothing to rank: no citation has resolved to a target yet. */
+  IDLE: "idle",
+  /** A previous process recomputed recently; wait out the remainder. */
+  FRESH: "fresh",
 } as const;
 
 export type RecomputeOutcome =
@@ -21,6 +25,11 @@ type RecomputeDelayOptions = {
   consecutiveFailures: number;
   retryDelayMs: number;
   intervalMs: number;
+  /**
+   * For `fresh` only: how much of the interval the last committed
+   * recompute has left. Clamped into [retryDelayMs, intervalMs].
+   */
+  freshRemainingMs?: number;
 };
 
 /**
@@ -44,12 +53,17 @@ export const nextRecomputeDelayMs = ({
   consecutiveFailures,
   retryDelayMs,
   intervalMs,
+  freshRemainingMs = 0,
 }: RecomputeDelayOptions): number => {
   switch (outcome) {
     case RECOMPUTE_OUTCOME.RECOMPUTED:
       return intervalMs;
     case RECOMPUTE_OUTCOME.SKIPPED:
       return retryDelayMs;
+    case RECOMPUTE_OUTCOME.IDLE:
+      return intervalMs;
+    case RECOMPUTE_OUTCOME.FRESH:
+      return Math.min(Math.max(freshRemainingMs, retryDelayMs), intervalMs);
     case RECOMPUTE_OUTCOME.FAILED:
       return Math.min(
         retryDelayMs * 2 ** Math.max(0, consecutiveFailures - 1),
