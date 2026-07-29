@@ -289,6 +289,41 @@ const sqlLexStateAfter = (
   return state;
 };
 
+type SqlBranchTextPart = {
+  endsBranch: boolean;
+  text: string;
+};
+
+const SQL_QUERY_BOUNDARY = /;|\b(?:except|intersect|union(?:\s+all)?)\b/giu;
+
+const splitAtSqlQueryBoundaries = (
+  text: string,
+  initialState: SqlLexState,
+): SqlBranchTextPart[] => {
+  const parts: SqlBranchTextPart[] = [];
+  let scanCursor = 0;
+  let partStart = 0;
+  let scanState = initialState;
+  for (const match of text.matchAll(SQL_QUERY_BOUNDARY)) {
+    const matchIndex = match.index;
+    const matchText = match.at(0);
+    if (matchIndex === undefined || matchText === undefined) {
+      continue;
+    }
+    scanState = sqlLexStateAfter(text.slice(scanCursor, matchIndex), scanState);
+    const isBoundary = scanState.type === "normal";
+    scanState = sqlLexStateAfter(matchText, scanState);
+    scanCursor = matchIndex + matchText.length;
+    if (!isBoundary) {
+      continue;
+    }
+    parts.push({ endsBranch: true, text: text.slice(partStart, matchIndex) });
+    partStart = scanCursor;
+  }
+  parts.push({ endsBranch: false, text: text.slice(partStart) });
+  return parts;
+};
+
 export default {
   meta: { name: "require-search-scope" },
   rules: {
@@ -477,17 +512,28 @@ export default {
             for (const [table, projection] of Object.entries(
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
+              let hasUnscopedBranch = false;
               let unscopedReadCount = 0;
               let scopeEligibleReadCount = 0;
               let sqlLexState: SqlLexState = { type: "normal" };
               for (const [index, token] of tokens.entries()) {
                 if (token.type === "text") {
-                  const aliases = projectionReadAliases(token.value, table);
-                  unscopedReadCount += aliases.length;
-                  scopeEligibleReadCount += aliases.filter(
-                    (alias) => alias === projection.expectedAlias,
-                  ).length;
-                  sqlLexState = sqlLexStateAfter(token.value, sqlLexState);
+                  for (const part of splitAtSqlQueryBoundaries(
+                    token.value,
+                    sqlLexState,
+                  )) {
+                    const aliases = projectionReadAliases(part.text, table);
+                    unscopedReadCount += aliases.length;
+                    scopeEligibleReadCount += aliases.filter(
+                      (alias) => alias === projection.expectedAlias,
+                    ).length;
+                    sqlLexState = sqlLexStateAfter(part.text, sqlLexState);
+                    if (part.endsBranch) {
+                      hasUnscopedBranch ||= unscopedReadCount > 0;
+                      unscopedReadCount = 0;
+                      scopeEligibleReadCount = 0;
+                    }
+                  }
                   continue;
                 }
                 if (
@@ -517,7 +563,7 @@ export default {
                   scopeEligibleReadCount -= 1;
                 }
               }
-              if (unscopedReadCount === 0) {
+              if (!hasUnscopedBranch && unscopedReadCount === 0) {
                 continue;
               }
               context.report({

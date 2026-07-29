@@ -97,6 +97,19 @@ const unsafeMultiBranch = sql`
   SELECT * FROM search_documents sd WHERE true
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a later UNION branch cannot authorize an earlier private read
+const unsafeScopeInLaterBranch = sql`
+  SELECT * FROM search_documents sd
+  UNION ALL
+  SELECT sd.* FROM entities sd WHERE true ${entityWorkspaceFilter}
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a later statement cannot authorize an earlier private read
+const unsafeScopeInLaterStatement = sql`
+  SELECT * FROM search_documents sd;
+  SELECT sd.* FROM entities sd WHERE true ${entityWorkspaceFilter}
+`;
+
 const scopedEntity = sql`
   SELECT *
   FROM search_documents sd
@@ -181,6 +194,8 @@ void [
   unsafeComposedPrivateRead,
   unsafeWrongProjectionAlias,
   unsafeMultiBranch,
+  unsafeScopeInLaterBranch,
+  unsafeScopeInLaterStatement,
   scopedEntity,
   scopedSingleWorkspace,
   scopedInterpolatedEntity,
