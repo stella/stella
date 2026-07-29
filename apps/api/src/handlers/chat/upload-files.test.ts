@@ -20,6 +20,7 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const fileBytes = new TextEncoder().encode("Jan Novak,Acme");
+const IMAGE_PNG_MIME_TYPE = "image/png";
 const arrayBufferMock = mock(async () =>
   fileBytes.buffer.slice(
     fileBytes.byteOffset,
@@ -138,8 +139,38 @@ describe("chat attachment hydration", () => {
       type: "rawOverride",
       part: {
         metadata: { filename: "scan.pdf" },
-        source: { mimeType: PDF_MIME_TYPE },
+        source: {
+          type: "data",
+          value: Buffer.from(fileBytes).toString("base64"),
+          mimeType: PDF_MIME_TYPE,
+        },
         type: "document",
+      },
+    });
+  });
+
+  test("keeps raw image attachments URL-backed for provider adapters", async () => {
+    const result = await hydrateFilePart({
+      fileName: "scan.png",
+      mimeType: IMAGE_PNG_MIME_TYPE,
+      sendMode: CHAT_SEND_MODE.rawOverride,
+      s3Key: "user/file",
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value).toMatchObject({
+      type: "rawOverride",
+      part: {
+        metadata: { filename: "scan.png" },
+        source: {
+          type: "url",
+          value: toDataUrl(fileBytes, IMAGE_PNG_MIME_TYPE),
+          mimeType: IMAGE_PNG_MIME_TYPE,
+        },
+        type: "image",
       },
     });
   });

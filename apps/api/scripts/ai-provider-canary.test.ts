@@ -1,15 +1,74 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import {
+  CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
+  DEFAULT_MODELS,
+  isBYOKProviderRoleSupported,
+} from "@stll/ai-catalog";
+
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 
 import {
   CanaryProviderRunError,
+  createPdfCanaryMessages,
   errorSummary,
+  PDF_CANARY_TOKEN,
+  pdfCanarySelection,
   toolRoundTripInputSchema,
   toolRoundTripInputSchemaForProvider,
   toolRoundTripPromptForProvider,
 } from "./ai-provider-canary";
+import { CANARY_PROVIDERS } from "./ai-provider-canary-config";
+
+describe("AI provider PDF canary contract", () => {
+  test("sends a real inline PDF rather than a text-only pdf-role probe", () => {
+    const message = createPdfCanaryMessages().at(0);
+    expect(message?.role).toBe("user");
+    const content = message?.content;
+    if (!Array.isArray(content)) {
+      throw new TypeError("Expected multimodal PDF canary message");
+    }
+
+    const text = content.find((part) => part.type === "text");
+    expect(text?.content).not.toContain(PDF_CANARY_TOKEN);
+    const document = content.find((part) => part.type === "document");
+    expect(document?.source.type).toBe("data");
+    if (!document || document.source.type !== "data") {
+      throw new Error("Expected inline PDF canary data");
+    }
+
+    const bytes = Buffer.from(document.source.value, "base64");
+    expect(bytes.subarray(0, 8).toString()).toBe("%PDF-1.4");
+    expect(bytes.toString()).toContain(PDF_CANARY_TOKEN);
+  });
+
+  test("covers every provider with an available PDF attachment path", () => {
+    for (const provider of CANARY_PROVIDERS) {
+      const selection = pdfCanarySelection(provider);
+      if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
+        expect(selection).toEqual({
+          modelId: DEFAULT_MODELS[provider].pdf,
+          role: "pdf",
+        });
+        continue;
+      }
+
+      const chatAttachmentModel =
+        CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider].at(0);
+      expect(selection).toEqual(
+        chatAttachmentModel === undefined
+          ? null
+          : { modelId: chatAttachmentModel, role: "chat" },
+      );
+    }
+
+    expect(pdfCanarySelection("mistral")).toEqual({
+      modelId: "mistral-medium-latest",
+      role: "chat",
+    });
+  });
+});
 
 describe("AI provider canary tool contract", () => {
   test("keeps the omission marker outside the application schema", () => {

@@ -290,12 +290,30 @@ export const createRawChatFilePart = ({
   bytes: Uint8Array;
   fileName: string;
   mimeType: string;
-}): ChatAttachmentPart =>
-  createChatAttachmentPart({
-    filename: fileName,
-    mimeType,
-    url: toDataUrl(bytes, mimeType),
-  });
+}): ChatAttachmentPart => {
+  const metadata = { filename: fileName };
+
+  if (mimeType.startsWith("image/")) {
+    return {
+      type: "image",
+      source: {
+        type: "url",
+        value: toDataUrl(bytes, mimeType),
+        mimeType,
+      },
+      metadata,
+    };
+  }
+  return {
+    type: "document",
+    source: {
+      type: "data",
+      value: Buffer.from(bytes).toString("base64"),
+      mimeType,
+    },
+    metadata,
+  };
+};
 
 /**
  * Wraps extracted attachment text with a filename header so the model has the

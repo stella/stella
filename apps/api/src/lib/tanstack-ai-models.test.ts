@@ -14,6 +14,7 @@ import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { StellaOpenRouterTextAdapter } from "@/api/lib/stella-openrouter-text-adapter";
 import type { TanStackModelOptions } from "@/api/lib/tanstack-ai-models";
 
 process.env["EMAIL_PROVIDER"] ??= "smtp";
@@ -416,6 +417,7 @@ describe("TanStack text model resolution", () => {
     });
     expect(model.adapter.name).toBe("openrouter");
     expect(model.adapter.model).toBe("google/gemini-3.5-flash");
+    expect(model.adapter).toBeInstanceOf(StellaOpenRouterTextAdapter);
   });
 
   test("resolves Mistral BYOK selections through the TanStack adapter", () => {

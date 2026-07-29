@@ -1,9 +1,10 @@
 import { chat, EventType, maxIterations, toolDefinition } from "@tanstack/ai";
-import type { Tool } from "@tanstack/ai";
+import type { ModelMessage, Tool } from "@tanstack/ai";
 import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
 import {
+  CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
   DEFAULT_MODELS,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
@@ -22,6 +23,7 @@ import {
   resolveTanStackTextModel,
 } from "@/api/lib/tanstack-ai-generate";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 import {
   CANARY_TIERS,
@@ -48,6 +50,10 @@ const MODEL_ROLE_PROBE_TIMEOUT_MS = 30_000;
 const TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS = 45_000;
 const MILLISECONDS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 const SYNTHETIC_PROMPT = "Reply with exactly OK.";
+export const PDF_CANARY_TOKEN = "STELLA_PDF_CANARY_OK";
+const PDF_CANARY_FILENAME = "stella-provider-canary.pdf";
+const PDF_CANARY_PROMPT =
+  "Read the attached PDF and reply with exactly the uppercase identifier printed on its page.";
 const TOOL_SCHEMA_PROMPT = "Do not call any tool. Reply with exactly OK.";
 const TOOL_ROUND_TRIP_NAME = "canary_round_trip";
 const TOOL_ROUND_TRIP_VALUE = "stella-canary";
@@ -79,8 +85,54 @@ const SAFE_CANARY_ERROR_MESSAGES = new Set([
   "Provider did not execute the weekly canary tool exactly once.",
   "Provider returned unexpected weekly canary tool arguments.",
   "Provider did not return the weekly canary tool result.",
+  "Provider did not read the attached PDF.",
   "Provider returned no text.",
 ]);
+
+const createSyntheticPdf = (): Uint8Array => {
+  const stream = `BT /F1 18 Tf 72 720 Td (${PDF_CANARY_TOKEN}) Tj ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf);
+  const entries = offsets
+    .map((offset) => `${offset.toString().padStart(10, "0")} 00000 n \n`)
+    .join("");
+  pdf +=
+    `xref\n0 ${objects.length + 1}\n` +
+    `0000000000 65535 f \n${entries}` +
+    `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n` +
+    `startxref\n${xrefOffset}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
+};
+
+export const createPdfCanaryMessages = (): ModelMessage[] => [
+  {
+    role: "user",
+    content: [
+      { type: "text", content: PDF_CANARY_PROMPT },
+      {
+        type: "document",
+        source: {
+          type: "data",
+          value: Buffer.from(createSyntheticPdf()).toString("base64"),
+          mimeType: PDF_MIME_TYPE,
+        },
+        metadata: { filename: PDF_CANARY_FILENAME },
+      },
+    ],
+  },
+];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -280,6 +332,22 @@ type CanaryContext = {
   provider: CanaryProvider;
 };
 
+type PdfCanarySelection = {
+  modelId: string;
+  role: "chat" | "pdf";
+};
+
+export const pdfCanarySelection = (
+  provider: CanaryProvider,
+): PdfCanarySelection | null => {
+  if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
+    return { modelId: DEFAULT_MODELS[provider].pdf, role: "pdf" };
+  }
+
+  const modelId = CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider].at(0);
+  return modelId === undefined ? null : { modelId, role: "chat" };
+};
+
 type WeeklyCanaryContext = CanaryContext & {
   rotatedConfig: OrgAIConfig;
   rotation: WeeklyCanaryRotation;
@@ -391,15 +459,32 @@ const runModelRoleProbe = async ({
   role,
   signal,
 }: RunModelRoleProbeOptions): Promise<void> => {
+  const selection =
+    role === "pdf"
+      ? pdfCanarySelection(provider)
+      : { modelId: DEFAULT_MODELS[provider][role], role };
+  if (selection === null) {
+    throw new TypeError("Canary resolved an unexpected provider model.");
+  }
+  const probeConfig =
+    selection.role === role
+      ? config
+      : {
+          ...config,
+          overrideModels: {
+            ...config.overrideModels,
+            [selection.role]: {
+              modelId: selection.modelId,
+              provider,
+            },
+          },
+        };
   const model = resolveTanStackTextModel({
     organizationId: null,
-    orgAIConfig: config,
-    role,
+    orgAIConfig: probeConfig,
+    role: selection.role,
   });
-  if (
-    model.provider !== provider ||
-    model.modelId !== DEFAULT_MODELS[provider][role]
-  ) {
+  if (model.provider !== provider || model.modelId !== selection.modelId) {
     throw new TypeError("Canary resolved an unexpected provider model.");
   }
 
@@ -407,13 +492,15 @@ const runModelRoleProbe = async ({
     abortSignal: signal,
     caching: NO_CACHING,
     maxOutputTokens: modelRoleMaxOutputTokens(role),
+    ...(role === "pdf"
+      ? { messages: createPdfCanaryMessages() }
+      : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
-    orgAIConfig: config,
-    prompt: SYNTHETIC_PROMPT,
-    role,
+    orgAIConfig: probeConfig,
+    role: selection.role,
     serviceTier: "standard",
   });
-  requireNonEmptyText(output);
+  requireExpectedRoleOutput(output, role);
 };
 
 type RunWeeklyModelRoleProbeOptions = {
@@ -440,13 +527,15 @@ const runWeeklyModelRoleProbe = async ({
     abortSignal: signal,
     caching: NO_CACHING,
     maxOutputTokens: modelRoleMaxOutputTokens(role),
+    ...(role === "pdf"
+      ? { messages: createPdfCanaryMessages() }
+      : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
     orgAIConfig: rotatedConfig,
-    prompt: SYNTHETIC_PROMPT,
     role,
     serviceTier: "standard",
   });
-  requireNonEmptyText(output);
+  requireExpectedRoleOutput(output, role);
 };
 
 type RunToolCallRoundTripProbeOptions = {
@@ -625,6 +714,13 @@ const requireNonEmptyText = (output: string): void => {
   }
 };
 
+const requireExpectedRoleOutput = (output: string, role: ModelRole): void => {
+  requireNonEmptyText(output);
+  if (role === "pdf" && output.trim() !== PDF_CANARY_TOKEN) {
+    throw new TypeError("Provider did not read the attached PDF.");
+  }
+};
+
 const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
   const modelIdForRole = (role: ModelRole) =>
     rotatedModelId !== undefined &&
@@ -763,7 +859,11 @@ const probeLabel = (context: CanaryContext, probe: Probe): string => {
     return probe.name;
   }
 
-  return `role-${probe.role}:${DEFAULT_MODELS[context.provider][probe.role]}`;
+  const modelId =
+    probe.role === "pdf"
+      ? pdfCanarySelection(context.provider)?.modelId
+      : DEFAULT_MODELS[context.provider][probe.role];
+  return `role-${probe.role}:${modelId ?? "unsupported"}`;
 };
 
 const run = async (): Promise<void> => {
@@ -822,10 +922,12 @@ const runProbes = async (
   const label = probeLabel(context, probe);
   if (
     probe.type === "model-role" &&
-    !isBYOKProviderRoleSupported({
-      provider: context.provider,
-      role: probe.role,
-    })
+    (probe.role === "pdf"
+      ? pdfCanarySelection(context.provider) === null
+      : !isBYOKProviderRoleSupported({
+          provider: context.provider,
+          role: probe.role,
+        }))
   ) {
     console.log(
       `[ai-canary] ${context.provider}/${label}: skipped (unsupported role)`,
