@@ -33,6 +33,13 @@ const CITATION_PATTERNS: RegExp[] = [
   // insolvency). Same shape as sp. zn. under a different prefix.
   /sen\.\s*zn\.\s*(?<caseNumber>\d{1,3}\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
+  // Czech letter-first registries without a senate number:
+  // "sp. zn. Nt 408/2023" (criminal auxiliary), "sp. zn. A 9/2003"
+  // (pre-2003 administrative). The registry run is short and must be
+  // followed by a space and digits, which keeps agency file numbers
+  // ("MSP-725/2022") out.
+  /sp\.\s*zn\.\s*(?<caseNumber>\p{L}{1,4}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+
   // Czech Constitutional Court: "IV. ÚS 23/05", "Pl. ÚS 12/94" — the
   // senate is a Roman numeral (or Pl. for the plenum), so the digit-led
   // pattern above never matches these. The bare form also covers the
@@ -52,8 +59,9 @@ const CITATION_PATTERNS: RegExp[] = [
   // Slovak case number: "sp. zn. 1Cdo/123/2020"
   /sp\.\s*zn\.\s*\d{1,3}[A-Za-z]{1,5}\/\d{1,6}\/\d{4}/gu,
 
-  // Generic: "rozsudek č.j. 5 As 123/2020"
-  /[čc]\.\s*j\.\s*(?<caseNumber>\d{1,3}\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  // Generic: "rozsudek č.j. 5 As 123/2020"; registrars also write
+  // "č. j.: 137 Ex 1850/23".
+  /[čc]\.\s*j\.:?\s*(?<caseNumber>\d{1,3}\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   PL_PREFIXED_PATTERN,
 

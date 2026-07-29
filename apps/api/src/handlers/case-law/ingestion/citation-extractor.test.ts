@@ -74,6 +74,25 @@ describe("extractCitations", () => {
     expect(texts).toContain("T-13/99");
   });
 
+  test("extracts letter-first registries without a senate number", () => {
+    const text =
+      "usnesení sp. zn. Nt 408/2023 a rozhodnutí sp. zn. A 9/2003, " +
+      "nikoli spisu Ministerstva sp. zn. MSP-725/2022-ODKA-SPZ/7";
+    const texts = extractCitations([{ index: 0, text }]).map(
+      (c) => c.citationText,
+    );
+    expect(texts).toContain("sp. zn. Nt 408/2023");
+    expect(texts).toContain("sp. zn. A 9/2003");
+    expect(texts).toHaveLength(2);
+  });
+
+  test("extracts č. j. with a colon", () => {
+    const text = "vyrozumění soudního exekutora č. j.: 137 Ex 1850/23";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("č. j.: 137 Ex 1850/23");
+  });
+
   test("does not treat statute references as citations", () => {
     const text = "podle § 237 o. s. ř. a zákona č. 40/2009 Sb.";
     expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
