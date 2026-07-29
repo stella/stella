@@ -42,6 +42,8 @@ const importSkillsBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Import one or more discovered skills from source URLs into the selected scope.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: importSkillsBodySchema,

@@ -63,6 +63,7 @@ import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
+import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-rate-limit";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
@@ -467,6 +468,7 @@ const api = new Elysia()
             return (
               isUploadRateLimitedPath(pathname) ||
               isFolioCollabRateLimitedPath(pathname) ||
+              isSkillSourceRateLimitedRequest(req) ||
               isStyleSetUploadRateLimitedRequest(req)
             );
           },

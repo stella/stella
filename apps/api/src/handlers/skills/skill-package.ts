@@ -119,7 +119,8 @@ export const createSkillPackageFetchContext = (): SkillPackageFetchContext => ({
   githubTrees: new Map(),
 });
 
-export const getOrCreateGithubTreeRequest = async ({
+// eslint-disable-next-line promise-function-async -- preserves the cached promise identity so concurrent callers share the same request
+export const getOrCreateGithubTreeRequest = ({
   cacheKey,
   context,
   load,
@@ -592,7 +593,7 @@ const fetchGithubTreeOnce = async ({
   repo: string;
 }): Promise<GithubTreeItem[]> => {
   const cacheKey = `${owner}\0${repo}\0${commitSha}`;
-  return getOrCreateGithubTreeRequest({
+  return await getOrCreateGithubTreeRequest({
     cacheKey,
     context,
     load: async () =>
@@ -1101,14 +1102,14 @@ const discoverGithubSkillPackages = async (
   });
   const entries = await mapWithConcurrency({
     transform: async (skillPath): Promise<DiscoveredSkillPackage | null> => {
-      const source = await fetchGithubSkillSource({
-        budget,
-        commitSha,
-        owner: target.owner,
-        path: skillPath,
-        repo: target.repo,
-      });
       try {
+        const source = await fetchGithubSkillSource({
+          budget,
+          commitSha,
+          owner: target.owner,
+          path: skillPath,
+          repo: target.repo,
+        });
         const parsed = parseMarkdownSkillPackage(source);
         const skillDir =
           skillPath === SKILL_FILE_NAME

@@ -270,9 +270,11 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | -------------------------- | ------------------ | ------------- | ------- | -------------------------------------------------------------------- |
 | `skills.create`            | write              | stella:skills | —       | generic invoke → `stella capability skills create`                   |
 | `skills.delete`            | write, destructive | stella:skills | —       | generic invoke → `stella capability skills delete`                   |
+| `skills.discover`          | write              | stella:skills | —       | generic invoke → `stella capability skills discover`                 |
 | `skills.from-blueprint`    | write              | stella:skills | —       | generic invoke → `stella capability skills from-blueprint`           |
 | `skills.generate-draft`    | write              | stella:skills | —       | generic invoke → `stella capability skills generate-draft`           |
 | `skills.get`               | read               | stella:skills | —       | generic invoke → `stella capability skills get`                      |
+| `skills.import`            | write              | stella:skills | —       | generic invoke → `stella capability skills import`                   |
 | `skills.import-url`        | write              | stella:skills | —       | generic invoke → `stella capability skills import-url`               |
 | `skills.list`              | read               | stella:skills | —       | generic invoke → `stella capability skills list`                     |
 | `skills.list-commands`     | read               | stella:skills | —       | generic invoke → `stella capability skills list-commands`            |

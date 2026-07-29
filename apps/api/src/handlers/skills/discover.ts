@@ -11,6 +11,8 @@ const discoverSkillUrlBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Discover importable skills from a GitHub repository or SKILL.md URL.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: discoverSkillUrlBodySchema,

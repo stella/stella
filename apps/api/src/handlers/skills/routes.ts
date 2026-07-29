@@ -3,12 +3,12 @@ import { rateLimit } from "elysia-rate-limit";
 
 import createSkill from "@/api/handlers/skills/create";
 import deleteSkill from "@/api/handlers/skills/delete";
-import discoverSkillUrl from "@/api/handlers/skills/discover-url";
+import discoverSkillUrl from "@/api/handlers/skills/discover";
 import fromBlueprint from "@/api/handlers/skills/from-blueprint";
 import generateSkillDraft from "@/api/handlers/skills/generate-draft";
 import getSkill from "@/api/handlers/skills/get";
+import importSkillsFromUrls from "@/api/handlers/skills/import";
 import importSkillFromUrl from "@/api/handlers/skills/import-url";
-import importSkillsFromUrls from "@/api/handlers/skills/import-urls";
 import listSkills from "@/api/handlers/skills/list";
 import listSkillCommands from "@/api/handlers/skills/list-commands";
 import createSkillResource from "@/api/handlers/skills/resources/create";

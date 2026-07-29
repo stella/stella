@@ -139,8 +139,8 @@ const ImportSkillDialogBody = ({
       setSelected(failedUrls);
       stellaToast.add({
         title: tSkills("importPartial", {
-          failed: result.failed.length,
-          installed: result.installed.length,
+          failed: String(result.failed.length),
+          installed: String(result.installed.length),
         }),
         description: t("common.unexpectedError"),
         type: "warning",
@@ -265,31 +265,36 @@ const ImportSkillDialogBody = ({
                   type="button"
                   variant="ghost"
                 >
-                  {t("common.selectAll")}
+                  {t("folio.selectAll")}
                 </Button>
               )}
             </div>
 
             {discovery.skills.length > MAX_SELECTED_SKILLS && (
               <p className="text-muted-foreground text-xs">
-                {tSkills("selectionLimit", { count: MAX_SELECTED_SKILLS })}
+                {tSkills("selectionLimit", {
+                  count: String(MAX_SELECTED_SKILLS),
+                })}
               </p>
             )}
 
             <div className="border-border flex max-h-80 flex-col overflow-y-auto rounded-lg border">
-              {discovery.skills.map((skill) => {
+              {discovery.skills.map((skill, index) => {
                 const checked = selected.has(skill.sourceUrl);
+                const checkboxId = `import-skill-${index}`;
                 const selectionFull =
                   selected.size >= MAX_SELECTED_SKILLS && !checked;
                 return (
                   <label
                     className="hover:bg-muted/50 flex min-h-11 items-start gap-3 p-3 transition-colors"
+                    htmlFor={checkboxId}
                     key={skill.sourceUrl}
                   >
                     <Checkbox
                       checked={checked}
                       className="mt-0.5"
                       disabled={busy || selectionFull}
+                      id={checkboxId}
                       onCheckedChange={(next) =>
                         toggleSkill(skill.sourceUrl, next)
                       }
@@ -380,7 +385,7 @@ const ImportSkillDialogBody = ({
             {importSkills.isPending && (
               <LoaderIcon className="size-4 animate-spin" />
             )}
-            {tSkills("importSelected", { count: selected.size })}
+            {tSkills("importSelected", { count: String(selected.size) })}
           </Button>
         )}
       </DialogFooter>
