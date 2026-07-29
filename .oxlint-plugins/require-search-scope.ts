@@ -237,6 +237,7 @@ const SQL_ALIAS_STOP_WORDS = new Set([
   "right",
   "set",
   "union",
+  "using",
   "values",
   "where",
   "window",
@@ -257,14 +258,14 @@ const SQL_IDENTIFIER_PATTERN = `(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)`;
 const SQL_RELATION_PATH_PATTERN =
   `${SQL_IDENTIFIER_PATTERN}` + `(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*`;
 const SQL_RELATION_REFERENCE = new RegExp(
-  `(?:\\b(?:from|join|table)\\s+|,\\s*)` +
+  `(?:\\b(?:from|join|table|using)\\s+|,\\s*)` +
     `(?:only\\s+)?(?:\\(\\s*)*(?:only\\s+)?` +
     `(${SQL_RELATION_PATH_PATTERN})` +
     `(?:\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN}))?`,
   "giu",
 );
 const SQL_FROM_CLAUSE_BOUNDARY =
-  /\b(?:except|from|group|having|intersect|limit|offset|order|returning|union|where|window)\b/giu;
+  /\b(?:except|from|group|having|intersect|limit|offset|order|returning|union|using|where|window)\b/giu;
 
 const normalizeSqlIdentifier = (identifier: string): string => {
   if (identifier.startsWith('"') && identifier.endsWith('"')) {
@@ -281,7 +282,7 @@ const finalRelationIdentifier = (path: string): string | null => {
     : normalizeSqlIdentifier(finalIdentifier);
 };
 
-const commaIntroducesFromRelation = (
+const commaIntroducesReadRelation = (
   text: string,
   commaIndex: number,
 ): boolean => {
@@ -292,15 +293,16 @@ const commaIntroducesFromRelation = (
     );
   const boundaries = [...precedingText.matchAll(SQL_FROM_CLAUSE_BOUNDARY)];
   const latestBoundary = boundaries.at(-1);
-  if (latestBoundary?.at(0)?.toLowerCase() !== "from") {
+  const latestKeyword = latestBoundary?.at(0)?.toLowerCase();
+  if (latestKeyword !== "from" && latestKeyword !== "using") {
     return false;
   }
-  const fromIndex = latestBoundary.index;
-  if (fromIndex === undefined) {
+  const clauseIndex = latestBoundary?.index;
+  if (clauseIndex === undefined) {
     return false;
   }
   let parenthesisDepth = 0;
-  for (const character of precedingText.slice(fromIndex)) {
+  for (const character of precedingText.slice(clauseIndex)) {
     if (character === "(") {
       parenthesisDepth += 1;
     } else if (character === ")") {
@@ -309,6 +311,14 @@ const commaIntroducesFromRelation = (
   }
   return parenthesisDepth === 0;
 };
+
+const relationReferenceIsDeleteTarget = (
+  structuralText: string,
+  matchIndex: number,
+  fullMatch: string,
+): boolean =>
+  /^\s*from\b/iu.test(fullMatch) &&
+  /\bdelete\s*$/iu.test(structuralText.slice(0, matchIndex));
 
 const projectionReadAliases = (
   text: string,
@@ -328,9 +338,15 @@ const projectionReadAliases = (
       continue;
     }
     if (
+      match.index !== undefined &&
+      relationReferenceIsDeleteTarget(structuralText, match.index, fullMatch)
+    ) {
+      continue;
+    }
+    if (
       fullMatch.trimStart().startsWith(",") &&
       (match.index === undefined ||
-        !commaIntroducesFromRelation(structuralText, match.index))
+        !commaIntroducesReadRelation(structuralText, match.index))
     ) {
       continue;
     }
@@ -362,7 +378,7 @@ const hasProjectionReadIntroducer = (
     precedingText = token.value + precedingText;
   }
   if (
-    /\b(?:from|join|table)\s+(?:only\s+)?(?:\(\s*)*(?:only\s+)?$/iu.test(
+    /\b(?:from|join|table|using)\s+(?:only\s+)?(?:\(\s*)*(?:only\s+)?$/iu.test(
       precedingText,
     )
   ) {
@@ -372,7 +388,24 @@ const hasProjectionReadIntroducer = (
     /,\s*(?:only\s+)?(?:\(\s*)*(?:only\s+)?$/iu,
   );
   return (
-    commaIndex >= 0 && commaIntroducesFromRelation(precedingText, commaIndex)
+    commaIndex >= 0 && commaIntroducesReadRelation(precedingText, commaIndex)
+  );
+};
+
+const interpolationIsDeleteTarget = (
+  tokens: readonly SqlTemplateToken[],
+  expressionIndex: number,
+): boolean => {
+  let precedingText = "";
+  for (let index = expressionIndex - 1; index >= 0; index -= 1) {
+    const token = tokens.at(index);
+    if (token?.type !== "text") {
+      break;
+    }
+    precedingText = token.value + precedingText;
+  }
+  return /\bdelete\s+from\s+(?:only\s+)?(?:\(\s*)*(?:only\s+)?$/iu.test(
+    precedingText,
   );
 };
 
@@ -786,6 +819,7 @@ const SQL_CLAUSE_KEYWORDS = [
   "select",
   "set",
   "not",
+  "using",
   "values",
   "where",
   "window",
@@ -797,7 +831,7 @@ const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
   SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
 
 const SQL_SCOPE_CONTEXT_TOKEN =
-  /[()]|\b(?:not\s+)?in\s*\(\s*(?:false|true)\s*\)|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
+  /[()]|\b(?:not\s+)?in\s*\(\s*(?:false|true)\s*\)|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|using|values|where|window)\b/giu;
 
 const INVERSE_BOOLEAN_MEMBERSHIP_TESTS = new Set(["in(false)", "notin(true)"]);
 
@@ -981,6 +1015,7 @@ const sqlScopeContextAfter = (
       case "returning":
       case "select":
       case "set":
+      case "using":
       case "values":
       case "window":
         context.clause = "non-filtering";
@@ -1152,6 +1187,111 @@ export default {
             return unwrapExpression(definition.node.init);
           }
           return unwrapped;
+        };
+
+        const FUNCTION_NODE_TYPES = new Set([
+          "ArrowFunctionExpression",
+          "FunctionDeclaration",
+          "FunctionExpression",
+        ]);
+
+        const functionReturnExpressions = (
+          functionNode: AstNode,
+        ): unknown[] => {
+          const body = functionNode.body;
+          if (!isAstNode(body)) {
+            return [];
+          }
+          if (body.type !== "BlockStatement") {
+            return [body];
+          }
+
+          const expressions: unknown[] = [];
+          const visited = new Set<unknown>();
+          const visit = (value: unknown): void => {
+            if (Array.isArray(value)) {
+              for (const element of value) {
+                visit(element);
+              }
+              return;
+            }
+            if (!isAstNode(value) || visited.has(value)) {
+              return;
+            }
+            visited.add(value);
+            if (value.type === "ReturnStatement") {
+              if (value.argument !== null && value.argument !== undefined) {
+                expressions.push(value.argument);
+              }
+              return;
+            }
+            if (value !== body && FUNCTION_NODE_TYPES.has(value.type)) {
+              return;
+            }
+            for (const [key, child] of Object.entries(value)) {
+              if (key !== "parent") {
+                visit(child);
+              }
+            }
+          };
+          visit(body);
+          return expressions;
+        };
+
+        type LocalSqlHelper = {
+          functionNode: AstNode;
+          returns: unknown[];
+        };
+
+        const resolveLocalZeroArgumentHelper = (
+          call: AstNode,
+        ): LocalSqlHelper | null => {
+          if (
+            !Array.isArray(call.arguments) ||
+            call.arguments.length > 0 ||
+            !isIdentifier(call.callee)
+          ) {
+            return null;
+          }
+          const variable = resolveVariable(call.callee);
+          for (const definition of variable?.defs ?? []) {
+            let functionNode: AstNode | null = null;
+            if (
+              definition.type === "FunctionName" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "FunctionDeclaration"
+            ) {
+              functionNode = definition.node;
+            } else if (
+              definition.type === "Variable" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "VariableDeclarator" &&
+              isAstNode(definition.parent) &&
+              definition.parent.type === "VariableDeclaration" &&
+              definition.parent.kind === "const"
+            ) {
+              const initializer = unwrapExpression(definition.node.init);
+              if (
+                isAstNode(initializer) &&
+                (initializer.type === "ArrowFunctionExpression" ||
+                  initializer.type === "FunctionExpression")
+              ) {
+                functionNode = initializer;
+              }
+            }
+            if (
+              functionNode === null ||
+              !Array.isArray(functionNode.params) ||
+              functionNode.params.length > 0
+            ) {
+              continue;
+            }
+            const returns = functionReturnExpressions(functionNode);
+            if (returns.length > 0) {
+              return { functionNode, returns };
+            }
+          }
+          return null;
         };
 
         const expressionTokenPaths = (value: unknown): SqlTemplateToken[][] => [
@@ -1335,6 +1475,14 @@ export default {
                 textBoundary: "exact",
               });
             }
+            const localHelper = resolveLocalZeroArgumentHelper(resolved);
+            if (
+              localHelper !== null &&
+              !nextAncestors.has(localHelper.functionNode)
+            ) {
+              nextAncestors.add(localHelper.functionNode);
+              return flattenSqlAlternatives(localHelper.returns, nextAncestors);
+            }
             return flattenSqlAlternatives(resolved.arguments, nextAncestors);
           }
           if (
@@ -1453,7 +1601,7 @@ export default {
             )
             .map((token) => token.value)
             .join(" ");
-          if (!/\b(?:select|table)\b/iu.test(text)) {
+          if (!/\b(?:delete|select|table|update)\b/iu.test(text)) {
             return;
           }
 
@@ -1530,6 +1678,7 @@ export default {
                 if (
                   queryState.sqlLexState.type === "normal" &&
                   hasProjectionReadIntroducer(tokens, index) &&
+                  !interpolationIsDeleteTarget(tokens, index) &&
                   isPrivateProjectionInterpolation(
                     token.value,
                     projection.tableImports,

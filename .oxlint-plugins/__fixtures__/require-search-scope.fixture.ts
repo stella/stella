@@ -50,6 +50,36 @@ const unsafeAliasedInterpolatedEntity = sql`
   SELECT * FROM ${privateSearchTable} sd
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves UPDATE FROM reads cannot omit authorization
+const unsafeUpdateFromEntity = sql`
+  UPDATE entities e
+  SET title = sd.title
+  FROM search_documents sd
+  WHERE e.id = sd.entity_id
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves interpolated UPDATE FROM reads cannot omit authorization
+const unsafeInterpolatedUpdateFromEntity = sql`
+  UPDATE entities e
+  SET title = sd.title
+  FROM ${searchDocuments} sd
+  WHERE e.id = sd.entity_id
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves DELETE USING reads cannot omit authorization
+const unsafeDeleteUsingEntity = sql`
+  DELETE FROM entities e
+  USING search_documents sd
+  WHERE e.id = sd.entity_id
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves interpolated DELETE USING reads cannot omit authorization
+const unsafeInterpolatedDeleteUsingEntity = sql`
+  DELETE FROM entities e
+  USING ${searchDocuments} sd
+  WHERE e.id = sd.entity_id
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves counts cannot omit authorization either
 const unsafeChatCount = sql`SELECT count(*) FROM chat_thread_search_documents cst`;
 
@@ -130,6 +160,18 @@ const unsafeComposedPrivateRead = (() => {
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an ordinary SQL fragment cannot hide a private projection
   return sql`SELECT * ${privateFrom}`;
 })();
+
+const privateFrom = () => sql`FROM search_documents sd`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a local zero-argument helper cannot hide a private projection
+const unsafeLocalHelperPrivateRead = sql`SELECT * ${privateFrom()}`;
+
+const privateFromBlock = () => {
+  return sql`FROM search_documents sd`;
+};
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves block-returning local helpers cannot hide a private projection
+const unsafeBlockHelperPrivateRead = sql`SELECT * ${privateFromBlock()}`;
 
 const unsafeJoinedPrivateFragment = (() => {
   const privateFragments = [sql`FROM search_documents sd`];
@@ -391,6 +433,36 @@ const scopedAliasedInterpolatedEntity = sql`
   WHERE true ${entityWorkspaceFilter}
 `;
 
+const scopedUpdateFromEntity = sql`
+  UPDATE entities e
+  SET title = sd.title
+  FROM search_documents sd
+  WHERE e.id = sd.entity_id
+    AND true ${entityWorkspaceFilter}
+`;
+
+const scopedInterpolatedUpdateFromEntity = sql`
+  UPDATE entities e
+  SET title = sd.title
+  FROM ${searchDocuments} sd
+  WHERE e.id = sd.entity_id
+    AND true ${entityWorkspaceFilter}
+`;
+
+const scopedDeleteUsingEntity = sql`
+  DELETE FROM entities e
+  USING search_documents sd
+  WHERE e.id = sd.entity_id
+    AND true ${entityWorkspaceFilter}
+`;
+
+const scopedInterpolatedDeleteUsingEntity = sql`
+  DELETE FROM entities e
+  USING ${searchDocuments} sd
+  WHERE e.id = sd.entity_id
+    AND true ${entityWorkspaceFilter}
+`;
+
 const scopedExplicitAlias = sql`
   SELECT * FROM search_documents AS sd WHERE true ${entityWorkspaceFilter}
 `;
@@ -449,6 +521,18 @@ const scopedComposedRead = (() => {
   const scopedWhere = sql`WHERE true ${entityWorkspaceFilter}`;
   return sql`SELECT * ${privateFrom} ${scopedWhere}`;
 })();
+
+const scopedPrivateFrom = () =>
+  sql`FROM search_documents sd WHERE true ${entityWorkspaceFilter}`;
+const scopedLocalHelperPrivateRead = sql`SELECT * ${scopedPrivateFrom()}`;
+
+const scopedPrivateFromBlock = () => {
+  return sql`FROM search_documents sd`;
+};
+const scopedBlockHelperPrivateRead = sql`
+  SELECT * ${scopedPrivateFromBlock()}
+  WHERE true ${entityWorkspaceFilter}
+`;
 
 const scopedJoinedPrivateFragment = (() => {
   const fragments = [
@@ -536,6 +620,28 @@ const writeOnlyInterpolatedEntityProjection = sql`
   SELECT id FROM entities
 `;
 
+const writeOnlyUpdateEntityProjection = sql`
+  UPDATE search_documents sd
+  SET title = sd.title
+  WHERE sd.entity_id = ${organizationId}
+`;
+
+const writeOnlyInterpolatedUpdateEntityProjection = sql`
+  UPDATE ${searchDocuments}
+  SET title = title
+  WHERE entity_id = ${organizationId}
+`;
+
+const writeOnlyDeleteEntityProjection = sql`
+  DELETE FROM search_documents
+  WHERE entity_id = ${organizationId}
+`;
+
+const writeOnlyInterpolatedDeleteEntityProjection = sql`
+  DELETE FROM ${searchDocuments}
+  WHERE entity_id = ${organizationId}
+`;
+
 // Public case law is intentionally organization-independent.
 const publicCaseLaw = sql`SELECT * FROM case_law_search_documents clsd`;
 
@@ -548,6 +654,10 @@ void [
   unsafeCommaFormInterpolatedEntity,
   unsafeInterpolatedEntity,
   unsafeAliasedInterpolatedEntity,
+  unsafeUpdateFromEntity,
+  unsafeInterpolatedUpdateFromEntity,
+  unsafeDeleteUsingEntity,
+  unsafeInterpolatedDeleteUsingEntity,
   unsafeChatCount,
   unsafeConditionalScope,
   unsafeNestedHelper,
@@ -563,6 +673,8 @@ void [
   unsafeOnlyInterpolatedEntity,
   unsafeCommaOnlyInterpolatedEntity,
   unsafeComposedPrivateRead,
+  unsafeLocalHelperPrivateRead,
+  unsafeBlockHelperPrivateRead,
   unsafeJoinedPrivateFragment,
   unsafeSplitJoinedPrivateFragment,
   unsafeJoinedMultiBranch,
@@ -604,6 +716,10 @@ void [
   scopedSingleWorkspace,
   scopedInterpolatedEntity,
   scopedAliasedInterpolatedEntity,
+  scopedUpdateFromEntity,
+  scopedInterpolatedUpdateFromEntity,
+  scopedDeleteUsingEntity,
+  scopedInterpolatedDeleteUsingEntity,
   scopedExplicitAlias,
   scopedAfterLineComment,
   scopedAfterDollarQuote,
@@ -615,6 +731,8 @@ void [
   scopedNotInFalseMembership,
   scopedNestedPrivateRead,
   scopedComposedRead,
+  scopedLocalHelperPrivateRead,
+  scopedBlockHelperPrivateRead,
   scopedJoinedPrivateFragment,
   scopedParenthesizedJoinedEntity,
   scopedParenthesizedJoinedInterpolatedEntity,
@@ -628,5 +746,9 @@ void [
   scopedChat,
   writeOnlyEntityProjection,
   writeOnlyInterpolatedEntityProjection,
+  writeOnlyUpdateEntityProjection,
+  writeOnlyInterpolatedUpdateEntityProjection,
+  writeOnlyDeleteEntityProjection,
+  writeOnlyInterpolatedDeleteEntityProjection,
   publicCaseLaw,
 ];
