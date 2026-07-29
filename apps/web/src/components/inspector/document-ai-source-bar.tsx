@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import {
   ChevronLeftIcon,
@@ -17,7 +17,7 @@ import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { FileTab } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
-import { useAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
@@ -95,8 +95,6 @@ export const DocumentAiSourceBar = ({
   const [isAnswerExpanded, setIsAnswerExpanded] = useState(false);
 
   // Eagerly generate bboxes when the justification bar mounts.
-  const queryClient = useQueryClient();
-  const analytics = useAnalytics();
   const setScrollTo = useOptionalPDFStore((s) => s.setScrollTo);
   const pages = useOptionalPDFStore((s) => s.pages);
   const justificationId = justification?.id;
@@ -135,7 +133,7 @@ export const DocumentAiSourceBar = ({
       "generate-bounding-boxes",
       justificationId,
     ],
-    queryFn: async ({ signal }) => {
+    queryFn: async ({ client, signal }) => {
       // `enabled` gates this query on `justificationId !== undefined`, so an
       // undefined id here is an impossible invariant, not a runtime state.
       if (justificationId === undefined) {
@@ -154,13 +152,13 @@ export const DocumentAiSourceBar = ({
         if (response.error) {
           throw toAPIError(response.error);
         }
-        await queryClient.invalidateQueries({
+        await client.invalidateQueries({
           queryKey: workspaceKeys.justifications(workspaceId),
         });
         return response.data;
       });
       if (Result.isError(result)) {
-        analytics.captureError(result.error);
+        getAnalytics().captureError(result.error);
         throw result.error;
       }
       return result.value;
@@ -192,8 +190,8 @@ export const DocumentAiSourceBar = ({
       "bounding-box-poll",
       justificationId,
     ],
-    queryFn: async () => {
-      await queryClient.invalidateQueries({
+    queryFn: async ({ client }) => {
+      await client.invalidateQueries({
         queryKey: workspaceKeys.justifications(workspaceId),
       });
       return true;

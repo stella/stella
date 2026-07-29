@@ -569,8 +569,9 @@ export const ExternalReferencePanel = ({
       tab.sourceToolName !== undefined ||
       storedSource?.connectorSlug !== undefined ||
       storedSource?.sourceToolName !== undefined);
+  const previewErrorTitle = t("common.somethingWentWrong");
   const { data: fetchedPreview, isLoading: previewLoading } = useQuery({
-    queryKey: ["external-preview", tab.url],
+    queryKey: ["external-preview", tab.url, previewErrorTitle],
     queryFn: async ({ signal }) => {
       const response = await api["external-preview"].get({
         query: { url: tab.url },
@@ -587,7 +588,7 @@ export const ExternalReferencePanel = ({
           if (!toastedPreviewFailures.has(toastKey)) {
             toastedPreviewFailures.add(toastKey);
             stellaToast.add({
-              title: t("common.somethingWentWrong"),
+              title: previewErrorTitle,
               description: error.message,
               type: "error",
             });
