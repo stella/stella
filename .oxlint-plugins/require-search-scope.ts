@@ -202,11 +202,14 @@ const leadingProjectionAlias = (text: string): string | null => {
 };
 
 type SqlLexState =
-  | "block-comment"
-  | "double-quote"
-  | "line-comment"
-  | "normal"
-  | "single-quote";
+  | { type: "block-comment"; depth: number }
+  | { type: "dollar-quote"; delimiter: string }
+  | { type: "double-quote" }
+  | { type: "line-comment" }
+  | { type: "normal" }
+  | { type: "single-quote" };
+
+const DOLLAR_QUOTE_START = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/u;
 
 const sqlLexStateAfter = (
   text: string,
@@ -216,43 +219,65 @@ const sqlLexStateAfter = (
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
     const next = text[index + 1];
-    switch (state) {
+    switch (state.type) {
       case "normal":
         if (char === "-" && next === "-") {
-          state = "line-comment";
+          state = { type: "line-comment" };
           index += 1;
         } else if (char === "/" && next === "*") {
-          state = "block-comment";
+          state = { type: "block-comment", depth: 1 };
           index += 1;
         } else if (char === "'") {
-          state = "single-quote";
+          state = { type: "single-quote" };
         } else if (char === '"') {
-          state = "double-quote";
+          state = { type: "double-quote" };
+        } else if (char === "$") {
+          const delimiter = text.slice(index).match(DOLLAR_QUOTE_START)?.at(0);
+          if (delimiter) {
+            state = { type: "dollar-quote", delimiter };
+            index += delimiter.length - 1;
+          }
         }
         break;
       case "line-comment":
         if (char === "\n" || char === "\r") {
-          state = "normal";
+          state = { type: "normal" };
         }
         break;
       case "block-comment":
-        if (char === "*" && next === "/") {
-          state = "normal";
+        if (char === "/" && next === "*") {
+          state = { type: "block-comment", depth: state.depth + 1 };
+          index += 1;
+        } else if (char === "*" && next === "/") {
+          state =
+            state.depth === 1
+              ? { type: "normal" }
+              : { type: "block-comment", depth: state.depth - 1 };
           index += 1;
         }
         break;
       case "single-quote":
-        if (char === "'" && next === "'") {
+        if (char === "\\" && next !== undefined) {
+          index += 1;
+        } else if (char === "'" && next === "'") {
           index += 1;
         } else if (char === "'") {
-          state = "normal";
+          state = { type: "normal" };
         }
         break;
       case "double-quote":
-        if (char === '"' && next === '"') {
+        if (char === "\\" && next !== undefined) {
+          index += 1;
+        } else if (char === '"' && next === '"') {
           index += 1;
         } else if (char === '"') {
-          state = "normal";
+          state = { type: "normal" };
+        }
+        break;
+      case "dollar-quote":
+        if (text.startsWith(state.delimiter, index)) {
+          index += state.delimiter.length - 1;
+          state = { type: "normal" };
         }
         break;
       default: {
@@ -272,7 +297,7 @@ export default {
         type: "problem",
         messages: {
           missingScope:
-            "Raw SELECT from private search projection `{{table}}` must " +
+            "Raw read from private search projection `{{table}}` must " +
             "compose an approved workspace/contact/chat authorization scope " +
             "fragment. Add the appropriate scope helper; do not post-filter.",
         },
@@ -445,7 +470,7 @@ export default {
               )
               .map((token) => token.value)
               .join(" ");
-            if (!/\bselect\b/iu.test(text)) {
+            if (!/\b(?:select|table)\b/iu.test(text)) {
               return;
             }
 
@@ -454,7 +479,7 @@ export default {
             )) {
               let unscopedReadCount = 0;
               let scopeEligibleReadCount = 0;
-              let sqlLexState: SqlLexState = "normal";
+              let sqlLexState: SqlLexState = { type: "normal" };
               for (const [index, token] of tokens.entries()) {
                 if (token.type === "text") {
                   const aliases = projectionReadAliases(token.value, table);
@@ -466,7 +491,7 @@ export default {
                   continue;
                 }
                 if (
-                  sqlLexState === "normal" &&
+                  sqlLexState.type === "normal" &&
                   isPrivateProjectionInterpolation(
                     token.value,
                     projection.tableImports,
@@ -485,7 +510,7 @@ export default {
                 if (
                   unscopedReadCount > 0 &&
                   scopeEligibleReadCount > 0 &&
-                  sqlLexState === "normal" &&
+                  sqlLexState.type === "normal" &&
                   isApprovedScopeFragment(token.value, projection.scopeImports)
                 ) {
                   unscopedReadCount -= 1;

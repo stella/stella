@@ -17,7 +17,7 @@ export const TS_HEADLINE_CONFIG =
 // Preview is fetched for one selected hit, never for the search result list.
 // More fragments make the pane useful while keeping the response bounded.
 export const SEARCH_PREVIEW_HEADLINE_CONFIG =
-  "MaxWords=220, MinWords=80, MaxFragments=8, FragmentDelimiter=...\n\n, " +
+  'MaxWords=220, MinWords=80, MaxFragments=8, FragmentDelimiter="...\n\n", ' +
   `StartSel=${HIGHLIGHT_START}, ` +
   `StopSel=${HIGHLIGHT_STOP}`;
 

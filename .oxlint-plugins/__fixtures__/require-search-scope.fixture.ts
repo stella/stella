@@ -60,6 +60,21 @@ const unsafeBlockCommentScope = sql`
   SELECT * FROM search_documents sd /* ${entityWorkspaceFilter} */
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves nested block comments cannot hide their closing delimiter
+const unsafeNestedBlockCommentScope = sql`
+  SELECT * FROM search_documents sd
+  /* outer /* nested */ ${entityWorkspaceFilter} */
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves dollar-quoted strings cannot authorize a private read
+const unsafeDollarQuotedScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE $guard$${entityWorkspaceFilter}$guard$ <> ''
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL TABLE shorthand is also a protected read
+const unsafeTableRead = sql`TABLE search_documents`;
+
 const unsafeComposedPrivateRead = (() => {
   const privateFrom = sql`FROM search_documents sd`;
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an ordinary SQL fragment cannot hide a private projection
@@ -110,6 +125,11 @@ const scopedAfterLineComment = sql`
   WHERE true ${entityWorkspaceFilter}
 `;
 
+const scopedAfterDollarQuote = sql`
+  SELECT * FROM search_documents sd
+  WHERE $note$literal$note$ <> '' ${entityWorkspaceFilter}
+`;
+
 const scopedComposedRead = (() => {
   const privateFrom = sql`FROM search_documents sd`;
   const scopedWhere = sql`WHERE true ${entityWorkspaceFilter}`;
@@ -155,6 +175,9 @@ void [
   unsafeShadowedHelper,
   unsafeLineCommentScope,
   unsafeBlockCommentScope,
+  unsafeNestedBlockCommentScope,
+  unsafeDollarQuotedScope,
+  unsafeTableRead,
   unsafeComposedPrivateRead,
   unsafeWrongProjectionAlias,
   unsafeMultiBranch,
@@ -163,6 +186,7 @@ void [
   scopedInterpolatedEntity,
   scopedExplicitAlias,
   scopedAfterLineComment,
+  scopedAfterDollarQuote,
   scopedComposedRead,
   scopedMultiBranch,
   scopedMatter,

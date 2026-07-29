@@ -26,7 +26,7 @@ describe("search result highlighting", () => {
 
   test("separates preview fragments with real paragraph breaks", () => {
     expect(SEARCH_PREVIEW_HEADLINE_CONFIG).toContain(
-      "FragmentDelimiter=...\n\n, ",
+      'FragmentDelimiter="...\n\n", ',
     );
     expect(SEARCH_PREVIEW_HEADLINE_CONFIG).not.toContain("\\n");
   });
