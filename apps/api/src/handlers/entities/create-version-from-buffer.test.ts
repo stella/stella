@@ -70,6 +70,7 @@ const baseInput = {
   fileName: "filled.docx",
   mimeType:
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  source: null,
 };
 
 describe("createEntityVersionFromBuffer", () => {
@@ -113,6 +114,7 @@ describe("createEntityVersionFromBuffer", () => {
         fileId: "file_1",
         fileName: "filled.docx",
         sizeBytes: Buffer.byteLength("filled docx"),
+        source: null,
       }),
     );
     expect(s3DeleteMock).not.toHaveBeenCalled();

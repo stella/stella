@@ -15,8 +15,9 @@ bun --filter @stll/mobile web
 ```
 
 `EXPO_PUBLIC_API_URL` is the API base URL. A simulator can normally use the
-example's `localhost` value; a physical device needs an address reachable from
-the device, such as the development computer's LAN address. This is public
+example's loopback HTTP value. A physical device needs an HTTPS address
+reachable from the device; non-loopback HTTP is rejected so authentication
+cookies and API data are never sent over a cleartext network. This is public
 runtime configuration, never a place for secrets.
 
 Native sessions are managed by Better Auth's Expo integration and persisted in

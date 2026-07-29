@@ -38,6 +38,7 @@ type RecordTemplateFillOptions = {
   templateId: SafeId<"template">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  workspaceId?: SafeId<"workspace"> | undefined;
   /** Output the caller produced (`docx`, `pdf`, `text`). */
   format: string;
   unmatchedCount: number;
@@ -60,6 +61,7 @@ export const recordTemplateFill = async ({
   templateId,
   organizationId,
   userId,
+  workspaceId,
   format,
   unmatchedCount,
   unusedCount,
@@ -79,7 +81,7 @@ export const recordTemplateFill = async ({
     action: AUDIT_ACTION.EXECUTE,
     resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
     resourceId: templateId,
-    workspaceId: null,
+    workspaceId: workspaceId ?? null,
     metadata: { format, status, unmatchedCount },
   });
 };

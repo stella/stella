@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueImageThumbnailOrMarkFailed,
@@ -157,6 +158,7 @@ export const finalizeEntityVersion = async function* ({
         mimeType: declaredMime,
         sizeBytes: declaredSize,
         sha256Hex: declaredSha256Hex,
+        source: UPLOAD_DOCUMENT_SOURCE,
         scanWarnings,
         afterWrite: async ({ versionNumber }) => {
           finalized = {

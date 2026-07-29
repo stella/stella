@@ -22,7 +22,11 @@ import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 
-import { STELLA_DEV_AUTH_COOKIE_PREFIX } from "@stll/api-contract";
+import {
+  STELLA_DEV_AUTH_COOKIE_PREFIX,
+  STELLA_MOBILE_ORIGIN,
+  STELLA_MOBILE_SCHEME,
+} from "@stll/api-contract";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -133,6 +137,39 @@ const isStellaTwoFactorSignInGatePath = (path: string | undefined): boolean =>
  * schema defaults `redirectTo`, so no query string is required here.
  */
 const TWO_FACTOR_CHALLENGE_PATH = "/auth/two-factor";
+const MOBILE_TWO_FACTOR_CHALLENGE_PATH = "/two-factor";
+
+type TwoFactorChallengeRedirectOptions = {
+  callbackLocation: string | null;
+  frontendUrl: string;
+};
+
+/**
+ * Keep a social sign-in's second-factor challenge on the surface that started
+ * it. Better Auth stores the origin-validated callback in OAuth state and
+ * exposes it as the callback response's Location header; only Stella's native
+ * scheme is projected to the native challenge route. All browser and missing
+ * locations use the configured web frontend.
+ */
+export const resolveTwoFactorChallengeRedirect = ({
+  callbackLocation,
+  frontendUrl,
+}: TwoFactorChallengeRedirectOptions): string => {
+  if (
+    callbackLocation !== null &&
+    URL.canParse(callbackLocation) &&
+    new URL(callbackLocation).protocol === `${STELLA_MOBILE_SCHEME}:`
+  ) {
+    return new URL(
+      MOBILE_TWO_FACTOR_CHALLENGE_PATH,
+      STELLA_MOBILE_ORIGIN,
+    ).toString();
+  }
+  return new URL(
+    TWO_FACTOR_CHALLENGE_PATH,
+    `${frontendUrl.replace(/\/$/u, "")}/`,
+  ).toString();
+};
 
 /**
  * True when a sign-in endpoint's response body is the two-factor plugin's
@@ -484,7 +521,13 @@ const socialSignInTwoFactorRedirectPlugin = {
           if (!isTwoFactorRedirectResponse(ctx.context.returned)) {
             return;
           }
-          throw ctx.redirect(`${env.FRONTEND_URL}${TWO_FACTOR_CHALLENGE_PATH}`);
+          throw ctx.redirect(
+            resolveTwoFactorChallengeRedirect({
+              callbackLocation:
+                ctx.context.responseHeaders?.get("location") ?? null,
+              frontendUrl: env.FRONTEND_URL,
+            }),
+          );
         }),
       },
     ],
@@ -682,9 +725,6 @@ const createAuth = () => {
         : {}),
     },
     plugins: [
-      // Translates Expo's explicit origin header into Better Auth's normal
-      // origin validation and carries OAuth cookies through native deep links.
-      expo(),
       bearer(),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.
@@ -765,6 +805,10 @@ const createAuth = () => {
       // Must be registered after `twoFactorWithSignInGate` so its after-hook
       // runs after the two-factor hook has set the pending-challenge response.
       socialSignInTwoFactorRedirectPlugin,
+      // Keep this after the social 2FA redirect hook: Expo must append the
+      // final challenge cookie to the final native deep link, not capture the
+      // temporary first-factor session redirect before 2FA replaces it.
+      expo(),
       organization({
         ac,
         roles,

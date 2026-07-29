@@ -41,7 +41,10 @@ export default function SignInScreen() {
   const { refreshSession } = useAuthSessionActions();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordEmailError, setPasswordEmailError] = useState<string | null>(
+    null,
+  );
+  const [otpEmailError, setOtpEmailError] = useState<string | null>(null);
   const capabilities = useQuery(authCapabilitiesQuery);
 
   const socialSignIn = useMutation({
@@ -85,10 +88,10 @@ export default function SignInScreen() {
       return "complete" as const;
     },
     onError: (error) => {
-      setEmailError(authErrorMessage(error, "Sign-in failed."));
+      setPasswordEmailError(authErrorMessage(error, "Sign-in failed."));
     },
     onSuccess: (result) => {
-      setEmailError(null);
+      setPasswordEmailError(null);
       if (result === "twoFactor") {
         router.push("/two-factor");
       }
@@ -111,12 +114,12 @@ export default function SignInScreen() {
       return normalizedEmail;
     },
     onError: (error) => {
-      setEmailError(
+      setOtpEmailError(
         authErrorMessage(error, "Could not send the sign-in code."),
       );
     },
     onSuccess: (normalizedEmail) => {
-      setEmailError(null);
+      setOtpEmailError(null);
       router.push({ pathname: "/otp", params: { email: normalizedEmail } });
     },
   });
@@ -185,12 +188,13 @@ export default function SignInScreen() {
           <FormField
             autoCapitalize="none"
             autoComplete="email"
-            error={emailError}
+            error={passwordEmailError}
             keyboardType="email-address"
             label="Email"
             onChangeText={(value) => {
               setEmail(value);
-              setEmailError(null);
+              setPasswordEmailError(null);
+              setOtpEmailError(null);
             }}
             returnKeyType="next"
             textContentType="emailAddress"
@@ -223,12 +227,13 @@ export default function SignInScreen() {
           <FormField
             autoCapitalize="none"
             autoComplete="email"
-            error={methods.localPassword ? null : emailError}
+            error={otpEmailError}
             keyboardType="email-address"
             label="Email"
             onChangeText={(value) => {
               setEmail(value);
-              setEmailError(null);
+              setPasswordEmailError(null);
+              setOtpEmailError(null);
             }}
             onSubmitEditing={() => sendEmailOtp.mutate()}
             returnKeyType="send"

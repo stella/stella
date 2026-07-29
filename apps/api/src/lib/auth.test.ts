@@ -15,6 +15,7 @@ import {
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
   resolveMemberAuthorization,
+  resolveTwoFactorChallengeRedirect,
   TWO_FACTOR_MANAGE_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
@@ -358,6 +359,29 @@ describe("isTwoFactorRedirectResponse", () => {
   });
 });
 
+describe("resolveTwoFactorChallengeRedirect", () => {
+  test("returns the native challenge route for a stella deep-link callback", () => {
+    expect(
+      resolveTwoFactorChallengeRedirect({
+        callbackLocation: "stella:///?cookie=session",
+        frontendUrl: "https://app.example.com",
+      }),
+    ).toBe("stella:///two-factor");
+  });
+
+  test.each([null, "https://app.example.com/"])(
+    "returns the web challenge route for callback %p",
+    (callbackLocation) => {
+      expect(
+        resolveTwoFactorChallengeRedirect({
+          callbackLocation,
+          frontendUrl: "https://app.example.com/",
+        }),
+      ).toBe("https://app.example.com/auth/two-factor");
+    },
+  );
+});
+
 describe("TWO_FACTOR_MANAGE_PATHS", () => {
   test("matches every two-factor management path that exposes or changes the second factor", () => {
     expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/enable")).toBe(true);
@@ -419,5 +443,15 @@ describe("session freshness", () => {
     // disabled. If it were re-exposed, relaxing freshAge would let an old
     // session unlink a provider. Keep these two decisions coupled.
     expect(getAuth().options.disabledPaths).toContain("/unlink-account");
+  });
+});
+
+describe("native OAuth plugin order", () => {
+  test("Expo carries the final social 2FA cookie after the redirect is resolved", () => {
+    const pluginIds = getAuth().options.plugins.map((plugin) => plugin.id);
+
+    expect(pluginIds.indexOf("expo")).toBeGreaterThan(
+      pluginIds.indexOf("stella-social-two-factor-redirect"),
+    );
   });
 });

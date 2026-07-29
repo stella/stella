@@ -17,6 +17,9 @@ describe("entity-version persistence parity", () => {
     expect(presigned).toContain("writeFileVersion");
     expect(templates).toContain("persistFilledTemplateVersion");
     expect(templatePersistence).toContain("createEntityVersionFromBuffer");
+    expect(multipart).toContain("source: UPLOAD_DOCUMENT_SOURCE");
+    expect(presigned).toContain("source: UPLOAD_DOCUMENT_SOURCE");
+    expect(templates).toContain("source: null");
 
     for (const transport of [
       multipart,
@@ -39,5 +42,7 @@ describe("entity-version persistence parity", () => {
     expect(core).toContain("ENTITY_VERSION");
     expect(core).toContain("AUDIT_RESOURCE_TYPE.ENTITY");
     expect(core).toContain("entity-read-only");
+    expect(core).toContain("source,");
+    expect(core).toContain("deletedAt: { isNull: true }");
   });
 });

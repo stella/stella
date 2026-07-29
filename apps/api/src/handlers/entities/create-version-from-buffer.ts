@@ -9,6 +9,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DocumentSource } from "@/api/lib/document-source";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
@@ -40,6 +41,7 @@ type CreateEntityVersionFromBufferInput = {
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
+  source: DocumentSource | null;
   scanWarnings?: string[] | undefined;
 };
 
@@ -75,6 +77,7 @@ export const createEntityVersionFromBuffer = async ({
   buffer,
   fileName: rawFileName,
   mimeType,
+  source,
   scanWarnings,
 }: CreateEntityVersionFromBufferInput): Promise<CreateEntityVersionFromBufferResult> => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
@@ -107,6 +110,7 @@ export const createEntityVersionFromBuffer = async ({
         mimeType,
         sizeBytes: bytes.byteLength,
         sha256Hex,
+        source,
         scanWarnings,
       }),
   );

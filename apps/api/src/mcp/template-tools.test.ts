@@ -789,7 +789,11 @@ describe("MCP template tools", () => {
         workspaceId: "ws_1",
         entityId: "entity_1",
         fileName: "lease.docx",
+        source: null,
       }),
+    );
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "ws_1" }),
     );
     expect(parseToolPayload(result)).toEqual({
       action: "create_version",

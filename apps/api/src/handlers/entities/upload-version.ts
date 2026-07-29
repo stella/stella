@@ -4,6 +4,7 @@ import { createEntityVersionFromBuffer } from "@/api/handlers/entities/create-ve
 import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -97,6 +98,7 @@ export default createSafeHandler(
             buffer: fileBuffer,
             fileName: sanitizedName,
             mimeType: file.type,
+            source: UPLOAD_DOCUMENT_SOURCE,
             scanWarnings: getScanWarnings(scanResult.value) ?? undefined,
           }),
         catch: (cause) =>

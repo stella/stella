@@ -1073,6 +1073,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
         buffer: filled.buffer,
         fileName,
         mimeType: DOCX_MIME_TYPE,
+        source: null,
       });
       return Result.isError(created)
         ? { status: "error", message: created.error.message }
@@ -1099,6 +1100,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
           format: "docx",
           unmatchedCount: filled.unmatchedPlaceholders.length,
           unusedCount: filled.unusedValues.length,
+          workspaceId,
           recordAuditEvent,
         }),
     )

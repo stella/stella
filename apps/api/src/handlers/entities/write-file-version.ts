@@ -20,6 +20,7 @@ import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-deri
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DocumentSource } from "@/api/lib/document-source";
 
 export type WriteFileVersionResult =
   | {
@@ -49,6 +50,7 @@ type WriteFileVersionInput = {
   mimeType: string;
   sizeBytes: number;
   sha256Hex: string;
+  source: DocumentSource | null;
   scanWarnings?: string[] | undefined;
   afterWrite?:
     | ((
@@ -78,6 +80,7 @@ export const writeFileVersion = async ({
   mimeType,
   sizeBytes,
   sha256Hex,
+  source,
   scanWarnings,
   afterWrite,
 }: WriteFileVersionInput): Promise<WriteFileVersionResult> => {
@@ -104,7 +107,7 @@ export const writeFileVersion = async ({
 
   const currentVersionId = lockedEntity.currentVersionId;
   const currentVersion = await tx.query.entityVersions.findFirst({
-    where: { id: { eq: currentVersionId } },
+    where: { id: { eq: currentVersionId }, deletedAt: { isNull: true } },
     columns: { versionNumber: true },
     with: {
       fields: { columns: { content: true, propertyId: true } },
@@ -143,6 +146,7 @@ export const writeFileVersion = async ({
     verificationCode: stamp.verificationCode,
     versionNumber,
     workspaceId,
+    source,
   });
 
   await tx.insert(fields).values(
