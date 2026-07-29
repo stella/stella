@@ -93,6 +93,23 @@ const previewHeadline = (title: SQL, body: SQL, tsQuery: SQL) => sql`
   ) AS content
 `;
 
+const previewUnhighlighted = (title: SQL, body: SQL) => sql`
+  left(
+    left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
+      || ' ' ||
+    left(${body}, ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}),
+    ${SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT}
+  ) AS content
+`;
+
+const previewContent = (title: SQL, body: SQL, tsQuery: SQL | null): SQL =>
+  tsQuery
+    ? previewHeadline(title, body, tsQuery)
+    : previewUnhighlighted(title, body);
+
+const previewTextFilter = (searchVector: SQL, tsQuery: SQL | null): SQL =>
+  tsQuery ? sql`AND ${searchVector} @@ ${tsQuery}` : sql.empty();
+
 export const buildSearchPreviewQuery = ({
   query,
   resultId,
@@ -101,7 +118,7 @@ export const buildSearchPreviewQuery = ({
   userId,
   accessibleWorkspaceIds,
 }: SearchPreviewQuery): SQL => {
-  const tsQuery = buildSearchTsQuery(query);
+  const tsQuery = query.trim() ? buildSearchTsQuery(query) : null;
   const workspaceScope = {
     accessibleWorkspaceIds,
     selectedWorkspaceIds: [],
@@ -110,7 +127,7 @@ export const buildSearchPreviewQuery = ({
   switch (type) {
     case "matter":
       return sql`
-        SELECT ${previewHeadline(
+        SELECT ${previewContent(
           sql`wsd.title`,
           sql`wsd.searchable_text`,
           tsQuery,
@@ -121,12 +138,12 @@ export const buildSearchPreviewQuery = ({
           ${workspaceSearchDocumentsAccessSql({
             ...workspaceScope,
           })}
-          AND wsd.tsv @@ ${tsQuery}
+          ${previewTextFilter(sql`wsd.tsv`, tsQuery)}
         LIMIT 1
       `;
     case "contact":
       return sql`
-        SELECT ${previewHeadline(
+        SELECT ${previewContent(
           sql`csd.title`,
           sql`csd.searchable_text`,
           tsQuery,
@@ -138,12 +155,12 @@ export const buildSearchPreviewQuery = ({
             organizationId,
             ...workspaceScope,
           })}
-          AND csd.tsv @@ ${tsQuery}
+          ${previewTextFilter(sql`csd.tsv`, tsQuery)}
         LIMIT 1
       `;
     case "case-law":
       return sql`
-        SELECT ${previewHeadline(
+        SELECT ${previewContent(
           sql`clsd.title`,
           sql`clsd.searchable_text`,
           tsQuery,
@@ -152,12 +169,12 @@ export const buildSearchPreviewQuery = ({
         JOIN case_law_decisions d ON d.id = clsd.decision_id
         ${redistributableSourceJoin}
         WHERE clsd.decision_id = ${resultId}
-          AND clsd.tsv @@ ${tsQuery}
+          ${previewTextFilter(sql`clsd.tsv`, tsQuery)}
         LIMIT 1
       `;
     case "chat":
       return sql`
-        SELECT ${previewHeadline(
+        SELECT ${previewContent(
           sql`cst.title`,
           sql`cst.searchable_text`,
           tsQuery,
@@ -171,7 +188,7 @@ export const buildSearchPreviewQuery = ({
             accessibleWorkspaceIds,
             selectedWorkspaceIds: [],
           })}
-          AND cst.tsv @@ ${tsQuery}
+          ${previewTextFilter(sql`cst.tsv`, tsQuery)}
         LIMIT 1
       `;
     case "document":
@@ -180,7 +197,7 @@ export const buildSearchPreviewQuery = ({
     case "message":
     case "link":
       return sql`
-        SELECT ${previewHeadline(
+        SELECT ${previewContent(
           sql`sd.title`,
           sql`sd.searchable_text`,
           tsQuery,
@@ -192,7 +209,7 @@ export const buildSearchPreviewQuery = ({
           ${searchDocumentsAccessSql({
             ...workspaceScope,
           })}
-          AND sd.tsv @@ ${tsQuery}
+          ${previewTextFilter(sql`sd.tsv`, tsQuery)}
         LIMIT 1
       `;
     default: {

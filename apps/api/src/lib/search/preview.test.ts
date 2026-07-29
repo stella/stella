@@ -23,11 +23,14 @@ const SEARCH_PREVIEW_BODY_MAX_CHUNK_START =
   1 + (SEARCH_PREVIEW_BODY_CHUNK_LIMIT - 1) * SEARCH_PREVIEW_BODY_CHUNK_STEP;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 
-const compilePreview = (type: GlobalSearchResultType) => {
+const compilePreview = (
+  type: GlobalSearchResultType,
+  query = "closing memo",
+) => {
   const dialect = new PgDialect();
   return dialect.sqlToQuery(
     buildSearchPreviewQuery({
-      query: "closing memo",
+      query,
       resultId,
       type,
       organizationId,
@@ -55,6 +58,19 @@ describe("search preview authorization scope", () => {
         1 +
         SEARCH_PREVIEW_BODY_CHARACTER_LIMIT,
     ).toBe(SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT);
+  });
+
+  test("returns a bounded unhighlighted excerpt for filter-only searches", () => {
+    const compiled = compilePreview("document", "");
+
+    expect(compiled.sql).not.toContain("ts_headline");
+    expect(compiled.sql).not.toContain("@@");
+    expect(compiled.sql).not.toContain("generate_series");
+    expect(compiled.params).toContain(SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT);
+    expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHARACTER_LIMIT);
+    expect(compiled.params).toContain(SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT);
+    expect(compiled.sql).toContain("sd.organization_id =");
+    expect(compiled.sql).toContain("sd.workspace_id = ANY");
   });
 
   test("every workspace entity kind is constrained by org and workspace", () => {

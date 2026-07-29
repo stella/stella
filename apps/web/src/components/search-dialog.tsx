@@ -425,7 +425,6 @@ export const SearchDialog = ({
     highlightedHitId,
     hits: allHits,
     isPlaceholderData,
-    query: searchQuery,
   });
   const showPreview = previewEnabled && !isMobile;
 

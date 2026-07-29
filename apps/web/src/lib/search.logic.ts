@@ -6,16 +6,14 @@ type SelectSearchPreviewHitArgs = {
   highlightedHitId: string | null;
   hits: readonly GlobalSearchHit[];
   isPlaceholderData: boolean;
-  query: string;
 };
 
 export const selectSearchPreviewHit = ({
   highlightedHitId,
   hits,
   isPlaceholderData,
-  query,
 }: SelectSearchPreviewHitArgs): GlobalSearchHit | null => {
-  if (isPlaceholderData || normalizeSearchQuery(query) === "") {
+  if (isPlaceholderData) {
     return null;
   }
   return hits.find((hit) => hit.id === highlightedHitId) ?? hits.at(0) ?? null;

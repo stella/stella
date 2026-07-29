@@ -160,7 +160,6 @@ describe("search preview targets", () => {
         highlightedHitId: previewHit.id,
         hits: [previewHit],
         isPlaceholderData: true,
-        query: "new terms",
       }),
     ).toBeNull();
   });
@@ -171,7 +170,16 @@ describe("search preview targets", () => {
         highlightedHitId: previewHit.id,
         hits: [previewHit],
         isPlaceholderData: false,
-        query: "current terms",
+      }),
+    ).toBe(previewHit);
+  });
+
+  test("selects a hit when filters produce results without query text", () => {
+    expect(
+      selectSearchPreviewHit({
+        highlightedHitId: previewHit.id,
+        hits: [previewHit],
+        isPlaceholderData: false,
       }),
     ).toBe(previewHit);
   });

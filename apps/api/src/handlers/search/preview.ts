@@ -10,7 +10,6 @@ import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
 export const searchPreviewBodySchema = t.Object({
   query: t.String({
-    minLength: 1,
     maxLength: LIMITS.searchQueryMaxLength,
   }),
   resultId: t.String({ format: "uuid" }),
