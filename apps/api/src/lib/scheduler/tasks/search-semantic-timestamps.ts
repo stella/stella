@@ -97,7 +97,8 @@ export const repairSearchSemanticTimestamps = async ({
   payload,
   signal,
 }: RepairSearchSemanticTimestampsOptions): Promise<RepairSearchSemanticTimestampsOutcome> => {
-  if (signal.aborted) {
+  const isAborted = () => signal.aborted;
+  if (isAborted()) {
     return { status: "aborted" };
   }
 
@@ -130,7 +131,7 @@ export const repairSearchSemanticTimestamps = async ({
   const last = pageRows.at(-1);
   const nowIso = now.toISOString();
 
-  if (signal.aborted) {
+  if (isAborted()) {
     return { status: "aborted" };
   }
 
@@ -206,7 +207,7 @@ export const repairSearchSemanticTimestamps = async ({
       : nowIso;
 
   if (state.pass === REPAIR_PASS.verify && reindexEntityIds.length > 0) {
-    if (signal.aborted) {
+    if (isAborted()) {
       return { status: "aborted" };
     }
 
@@ -231,29 +232,31 @@ export const repairSearchSemanticTimestamps = async ({
   let failed = 0;
   let repaired = 0;
   const reindexNext = async (): Promise<void> => {
-    while (!signal.aborted) {
-      const entityId = reindexEntityIds.at(nextReindexIndex);
-      nextReindexIndex += 1;
-      if (!entityId) {
-        return;
-      }
-      const reindexResult = await Result.tryPromise({
-        try: async () => await upsertSearchDocument(entityId),
-        catch: (error: unknown) => error,
-      });
-      if (signal.aborted) {
-        return;
-      }
-      if (Result.isError(reindexResult)) {
-        failed += 1;
-        captureError(reindexResult.error, {
-          entityId,
-          schedulerTask: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
-        });
-      } else {
-        repaired += 1;
-      }
+    if (isAborted()) {
+      return;
     }
+    const entityId = reindexEntityIds.at(nextReindexIndex);
+    nextReindexIndex += 1;
+    if (!entityId) {
+      return;
+    }
+    const reindexResult = await Result.tryPromise({
+      try: async () => await upsertSearchDocument(entityId),
+      catch: (error: unknown) => error,
+    });
+    if (isAborted()) {
+      return;
+    }
+    if (Result.isError(reindexResult)) {
+      failed += 1;
+      captureError(reindexResult.error, {
+        entityId,
+        schedulerTask: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+      });
+    } else {
+      repaired += 1;
+    }
+    await reindexNext();
   };
   await Promise.all(
     Array.from(
@@ -264,7 +267,7 @@ export const repairSearchSemanticTimestamps = async ({
     ),
   );
 
-  if (signal.aborted) {
+  if (isAborted()) {
     return { status: "aborted" };
   }
 

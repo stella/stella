@@ -310,8 +310,8 @@ test("does not checkpoint after cancellation during a bounded reindex", async ()
   ];
   const controller = new AbortController();
   let reindexStarts = 0;
-  let resolveInitialBatchStarted = () => undefined;
-  let resolveUpsert = () => undefined;
+  let resolveInitialBatchStarted: () => void = () => undefined;
+  let resolveUpsert: () => void = () => undefined;
   const initialBatchStarted = new Promise<void>((resolve) => {
     resolveInitialBatchStarted = resolve;
   });
@@ -339,7 +339,8 @@ test("does not checkpoint after cancellation during a bounded reindex", async ()
   controller.abort();
   resolveUpsert();
 
-  await expect(outcomePromise).resolves.toEqual({ status: "aborted" });
+  const outcome = await outcomePromise;
+  expect(outcome).toEqual({ status: "aborted" });
   expect(upsertSearchDocumentMock).toHaveBeenCalledTimes(4);
   expect(executeMock).toHaveBeenCalledTimes(1);
 });
