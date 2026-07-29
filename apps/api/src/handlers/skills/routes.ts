@@ -2,10 +2,12 @@ import Elysia from "elysia";
 
 import createSkill from "@/api/handlers/skills/create";
 import deleteSkill from "@/api/handlers/skills/delete";
+import discoverSkillUrl from "@/api/handlers/skills/discover-url";
 import fromBlueprint from "@/api/handlers/skills/from-blueprint";
 import generateSkillDraft from "@/api/handlers/skills/generate-draft";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillFromUrl from "@/api/handlers/skills/import-url";
+import importSkillsFromUrls from "@/api/handlers/skills/import-urls";
 import listSkills from "@/api/handlers/skills/list";
 import listSkillCommands from "@/api/handlers/skills/list-commands";
 import createSkillResource from "@/api/handlers/skills/resources/create";
@@ -59,6 +61,15 @@ export const skillsRoute = new Elysia({ prefix: "/skills" })
     body: importSkillFromUrl.config.body,
     invalidateQuery: true,
     permissions: importSkillFromUrl.config.permissions,
+  })
+  .post("/discover-url", discoverSkillUrl.handler, {
+    body: discoverSkillUrl.config.body,
+    permissions: discoverSkillUrl.config.permissions,
+  })
+  .post("/import-urls", importSkillsFromUrls.handler, {
+    body: importSkillsFromUrls.config.body,
+    invalidateQuery: true,
+    permissions: importSkillsFromUrls.config.permissions,
   })
   .post("/generate-draft", generateSkillDraft.handler, {
     body: generateSkillDraft.config.body,

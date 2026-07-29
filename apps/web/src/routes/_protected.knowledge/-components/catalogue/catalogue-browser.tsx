@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
   ChevronDownIcon,
+  FileDownIcon,
   GlobeIcon,
   GraduationCapIcon,
   LoaderIcon,
@@ -58,6 +59,7 @@ import {
   BlueprintGallerySheet,
   type BlueprintCreatedSkill,
 } from "@/routes/_protected.knowledge/-components/blueprint-gallery-sheet";
+import { ImportSkillDialog } from "@/routes/_protected.knowledge/-components/import-skill-dialog";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
   catalogueKeys,
@@ -172,6 +174,7 @@ export const CatalogueBrowser = ({
   const [jurisdictionQuery, setJurisdictionQuery] = useState("");
   const [addMcpOpen, setAddMcpOpen] = useState(false);
   const [blueprintGalleryOpen, setBlueprintGalleryOpen] = useState(false);
+  const [importSkillOpen, setImportSkillOpen] = useState(false);
 
   const entries = data.entries;
 
@@ -457,6 +460,10 @@ export const CatalogueBrowser = ({
                   <GraduationCapIcon className="size-4" />
                   {t("catalogue.addCustomSkill")}
                 </MenuItem>
+                <MenuItem onClick={() => setImportSkillOpen(true)}>
+                  <FileDownIcon className="size-4" />
+                  {t("knowledge.agentSkills.importSkill")}
+                </MenuItem>
               </MenuPopup>
             </Menu>
           </ResponsiveActionToolbarItem>
@@ -598,6 +605,12 @@ export const CatalogueBrowser = ({
         onCreated={onBlueprintCreated}
         onOpenChange={setBlueprintGalleryOpen}
         open={blueprintGalleryOpen}
+      />
+      <ImportSkillDialog
+        canManageTeam={canManageCustomTools}
+        onImported={onSkillSheetChanged}
+        onOpenChange={setImportSkillOpen}
+        open={importSkillOpen}
       />
     </div>
   );

@@ -5,7 +5,9 @@ import JSZip from "jszip";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
+  discoverSkillPackagesFromUrl,
   fetchSkillPackageFromUrl,
+  findGithubSkillEntrypoints,
   isZipSkillSource,
   parseUploadedSkillPackage,
   redactSkillSourceUrlForStorage,
@@ -188,7 +190,48 @@ Instructions.`,
       // oxlint-disable-next-line no-await-in-loop -- sequential test assertions over a fixed input list
       const result = await fetchSkillPackageFromUrl(url);
       expect(Result.isError(result)).toBe(true);
+      // oxlint-disable-next-line no-await-in-loop -- discovery must enforce the same URL boundary as direct import
+      const discovery = await discoverSkillPackagesFromUrl(url);
+      expect(Result.isError(discovery)).toBe(true);
     }
+  });
+
+  test("rejects malformed GitHub repository coordinates before fetching", async () => {
+    const result = await discoverSkillPackagesFromUrl(
+      "https://github.com/not_valid/repository",
+    );
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("discovers only SKILL.md entrypoints inside the selected folder", () => {
+    const result = findGithubSkillEntrypoints({
+      rootPath: "packages/legal",
+      tree: [
+        { path: "SKILL.md", type: "blob" },
+        { path: "packages/legal/review/SKILL.md", type: "blob" },
+        { path: "packages/legal/review/references/notes.md", type: "blob" },
+        { path: "packages/legal/research/SKILL.md", type: "blob" },
+        { path: "packages/legalish/other/SKILL.md", type: "blob" },
+        { path: "packages/legal/directory/SKILL.md", type: "tree" },
+      ],
+    });
+
+    expect(result).toEqual([
+      "packages/legal/research/SKILL.md",
+      "packages/legal/review/SKILL.md",
+    ]);
+  });
+
+  test("bounds repository discovery before fetching skill bodies", () => {
+    const tree = Array.from({ length: 51 }, (_, index) => ({
+      path: `skills/skill-${index}/SKILL.md`,
+      type: "blob",
+    }));
+
+    expect(() =>
+      findGithubSkillEntrypoints({ rootPath: "skills", tree }),
+    ).toThrow("at most 50 skills");
   });
 
   test("strips query strings from persisted skill source URLs", () => {
