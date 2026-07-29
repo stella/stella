@@ -38,6 +38,21 @@ const collectHyperlinkTargets = (blocks: readonly BlockContent[]): string[] =>
       : [],
   );
 
+const collectText = (blocks: readonly BlockContent[]): string => {
+  const fragments: string[] = [];
+  for (const content of collectParagraphContent(blocks)) {
+    if (content.type !== "run") {
+      continue;
+    }
+    for (const runContent of content.content) {
+      if (runContent.type === "text") {
+        fragments.push(runContent.text);
+      }
+    }
+  }
+  return fragments.join("");
+};
+
 const collectFootnoteReferenceIds = (
   blocks: readonly BlockContent[],
 ): number[] => {
@@ -118,9 +133,8 @@ describe("styleDocumentCitations", () => {
       1, 2, 3, 4,
     ]);
     expect(
-      styled.package.footnotes?.map(
-        (footnote) =>
-          footnote.content.at(0)?.content.at(0)?.content.at(0)?.text,
+      styled.package.footnotes?.map((footnote) =>
+        collectText(footnote.content),
       ),
     ).toEqual([
       "https://example.com/source",
