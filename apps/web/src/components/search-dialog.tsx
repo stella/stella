@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
@@ -394,6 +394,7 @@ export const SearchDialog = ({
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
+    isFetchNextPageError,
     isPlaceholderData,
     refetch: refetchSearch,
   } = useInfiniteQuery(
@@ -411,6 +412,7 @@ export const SearchDialog = ({
       updatedTo,
     }),
   );
+  const isBlockingSearchError = isSearchError && !isFetchNextPageError;
 
   const allHits = useMemo(() => {
     if (!data) {
@@ -431,7 +433,7 @@ export const SearchDialog = ({
   // ignore them entirely while the query is empty so a cleared input
   // doesn't leave stale numbers in the sidebar.
   const firstPage =
-    hasActiveSearch && !isSearchError ? data?.pages.at(0) : undefined;
+    hasActiveSearch && !isBlockingSearchError ? data?.pages.at(0) : undefined;
   const facets = firstPage?.facets;
   const typeBuckets = facets ? facets.type : EMPTY_FACET_BUCKETS;
   const mimeTypeBuckets = facets ? facets.mimeType : EMPTY_FACET_BUCKETS;
@@ -828,7 +830,7 @@ export const SearchDialog = ({
   const shouldShowResults =
     hasVisibleSearch &&
     !hasUnavailableSelectedType &&
-    !isSearchError &&
+    !isBlockingSearchError &&
     hasResults;
   const commandHits = shouldShowResults ? allHits : [];
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
@@ -1176,7 +1178,7 @@ export const SearchDialog = ({
               {hasVisibleSearch &&
                 !hasUnavailableSelectedType &&
                 hasActiveSearch &&
-                isSearchError && (
+                isBlockingSearchError && (
                   <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-8">
                     <p className="text-muted-foreground text-sm">
                       {t("common.somethingWentWrong")}
@@ -1195,7 +1197,7 @@ export const SearchDialog = ({
 
               {hasVisibleSearch &&
                 !hasUnavailableSelectedType &&
-                !isSearchError &&
+                !isBlockingSearchError &&
                 !hasResults &&
                 (!hasActiveSearch || isLoading) && (
                   <div className="space-y-3 px-4 py-3">
@@ -1211,7 +1213,7 @@ export const SearchDialog = ({
 
               {hasVisibleSearch &&
                 hasActiveSearch &&
-                !isSearchError &&
+                !isBlockingSearchError &&
                 !isLoading &&
                 !hasResults && (
                   <div className="flex h-full items-center justify-center px-4 py-8">
@@ -1281,15 +1283,26 @@ export const SearchDialog = ({
                       );
                     })}
                   </div>
-                  {hasNextPage && (
+                  {(hasNextPage || isFetchNextPageError) && (
                     <div
                       className="flex h-10 items-center justify-center px-2 pt-2"
-                      ref={loadMoreRef}
+                      ref={isFetchNextPageError ? undefined : loadMoreRef}
                     >
-                      {isFetchingNextPage && (
+                      {isFetchNextPageError && (
+                        <Button
+                          onClick={() => {
+                            detached(fetchNextPage(), "SearchDialog");
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          {t("common.retry")}
+                        </Button>
+                      )}
+                      {!isFetchNextPageError && isFetchingNextPage && (
                         <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
                       )}
-                      {!isFetchingNextPage && (
+                      {!isFetchNextPageError && !isFetchingNextPage && (
                         <span className="sr-only">{t("common.loadMore")}</span>
                       )}
                     </div>
@@ -1329,9 +1342,16 @@ const SearchPreviewPanel = ({
   onOpen,
 }: SearchPreviewPanelProps) => {
   const t = useTranslations();
+  const headingId = useId();
 
   return (
-    <aside className="hidden w-[min(44%,32rem)] min-w-72 shrink-0 flex-col border-s md:flex">
+    <aside
+      aria-labelledby={headingId}
+      className="hidden w-[min(44%,32rem)] min-w-72 shrink-0 flex-col border-s md:flex"
+    >
+      <h2 className="sr-only" id={headingId}>
+        {t("common.preview")}
+      </h2>
       {hit ? (
         <SearchPreviewContent
           hit={hit}
