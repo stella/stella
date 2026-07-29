@@ -209,6 +209,7 @@ const searchContent = async (
 ): Promise<ContentSearchResult> => {
   const { organizationId, workspaceId, limit } = query;
   const tsQuery = buildSearchTsQuery(query.query);
+  const singleWorkspaceFilter = sql`AND sd.workspace_id = ${workspaceId}`;
 
   const [hitsResult, countResult] = await Promise.all([
     rootDb.execute(sql`
@@ -225,7 +226,7 @@ const searchContent = async (
         ts_rank(sd.tsv, ${tsQuery})::float8 AS score
       FROM search_documents sd
       WHERE sd.organization_id = ${organizationId}
-        AND sd.workspace_id = ${workspaceId}
+        ${singleWorkspaceFilter}
         AND sd.tsv @@ ${tsQuery}
       ORDER BY score DESC, sd.entity_id DESC
       LIMIT ${limit}
@@ -234,7 +235,7 @@ const searchContent = async (
       SELECT count(*)::int AS total
       FROM search_documents sd
       WHERE sd.organization_id = ${organizationId}
-        AND sd.workspace_id = ${workspaceId}
+        ${singleWorkspaceFilter}
         AND sd.tsv @@ ${tsQuery}
     `),
   ]);

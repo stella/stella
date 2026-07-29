@@ -13,6 +13,7 @@ import {
   searchFacetsBodySchema,
   searchFacetsHandler,
 } from "@/api/handlers/search/facets";
+import searchPreviewEndpoint from "@/api/handlers/search/preview";
 import { searchBodySchema, searchHandler } from "@/api/handlers/search/search";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -194,6 +195,10 @@ export const searchRoute = new Elysia({ prefix: "/search" })
   .post("/facets", searchFacetsEndpoint.handler, {
     body: searchFacetsEndpoint.config.body,
     permissions: searchFacetsEndpoint.config.permissions,
+  })
+  .post("/preview", searchPreviewEndpoint.handler, {
+    body: searchPreviewEndpoint.config.body,
+    permissions: searchPreviewEndpoint.config.permissions,
   })
   .post("/refine", refineSearchEndpoint.handler, {
     body: refineSearchEndpoint.config.body,

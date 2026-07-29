@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import type { GlobalSearchHit } from "@stll/api/types";
+
+import {
+  getSearchPreviewTarget,
+  normalizeSearchQuery,
+} from "@/lib/search.logic";
+
 process.env["VITE_API_URL"] ??= "http://localhost:3001";
 
 const { hasSearchQueryOrSelectiveFilter, searchInfiniteOptions } =
@@ -80,5 +87,79 @@ describe("search query enablement", () => {
 
     expect(organizationB.queryKey).not.toEqual(ownerA.queryKey);
     expect(userB.queryKey).not.toEqual(ownerA.queryKey);
+  });
+});
+
+describe("search query normalization", () => {
+  test("removes boundary whitespace without changing internal terms", () => {
+    expect(normalizeSearchQuery("  closing   memo \n")).toBe("closing   memo");
+  });
+
+  test("turns whitespace-only input into an empty query", () => {
+    expect(normalizeSearchQuery(" \t\n ")).toBe("");
+  });
+});
+
+describe("search preview targets", () => {
+  test("uses the authorized resource identifier for every hit type", () => {
+    const base = {
+      headline: null,
+      title: "Result",
+      updatedAt: "2026-07-29T12:00:00.000Z",
+    };
+    const hits = [
+      {
+        ...base,
+        id: "matter:ws_1",
+        type: "matter",
+        workspaceId: "ws_1",
+        workspaceName: "Matter",
+        color: null,
+      },
+      {
+        ...base,
+        id: "contact:contact_1",
+        type: "contact",
+        contactId: "contact_1",
+        contactType: "person",
+      },
+      {
+        ...base,
+        id: "case-law:decision_1",
+        type: "case-law",
+        decisionId: "decision_1",
+        caseNumber: "1 T 1/2026",
+        court: "Court",
+        country: "CZ",
+        decisionDate: null,
+      },
+      {
+        ...base,
+        id: "chat:thread_1",
+        type: "chat",
+        threadId: "thread_1",
+        workspaceId: null,
+        workspaceName: null,
+      },
+      {
+        ...base,
+        id: "document:entity_1",
+        type: "document",
+        entityId: "entity_1",
+        workspaceId: "ws_1",
+        workspaceName: "Matter",
+        lastEditedByName: null,
+        lastEditedByImage: null,
+        mimeType: null,
+      },
+    ] as const satisfies readonly GlobalSearchHit[];
+
+    expect(hits.map(getSearchPreviewTarget)).toEqual([
+      { resultId: "ws_1", type: "matter" },
+      { resultId: "contact_1", type: "contact" },
+      { resultId: "decision_1", type: "case-law" },
+      { resultId: "thread_1", type: "chat" },
+      { resultId: "entity_1", type: "document" },
+    ]);
   });
 });

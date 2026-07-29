@@ -13,9 +13,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { compareCodepoint } from "@/api/lib/collation";
 import {
   contactWorkspaceAccessSql,
-  resolveWorkspaceScope,
+  workspaceAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
-import type { WorkspaceScopeArgs } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
 import {
@@ -219,17 +218,6 @@ const caseLawBodyPreviewJoin = sql`
 const headlineRegconfig = sql`
   'public.stella_unaccent'::regconfig
 `;
-
-const workspaceAccessSql = ({
-  column = sql`workspace_id`,
-  ...scope
-}: WorkspaceScopeArgs & { column?: SQL }) => {
-  const effective = resolveWorkspaceScope(scope);
-  if (effective === null) {
-    return sql`AND false`;
-  }
-  return sql`AND ${column} = ANY(${typedPgArray(effective, "uuid")})`;
-};
 
 type ChatScopeArgs = {
   userId: SafeId<"user">;

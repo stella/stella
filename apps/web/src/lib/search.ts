@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
+import { normalizeSearchQuery } from "@/lib/search.logic";
 
 export const TIME_PRESETS = ["day", "week", "month", "year"] as const;
 export type TimePreset = (typeof TIME_PRESETS)[number];
@@ -77,6 +78,7 @@ export const hasSearchQueryOrSelectiveFilter = ({
   updatedTo !== undefined;
 
 type SearchFacetParams = {
+  organizationId: string;
   facet: SearchableFacet;
   search: string;
 } & SearchParams;
@@ -114,7 +116,7 @@ const searchKeys = {
       ...searchKeys.owner(params),
       "query",
       {
-        query: params.query,
+        query: normalizeSearchQuery(params.query),
         workspaceIds: params.workspaceIds,
         types: params.types,
         kinds: params.kinds,
@@ -125,11 +127,30 @@ const searchKeys = {
         limit: params.limit,
       },
     ] as const,
+  preview: ({
+    organizationId,
+    query,
+    resultId,
+    type,
+    updatedAt,
+  }: SearchPreviewParams) =>
+    [
+      ...searchKeys.all,
+      "preview",
+      {
+        organizationId,
+        query: normalizeSearchQuery(query),
+        resultId,
+        type,
+        updatedAt,
+      },
+    ] as const,
   facet: (params: SearchFacetParams) =>
     [
       ...searchKeys.owner(params),
       "facet",
       {
+        organizationId: params.organizationId,
         facet: params.facet,
         search: params.search,
         query: params.query,
@@ -163,9 +184,10 @@ export const searchInfiniteOptions = (params: SearchParams) =>
   infiniteQueryOptions({
     queryKey: searchKeys.query(params),
     queryFn: async ({ signal, pageParam }) => {
+      const query = normalizeSearchQuery(params.query);
       const response = await api.search.post(
         {
-          query: params.query,
+          query,
           workspaceIds: params.workspaceIds.map((id) =>
             toSafeId<"workspace">(id),
           ),
@@ -190,6 +212,44 @@ export const searchInfiniteOptions = (params: SearchParams) =>
         ? previousData
         : undefined,
     enabled: params.enabled,
+  });
+
+type SearchPreviewParams = {
+  organizationId: string;
+  query: string;
+  resultId: string;
+  type: GlobalSearchResultType;
+  updatedAt: string;
+};
+
+export const searchPreviewOptions = ({
+  organizationId,
+  query,
+  resultId,
+  type,
+  updatedAt,
+}: SearchPreviewParams) =>
+  queryOptions({
+    queryKey: searchKeys.preview({
+      organizationId,
+      query,
+      resultId,
+      type,
+      updatedAt,
+    }),
+    queryFn: async ({ signal }) => {
+      const response = await api.search.preview.post(
+        {
+          query: normalizeSearchQuery(query),
+          resultId,
+          type,
+        },
+        { fetch: { signal } },
+      );
+
+      return unwrapEden(response);
+    },
+    staleTime: 60_000,
   });
 
 export const searchFacetOptions = (params: SearchFacetParams) =>

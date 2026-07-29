@@ -261,7 +261,7 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
   let total = 0;
 
   for (;;) {
-    // oxlint-disable-next-line no-await-in-loop -- keyset pagination: each batch depends on the previous cursor
+    // oxlint-disable-next-line no-await-in-loop, require-search-scope/require-search-scope -- system backfill repairs derived search documents across all threads; it does not return request data
     const batch = await rootDb.execute<{ id: SafeId<"chatThread"> }>(sql`
       SELECT t.id
       FROM chat_threads t
