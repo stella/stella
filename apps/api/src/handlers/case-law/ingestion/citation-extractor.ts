@@ -23,8 +23,25 @@ const PL_PREFIXED_PATTERN =
   /sygn\.\s*(?:akt\s+)?(?<caseNumber>[IVX]{1,4}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{2,4})/gu;
 
 const CITATION_PATTERNS: RegExp[] = [
-  // Czech case number: "sp. zn. 21 Cdo 1234/2020"
-  /sp\.\s*zn\.\s*(?<caseNumber>\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/gu,
+  // Czech case number: "sp. zn. 21 Cdo 1234/2020". Two-digit years
+  // ("2 Cdon 808/97") are the standard form for pre-2000 decisions, and
+  // registry codes can carry diacritics, so the registry is a letter run
+  // and the year is 2 or 4 digits; the resolver owns century mapping.
+  /sp\.\s*zn\.\s*(?<caseNumber>\d{1,3}\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+
+  // Czech senate file number: "sen. zn. 29 NSČR 55/2013" (grand panel,
+  // insolvency). Same shape as sp. zn. under a different prefix.
+  /sen\.\s*zn\.\s*(?<caseNumber>\d{1,3}\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+
+  // Czech Constitutional Court: "IV. ÚS 23/05", "Pl. ÚS 12/94" — the
+  // senate is a Roman numeral (or Pl. for the plenum), so the digit-led
+  // pattern above never matches these. The bare form also covers the
+  // "sp. zn. IV. ÚS 23/05" spelling.
+  /\b(?<caseNumber>(?:[IVX]{1,4}|Pl)\.\s*ÚS\s+\d{1,5}\/\d{2,4})(?!\d)/gu,
+
+  // CJEU: "C-283/81", "T-13/99", including the non-breaking hyphen the
+  // publications office uses ("C‑283/81").
+  /\b(?<caseNumber>[CT][-‑]\d{1,4}\/\d{2})(?!\d)/gu,
 
   // ECLI: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1"
   /ECLI:[A-Z]{2}:[A-Z]{1,8}:\d{4}:[\w.]+/gu,
@@ -36,7 +53,7 @@ const CITATION_PATTERNS: RegExp[] = [
   /sp\.\s*zn\.\s*\d{1,3}[A-Za-z]{1,5}\/\d{1,6}\/\d{4}/gu,
 
   // Generic: "rozsudek č.j. 5 As 123/2020"
-  /[čc]\.\s*j\.\s*(?<caseNumber>\d{1,3}\s+[A-Za-z]{1,5}\s+\d{1,6}\/\d{4})/gu,
+  /[čc]\.\s*j\.\s*(?<caseNumber>\d{1,3}\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   PL_PREFIXED_PATTERN,
 
@@ -62,6 +79,12 @@ const stripPrefix = (text: string): string => {
   const cj = /^[čc]\.\s*j\.\s*(?<caseNumber>.+)/iu.exec(trimmed);
   if (cj?.groups?.["caseNumber"]) {
     return cj.groups["caseNumber"].trim();
+  }
+
+  // Czech senate file number: "sen. zn. 29 NSČR 55/2013"
+  const senZn = /^sen\.\s*zn\.\s*(?<caseNumber>.+)/iu.exec(trimmed);
+  if (senZn?.groups?.["caseNumber"]) {
+    return senZn.groups["caseNumber"].trim();
   }
 
   // Polish: "sygn. akt II CSK 123/20"

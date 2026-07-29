@@ -33,6 +33,52 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(2);
   });
 
+  test("extracts two-digit-year citations from real NS prose", () => {
+    // Verbatim shapes from prod decisions 22 Cdo 1534/2020 and
+    // 25 Cdo 2181/2002: pre-2000 citations use two-digit years.
+    const text =
+      "usnesení Nejvyššího soudu ze dne 27. 5. 1999, sp. zn. 2 Cdon 808/97, " +
+      "vedené u Okresního soudu v Děčíně pod sp. zn. 9 C 2058/96";
+    const texts = extractCitations([{ index: 0, text }]).map(
+      (c) => c.citationText,
+    );
+    expect(texts).toContain("sp. zn. 2 Cdon 808/97");
+    expect(texts).toContain("sp. zn. 9 C 2058/96");
+  });
+
+  test("extracts senate file numbers with diacritic registries", () => {
+    const text =
+      "usnesení Nejvyššího soudu ze dne 27. 8. 2013, sen. zn. 29 NSČR 55/2013";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("sen. zn. 29 NSČR 55/2013");
+  });
+
+  test("extracts Constitutional Court citations in senate and plenum form", () => {
+    const text =
+      "nález Ústavního soudu sp. zn. IV. ÚS 23/05 a stanovisko Pl. ÚS 12/94";
+    const texts = extractCitations([{ index: 0, text }]).map(
+      (c) => c.citationText,
+    );
+    expect(texts).toContain("IV. ÚS 23/05");
+    expect(texts).toContain("Pl. ÚS 12/94");
+  });
+
+  test("extracts CJEU case numbers with plain and non-breaking hyphens", () => {
+    const text =
+      "rozsudek Soudního dvora ve věci C‑283/81 CILFIT a věc T-13/99";
+    const texts = extractCitations([{ index: 0, text }]).map(
+      (c) => c.citationText,
+    );
+    expect(texts).toContain("C‑283/81");
+    expect(texts).toContain("T-13/99");
+  });
+
+  test("does not treat statute references as citations", () => {
+    const text = "podle § 237 o. s. ř. a zákona č. 40/2009 Sb.";
+    expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
+  });
+
   test("extracts an unprefixed Polish case number", () => {
     const citations = extractCitations([
       { index: 0, text: "Por. wyrok II CSK 123/20 oraz II ACa 45/20." },
