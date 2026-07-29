@@ -67,6 +67,12 @@ describe("search preview authorization scope", () => {
       "coalesce(sd.language, 'simple')::regconfig",
     );
     expect(compiled.sql).toContain("unaccent(arabic_normalize(");
+    expect(compiled.sql).toContain(
+      "unaccent(arabic_normalize(preview_source.content))",
+    );
+    expect(compiled.sql).toContain("'sourceContent'");
+    expect(compiled.sql).toMatch(/'useUnaccent',\s+true/u);
+    expect(compiled.params).not.toContain(undefined);
     expect(compiled.sql).not.toContain("public.stella_unaccent");
   });
 
@@ -163,6 +169,9 @@ describe("search preview authorization scope", () => {
     expect(compiled.sql).toContain("clsd.regconfig::regconfig");
     expect(compiled.sql).toContain("coalesce(clfc.use_unaccent, true)");
     expect(compiled.sql).toContain("unaccent(arabic_normalize(");
+    expect(compiled.sql).toContain(
+      "unaccent(arabic_normalize(preview_source.content))",
+    );
     expect(compiled.sql).toContain("ELSE arabic_normalize(");
     expect(compiled.sql).toContain("allowsRedistribution");
     expect(compiled.sql).not.toContain("organization_id");

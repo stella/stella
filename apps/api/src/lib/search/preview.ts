@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/search/contact-workspace-access-sql";
 import {
   escapeAndHighlight,
+  restoreOriginalSearchPreview,
   SEARCH_PREVIEW_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
@@ -45,6 +46,7 @@ const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 type PreviewTextConfig = {
   normalize: (text: SQL) => SQL;
   regconfig: SQL;
+  useUnaccent: SQL;
 };
 
 type PreviewHeadlineOptions = PreviewTextConfig & {
@@ -114,21 +116,39 @@ const previewBodyExcerpt = ({
   END
 `;
 
-// Passage selection mirrors the normalized index, but rendering keeps the
-// original source text so a legal preview never rewrites its content.
-const previewHeadline = (options: PreviewHeadlineOptions) => sql`
-  left(
-    ts_headline(
-      ${options.regconfig},
-      left(${options.title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
-        || ' ' ||
-      ${previewBodyExcerpt(options)},
-      ${options.tsQuery},
-      ${SEARCH_PREVIEW_HEADLINE_CONFIG}
-    ),
-    ${SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT}
-  ) AS content
+const previewSourceContent = (options: PreviewHeadlineOptions) => sql`
+  left(${options.title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
+    || ' ' ||
+  ${previewBodyExcerpt(options)}
 `;
+
+// PostgreSQL finds and marks passages in index-normalized text. The original
+// bounded source travels beside it so readSearchPreview can restore the exact
+// legal text around those markers before HTML rendering.
+const previewHeadline = (options: PreviewHeadlineOptions) => {
+  const sourceContent = previewSourceContent(options);
+  return sql`
+    (
+      SELECT json_build_object(
+        'content',
+        left(
+          ts_headline(
+            ${options.regconfig},
+            ${options.normalize(sql`preview_source.content`)},
+            ${options.tsQuery},
+            ${SEARCH_PREVIEW_HEADLINE_CONFIG}
+          ),
+          ${SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT}
+        ),
+        'sourceContent',
+        preview_source.content,
+        'useUnaccent',
+        ${options.useUnaccent}
+      )
+      FROM (VALUES (${sourceContent})) AS preview_source(content)
+    ) AS preview
+  `;
+};
 
 const previewUnhighlighted = (title: SQL, body: SQL) => sql`
   left(
@@ -136,7 +156,7 @@ const previewUnhighlighted = (title: SQL, body: SQL) => sql`
       || ' ' ||
     left(${body}, ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}),
     ${SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT}
-  ) AS content
+  )
 `;
 
 const previewContent = ({
@@ -145,6 +165,7 @@ const previewContent = ({
   regconfig,
   title,
   tsQuery,
+  useUnaccent,
 }: PreviewContentOptions): SQL =>
   tsQuery
     ? previewHeadline({
@@ -153,8 +174,18 @@ const previewContent = ({
         regconfig,
         title,
         tsQuery,
+        useUnaccent,
       })
-    : previewUnhighlighted(title, body);
+    : sql`
+        json_build_object(
+          'content',
+          ${previewUnhighlighted(title, body)},
+          'sourceContent',
+          NULL,
+          'useUnaccent',
+          ${useUnaccent}
+        ) AS preview
+      `;
 
 const previewTextFilter = (searchVector: SQL, tsQuery: SQL | null): SQL =>
   tsQuery ? sql`AND ${searchVector} @@ ${tsQuery}` : sql.empty();
@@ -182,6 +213,7 @@ export const buildSearchPreviewQuery = ({
           regconfig: sql`'simple'::regconfig`,
           title: sql`wsd.title`,
           tsQuery,
+          useUnaccent: sql`true`,
         })}
         FROM workspace_search_documents wsd
         WHERE wsd.workspace_id = ${resultId}
@@ -200,6 +232,7 @@ export const buildSearchPreviewQuery = ({
           regconfig: sql`'simple'::regconfig`,
           title: sql`csd.title`,
           tsQuery,
+          useUnaccent: sql`true`,
         })}
         FROM contact_search_documents csd
         WHERE csd.contact_id = ${resultId}
@@ -219,6 +252,7 @@ export const buildSearchPreviewQuery = ({
           regconfig: sql`clsd.regconfig::regconfig`,
           title: sql`clsd.title`,
           tsQuery,
+          useUnaccent: sql`coalesce(clfc.use_unaccent, true)`,
         })}
         FROM case_law_search_documents clsd
         JOIN case_law_decisions d ON d.id = clsd.decision_id
@@ -236,6 +270,7 @@ export const buildSearchPreviewQuery = ({
           regconfig: sql`'simple'::regconfig`,
           title: sql`cst.title`,
           tsQuery,
+          useUnaccent: sql`true`,
         })}
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
@@ -261,6 +296,7 @@ export const buildSearchPreviewQuery = ({
           regconfig: sql`coalesce(sd.language, 'simple')::regconfig`,
           title: sql`sd.title`,
           tsQuery,
+          useUnaccent: sql`true`,
         })}
         FROM search_documents sd
         WHERE sd.entity_id = ${resultId}
@@ -279,14 +315,39 @@ export const buildSearchPreviewQuery = ({
   }
 };
 
+const isSearchPreviewRow = (
+  value: unknown,
+): value is {
+  content: string;
+  sourceContent: string | null;
+  useUnaccent: boolean;
+} =>
+  typeof value === "object" &&
+  value !== null &&
+  "content" in value &&
+  typeof value.content === "string" &&
+  "sourceContent" in value &&
+  (typeof value.sourceContent === "string" || value.sourceContent === null) &&
+  "useUnaccent" in value &&
+  typeof value.useUnaccent === "boolean";
+
 export const readSearchPreview = async (
   input: SearchPreviewQuery,
 ): Promise<SearchPreview | null> => {
   const rows = await rootDb.execute(buildSearchPreviewQuery(input));
-  const content = rows.at(0)?.["content"];
-  if (typeof content !== "string") {
+  const preview = rows.at(0)?.["preview"];
+  if (!isSearchPreviewRow(preview)) {
     return null;
   }
 
+  const content =
+    preview.sourceContent === null
+      ? preview.content
+      : restoreOriginalSearchPreview({
+          headline: preview.content,
+          maxLength: SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT,
+          source: preview.sourceContent,
+          useUnaccent: preview.useUnaccent,
+        });
   return { content: escapeAndHighlight(content) };
 };
