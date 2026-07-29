@@ -425,6 +425,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // every keystroke / mutation.
   const excludedCanonicalsRef = useRef<readonly string[]>([]);
   useExternalSyncEffect(() => {
+    // eslint-disable-next-line react/react-compiler -- latest-ref mirror consumed by the polling effect, never rendered
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
     // Kick the detection right away so worker-found terms that
     // the user just added to the allowlist disappear without
@@ -614,6 +615,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     [fitZoomRef],
   );
   const t = useTranslations();
+  /* eslint-disable react/react-compiler -- optimistic preview is deliberately carried across the finalize/refetch window in a mutable ref */
   const optimisticPreview = optimisticPreviewRef.current;
   const previewPlaceholderData =
     optimisticPreview?.fieldId === fieldId
@@ -650,6 +652,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     throw previewFileQuery.error;
   }
 
+  /* eslint-disable react/react-compiler -- select the optimistic preview from the same deliberate render-time ref snapshot */
   const previewFile = previewFileQuery.data
     ? selectPreviewFile({
         file: previewFileQuery.data,
@@ -913,7 +916,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // lock-state changes via `updateEditable`. Including it here would
   // tear down + re-create the registration on every toggle,
   // invalidating the token contract documented above.
-  useExternalSyncEffect(() => {
+  const registerActiveEditor = useLatestCallback(() => {
     const token = useActiveDocxStore
       .getState()
       .registerEditor(entityId, fieldId, {
@@ -928,9 +931,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         tokenRef.current = null;
       }
     };
-    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this edit-mode effect out of compiler memoization
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `isUnlocked` deliberately excluded; see block comment above.
-  }, [entityId, fieldId, requestEditMode]);
+  });
+  useExternalSyncEffect(registerActiveEditor, [
+    entityId,
+    fieldId,
+    requestEditMode,
+    registerActiveEditor,
+  ]);
 
   useExternalSyncEffect(() => {
     const token = tokenRef.current;
@@ -1384,6 +1391,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // "saving" with no buffer of its own). Without this we'd reload the
   // editor against `previewFile.buffer` for the few hundred ms before
   // the parent unmounts us — and the Stella fallback would flash.
+  /* eslint-disable react/react-compiler -- editing buffers are intentionally latched in refs across the save transition */
   const preservedLoadedBufferSnapshot = preservedLoadedBufferRef.current;
   const preservedLoadedBuffer =
     preservedLoadedBufferSnapshot?.fieldId === fieldId
@@ -1525,7 +1533,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     );
   }
 
+  // eslint-disable-next-line react/react-compiler -- retain the last style label in a ref to avoid a loading-state flash
   const lastStyleLabel = lastStyleLabelRef.current;
+  // eslint-disable-next-line react/react-compiler -- retain the matching label style for the same loading-state fallback
   const lastStyleLabelStyle = lastStyleLabelStyleRef.current;
 
   if (previewFile === null || editorBuffer === undefined) {

@@ -35,6 +35,7 @@ import {
   handlePromptEditorSelectAll,
 } from "@/components/prompt-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
 
@@ -219,16 +220,18 @@ export const AIPromptInput = ({
   // editor's serialized value diverges from `value`. `emitUpdate: false` keeps
   // this from looping back through `onUpdate` → `onChange`; the equality guard
   // makes the editor's own edits a no-op so the caret is never disturbed.
-  useExternalSyncEffect(() => {
+  const syncControlledValue = useLatestCallback(() => {
     if (editor.isDestroyed || readValue(editor) === value) {
       return;
     }
     editor.commands.setContent(initialContent, { emitUpdate: false });
-    // `readValue`/`initialContent` derive solely from `value`/`valueFormat`,
-    // which are the tracked deps.
-    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this synchronization effect out of compiler memoization
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- readValue and initialContent derive only from the tracked value/valueFormat inputs
-  }, [editor, value, valueFormat]);
+  });
+  useExternalSyncEffect(syncControlledValue, [
+    editor,
+    value,
+    valueFormat,
+    syncControlledValue,
+  ]);
 
   return (
     <div className={cn("relative w-full", className)}>

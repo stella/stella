@@ -61,7 +61,7 @@
     "postinstall": "bun run lint:ws"
   },
   "devDependencies": {
-    "@stll/oxlint-config": "0.4.0",
+    "@stll/oxlint-config": "0.6.0",
     "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",
@@ -73,7 +73,7 @@
     "lefthook": "^2.1.10",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "^0.24.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "react": "catalog:react19",
     "scslre": "0.3.0",
     "sherif": "catalog:",
@@ -131,7 +131,7 @@
     "jszip": "3.10.1",
     "lucide-react": "1.25.0",
     "oxfmt": "0.60.0",
-    "oxlint": "1.73.0",
+    "oxlint": "1.75.0",
     "sherif": "1.13.0",
     "tailwindcss": "4.3.3",
     "tsdown": "0.22.14",

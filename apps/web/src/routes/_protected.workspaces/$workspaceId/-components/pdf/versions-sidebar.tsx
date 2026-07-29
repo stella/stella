@@ -36,6 +36,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -160,13 +161,13 @@ export function VersionsSidebar({
   // the newest id) but not on an older-page append (newest id unchanged).
   const prevNewestVersionIdRef = useRef<string | null>(null);
 
-  const triggerLoadOlder = () => {
+  const triggerLoadOlder = useLatestCallback(() => {
     const container = viewportRef.current;
     if (container) {
       anchorScrollHeightRef.current = container.scrollHeight;
     }
     detached(onLoadOlder?.(), "triggerLoadOlder");
-  };
+  });
 
   // Drive the trigger from a top sentinel: when it scrolls into view
   // (with a buffer) and an older page exists, fetch it. The observer
@@ -198,9 +199,7 @@ export function VersionsSidebar({
     // its identity changes on entity switch, so this stops the observer
     // from fetching the previous entity's older page into the current
     // list.
-    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this scroll effect out of compiler memoization
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder is a stable closure over refs; onLoadOlder tracks the active entity
-  }, [canLoadOlder, isLoadingOlder, loadOlderError, onLoadOlder]);
+  }, [canLoadOlder, isLoadingOlder, loadOlderError, triggerLoadOlder]);
 
   // Scroll anchoring: loading an older page changes the displayed-top
   // (oldest) version id and grows scrollHeight above the viewport. Restore the

@@ -316,12 +316,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   });
 
-  // `today` forces a recompute at day rollover; getWeekStart reads the current
-  // date itself, so the `today` dependency is intentional despite not being
-  // referenced. `locale` drives the first weekday.
-  // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this day-rollover memo out of compiler memoization
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `today` is an intentional extra dep to force recompute at day rollover; getWeekStart reads the current date itself
-  const weekStart = useMemo(() => getWeekStart(locale), [today, locale]);
+  // Anchor the calculation to the tracked local date so visibility-driven day
+  // rollover updates are explicit dependencies rather than cache invalidators.
+  const weekStart = useMemo(
+    () => getWeekStart(locale, new Date(`${today}T12:00:00`)),
+    [today, locale],
+  );
   const weekEnd = useMemo(() => {
     const end = new Date(weekStart);
     end.setDate(end.getDate() + 6);
