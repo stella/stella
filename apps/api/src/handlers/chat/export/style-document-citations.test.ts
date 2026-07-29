@@ -68,16 +68,22 @@ const markdown = [
   "| reference | [table entity](#stella-entity=table) |",
 ].join("\n");
 
+const options = {
+  folioSourceTitle: "Agreement.docx",
+  internalCitationFallback: "Citation",
+};
+
 describe("styleDocumentCitations", () => {
   test("inline preserves every hyperlink and returns the same document", () => {
     const document = markdownToStellaDocument(markdown);
-    expect(styleDocumentCitations(document, "inline")).toBe(document);
+    expect(styleDocumentCitations(document, "inline", options)).toBe(document);
   });
 
   test("none unwraps only citations and preserves application references", () => {
     const styled = styleDocumentCitations(
       markdownToStellaDocument(markdown),
       "none",
+      options,
     );
 
     expect(collectHyperlinkTargets(styled.package.document.content)).toEqual([
@@ -96,6 +102,7 @@ describe("styleDocumentCitations", () => {
     const styled = styleDocumentCitations(
       markdownToStellaDocument(markdown),
       "footnotes",
+      options,
     );
 
     expect(collectHyperlinkTargets(styled.package.document.content)).toEqual([
@@ -110,14 +117,26 @@ describe("styleDocumentCitations", () => {
     expect(styled.package.footnotes?.map((footnote) => footnote.id)).toEqual([
       1, 2, 3, 4,
     ]);
+    expect(
+      styled.package.footnotes?.map(
+        (footnote) =>
+          footnote.content.at(0)?.content.at(0)?.content.at(0)?.text,
+      ),
+    ).toEqual([
+      "https://example.com/source",
+      "Agreement.docx: folio",
+      "decision",
+      "https://example.com/table",
+    ]);
   });
 
   test("the transformation reaches a fixed point", () => {
     const once = styleDocumentCitations(
       markdownToStellaDocument(markdown),
       "footnotes",
+      options,
     );
-    const twice = styleDocumentCitations(once, "footnotes");
+    const twice = styleDocumentCitations(once, "footnotes", options);
 
     expect(twice).toEqual(once);
   });
@@ -128,6 +147,7 @@ describe("styleDocumentCitations", () => {
         "The [supported claim](https://example.com/source).",
       ),
       "footnotes",
+      options,
     );
     const zip = await JSZip.loadAsync(await createChatExportDocx(styled));
     const contentTypes = await zip.file("[Content_Types].xml")?.async("text");

@@ -45,6 +45,7 @@ export type ChatExportCitationStyle =
   (typeof CHAT_EXPORT_CITATION_STYLES)[number];
 
 type ChatExportCitationLabels = {
+  citation: string;
   locale: UiLocale;
   sources: string;
   unverifiedCitationsOmitted: string;
@@ -52,54 +53,67 @@ type ChatExportCitationLabels = {
 
 const CHAT_EXPORT_CITATION_LABELS = {
   ar: {
+    citation: "استشهاد",
     sources: "المصادر",
     unverifiedCitationsOmitted: "تم حذف الاستشهادات غير المتحقق منها",
   },
   cs: {
+    citation: "Citace",
     sources: "Zdroje",
     unverifiedCitationsOmitted: "Vynechané neověřené citace",
   },
   de: {
+    citation: "Quellenangabe",
     sources: "Quellen",
     unverifiedCitationsOmitted: "Ausgelassene nicht verifizierte Zitate",
   },
   en: {
+    citation: "Citation",
     sources: "Sources",
     unverifiedCitationsOmitted: "Unverified citations omitted",
   },
   es: {
+    citation: "Cita",
     sources: "Fuentes",
     unverifiedCitationsOmitted: "Citas no verificadas omitidas",
   },
   et: {
+    citation: "Viide",
     sources: "Allikad",
     unverifiedCitationsOmitted: "Välja jäetud kontrollimata viited",
   },
   fr: {
+    citation: "Citation",
     sources: "Sources",
     unverifiedCitationsOmitted: "Citations non vérifiées omises",
   },
   hu: {
+    citation: "Hivatkozás",
     sources: "Források",
     unverifiedCitationsOmitted: "Kihagyott, nem ellenőrzött hivatkozások",
   },
   lt: {
+    citation: "Citata",
     sources: "Šaltiniai",
     unverifiedCitationsOmitted: "Praleistos nepatvirtintos citatos",
   },
   lv: {
+    citation: "Atsauce",
     sources: "Avoti",
     unverifiedCitationsOmitted: "Izlaistas nepārbaudītas atsauces",
   },
   pl: {
+    citation: "Cytowanie",
     sources: "Źródła",
     unverifiedCitationsOmitted: "Pominięte niezweryfikowane cytowania",
   },
   "pt-BR": {
+    citation: "Citação",
     sources: "Fontes",
     unverifiedCitationsOmitted: "Citações não verificadas omitidas",
   },
   sk: {
+    citation: "Citácia",
     sources: "Zdroje",
     unverifiedCitationsOmitted: "Vynechané neoverené citácie",
   },

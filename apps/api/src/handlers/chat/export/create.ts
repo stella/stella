@@ -58,6 +58,23 @@ const CHAT_EXPORT_URL_TTL_SECONDS = 300;
  *  section, so one export can never assemble an unbounded citation list. */
 const CHAT_EXPORT_MAX_SOURCE_DOCUMENTS = 50;
 
+const onlySourceDocumentTitle = (
+  sourceDocuments: readonly { title: string }[] | undefined,
+): string | undefined => {
+  if (sourceDocuments === undefined) {
+    return undefined;
+  }
+  const titles = new Set(
+    sourceDocuments
+      .map(({ title }) => title.trim())
+      .filter((title) => title.length > 0),
+  );
+  if (titles.size !== 1) {
+    return undefined;
+  }
+  return titles.values().next().value;
+};
+
 const config = {
   description:
     "Export one assistant chat message as a DOCX document with the selected " +
@@ -143,13 +160,16 @@ const createMessageExport = createSafeRootHandler(
     // Resolve the answer's grounded provenance for the chosen style. Only
     // verified sources are surfaced; unverified citations are counted, never
     // rendered as a fabricated source.
+    const citationLabels = getChatExportCitationLabels(
+      extractLangFromRequest(request),
+    );
     const section = buildCitationSection(
       sourceDocumentsToCitations(
         metadata.sourceDocuments,
         CHAT_EXPORT_MAX_SOURCE_DOCUMENTS,
       ),
       citationStyle,
-      getChatExportCitationLabels(extractLangFromRequest(request)),
+      citationLabels,
     );
 
     const markdown = composeExportMarkdown(body, section);
@@ -161,6 +181,12 @@ const createMessageExport = createSafeRootHandler(
             styleDocumentCitations(
               markdownToStellaDocument(markdown),
               citationStyle,
+              {
+                folioSourceTitle: onlySourceDocumentTitle(
+                  metadata.sourceDocuments,
+                ),
+                internalCitationFallback: citationLabels.citation,
+              },
             ),
           ),
         catch: (cause) =>

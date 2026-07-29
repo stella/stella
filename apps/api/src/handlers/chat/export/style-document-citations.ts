@@ -30,6 +30,23 @@ const isCitationHyperlink = ({ href }: Hyperlink): boolean => {
 const citationTarget = ({ anchor, href }: Hyperlink): string =>
   href ?? (anchor === undefined ? "" : `#${anchor}`);
 
+const hyperlinkVisibleText = ({ children }: Hyperlink): string => {
+  const fragments: string[] = [];
+  for (const child of children) {
+    if (child.type !== "run") {
+      continue;
+    }
+    for (const content of child.content) {
+      if (content.type === "text") {
+        fragments.push(content.text);
+      } else if (content.type === "tab") {
+        fragments.push(" ");
+      }
+    }
+  }
+  return fragments.join("").trim().replace(/\s+/gu, " ");
+};
+
 const createFootnoteReference = (id: number): Run => ({
   type: "run",
   content: [{ type: "footnoteRef", id }],
@@ -54,8 +71,35 @@ const createFootnote = (id: number, target: string): Footnote => ({
 type CitationTransformContext = {
   footnoteByTarget: Map<string, number>;
   footnotes: Footnote[];
+  folioSourceTitle: string | undefined;
+  internalCitationFallback: string;
   nextFootnoteId: number;
   style: Exclude<ChatExportCitationStyle, "inline">;
+};
+
+const citationFootnoteText = (
+  hyperlink: Hyperlink,
+  context: CitationTransformContext,
+): string => {
+  const target = citationTarget(hyperlink);
+  if (
+    !target.startsWith(FOLIO_CITATION_PREFIX) &&
+    !target.startsWith(DECISION_CITATION_PREFIX)
+  ) {
+    return target;
+  }
+
+  const visibleText = hyperlinkVisibleText(hyperlink);
+  if (
+    target.startsWith(FOLIO_CITATION_PREFIX) &&
+    context.folioSourceTitle !== undefined
+  ) {
+    if (visibleText.length === 0) {
+      return context.folioSourceTitle;
+    }
+    return `${context.folioSourceTitle}: ${visibleText}`;
+  }
+  return visibleText || context.internalCitationFallback;
 };
 
 const transformHyperlink = (
@@ -78,7 +122,9 @@ const transformHyperlink = (
   const id = context.nextFootnoteId;
   context.nextFootnoteId += 1;
   context.footnoteByTarget.set(target, id);
-  context.footnotes.push(createFootnote(id, target));
+  context.footnotes.push(
+    createFootnote(id, citationFootnoteText(hyperlink, context)),
+  );
   return [...hyperlink.children, createFootnoteReference(id)];
 };
 
@@ -159,6 +205,13 @@ const nextFootnoteId = (footnotes: readonly Footnote[]): number => {
 export const styleDocumentCitations = (
   document: Document,
   style: ChatExportCitationStyle,
+  {
+    folioSourceTitle,
+    internalCitationFallback,
+  }: {
+    folioSourceTitle: string | undefined;
+    internalCitationFallback: string;
+  },
 ): Document => {
   if (style === "inline") {
     return document;
@@ -172,6 +225,8 @@ export const styleDocumentCitations = (
   const context: CitationTransformContext = {
     footnoteByTarget: new Map(),
     footnotes,
+    folioSourceTitle,
+    internalCitationFallback,
     nextFootnoteId: nextFootnoteId(footnotes),
     style,
   };
