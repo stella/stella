@@ -484,10 +484,7 @@ const runModelRoleProbe = async ({
     orgAIConfig: probeConfig,
     role: selection.role,
   });
-  if (
-    model.provider !== provider ||
-    model.modelId !== selection.modelId
-  ) {
+  if (model.provider !== provider || model.modelId !== selection.modelId) {
     throw new TypeError("Canary resolved an unexpected provider model.");
   }
 
