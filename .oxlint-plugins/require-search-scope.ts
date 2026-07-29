@@ -1540,7 +1540,9 @@ export default {
           returns: unknown[];
         };
 
-        const localFunctionNodes = (expression: unknown): AstNode[] => {
+        const staticallySelectedFunctionNodes = (
+          expression: unknown,
+        ): AstNode[] => {
           const resolved = resolveStaticConstValue(expression, new Set());
           if (
             isAstNode(resolved) &&
@@ -1553,13 +1555,31 @@ export default {
             return [];
           }
           const variable = resolveVariable(resolved);
-          return (variable?.defs ?? []).flatMap((definition) =>
-            definition.type === "FunctionName" &&
-            isAstNode(definition.node) &&
-            definition.node.type === "FunctionDeclaration"
-              ? [definition.node]
-              : [],
-          );
+          return (variable?.defs ?? []).flatMap((definition) => {
+            if (
+              definition.type === "FunctionName" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "FunctionDeclaration"
+            ) {
+              return [definition.node];
+            }
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const"
+            ) {
+              return [];
+            }
+            const initializer = unwrapExpression(definition.node.init);
+            return isAstNode(initializer) &&
+              (initializer.type === "ArrowFunctionExpression" ||
+                initializer.type === "FunctionExpression")
+              ? [initializer]
+              : [];
+          });
         };
 
         const resolveLocalSqlHelpers = (
@@ -1575,13 +1595,19 @@ export default {
           ) {
             return [];
           }
-          const dynamicCalleeAlternatives = resolveDynamicMemberAlternatives(
-            call.callee,
-            new Set(),
-          );
-          const calleeCandidates = dynamicCalleeAlternatives ?? [call.callee];
+          const callee = unwrapExpression(call.callee);
+          if (!isAstNode(callee)) {
+            return [];
+          }
+          const isMemberCall = callee.type === "MemberExpression";
+          if (!isIdentifier(callee) && !isMemberCall) {
+            return [];
+          }
+          const calleeCandidates = isMemberCall
+            ? (resolveDynamicMemberAlternatives(callee, new Set()) ?? [callee])
+            : [callee];
           const functionNodes = new Set(
-            calleeCandidates.flatMap(localFunctionNodes),
+            calleeCandidates.flatMap(staticallySelectedFunctionNodes),
           );
           const helpers: LocalSqlHelper[] = [];
           for (const functionNode of functionNodes) {
@@ -1589,6 +1615,8 @@ export default {
               !Array.isArray(functionNode.params) ||
               functionNode.async === true ||
               functionNode.generator === true ||
+              (!isMemberCall &&
+                functionNode.params.length !== call.arguments.length) ||
               functionNode.params.some(
                 (parameter) =>
                   !isIdentifier(parameter) || parameter.optional === true,
