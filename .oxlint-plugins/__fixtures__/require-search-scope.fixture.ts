@@ -117,6 +117,12 @@ const unsafeScopeInOuterJoin = sql`
   LEFT JOIN entities e ON true ${entityWorkspaceFilter}
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a scope beneath OR is not a dominating conjunct
+const unsafeScopeInOrBranch = sql`
+  SELECT * FROM search_documents sd
+  WHERE true OR (false ${entityWorkspaceFilter})
+`;
+
 const scopedEntity = sql`
   SELECT *
   FROM search_documents sd
@@ -204,6 +210,7 @@ void [
   unsafeScopeInLaterBranch,
   unsafeScopeInLaterStatement,
   unsafeScopeInOuterJoin,
+  unsafeScopeInOrBranch,
   scopedEntity,
   scopedSingleWorkspace,
   scopedInterpolatedEntity,

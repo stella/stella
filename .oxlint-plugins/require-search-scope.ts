@@ -327,12 +327,14 @@ const splitAtSqlQueryBoundaries = (
 type SqlScopeContext = {
   clause: "filtering" | "non-filtering";
   currentJoinIsOuter: boolean;
+  hasNonConjunctiveFilter: boolean;
   pendingJoinIsOuter: boolean;
 };
 
 const INITIAL_SQL_SCOPE_CONTEXT: SqlScopeContext = {
   clause: "non-filtering",
   currentJoinIsOuter: false,
+  hasNonConjunctiveFilter: false,
   pendingJoinIsOuter: false,
 };
 
@@ -348,11 +350,13 @@ const SQL_CLAUSE_KEYWORDS = [
   "limit",
   "offset",
   "on",
+  "or",
   "order",
   "returning",
   "right",
   "select",
   "set",
+  "not",
   "values",
   "where",
   "window",
@@ -364,7 +368,7 @@ const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
   SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
 
 const SQL_CLAUSE_KEYWORD =
-  /\b(?:cross|from|full|group|having|inner|join|left|limit|offset|on|order|returning|right|select|set|values|where|window)\b/giu;
+  /\b(?:cross|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
 
 const sqlScopeContextAfter = (
   text: string,
@@ -423,6 +427,14 @@ const sqlScopeContextAfter = (
       case "where":
       case "having":
         context = { ...context, clause: "filtering" };
+        break;
+      case "or":
+      case "not":
+        context = {
+          ...context,
+          hasNonConjunctiveFilter:
+            context.hasNonConjunctiveFilter || context.clause === "filtering",
+        };
         break;
       case "from":
       case "group":
@@ -634,6 +646,7 @@ export default {
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
               let hasUnscopedBranch = false;
+              let branchProtectedReadCount = 0;
               let unscopedReadCount = 0;
               let scopeEligibleReadCount = 0;
               let sqlLexState: SqlLexState = { type: "normal" };
@@ -645,6 +658,7 @@ export default {
                     sqlLexState,
                   )) {
                     const aliases = projectionReadAliases(part.text, table);
+                    branchProtectedReadCount += aliases.length;
                     unscopedReadCount += aliases.length;
                     scopeEligibleReadCount += aliases.filter(
                       (alias) => alias === projection.expectedAlias,
@@ -656,7 +670,11 @@ export default {
                     );
                     sqlLexState = sqlLexStateAfter(part.text, sqlLexState);
                     if (part.endsBranch) {
-                      hasUnscopedBranch ||= unscopedReadCount > 0;
+                      hasUnscopedBranch ||=
+                        unscopedReadCount > 0 ||
+                        (branchProtectedReadCount > 0 &&
+                          sqlScopeContext.hasNonConjunctiveFilter);
+                      branchProtectedReadCount = 0;
                       unscopedReadCount = 0;
                       scopeEligibleReadCount = 0;
                       sqlScopeContext = INITIAL_SQL_SCOPE_CONTEXT;
@@ -671,6 +689,7 @@ export default {
                     projection.tableImports,
                   )
                 ) {
+                  branchProtectedReadCount += 1;
                   unscopedReadCount += 1;
                   const nextToken = tokens.at(index + 1);
                   if (
@@ -685,6 +704,7 @@ export default {
                   unscopedReadCount > 0 &&
                   scopeEligibleReadCount > 0 &&
                   sqlScopeContext.clause === "filtering" &&
+                  !sqlScopeContext.hasNonConjunctiveFilter &&
                   sqlLexState.type === "normal" &&
                   isApprovedScopeFragment(token.value, projection.scopeImports)
                 ) {
@@ -692,7 +712,14 @@ export default {
                   scopeEligibleReadCount -= 1;
                 }
               }
-              if (!hasUnscopedBranch && unscopedReadCount === 0) {
+              if (
+                !hasUnscopedBranch &&
+                unscopedReadCount === 0 &&
+                !(
+                  branchProtectedReadCount > 0 &&
+                  sqlScopeContext.hasNonConjunctiveFilter
+                )
+              ) {
                 continue;
               }
               context.report({
