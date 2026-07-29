@@ -1,3 +1,5 @@
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
 CREATE TABLE "saved_searches" (
   "id" uuid PRIMARY KEY NOT NULL,
   "organization_id" varchar(128) NOT NULL,
