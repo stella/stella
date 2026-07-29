@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { savedSearches } from "@/api/db/schema";
@@ -82,14 +82,13 @@ const createSavedSearch = createSafeRootHandler(
             criteria: accessibleCriteria,
           })
           .returning();
-        if (!savedSearch) {
-          return null;
-        }
+        const createdSavedSearch =
+          savedSearch ?? panic("Saved search insert returned no row");
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
           resourceType: AUDIT_RESOURCE_TYPE.SAVED_SEARCH,
-          resourceId: savedSearch.id,
+          resourceId: createdSavedSearch.id,
           changes: {
             created: {
               old: null,
@@ -97,7 +96,7 @@ const createSavedSearch = createSafeRootHandler(
             },
           },
         });
-        return savedSearch;
+        return createdSavedSearch;
       }),
     );
     if (!created) {

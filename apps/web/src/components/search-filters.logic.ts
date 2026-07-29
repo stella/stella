@@ -24,11 +24,10 @@ type ResolveActiveSearchTypesParams = {
 
 export const hasUnavailableSearchType = ({
   availableTypes,
+  kinds,
   selectedTypes,
-}: Pick<
-  ResolveActiveSearchTypesParams,
-  "availableTypes" | "selectedTypes"
->): boolean => selectedTypes.some((type) => !availableTypes.includes(type));
+}: ResolveActiveSearchTypesParams): boolean =>
+  [...selectedTypes, ...kinds].some((type) => !availableTypes.includes(type));
 
 export const resolveActiveSearchTypes = ({
   availableTypes,

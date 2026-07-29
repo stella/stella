@@ -153,6 +153,9 @@ test("durably marks verification dirty before rebuilding a mismatch", async () =
     executeMock.mock.calls.at(1)?.at(0) ?? sql``,
   );
   expect(dirtyCheckpoint.sql).toContain("'dirty', true");
+  expect(dirtyCheckpoint.sql).toContain("'pass', $2::text");
+  expect(dirtyCheckpoint.sql).toContain("'passStartedAt', $3::text");
+  expect(dirtyCheckpoint.sql).toContain("'quietSince', $4::text");
   expect(dirtyCheckpoint.params).toContain("2026-07-29T00:05:00.000Z");
   expect(upsertSearchDocumentMock).toHaveBeenCalledWith(entityId);
 });
@@ -295,4 +298,48 @@ test("does not touch durable state after cancellation", async () => {
 
   expect(outcome).toEqual({ status: "aborted" });
   expect(executeMock).not.toHaveBeenCalled();
+});
+
+test("does not checkpoint after cancellation during a bounded reindex", async () => {
+  const entityIds = [
+    toSafeId<"entity">("11111111-1111-4111-8111-111111111111"),
+    toSafeId<"entity">("22222222-2222-4222-8222-222222222222"),
+    toSafeId<"entity">("33333333-3333-4333-8333-333333333333"),
+    toSafeId<"entity">("44444444-4444-4444-8444-444444444444"),
+    toSafeId<"entity">("55555555-5555-4555-8555-555555555555"),
+  ];
+  const controller = new AbortController();
+  let reindexStarts = 0;
+  let resolveInitialBatchStarted = () => undefined;
+  let resolveUpsert = () => undefined;
+  const initialBatchStarted = new Promise<void>((resolve) => {
+    resolveInitialBatchStarted = resolve;
+  });
+  const pendingUpsert = new Promise<void>((resolve) => {
+    resolveUpsert = resolve;
+  });
+  executeMock.mockResolvedValueOnce(
+    entityIds.map((entityId) => ({ entityId, needsReindex: true })),
+  );
+  upsertSearchDocumentMock.mockImplementation(async () => {
+    reindexStarts += 1;
+    if (reindexStarts === 4) {
+      resolveInitialBatchStarted();
+    }
+    await pendingUpsert;
+  });
+
+  const outcomePromise = repairSearchSemanticTimestamps({
+    jobId: "search.repairSemanticTimestamps.v1",
+    leaseToken: "runner#lease-1",
+    payload: null,
+    signal: controller.signal,
+  });
+  await initialBatchStarted;
+  controller.abort();
+  resolveUpsert();
+
+  await expect(outcomePromise).resolves.toEqual({ status: "aborted" });
+  expect(upsertSearchDocumentMock).toHaveBeenCalledTimes(4);
+  expect(executeMock).toHaveBeenCalledTimes(1);
 });

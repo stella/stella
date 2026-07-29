@@ -510,7 +510,7 @@ const buildSearchFilterFragments = ({
   const entityUpdatedFilter = updatedRangeFilter(sql`sd.updated_at`);
   const matterUpdatedFilter = updatedRangeFilter(sql`wsd.updated_at`);
   const contactUpdatedFilter = updatedRangeFilter(sql`csd.updated_at`);
-  const caseLawUpdatedFilter = updatedRangeFilter(sql`clsd.updated_at`);
+  const caseLawUpdatedFilter = updatedRangeFilter(sql`d.updated_at`);
   const chatUpdatedFilter = updatedRangeFilter(sql`t.updated_at`);
   const entityTextSearchFilter = sqlWhen(
     hasSearchQuery,
@@ -738,14 +738,14 @@ export const searchGlobal = async ({
         d.decision_date,
         ${searchHeadline(sql`coalesce(nullif(body_preview.text, ''), d.fulltext, clsd.searchable_text)`)},
         ${searchScore(sql`clsd.tsv`)},
-        clsd.updated_at
+        d.updated_at
       FROM case_law_search_documents clsd
       JOIN case_law_decisions d ON d.id = clsd.decision_id
       ${caseLawBodyPreviewJoin}
       WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}
-      ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`clsd.updated_at` })}
+      ORDER BY ${searchOrderBy({ id: sql`clsd.decision_id`, updatedAt: sql`d.updated_at` })}
       LIMIT ${fetchLimit}
     `),
   );
@@ -835,6 +835,7 @@ export const searchGlobal = async ({
         rootDb.execute(sql`
         SELECT count(*)::int AS total
         FROM case_law_search_documents clsd
+        JOIN case_law_decisions d ON d.id = clsd.decision_id
         WHERE TRUE
           ${caseLawTextSearchFilter}
           ${caseLawUpdatedFilter}
@@ -908,6 +909,7 @@ export const searchGlobal = async ({
       rootDb.execute(sql`
       SELECT count(*)::int AS total
       FROM case_law_search_documents clsd
+      JOIN case_law_decisions d ON d.id = clsd.decision_id
       WHERE TRUE
         ${caseLawTextSearchFilter}
         ${caseLawUpdatedFilter}

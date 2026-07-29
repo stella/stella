@@ -26,7 +26,7 @@ const criteria = {
   editedByUserIds: [],
   mimeTypes: [],
   sort: "relevance",
-} as const satisfies SavedSearchCriteria;
+} satisfies SavedSearchCriteria;
 
 beforeAll(
   async () => {

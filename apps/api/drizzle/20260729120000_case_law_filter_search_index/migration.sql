@@ -2,7 +2,7 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 -- Filter-only case-law search has no full-text predicate: it reads newest
--- decisions by (updated_at, decision_id). Build the matching keyset index
+-- decisions by their authoritative (updated_at, id). Build the matching index
 -- without blocking reads or ingestion on the existing public corpus table.
 --
 -- Drizzle wraps pending migrations in one transaction, while PostgreSQL
@@ -20,11 +20,11 @@ SET lock_timeout = 0;
 -- stella-migration-safety: reviewed destructive-change - drops only this
 -- migration's own index by name before recreating it. A cancelled concurrent
 -- build can leave an INVALID index that IF NOT EXISTS would otherwise retain.
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_search_docs_updated_id_idx";
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_updated_id_idx";
 --> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "case_law_search_docs_updated_id_idx"
-  ON "case_law_search_documents" ("updated_at" DESC, "decision_id" DESC);
+CREATE INDEX CONCURRENTLY "case_law_decisions_updated_id_idx"
+  ON "case_law_decisions" ("updated_at" DESC, "id" DESC);
 --> statement-breakpoint
 
 SET statement_timeout = '5s';

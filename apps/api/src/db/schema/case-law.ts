@@ -177,6 +177,9 @@ export const caseLawDecisions = p.pgTable(
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
     p
+      .index("case_law_decisions_updated_id_idx")
+      .on(t.updatedAt.desc(), t.id.desc()),
+    p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),
     // Supports the missing/stale scan the corpus index indexer loop runs
@@ -375,9 +378,6 @@ export const caseLawSearchDocuments = p.pgTable(
   },
   (table) => [
     p.index("case_law_search_docs_tsv_idx").using("gin", table.tsv),
-    p
-      .index("case_law_search_docs_updated_id_idx")
-      .on(table.updatedAt.desc(), table.decisionId.desc()),
     ...globalCaseLawPolicies(),
   ],
 );

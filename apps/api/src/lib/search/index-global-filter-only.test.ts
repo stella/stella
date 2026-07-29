@@ -74,6 +74,43 @@ test("orders filter-only chat hits on the tenant-leading thread key", async () =
   expect(hitQuery).toContain("ORDER BY t.updated_at DESC, t.id DESC");
 });
 
+test("uses authoritative decision timestamps for filter-only case law", async () => {
+  await searchGlobal({
+    accessibleWorkspaceIds: [],
+    editedByUserIds: [],
+    limit: 10,
+    mimeTypes: [],
+    organizationId: toSafeId<"organization">("org_1"),
+    query: "",
+    selectedWorkspaceIds: [],
+    types: ["case-law"],
+    updatedFrom: "2026-07-28T00:00:00.000Z",
+    userId: toSafeId<"user">("user_1"),
+  });
+
+  const dialect = new PgDialect();
+  const caseLawQueries = rootDbExecuteMock.mock.calls
+    .map(([query]) => dialect.sqlToQuery(query).sql)
+    .filter((query) => query.includes("FROM case_law_search_documents clsd"));
+
+  expect(caseLawQueries.length).toBeGreaterThan(0);
+  for (const query of caseLawQueries) {
+    expect(query).toContain(
+      "JOIN case_law_decisions d ON d.id = clsd.decision_id",
+    );
+    expect(query).toContain("d.updated_at >=");
+    expect(query).not.toContain("clsd.updated_at >=");
+  }
+
+  const hitQuery = caseLawQueries.find((query) =>
+    query.includes("clsd.decision_id AS id"),
+  );
+  expect(hitQuery).toContain("d.updated_at");
+  expect(hitQuery).toContain(
+    "ORDER BY d.updated_at DESC, clsd.decision_id DESC",
+  );
+});
+
 test("sorts filter-only hits newest first across result types", async () => {
   const dialect = new PgDialect();
   rootDbExecuteMock.mockImplementation(async (query: SQL) => {

@@ -31,15 +31,27 @@ describe("active search types", () => {
     expect(
       hasUnavailableSearchType({
         availableTypes: ["matter", "contact", "document"],
+        kinds: [],
         selectedTypes: ["case-law"],
       }),
     ).toBe(true);
     expect(
       hasUnavailableSearchType({
         availableTypes: ["matter", "contact", "document"],
+        kinds: [],
         selectedTypes: ["contact"],
       }),
     ).toBe(false);
+  });
+
+  test("detects a saved kind that is no longer available", () => {
+    expect(
+      hasUnavailableSearchType({
+        availableTypes: ["matter", "contact", "document"],
+        kinds: ["case-law"],
+        selectedTypes: [],
+      }),
+    ).toBe(true);
   });
 
   test("uses saved kinds when no explicit result types are selected", () => {

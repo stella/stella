@@ -130,6 +130,10 @@ export const repairSearchSemanticTimestamps = async ({
   const last = pageRows.at(-1);
   const nowIso = now.toISOString();
 
+  if (signal.aborted) {
+    return { status: "aborted" };
+  }
+
   if (!last) {
     if (state.pass === REPAIR_PASS.repair) {
       // Old application instances can still write reindex time during a
@@ -138,11 +142,11 @@ export const repairSearchSemanticTimestamps = async ({
       await rootDb.execute(sql`
         UPDATE scheduler_jobs
         SET payload = jsonb_build_object(
-          'pass', ${REPAIR_PASS.verify},
+          'pass', ${REPAIR_PASS.verify}::text,
           'dirty', false,
           'cleanPasses', 0,
-          'passStartedAt', ${nowIso},
-          'quietSince', ${nowIso}
+          'passStartedAt', ${nowIso}::text,
+          'quietSince', ${nowIso}::text
         )
         WHERE id = ${jobId}
           AND locked_by = ${leaseToken}
@@ -167,11 +171,11 @@ export const repairSearchSemanticTimestamps = async ({
       await rootDb.execute(sql`
         UPDATE scheduler_jobs
         SET payload = jsonb_build_object(
-          'pass', ${REPAIR_PASS.verify},
+          'pass', ${REPAIR_PASS.verify}::text,
           'dirty', false,
-          'cleanPasses', ${cleanPasses},
-          'passStartedAt', ${nowIso},
-          'quietSince', ${quietSince}
+          'cleanPasses', ${cleanPasses}::int,
+          'passStartedAt', ${nowIso}::text,
+          'quietSince', ${quietSince}::text
         )
         WHERE id = ${jobId}
           AND locked_by = ${leaseToken}
@@ -202,17 +206,21 @@ export const repairSearchSemanticTimestamps = async ({
       : nowIso;
 
   if (state.pass === REPAIR_PASS.verify && reindexEntityIds.length > 0) {
+    if (signal.aborted) {
+      return { status: "aborted" };
+    }
+
     // Mark the pass dirty before external projection work. A crash can replay
     // the page, but cannot lose the quiet-window reset.
     await rootDb.execute(sql`
       UPDATE scheduler_jobs
       SET payload = jsonb_build_object(
         'cursor', ${state.cursor}::text,
-        'pass', ${REPAIR_PASS.verify},
+        'pass', ${REPAIR_PASS.verify}::text,
         'dirty', true,
         'cleanPasses', 0,
-        'passStartedAt', ${state.passStartedAt},
-        'quietSince', ${nowIso}
+        'passStartedAt', ${state.passStartedAt}::text,
+        'quietSince', ${nowIso}::text
       )
       WHERE id = ${jobId}
         AND locked_by = ${leaseToken}
@@ -223,25 +231,29 @@ export const repairSearchSemanticTimestamps = async ({
   let failed = 0;
   let repaired = 0;
   const reindexNext = async (): Promise<void> => {
-    const entityId = reindexEntityIds.at(nextReindexIndex);
-    nextReindexIndex += 1;
-    if (!entityId) {
-      return;
-    }
-    const reindexResult = await Result.tryPromise({
-      try: async () => await upsertSearchDocument(entityId),
-      catch: (error: unknown) => error,
-    });
-    if (Result.isError(reindexResult)) {
-      failed += 1;
-      captureError(reindexResult.error, {
-        entityId,
-        schedulerTask: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+    while (!signal.aborted) {
+      const entityId = reindexEntityIds.at(nextReindexIndex);
+      nextReindexIndex += 1;
+      if (!entityId) {
+        return;
+      }
+      const reindexResult = await Result.tryPromise({
+        try: async () => await upsertSearchDocument(entityId),
+        catch: (error: unknown) => error,
       });
-    } else {
-      repaired += 1;
+      if (signal.aborted) {
+        return;
+      }
+      if (Result.isError(reindexResult)) {
+        failed += 1;
+        captureError(reindexResult.error, {
+          entityId,
+          schedulerTask: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+        });
+      } else {
+        repaired += 1;
+      }
     }
-    await reindexNext();
   };
   await Promise.all(
     Array.from(
@@ -252,16 +264,20 @@ export const repairSearchSemanticTimestamps = async ({
     ),
   );
 
+  if (signal.aborted) {
+    return { status: "aborted" };
+  }
+
   if (state.pass === REPAIR_PASS.verify) {
     await rootDb.execute(sql`
       UPDATE scheduler_jobs
       SET payload = jsonb_build_object(
         'cursor', ${last.entityId}::text,
-        'pass', ${REPAIR_PASS.verify},
-        'dirty', ${verificationDirty},
-        'cleanPasses', ${verificationDirty ? 0 : state.cleanPasses},
-        'passStartedAt', ${state.passStartedAt},
-        'quietSince', ${quietSince}
+        'pass', ${REPAIR_PASS.verify}::text,
+        'dirty', ${verificationDirty}::boolean,
+        'cleanPasses', ${verificationDirty ? 0 : state.cleanPasses}::int,
+        'passStartedAt', ${state.passStartedAt}::text,
+        'quietSince', ${quietSince}::text
       )
       WHERE id = ${jobId}
         AND locked_by = ${leaseToken}
@@ -273,7 +289,7 @@ export const repairSearchSemanticTimestamps = async ({
       UPDATE scheduler_jobs
       SET payload = jsonb_build_object(
         'cursor', ${last.entityId}::text,
-        'pass', ${REPAIR_PASS.repair}
+        'pass', ${REPAIR_PASS.repair}::text
       )
       WHERE id = ${jobId}
         AND locked_by = ${leaseToken}

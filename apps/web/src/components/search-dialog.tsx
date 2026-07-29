@@ -309,6 +309,7 @@ export const SearchDialog = ({
   const [filters, setFilters] = useState<SearchFilters>(() =>
     initialSearchFilters(initialWorkspaceId),
   );
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const debouncedSetQuery = useDebouncedCallback((value: string) => {
     setDebouncedQuery(value);
@@ -334,6 +335,7 @@ export const SearchDialog = ({
   const selectedSearchTypes = filters.types.filter(isSearchKindOption);
   const hasUnavailableSelectedType = hasUnavailableSearchType({
     availableTypes: availableSearchTypes,
+    kinds: filters.kinds,
     selectedTypes: selectedSearchTypes,
   });
   const activeSearchTypes = resolveActiveSearchTypes({
@@ -870,6 +872,7 @@ export const SearchDialog = ({
       ...(savedFilters.time !== undefined && { time: savedFilters.time }),
     });
     summarizeSearchMutation.reset();
+    searchInputRef.current?.focus();
   };
 
   return (
@@ -908,6 +911,7 @@ export const SearchDialog = ({
               dir={contentDir(query)}
               onKeyDownCapture={handleCommandInputKeyDownCapture}
               placeholder={t("search.placeholder")}
+              ref={searchInputRef}
             />
             {isFetching && !isFetchingNextPage && (
               <LoaderIcon className="text-muted-foreground size-4 shrink-0 animate-spin" />
