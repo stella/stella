@@ -614,7 +614,8 @@ type SqlQueryNestingEvent =
   | { queryId: number; text: string; type: "text" }
   | { queryId: number; type: "end-query" };
 
-const SQL_QUERY_NESTING_TOKEN = /[()]|\b(?:select|table|values|with)\b/giu;
+const SQL_QUERY_NESTING_TOKEN =
+  /[()]|\b(?:delete|select|table|update|values|with)\b/giu;
 
 const sqlQueryNestingEvents = (
   text: string,
@@ -831,7 +832,7 @@ const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
   SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
 
 const SQL_SCOPE_CONTEXT_TOKEN =
-  /[()]|\b(?:not\s+)?in\s*\(\s*(?:false|true)\s*\)|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|using|values|where|window)\b/giu;
+  /[()]|\b(?:not\s+)?in\s*\(\s*(?:false|true)\s*\)|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|(?:<=|>=|<|>)\s*\b(?:false|true)\b|\b(?:false|true)\b\s*(?:<=|>=|<|>)|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|using|values|where|window)\b/giu;
 
 const INVERSE_BOOLEAN_MEMBERSHIP_TESTS = new Set(["in(false)", "notin(true)"]);
 
@@ -1167,17 +1168,16 @@ export default {
           );
         };
 
-        const resolveConstInitializer = (expression: unknown): unknown => {
-          const unwrapped = unwrapExpression(expression);
-          if (!isIdentifier(unwrapped)) {
-            return unwrapped;
-          }
-          const variable = resolveVariable(unwrapped);
+        const constIdentifierInitializer = (
+          identifier: AstNode & { name: string },
+        ): unknown | null => {
+          const variable = resolveVariable(identifier);
           for (const definition of variable?.defs ?? []) {
             if (
               definition.type !== "Variable" ||
               !isAstNode(definition.node) ||
               definition.node.type !== "VariableDeclarator" ||
+              !isIdentifier(definition.node.id, identifier.name) ||
               !isAstNode(definition.parent) ||
               definition.parent.type !== "VariableDeclaration" ||
               definition.parent.kind !== "const"
@@ -1186,8 +1186,134 @@ export default {
             }
             return unwrapExpression(definition.node.init);
           }
-          return unwrapped;
+          return null;
         };
+
+        const staticLiteralPropertyKey = (node: unknown): string | null => {
+          const unwrapped = unwrapExpression(node);
+          if (
+            !isAstNode(unwrapped) ||
+            unwrapped.type !== "Literal" ||
+            (typeof unwrapped.value !== "string" &&
+              typeof unwrapped.value !== "number")
+          ) {
+            return null;
+          }
+          return String(unwrapped.value);
+        };
+
+        const staticMemberPropertyKey = (member: AstNode): string | null => {
+          if (member.computed === false) {
+            return isIdentifier(member.property) ? member.property.name : null;
+          }
+          return staticLiteralPropertyKey(member.property);
+        };
+
+        const staticObjectPropertyKey = (property: AstNode): string | null => {
+          if (property.computed === true) {
+            return staticLiteralPropertyKey(property.key);
+          }
+          if (isIdentifier(property.key)) {
+            return property.key.name;
+          }
+          return staticLiteralPropertyKey(property.key);
+        };
+
+        type StaticSelection = { value: unknown };
+
+        const selectStaticMember = (
+          container: AstNode,
+          propertyKey: string,
+        ): StaticSelection | null => {
+          if (
+            container.type === "ArrayExpression" &&
+            Array.isArray(container.elements)
+          ) {
+            if (
+              container.elements.some(
+                (element) =>
+                  isAstNode(element) && element.type === "SpreadElement",
+              )
+            ) {
+              return null;
+            }
+            const index = Number(propertyKey);
+            if (
+              !Number.isSafeInteger(index) ||
+              index < 0 ||
+              String(index) !== propertyKey
+            ) {
+              return null;
+            }
+            const value = container.elements.at(index);
+            return value === null || value === undefined ? null : { value };
+          }
+          if (
+            container.type !== "ObjectExpression" ||
+            !Array.isArray(container.properties)
+          ) {
+            return null;
+          }
+
+          let selected: StaticSelection | null = null;
+          for (const property of container.properties) {
+            if (
+              !isAstNode(property) ||
+              property.type !== "Property" ||
+              property.kind !== "init" ||
+              property.method === true
+            ) {
+              return null;
+            }
+            const key = staticObjectPropertyKey(property);
+            if (key === null) {
+              return null;
+            }
+            if (key === propertyKey) {
+              selected = { value: property.value };
+            }
+          }
+          return selected;
+        };
+
+        const resolveStaticConstValue = (
+          expression: unknown,
+          ancestors: ReadonlySet<unknown>,
+        ): unknown => {
+          const unwrapped = unwrapExpression(expression);
+          if (!isAstNode(unwrapped) || ancestors.has(unwrapped)) {
+            return unwrapped;
+          }
+          const nextAncestors = new Set(ancestors);
+          nextAncestors.add(unwrapped);
+          if (isIdentifier(unwrapped)) {
+            const initializer = constIdentifierInitializer(unwrapped);
+            return initializer === null
+              ? unwrapped
+              : resolveStaticConstValue(initializer, nextAncestors);
+          }
+          if (unwrapped.type !== "MemberExpression") {
+            return unwrapped;
+          }
+          const propertyKey = staticMemberPropertyKey(unwrapped);
+          if (propertyKey === null) {
+            return unwrapped;
+          }
+          const container = resolveStaticConstValue(
+            unwrapped.object,
+            nextAncestors,
+          );
+          if (!isAstNode(container)) {
+            return unwrapped;
+          }
+          const selected = selectStaticMember(container, propertyKey);
+          return selected === null
+            ? unwrapped
+            : resolveStaticConstValue(selected.value, nextAncestors);
+        };
+
+        const resolveConstInitializer = (expression: unknown): unknown =>
+          resolveStaticConstValue(expression, new Set());
 
         const FUNCTION_NODE_TYPES = new Set([
           "ArrowFunctionExpression",

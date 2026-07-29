@@ -174,6 +174,22 @@ const privateFromBlock = () => {
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves block-returning local helpers cannot hide a private projection
 const unsafeBlockHelperPrivateRead = sql`SELECT * ${privateFromBlock()}`;
 
+const memberFragments = {
+  from: sql`FROM search_documents sd`,
+  publicFrom: sql`FROM entities e`,
+};
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a statically selected object fragment cannot hide a private projection
+const unsafeMemberFragmentRead = sql`SELECT * ${memberFragments.from}`;
+
+const tupleFragments = [
+  sql`FROM search_documents sd`,
+  sql`FROM entities e`,
+] as const;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a statically selected tuple fragment cannot hide a private projection
+const unsafeTupleFragmentRead = sql`SELECT * ${tupleFragments[0]}`;
+
 const unsafeJoinedPrivateFragment = (() => {
   const privateFragments = [sql`FROM search_documents sd`];
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves call-composed SQL fragments cannot hide a private projection
@@ -392,6 +408,54 @@ const unsafeScopeNotInTrueMembership = sql`
   WHERE (true ${entityWorkspaceFilter}) NOT IN (TRUE)
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves less-than TRUE cannot invert an approved scope
+const unsafeScopeLessThanTrue = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) < TRUE
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves greater-than FALSE is rejected as an ordering test around an approved scope
+const unsafeScopeGreaterThanFalse = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) > FALSE
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves less-than-or-equal FALSE cannot invert an approved scope
+const unsafeScopeLessThanOrEqualFalse = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) <= FALSE
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves greater-than-or-equal TRUE is rejected as an ordering test around an approved scope
+const unsafeScopeGreaterThanOrEqualTrue = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) >= TRUE
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves reversed TRUE-greater-than ordering cannot invert an approved scope
+const unsafeTrueGreaterThanScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE TRUE > (true ${entityWorkspaceFilter})
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves reversed FALSE-less-than ordering is rejected around an approved scope
+const unsafeFalseLessThanScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE FALSE < (true ${entityWorkspaceFilter})
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves reversed FALSE-greater-than-or-equal ordering cannot invert an approved scope
+const unsafeFalseGreaterThanOrEqualScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE FALSE >= (true ${entityWorkspaceFilter})
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves reversed TRUE-less-than-or-equal ordering is rejected around an approved scope
+const unsafeTrueLessThanOrEqualScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE TRUE <= (true ${entityWorkspaceFilter})
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a nested query cannot authorize an outer private read through an alias shadow
 const unsafeScopeInNestedQuery = sql`
   SELECT sd.*
@@ -408,6 +472,33 @@ const unsafeScopeInSiblingQuery = sql`
   ) OR EXISTS (
     SELECT 1 FROM entities sd WHERE true ${entityWorkspaceFilter}
   )
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an outer SELECT scope cannot authorize an unscoped UPDATE CTE read
+const unsafeScopeOutsideUpdateCte = sql`
+  WITH updated_entities AS (
+    UPDATE entities e
+    SET title = sd.title
+    FROM search_documents sd
+    WHERE e.id = sd.entity_id
+    RETURNING e.id
+  )
+  SELECT sd.*
+  FROM entities sd
+  WHERE true ${entityWorkspaceFilter}
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an outer SELECT scope cannot authorize an unscoped DELETE CTE read
+const unsafeScopeOutsideDeleteCte = sql`
+  WITH deleted_entities AS (
+    DELETE FROM entities e
+    USING search_documents sd
+    WHERE e.id = sd.entity_id
+    RETURNING e.id
+  )
+  SELECT sd.*
+  FROM entities sd
+  WHERE true ${entityWorkspaceFilter}
 `;
 
 const scopedEntity = sql`
@@ -464,6 +555,29 @@ const scopedInterpolatedDeleteUsingEntity = sql`
     AND true ${entityWorkspaceFilter}
 `;
 
+const scopedUpdateCte = sql`
+  WITH updated_entities AS (
+    UPDATE entities e
+    SET title = sd.title
+    FROM search_documents sd
+    WHERE e.id = sd.entity_id
+      AND true ${entityWorkspaceFilter}
+    RETURNING e.id
+  )
+  SELECT * FROM updated_entities
+`;
+
+const scopedDeleteCte = sql`
+  WITH deleted_entities AS (
+    DELETE FROM entities e
+    USING search_documents sd
+    WHERE e.id = sd.entity_id
+      AND true ${entityWorkspaceFilter}
+    RETURNING e.id
+  )
+  SELECT * FROM deleted_entities
+`;
+
 const scopedExplicitAlias = sql`
   SELECT * FROM search_documents AS sd WHERE true ${entityWorkspaceFilter}
 `;
@@ -509,6 +623,17 @@ const scopedNotInFalseMembership = sql`
   WHERE (true ${entityWorkspaceFilter}) NOT IN (FALSE)
 `;
 
+const scopedComparedToTrue = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) = TRUE
+`;
+
+const scopedWithNumericOrdering = sql`
+  SELECT * FROM search_documents sd
+  WHERE rank > 0
+    AND true ${entityWorkspaceFilter}
+`;
+
 const scopedNestedPrivateRead = sql`
   SELECT EXISTS (
     SELECT 1
@@ -535,6 +660,28 @@ const scopedBlockHelperPrivateRead = sql`
   SELECT * ${scopedPrivateFromBlock()}
   WHERE true ${entityWorkspaceFilter}
 `;
+
+const scopedMemberFragments = {
+  from: sql`FROM search_documents sd`,
+  where: sql`WHERE true ${entityWorkspaceFilter}`,
+};
+const scopedMemberFragmentRead = sql`
+  SELECT * ${scopedMemberFragments.from} ${scopedMemberFragments.where}
+`;
+
+const scopedTupleFragments = [
+  sql`FROM search_documents sd`,
+  sql`WHERE true ${entityWorkspaceFilter}`,
+] as const;
+const scopedTupleFragmentRead = sql`
+  SELECT * ${scopedTupleFragments[0]} ${scopedTupleFragments[1]}
+`;
+
+// Exact static selection must not inspect an unselected private sibling.
+const selectedPublicMemberFragment = sql`
+  SELECT * ${memberFragments.publicFrom}
+`;
+const selectedPublicTupleFragment = sql`SELECT * ${tupleFragments[1]}`;
 
 const scopedJoinedPrivateFragment = (() => {
   const fragments = [
@@ -677,6 +824,8 @@ void [
   unsafeComposedPrivateRead,
   unsafeLocalHelperPrivateRead,
   unsafeBlockHelperPrivateRead,
+  unsafeMemberFragmentRead,
+  unsafeTupleFragmentRead,
   unsafeJoinedPrivateFragment,
   unsafeSplitJoinedPrivateFragment,
   unsafeJoinedMultiBranch,
@@ -712,8 +861,18 @@ void [
   unsafeScopeDistinctFromTrue,
   unsafeScopeInFalseMembership,
   unsafeScopeNotInTrueMembership,
+  unsafeScopeLessThanTrue,
+  unsafeScopeGreaterThanFalse,
+  unsafeScopeLessThanOrEqualFalse,
+  unsafeScopeGreaterThanOrEqualTrue,
+  unsafeTrueGreaterThanScope,
+  unsafeFalseLessThanScope,
+  unsafeFalseGreaterThanOrEqualScope,
+  unsafeTrueLessThanOrEqualScope,
   unsafeScopeInNestedQuery,
   unsafeScopeInSiblingQuery,
+  unsafeScopeOutsideUpdateCte,
+  unsafeScopeOutsideDeleteCte,
   scopedEntity,
   scopedSingleWorkspace,
   scopedInterpolatedEntity,
@@ -722,6 +881,8 @@ void [
   scopedInterpolatedUpdateFromEntity,
   scopedDeleteUsingEntity,
   scopedInterpolatedDeleteUsingEntity,
+  scopedUpdateCte,
+  scopedDeleteCte,
   scopedExplicitAlias,
   scopedAfterLineComment,
   scopedAfterDollarQuote,
@@ -731,10 +892,16 @@ void [
   scopedTestedAsTrue,
   scopedInTrueMembership,
   scopedNotInFalseMembership,
+  scopedComparedToTrue,
+  scopedWithNumericOrdering,
   scopedNestedPrivateRead,
   scopedComposedRead,
   scopedLocalHelperPrivateRead,
   scopedBlockHelperPrivateRead,
+  scopedMemberFragmentRead,
+  scopedTupleFragmentRead,
+  selectedPublicMemberFragment,
+  selectedPublicTupleFragment,
   scopedJoinedPrivateFragment,
   scopedParenthesizedJoinedEntity,
   scopedParenthesizedJoinedInterpolatedEntity,
