@@ -68,6 +68,15 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
           },
           {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#9"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -126,15 +135,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-directive-extension.ts#1"
@@ -2870,6 +2870,15 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
           },
           {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#9"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -2928,15 +2937,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-directive-extension.ts#1"
@@ -5450,6 +5450,15 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
           },
           {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#9"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -5508,15 +5517,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-directive-extension.ts#1"
@@ -8121,16 +8121,16 @@
             "location": "apps/web/src/components/chat/chat-ui-tools.ts#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic.ts#1"
+            "location": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-lib/build-chat-request-message.ts#1"
+            "location": "apps/web/src/features/chat/lib/build-chat-request-message.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#1"
+            "location": "apps/web/src/features/chat/queries.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#6"
+            "location": "apps/web/src/features/chat/queries.ts#6"
           },
           {
             "location": "apps/web/src/components/ai-elements/message.tsx#6"
@@ -8647,9 +8647,6 @@
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/chat-tool-types.ts#7"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#1"
           },
           {
@@ -8680,9 +8677,6 @@
             "location": "apps/api/src/handlers/chat/tools/registry-write-tools.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/spawn-subagents-tool.ts#1"
           },
           {
@@ -8701,16 +8695,22 @@
             "location": "apps/api/src/handlers/chat/types.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#12"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#13"
+            "location": "apps/api/src/lib/agent-skills/skill-tools.ts#1"
           },
           {
             "location": "apps/api/src/lib/analytics/tanstack-ai.ts#1"
           },
           {
             "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/chat/chat-tool-types.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/docx/ai-field-generator.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/docx/ai-field-generator.ts#13"
           },
           {
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#5"
@@ -9136,6 +9136,24 @@
             "location": "apps/web/src/features/case-law/queries/decisions.ts#1"
           },
           {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#11"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-chat-thread-runtime.ts#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#3"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#4"
+          },
+          {
+            "location": "apps/web/src/features/chat/queries.ts#7"
+          },
+          {
+            "location": "apps/web/src/features/chat/queries.ts#8"
+          },
+          {
             "location": "apps/web/src/features/style-sets/style-set-queries.ts#1"
           },
           {
@@ -9197,24 +9215,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.account/-queries.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#11"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-thread-runtime.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#8"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-caches.ts#1"
@@ -9577,6 +9577,12 @@
             "location": "apps/web/src/components/usage/usage-limit-modal.tsx#1"
           },
           {
+            "location": "apps/web/src/features/chat/components/chat-web-search-toggle.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/chat/components/chat-web-search-toggle.tsx#2"
+          },
+          {
             "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#4"
           },
           {
@@ -9593,12 +9599,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#8"
@@ -12139,6 +12139,15 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
           },
           {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#9"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -12197,15 +12206,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-directive-extension.ts#1"
@@ -14315,9 +14315,6 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/skills.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/chat/stream-chat.ts#17"
           },
           {
@@ -14328,9 +14325,6 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/chat-tool-types.ts#8"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/create-workspace-document-tools.ts#2"
@@ -14376,9 +14370,6 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/resolve-docx-edit-author-name.ts#17"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/spawn-subagents-tool.ts#2"
@@ -14478,15 +14469,6 @@
           },
           {
             "location": "apps/api/src/handlers/document-types/update.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/discover-template.ts#11"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/patch-template.ts#11"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/template-manifest.ts#13"
           },
           {
             "location": "apps/api/src/handlers/docx-suggestions/create.ts#1"
@@ -15062,6 +15044,33 @@
             "location": "apps/api/src/handlers/search/routes.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/sharepoint/connect.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/disconnect.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/enablement.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/graph-client.ts#17"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/graph-oauth.ts#17"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/list-drive-root.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/oauth-callback.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/set-enablement.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/status.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/skills/create.ts#1"
           },
           {
@@ -15087,9 +15096,6 @@
           },
           {
             "location": "apps/api/src/handlers/skills/list.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/skills/origin.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/resources/create.ts#1"
@@ -15548,6 +15554,15 @@
             "location": "apps/api/src/lib/agent-auth.ts#1"
           },
           {
+            "location": "apps/api/src/lib/agent-skills/origin.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/skill-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/skills.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
           },
           {
@@ -15581,6 +15596,9 @@
             "location": "apps/api/src/lib/business-registries/dispatch.ts#10"
           },
           {
+            "location": "apps/api/src/lib/chat/chat-tool-types.ts#8"
+          },
+          {
             "location": "apps/api/src/lib/confirmation-otp.ts#1"
           },
           {
@@ -15600,6 +15618,15 @@
           },
           {
             "location": "apps/api/src/lib/document-counter.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/docx/discover-template.ts#11"
+          },
+          {
+            "location": "apps/api/src/lib/docx/patch-template.ts#11"
+          },
+          {
+            "location": "apps/api/src/lib/docx/template-manifest.ts#13"
           },
           {
             "location": "apps/api/src/lib/docx-archive.ts#12"
@@ -15863,6 +15890,15 @@
             "location": "apps/web/src/env.ts#2"
           },
           {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#12"
+          },
+          {
+            "location": "apps/web/src/features/chat/queries.ts#9"
+          },
+          {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#4"
           },
           {
@@ -15903,15 +15939,6 @@
           },
           {
             "location": "apps/web/src/lib/secret-token.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic.ts#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#9"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/use-clause-field-save.ts#1"
@@ -16083,6 +16110,9 @@
           },
           {
             "location": "scripts/ratchet.ts#27"
+          },
+          {
+            "location": "scripts/sync-lockfile-workspace-versions.ts#3"
           },
           {
             "location": "scripts/typecheck-coverage.ts#18"
@@ -16800,7 +16830,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/docx/diff-paragraphs.ts#9"
+            "location": "apps/api/src/lib/docx/diff-paragraphs.ts#9"
           },
           {
             "location": "apps/api/src/lib/text-diff.ts#12"
@@ -16861,7 +16891,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/docx/diff-paragraphs.ts#9"
+            "location": "apps/api/src/lib/docx/diff-paragraphs.ts#9"
           },
           {
             "location": "apps/api/src/lib/text-diff.ts#12"
@@ -17295,7 +17325,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#23"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#35"
+            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#36"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/status.ts#2"
@@ -17317,6 +17347,12 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/search-index.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/stored-payload.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/stored-payload.ts#14"
           },
           {
             "location": "apps/api/src/handlers/catalogue/list-catalogue.ts#2"
@@ -17373,16 +17409,10 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/skills.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
@@ -17868,6 +17898,21 @@
             "location": "apps/api/src/handlers/search/ai.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/sharepoint/disconnect.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/graph-client.ts#18"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/list-drive-root.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/oauth-callback.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/status.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/skills/create.ts#2"
           },
           {
@@ -18165,6 +18210,12 @@
             "location": "apps/api/src/lib/agent-auth.ts#2"
           },
           {
+            "location": "apps/api/src/lib/agent-skills/skill-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/skills.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/ai-config-loader.ts#12"
           },
           {
@@ -18208,6 +18259,12 @@
           },
           {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db/timestamp-cas.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/timestamp-cas.ts#2"
           },
           {
             "location": "apps/api/src/lib/db-pagination.ts#1"
@@ -18373,6 +18430,9 @@
           },
           {
             "location": "apps/api/src/lib/search/sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/sharepoint-disable-purge.ts#21"
           },
           {
             "location": "apps/api/src/lib/style-sets.ts#2"
@@ -18746,7 +18806,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#23"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#35"
+            "location": "apps/api/src/handlers/case-law/ingestion/sk-document-backfill.ts#36"
           },
           {
             "location": "apps/api/src/handlers/case-law/ingestion/status.ts#2"
@@ -18768,6 +18828,12 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/search-index.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/stored-payload.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/stored-payload.ts#14"
           },
           {
             "location": "apps/api/src/handlers/catalogue/list-catalogue.ts#2"
@@ -18824,16 +18890,10 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/skills.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
@@ -19319,6 +19379,21 @@
             "location": "apps/api/src/handlers/search/ai.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/sharepoint/disconnect.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/graph-client.ts#18"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/list-drive-root.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/oauth-callback.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/status.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/skills/create.ts#2"
           },
           {
@@ -19616,6 +19691,12 @@
             "location": "apps/api/src/lib/agent-auth.ts#2"
           },
           {
+            "location": "apps/api/src/lib/agent-skills/skill-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/skills.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/ai-config-loader.ts#12"
           },
           {
@@ -19659,6 +19740,12 @@
           },
           {
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db/timestamp-cas.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/timestamp-cas.ts#2"
           },
           {
             "location": "apps/api/src/lib/db-pagination.ts#1"
@@ -19824,6 +19911,9 @@
           },
           {
             "location": "apps/api/src/lib/search/sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/sharepoint-disable-purge.ts#21"
           },
           {
             "location": "apps/api/src/lib/style-sets.ts#2"
@@ -20901,6 +20991,18 @@
           },
           {
             "location": "apps/api/src/handlers/search/search.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/list-drive-root.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/oauth-callback.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/set-enablement.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/create.ts#3"
@@ -21996,24 +22098,6 @@
             "location": "apps/api/scripts/seed-templates.ts#20"
           },
           {
-            "location": "apps/api/src/handlers/docx/adapt-ai-fields.ts#19"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/discover-clause-slots.ts#10"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/discover-placeholders.ts#10"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/discover-template.ts#12"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/patch-template.ts#12"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/template-manifest.ts#14"
-          },
-          {
             "location": "apps/api/src/handlers/files/xlsx-preprocess.ts#1"
           },
           {
@@ -22024,6 +22108,24 @@
           },
           {
             "location": "apps/api/src/handlers/views/table-export.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/docx/adapt-ai-fields.ts#19"
+          },
+          {
+            "location": "apps/api/src/lib/docx/discover-clause-slots.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/docx/discover-placeholders.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/docx/discover-template.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/docx/patch-template.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/docx/template-manifest.ts#14"
           },
           {
             "location": "apps/api/src/lib/docx-archive.ts#13"
@@ -22331,19 +22433,19 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#3"
           },
           {
-            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#5"
+            "location": "apps/web/src/features/chat/components/chat-anonymized-toggle.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#1"
+            "location": "apps/web/src/features/chat/components/chat-web-search-toggle.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#15"
@@ -24126,6 +24228,15 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
           },
           {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#8"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#9"
+          },
+          {
+            "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -24184,15 +24295,6 @@
           },
           {
             "location": "apps/web/src/lib/utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-directive-extension.ts#1"
@@ -25662,34 +25764,34 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/docx/block-directives.ts#49"
+            "location": "apps/api/src/lib/docx/block-directives.ts#49"
           },
           {
-            "location": "apps/api/src/handlers/docx/discover-clause-slots.ts#11"
+            "location": "apps/api/src/lib/docx/discover-clause-slots.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/docx/discover-placeholders.ts#11"
+            "location": "apps/api/src/lib/docx/discover-placeholders.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/docx/discover-template.ts#13"
+            "location": "apps/api/src/lib/docx/discover-template.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/docx/inline-conditions.ts#54"
+            "location": "apps/api/src/lib/docx/inline-conditions.ts#54"
           },
           {
-            "location": "apps/api/src/handlers/docx/numbering.ts#37"
+            "location": "apps/api/src/lib/docx/numbering.ts#37"
           },
           {
-            "location": "apps/api/src/handlers/docx/ooxml.ts#8"
+            "location": "apps/api/src/lib/docx/ooxml.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/docx/patch-template.ts#13"
+            "location": "apps/api/src/lib/docx/patch-template.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/docx/rich-patch.ts#10"
+            "location": "apps/api/src/lib/docx/rich-patch.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/docx/template-manifest.ts#15"
+            "location": "apps/api/src/lib/docx/template-manifest.ts#15"
           },
           {
             "location": "apps/api/src/lib/entity-versions/validate-docx-buffer.ts#1"
@@ -26179,6 +26281,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/web/src/features/chat/hooks/use-workspace-chat-mention-registration.ts#5"
+          },
+          {
             "location": "apps/web/src/lib/anonymize/use-chat-anonymize.ts#5"
           },
           {
@@ -26186,9 +26291,6 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts#11"
@@ -26317,13 +26419,13 @@
             "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#3"
           },
           {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#13"
+          },
+          {
             "location": "apps/web/src/hooks/use-external-file-drop.ts#5"
           },
           {
             "location": "apps/web/src/hooks/use-sign-out.ts#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#13"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-caches.ts#4"
@@ -26656,6 +26758,15 @@
             "location": "apps/web/src/features/case-law/components/decision-table.tsx#2"
           },
           {
+            "location": "apps/web/src/features/chat/components/chat-anonymized-toggle.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/chat/components/chat-web-search-toggle.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/chat/components/suggested-followup-chips.tsx#1"
+          },
+          {
             "location": "apps/web/src/features/style-sets/style-set-editor-controls.tsx#3"
           },
           {
@@ -26671,19 +26782,10 @@
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx#4"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-components/suggested-followup-chips.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#16"
@@ -27082,6 +27184,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/inline-edit.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/justification.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#7"
           },
           {
@@ -27416,10 +27521,10 @@
             "location": "apps/web/src/components/inspector/inspector-store.ts#2"
           },
           {
-            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
+            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#28"
@@ -27482,10 +27587,10 @@
             "location": "apps/web/src/components/inspector/inspector-store.ts#2"
           },
           {
-            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
+            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#28"
@@ -27548,10 +27653,10 @@
             "location": "apps/web/src/components/inspector/inspector-store.ts#2"
           },
           {
-            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
+            "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#28"
@@ -27685,9 +27790,6 @@
             "location": "apps/api/src/handlers/chat/tools/org-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/spawn-subagents-tool.ts#3"
           },
           {
@@ -27704,15 +27806,6 @@
           },
           {
             "location": "apps/api/src/handlers/clauses/rewrite.ts#18"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#14"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/template-manifest.ts#16"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/types.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
@@ -27745,6 +27838,15 @@
             "location": "apps/api/src/handlers/search/ai.ts#5"
           },
           {
+            "location": "apps/api/src/handlers/sharepoint/crypto.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/graph-client.ts#19"
+          },
+          {
+            "location": "apps/api/src/handlers/sharepoint/graph-oauth.ts#18"
+          },
+          {
             "location": "apps/api/src/handlers/skills/generate-draft.ts#3"
           },
           {
@@ -27758,6 +27860,9 @@
           },
           {
             "location": "apps/api/src/handlers/templates/suggest-template-fields.ts#18"
+          },
+          {
+            "location": "apps/api/src/lib/agent-skills/skill-tools.ts#4"
           },
           {
             "location": "apps/api/src/lib/ai-change-summary.ts#9"
@@ -27779,6 +27884,18 @@
           },
           {
             "location": "apps/api/src/lib/deepl/client.ts#17"
+          },
+          {
+            "location": "apps/api/src/lib/document-source.ts#20"
+          },
+          {
+            "location": "apps/api/src/lib/docx/ai-field-generator.ts#14"
+          },
+          {
+            "location": "apps/api/src/lib/docx/template-manifest.ts#16"
+          },
+          {
+            "location": "apps/api/src/lib/docx/types.ts#3"
           },
           {
             "location": "apps/api/src/lib/flows/flow-types.ts#1"
@@ -27874,6 +27991,9 @@
             "location": "apps/web/src/env.ts#3"
           },
           {
+            "location": "apps/web/src/features/chat/hooks/use-chat-session.ts#15"
+          },
+          {
             "location": "apps/web/src/lib/dev-otp.ts#2"
           },
           {
@@ -27899,9 +28019,6 @@
           },
           {
             "location": "apps/web/src/lib/stored-json.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#15"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-metadata.ts#1"
