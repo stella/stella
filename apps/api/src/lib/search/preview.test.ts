@@ -18,6 +18,9 @@ const SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT = 50_000;
 const SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT = 1000;
 const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT = 48_999;
 const SEARCH_PREVIEW_BODY_CHUNK_STEP = 24_000;
+const SEARCH_PREVIEW_BODY_CHUNK_LIMIT = 8;
+const SEARCH_PREVIEW_BODY_MAX_CHUNK_START =
+  1 + (SEARCH_PREVIEW_BODY_CHUNK_LIMIT - 1) * SEARCH_PREVIEW_BODY_CHUNK_STEP;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 
 const compilePreview = (type: GlobalSearchResultType) => {
@@ -37,11 +40,12 @@ const compilePreview = (type: GlobalSearchResultType) => {
 describe("search preview authorization scope", () => {
   test("bounds both source processing and response characters", () => {
     const compiled = compilePreview("document");
-    expect(compiled.sql.match(/\bleft\(/gu)).toHaveLength(3);
     expect(compiled.params).toContain(SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT);
     expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHARACTER_LIMIT);
     expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHUNK_STEP);
+    expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_MAX_CHUNK_START);
     expect(compiled.params).toContain(SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT);
+    expect(compiled.sql).toContain("CASE");
     expect(compiled.sql).toContain("generate_series");
     expect(compiled.sql).toContain("to_tsvector");
     expect(

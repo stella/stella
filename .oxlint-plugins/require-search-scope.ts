@@ -135,9 +135,6 @@ const templateQuasiTexts = (node: Record<string, unknown>): string[] => {
   });
 };
 
-const templateText = (node: Record<string, unknown>): string =>
-  templateQuasiTexts(node).join(" ");
-
 const templateExpressions = (node: Record<string, unknown>): unknown[] => {
   const quasi = node.quasi;
   if (isAstNode(quasi) && Array.isArray(quasi.expressions)) {
@@ -145,6 +142,10 @@ const templateExpressions = (node: Record<string, unknown>): unknown[] => {
   }
   return [];
 };
+
+type SqlTemplateToken =
+  | { type: "expression"; value: unknown }
+  | { type: "text"; value: string };
 
 const projectionReadCount = (text: string, table: string): number =>
   text.match(new RegExp(`\\b${table}\\b`, "giu"))?.length ?? 0;
@@ -319,36 +320,99 @@ export default {
           );
         };
 
+        const resolveConstSqlTemplate = (
+          expression: unknown,
+        ): AstNode | null => {
+          const unwrapped = unwrapExpression(expression);
+          if (
+            isAstNode(unwrapped) &&
+            unwrapped.type === "TaggedTemplateExpression"
+          ) {
+            return unwrapped;
+          }
+          if (!isIdentifier(unwrapped)) {
+            return null;
+          }
+          const variable = resolveVariable(unwrapped);
+          for (const definition of variable?.defs ?? []) {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const"
+            ) {
+              continue;
+            }
+            const init = unwrapExpression(definition.node.init);
+            if (isAstNode(init) && init.type === "TaggedTemplateExpression") {
+              return init;
+            }
+          }
+          return null;
+        };
+
+        const flattenSqlTemplate = (
+          node: AstNode,
+          ancestors: ReadonlySet<unknown> = new Set(),
+        ): SqlTemplateToken[] => {
+          if (ancestors.has(node)) {
+            return [];
+          }
+          const nextAncestors = new Set(ancestors);
+          nextAncestors.add(node);
+          const quasiTexts = templateQuasiTexts(node);
+          const expressions = templateExpressions(node);
+          const tokens: SqlTemplateToken[] = [];
+          for (const [index, quasiText] of quasiTexts.entries()) {
+            tokens.push({ type: "text", value: quasiText });
+            const expression = expressions.at(index);
+            if (expression === undefined) {
+              continue;
+            }
+            const nestedTemplate = resolveConstSqlTemplate(expression);
+            if (nestedTemplate) {
+              tokens.push(...flattenSqlTemplate(nestedTemplate, nextAncestors));
+              continue;
+            }
+            tokens.push({ type: "expression", value: expression });
+          }
+          return tokens;
+        };
+
         return {
           TaggedTemplateExpression(node: unknown) {
             if (!isAstNode(node)) {
               return;
             }
-            const text = templateText(node);
+            const tokens = flattenSqlTemplate(node);
+            const text = tokens
+              .filter(
+                (token): token is Extract<SqlTemplateToken, { type: "text" }> =>
+                  token.type === "text",
+              )
+              .map((token) => token.value)
+              .join(" ");
             if (!/\bselect\b/iu.test(text)) {
               return;
             }
 
-            const expressions = templateExpressions(node);
-            const quasiTexts = templateQuasiTexts(node);
-            const expressionIsSqlCode: boolean[] = [];
-            let sqlLexState: SqlLexState = "normal";
-            for (const quasiText of quasiTexts) {
-              sqlLexState = sqlLexStateAfter(quasiText, sqlLexState);
-              expressionIsSqlCode.push(sqlLexState === "normal");
-            }
             for (const [table, projection] of Object.entries(
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
               let unscopedReadCount = 0;
-              for (const [index, quasiText] of quasiTexts.entries()) {
-                unscopedReadCount += projectionReadCount(quasiText, table);
-                const expression = expressions.at(index);
+              let sqlLexState: SqlLexState = "normal";
+              for (const token of tokens) {
+                if (token.type === "text") {
+                  unscopedReadCount += projectionReadCount(token.value, table);
+                  sqlLexState = sqlLexStateAfter(token.value, sqlLexState);
+                  continue;
+                }
                 if (
-                  expressionIsSqlCode[index] === true &&
-                  expression !== undefined &&
+                  sqlLexState === "normal" &&
                   isPrivateProjectionInterpolation(
-                    expression,
+                    token.value,
                     projection.tableImports,
                   )
                 ) {
@@ -356,9 +420,8 @@ export default {
                 }
                 if (
                   unscopedReadCount > 0 &&
-                  expressionIsSqlCode[index] === true &&
-                  expression !== undefined &&
-                  isApprovedScopeFragment(expression, projection.scopeImports)
+                  sqlLexState === "normal" &&
+                  isApprovedScopeFragment(token.value, projection.scopeImports)
                 ) {
                   unscopedReadCount -= 1;
                 }

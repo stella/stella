@@ -112,6 +112,7 @@ import type {
 import {
   getSearchPreviewTarget,
   normalizeSearchQuery,
+  selectSearchPreviewHit,
 } from "@/lib/search.logic";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
@@ -393,6 +394,7 @@ export const SearchDialog = ({
     fetchNextPage,
     isFetchingNextPage,
     isFetchNextPageError,
+    isPlaceholderData,
     refetch: refetchSearch,
   } = useInfiniteQuery(
     searchInfiniteOptions({
@@ -417,12 +419,12 @@ export const SearchDialog = ({
     return data.pages.flatMap((page) => page.hits);
   }, [data]);
   const getHitVirtualKey = (index: number) => allHits.at(index)?.id ?? index;
-  const previewHit =
-    (searchQuery
-      ? allHits.find((hit) => hit.id === highlightedHitId)
-      : undefined) ??
-    (searchQuery ? allHits.at(0) : undefined) ??
-    null;
+  const previewHit = selectSearchPreviewHit({
+    highlightedHitId,
+    hits: allHits,
+    isPlaceholderData,
+    query: searchQuery,
+  });
   const showPreview = previewEnabled && !isMobile;
 
   // Counts and facets are computed only on the first page (see backend);

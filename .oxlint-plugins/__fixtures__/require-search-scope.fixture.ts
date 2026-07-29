@@ -60,6 +60,12 @@ const unsafeBlockCommentScope = sql`
   SELECT * FROM search_documents sd /* ${entityWorkspaceFilter} */
 `;
 
+const unsafeComposedPrivateRead = (() => {
+  const privateFrom = sql`FROM search_documents sd`;
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an ordinary SQL fragment cannot hide a private projection
+  return sql`SELECT * ${privateFrom}`;
+})();
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves every UNION branch needs its own verified scope
 const unsafeMultiBranch = sql`
   SELECT * FROM search_documents sd
@@ -91,6 +97,12 @@ const scopedAfterLineComment = sql`
   -- explanatory comment
   WHERE true ${entityWorkspaceFilter}
 `;
+
+const scopedComposedRead = (() => {
+  const privateFrom = sql`FROM search_documents sd`;
+  const scopedWhere = sql`WHERE true ${entityWorkspaceFilter}`;
+  return sql`SELECT * ${privateFrom} ${scopedWhere}`;
+})();
 
 const scopedMultiBranch = sql`
   SELECT * FROM search_documents sd WHERE true ${entityWorkspaceFilter}
@@ -131,11 +143,13 @@ void [
   unsafeShadowedHelper,
   unsafeLineCommentScope,
   unsafeBlockCommentScope,
+  unsafeComposedPrivateRead,
   unsafeMultiBranch,
   scopedEntity,
   scopedSingleWorkspace,
   scopedInterpolatedEntity,
   scopedAfterLineComment,
+  scopedComposedRead,
   scopedMultiBranch,
   scopedMatter,
   scopedContact,

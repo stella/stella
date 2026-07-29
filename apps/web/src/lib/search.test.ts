@@ -5,6 +5,7 @@ import type { GlobalSearchHit } from "@stll/api/types";
 import {
   getSearchPreviewTarget,
   normalizeSearchQuery,
+  selectSearchPreviewHit,
 } from "@/lib/search.logic";
 
 process.env["VITE_API_URL"] ??= "http://localhost:3001";
@@ -101,6 +102,42 @@ describe("search query normalization", () => {
 });
 
 describe("search preview targets", () => {
+  const previewHit = {
+    headline: null,
+    id: "document:entity_1",
+    type: "document",
+    title: "Result",
+    updatedAt: "2026-07-29T12:00:00.000Z",
+    entityId: "entity_1",
+    workspaceId: "ws_1",
+    workspaceName: "Matter",
+    lastEditedByName: null,
+    lastEditedByImage: null,
+    mimeType: null,
+  } as const satisfies GlobalSearchHit;
+
+  test("withholds previews while hits belong to the previous query", () => {
+    expect(
+      selectSearchPreviewHit({
+        highlightedHitId: previewHit.id,
+        hits: [previewHit],
+        isPlaceholderData: true,
+        query: "new terms",
+      }),
+    ).toBeNull();
+  });
+
+  test("selects the highlighted current-query hit", () => {
+    expect(
+      selectSearchPreviewHit({
+        highlightedHitId: previewHit.id,
+        hits: [previewHit],
+        isPlaceholderData: false,
+        query: "current terms",
+      }),
+    ).toBe(previewHit);
+  });
+
   test("uses the authorized resource identifier for every hit type", () => {
     const base = {
       headline: null,
