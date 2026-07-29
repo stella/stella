@@ -177,11 +177,22 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
     if (keys.size >= want) {
       break;
     }
-    const textKey = listed.contents?.find((entry) =>
+    const textEntries = (listed.contents ?? []).filter((entry) =>
       entry.key.endsWith("/text.zst"),
-    )?.key;
-    if (textKey) {
-      keys.add(textKey);
+    );
+    // A backfilled document can leave an orphaned older content-addressed
+    // payload beside the live one; the most recent write is the version
+    // the database points at.
+    const docOf = (key: string): string => key.split("/").at(3) ?? key;
+    const first = textEntries.at(0);
+    if (first) {
+      const sameDoc = textEntries.filter(
+        (entry) => docOf(entry.key) === docOf(first.key),
+      );
+      const newest = sameDoc.reduce((a, b) =>
+        (a.lastModified ?? "") > (b.lastModified ?? "") ? a : b,
+      );
+      keys.add(newest.key);
     }
   }
   return [...keys];
@@ -212,12 +223,26 @@ const probeKey = async (
     };
   }
   const extracted = extractCitations([{ index: 0, text }]);
-  const covered = (candidate: string): boolean =>
-    extracted.some(
-      (c) =>
-        candidate.includes(c.citationText) ||
-        c.citationText.includes(candidate),
+  // Both sides normalize (prefix stripped, whitespace collapsed) before
+  // the containment check: the extractor dedups sp. zn. and č. j.
+  // spellings of one case number to a single entry, and the surviving
+  // prefix must not decide coverage.
+  const stripCitePrefix = (value: string): string =>
+    value
+      .replace(
+        /^(?:sp\.\s{0,3}zn\.:?|sen\.\s{0,3}zn\.:?|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)\s{0,3}/iu,
+        "",
+      )
+      .replaceAll(/\s+/gu, " ")
+      .toLowerCase()
+      .trim();
+  const extractedKeys = extracted.map((c) => stripCitePrefix(c.citationText));
+  const covered = (candidate: string): boolean => {
+    const key = stripCitePrefix(candidate);
+    return extractedKeys.some(
+      (have) => key.includes(have) || have.includes(key),
     );
+  };
   const residuals = new Set<string>();
   for (const detector of DETECTORS) {
     detector.lastIndex = 0;
@@ -241,10 +266,19 @@ const probeKey = async (
   };
 };
 
-const want = Math.max(1, Math.floor(sampleTarget / JURISDICTIONS.length));
+// Distribute the requested total across jurisdictions, remainder to the
+// front, so --sample means what it says.
+const perJurisdiction = JURISDICTIONS.map((_, i) => {
+  const base = Math.floor(sampleTarget / JURISDICTIONS.length);
+  return base + (i < sampleTarget % JURISDICTIONS.length ? 1 : 0);
+});
 const docs = (
   await Promise.all(
-    JURISDICTIONS.map(async (jurisdiction) => {
+    JURISDICTIONS.map(async (jurisdiction, i) => {
+      const want = perJurisdiction[i] ?? 0;
+      if (want === 0) {
+        return [];
+      }
       const keys = await sampleKeys(jurisdiction, want);
       return await Promise.all(
         keys.map(async (key) => await probeKey(jurisdiction, key)),
