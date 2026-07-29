@@ -938,7 +938,7 @@ export const SearchDialog = ({
             />
             {hasVisibleSearch && (
               <Button
-                className="h-8 shrink-0 sm:hidden"
+                className="min-h-11 shrink-0 sm:hidden"
                 onClick={clearSearch}
                 size="sm"
                 variant="ghost"

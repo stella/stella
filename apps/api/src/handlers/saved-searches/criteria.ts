@@ -89,7 +89,7 @@ const hasValidCustomTimeRange = (
   time?.type !== "custom" ||
   time.updatedFrom === undefined ||
   time.updatedTo === undefined ||
-  time.updatedFrom <= time.updatedTo;
+  new Date(time.updatedFrom).getTime() <= new Date(time.updatedTo).getTime();
 
 const normalizeSavedSearchTime = (
   time: v.InferOutput<typeof savedSearchTimeFilterSchema> | undefined,

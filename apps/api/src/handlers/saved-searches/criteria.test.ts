@@ -82,6 +82,21 @@ describe("saved search criteria", () => {
     expect(Result.isError(result)).toBe(true);
   });
 
+  test("compares custom date ranges as instants", () => {
+    const result = validateSavedSearchCriteria(
+      criteria({
+        query: "",
+        time: {
+          type: "custom",
+          updatedFrom: "2026-07-29T10:00:00Z",
+          updatedTo: "2026-07-29T10:00:00.100Z",
+        },
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
   test("accepts only active workspace scopes", () => {
     const parsed = validateSavedSearchCriteria(
       criteria({ workspaceIds: [WORKSPACE_ID] }),

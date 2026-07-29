@@ -1,8 +1,9 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { SchedulerPayload } from "@/api/db/schema";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
@@ -42,6 +43,7 @@ type RepairSearchSemanticTimestampsOutcome =
   | {
       status: "progress";
       cursor: SafeId<"entity">;
+      failed: number;
       repaired: number;
     };
 
@@ -50,8 +52,12 @@ type RepairState = {
   cursor: string | null;
   dirty: boolean;
   pass: RepairPass;
+  passStartedAt: string | null;
   quietSince: string | null;
 };
+
+const validTimestampString = (value: unknown): value is string =>
+  typeof value === "string" && !Number.isNaN(new Date(value).getTime());
 
 const repairState = (payload: SchedulerPayload | null): RepairState => {
   const cursor = payload?.["cursor"];
@@ -60,6 +66,7 @@ const repairState = (payload: SchedulerPayload | null): RepairState => {
       ? REPAIR_PASS.verify
       : REPAIR_PASS.repair;
   const cleanPasses = payload?.["cleanPasses"];
+  const passStartedAt = payload?.["passStartedAt"];
   const quietSince = payload?.["quietSince"];
   return {
     cleanPasses:
@@ -72,10 +79,12 @@ const repairState = (payload: SchedulerPayload | null): RepairState => {
     cursor: typeof cursor === "string" ? cursor : null,
     dirty: pass === REPAIR_PASS.verify && payload?.["dirty"] === true,
     pass,
+    passStartedAt:
+      pass === REPAIR_PASS.verify && validTimestampString(passStartedAt)
+        ? passStartedAt
+        : null,
     quietSince:
-      pass === REPAIR_PASS.verify &&
-      typeof quietSince === "string" &&
-      !Number.isNaN(new Date(quietSince).getTime())
+      pass === REPAIR_PASS.verify && validTimestampString(quietSince)
         ? quietSince
         : null,
   };
@@ -132,6 +141,7 @@ export const repairSearchSemanticTimestamps = async ({
           'pass', ${REPAIR_PASS.verify},
           'dirty', false,
           'cleanPasses', 0,
+          'passStartedAt', ${nowIso},
           'quietSince', ${nowIso}
         )
         WHERE id = ${jobId}
@@ -140,17 +150,19 @@ export const repairSearchSemanticTimestamps = async ({
       return { status: "restart" };
     }
 
-    const cleanPasses = state.dirty
-      ? 0
-      : Math.min(state.cleanPasses + 1, REQUIRED_CLEAN_VERIFICATION_PASSES);
     const quietSince = state.quietSince ?? nowIso;
-    const quietPeriodElapsed =
-      now.getTime() - new Date(quietSince).getTime() >=
-      VERIFICATION_QUIET_PERIOD_MS;
+    const passStartedAfterQuiet =
+      state.passStartedAt !== null &&
+      new Date(state.passStartedAt).getTime() >=
+        new Date(quietSince).getTime() + VERIFICATION_QUIET_PERIOD_MS;
+    const cleanPasses =
+      state.dirty || !passStartedAfterQuiet
+        ? 0
+        : Math.min(state.cleanPasses + 1, REQUIRED_CLEAN_VERIFICATION_PASSES);
     if (
       state.dirty ||
       cleanPasses < REQUIRED_CLEAN_VERIFICATION_PASSES ||
-      !quietPeriodElapsed
+      !passStartedAfterQuiet
     ) {
       await rootDb.execute(sql`
         UPDATE scheduler_jobs
@@ -158,6 +170,7 @@ export const repairSearchSemanticTimestamps = async ({
           'pass', ${REPAIR_PASS.verify},
           'dirty', false,
           'cleanPasses', ${cleanPasses},
+          'passStartedAt', ${nowIso},
           'quietSince', ${quietSince}
         )
         WHERE id = ${jobId}
@@ -198,6 +211,7 @@ export const repairSearchSemanticTimestamps = async ({
         'pass', ${REPAIR_PASS.verify},
         'dirty', true,
         'cleanPasses', 0,
+        'passStartedAt', ${state.passStartedAt},
         'quietSince', ${nowIso}
       )
       WHERE id = ${jobId}
@@ -206,13 +220,27 @@ export const repairSearchSemanticTimestamps = async ({
   }
 
   let nextReindexIndex = 0;
+  let failed = 0;
+  let repaired = 0;
   const reindexNext = async (): Promise<void> => {
     const entityId = reindexEntityIds.at(nextReindexIndex);
     nextReindexIndex += 1;
     if (!entityId) {
       return;
     }
-    await upsertSearchDocument(entityId);
+    const reindexResult = await Result.tryPromise({
+      try: async () => await upsertSearchDocument(entityId),
+      catch: (error: unknown) => error,
+    });
+    if (Result.isError(reindexResult)) {
+      failed += 1;
+      captureError(reindexResult.error, {
+        entityId,
+        schedulerTask: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+      });
+    } else {
+      repaired += 1;
+    }
     await reindexNext();
   };
   await Promise.all(
@@ -232,6 +260,7 @@ export const repairSearchSemanticTimestamps = async ({
         'pass', ${REPAIR_PASS.verify},
         'dirty', ${verificationDirty},
         'cleanPasses', ${verificationDirty ? 0 : state.cleanPasses},
+        'passStartedAt', ${state.passStartedAt},
         'quietSince', ${quietSince}
       )
       WHERE id = ${jobId}
@@ -254,7 +283,8 @@ export const repairSearchSemanticTimestamps = async ({
   return {
     status: "progress",
     cursor: last.entityId,
-    repaired: reindexEntityIds.length,
+    failed,
+    repaired,
   };
 };
 
@@ -285,6 +315,7 @@ export const repairSearchSemanticTimestampsTask: SchedulerTask = async ({
     case "progress":
       logger.info("search.semantic_timestamp_repair.progress", {
         cursor: outcome.cursor,
+        failed: outcome.failed,
         repaired: outcome.repaired,
       });
       return;
