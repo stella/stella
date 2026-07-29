@@ -1,15 +1,15 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, watch } from "node:fs";
-import { extname, normalize, resolve, sep } from "node:path";
+import path from "node:path";
 
-const APP_ROOT = resolve(import.meta.dirname, "..");
-const DIST_DIR = resolve(APP_ROOT, "dist");
+const APP_ROOT = path.resolve(import.meta.dirname, "..");
+const DIST_DIR = path.resolve(APP_ROOT, "dist");
 const DEV_PORT = 3002;
 const API_TARGET = new URL(
   process.env["STELLA_API_URL"] ?? "http://localhost:3001",
 );
-const CERT_PATH = resolve(APP_ROOT, ".certs", "localhost-cert.pem");
-const KEY_PATH = resolve(APP_ROOT, ".certs", "localhost-key.pem");
+const CERT_PATH = path.resolve(APP_ROOT, ".certs", "localhost-cert.pem");
+const KEY_PATH = path.resolve(APP_ROOT, ".certs", "localhost-key.pem");
 
 const CONTENT_TYPES: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
@@ -34,10 +34,10 @@ const runBuild = () => {
 
 const getStaticPath = (pathname: string): string | null => {
   const requestedPath = pathname === "/" ? "/taskpane.html" : pathname;
-  const normalizedPath = normalize(decodeURIComponent(requestedPath));
-  const filePath = resolve(DIST_DIR, `.${normalizedPath}`);
+  const normalizedPath = path.normalize(decodeURIComponent(requestedPath));
+  const filePath = path.resolve(DIST_DIR, `.${normalizedPath}`);
 
-  if (filePath !== DIST_DIR && !filePath.startsWith(`${DIST_DIR}${sep}`)) {
+  if (filePath !== DIST_DIR && !filePath.startsWith(`${DIST_DIR}${path.sep}`)) {
     return null;
   }
 
@@ -72,7 +72,7 @@ const serveStatic = (pathname: string) => {
     return new Response("Not found", { status: 404 });
   }
 
-  const contentType = CONTENT_TYPES[extname(filePath)];
+  const contentType = CONTENT_TYPES[path.extname(filePath)];
   const headers = contentType ? { "Content-Type": contentType } : {};
   return new Response(Bun.file(filePath), {
     headers,
@@ -101,7 +101,11 @@ const scheduleRebuild = () => {
 };
 
 for (const directory of ["src", "public"]) {
-  watch(resolve(APP_ROOT, directory), { recursive: true }, scheduleRebuild);
+  watch(
+    path.resolve(APP_ROOT, directory),
+    { recursive: true },
+    scheduleRebuild,
+  );
 }
 
 Bun.serve({

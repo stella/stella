@@ -1,14 +1,13 @@
-import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TEXT_MAX_CHARS = 20_000;
 const LANGUAGE_MAX_CHARS = 32;
@@ -22,6 +21,8 @@ const summarizeBodySchema = t.Object({
 
 const config = {
   permissions: { chat: ["create"] },
+  mcp: { type: "internal", reason: "native_tool_ui" },
+  access: "write",
   body: summarizeBodySchema,
   // User-clicked from the Outlook add-in and latency-sensitive, so it
   // runs on the standard tier rather than the discounted flex queue.
@@ -60,6 +61,7 @@ const buildUserMessage = ({
 
 const summarizeEmail = createSafeRootHandler(
   config,
+  // eslint-disable-next-line require-yield -- createSafeRootHandler requires an AsyncGenerator; this handler has no safeDb Result to yield.
   async function* ({
     body,
     orgAIConfig,
@@ -69,9 +71,7 @@ const summarizeEmail = createSafeRootHandler(
     safeDb,
     user,
   }) {
-    yield* requireAIAvailable(orgAIConfig);
-
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -89,19 +89,23 @@ const summarizeEmail = createSafeRootHandler(
 
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateText({
+        await generateTanStackObjectForRole({
           abortSignal: AbortSignal.any([
             request.signal,
             AbortSignal.timeout(SUMMARIZE_TIMEOUT_MS),
           ]),
-          maxOutputTokens: SUMMARIZE_MAX_OUTPUT_TOKENS,
-          model: getModelForRole("fast", orgAIConfig, {
+          analytics: aiAnalytics,
+          caching: resolveCaching({
             promptCachingEnabled,
+            role: "fast",
             scopeKey: null,
-            organizationId: session.activeOrganizationId,
-            serviceTier: "standard",
           }),
-          output: Output.object({ schema: strictOutputSchema(summarySchema) }),
+          maxOutputTokens: SUMMARIZE_MAX_OUTPUT_TOKENS,
+          organizationId: session.activeOrganizationId,
+          orgAIConfig,
+          outputSchema: summarySchema,
+          role: "fast",
+          serviceTier: "standard",
           system: SYSTEM_PROMPT,
           messages: [
             {
@@ -112,7 +116,6 @@ const summarizeEmail = createSafeRootHandler(
               }),
             },
           ],
-          ...aiAnalytics.stepCallbacks,
         }),
       catch: (cause) => {
         aiAnalytics.captureError(cause);
@@ -127,7 +130,7 @@ const summarizeEmail = createSafeRootHandler(
       return Result.err(generation.error);
     }
 
-    return Result.ok({ summary: generation.value.output.summary.trim() });
+    return Result.ok({ summary: generation.value.summary.trim() });
   },
 );
 

@@ -1,11 +1,13 @@
 const DEV_DEFAULTS = {
   apiBaseUrl: "/api",
   stellaWebUrl: "http://localhost:3000",
+  taskpaneOrigin: "https://localhost:3002",
 } as const;
 
 const PROD_DEFAULTS = {
   apiBaseUrl: "https://api.stll.app",
   stellaWebUrl: "https://my.stll.app",
+  taskpaneOrigin: "https://outlook.stll.app",
 } as const;
 
 const readBuildEnv = (): "dev" | "prod" => {
@@ -21,4 +23,5 @@ export const env = {
   apiBaseUrl: defaults.apiBaseUrl,
   signInOrigin: defaults.stellaWebUrl,
   stellaWebUrl: defaults.stellaWebUrl,
+  taskpaneOrigin: defaults.taskpaneOrigin,
 };

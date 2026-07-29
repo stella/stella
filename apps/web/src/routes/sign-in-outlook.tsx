@@ -1,15 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import { authClient } from "@/lib/auth";
 
 const OFFICE_JS_URL =
   "https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js";
 const MESSAGE_TYPE = "stella:auth";
+const ALLOWED_PARENT_ORIGINS = new Set([
+  "https://outlook.stll.app",
+  "https://localhost:3002",
+]);
 
 type HandoffState =
   | { type: "loading" }
@@ -19,7 +24,7 @@ type HandoffState =
   | { message: string; type: "error" };
 
 type DialogParent = {
-  messageParent: (message: string) => void;
+  messageParent: (message: string, options: { targetOrigin: string }) => void;
 };
 
 type OfficeRuntime = {
@@ -65,49 +70,61 @@ const loadOfficeJs = async (): Promise<OfficeRuntime | null> => {
 };
 
 const SignInOutlook = () => {
-  const t = useTranslations("outlook");
+  const t = useTranslations("auth");
+  const tCommon = useTranslations("common");
   const [state, setState] = useState<HandoffState>({ type: "loading" });
 
-  const tryDeliverToken = useCallback(async () => {
-    const office = await loadOfficeJs();
+  useMountEffect(() => {
+    const tryDeliverToken = async () => {
+      const parentOrigin = new URLSearchParams(window.location.search).get(
+        "parentOrigin",
+      );
+      if (!parentOrigin || !ALLOWED_PARENT_ORIGINS.has(parentOrigin)) {
+        setState({
+          message: t("outlookHandoffMissingDialog"),
+          type: "error",
+        });
+        return;
+      }
 
-    const session = await authClient.getSession();
-    const token = session.data?.session.token;
-    if (!token) {
-      setState({ type: "signed-out" });
-      return;
-    }
+      const office = await loadOfficeJs();
 
-    const parent = office?.context?.ui;
-    if (!parent) {
-      setState({
-        message: t("handoffMissingDialog"),
-        type: "error",
+      const session = await authClient.getSession();
+      const token = session.data?.session.token;
+      if (!token) {
+        setState({ type: "signed-out" });
+        return;
+      }
+
+      const parent = office?.context?.ui;
+      if (!parent) {
+        setState({
+          message: t("outlookHandoffMissingDialog"),
+          type: "error",
+        });
+        return;
+      }
+
+      parent.messageParent(JSON.stringify({ token, type: MESSAGE_TYPE }), {
+        targetOrigin: parentOrigin,
       });
-      return;
-    }
+      setState({ type: "delivered" });
+    };
 
-    parent.messageParent(JSON.stringify({ token, type: MESSAGE_TYPE }));
-    setState({ type: "delivered" });
-  }, [t]);
-
-  useEffect(() => {
     void tryDeliverToken();
-  }, [tryDeliverToken]);
+  });
 
   const handleSignIn = async () => {
     setState({ type: "signing-in" });
-    const callbackURL = new URL(
-      "/sign-in-outlook",
-      window.location.origin,
-    ).toString();
+    const callbackURL = new URL(window.location.href);
+    callbackURL.hash = "";
     const { error } = await authClient.signIn.social({
-      callbackURL,
+      callbackURL: callbackURL.toString(),
       provider: "microsoft",
     });
     if (error) {
       setState({
-        message: error.message ?? "Sign-in failed.",
+        message: t("error.generic"),
         type: "error",
       });
     }
@@ -116,19 +133,19 @@ const SignInOutlook = () => {
   return (
     <main className="flex min-h-svh flex-col items-center justify-center gap-6 p-6 text-center">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">{t("handoffTitle")}</h1>
-        <p className="text-muted-foreground">{t("handoffDescription")}</p>
+        <h1 className="text-2xl font-semibold">{t("outlookHandoffTitle")}</h1>
+        <p className="text-muted-foreground">
+          {t("outlookHandoffDescription")}
+        </p>
       </header>
 
-      {state.type === "loading" && <p>{t("loading")}</p>}
-      {state.type === "signing-in" && <p>{t("loading")}</p>}
+      {state.type === "loading" && <p>{tCommon("loading")}</p>}
+      {state.type === "signing-in" && <p>{tCommon("loading")}</p>}
       {state.type === "delivered" && (
-        <p className="text-muted-foreground">{t("handoffSuccess")}</p>
+        <p className="text-muted-foreground">{t("outlookHandoffSuccess")}</p>
       )}
       {state.type === "signed-out" && (
-        <Button onClick={() => void handleSignIn()}>
-          {t("handoffSignInCta")}
-        </Button>
+        <Button onClick={() => void handleSignIn()}>{t("signIn")}</Button>
       )}
       {state.type === "error" && (
         <p className="text-destructive">{state.message}</p>

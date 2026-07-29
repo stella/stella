@@ -18,25 +18,38 @@ type UseMailSnapshot = {
 export const useMailSnapshot = (errorFallback: string): UseMailSnapshot => {
   const [state, setState] = useState<MailSnapshotState>({ type: "loading" });
 
-  const refresh = useCallback(async () => {
-    setState({ type: "loading" });
+  const load = useCallback(async (): Promise<MailSnapshotState> => {
     const result = await Result.tryPromise(
       async () => await loadMailSnapshot(),
     );
     if (Result.isError(result)) {
       const { error } = result;
-      setState({
+      return {
         message: error instanceof Error ? error.message : errorFallback,
         type: "error",
-      });
-      return;
+      };
     }
-    setState({ snapshot: result.value, type: "ready" });
+    return { snapshot: result.value, type: "ready" };
   }, [errorFallback]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let active = true;
+    void load().then((nextState) => {
+      if (active) {
+        setState(nextState);
+      }
+      return nextState;
+    });
+    return () => {
+      active = false;
+    };
+  }, [load]);
 
-  return { refresh: () => void refresh(), state };
+  return {
+    refresh: () => {
+      setState({ type: "loading" });
+      void load().then(setState);
+    },
+    state,
+  };
 };
