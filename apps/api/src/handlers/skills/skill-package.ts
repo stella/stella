@@ -614,6 +614,7 @@ export const findGithubSkillEntrypoints = ({
     }
   }
 
+  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- repository paths need deterministic code-point ordering, not linguistic collation
   return skillPaths.toSorted((left, right) => left.localeCompare(right));
 };
 
@@ -1312,16 +1313,16 @@ const assertGithubRepositoryCoordinates = ({
   });
 };
 
-const mapWithConcurrency = async <T, R>({
+const mapWithConcurrency = async <R>({
   callback,
   items,
   limit,
 }: {
-  callback: (item: T) => Promise<R>;
-  items: readonly T[];
+  callback: (item: string) => Promise<R>;
+  items: readonly string[];
   limit: number;
 }): Promise<R[]> => {
-  const results = new Array<R>(items.length);
+  const results: R[] = [];
   let nextIndex = 0;
   const workers = Array.from(
     { length: Math.min(limit, items.length) },
@@ -1331,9 +1332,11 @@ const mapWithConcurrency = async <T, R>({
         nextIndex += 1;
         const item = items.at(index);
         if (item !== undefined) {
+          // oxlint-disable-next-line no-await-in-loop -- each worker claims one bounded queue item at a time
           results[index] = await callback(item);
         }
       }
+      return undefined;
     },
   );
   await Promise.all(workers);

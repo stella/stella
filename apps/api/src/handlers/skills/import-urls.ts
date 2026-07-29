@@ -26,6 +26,7 @@ const config = {
 
 const importSkillsFromUrls = createSafeRootHandler(
   config,
+  // eslint-disable-next-line require-yield -- createSafeRootHandler expects a Result generator; per-item failures are collected instead of yielded.
   async function* ({
     body,
     memberRole,
@@ -42,8 +43,8 @@ const importSkillsFromUrls = createSafeRootHandler(
       return Result.err(authorization.error);
     }
 
-    const installed: Array<{ id: string; sourceUrl: string }> = [];
-    const failed: Array<{ message: string; sourceUrl: string }> = [];
+    const installed: { id: string; sourceUrl: string }[] = [];
+    const failed: { message: string; sourceUrl: string }[] = [];
     const sourceUrls = [...new Set(body.urls.map((url) => url.trim()))];
 
     for (const sourceUrl of sourceUrls) {
