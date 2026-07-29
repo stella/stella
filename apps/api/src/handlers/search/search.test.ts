@@ -12,10 +12,9 @@ const realDateNow = Date.now;
 
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");
-const accessibleWorkspaceIds = [
-  toSafeId<"workspace">("ws_1"),
-  toSafeId<"workspace">("ws_2"),
-];
+const workspaceOneId = toSafeId<"workspace">("ws_1");
+const workspaceTwoId = toSafeId<"workspace">("ws_2");
+const accessibleWorkspaceIds = [workspaceOneId, workspaceTwoId];
 
 const unusedScopedDb: ScopedDb = async () => {
   throw new Error("scopedDb should not be called");
@@ -94,7 +93,7 @@ describe("search handler workspace scoping", () => {
       body: {
         ...emptySearchFilters(),
         query: "  ",
-        workspaceIds: [accessibleWorkspaceIds[0]],
+        workspaceIds: [workspaceOneId],
       },
       organizationId,
       userId,
