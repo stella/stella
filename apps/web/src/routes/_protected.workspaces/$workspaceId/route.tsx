@@ -250,6 +250,10 @@ function RouteComponent() {
     from: "/_protected/workspaces/$workspaceId/invoices",
     shouldThrow: false,
   });
+  const sharesMatch = useMatch({
+    from: "/_protected/workspaces/$workspaceId/shares",
+    shouldThrow: false,
+  });
   const entityDetailMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/entities/$entityId",
     shouldThrow: false,
@@ -274,7 +278,7 @@ function RouteComponent() {
   // WorkspaceDropZone (they have their own layouts), but the inspector
   // pane is still available everywhere inside a workspace.
   const content =
-    timesheetsMatch || invoicesMatch || entityDetailMatch ? (
+    timesheetsMatch || invoicesMatch || sharesMatch || entityDetailMatch ? (
       <Outlet />
     ) : (
       <WorkspaceDropZone workspaceId={workspaceId}>

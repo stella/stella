@@ -99,6 +99,9 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   cannot carry a `File`, so the multipart endpoints stay unreachable and
  *   clients drive presign -> PUT -> finalize instead. Bulk tree/preflight
  *   helpers stay `internal` under `upload_mechanics`.
+ * - `external_sharing`: publishing and managing deliberately external,
+ *   immutable document snapshots. Recipient access remains outside the
+ *   internal capability surface.
  */
 export type McpCapabilityReason =
   | "template_authoring_ui"
@@ -114,7 +117,8 @@ export type McpCapabilityReason =
   | "document_processing"
   | "assistant_chat"
   | "chat_thread_ui"
-  | "file_transport";
+  | "file_transport"
+  | "external_sharing";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from
@@ -301,6 +305,7 @@ type SessionHandlerContext<
 > = Context<SessionConfigRouteSchema<TConfig>> & {
   user: {
     id: SafeId<"user">;
+    email: string;
   };
 };
 

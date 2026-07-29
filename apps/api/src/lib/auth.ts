@@ -1071,6 +1071,7 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       return {
         user: {
           id: userId,
+          email: user.email,
         },
       };
     },

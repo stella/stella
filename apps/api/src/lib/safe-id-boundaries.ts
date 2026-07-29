@@ -42,6 +42,14 @@ export const brandPersistedReportExportId = (
   reportExportId: string,
 ): SafeId<"reportExport"> => toSafeId<"reportExport">(reportExportId);
 
+export const brandPersistedShareSpaceId = (
+  shareSpaceId: string,
+): SafeId<"shareSpace"> => toSafeId<"shareSpace">(shareSpaceId);
+
+export const brandPersistedShareItemId = (
+  shareItemId: string,
+): SafeId<"shareItem"> => toSafeId<"shareItem">(shareItemId);
+
 export const brandPersistedFieldId = (fieldId: string): SafeId<"field"> =>
   toSafeId<"field">(fieldId);
 

@@ -150,6 +150,30 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("staff can manage Share Spaces; intern and external cannot", () => {
+    for (const role of ["owner", "admin", "member"] as const) {
+      for (const action of [
+        "create",
+        "read",
+        "update",
+        "revoke",
+        "audit",
+      ] as const) {
+        expect(roles[role].authorize({ shareSpace: [action] }).success).toBe(
+          true,
+        );
+      }
+    }
+    for (const role of ["intern", "external"] as const) {
+      expect(roles[role].authorize({ shareSpace: ["create"] }).success).toBe(
+        false,
+      );
+      expect(roles[role].authorize({ shareSpace: ["read"] }).success).toBe(
+        false,
+      );
+    }
+  });
+
   test("every role can read its workspace", () => {
     for (const role of [
       "owner",

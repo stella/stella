@@ -18,6 +18,7 @@ import {
   MessageSquareIcon,
   PencilIcon,
   RefreshCwIcon,
+  Share2Icon,
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
@@ -85,6 +86,7 @@ import {
   getDesktopEditLockState,
   getPdfDownloadFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+import { ShareDocumentDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/share-document-dialog";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
@@ -154,6 +156,7 @@ export const RowActions = ({
   const requestChatAbout = useRequestChatAbout(workspaceId);
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
+  const [shareDocumentOpen, setShareDocumentOpen] = useState(false);
   const [copyToMatterEntities, setCopyToMatterEntities] = useState<
     CopyToMatterEntity[]
   >([]);
@@ -713,6 +716,12 @@ export const RowActions = ({
             {t("workspaces.pdf.fullView")}
           </MenuItem>
         )}
+        {!isBulk && !isFolder && entity.kind !== "task" && file ? (
+          <MenuItem onClick={() => setShareDocumentOpen(true)}>
+            <Share2Icon />
+            {t("sharing.dialog.title")}
+          </MenuItem>
+        ) : null}
         <MenuItem onClick={handleChatAbout}>
           <MessageSquareIcon />
           {t("chat.chatAbout")}
@@ -837,6 +846,13 @@ export const RowActions = ({
         onOpenChange={handleCopyToMatterOpenChange}
         open={copyToMatterOpen}
         sourceWorkspaceId={workspaceId}
+      />
+      <ShareDocumentDialog
+        entityId={entity.entityId}
+        entityName={name}
+        onOpenChange={setShareDocumentOpen}
+        open={shareDocumentOpen}
+        workspaceId={workspaceId}
       />
       {/* Hidden file input for upload new version */}
       {canUploadVersion && (
