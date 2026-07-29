@@ -36,6 +36,7 @@ const unsafeNestedHelper = sql`
 `;
 
 const unsafeShadowedHelper = (() => {
+  // oxlint-disable-next-line no-shadow -- fixture proves this binding cannot impersonate the approved import
   const workspaceAccessSql = (_scope: unknown) => "";
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a same-named local cannot impersonate the approved import
   return sql`SELECT * FROM search_documents sd WHERE true ${workspaceAccessSql({})}`;
