@@ -5,11 +5,35 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 
 import {
   CanaryProviderRunError,
+  createPdfCanaryMessages,
   errorSummary,
+  PDF_CANARY_TOKEN,
   toolRoundTripInputSchema,
   toolRoundTripInputSchemaForProvider,
   toolRoundTripPromptForProvider,
 } from "./ai-provider-canary";
+
+describe("AI provider PDF canary contract", () => {
+  test("sends a real inline PDF rather than a text-only pdf-role probe", () => {
+    const message = createPdfCanaryMessages().at(0);
+    expect(message?.role).toBe("user");
+    if (!message || typeof message.content === "string") {
+      throw new Error("Expected multimodal PDF canary message");
+    }
+
+    const text = message.content.find((part) => part.type === "text");
+    expect(text?.content).not.toContain(PDF_CANARY_TOKEN);
+    const document = message.content.find((part) => part.type === "document");
+    expect(document?.source.type).toBe("data");
+    if (!document || document.source.type !== "data") {
+      throw new Error("Expected inline PDF canary data");
+    }
+
+    const bytes = Buffer.from(document.source.value, "base64");
+    expect(bytes.subarray(0, 8).toString()).toBe("%PDF-1.4");
+    expect(bytes.toString()).toContain(PDF_CANARY_TOKEN);
+  });
+});
 
 describe("AI provider canary tool contract", () => {
   test("keeps the omission marker outside the application schema", () => {

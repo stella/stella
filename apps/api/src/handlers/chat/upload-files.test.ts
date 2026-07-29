@@ -138,7 +138,11 @@ describe("chat attachment hydration", () => {
       type: "rawOverride",
       part: {
         metadata: { filename: "scan.pdf" },
-        source: { mimeType: PDF_MIME_TYPE },
+        source: {
+          type: "data",
+          value: Buffer.from(fileBytes).toString("base64"),
+          mimeType: PDF_MIME_TYPE,
+        },
         type: "document",
       },
     });

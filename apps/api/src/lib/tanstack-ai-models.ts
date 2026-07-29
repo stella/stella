@@ -12,10 +12,7 @@ import { createMistralText } from "@tanstack/ai-mistral";
 import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
-import {
-  createOpenRouterText,
-  type OpenRouterTextModelOptions,
-} from "@tanstack/ai-openrouter";
+import type { OpenRouterTextModelOptions } from "@tanstack/ai-openrouter";
 import { Result, panic } from "better-result";
 import * as v from "valibot";
 
@@ -49,6 +46,7 @@ import {
 } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createStellaOpenRouterText } from "@/api/lib/stella-openrouter-text-adapter";
 
 const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
 const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
@@ -461,7 +459,7 @@ const createExtendedOpenRouterAdapter = (
   modelId: string,
   apiKey: string,
 ): AnyTextAdapter => {
-  const openrouter = extendAdapter(createOpenRouterText, [
+  const openrouter = extendAdapter(createStellaOpenRouterText, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
