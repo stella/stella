@@ -54,9 +54,14 @@ export type ParsedSkillPackage = {
   version: string | null;
 };
 
+export type SkillSourceIntegrity =
+  | { type: "content-hash"; value: string }
+  | { type: "github-commit"; value: string };
+
 export type DiscoveredSkillPackage = {
   compatibility: string | null;
   description: string;
+  integrity: SkillSourceIntegrity;
   license: string | null;
   name: string;
   path: string | null;
@@ -181,6 +186,10 @@ export const discoverSkillPackagesFromUrl = async (
           repositoryUrl: null,
           skills: [
             toDiscoveredSkill({
+              integrity: {
+                type: "content-hash",
+                value: parsed.value.contentHash,
+              },
               parsed: parsed.value,
               sourceUrl: rawUrl,
             }),
@@ -1095,19 +1104,20 @@ const discoverGithubSkillPackages = async (
   });
   const entries = await mapWithConcurrency({
     transform: async (skillPath): Promise<DiscoveredSkillPackage | null> => {
-      const source = await fetchGithubSkillSource({
-        commitSha,
-        owner: target.owner,
-        path: skillPath,
-        repo: target.repo,
-      });
       try {
+        const source = await fetchGithubSkillSource({
+          commitSha,
+          owner: target.owner,
+          path: skillPath,
+          repo: target.repo,
+        });
         const parsed = parseMarkdownSkillPackage(source);
         const skillDir =
           skillPath === SKILL_FILE_NAME
             ? ""
             : skillPath.slice(0, -`/${SKILL_FILE_NAME}`.length);
         return toDiscoveredSkill({
+          integrity: { type: "github-commit", value: commitSha },
           path: skillDir || ".",
           parsed,
           sourceUrl: githubPinnedSkillUrl({
@@ -1137,10 +1147,12 @@ const discoverGithubSkillPackages = async (
 };
 
 const toDiscoveredSkill = ({
+  integrity,
   parsed,
   path = null,
   sourceUrl,
 }: {
+  integrity: SkillSourceIntegrity;
   parsed: ParsedSkillPackage;
   path?: string | null;
   sourceUrl: string | null;
@@ -1156,12 +1168,81 @@ const toDiscoveredSkill = ({
   return {
     compatibility: parsed.compatibility,
     description: parsed.description,
+    integrity,
     license: parsed.license,
     name: parsed.name,
     path,
     sourceUrl: resolvedSourceUrl,
     version: parsed.version,
   };
+};
+
+export const verifySkillPackageIntegrity = ({
+  integrity,
+  parsed,
+  sourceUrl,
+}: {
+  integrity: SkillSourceIntegrity;
+  parsed: ParsedSkillPackage;
+  sourceUrl: string;
+}): Result<void, HandlerError> => {
+  switch (integrity.type) {
+    case "content-hash":
+      if (integrity.value === parsed.contentHash) {
+        return Result.ok(undefined);
+      }
+      break;
+    case "github-commit":
+      if (
+        isGithubSkillSourcePinnedToCommit({
+          commitSha: integrity.value,
+          rawUrl: sourceUrl,
+        })
+      ) {
+        return Result.ok(undefined);
+      }
+      break;
+    default: {
+      const unreachable: never = integrity;
+      return unreachable;
+    }
+  }
+
+  return Result.err(
+    new HandlerError({
+      status: 409,
+      message: "Skill source changed after discovery; review it again",
+    }),
+  );
+};
+
+const isGithubSkillSourcePinnedToCommit = ({
+  commitSha,
+  rawUrl,
+}: {
+  commitSha: string;
+  rawUrl: string;
+}): boolean => {
+  try {
+    const url = new URL(rawUrl);
+    assertSafeGithubSkillUrl(url);
+    if (url.hostname !== "github.com" || url.search.length > 0) {
+      return false;
+    }
+    const [owner, rawRepo, kind, pinnedCommitSha] = pathParts(url);
+    const repo = normalizeGithubRepositoryName(rawRepo);
+    if (!owner || !repo) {
+      return false;
+    }
+    assertGithubRepositoryCoordinates({ owner, repo });
+    return (
+      kind === "tree" &&
+      GITHUB_COMMIT_SHA_PATTERN.test(commitSha) &&
+      pinnedCommitSha?.toLowerCase() === commitSha.toLowerCase()
+    );
+  } catch {
+    return false;
+  }
 };
 
 const resolveGithubDefaultBranch = async ({

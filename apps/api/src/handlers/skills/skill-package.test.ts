@@ -12,6 +12,7 @@ import {
   parseUploadedSkillPackage,
   redactSkillSourceUrlForStorage,
   resolveGithubRefAndPath,
+  verifySkillPackageIntegrity,
 } from "./skill-package";
 
 describe("agent skill package imports", () => {
@@ -40,6 +41,46 @@ Follow the checklist.`,
     expect(result.value.license).toBe("Apache-2.0");
     expect(result.value.resources).toEqual([]);
     expect(result.value.contentHash).toHaveLength(64);
+    expect(
+      Result.isOk(
+        verifySkillPackageIntegrity({
+          integrity: {
+            type: "content-hash",
+            value: result.value.contentHash,
+          },
+          parsed: result.value,
+          sourceUrl: "https://example.com/SKILL.md",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      Result.isError(
+        verifySkillPackageIntegrity({
+          integrity: { type: "content-hash", value: "0".repeat(64) },
+          parsed: result.value,
+          sourceUrl: "https://example.com/SKILL.md",
+        }),
+      ),
+    ).toBe(true);
+    const commitSha = "a".repeat(40);
+    expect(
+      Result.isOk(
+        verifySkillPackageIntegrity({
+          integrity: { type: "github-commit", value: commitSha },
+          parsed: result.value,
+          sourceUrl: `https://github.com/example/skills/tree/${commitSha}/review`,
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      Result.isError(
+        verifySkillPackageIntegrity({
+          integrity: { type: "github-commit", value: commitSha },
+          parsed: result.value,
+          sourceUrl: "https://github.com/example/skills/tree/main/review",
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("parses zipped skill folders with read-only resources", async () => {

@@ -36,6 +36,9 @@ type SkillScope = "team" | "private";
 type DiscoveredSkill = {
   compatibility: string | null;
   description: string;
+  integrity:
+    | { type: "content-hash"; value: string }
+    | { type: "github-commit"; value: string };
   license: string | null;
   name: string;
   path: string | null;
@@ -103,9 +106,15 @@ const ImportSkillDialogBody = ({
   const importSkills = useMutation({
     mutationFn: async () => {
       const response = await api.skills["import-urls"].post({
+        items:
+          discovery?.skills
+            .filter((skill) => selected.has(skill.sourceUrl))
+            .map((skill) => ({
+              integrity: skill.integrity,
+              sourceUrl: skill.sourceUrl,
+            })) ?? [],
         queryKey: ["skills"],
         scope,
-        urls: [...selected],
       });
       return unwrapEden(response);
     },
@@ -235,9 +244,18 @@ const ImportSkillDialogBody = ({
         </div>
 
         {discovery && discovery.skills.length === 0 && (
-          <p className="text-muted-foreground py-4 text-sm">
-            {tSkills("discoveryEmpty")}
-          </p>
+          <div className="flex flex-col gap-2 py-4">
+            <p className="text-muted-foreground text-sm">
+              {tSkills("discoveryEmpty")}
+            </p>
+            {discovery.invalidSkillCount > 0 && (
+              <p className="text-muted-foreground text-xs">
+                {tSkills("discoverySkippedInvalid", {
+                  count: discovery.invalidSkillCount,
+                })}
+              </p>
+            )}
+          </div>
         )}
 
         {discovery && discovery.skills.length > 0 && (
