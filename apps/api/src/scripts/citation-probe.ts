@@ -14,6 +14,7 @@
  */
 import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { zstdDecompressToString } from "@/api/lib/compression";
+import { isRecord } from "@/api/lib/type-guards";
 
 const JURISDICTIONS = ["CZE", "SVK", "POL"] as const;
 const KEY_PREFIX = "legal-corpus/documents/jurisdiction=";
@@ -21,7 +22,7 @@ const KEY_PREFIX = "legal-corpus/documents/jurisdiction=";
 const args = Bun.argv.slice(2);
 const argValue = (name: string): string | undefined => {
   const idx = args.indexOf(name);
-  return idx >= 0 ? args[idx + 1] : undefined;
+  return idx !== -1 ? args[idx + 1] : undefined;
 };
 
 const bucket = argValue("--bucket");
@@ -35,19 +36,73 @@ if (!Number.isInteger(sampleTarget) || sampleTarget <= 0) {
   process.exit(2);
 }
 
-// Explicit credential plumbing: the client's environment inference does
-// not cover session credentials (SSO, task roles), which carry a token.
-const credentialEnv = {
-  ...(Bun.env["AWS_ACCESS_KEY_ID"]
-    ? { accessKeyId: Bun.env["AWS_ACCESS_KEY_ID"] }
-    : {}),
-  ...(Bun.env["AWS_SECRET_ACCESS_KEY"]
-    ? { secretAccessKey: Bun.env["AWS_SECRET_ACCESS_KEY"] }
-    : {}),
-  ...(Bun.env["AWS_SESSION_TOKEN"]
-    ? { sessionToken: Bun.env["AWS_SESSION_TOKEN"] }
-    : {}),
+/** Race an S3 operation against a deadline so a stall cannot hang the probe. */
+const withDeadline = async <T>(work: Promise<T>, label: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label}: timed out after 30s`)),
+      30_000,
+    );
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
 };
+
+type ResolvedCredentials = {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+};
+
+/**
+ * Environment keys first (SSO exports, CI); otherwise the ECS container
+ * credential endpoint, which is how a task role exposes its keys.
+ */
+const resolveCredentials = async (): Promise<ResolvedCredentials | null> => {
+  const accessKeyId = Bun.env["AWS_ACCESS_KEY_ID"];
+  const secretAccessKey = Bun.env["AWS_SECRET_ACCESS_KEY"];
+  if (accessKeyId && secretAccessKey) {
+    const sessionToken = Bun.env["AWS_SESSION_TOKEN"];
+    return {
+      accessKeyId,
+      secretAccessKey,
+      ...(sessionToken ? { sessionToken } : {}),
+    };
+  }
+  const relativeUri = Bun.env["AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"];
+  if (!relativeUri) {
+    return null;
+  }
+  const response = await fetch(`http://169.254.170.2${relativeUri}`, {
+    signal: AbortSignal.timeout(5000),
+  });
+  const body: unknown = await response.json();
+  if (
+    !isRecord(body) ||
+    typeof body["AccessKeyId"] !== "string" ||
+    typeof body["SecretAccessKey"] !== "string"
+  ) {
+    return null;
+  }
+  const token = body["Token"];
+  return {
+    accessKeyId: body["AccessKeyId"],
+    secretAccessKey: body["SecretAccessKey"],
+    ...(typeof token === "string" ? { sessionToken: token } : {}),
+  };
+};
+
+const credentials = await resolveCredentials();
+if (!credentials) {
+  console.error(
+    "citation-probe: no AWS credentials (env keys or container endpoint)",
+  );
+  process.exit(2);
+}
 
 const region = Bun.env["AWS_REGION"] ?? "eu-central-1";
 
@@ -57,109 +112,165 @@ const s3 = new Bun.S3Client({
   // Without an explicit endpoint the client signs against the wrong host
   // and session credentials are rejected.
   endpoint: `https://s3.${region}.amazonaws.com`,
-  ...credentialEnv,
+  ...credentials,
 });
 
 // Broad candidate detectors. Noisy on purpose; benign filters and the
 // covered-check prune them, and whatever survives is worth human review.
+// Every quantifier is bounded so the scan stays linear (the repo ratchets
+// super-linear regexes).
 const DETECTORS: readonly RegExp[] = [
-  /(?:sp\.\s*zn\.|sen\.\s*zn\.|sygn\.\s*(?:akt\s+)?|[čc]\.\s*j\.:?)\s*[^\s,;()][^,;()\n]{2,38}/gu,
-  /\b(?:[IVX]{1,4}|Pl)\.?\s*ÚS[^,;()\n]{0,18}/gu,
-  /\bECLI:[^\s,;)]+/gu,
-  /\b[CTF][-‑–]\s?\d{1,4}\/\d{2,4}/gu,
+  /(?:sp\.\s{0,3}zn\.|sen\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?|[čc]\.\s{0,3}j\.:?)\s{0,3}[^,;()\n]{3,38}/gu,
+  /\b(?:[IVX]{1,4}|Pl)\.?\s{0,3}ÚS[^,;()\n]{0,18}/gu,
+  /\bECLI:[^\s,;)]{1,60}/gu,
+  /\b[CTF][-‑–]\s{0,1}\d{1,4}\/\d{2,4}/gu,
 ];
 
 // Residual classes that are not court decisions and never will be:
 // administrative-authority file numbers (letter blocks joined by dashes),
 // anonymization placeholders, and statute/collection references.
 const BENIGN: readonly RegExp[] = [
-  /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,}[-–][\w/–-]*\d/u,
+  /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–][\w/–-]{0,30}\d/u,
   /X{2,}/u,
-  /\d+\/\d+\s+Sb\b/u,
+  /\b\d{1,5}\/\d{2,4}\s{1,3}Sb\b/u,
   /\bZb\.\s*z\b/u,
   // Polish procurement-tribunal rulings (KIO/UZP): quasi-judicial, not a
   // court source the corpus ingests, so never a resolvable citation.
-  /\bKIO\s*\/?\s*UZP\b/u,
+  /\bKIO ?\/? ?UZP\b/u,
 ];
 
 const isBenign = (candidate: string): boolean =>
   BENIGN.some((re) => re.test(candidate));
 
+/** Uniform random UUID-shaped hex string (not crypto.randomUUID: the id
+ * layout is irrelevant here, only its lexicographic position). */
+const randomHexUuid = (): string => {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
 const sampleKeys = async (jurisdiction: string, want: number) => {
-  const keys: string[] = [];
   const prefix = `${KEY_PREFIX}${jurisdiction}/`;
-  let guard = 0;
-  while (keys.length < want && guard < want * 4) {
-    guard += 1;
-    // A random v4 UUID as the listing cursor is a uniform draw over the
-    // id space; v7 would be time-prefixed and collapse every draw onto
-    // the most recent documents.
-    const listed = await s3.list({
-      prefix,
-      startAfter: `${prefix}${crypto.randomUUID()}`,
-      maxKeys: 8,
-    });
+  // The id space is mixed: database-defaulted rows carry uniform v4 ids
+  // while application-minted rows carry time-prefixed v7 ids that cluster
+  // lexicographically under `01…`. Half the cursors draw fully at random
+  // (v4 region), half are pinned into the v7 era prefix; within each
+  // region, sampling is proportional to key gaps, which for the
+  // time-ordered v7 cluster approximates time-uniform. Over-draw and
+  // deduplicate, since independent draws can land on the same document.
+  const cursors = Array.from({ length: want * 3 }, (_, i) =>
+    i % 2 === 0 ? randomHexUuid() : `019${randomHexUuid().slice(3)}`,
+  );
+  const listings = await Promise.all(
+    cursors.map(
+      async (cursor) =>
+        await withDeadline(
+          s3.list({ prefix, startAfter: `${prefix}${cursor}`, maxKeys: 8 }),
+          "s3.list",
+        ),
+    ),
+  );
+  const keys = new Set<string>();
+  for (const listed of listings) {
+    if (keys.size >= want) {
+      break;
+    }
     const textKey = listed.contents?.find((entry) =>
       entry.key.endsWith("/text.zst"),
     )?.key;
-    if (textKey && !keys.includes(textKey)) {
-      keys.push(textKey);
+    if (textKey) {
+      keys.add(textKey);
     }
   }
-  return keys;
+  return [...keys];
 };
 
-let totalDocs = 0;
+type ProbedDoc = {
+  jurisdiction: string;
+  documentId: string;
+  empty: boolean;
+  extractedCount: number;
+  residuals: string[];
+};
+
+const probeKey = async (
+  jurisdiction: string,
+  key: string,
+): Promise<ProbedDoc> => {
+  const body = await withDeadline(s3.file(key).bytes(), "s3.get");
+  const text = zstdDecompressToString(body);
+  const documentId = key.slice(KEY_PREFIX.length).split("/").at(1) ?? key;
+  if (text.trim().length === 0) {
+    return {
+      jurisdiction,
+      documentId,
+      empty: true,
+      extractedCount: 0,
+      residuals: [],
+    };
+  }
+  const extracted = extractCitations([{ index: 0, text }]);
+  const covered = (candidate: string): boolean =>
+    extracted.some(
+      (c) =>
+        candidate.includes(c.citationText) ||
+        c.citationText.includes(candidate),
+    );
+  const residuals = new Set<string>();
+  for (const detector of DETECTORS) {
+    detector.lastIndex = 0;
+    for (
+      let match = detector.exec(text);
+      match !== null;
+      match = detector.exec(text)
+    ) {
+      const candidate = match[0].replaceAll(/\s+/gu, " ").trim();
+      if (!covered(candidate) && !isBenign(candidate)) {
+        residuals.add(candidate);
+      }
+    }
+  }
+  return {
+    jurisdiction,
+    documentId,
+    empty: false,
+    extractedCount: extracted.length,
+    residuals: [...residuals],
+  };
+};
+
+const want = Math.max(1, Math.floor(sampleTarget / JURISDICTIONS.length));
+const docs = (
+  await Promise.all(
+    JURISDICTIONS.map(async (jurisdiction) => {
+      const keys = await sampleKeys(jurisdiction, want);
+      return await Promise.all(
+        keys.map(async (key) => await probeKey(jurisdiction, key)),
+      );
+    }),
+  )
+).flat();
+
 let totalExtracted = 0;
 let totalResiduals = 0;
 let emptyDocs = 0;
-
-for (const jurisdiction of JURISDICTIONS) {
-  const want = Math.max(1, Math.floor(sampleTarget / JURISDICTIONS.length));
-  // oxlint-disable-next-line no-await-in-loop -- sequential per-jurisdiction sampling keeps S3 pressure trivial
-  const keys = await sampleKeys(jurisdiction, want);
-  for (const key of keys) {
-    // oxlint-disable-next-line no-await-in-loop -- one object at a time; the probe favors simplicity over speed
-    const body = await s3.file(key).bytes();
-    const text = zstdDecompressToString(body);
-    if (text.trim().length === 0) {
-      emptyDocs += 1;
-      continue;
-    }
-    const extracted = extractCitations([{ index: 0, text }]);
-    const covered = (candidate: string): boolean =>
-      extracted.some(
-        (c) =>
-          candidate.includes(c.citationText) ||
-          c.citationText.includes(candidate),
-      );
-    const residuals = new Set<string>();
-    for (const detector of DETECTORS) {
-      detector.lastIndex = 0;
-      for (
-        let match = detector.exec(text);
-        match !== null;
-        match = detector.exec(text)
-      ) {
-        const candidate = match[0].replaceAll(/\s+/gu, " ").trim();
-        if (!covered(candidate) && !isBenign(candidate)) {
-          residuals.add(candidate);
-        }
-      }
-    }
-    totalDocs += 1;
-    totalExtracted += extracted.length;
-    totalResiduals += residuals.size;
-    const documentId = key.slice(KEY_PREFIX.length).split("/").at(1) ?? key;
-    if (residuals.size > 0) {
-      console.log(`RESIDUAL ${jurisdiction} ${documentId}`);
-      for (const residual of [...residuals].slice(0, 6)) {
-        console.log(`  ${residual}`);
-      }
+for (const doc of docs) {
+  if (doc.empty) {
+    emptyDocs += 1;
+    continue;
+  }
+  totalExtracted += doc.extractedCount;
+  totalResiduals += doc.residuals.length;
+  if (doc.residuals.length > 0) {
+    console.log(`RESIDUAL ${doc.jurisdiction} ${doc.documentId}`);
+    for (const residual of doc.residuals.slice(0, 6)) {
+      console.log(`  ${residual}`);
     }
   }
 }
 
 console.log(
-  `SUMMARY docs=${totalDocs} empty=${emptyDocs} extracted=${totalExtracted} residual-candidates=${totalResiduals}`,
+  `SUMMARY docs=${docs.length - emptyDocs} empty=${emptyDocs} extracted=${totalExtracted} residual-candidates=${totalResiduals}`,
 );
