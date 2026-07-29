@@ -673,13 +673,16 @@ export const processDecision = async (
   // commits (a replayed decision must not re-count) — and emitted for
   // zero-gap decisions too, or aggregated events could not produce a
   // recall denominator.
-  // Skipped on a document-preserving refresh: the stored document and its
-  // citations are retained, so measuring the empty incoming payload would
-  // report every publisher citation as missed. Emitted here rather than
-  // after the write because an ambiguous timeout can commit the row yet
-  // throw, and the replay dedup-skips before re-measuring; the source
-  // hash is the identity a consumer deduplicates retries on.
+  // Measured only when the incoming payload carries a document: an empty
+  // payload has nothing for extraction to find, so every publisher
+  // citation would read as missed — on document-preserving refreshes and
+  // equally when a concurrent backfill wins the row between the read and
+  // the transaction. Emitted here rather than after the write because an
+  // ambiguous timeout can commit the row yet throw, and the replay
+  // dedup-skips before re-measuring; the source hash is the identity a
+  // consumer deduplicates retries on.
   if (
+    incomingCarriesDocument &&
     !preserveStoredDocument &&
     result.publisherCitedCases &&
     result.publisherCitedCases.length > 0
