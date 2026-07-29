@@ -63,8 +63,10 @@ const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}
 // lowercase "sygn." in body prose; an optional colon directly after the
 // period ("sygn.: P. 12/98"); and "akt" itself optionally punctuated with
 // a dot ("akt.") or a colon ("akt:"), or omitted entirely ("sygn. II CSK
-// 123/20").
-const PL_SYGN_PREFIX = String.raw`[Ss]ygn\.\s*(?::\s*)?(?:[Aa]kt\.?:?\s*)?`;
+// 123/20"). Every gap is a bounded whitespace run (not unbounded `\s*`),
+// so an OCR whitespace run after "sygn." fails to match rather than
+// being swallowed into a phantom Tribunal citation.
+const PL_SYGN_PREFIX = String.raw`[Ss]ygn\.\s{0,3}(?::\s{0,3})?(?:[Aa]kt\.?:?\s{0,3})?`;
 
 // Polish prefixed pattern: "sygn. akt II CSK 123/20". The chamber roman
 // numeral and division code are frequently glued with no space ("IC
@@ -154,24 +156,29 @@ const CITATION_PATTERNS: RegExp[] = [
   // zn. 4 M Cdo 15/2010", "sp. zn. 2 M Obdo 1/2008", where "M"
   // (mimoriadne dovolanie / veľký senát) sits between the chamber digit
   // and the ordinary registry as its own word -- one word more than
-  // CASE_NUMBER_BODY allows.
-  /sp\.\s*zn\.:?\s*(?<caseNumber>\d{1,3}\s+M\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  // CASE_NUMBER_BODY allows. The period after "zn" is optional, matching
+  // the general sp. zn. pattern above ("sp. zn 4 M Cdo 15/2010").
+  /sp\.\s*zn\.?:?\s*(?<caseNumber>\d{1,3}\s+M\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Slovak Special Court (Špeciálny súd v Pezinku, 2004-2009) case numbers
   // carry a "PK" panel prefix before the ordinary senate/registry/number
-  // shape: "sp. zn. PK 1 Tš 24/2006".
-  /sp\.\s*zn\.:?\s*(?<caseNumber>PK\s+\d{1,3}\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  // shape: "sp. zn. PK 1 Tš 24/2006". The period after "zn" is optional,
+  // matching the general sp. zn. pattern above.
+  /sp\.\s*zn\.?:?\s*(?<caseNumber>PK\s+\d{1,3}\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Slovak Najvyšší súd hyphenated administrative registry code: "sp. zn.
   // 5 Sž-o-KS 94/2005" (appellate senates chain short letter groups with
   // hyphens; the plain-letter registry in CASE_NUMBER_BODY excludes them).
-  /sp\.\s*zn\.:?\s*(?<caseNumber>\d{1,3}\s+\p{L}{1,4}(?:-\p{L}{1,4}){1,3}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  // The period after "zn" is optional, matching the general sp. zn.
+  // pattern above.
+  /sp\.\s*zn\.?:?\s*(?<caseNumber>\d{1,3}\s+\p{L}{1,4}(?:-\p{L}{1,4}){1,3}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Slovak courthouse workplace-code prefix (post-2023 court reform): "sp.
   // zn. B4-14Cb/13/2021", "sp. zn. K2-17P/72/2022" (Mestský súd) -- a
   // branch letter+digits, hyphen, then the ordinary joined chamber+
-  // registry/case/year shape.
-  /sp\.\s*zn\.:?\s*(?<caseNumber>[A-Z]\d{1,2}-\d{1,3}\p{L}{1,5}\/\d{1,6}\/\d{2,4})(?!\d)/gu,
+  // registry/case/year shape. The period after "zn" is optional, matching
+  // the general sp. zn. pattern above.
+  /sp\.\s*zn\.?:?\s*(?<caseNumber>[A-Z]\d{1,2}-\d{1,3}\p{L}{1,5}\/\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Czech senate file number: "sen. zn. 29 NSČR 55/2013" (grand panel,
   // insolvency). Same shape as sp. zn. under a different prefix.
@@ -332,9 +339,18 @@ const CONSOLIDATED_DOCKET_NORMALIZE_RE =
  * the diacritic-dropped "III.US 364/2017" folds to the same key as
  * "III. ÚS 364/2017". Stored citationText is never touched by this --
  * only the dedup key folds the diacritic.
+ *
+ * The infix's own trailing dot is optional ("-st\.?", not "-st\."): the
+ * upstream trailing-dot-strip step (below) also fires on "t." when it is
+ * itself followed by whitespace or a slash (as it always is here, right
+ * before the docket), so the dot is already gone by the time this regex
+ * runs for most spellings. Requiring it literally would make the infix
+ * fail to match and silently fall through to the plain (non-standpoint)
+ * reconstruction, colliding a plenary standpoint with an ordinary nález
+ * sharing the same digits.
  */
 const US_CASE_RE =
-  /^(?<chamber>[IVX]{1,4}|Pl|PL)\.?\s?[ÚU]S(?<infix>-st\.)?[\s/](?<docket>\d{1,5}\/\d{2,4})$/u;
+  /^(?<chamber>[IVX]{1,4}|Pl|PL)\.?\s?[ÚU]S(?<infix>-st\.?)?[\s/](?<docket>\d{1,5}\/\d{2,4})$/u;
 
 /**
  * Matches a Polish roman-numeral-chamber case number after whitespace
@@ -349,17 +365,18 @@ const POLISH_ROMAN_DIVISION_RE =
   /^(?<roman>[IVX]{1,6})\s?(?<division>[A-Za-z]{1,5}\s?.*)$/u;
 
 /**
- * Some Polish division codes are themselves two space-separated tokens
- * (an appellate/labor qualifier plus the base code, e.g. "A Ua"), which
- * courts also glue together ("AUa"). Applied to the `division` group of
- * `POLISH_ROMAN_DIVISION_RE`, this collapses the first two-token gap to
- * the same glued spelling so "III A Ua 2389/02" and "III AUa 2389/02"
- * resolve to one dedup key. The second token is a letter run, never
- * digits, so this never matches an ordinary single-token division
- * directly followed by the docket number ("CSK 123/20").
+ * Some Polish division codes are themselves two tokens separated by a
+ * space or a slash (an appellate/labor qualifier plus the base code, e.g.
+ * "A Ua" or "A/Ua"), which courts also glue together ("AUa"). Applied to
+ * the `division` group of `POLISH_ROMAN_DIVISION_RE`, this collapses the
+ * first two-token gap to the same glued spelling so "III A Ua 2389/02",
+ * "III A/Ua 2389/02", and "III AUa 2389/02" all resolve to one dedup key.
+ * The second token is a letter run, never digits, so this never matches
+ * an ordinary single-token division directly followed by the docket
+ * number ("CSK 123/20").
  */
 const POLISH_TWO_WORD_DIVISION_RE =
-  /^(?<div1>[A-Za-z]{1,4})\s(?<div2>[A-Za-z]{1,5})(?<rest>\s\d.*)$/u;
+  /^(?<div1>[A-Za-z]{1,4})[\s/](?<div2>[A-Za-z]{1,5})(?<rest>\s\d.*)$/u;
 
 /**
  * Matches a single-token Polish division code directly followed by the

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  bareCitationKey,
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -459,6 +460,22 @@ describe("extractCitations", () => {
     expect(citations[0]?.citationText).toBe("Pl. ÚS‑st. 45/16");
   });
 
+  test("keeps standpoint and plain Constitutional Court citations distinct across spelling variants", () => {
+    // The "-st." infix must survive canonicalization for the
+    // diacritic-dropped and slash-joined spellings too, or a plenary
+    // standpoint ("Pl. ÚS-st. 45/16") would collide with an unrelated
+    // ordinary nález sharing the same digits ("Pl. ÚS 45/16").
+    const pairs: [string, string][] = [
+      ["Pl. ÚS-st. 45/16", "Pl. ÚS 45/16"],
+      ["Pl. ÚS – st. 45/16", "Pl. ÚS 45/16"],
+      ["II.US-st./251/04", "II.US/251/04"],
+      ["III. ÚS-st. 364/2017", "III. ÚS 364/2017"],
+    ];
+    for (const [standpoint, plain] of pairs) {
+      expect(bareCitationKey(standpoint)).not.toBe(bareCitationKey(plain));
+    }
+  });
+
   test("extracts Slovak Constitutional Court citations with a slash before the number", () => {
     // Verbatim prose quoted from a prod Ústavný súd decision: a case list
     // mixes the slash shorthand with the ordinary spaced form in the same
@@ -574,6 +591,22 @@ describe("extractCitations", () => {
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
     expect(citations[0]?.citationText).toBe("sp. zn. B4-14Cb/13/2021");
+  });
+
+  test("extracts specialist Slovak case numbers without a period after 'zn'", () => {
+    // The general Slovak sp. zn. pattern already accepts a missing
+    // period after "zn" ("sp. zn 5Obdo/23/2016"); the specialist
+    // patterns for the M-insert, PK panel, hyphenated registry, and
+    // workplace-code shapes must accept the same no-period spelling.
+    const texts = [
+      "sp. zn 4 M Cdo 15/2010",
+      "sp. zn PK 1 Tš 24/2006",
+      "sp. zn 5 Sž-o-KS 94/2005",
+      "sp. zn B4-14Cb/13/2021",
+    ];
+    for (const text of texts) {
+      expect(extractCitations([{ index: 0, text }])).toHaveLength(1);
+    }
   });
 
   test("extracts a Slovak Mestský súd (post-2023 reform) case number", () => {
@@ -1215,6 +1248,23 @@ describe("extractCitations", () => {
     expect(extractCitations([{ index: 0, text: lineWrap }])).toHaveLength(1);
   });
 
+  test("dedupes a Polish two-word division code across every accepted separator spelling", () => {
+    // "III A Ua 2389/02" (spaced), "III AUa 2389/02" (merged), and
+    // "III A/Ua 2389/02" (slash-joined, which the matcher's division-gap
+    // class already accepts) all name the same case; the canonicalizer
+    // must fold every accepted separator spelling to one key.
+    const citations = extractCitations([
+      {
+        index: 0,
+        text:
+          "Sądu Apelacyjnego we Wrocławiu z 7 listopada 2003 r., sygn. akt " +
+          "III A Ua 2389/02, ponownie sygn. akt III AUa 2389/02, oraz " +
+          "sygn. akt III A/Ua 2389/02 w uzasadnieniu",
+      },
+    ]);
+    expect(citations).toHaveLength(1);
+  });
+
   test("extracts Polish fused division+department case numbers", () => {
     // Verbatim prose quoted from a prod Polish labour-court decision:
     // "X Wydział Pracy" (10th labour division) case numbers fuse the
@@ -1603,6 +1653,15 @@ describe("extractCitations", () => {
     // unanchored 1-3 uppercase letters + digits/year shape is far too
     // common in ordinary prose (initials, abbreviations, addresses).
     const text = "Delivered by K on the 8/00 shift, then P handled 12/03.";
+    expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
+  });
+
+  test("does not capture a Tribunal citation across an over-long whitespace run after 'sygn.'", () => {
+    // The whitespace after "sygn." is bounded so an OCR whitespace run
+    // does not get swallowed into a phantom Tribunal match; an
+    // unrealistically long run simply fails to match rather than being
+    // captured with the whitespace baked in.
+    const text = "orzeczenie sygn.     K 20/03 Trybunału Konstytucyjnego";
     expect(extractCitations([{ index: 0, text }])).toHaveLength(0);
   });
 
