@@ -61,6 +61,8 @@
     "postinstall": "bun run lint:ws"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0",
     "@stll/oxlint-config": "0.6.0",
     "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
