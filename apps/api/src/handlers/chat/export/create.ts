@@ -34,6 +34,7 @@ import {
   assembleMessageMarkdown,
   buildChatExportDownload,
   composeExportMarkdown,
+  extractPersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
 import { styleDocumentCitations } from "@/api/handlers/chat/export/style-document-citations";
 import { markdownToStellaDocument } from "@/api/handlers/chat/tools/markdown-to-stella-docx";
@@ -163,16 +164,25 @@ const createMessageExport = createSafeRootHandler(
     const citationLabels = getChatExportCitationLabels(
       extractLangFromRequest(request),
     );
+    const persistedSearchSources = extractPersistedSearchSummarySources(body);
+    const sourceCitations =
+      persistedSearchSources === null
+        ? sourceDocumentsToCitations(
+            metadata.sourceDocuments,
+            CHAT_EXPORT_MAX_SOURCE_DOCUMENTS,
+          )
+        : [];
     const section = buildCitationSection(
-      sourceDocumentsToCitations(
-        metadata.sourceDocuments,
-        CHAT_EXPORT_MAX_SOURCE_DOCUMENTS,
-      ),
+      sourceCitations,
       citationStyle,
       citationLabels,
     );
 
-    const markdown = composeExportMarkdown(body, section);
+    const exportBody =
+      citationStyle === "none" && persistedSearchSources !== null
+        ? persistedSearchSources.bodyWithoutSources
+        : body;
+    const markdown = composeExportMarkdown(exportBody, section);
 
     const docxResult = yield* Result.await(
       Result.tryPromise({
@@ -186,6 +196,8 @@ const createMessageExport = createSafeRootHandler(
                   metadata.sourceDocuments,
                 ),
                 internalCitationFallback: citationLabels.citation,
+                internalReferenceMode:
+                  persistedSearchSources === null ? "references" : "citations",
               },
             ),
           ),
@@ -245,7 +257,11 @@ const createMessageExport = createSafeRootHandler(
             metadata: {
               format: "docx",
               citationStyle,
-              verifiedCitations: section.verifiedCount,
+              verifiedCitations:
+                citationStyle === "none"
+                  ? 0
+                  : (persistedSearchSources?.sourceCount ??
+                    section.verifiedCount),
               unverifiedCitations: section.unverifiedCount,
             },
           }),

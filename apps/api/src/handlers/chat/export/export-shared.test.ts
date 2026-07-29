@@ -6,6 +6,7 @@ import {
   assembleMessageMarkdown,
   buildChatExportDownload,
   composeExportMarkdown,
+  extractPersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
 import type { ChatPart } from "@/api/handlers/chat/types";
 
@@ -55,6 +56,38 @@ describe("composeExportMarkdown", () => {
 
   test("an empty section leaves the body untouched", () => {
     expect(composeExportMarkdown("Body", section(""))).toBe("Body");
+  });
+});
+
+describe("extractPersistedSearchSummarySources", () => {
+  test("extracts the generated trailing source list", () => {
+    expect(
+      extractPersistedSearchSummarySources(
+        "## Result\n\nSummary.\n\n### Sources\n\n- Matter\n\n- Decision",
+      ),
+    ).toEqual({
+      bodyWithoutSources: "## Result\n\nSummary.",
+      sourceCount: 2,
+    });
+  });
+
+  test("recognizes a generated empty source block", () => {
+    expect(
+      extractPersistedSearchSummarySources(
+        "## Result\n\nSummary.\n\n### Sources",
+      ),
+    ).toEqual({
+      bodyWithoutSources: "## Result\n\nSummary.",
+      sourceCount: 0,
+    });
+  });
+
+  test("leaves ordinary Sources prose alone", () => {
+    expect(
+      extractPersistedSearchSummarySources(
+        "Answer.\n\n### Sources\n\nThis is explanatory prose.",
+      ),
+    ).toBeNull();
   });
 });
 

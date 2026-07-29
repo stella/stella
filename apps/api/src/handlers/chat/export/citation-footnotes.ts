@@ -136,6 +136,8 @@ export type ResolvedExportCitation =
   | { status: "unverified" };
 
 const MARKDOWN_INLINE_ESCAPE = /(?<character>[\\`*_~[\]<>|])/gu;
+const MARKDOWN_LEADING_BULLET = /^(?<marker>[#+-])(?=\s)/u;
+const MARKDOWN_LEADING_ORDINAL = /^(?<number>\d+)(?<marker>[.)])(?=\s)/u;
 
 /**
  * Render an untrusted document title as one Markdown-safe inline label.
@@ -146,7 +148,9 @@ const normalizeMarkdownSource = (source: string): string =>
   source
     .trim()
     .replace(/\s+/gu, " ")
-    .replace(MARKDOWN_INLINE_ESCAPE, "\\$<character>");
+    .replace(MARKDOWN_INLINE_ESCAPE, "\\$<character>")
+    .replace(MARKDOWN_LEADING_BULLET, "\\$<marker>")
+    .replace(MARKDOWN_LEADING_ORDINAL, "$<number>\\$<marker>");
 
 /** A `pdf-bates` block's per-statement citation shape. Derived from the schema
  *  union so it stays in lockstep with the stored model. */

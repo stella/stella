@@ -14,8 +14,15 @@ import { unreachable } from "@/api/lib/errors/tagged-errors";
 
 const FOLIO_CITATION_PREFIX = "#folio:";
 const DECISION_CITATION_PREFIX = "#stella-decision=";
+const ENTITY_REFERENCE_PREFIX = "#stella-entity=";
+const WORKSPACE_REFERENCE_PREFIX = "#stella-workspace=";
 
-const isCitationHyperlink = ({ href }: Hyperlink): boolean => {
+type InternalReferenceMode = "citations" | "references";
+
+const isCitationHyperlink = (
+  { href }: Hyperlink,
+  internalReferenceMode: InternalReferenceMode,
+): boolean => {
   if (href === undefined) {
     return false;
   }
@@ -23,7 +30,10 @@ const isCitationHyperlink = ({ href }: Hyperlink): boolean => {
     href.startsWith("https://") ||
     href.startsWith("http://") ||
     href.startsWith(FOLIO_CITATION_PREFIX) ||
-    href.startsWith(DECISION_CITATION_PREFIX)
+    href.startsWith(DECISION_CITATION_PREFIX) ||
+    (internalReferenceMode === "citations" &&
+      (href.startsWith(ENTITY_REFERENCE_PREFIX) ||
+        href.startsWith(WORKSPACE_REFERENCE_PREFIX)))
   );
 };
 
@@ -73,6 +83,7 @@ type CitationTransformContext = {
   footnotes: Footnote[];
   folioSourceTitle: string | undefined;
   internalCitationFallback: string;
+  internalReferenceMode: InternalReferenceMode;
   nextFootnoteId: number;
   style: Exclude<ChatExportCitationStyle, "inline">;
 };
@@ -82,10 +93,12 @@ const citationFootnoteText = (
   context: CitationTransformContext,
 ): string => {
   const target = citationTarget(hyperlink);
-  if (
-    !target.startsWith(FOLIO_CITATION_PREFIX) &&
-    !target.startsWith(DECISION_CITATION_PREFIX)
-  ) {
+  const isInternalTarget =
+    target.startsWith(FOLIO_CITATION_PREFIX) ||
+    target.startsWith(DECISION_CITATION_PREFIX) ||
+    target.startsWith(ENTITY_REFERENCE_PREFIX) ||
+    target.startsWith(WORKSPACE_REFERENCE_PREFIX);
+  if (!isInternalTarget) {
     return target;
   }
 
@@ -106,7 +119,7 @@ const transformHyperlink = (
   hyperlink: Hyperlink,
   context: CitationTransformContext,
 ): ParagraphContent[] => {
-  if (!isCitationHyperlink(hyperlink)) {
+  if (!isCitationHyperlink(hyperlink, context.internalReferenceMode)) {
     return [hyperlink];
   }
   if (context.style === "none") {
@@ -208,9 +221,11 @@ export const styleDocumentCitations = (
   {
     folioSourceTitle,
     internalCitationFallback,
+    internalReferenceMode,
   }: {
     folioSourceTitle: string | undefined;
     internalCitationFallback: string;
+    internalReferenceMode: InternalReferenceMode;
   },
 ): Document => {
   if (style === "inline") {
@@ -227,6 +242,7 @@ export const styleDocumentCitations = (
     footnotes,
     folioSourceTitle,
     internalCitationFallback,
+    internalReferenceMode,
     nextFootnoteId: nextFootnoteId(footnotes),
     style,
   };

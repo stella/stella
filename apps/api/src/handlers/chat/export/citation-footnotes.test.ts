@@ -193,6 +193,22 @@ describe("sourceDocumentsToCitations", () => {
     ]);
   });
 
+  test("leading Markdown block markers stay plain source text", () => {
+    const citations = sourceDocumentsToCitations(
+      [
+        doc("# Conclusion"),
+        doc("- Nested list", "e2"),
+        doc("1. Ordered list", "e3"),
+      ],
+      50,
+    );
+    const section = buildCitationSection(citations, "footnotes");
+
+    expect(section.markdown).toContain("1. \\# Conclusion");
+    expect(section.markdown).toContain("2. \\- Nested list");
+    expect(section.markdown).toContain("3. 1\\. Ordered list");
+  });
+
   test("undefined source documents yield no citations", () => {
     expect(sourceDocumentsToCitations(undefined, 50)).toEqual([]);
   });

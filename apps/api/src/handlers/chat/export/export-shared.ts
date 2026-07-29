@@ -8,6 +8,8 @@ import { chatPartText } from "@/api/handlers/chat/chat-message-parts";
 import type { CitationSection } from "@/api/handlers/chat/export/citation-footnotes";
 import type { ChatPart } from "@/api/handlers/chat/types";
 
+const SEARCH_SUMMARY_SOURCES_HEADING = "\n\n### Sources";
+
 /**
  * Concatenate a message's text parts into a markdown body, verbatim (no
  * whitespace collapsing — the recap transcript collapses, which would flatten
@@ -39,6 +41,44 @@ export const composeExportMarkdown = (
     return section.markdown;
   }
   return `${body}\n\n${section.markdown}`;
+};
+
+export type PersistedSearchSummarySources = {
+  bodyWithoutSources: string;
+  sourceCount: number;
+};
+
+/**
+ * Recognize the trailing Sources block written by `/search/summary/chat`.
+ *
+ * The producer owns this exact shape: a level-three English heading followed
+ * by zero or more unordered-list items. Requiring the block to be trailing and
+ * list-shaped avoids treating an ordinary answer's prose section as generated
+ * search provenance.
+ */
+export const extractPersistedSearchSummarySources = (
+  body: string,
+): PersistedSearchSummarySources | null => {
+  const headingIndex = body.lastIndexOf(SEARCH_SUMMARY_SOURCES_HEADING);
+  if (headingIndex === -1) {
+    return null;
+  }
+
+  const sources = body.slice(
+    headingIndex + SEARCH_SUMMARY_SOURCES_HEADING.length,
+  );
+  if (sources.length > 0 && !sources.startsWith("\n\n- ")) {
+    return null;
+  }
+
+  const sourceCount =
+    sources.length === 0
+      ? 0
+      : sources.split("\n").filter((line) => line.startsWith("- ")).length;
+  return {
+    bodyWithoutSources: body.slice(0, headingIndex).trimEnd(),
+    sourceCount,
+  };
 };
 
 export type ChatExportDownload = {

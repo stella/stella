@@ -86,7 +86,8 @@ const markdown = [
 const options = {
   folioSourceTitle: "Agreement.docx",
   internalCitationFallback: "Citation",
-};
+  internalReferenceMode: "references",
+} as const;
 
 describe("styleDocumentCitations", () => {
   test("inline preserves every hyperlink and returns the same document", () => {
@@ -111,6 +112,26 @@ describe("styleDocumentCitations", () => {
       collectFootnoteReferenceIds(styled.package.document.content),
     ).toEqual([]);
     expect(styled.package.footnotes).toEqual([]);
+  });
+
+  test("search-summary mode treats entity and workspace links as citations", () => {
+    const styled = styleDocumentCitations(
+      markdownToStellaDocument(
+        "[matter](#stella-workspace=w) [document](#stella-entity=e)",
+      ),
+      "footnotes",
+      {
+        ...options,
+        internalReferenceMode: "citations",
+      },
+    );
+
+    expect(collectHyperlinkTargets(styled.package.document.content)).toEqual(
+      [],
+    );
+    expect(
+      styled.package.footnotes?.map(({ content }) => collectText(content)),
+    ).toEqual(["matter", "document"]);
   });
 
   test("footnotes are real, destination-deduplicated, and recursive", () => {
