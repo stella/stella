@@ -423,6 +423,8 @@ type SqlScopeClause = "inner-join-on" | "non-filtering" | "query-filter";
 type SqlScopeContext = {
   aggregateFilterDepth: number;
   aggregateFilterOuterClause: SqlScopeClause | null;
+  caseDepth: number;
+  caseOuterClause: SqlScopeClause | null;
   clause: SqlScopeClause;
   currentJoinIsOuter: boolean;
   hasNonConjunctiveFilter: boolean;
@@ -433,6 +435,8 @@ type SqlScopeContext = {
 const INITIAL_SQL_SCOPE_CONTEXT: SqlScopeContext = {
   aggregateFilterDepth: 0,
   aggregateFilterOuterClause: null,
+  caseDepth: 0,
+  caseOuterClause: null,
   clause: "non-filtering",
   currentJoinIsOuter: false,
   hasNonConjunctiveFilter: false,
@@ -511,7 +515,7 @@ const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
   SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
 
 const SQL_SCOPE_CONTEXT_TOKEN =
-  /[()]|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:cross|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
+  /[()]|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
 
 const sqlScopeContextAfter = (
   text: string,
@@ -530,6 +534,22 @@ const sqlScopeContextAfter = (
     scanState = sqlLexStateAfter(text.slice(scanCursor, matchIndex), scanState);
     scanCursor = matchIndex + matchText.length;
     if (scanState.type !== "normal") {
+      continue;
+    }
+    if (matchText === "case") {
+      if (context.caseDepth === 0) {
+        context.caseOuterClause = context.clause;
+        context.clause = "non-filtering";
+      }
+      context.caseDepth += 1;
+      continue;
+    }
+    if (matchText === "end" && context.caseDepth > 0) {
+      context.caseDepth -= 1;
+      if (context.caseDepth === 0) {
+        context.clause = context.caseOuterClause ?? "non-filtering";
+        context.caseOuterClause = null;
+      }
       continue;
     }
     if (matchText === "filter") {
@@ -599,7 +619,9 @@ const sqlScopeContextAfter = (
         break;
       case "where":
         context.clause =
-          context.aggregateFilterDepth > 0 ? "non-filtering" : "query-filter";
+          context.aggregateFilterDepth > 0 || context.caseDepth > 0
+            ? "non-filtering"
+            : "query-filter";
         break;
       case "or":
       case "not":
@@ -755,6 +777,15 @@ export default {
           return unwrapped;
         };
 
+        const expressionTokenPaths = (value: unknown): SqlTemplateToken[][] => [
+          [
+            {
+              type: "expression",
+              value,
+            },
+          ],
+        ];
+
         const flattenSqlTemplate = (
           node: AstNode,
           ancestors: ReadonlySet<unknown> = new Set(),
@@ -776,17 +807,9 @@ export default {
             if (expression === undefined) {
               continue;
             }
-            const nestedPaths = flattenSqlExpression(
-              expression,
-              nextAncestors,
-            ) ?? [
-              [
-                {
-                  type: "expression",
-                  value: expression,
-                } satisfies SqlTemplateToken,
-              ],
-            ];
+            const nestedPaths =
+              flattenSqlExpression(expression, nextAncestors) ??
+              expressionTokenPaths(expression);
             paths = paths.flatMap((path) =>
               nestedPaths.map((nestedPath) => path.concat(nestedPath)),
             );
@@ -806,13 +829,35 @@ export default {
           if (resolved !== unwrapped) {
             const nextAncestors = new Set(ancestors);
             nextAncestors.add(unwrapped);
-            return flattenSqlExpression(resolved, nextAncestors);
+            return (
+              flattenSqlExpression(resolved, nextAncestors) ??
+              expressionTokenPaths(resolved)
+            );
           }
           if (!isAstNode(resolved)) {
             return null;
           }
           if (resolved.type === "TaggedTemplateExpression") {
             return flattenSqlTemplate(resolved, ancestors);
+          }
+          if (resolved.type === "SpreadElement") {
+            return flattenSqlExpression(resolved.argument, ancestors);
+          }
+          if (
+            resolved.type === "ArrayExpression" &&
+            Array.isArray(resolved.elements)
+          ) {
+            const nextAncestors = new Set(ancestors);
+            nextAncestors.add(resolved);
+            return flattenSqlSequence(resolved.elements, nextAncestors, true);
+          }
+          if (
+            resolved.type === "CallExpression" &&
+            Array.isArray(resolved.arguments)
+          ) {
+            const nextAncestors = new Set(ancestors);
+            nextAncestors.add(resolved);
+            return flattenSqlSequence(resolved.arguments, nextAncestors, false);
           }
           if (
             resolved.type === "SequenceExpression" &&
@@ -838,15 +883,35 @@ export default {
               : [resolved.left, resolved.right];
           return branches.flatMap(
             (branch) =>
-              flattenSqlExpression(branch, nextAncestors) ?? [
-                [
-                  {
-                    type: "expression",
-                    value: branch,
-                  } satisfies SqlTemplateToken,
-                ],
-              ],
+              flattenSqlExpression(branch, nextAncestors) ??
+              expressionTokenPaths(branch),
           );
+        };
+
+        const flattenSqlSequence = (
+          expressions: readonly unknown[],
+          ancestors: ReadonlySet<unknown>,
+          isKnownSqlSequence: boolean,
+        ): SqlTemplateToken[][] | null => {
+          let hasSqlStructure = isKnownSqlSequence;
+          let paths: SqlTemplateToken[][] = [[]];
+          for (const expression of expressions) {
+            if (expression === null) {
+              continue;
+            }
+            const flattened = flattenSqlExpression(expression, ancestors);
+            if (flattened) {
+              hasSqlStructure = true;
+            }
+            const expressionPaths =
+              flattened ?? expressionTokenPaths(expression);
+            paths = paths.flatMap((path) =>
+              expressionPaths.map((expressionPath) =>
+                path.concat(expressionPath),
+              ),
+            );
+          }
+          return hasSqlStructure ? paths : null;
         };
 
         return {
