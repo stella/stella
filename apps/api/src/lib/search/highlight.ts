@@ -53,11 +53,8 @@ const normalizeSourceWithSpans = (
   let pendingWhitespace: SourceSpan | null = null;
 
   for (const match of source.matchAll(NORMALIZATION_UNIT)) {
-    const value = match.at(0);
+    const value = match[0];
     const start = match.index;
-    if (value === undefined || start === undefined) {
-      continue;
-    }
     const span = { start, end: start + value.length };
     if (SEARCH_WHITESPACE.test(value)) {
       pendingWhitespace = pendingWhitespace
@@ -76,8 +73,10 @@ const normalizeSourceWithSpans = (
     }
     pendingWhitespace = null;
     text += normalized;
-    for (let index = 0; index < normalized.length; index += 1) {
+    let remainingCodeUnits = normalized.length;
+    while (remainingCodeUnits > 0) {
       spans.push(span);
+      remainingCodeUnits -= 1;
     }
   }
 
@@ -141,7 +140,7 @@ const restoreFragment = ({
     fragment.text,
     searchFrom,
   );
-  if (normalizedStart < 0) {
+  if (normalizedStart === -1) {
     return null;
   }
   const normalizedEnd = normalizedStart + fragment.text.length;

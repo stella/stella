@@ -19,6 +19,6 @@ test("every pg-fts case-law projection read rechecks redistribution", async () =
 
   expect(projectionSegments.length).toBeGreaterThan(0);
   for (const segment of projectionSegments) {
-    expect(segment).toContain("${redistributableSourceJoin}");
+    expect(segment).toContain(`\${redistributableSourceJoin}`);
   }
 });

@@ -218,10 +218,10 @@ export const buildSearchPreviewQuery = ({
         FROM workspace_search_documents wsd
         WHERE wsd.workspace_id = ${resultId}
           AND wsd.organization_id = ${organizationId}
+          ${previewTextFilter(sql`wsd.tsv`, tsQuery)}
           ${workspaceSearchDocumentsAccessSql({
             ...workspaceScope,
           })}
-          ${previewTextFilter(sql`wsd.tsv`, tsQuery)}
         LIMIT 1
       `;
     case "contact":
@@ -237,11 +237,11 @@ export const buildSearchPreviewQuery = ({
         FROM contact_search_documents csd
         WHERE csd.contact_id = ${resultId}
           AND csd.organization_id = ${organizationId}
+          ${previewTextFilter(sql`csd.tsv`, tsQuery)}
           ${contactWorkspaceAccessSql({
             organizationId,
             ...workspaceScope,
           })}
-          ${previewTextFilter(sql`csd.tsv`, tsQuery)}
         LIMIT 1
       `;
     case "case-law":
@@ -275,13 +275,13 @@ export const buildSearchPreviewQuery = ({
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
         WHERE cst.thread_id = ${resultId}
+          ${previewTextFilter(sql`cst.tsv`, tsQuery)}
           AND ${chatThreadScopeSql({
             userId,
             organizationId,
             accessibleWorkspaceIds,
             selectedWorkspaceIds: [],
           })}
-          ${previewTextFilter(sql`cst.tsv`, tsQuery)}
         LIMIT 1
       `;
     case "document":
@@ -302,10 +302,10 @@ export const buildSearchPreviewQuery = ({
         WHERE sd.entity_id = ${resultId}
           AND sd.kind = ${type}
           AND sd.organization_id = ${organizationId}
+          ${previewTextFilter(sql`sd.tsv`, tsQuery)}
           ${searchDocumentsAccessSql({
             ...workspaceScope,
           })}
-          ${previewTextFilter(sql`sd.tsv`, tsQuery)}
         LIMIT 1
       `;
     default: {

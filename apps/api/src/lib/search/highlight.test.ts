@@ -58,17 +58,13 @@ describe("search result highlighting", () => {
   test("restores ordered fragments and renders their paragraph separator", () => {
     expect(
       restoreOriginalSearchPreview({
-        headline:
-          `${HIGHLIGHT_START}first${HIGHLIGHT_STOP} resume.` +
-          SEARCH_PREVIEW_FRAGMENT_DELIMITER +
-          `قرار ${HIGHLIGHT_START}احمد${HIGHLIGHT_STOP}.`,
+        headline: `${HIGHLIGHT_START}first${HIGHLIGHT_STOP} resume.${SEARCH_PREVIEW_FRAGMENT_DELIMITER}قرار ${HIGHLIGHT_START}احمد${HIGHLIGHT_STOP}.`,
         maxLength: 1000,
         source: "First résumé. Omitted middle. قرار أَحْمَد.",
         useUnaccent: true,
       }),
     ).toBe(
-      `${HIGHLIGHT_START}First${HIGHLIGHT_STOP} résumé....\n\n` +
-        `قرار ${HIGHLIGHT_START}أَحْمَد${HIGHLIGHT_STOP}.`,
+      `${HIGHLIGHT_START}First${HIGHLIGHT_STOP} résumé....\n\nقرار ${HIGHLIGHT_START}أَحْمَد${HIGHLIGHT_STOP}.`,
     );
   });
 
