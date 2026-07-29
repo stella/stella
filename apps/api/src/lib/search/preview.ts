@@ -37,7 +37,13 @@ const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT =
   SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT -
   SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT -
   1;
-const SEARCH_PREVIEW_BODY_CHUNK_STEP = 24_000;
+// The stored tsvector proves the full document matches but does not retain
+// character offsets. Sample a fixed set of windows so request-time
+// normalization and tokenization cannot grow with document size. If none
+// contains the match, previewBodyExcerpt falls back to the leading window.
+const SEARCH_PREVIEW_BODY_SAMPLE_ORDINALS = [0, 1, 2, 3, 4] as const;
+const SEARCH_PREVIEW_BODY_SAMPLE_DIVISOR =
+  SEARCH_PREVIEW_BODY_SAMPLE_ORDINALS.length - 1;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 
 type PreviewTextConfig = {
@@ -69,6 +75,12 @@ const normalizeCaseLawPreviewText = (text: SQL): SQL => sql`
   END
 `;
 
+const previewBodySampleRows = (): SQL =>
+  sql.join(
+    SEARCH_PREVIEW_BODY_SAMPLE_ORDINALS.map((ordinal) => sql`(${ordinal})`),
+    sql`, `,
+  );
+
 const previewBodyExcerpt = ({
   body,
   normalize,
@@ -90,19 +102,23 @@ const previewBodyExcerpt = ({
           FOR ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}
         )
         FROM (
-          SELECT generate_series(
-            1,
-            greatest(
-              char_length(${body}) - ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT} + 1,
-              1
-            ),
-            ${SEARCH_PREVIEW_BODY_CHUNK_STEP}
-          ) AS chunk_start
-          UNION
-          SELECT greatest(
-            char_length(${body}) - ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT} + 1,
-            1
+          WITH body_metrics AS MATERIALIZED (
+            SELECT char_length(${body}) AS body_length
           )
+          SELECT DISTINCT
+            1 + (
+              greatest(
+                body_metrics.body_length -
+                  ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT},
+                0
+              ) *
+              samples.sample_ordinal /
+              ${SEARCH_PREVIEW_BODY_SAMPLE_DIVISOR}
+            )::integer AS chunk_start
+          FROM body_metrics
+          CROSS JOIN (
+            VALUES ${previewBodySampleRows()}
+          ) AS samples(sample_ordinal)
         ) AS chunks
         WHERE to_tsvector(
             ${regconfig},

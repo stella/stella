@@ -17,7 +17,8 @@ const resultId = "00000000-0000-4000-8000-000000000004";
 const SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT = 50_000;
 const SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT = 1000;
 const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT = 48_999;
-const SEARCH_PREVIEW_BODY_CHUNK_STEP = 24_000;
+const SEARCH_PREVIEW_BODY_SAMPLE_COUNT = 5;
+const SEARCH_PREVIEW_BODY_SAMPLE_DIVISOR = SEARCH_PREVIEW_BODY_SAMPLE_COUNT - 1;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 
 const compilePreview = (
@@ -38,27 +39,65 @@ const compilePreview = (
 };
 
 describe("search preview authorization scope", () => {
-  test("bounds the selected source while searching the entire body", () => {
+  test("bounds source and passage-location work independently of body length", () => {
     const compiled = compilePreview("document");
     expect(compiled.params).toContain(SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT);
     expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHARACTER_LIMIT);
-    expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHUNK_STEP);
+    expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_SAMPLE_DIVISOR);
     expect(compiled.params).toContain(SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT);
     expect(compiled.sql).toContain("CASE");
-    expect(compiled.sql).toContain("generate_series");
+    expect(compiled.sql).not.toContain("generate_series");
     expect(compiled.sql).toContain("char_length(sd.searchable_text)");
     expect(compiled.sql).toContain("greatest");
-    expect(compiled.sql).toContain("UNION");
+    expect(compiled.sql).toContain("body_metrics AS MATERIALIZED");
+    expect(compiled.sql).toContain("VALUES");
+    expect(compiled.sql).toContain("samples(sample_ordinal)");
     expect(compiled.sql).toContain("to_tsvector");
     expect(compiled.sql).toContain("|| ' ' ||");
+    for (
+      let ordinal = 0;
+      ordinal < SEARCH_PREVIEW_BODY_SAMPLE_COUNT;
+      ordinal += 1
+    ) {
+      expect(compiled.params).toContain(ordinal);
+    }
     expect(
       SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT +
         1 +
         SEARCH_PREVIEW_BODY_CHARACTER_LIMIT,
     ).toBe(SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT);
-    expect(SEARCH_PREVIEW_BODY_CHUNK_STEP).toBeLessThanOrEqual(
-      SEARCH_PREVIEW_BODY_CHARACTER_LIMIT,
-    );
+    expect(
+      SEARCH_PREVIEW_BODY_SAMPLE_COUNT * SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT,
+    ).toBe(250_000);
+    expect(compiled.sql.match(/samples\.sample_ordinal/gu)?.length).toBe(1);
+  });
+
+  test("uses the same fixed-cardinality locator for every searchable projection", () => {
+    const resultTypes = [
+      "matter",
+      "contact",
+      "case-law",
+      "chat",
+      "document",
+      "folder",
+      "task",
+      "message",
+      "link",
+    ] as const satisfies readonly GlobalSearchResultType[];
+
+    for (const type of resultTypes) {
+      const compiled = compilePreview(type);
+      expect(compiled.sql).not.toContain("generate_series");
+      expect(compiled.sql).toContain("body_metrics AS MATERIALIZED");
+      expect(
+        compiled.params.filter(
+          (parameter) =>
+            typeof parameter === "number" &&
+            parameter >= 0 &&
+            parameter < SEARCH_PREVIEW_BODY_SAMPLE_COUNT,
+        ).length,
+      ).toBeGreaterThanOrEqual(SEARCH_PREVIEW_BODY_SAMPLE_COUNT);
+    }
   });
 
   test("matches document passages with the indexed normalization and config", () => {
