@@ -137,6 +137,12 @@ const unsafeJoinedPrivateFragment = (() => {
   return sql`SELECT * ${sql.join(privateFragments)}`;
 })();
 
+const unsafeSplitJoinedPrivateFragment = (() => {
+  const privateFragments = [sql`FROM search_`, sql`documents sd`];
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves no-separator sql.join preserves exact runtime text
+  return sql`SELECT * ${sql.join(privateFragments)}`;
+})();
+
 const unsafeJoinedMultiBranch = (() => {
   const branches = [
     sql`* FROM search_documents sd`,
@@ -220,6 +226,24 @@ const unsafeScopeInConditionalSibling = (() => {
 const unsafeConditionalInterpolatedEntity = sql`
   SELECT *
   FROM ${enabled ? searchDocuments : sql`entities`} sd
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a parenthesized joined-table expression cannot hide a private projection
+const unsafeParenthesizedJoinedEntity = sql`
+  SELECT *
+  FROM (search_documents sd CROSS JOIN entities e) joined_entities
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves nested parenthesized joined-table expressions cannot hide a private projection
+const unsafeNestedParenthesizedJoinedEntity = sql`
+  SELECT *
+  FROM ((search_documents sd CROSS JOIN entities e)) joined_entities
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves interpolated tables leading parenthesized joins remain protected
+const unsafeParenthesizedJoinedInterpolatedEntity = sql`
+  SELECT *
+  FROM (${searchDocuments} sd CROSS JOIN entities e) joined_entities
 `;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a fixed scope alias cannot authorize a differently aliased private projection
@@ -313,6 +337,18 @@ const unsafeScopeDistinctFromTrue = sql`
   WHERE (true ${entityWorkspaceFilter}) IS DISTINCT FROM TRUE
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves false Boolean membership cannot invert an approved scope
+const unsafeScopeInFalseMembership = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) IN (FALSE)
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves NOT IN true cannot invert an approved scope
+const unsafeScopeNotInTrueMembership = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) NOT IN (TRUE)
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a nested query cannot authorize an outer private read through an alias shadow
 const unsafeScopeInNestedQuery = sql`
   SELECT sd.*
@@ -390,6 +426,16 @@ const scopedTestedAsTrue = sql`
   WHERE (true ${entityWorkspaceFilter}) IS TRUE
 `;
 
+const scopedInTrueMembership = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) IN (TRUE)
+`;
+
+const scopedNotInFalseMembership = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) NOT IN (FALSE)
+`;
+
 const scopedNestedPrivateRead = sql`
   SELECT EXISTS (
     SELECT 1
@@ -406,12 +452,24 @@ const scopedComposedRead = (() => {
 
 const scopedJoinedPrivateFragment = (() => {
   const fragments = [
-    sql`FROM search_documents sd`,
-    sql`WHERE true`,
+    sql`FROM search_documents sd `,
+    sql`WHERE true `,
     entityWorkspaceFilter,
   ];
   return sql`SELECT * ${sql.join(fragments)}`;
 })();
+
+const scopedParenthesizedJoinedEntity = sql`
+  SELECT *
+  FROM (search_documents sd CROSS JOIN entities e) joined_entities
+  WHERE true ${entityWorkspaceFilter}
+`;
+
+const scopedParenthesizedJoinedInterpolatedEntity = sql`
+  SELECT *
+  FROM (${searchDocuments} sd CROSS JOIN entities e) joined_entities
+  WHERE true ${entityWorkspaceFilter}
+`;
 
 const scopedJoinedMultiBranch = (() => {
   const branches = [
@@ -506,6 +564,7 @@ void [
   unsafeCommaOnlyInterpolatedEntity,
   unsafeComposedPrivateRead,
   unsafeJoinedPrivateFragment,
+  unsafeSplitJoinedPrivateFragment,
   unsafeJoinedMultiBranch,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
@@ -521,6 +580,9 @@ void [
   unsafeSequencePrivateFragment,
   unsafeScopeInConditionalSibling,
   unsafeConditionalInterpolatedEntity,
+  unsafeParenthesizedJoinedEntity,
+  unsafeNestedParenthesizedJoinedEntity,
+  unsafeParenthesizedJoinedInterpolatedEntity,
   unsafeWrongProjectionAlias,
   unsafeMultiBranch,
   unsafeScopeInLaterBranch,
@@ -534,6 +596,8 @@ void [
   unsafeScopeTestedAsFalse,
   unsafeScopeComparedToFalse,
   unsafeScopeDistinctFromTrue,
+  unsafeScopeInFalseMembership,
+  unsafeScopeNotInTrueMembership,
   unsafeScopeInNestedQuery,
   unsafeScopeInSiblingQuery,
   scopedEntity,
@@ -547,9 +611,13 @@ void [
   scopedAfterFunctionArgument,
   scopedAfterNestedQuery,
   scopedTestedAsTrue,
+  scopedInTrueMembership,
+  scopedNotInFalseMembership,
   scopedNestedPrivateRead,
   scopedComposedRead,
   scopedJoinedPrivateFragment,
+  scopedParenthesizedJoinedEntity,
+  scopedParenthesizedJoinedInterpolatedEntity,
   scopedJoinedMultiBranch,
   scopedRawJoinedMultiBranch,
   scopedOpaquePrivateFragment,

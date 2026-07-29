@@ -203,6 +203,22 @@ const mergeAdjacentSqlTextTokens = (
   return merged;
 };
 
+const concatenateSqlTokenPaths = (
+  left: readonly SqlTemplateToken[],
+  right: readonly SqlTemplateToken[],
+): SqlTemplateToken[] => {
+  const leftTail = left.at(-1);
+  const rightHead = right.at(0);
+  if (leftTail?.type !== "text" || rightHead?.type !== "text") {
+    return left.concat(right);
+  }
+  return [
+    ...left.slice(0, -1),
+    { type: "text", value: leftTail.value + rightHead.value },
+    ...right.slice(1),
+  ];
+};
+
 const SQL_ALIAS_STOP_WORDS = new Set([
   "cross",
   "except",
@@ -241,7 +257,8 @@ const SQL_IDENTIFIER_PATTERN = `(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)`;
 const SQL_RELATION_PATH_PATTERN =
   `${SQL_IDENTIFIER_PATTERN}` + `(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*`;
 const SQL_RELATION_REFERENCE = new RegExp(
-  `(?:\\b(?:from|join|table)\\s+|,\\s*)(?:only\\s+)?` +
+  `(?:\\b(?:from|join|table)\\s+|,\\s*)` +
+    `(?:only\\s+)?(?:\\(\\s*)*(?:only\\s+)?` +
     `(${SQL_RELATION_PATH_PATTERN})` +
     `(?:\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN}))?`,
   "giu",
@@ -344,10 +361,16 @@ const hasProjectionReadIntroducer = (
     }
     precedingText = token.value + precedingText;
   }
-  if (/\b(?:from|join|table)\s+(?:only\s+)?$/iu.test(precedingText)) {
+  if (
+    /\b(?:from|join|table)\s+(?:only\s+)?(?:\(\s*)*(?:only\s+)?$/iu.test(
+      precedingText,
+    )
+  ) {
     return true;
   }
-  const commaIndex = precedingText.search(/,\s*(?:only\s+)?$/iu);
+  const commaIndex = precedingText.search(
+    /,\s*(?:only\s+)?(?:\(\s*)*(?:only\s+)?$/iu,
+  );
   return (
     commaIndex >= 0 && commaIntroducesFromRelation(precedingText, commaIndex)
   );
@@ -774,7 +797,12 @@ const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
   SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
 
 const SQL_SCOPE_CONTEXT_TOKEN =
-  /[()]|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
+  /[()]|\b(?:not\s+)?in\s*\(\s*(?:false|true)\s*\)|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
+
+const INVERSE_BOOLEAN_MEMBERSHIP_TESTS = new Set(["in(false)", "notin(true)"]);
+
+const isInverseBooleanMembershipTest = (value: string): boolean =>
+  INVERSE_BOOLEAN_MEMBERSHIP_TESTS.has(value.replaceAll(/\s/gu, ""));
 
 const SQL_BOOLEAN_GROUPING_PREFIXES = new Set([
   "and",
@@ -891,6 +919,12 @@ const sqlScopeContextAfter = (
       } else if (context.functionArgumentDepth > 1) {
         context.functionArgumentDepth -= 1;
       }
+      continue;
+    }
+    if (/^(?:not\s+)?in\b/iu.test(matchText)) {
+      context.hasNonConjunctiveFilter ||=
+        context.clause !== "non-filtering" &&
+        isInverseBooleanMembershipTest(matchText);
       continue;
     }
     if (!isSqlClauseKeyword(matchText)) {
@@ -1250,7 +1284,11 @@ export default {
           ) {
             const nextAncestors = new Set(ancestors);
             nextAncestors.add(resolved);
-            return flattenSqlSequence(resolved.elements, nextAncestors, true);
+            return flattenSqlSequence({
+              ancestors: nextAncestors,
+              expressions: resolved.elements,
+              isKnownSqlSequence: true,
+            });
           }
           if (
             resolved.type === "CallExpression" &&
@@ -1275,7 +1313,12 @@ export default {
               }
               const separator = resolved.arguments.at(1);
               if (separator === undefined) {
-                return flattenSqlSequence(elements, nextAncestors, true);
+                return flattenSqlSequence({
+                  ancestors: nextAncestors,
+                  expressions: elements,
+                  isKnownSqlSequence: true,
+                  textBoundary: "exact",
+                });
               }
               const separatorPaths = flattenSqlExpression(
                 separator,
@@ -1284,12 +1327,13 @@ export default {
               if (separatorPaths === null) {
                 return flattenSqlAlternatives(elements, nextAncestors);
               }
-              return flattenSqlSequence(
-                elements,
-                nextAncestors,
-                true,
+              return flattenSqlSequence({
+                ancestors: nextAncestors,
+                expressions: elements,
+                isKnownSqlSequence: true,
                 separatorPaths,
-              );
+                textBoundary: "exact",
+              });
             }
             return flattenSqlAlternatives(resolved.arguments, nextAncestors);
           }
@@ -1322,12 +1366,21 @@ export default {
           );
         };
 
-        const flattenSqlSequence = (
-          expressions: readonly unknown[],
-          ancestors: ReadonlySet<unknown>,
-          isKnownSqlSequence: boolean,
-          separatorPaths: readonly SqlTemplateToken[][] = [[]],
-        ): SqlTemplateToken[][] | null => {
+        type FlattenSqlSequenceOptions = {
+          ancestors: ReadonlySet<unknown>;
+          expressions: readonly unknown[];
+          isKnownSqlSequence: boolean;
+          separatorPaths?: readonly SqlTemplateToken[][] | undefined;
+          textBoundary?: "exact" | "independent" | undefined;
+        };
+
+        const flattenSqlSequence = ({
+          ancestors,
+          expressions,
+          isKnownSqlSequence,
+          separatorPaths = [[]],
+          textBoundary = "independent",
+        }: FlattenSqlSequenceOptions): SqlTemplateToken[][] | null => {
           let hasSqlStructure = isKnownSqlSequence;
           let hasExpression = false;
           let paths: SqlTemplateToken[][] = [[]];
@@ -1344,13 +1397,17 @@ export default {
             if (hasExpression) {
               paths = paths.flatMap((path) =>
                 separatorPaths.map((separatorPath) =>
-                  path.concat(separatorPath),
+                  textBoundary === "exact"
+                    ? concatenateSqlTokenPaths(path, separatorPath)
+                    : path.concat(separatorPath),
                 ),
               );
             }
             paths = paths.flatMap((path) =>
               expressionPaths.map((expressionPath) =>
-                path.concat(expressionPath),
+                textBoundary === "exact"
+                  ? concatenateSqlTokenPaths(path, expressionPath)
+                  : path.concat(expressionPath),
               ),
             );
             hasExpression = true;
