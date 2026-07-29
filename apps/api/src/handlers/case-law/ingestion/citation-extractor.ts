@@ -121,7 +121,10 @@ export const bareCitationKey = (text: string): string =>
   normalizeDashes(stripPrefix(text.trim()))
     .toLowerCase()
     .replaceAll(/\s+/gu, " ")
-    .replaceAll(/\s*\/\s*/gu, "/")
+    // After whitespace collapses, slash spacing is at most one space per
+    // side; plain string replaces keep the scan linear.
+    .replaceAll(" /", "/")
+    .replaceAll("/ ", "/")
     .trim();
 
 type DecisionIdentity = {
