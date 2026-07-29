@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -127,8 +127,7 @@ export const AIPromptInput = ({
     }
     detached(fetchNextSkillPage(), "AIPromptInput");
   }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
-  const slashItemsRef = useRef<SlashItem[]>([]);
-  slashItemsRef.current = useMemo<SlashItem[]>(
+  const slashItems = useMemo<SlashItem[]>(
     () =>
       buildChatSlashItems({
         shortcuts: slashShortcutRows,
@@ -136,6 +135,7 @@ export const AIPromptInput = ({
       }),
     [slashShortcutRows, skillPages],
   );
+  const getSlashItems = useLatestCallback(() => slashItems);
 
   const readValue = (editor: Editor): string =>
     valueFormat === "text" ? editor.getText() : editor.getHTML();
@@ -165,7 +165,7 @@ export const AIPromptInput = ({
       }),
       ...(mentionExtension ? [mentionExtension] : []),
       PromptSlash.configure({
-        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
+        suggestion: createPromptSlashSuggestion(getSlashItems),
       }),
       History,
     ],
