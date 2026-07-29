@@ -154,4 +154,35 @@ describe("createEntityVersionFromBuffer", () => {
     }
     expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
   });
+
+  test("rolls back persistence when the in-transaction callback fails", async () => {
+    writeFileVersionMock.mockImplementation(async (input) => {
+      const result = {
+        status: "ok" as const,
+        entityVersionId: input.entityVersionId,
+        fieldId: input.fieldId,
+        versionNumber: 2,
+      };
+      await input.afterWrite(result);
+      return result;
+    });
+
+    const attempted = await Result.tryPromise({
+      try: async () =>
+        await createEntityVersionFromBuffer({
+          ...baseInput,
+          afterWrite: async () => {
+            throw new Error("audit failed");
+          },
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted) && attempted.error instanceof Error) {
+      expect(attempted.error.message).toBe("audit failed");
+    }
+    expect(s3DeleteMock).toHaveBeenCalledWith("org_1/ws_1/file_1.docx");
+    expect(processExtractionMock).not.toHaveBeenCalled();
+  });
 });

@@ -53,6 +53,7 @@ describe("createEntityFromBuffer", () => {
   beforeEach(() => {
     s3WriteMock.mockClear();
     s3DeleteMock.mockClear();
+    processExtractionMock.mockClear();
   });
 
   test("writes an entity create audit log with the DB insert", async () => {
@@ -202,6 +203,64 @@ describe("createEntityFromBuffer", () => {
     expect(s3WriteMock).toHaveBeenCalledTimes(1);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  test("cleans up uploaded bytes when the in-transaction callback fails", async () => {
+    const tx = {
+      query: {
+        properties: {
+          findMany: async () => [
+            { id: propertyId, content: { type: "file" as const } },
+          ],
+        },
+        workspaces: {
+          findFirst: async () => ({ reference: null }),
+        },
+      },
+      $count: async () => 0,
+      select: createParentSelect({ parentKind: "folder" }),
+      insert: (table: unknown) => ({
+        values: () =>
+          table === documentCounters
+            ? {
+                onConflictDoUpdate: () => ({
+                  returning: async () => [{ lastValue: 1 }],
+                }),
+              }
+            : undefined,
+      }),
+      update: () => ({
+        set: () => ({ where: async () => {} }),
+      }),
+    };
+    const { scopedDb } = createScopedDbMock(tx);
+
+    const attempted = await Result.tryPromise({
+      try: async () =>
+        await createEntityFromBuffer({
+          scopedDb,
+          organizationId,
+          workspaceId,
+          userId,
+          recordAuditEvent: async () => undefined,
+          buffer: new TextEncoder().encode("docx bytes"),
+          fileName: "Generated Agreement.docx",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          parentId,
+          afterCreate: async () => {
+            throw new Error("audit failed");
+          },
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(attempted)).toBe(true);
+    if (Result.isError(attempted) && attempted.error instanceof Error) {
+      expect(attempted.error.message).toBe("audit failed");
+    }
+    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    expect(processExtractionMock).not.toHaveBeenCalled();
   });
 });
 

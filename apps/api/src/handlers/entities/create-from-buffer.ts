@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { eq } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { validateParentIdForInsert } from "@/api/handlers/entities/validate-parent-id";
@@ -38,6 +39,9 @@ type CreateEntityFromBufferInput = {
   mimeType: string;
   parentId?: SafeId<"entity"> | null | undefined;
   scanWarnings?: string[] | undefined;
+  afterCreate?:
+    | ((tx: Transaction, result: CreateEntityFromBufferValue) => Promise<void>)
+    | undefined;
 };
 
 class EntityLimitError extends TaggedError("EntityLimitError")<{
@@ -52,12 +56,14 @@ class InvalidParentError extends TaggedError("InvalidParentError")<{
   message: string;
 }>() {}
 
+type CreateEntityFromBufferValue = {
+  entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
+  fileName: string;
+};
+
 export type CreateEntityFromBufferResult = Result<
-  {
-    entityId: SafeId<"entity">;
-    fieldId: SafeId<"field">;
-    fileName: string;
-  },
+  CreateEntityFromBufferValue,
   EntityLimitError | InvalidParentError | MissingFilePropertyError
 >;
 
@@ -79,6 +85,7 @@ export const createEntityFromBuffer = async ({
   mimeType,
   parentId,
   scanWarnings,
+  afterCreate,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
   const fileId = allocateFileObject();
@@ -228,6 +235,8 @@ export const createEntityFromBuffer = async ({
           },
         },
       });
+
+      await afterCreate?.(tx, { entityId, fieldId, fileName });
     });
   } catch (error) {
     await Promise.all(s3Keys.map(async (k) => await getS3().delete(k)));

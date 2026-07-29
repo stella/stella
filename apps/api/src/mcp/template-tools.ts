@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import { roles } from "@stll/permissions";
 
+import type { Transaction } from "@/api/db/root";
 import { templates } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import { createStoredTemplate } from "@/api/handlers/templates/create-template-service";
@@ -874,8 +875,8 @@ const saveFilledTemplateArgsSchema = v.strictObject({
   action: v.picklist(["create_document", "create_version"]),
   template_id: v.pipe(v.string(), v.minLength(1)),
   matter_id: v.pipe(v.string(), v.minLength(1)),
-  entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+  entity_id: v.optional(v.pipe(v.string(), v.uuid())),
+  parent_id: v.optional(v.pipe(v.string(), v.uuid())),
   name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
   values: v.record(v.string(), v.unknown()),
 });
@@ -1116,6 +1117,19 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     requested: input.name,
     fallback: filled.fileName,
   });
+  const recordPersistedFill = async (tx: Transaction): Promise<void> =>
+    await recordTemplateFill({
+      tx,
+      templateId,
+      organizationId: context.organizationId,
+      userId: context.userId,
+      format: "docx",
+      unmatchedCount: filled.unmatchedPlaceholders.length,
+      unusedCount: filled.unusedValues.length,
+      structureErrors: filled.structureErrors,
+      workspaceId,
+      recordAuditEvent,
+    });
   type StoredFilledTemplate = {
     entityId: string;
     fileName: string;
@@ -1141,6 +1155,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
             input.parent_id === undefined
               ? undefined
               : brandPersistedEntityId(input.parent_id),
+          afterCreate: async (tx) => await recordPersistedFill(tx),
         });
         return Result.isError(created)
           ? { status: "error", message: created.error.message }
@@ -1160,6 +1175,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
         fileName,
         mimeType: DOCX_MIME_TYPE,
         source: null,
+        afterWrite: async (tx) => await recordPersistedFill(tx),
       });
       return Result.isError(created)
         ? { status: "error", message: created.error.message }
@@ -1174,24 +1190,6 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
     return errorResult(persistence.value.message);
   }
   const stored = persistence.value.value;
-
-  await context
-    .scopedDb(
-      async (tx) =>
-        await recordTemplateFill({
-          tx,
-          templateId,
-          organizationId: context.organizationId,
-          userId: context.userId,
-          format: "docx",
-          unmatchedCount: filled.unmatchedPlaceholders.length,
-          unusedCount: filled.unusedValues.length,
-          structureErrors: filled.structureErrors,
-          workspaceId,
-          recordAuditEvent,
-        }),
-    )
-    .catch(captureError);
 
   return textResult({
     action: input.action,

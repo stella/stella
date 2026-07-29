@@ -1,8 +1,10 @@
 import { Result, TaggedError } from "better-result";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { writeFileVersion } from "@/api/handlers/entities/write-file-version";
+import type { WriteFileVersionResult } from "@/api/handlers/entities/write-file-version";
 import { allocateFileObject } from "@/api/handlers/files/file-object-ids";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -43,6 +45,12 @@ type CreateEntityVersionFromBufferInput = {
   mimeType: string;
   source: DocumentSource | null;
   scanWarnings?: string[] | undefined;
+  afterWrite?:
+    | ((
+        tx: Transaction,
+        result: Extract<WriteFileVersionResult, { status: "ok" }>,
+      ) => Promise<void>)
+    | undefined;
 };
 
 export type CreateEntityVersionFromBufferResult = Result<
@@ -79,6 +87,7 @@ export const createEntityVersionFromBuffer = async ({
   mimeType,
   source,
   scanWarnings,
+  afterWrite,
 }: CreateEntityVersionFromBufferInput): Promise<CreateEntityVersionFromBufferResult> => {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
@@ -112,6 +121,9 @@ export const createEntityVersionFromBuffer = async ({
         sha256Hex,
         source,
         scanWarnings,
+        ...(afterWrite !== undefined && {
+          afterWrite: async (result) => await afterWrite(tx, result),
+        }),
       }),
   );
   if (Result.isError(writeResult)) {

@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -152,7 +153,7 @@ const createScopedDb = (
               if (Object.hasOwn(entityTargets, id)) {
                 return entityTargets[id];
               }
-              if (id === "folder_1") {
+              if (id === FOLDER_ID) {
                 return { kind: "folder" };
               }
               return {
@@ -195,6 +196,14 @@ const createContext = ({
 });
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const ENTITY_ID = "00000000-0000-4000-8000-000000000001";
+const FOLDER_ID = "00000000-0000-4000-8000-000000000002";
+const MISSING_FOLDER_ID = "00000000-0000-4000-8000-000000000003";
+const NON_FOLDER_ID = "00000000-0000-4000-8000-000000000004";
+const MISSING_VERSION_ID = "00000000-0000-4000-8000-000000000005";
+const READ_ONLY_VERSION_ID = "00000000-0000-4000-8000-000000000006";
+const NON_FILE_VERSION_ID = "00000000-0000-4000-8000-000000000007";
+const fakeTransaction = asTestRaw<Transaction>({});
 
 /** A real, minimal valid DOCX (well-formed word/document.xml) as base64, so
  *  save_template (create) exercises the real validateDocxBuffer — no module mock to
@@ -749,20 +758,21 @@ describe("MCP template tools", () => {
       unmatchedPlaceholders: [],
       unusedValues: ["unused"],
     });
-    createEntityFromBufferMock.mockResolvedValue(
-      Result.ok({
+    createEntityFromBufferMock.mockImplementation(async (input) => {
+      await input.afterCreate(fakeTransaction);
+      return Result.ok({
         entityId: "entity_new",
         fieldId: "field_new",
         fileName: "Example Lease.docx",
-      }),
-    );
+      });
+    });
 
     const result = await handleMcpToolCall({
       args: {
         action: "create_document",
         template_id: "t1",
         matter_id: "ws_1",
-        parent_id: "folder_1",
+        parent_id: FOLDER_ID,
         name: "Example Lease",
         values: { "tenant.name": "ACME" },
       },
@@ -773,10 +783,12 @@ describe("MCP template tools", () => {
     expect(createEntityFromBufferMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws_1",
-        parentId: "folder_1",
+        parentId: FOLDER_ID,
         fileName: "Example Lease.docx",
+        afterCreate: expect.any(Function),
       }),
     );
+    expect(recordTemplateFillMock).toHaveBeenCalledTimes(1);
     expect(parseToolPayload(result)).toEqual({
       action: "create_document",
       entityId: "entity_new",
@@ -801,22 +813,23 @@ describe("MCP template tools", () => {
         },
       ],
     });
-    createEntityVersionFromBufferMock.mockResolvedValue(
-      Result.ok({
-        entityId: "entity_1",
+    createEntityVersionFromBufferMock.mockImplementation(async (input) => {
+      await input.afterWrite(fakeTransaction);
+      return Result.ok({
+        entityId: ENTITY_ID,
         entityVersionId: "version_2",
         fieldId: "field_2",
         fileName: "lease.docx",
         versionNumber: 2,
-      }),
-    );
+      });
+    });
 
     const result = await handleMcpToolCall({
       args: {
         action: "create_version",
         template_id: "t1",
         matter_id: "ws_1",
-        entity_id: "entity_1",
+        entity_id: ENTITY_ID,
         values: { "tenant.name": "ACME" },
       },
       context: createContext(),
@@ -826,9 +839,10 @@ describe("MCP template tools", () => {
     expect(createEntityVersionFromBufferMock).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "ws_1",
-        entityId: "entity_1",
+        entityId: ENTITY_ID,
         fileName: "lease.docx",
         source: null,
+        afterWrite: expect.any(Function),
       }),
     );
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
@@ -845,7 +859,7 @@ describe("MCP template tools", () => {
     );
     expect(parseToolPayload(result)).toEqual({
       action: "create_version",
-      entityId: "entity_1",
+      entityId: ENTITY_ID,
       entityVersionId: "version_2",
       versionNumber: 2,
       fileName: "lease.docx",
@@ -885,6 +899,28 @@ describe("MCP template tools", () => {
       context: createContext({ memberRole: "intern" }),
       toolName: "save_filled_template",
     });
+    const malformedParent = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: "t1",
+        matter_id: "ws_1",
+        parent_id: "not-a-uuid",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+    const malformedEntity = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: "t1",
+        matter_id: "ws_1",
+        entity_id: "not-a-uuid",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
 
     expect(missingEntity.isError).toBe(true);
     expect(validationEnvelope(missingEntity)).toMatchObject({
@@ -900,20 +936,26 @@ describe("MCP template tools", () => {
       type: "text",
       text: "Forbidden",
     });
+    expect(validationEnvelope(malformedParent)).toMatchObject({
+      code: "validation_error",
+    });
+    expect(validationEnvelope(malformedEntity)).toMatchObject({
+      code: "validation_error",
+    });
     expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
   });
 
   test("save_filled_template preflights persisted targets before fill work", async () => {
     const invalidTargets = createScopedDb([], {
-      folder_missing: null,
-      not_a_folder: { kind: "document" },
-      version_missing: null,
-      version_read_only: {
+      [MISSING_FOLDER_ID]: null,
+      [NON_FOLDER_ID]: { kind: "document" },
+      [MISSING_VERSION_ID]: null,
+      [READ_ONLY_VERSION_ID]: {
         currentVersionId: "version_1",
         readOnly: true,
         currentVersion: { fields: [{ content: { type: "file" } }] },
       },
-      version_without_file: {
+      [NON_FILE_VERSION_ID]: {
         currentVersionId: "version_1",
         readOnly: false,
         currentVersion: { fields: [{ content: { type: "text" } }] },
@@ -926,7 +968,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: "t1",
         matter_id: "ws_1",
-        parent_id: "folder_missing",
+        parent_id: MISSING_FOLDER_ID,
         values: {},
       },
       context,
@@ -937,7 +979,7 @@ describe("MCP template tools", () => {
         action: "create_document",
         template_id: "t1",
         matter_id: "ws_1",
-        parent_id: "not_a_folder",
+        parent_id: NON_FOLDER_ID,
         values: {},
       },
       context,
@@ -948,7 +990,7 @@ describe("MCP template tools", () => {
         action: "create_version",
         template_id: "t1",
         matter_id: "ws_1",
-        entity_id: "version_missing",
+        entity_id: MISSING_VERSION_ID,
         values: {},
       },
       context,
@@ -959,7 +1001,7 @@ describe("MCP template tools", () => {
         action: "create_version",
         template_id: "t1",
         matter_id: "ws_1",
-        entity_id: "version_read_only",
+        entity_id: READ_ONLY_VERSION_ID,
         values: {},
       },
       context,
@@ -970,7 +1012,7 @@ describe("MCP template tools", () => {
         action: "create_version",
         template_id: "t1",
         matter_id: "ws_1",
-        entity_id: "version_without_file",
+        entity_id: NON_FILE_VERSION_ID,
         values: {},
       },
       context,
