@@ -252,7 +252,7 @@ function ConsentPage() {
           {hasError ? (
             <p className="text-destructive text-sm">{t("consent.error")}</p>
           ) : null}
-          <div className="border-border/64 flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+          <div className="border-border/64 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end">
             <Button
               className="w-full sm:w-auto"
               disabled={isPending}
