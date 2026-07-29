@@ -5040,6 +5040,123 @@ export const generatedRouteMap: RouteNode = {
                 schemaTruncated: false,
               },
             },
+            "export-create": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "chat", "export-create"],
+                capabilityId: "chat.export.create",
+                description:
+                  "Export one assistant chat message as a DOCX document with the selected citation style. Returns a short-lived download URL.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--thread-id",
+                    prop: "threadId",
+                    required: true,
+                    part: "params",
+                    partPath: "threadId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--message-id",
+                    prop: "messageId",
+                    required: true,
+                    part: "body",
+                    partPath: "messageId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--format",
+                    prop: "format",
+                    required: true,
+                    part: "body",
+                    partPath: "format",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--workspace-id",
+                    prop: "workspaceId",
+                    required: false,
+                    part: "query",
+                    partPath: "workspaceId",
+                  },
+                ],
+                inputOnly: ["body.citationStyle"],
+                paginated: false,
+                destructive: false,
+                scope: "chat",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["messageId", "format", "citationStyle"],
+                      properties: {
+                        messageId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        format: {
+                          const: "docx",
+                          type: "string",
+                        },
+                        citationStyle: {
+                          anyOf: [
+                            {
+                              const: "footnotes",
+                              type: "string",
+                            },
+                            {
+                              const: "inline",
+                              type: "string",
+                            },
+                            {
+                              const: "none",
+                              type: "string",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["threadId"],
+                      properties: {
+                        threadId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                    query: {
+                      type: "object",
+                      properties: {
+                        workspaceId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                schemaTruncated: false,
+              },
+            },
             "get-messages": {
               kind: "capability-leaf",
               spec: {
