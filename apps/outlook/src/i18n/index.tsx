@@ -6,6 +6,8 @@ import { createTranslator } from "use-intl/core";
 const OUTLOOK_LOCALE = "en";
 const messages = {
   outlook: {
+    aiDataNotice:
+      "AI actions send this email text to your organization's configured AI provider. Review every output before use.",
     aiUnavailable: "AI is unavailable right now",
     attachmentSelection: "Attachments",
     attachmentsSaved: "{count} attachment(s) saved.",
@@ -34,6 +36,7 @@ const messages = {
     noBody: "No body text available.",
     noMatterResults: "No matters matched.",
     openStella: "Open stella",
+    openSavedEmail: "Open saved email",
     openedReplyDraft: "Opened a reply draft.",
     readMode: "Read mode",
     refresh: "Refresh",
@@ -42,6 +45,7 @@ const messages = {
     saveErrorFallback: "Could not save email",
     saveFailed: "Save failed",
     saveSuccess: "Saved to matter",
+    saved: "Saved",
     saving: "Saving...",
     signInHint: "Sign in to stella in the browser, then return to Outlook.",
     stellaForOutlook: "stella for Outlook",

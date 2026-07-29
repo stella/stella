@@ -15,6 +15,7 @@ const APP_ROOT = path.resolve(import.meta.dirname, "..");
 const DIST_DIR = path.resolve(APP_ROOT, "dist");
 const DIST_ASSETS_DIR = path.resolve(DIST_DIR, "assets");
 const PUBLIC_ASSETS_DIR = path.resolve(APP_ROOT, "public", "assets");
+const PUBLIC_ROBOTS_PATH = path.resolve(APP_ROOT, "public", "robots.txt");
 
 const parseEnv = (): ManifestEnv => {
   const flag = process.argv.find((arg) => arg.startsWith("--env="));
@@ -91,6 +92,7 @@ for (const fileName of readdirSync(PUBLIC_ASSETS_DIR)) {
     path.resolve(DIST_ASSETS_DIR, fileName),
   );
 }
+copyFileSync(PUBLIC_ROBOTS_PATH, path.resolve(DIST_DIR, "robots.txt"));
 
 writeFileSync(
   path.resolve(DIST_DIR, "taskpane.html"),
@@ -100,6 +102,7 @@ writeFileSync(
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
     <title>stella for Outlook</title>
     <script type="text/javascript">
       window.__STELLA_HISTORY__ = {
@@ -132,6 +135,7 @@ writeFileSync(
   <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="robots" content="noindex, nofollow" />
     <script
       type="text/javascript"
       src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"

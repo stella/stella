@@ -9,6 +9,10 @@ declare namespace Office {
     readonly Text: "text";
   };
 
+  const EventType: {
+    readonly ItemChanged: "itemChanged";
+  };
+
   type AsyncResultStatusValue =
     (typeof AsyncResultStatus)[keyof typeof AsyncResultStatus];
 
@@ -93,7 +97,17 @@ declare namespace Office {
   };
 
   type Mailbox = {
+    addHandlerAsync?: (
+      eventType: (typeof EventType)[keyof typeof EventType],
+      handler: (event: { type: string }) => void,
+      callback?: AsyncCallback<undefined>,
+    ) => void;
     item?: MailboxItem;
+    removeHandlerAsync?: (
+      eventType: (typeof EventType)[keyof typeof EventType],
+      options: { handler: (event: { type: string }) => void },
+      callback?: AsyncCallback<undefined>,
+    ) => void;
     userProfile?: {
       displayName?: string;
       emailAddress?: string;

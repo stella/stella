@@ -15,6 +15,7 @@ import type {
 // it once) the way the web upload flow does.
 const EMAIL_FILE_PROPERTY_NAME = "Documents";
 const S3_UPLOAD_TIMEOUT_MS = 60_000;
+const EMAIL_FINALIZE_TIMEOUT_MS = 120_000;
 
 const entitiesQueryKey = (workspaceId: SafeId<"workspace">) => [
   "entities",
@@ -137,7 +138,10 @@ export const ingestEmailToMatter = async ({
 
   const finalize = await api
     .uploads({ workspaceId })({ uploadId: presign.data.uploadId })
-    .finalize.post({ queryKey: entitiesQueryKey(workspaceId) }, withTimeout());
+    .finalize.post(
+      { queryKey: entitiesQueryKey(workspaceId) },
+      withTimeout(EMAIL_FINALIZE_TIMEOUT_MS),
+    );
   if (finalize.error) {
     throw toAPIError(finalize.error);
   }

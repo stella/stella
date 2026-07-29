@@ -1,8 +1,12 @@
 import { useState } from "react";
 
-import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/api-error";
+import { Result } from "better-result";
+
+import { api, withTimeout } from "@/lib/api";
+import { toAPIError, userErrorMessage } from "@/lib/api-error";
 import type { MailSnapshot } from "@/types";
+
+const AI_REQUEST_TIMEOUT_MS = 70_000;
 
 export type AIDraftState =
   | { type: "idle" }
@@ -27,16 +31,28 @@ export const useAIDraft = (errorFallback: string): UseAIDraft => {
   const draftReply = async ({ intent, language, snapshot }: DraftArgs) => {
     setState({ type: "loading" });
     const originalFrom = snapshot.from?.email;
-    const { data, error } = await api.ai["draft-email"].post({
-      intent,
-      originalBody: snapshot.bodyText,
-      originalSubject: snapshot.subject,
-      ...(originalFrom ? { originalFrom } : {}),
-      ...(language ? { language } : {}),
-    });
+    const result = await Result.tryPromise(
+      async () =>
+        await api.ai["draft-email"].post(
+          {
+            intent,
+            originalBody: snapshot.bodyText,
+            originalSubject: snapshot.subject,
+            ...(originalFrom ? { originalFrom } : {}),
+            ...(language ? { language } : {}),
+          },
+          withTimeout(AI_REQUEST_TIMEOUT_MS),
+        ),
+    );
+    if (Result.isError(result)) {
+      setState({ message: errorFallback, type: "error" });
+      return;
+    }
+    const { data, error } = result.value;
     if (error) {
+      const apiError = toAPIError(error);
       setState({
-        message: toAPIError(error).message || errorFallback,
+        message: userErrorMessage(apiError, errorFallback),
         type: "error",
       });
       return;

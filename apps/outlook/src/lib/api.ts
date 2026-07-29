@@ -20,6 +20,6 @@ const eden = treaty<API>(env.apiBaseUrl, {
 
 export const api = eden.v1;
 
-export const withTimeout = () => ({
-  fetch: { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) },
+export const withTimeout = (timeoutMs = REQUEST_TIMEOUT_MS) => ({
+  fetch: { signal: AbortSignal.timeout(timeoutMs) },
 });

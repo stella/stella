@@ -37,5 +37,6 @@
     "@types/react-dom": "catalog:react19",
     "libxml2-wasm": "^0.7.1",
     "tailwindcss": "catalog:"
-  }
+  },
+  "crawlPosture": "private"
 }

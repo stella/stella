@@ -1,8 +1,10 @@
 import { useState } from "react";
 
+import {
+  filterWorkspaces,
+  suggestWorkspaceId,
+} from "@/lib/workspace-selection";
 import type { MailSnapshot, WorkspaceSummary } from "@/types";
-
-const MIN_SUGGEST_TERM_LENGTH = 3;
 
 type UseWorkspaceSelection = {
   filteredWorkspaces: WorkspaceSummary[];
@@ -46,60 +48,4 @@ export const useWorkspaceSelection = ({
     setSelectedWorkspaceId,
     suggestedWorkspaceId,
   };
-};
-
-const filterWorkspaces = ({
-  query,
-  workspaces,
-}: {
-  query: string;
-  workspaces: WorkspaceSummary[];
-}): WorkspaceSummary[] => {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (normalizedQuery.length === 0) {
-    return workspaces;
-  }
-
-  return workspaces.filter((workspace) => {
-    const haystack = [workspace.name, workspace.reference, workspace.clientName]
-      .filter((value): value is string => !!value)
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(normalizedQuery);
-  });
-};
-
-const suggestWorkspaceId = ({
-  snapshot,
-  workspaces,
-}: {
-  snapshot: MailSnapshot;
-  workspaces: WorkspaceSummary[];
-}): string | null => {
-  const haystack = [
-    snapshot.subject,
-    snapshot.bodyText,
-    snapshot.from?.email,
-    ...snapshot.attachments.map((attachment) => attachment.name),
-  ]
-    .filter((value): value is string => !!value)
-    .join(" ")
-    .toLowerCase();
-
-  let best: { score: number; workspaceId: string } | null = null;
-  for (const workspace of workspaces) {
-    const terms = [workspace.name, workspace.reference, workspace.clientName]
-      .filter((value): value is string => !!value)
-      .flatMap((value) => value.toLowerCase().split(/[\s/._-]+/u))
-      .filter((term) => term.length >= MIN_SUGGEST_TERM_LENGTH);
-    const score = terms.reduce(
-      (total, term) => total + (haystack.includes(term) ? 1 : 0),
-      0,
-    );
-    if (score > 0 && (!best || score > best.score)) {
-      best = { score, workspaceId: workspace.id };
-    }
-  }
-
-  return best?.workspaceId ?? workspaces.at(0)?.id ?? null;
 };

@@ -30,6 +30,10 @@ export const envWebClientSchema = {
     v.pipe(v.string(), v.url()),
     "http://localhost:3000",
   ),
+  VITE_OUTLOOK_ORIGIN: v.optional(
+    v.pipe(v.string(), v.url()),
+    "https://outlook.stll.app",
+  ),
   VITE_COLLAB_URL: v.optional(v.pipe(v.string(), v.url())),
   VITE_DESKTOP_BRIDGE_PORT: v.optional(
     v.pipe(

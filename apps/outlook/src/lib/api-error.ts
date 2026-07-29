@@ -1,5 +1,7 @@
 import { TaggedError } from "better-result";
 
+import { clearAuthToken } from "@/lib/auth";
+
 export class APIError extends TaggedError("ApiError")<{
   status: number;
   message: string;
@@ -25,6 +27,10 @@ type ToAPIErrorProps = {
 };
 
 export const toAPIError = ({ status, value }: ToAPIErrorProps): APIError => {
+  if (status === 401) {
+    clearAuthToken();
+  }
+
   if (typeof value === "string") {
     return new APIError({ message: value, status });
   }
