@@ -1393,7 +1393,7 @@ const SearchPreviewContent = ({
   const t = useTranslations();
   const format = useFormatter();
   const target = getSearchPreviewTarget(hit);
-  const { data, isLoading, isError, refetch } = useQuery(
+  const { data, isError, isFetchedAfterMount, isFetching, refetch } = useQuery(
     searchPreviewOptions({
       organizationId,
       query,
@@ -1403,6 +1403,8 @@ const SearchPreviewContent = ({
       userId,
     }),
   );
+  const authorizedData =
+    isFetchedAfterMount && !isError && !isFetching ? data : undefined;
   const location =
     hit.type === "contact" || hit.type === "case-law"
       ? null
@@ -1454,7 +1456,7 @@ const SearchPreviewContent = ({
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-        {isLoading && (
+        {!isError && authorizedData === undefined && (
           <div className="space-y-3">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-11/12" />
@@ -1469,6 +1471,7 @@ const SearchPreviewContent = ({
               {t("common.somethingWentWrong")}
             </p>
             <Button
+              disabled={isFetching}
               onClick={() => {
                 detached(refetch(), "SearchPreviewContent");
               }}
@@ -1479,13 +1482,13 @@ const SearchPreviewContent = ({
             </Button>
           </div>
         )}
-        {data && !isError && (
+        {authorizedData && (
           <div
             className="text-foreground/90 [&_mark]:bg-highlight [&_mark]:text-highlight-foreground text-sm leading-6 whitespace-pre-wrap [&_mark]:font-medium"
-            dir={contentDir(stripSearchMarkup(data.content))}
+            dir={contentDir(stripSearchMarkup(authorizedData.content))}
             dangerouslySetInnerHTML={{
               // safe-html: preview content is server-escaped before the trusted <mark> tags are inserted
-              __html: data.content,
+              __html: authorizedData.content,
             }}
           />
         )}

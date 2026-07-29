@@ -140,6 +140,20 @@ describe("search preview targets", () => {
     expect(userB.queryKey).not.toEqual(ownerA.queryKey);
   });
 
+  test("reauthorizes cached previews whenever they mount", () => {
+    const options = searchPreviewOptions({
+      organizationId: "org_1",
+      userId: "user_1",
+      query: "current terms",
+      resultId: "entity_1",
+      type: "document",
+      updatedAt: previewHit.updatedAt,
+    });
+
+    expect(options.refetchOnMount).toBe("always");
+    expect(options.staleTime).toBe(0);
+  });
+
   test("withholds previews while hits belong to the previous query", () => {
     expect(
       selectSearchPreviewHit({

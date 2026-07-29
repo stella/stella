@@ -252,7 +252,8 @@ export const searchPreviewOptions = ({
 
       return unwrapEden(response);
     },
-    staleTime: 60_000,
+    refetchOnMount: "always",
+    staleTime: 0,
   });
 
 export const searchFacetOptions = (params: SearchFacetParams) =>
