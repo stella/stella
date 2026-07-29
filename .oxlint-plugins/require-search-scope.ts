@@ -241,7 +241,7 @@ const SQL_IDENTIFIER_PATTERN = `(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)`;
 const SQL_RELATION_PATH_PATTERN =
   `${SQL_IDENTIFIER_PATTERN}` + `(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*`;
 const SQL_RELATION_REFERENCE = new RegExp(
-  `(?:\\b(?:from|join|table)\\s+|,\\s*)` +
+  `(?:\\b(?:from|join|table)\\s+|,\\s*)(?:only\\s+)?` +
     `(${SQL_RELATION_PATH_PATTERN})` +
     `(?:\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN}))?`,
   "giu",
@@ -344,10 +344,10 @@ const hasProjectionReadIntroducer = (
     }
     precedingText = token.value + precedingText;
   }
-  if (/\b(?:from|join|table)\s*$/iu.test(precedingText)) {
+  if (/\b(?:from|join|table)\s+(?:only\s+)?$/iu.test(precedingText)) {
     return true;
   }
-  const commaIndex = precedingText.search(/,\s*$/u);
+  const commaIndex = precedingText.search(/,\s*(?:only\s+)?$/iu);
   return (
     commaIndex >= 0 && commaIntroducesFromRelation(precedingText, commaIndex)
   );
@@ -1143,6 +1143,50 @@ export default {
             : staticTemplateLiteralText(resolved);
         };
 
+        const resolveSqlArrayElements = (
+          expression: unknown,
+          ancestors: ReadonlySet<unknown>,
+        ): unknown[] | null => {
+          const unwrapped = unwrapExpression(expression);
+          if (!isAstNode(unwrapped) || ancestors.has(unwrapped)) {
+            return null;
+          }
+          const resolved = resolveConstInitializer(unwrapped);
+          if (resolved !== unwrapped) {
+            const nextAncestors = new Set(ancestors);
+            nextAncestors.add(unwrapped);
+            return resolveSqlArrayElements(resolved, nextAncestors);
+          }
+          if (
+            !isAstNode(resolved) ||
+            resolved.type !== "ArrayExpression" ||
+            !Array.isArray(resolved.elements)
+          ) {
+            return null;
+          }
+          const nextAncestors = new Set(ancestors);
+          nextAncestors.add(resolved);
+          const elements: unknown[] = [];
+          for (const element of resolved.elements) {
+            if (element === null) {
+              continue;
+            }
+            if (isAstNode(element) && element.type === "SpreadElement") {
+              const spreadElements = resolveSqlArrayElements(
+                element.argument,
+                nextAncestors,
+              );
+              if (spreadElements === null) {
+                return null;
+              }
+              elements.push(...spreadElements);
+              continue;
+            }
+            elements.push(element);
+          }
+          return elements;
+        };
+
         const flattenSqlTemplate = (
           node: AstNode,
           ancestors: ReadonlySet<unknown> = new Set(),
@@ -1222,12 +1266,30 @@ export default {
             }
             if (isSqlMethodCall(resolved, "join")) {
               const values = resolved.arguments.at(0);
-              if (values !== undefined) {
-                const joined = flattenSqlExpression(values, nextAncestors);
-                if (joined) {
-                  return joined;
-                }
+              if (values === undefined) {
+                return null;
               }
+              const elements = resolveSqlArrayElements(values, nextAncestors);
+              if (elements === null) {
+                return flattenSqlExpression(values, nextAncestors);
+              }
+              const separator = resolved.arguments.at(1);
+              if (separator === undefined) {
+                return flattenSqlSequence(elements, nextAncestors, true);
+              }
+              const separatorPaths = flattenSqlExpression(
+                separator,
+                nextAncestors,
+              );
+              if (separatorPaths === null) {
+                return flattenSqlAlternatives(elements, nextAncestors);
+              }
+              return flattenSqlSequence(
+                elements,
+                nextAncestors,
+                true,
+                separatorPaths,
+              );
             }
             return flattenSqlAlternatives(resolved.arguments, nextAncestors);
           }
@@ -1264,8 +1326,10 @@ export default {
           expressions: readonly unknown[],
           ancestors: ReadonlySet<unknown>,
           isKnownSqlSequence: boolean,
+          separatorPaths: readonly SqlTemplateToken[][] = [[]],
         ): SqlTemplateToken[][] | null => {
           let hasSqlStructure = isKnownSqlSequence;
+          let hasExpression = false;
           let paths: SqlTemplateToken[][] = [[]];
           for (const expression of expressions) {
             if (expression === null) {
@@ -1277,11 +1341,19 @@ export default {
             }
             const expressionPaths =
               flattened ?? expressionTokenPaths(expression);
+            if (hasExpression) {
+              paths = paths.flatMap((path) =>
+                separatorPaths.map((separatorPath) =>
+                  path.concat(separatorPath),
+                ),
+              );
+            }
             paths = paths.flatMap((path) =>
               expressionPaths.map((expressionPath) =>
                 path.concat(expressionPath),
               ),
             );
+            hasExpression = true;
           }
           return hasSqlStructure ? paths : null;
         };

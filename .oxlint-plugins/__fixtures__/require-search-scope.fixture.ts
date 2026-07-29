@@ -101,6 +101,30 @@ const unsafeDollarQuotedScope = sql`
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL TABLE shorthand is also a protected read
 const unsafeTableRead = sql`TABLE search_documents`;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL ONLY cannot hide a private projection
+const unsafeOnlyEntity = sql`SELECT * FROM ONLY search_documents sd`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves ONLY with a qualified relation cannot hide a private projection
+const unsafeQualifiedOnlyEntity = sql`
+  SELECT * FROM ONLY public.search_documents sd
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves ONLY with quoted identifiers cannot hide a private projection
+const unsafeQuotedOnlyEntity = sql`
+  SELECT * FROM ONLY "public"."search_documents" AS "sd"
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves ONLY before an interpolated relation cannot hide a private projection
+const unsafeOnlyInterpolatedEntity = sql`
+  SELECT * FROM ONLY ${searchDocuments} sd
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves comma-form ONLY interpolation cannot hide a private projection
+const unsafeCommaOnlyInterpolatedEntity = sql`
+  SELECT *
+  FROM entities e, ONLY ${searchDocuments} sd
+`;
+
 const unsafeComposedPrivateRead = (() => {
   const privateFrom = sql`FROM search_documents sd`;
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an ordinary SQL fragment cannot hide a private projection
@@ -111,6 +135,15 @@ const unsafeJoinedPrivateFragment = (() => {
   const privateFragments = [sql`FROM search_documents sd`];
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves call-composed SQL fragments cannot hide a private projection
   return sql`SELECT * ${sql.join(privateFragments)}`;
+})();
+
+const unsafeJoinedMultiBranch = (() => {
+  const branches = [
+    sql`* FROM search_documents sd`,
+    sql`* FROM entities sd WHERE true ${entityWorkspaceFilter}`,
+  ];
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a sql.join separator preserves query branch boundaries
+  return sql`SELECT ${sql.join(branches, sql` UNION ALL SELECT `)}`;
 })();
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.raw cannot bypass private projection detection
@@ -380,6 +413,22 @@ const scopedJoinedPrivateFragment = (() => {
   return sql`SELECT * ${sql.join(fragments)}`;
 })();
 
+const scopedJoinedMultiBranch = (() => {
+  const branches = [
+    sql`* FROM search_documents sd WHERE true ${entityWorkspaceFilter}`,
+    sql`* FROM search_documents sd WHERE true ${singleWorkspaceFilter}`,
+  ];
+  return sql`SELECT ${sql.join(branches, sql` UNION ALL SELECT `)}`;
+})();
+
+const scopedRawJoinedMultiBranch = (() => {
+  const branches = [
+    sql`* FROM search_documents sd WHERE true ${entityWorkspaceFilter}`,
+    sql`* FROM search_documents sd WHERE true ${singleWorkspaceFilter}`,
+  ];
+  return sql`SELECT ${sql.join(branches, sql.raw(" UNION ALL SELECT "))}`;
+})();
+
 const scopedOpaquePrivateFragment = sql`
   SELECT *
   ${pickFirst(sql`FROM search_documents sd`)}
@@ -450,8 +499,14 @@ void [
   unsafeNestedBlockCommentScope,
   unsafeDollarQuotedScope,
   unsafeTableRead,
+  unsafeOnlyEntity,
+  unsafeQualifiedOnlyEntity,
+  unsafeQuotedOnlyEntity,
+  unsafeOnlyInterpolatedEntity,
+  unsafeCommaOnlyInterpolatedEntity,
   unsafeComposedPrivateRead,
   unsafeJoinedPrivateFragment,
+  unsafeJoinedMultiBranch,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
   unsafeRawRelationFragment,
@@ -495,6 +550,8 @@ void [
   scopedNestedPrivateRead,
   scopedComposedRead,
   scopedJoinedPrivateFragment,
+  scopedJoinedMultiBranch,
+  scopedRawJoinedMultiBranch,
   scopedOpaquePrivateFragment,
   scopedConditionalPrivateFragment,
   scopedMultiBranch,
