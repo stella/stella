@@ -5,7 +5,7 @@ import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { workspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
+import { searchDocumentsAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
@@ -59,13 +59,11 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const selectedWorkspaceIds =
     query.workspaceId === undefined ? [] : [query.workspaceId];
   const accessibleWorkspaceIds = query.workspaceIds ?? selectedWorkspaceIds;
-  const workspaceAccessFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
+  const workspaceAccessFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds: [],
   });
-  const workspaceSelectionFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
+  const workspaceSelectionFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
   });
@@ -207,8 +205,7 @@ const searchContent = async (
 ): Promise<ContentSearchResult> => {
   const { organizationId, workspaceId, limit } = query;
   const tsQuery = buildSearchTsQuery(query.query);
-  const singleWorkspaceFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
+  const singleWorkspaceFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds: [workspaceId],
     selectedWorkspaceIds: [],
   });

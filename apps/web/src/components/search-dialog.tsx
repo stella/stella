@@ -37,6 +37,7 @@ import {
   CommandItem,
   CommandList,
 } from "@stll/ui/components/command";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -1016,7 +1017,7 @@ export const SearchDialog = ({
               title={t("common.preview")}
               variant={previewEnabled ? "secondary" : "ghost"}
             >
-              <PanelRightIcon className="size-4" />
+              <DirectionalIcon className="size-4" icon={PanelRightIcon} />
             </Button>
             <Button
               aria-keyshortcuts="Escape"

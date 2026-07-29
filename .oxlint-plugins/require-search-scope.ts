@@ -42,35 +42,79 @@ type RuleContext = {
   };
 };
 
-const PRIVATE_SEARCH_PROJECTIONS = {
-  search_documents: [
-    {
-      importedName: "workspaceAccessSql",
-      module: "@/api/lib/search/contact-workspace-access-sql",
-    },
-  ],
-  workspace_search_documents: [
-    {
-      importedName: "workspaceAccessSql",
-      module: "@/api/lib/search/contact-workspace-access-sql",
-    },
-  ],
-  contact_search_documents: [
-    {
-      importedName: "contactWorkspaceAccessSql",
-      module: "@/api/lib/search/contact-workspace-access-sql",
-    },
-  ],
-  chat_thread_search_documents: [
-    {
-      importedName: "chatThreadScopeSql",
-      module: "@/api/lib/search/chat-thread-scope-sql",
-    },
-  ],
-} as const;
+type ApprovedImport = {
+  importedName: string;
+  module: string;
+};
 
-type ApprovedScopeImport =
-  (typeof PRIVATE_SEARCH_PROJECTIONS)[keyof typeof PRIVATE_SEARCH_PROJECTIONS][number];
+const PRIVATE_SEARCH_PROJECTIONS = {
+  search_documents: {
+    scopeImports: [
+      {
+        importedName: "searchDocumentsAccessSql",
+        module: "@/api/lib/search/contact-workspace-access-sql",
+      },
+    ],
+    tableImports: [
+      { importedName: "searchDocuments", module: "@/api/db/schema" },
+      {
+        importedName: "searchDocuments",
+        module: "@/api/db/schema/templates",
+      },
+    ],
+  },
+  workspace_search_documents: {
+    scopeImports: [
+      {
+        importedName: "workspaceSearchDocumentsAccessSql",
+        module: "@/api/lib/search/contact-workspace-access-sql",
+      },
+    ],
+    tableImports: [
+      { importedName: "workspaceSearchDocuments", module: "@/api/db/schema" },
+      {
+        importedName: "workspaceSearchDocuments",
+        module: "@/api/db/schema/templates",
+      },
+    ],
+  },
+  contact_search_documents: {
+    scopeImports: [
+      {
+        importedName: "contactWorkspaceAccessSql",
+        module: "@/api/lib/search/contact-workspace-access-sql",
+      },
+    ],
+    tableImports: [
+      { importedName: "contactSearchDocuments", module: "@/api/db/schema" },
+      {
+        importedName: "contactSearchDocuments",
+        module: "@/api/db/schema/templates",
+      },
+    ],
+  },
+  chat_thread_search_documents: {
+    scopeImports: [
+      {
+        importedName: "chatThreadScopeSql",
+        module: "@/api/lib/search/chat-thread-scope-sql",
+      },
+    ],
+    tableImports: [
+      { importedName: "chatThreadSearchDocuments", module: "@/api/db/schema" },
+      {
+        importedName: "chatThreadSearchDocuments",
+        module: "@/api/db/schema/chat",
+      },
+    ],
+  },
+} as const satisfies Record<
+  string,
+  {
+    scopeImports: readonly ApprovedImport[];
+    tableImports: readonly ApprovedImport[];
+  }
+>;
 
 const templateQuasiTexts = (node: Record<string, unknown>): string[] => {
   const quasi = node.quasi;
@@ -133,9 +177,9 @@ export default {
           return null;
         };
 
-        const isApprovedScopeImport = (
+        const isApprovedImport = (
           identifier: AstNode & { name: string },
-          approvedImports: readonly ApprovedScopeImport[],
+          approvedImports: readonly ApprovedImport[],
         ): boolean => {
           const variable = resolveVariable(identifier);
           return (
@@ -162,20 +206,20 @@ export default {
 
         const isApprovedScopeCall = (
           expression: unknown,
-          approvedImports: readonly ApprovedScopeImport[],
+          approvedImports: readonly ApprovedImport[],
         ): boolean => {
           const unwrapped = unwrapExpression(expression);
           return (
             isAstNode(unwrapped) &&
             unwrapped.type === "CallExpression" &&
             isIdentifier(unwrapped.callee) &&
-            isApprovedScopeImport(unwrapped.callee, approvedImports)
+            isApprovedImport(unwrapped.callee, approvedImports)
           );
         };
 
         const isApprovedScopeFragment = (
           expression: unknown,
-          approvedImports: readonly ApprovedScopeImport[],
+          approvedImports: readonly ApprovedImport[],
         ): boolean => {
           const unwrapped = unwrapExpression(expression);
           if (isApprovedScopeCall(unwrapped, approvedImports)) {
@@ -202,6 +246,16 @@ export default {
           );
         };
 
+        const isPrivateProjectionInterpolation = (
+          expression: unknown,
+          tableImports: readonly ApprovedImport[],
+        ): boolean => {
+          const unwrapped = unwrapExpression(expression);
+          return (
+            isIdentifier(unwrapped) && isApprovedImport(unwrapped, tableImports)
+          );
+        };
+
         return {
           TaggedTemplateExpression(node: unknown) {
             if (!isAstNode(node)) {
@@ -214,7 +268,7 @@ export default {
 
             const expressions = templateExpressions(node);
             const quasiTexts = templateQuasiTexts(node);
-            for (const [table, approvedImports] of Object.entries(
+            for (const [table, projection] of Object.entries(
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
               let unscopedReadCount = 0;
@@ -222,9 +276,18 @@ export default {
                 unscopedReadCount += projectionReadCount(quasiText, table);
                 const expression = expressions.at(index);
                 if (
+                  expression !== undefined &&
+                  isPrivateProjectionInterpolation(
+                    expression,
+                    projection.tableImports,
+                  )
+                ) {
+                  unscopedReadCount += 1;
+                }
+                if (
                   unscopedReadCount > 0 &&
                   expression !== undefined &&
-                  isApprovedScopeFragment(expression, approvedImports)
+                  isApprovedScopeFragment(expression, projection.scopeImports)
                 ) {
                   unscopedReadCount -= 1;
                 }

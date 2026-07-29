@@ -14,7 +14,8 @@ import { compareCodepoint } from "@/api/lib/collation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
-  workspaceAccessSql,
+  searchDocumentsAccessSql,
+  workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
@@ -562,23 +563,19 @@ export const searchGlobal = async ({
     updatedFrom,
     updatedTo,
   });
-  const entityWorkspaceFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
+  const entityWorkspaceFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
   });
-  const entityWorkspaceFacetFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
+  const entityWorkspaceFacetFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds: [],
   });
-  const matterWorkspaceFilter = workspaceAccessSql({
-    column: sql`wsd.workspace_id`,
+  const matterWorkspaceFilter = workspaceSearchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
   });
-  const matterWorkspaceFacetFilter = workspaceAccessSql({
-    column: sql`wsd.workspace_id`,
+  const matterWorkspaceFacetFilter = workspaceSearchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds: [],
   });
@@ -1161,20 +1158,17 @@ export const searchGlobalFacet = async ({
     updatedFrom,
     updatedTo,
   });
-  const entityWorkspaceFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
+  const entityWorkspaceFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds,
   });
   // Workspace facets intentionally ignore the current workspace selection so
   // every accessible sibling remains available as a bucket.
-  const entityWorkspaceFacetFilter = workspaceAccessSql({
-    column: sql`sd.workspace_id`,
+  const entityWorkspaceFacetFilter = searchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds: [],
   });
-  const matterWorkspaceFacetFilter = workspaceAccessSql({
-    column: sql`wsd.workspace_id`,
+  const matterWorkspaceFacetFilter = workspaceSearchDocumentsAccessSql({
     accessibleWorkspaceIds,
     selectedWorkspaceIds: [],
   });

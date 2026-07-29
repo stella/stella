@@ -1,7 +1,9 @@
+import { searchDocuments } from "@/api/db/schema";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
-  workspaceAccessSql,
+  searchDocumentsAccessSql,
+  workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
 
 declare const sql: (
@@ -10,14 +12,17 @@ declare const sql: (
 ) => unknown;
 declare const organizationId: string;
 
-const entityWorkspaceFilter = workspaceAccessSql({});
-const singleWorkspaceFilter = workspaceAccessSql({});
+const entityWorkspaceFilter = searchDocumentsAccessSql({});
+const singleWorkspaceFilter = searchDocumentsAccessSql({});
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an unscoped private projection read is rejected
 const unsafeEntity = sql`SELECT * FROM search_documents sd WHERE sd.organization_id = ${organizationId}`;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL-equivalent uppercase identifiers are protected
 const unsafeUppercaseEntity = sql`SELECT * FROM SEARCH_DOCUMENTS sd`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an interpolated private schema table cannot bypass the guard
+const unsafeInterpolatedEntity = sql`SELECT * FROM ${searchDocuments} sd`;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves counts cannot omit authorization either
 const unsafeChatCount = sql`SELECT count(*) FROM chat_thread_search_documents cst`;
@@ -35,14 +40,14 @@ const unsafeNestedHelper = sql`
   SELECT *
   FROM search_documents sd
   WHERE true
-    ${() => workspaceAccessSql}
+    ${() => searchDocumentsAccessSql}
 `;
 
 const unsafeShadowedHelper = (() => {
   // oxlint-disable-next-line no-shadow -- fixture proves this binding cannot impersonate the approved import
-  const workspaceAccessSql = (_scope: unknown) => "";
+  const searchDocumentsAccessSql = (_scope: unknown) => "";
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a same-named local cannot impersonate the approved import
-  return sql`SELECT * FROM search_documents sd WHERE true ${workspaceAccessSql({})}`;
+  return sql`SELECT * FROM search_documents sd WHERE true ${searchDocumentsAccessSql({})}`;
 })();
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves every UNION branch needs its own verified scope
@@ -67,6 +72,10 @@ const scopedSingleWorkspace = sql`
     ${singleWorkspaceFilter}
 `;
 
+const scopedInterpolatedEntity = sql`
+  SELECT * FROM ${searchDocuments} sd WHERE true ${entityWorkspaceFilter}
+`;
+
 const scopedMultiBranch = sql`
   SELECT * FROM search_documents sd WHERE true ${entityWorkspaceFilter}
   UNION ALL
@@ -77,7 +86,7 @@ const scopedMatter = sql`
   SELECT *
   FROM workspace_search_documents wsd
   WHERE true
-    ${workspaceAccessSql({ column: "wsd.workspace_id" })}
+    ${workspaceSearchDocumentsAccessSql({})}
 `;
 
 const scopedContact = sql`
@@ -99,6 +108,7 @@ const publicCaseLaw = sql`SELECT * FROM case_law_search_documents clsd`;
 void [
   unsafeEntity,
   unsafeUppercaseEntity,
+  unsafeInterpolatedEntity,
   unsafeChatCount,
   unsafeConditionalScope,
   unsafeNestedHelper,
@@ -106,6 +116,7 @@ void [
   unsafeMultiBranch,
   scopedEntity,
   scopedSingleWorkspace,
+  scopedInterpolatedEntity,
   scopedMultiBranch,
   scopedMatter,
   scopedContact,

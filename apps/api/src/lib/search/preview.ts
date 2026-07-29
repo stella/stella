@@ -6,7 +6,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
-  workspaceAccessSql,
+  searchDocumentsAccessSql,
+  workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
 import {
   escapeAndHighlight,
@@ -75,8 +76,7 @@ export const buildSearchPreviewQuery = ({
         FROM workspace_search_documents wsd
         WHERE wsd.workspace_id = ${resultId}
           AND wsd.organization_id = ${organizationId}
-          ${workspaceAccessSql({
-            column: sql`wsd.workspace_id`,
+          ${workspaceSearchDocumentsAccessSql({
             ...workspaceScope,
           })}
           AND wsd.tsv @@ ${tsQuery}
@@ -145,8 +145,7 @@ export const buildSearchPreviewQuery = ({
         WHERE sd.entity_id = ${resultId}
           AND sd.kind = ${type}
           AND sd.organization_id = ${organizationId}
-          ${workspaceAccessSql({
-            column: sql`sd.workspace_id`,
+          ${searchDocumentsAccessSql({
             ...workspaceScope,
           })}
           AND sd.tsv @@ ${tsQuery}

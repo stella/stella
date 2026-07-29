@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
   resolveWorkspaceScope,
+  searchDocumentsAccessSql,
+  workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
 
 const organizationId = toSafeId<"organization">("org_1");
@@ -78,6 +81,28 @@ describe("contactWorkspaceAccessSql", () => {
     expect(serialized).toContain(organizationId);
     expect(serialized).toContain(wsA);
     expect(serialized).toContain(wsB);
+  });
+});
+
+describe("projection-specific workspace scopes", () => {
+  const dialect = new PgDialect();
+  const scope = {
+    accessibleWorkspaceIds: [wsA],
+    selectedWorkspaceIds: [],
+  };
+
+  test("fixes the entity projection alias", () => {
+    const compiled = dialect.sqlToQuery(searchDocumentsAccessSql(scope));
+    expect(compiled.sql).toContain("sd.workspace_id");
+    expect(compiled.params).toContain(wsA);
+  });
+
+  test("fixes the matter projection alias", () => {
+    const compiled = dialect.sqlToQuery(
+      workspaceSearchDocumentsAccessSql(scope),
+    );
+    expect(compiled.sql).toContain("wsd.workspace_id");
+    expect(compiled.params).toContain(wsA);
   });
 });
 
