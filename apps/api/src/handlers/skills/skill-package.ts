@@ -26,6 +26,7 @@ const GITHUB_DISCOVERY_MAX_SKILLS = 50;
 const GITHUB_DISCOVERY_CONCURRENCY = 6;
 const GITHUB_TREE_MAX_BYTES = 4 * 1024 * 1024;
 const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
+const UTF8_ENCODER = new TextEncoder();
 const GITHUB_SKILL_HOSTNAMES = new Set([
   "github.com",
   "raw.githubusercontent.com",
@@ -91,6 +92,7 @@ type GithubSkillPath = {
   ref: string;
   repo: string;
   rootPath: string;
+  selectedSkillPath: string | null;
 };
 
 type GithubRefKind = "heads" | "tags";
@@ -607,11 +609,22 @@ const fetchGithubTreeOnce = async ({
 
 export const findGithubSkillEntrypoints = ({
   rootPath,
+  selectedSkillPath = null,
   tree,
 }: {
   rootPath: string;
+  selectedSkillPath?: string | null;
   tree: readonly GithubTreeItem[];
 }): string[] => {
+  if (selectedSkillPath !== null) {
+    const selected = tree.find(
+      (item) =>
+        item.path === selectedSkillPath &&
+        (item.type === "blob" || item.type === "file"),
+    );
+    return selected ? [selected.path] : [];
+  }
+
   const normalizedRoot = rootPath
     .split("/")
     .filter((part) => part.length > 0)
@@ -830,12 +843,17 @@ const hashSkillPackage = ({
   source: string;
 }) => {
   const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(source);
+  const updateField = (value: string) => {
+    const bytes = UTF8_ENCODER.encode(value);
+    hasher.update(`${bytes.byteLength}:`);
+    hasher.update(bytes);
+  };
+  updateField("stella-skill-package-v1");
+  updateField(source);
+  updateField(String(resources.length));
   for (const resource of resources) {
-    hasher.update("\0");
-    hasher.update(resource.path);
-    hasher.update("\0");
-    hasher.update(resource.content);
+    updateField(resource.path);
+    updateField(resource.content);
   }
   return hasher.digest("hex");
 };
@@ -940,7 +958,10 @@ export const resolveGithubRefAndPath = async ({
   parts: readonly string[];
   refExists?: GithubRefExists;
   repo: string;
-}): Promise<Pick<GithubSkillPath, "ref" | "rootPath"> | null> => {
+}): Promise<Pick<
+  GithubSkillPath,
+  "ref" | "rootPath" | "selectedSkillPath"
+> | null> => {
   // Commit-pinned URLs are unambiguous: the SHA is always one path segment.
   // Resolve it before trying longest-first branch/tag candidates so a nested
   // path does not trigger one GitHub ref probe per ancestor.
@@ -951,13 +972,7 @@ export const resolveGithubRefAndPath = async ({
     parts.length - 1 >= minPathParts
   ) {
     const path = parts.slice(1);
-    return {
-      ref: pinnedCommit,
-      rootPath:
-        path.at(-1) === SKILL_FILE_NAME
-          ? path.slice(0, -1).join("/")
-          : path.join("/"),
-    };
+    return resolvedGithubPath({ path, ref: pinnedCommit });
   }
 
   const firstRefPartCount = Math.min(
@@ -979,14 +994,27 @@ export const resolveGithubRefAndPath = async ({
     }
 
     const path = parts.slice(refPartCount);
-    const rootPath =
-      path.at(-1) === SKILL_FILE_NAME
-        ? path.slice(0, -1).join("/")
-        : path.join("/");
-    return { ref, rootPath };
+    return resolvedGithubPath({ path, ref });
   }
 
   return null;
+};
+
+const resolvedGithubPath = ({
+  path,
+  ref,
+}: {
+  path: readonly string[];
+  ref: string;
+}): Pick<GithubSkillPath, "ref" | "rootPath" | "selectedSkillPath"> => {
+  const selectedSkillPath =
+    path.at(-1) === SKILL_FILE_NAME ? path.join("/") : null;
+  return {
+    ref,
+    rootPath:
+      selectedSkillPath === null ? path.join("/") : path.slice(0, -1).join("/"),
+    selectedSkillPath,
+  };
 };
 
 export const redactSkillSourceUrlForStorage = (rawUrl: string): string => {
@@ -1084,6 +1112,7 @@ const parseGithubDiscoveryPath = async (
       ref: await resolveGithubDefaultBranch({ budget, owner, repo }),
       repo,
       rootPath: "",
+      selectedSkillPath: null,
     };
   }
   if ((kind !== "tree" && kind !== "blob") || parts.length === 0) {
@@ -1117,6 +1146,7 @@ const discoverGithubSkillPackages = async (
   const tree = await fetchGithubTree({ ...target, budget, commitSha });
   const skillPaths = findGithubSkillEntrypoints({
     rootPath: target.rootPath,
+    selectedSkillPath: target.selectedSkillPath,
     tree,
   });
   const entries = await mapWithConcurrency({
@@ -1243,26 +1273,48 @@ const isGithubSkillSourcePinnedToCommit = ({
 }: {
   commitSha: string;
   rawUrl: string;
-}): boolean => {
+}): boolean => canonicalizeGithubCommitSkillUrl({ commitSha, rawUrl }) !== null;
+
+export const canonicalizeGithubCommitSkillUrl = ({
+  commitSha,
+  rawUrl,
+}: {
+  commitSha: string;
+  rawUrl: string;
+}): string | null => {
   try {
-    const url = new URL(rawUrl);
+    const url = new URL(rawUrl.trim());
     assertSafeGithubSkillUrl(url);
-    if (url.hostname !== "github.com" || url.search.length > 0) {
-      return false;
+    if (
+      url.hostname !== "github.com" ||
+      url.port.length > 0 ||
+      url.search.length > 0
+    ) {
+      return null;
     }
-    const [owner, rawRepo, kind, pinnedCommitSha] = pathParts(url);
+    const [owner, rawRepo, kind, pinnedCommitSha, ...skillDirParts] =
+      pathParts(url);
     const repo = normalizeGithubRepositoryName(rawRepo);
-    if (!owner || !repo) {
-      return false;
+    if (!owner || !repo || !pinnedCommitSha) {
+      return null;
     }
     assertGithubRepositoryCoordinates({ owner, repo });
-    return (
-      kind === "tree" &&
-      GITHUB_COMMIT_SHA_PATTERN.test(commitSha) &&
-      pinnedCommitSha?.toLowerCase() === commitSha.toLowerCase()
-    );
+    const normalizedCommitSha = commitSha.toLowerCase();
+    if (
+      kind !== "tree" ||
+      !GITHUB_COMMIT_SHA_PATTERN.test(normalizedCommitSha) ||
+      pinnedCommitSha.toLowerCase() !== normalizedCommitSha
+    ) {
+      return null;
+    }
+    return githubPinnedSkillUrl({
+      commitSha: normalizedCommitSha,
+      owner: owner.toLowerCase(),
+      repo: repo.toLowerCase(),
+      skillDir: skillDirParts.join("/"),
+    });
   } catch {
-    return false;
+    return null;
   }
 };
 
@@ -1532,7 +1584,7 @@ const decodeUtf8 = (buffer: ArrayBuffer | Uint8Array): string => {
 };
 
 const encodedSize = (value: string): number =>
-  new TextEncoder().encode(value).byteLength;
+  UTF8_ENCODER.encode(value).byteLength;
 
 const zipUncompressedSize = (file: JSZip.JSZipObject): number | null => {
   // JSZip has no public declared-size API; this is only a preflight before the

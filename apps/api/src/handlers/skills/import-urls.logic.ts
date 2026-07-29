@@ -1,6 +1,9 @@
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 
-import type { SkillSourceIntegrity } from "./skill-package";
+import {
+  canonicalizeGithubCommitSkillUrl,
+  type SkillSourceIntegrity,
+} from "./skill-package";
 
 type SkillImportItem = {
   integrity: SkillSourceIntegrity;
@@ -30,7 +33,21 @@ export const deduplicateSkillImportItems = (
   const conflictingSourceUrls = new Set<string>();
   const itemsBySourceUrl = new Map<string, SkillImportItem>();
   for (const item of requestedItems) {
-    const sourceUrl = item.sourceUrl.trim();
+    const requestedSourceUrl = item.sourceUrl.trim();
+    const sourceUrl =
+      item.integrity.type === "github-commit"
+        ? canonicalizeGithubCommitSkillUrl({
+            commitSha: item.integrity.value,
+            rawUrl: requestedSourceUrl,
+          })
+        : requestedSourceUrl;
+    if (sourceUrl === null) {
+      failed.push({
+        message: "Skill source changed after discovery; review it again",
+        sourceUrl: requestedSourceUrl,
+      });
+      continue;
+    }
     if (conflictingSourceUrls.has(sourceUrl)) {
       continue;
     }

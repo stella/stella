@@ -30,6 +30,14 @@ void mock.module("@/api/lib/safe-outbound-fetch", () => ({
           new SafeOutboundFetchError({ message: "Request timed out" }),
         );
       }
+      if (url.pathname.endsWith(`/${COMMIT_SHA}/SKILL.md`)) {
+        return response(`---
+name: root-skill
+description: A selected repository-root skill.
+---
+
+Instructions.`);
+      }
       return response(`---
 name: valid-skill
 description: A valid discovered skill.
@@ -43,6 +51,7 @@ Instructions.`);
     if (url.pathname.includes("/git/trees/")) {
       return response({
         tree: [
+          { path: "SKILL.md", type: "blob" },
           { path: "invalid/SKILL.md", type: "blob" },
           { path: "valid/SKILL.md", type: "blob" },
         ],
@@ -66,7 +75,23 @@ describe("GitHub skill package discovery", () => {
     }
     expect(result.value.invalidSkillCount).toBe(1);
     expect(result.value.skills.map((skill) => skill.name)).toEqual([
+      "root-skill",
       "valid-skill",
+    ]);
+  });
+
+  test("keeps direct root SKILL.md discovery scoped to that file", async () => {
+    const result = await discoverSkillPackagesFromUrl(
+      `https://github.com/example/skills/blob/${COMMIT_SHA}/SKILL.md`,
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.invalidSkillCount).toBe(0);
+    expect(result.value.skills.map((skill) => skill.name)).toEqual([
+      "root-skill",
     ]);
   });
 });

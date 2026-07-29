@@ -153,6 +153,49 @@ Use the references.`,
     ).toBe(true);
   });
 
+  test("hashes package fields with unambiguous boundaries", async () => {
+    const source = `---
+name: hash-boundaries
+description: Verify canonical package hashing.
+---
+
+Instructions.`;
+    const combined = new JSZip();
+    combined.file("skill/SKILL.md", source);
+    combined.file(
+      "skill/references/a.md",
+      "prefix\0references/b.md\0malicious",
+    );
+    const split = new JSZip();
+    split.file("skill/SKILL.md", source);
+    split.file("skill/references/a.md", "prefix");
+    split.file("skill/references/b.md", "malicious");
+
+    const [combinedBuffer, splitBuffer] = await Promise.all([
+      combined.generateAsync({ type: "arraybuffer" }),
+      split.generateAsync({ type: "arraybuffer" }),
+    ]);
+    const [combinedResult, splitResult] = await Promise.all([
+      parseUploadedSkillPackage(
+        new File([combinedBuffer], "combined.zip", {
+          type: "application/zip",
+        }),
+      ),
+      parseUploadedSkillPackage(
+        new File([splitBuffer], "split.zip", { type: "application/zip" }),
+      ),
+    ]);
+
+    expect(Result.isOk(combinedResult)).toBe(true);
+    expect(Result.isOk(splitResult)).toBe(true);
+    if (Result.isError(combinedResult) || Result.isError(splitResult)) {
+      throw new TypeError("Package parsing unexpectedly failed");
+    }
+    expect(combinedResult.value.contentHash).not.toBe(
+      splitResult.value.contentHash,
+    );
+  });
+
   test("rejects skill names that cannot be used as a load-skill id", async () => {
     const result = await parseUploadedSkillPackage(
       new File(
@@ -404,7 +447,11 @@ Instructions.`,
       repo: "repo",
     });
 
-    expect(result).toEqual({ ref: "feature/foo", rootPath: "skill" });
+    expect(result).toEqual({
+      ref: "feature/foo",
+      rootPath: "skill",
+      selectedSkillPath: null,
+    });
   });
 
   test("resolves GitHub skill paths pinned to commit SHAs", async () => {
@@ -424,6 +471,7 @@ Instructions.`,
     expect(result).toEqual({
       ref: commitSha,
       rootPath: "skills/review",
+      selectedSkillPath: "skills/review/SKILL.md",
     });
     expect(refProbeCount).toBe(0);
   });
@@ -440,6 +488,7 @@ Instructions.`,
     expect(result).toEqual({
       ref: "release/2026",
       rootPath: "skills/review",
+      selectedSkillPath: "skills/review/SKILL.md",
     });
   });
 });
