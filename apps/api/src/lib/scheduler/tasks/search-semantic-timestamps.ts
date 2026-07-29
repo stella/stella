@@ -75,7 +75,7 @@ const repairState = (payload: SchedulerPayload | null): RepairState => {
     quietSince:
       pass === REPAIR_PASS.verify &&
       typeof quietSince === "string" &&
-      !Number.isNaN(Date.parse(quietSince))
+      !Number.isNaN(new Date(quietSince).getTime())
         ? quietSince
         : null,
   };
@@ -145,7 +145,8 @@ export const repairSearchSemanticTimestamps = async ({
       : Math.min(state.cleanPasses + 1, REQUIRED_CLEAN_VERIFICATION_PASSES);
     const quietSince = state.quietSince ?? nowIso;
     const quietPeriodElapsed =
-      now.getTime() - Date.parse(quietSince) >= VERIFICATION_QUIET_PERIOD_MS;
+      now.getTime() - new Date(quietSince).getTime() >=
+      VERIFICATION_QUIET_PERIOD_MS;
     if (
       state.dirty ||
       cleanPasses < REQUIRED_CLEAN_VERIFICATION_PASSES ||

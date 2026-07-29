@@ -141,7 +141,7 @@ test("durably marks verification dirty before rebuilding a mismatch", async () =
   const dirtyCheckpoint = new PgDialect().sqlToQuery(
     executeMock.mock.calls.at(1)?.at(0) ?? sql``,
   );
-  expect(dirtyCheckpoint.params).toContain(true);
+  expect(dirtyCheckpoint.sql).toContain("'dirty', true");
   expect(dirtyCheckpoint.params).toContain("2026-07-29T00:05:00.000Z");
   expect(upsertSearchDocumentMock).toHaveBeenCalledWith(entityId);
 });

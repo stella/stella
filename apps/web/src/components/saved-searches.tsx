@@ -33,6 +33,7 @@ import {
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import {
   canSaveSearch,
@@ -356,6 +357,7 @@ export const SavedSearches = ({
               </label>
               <Input
                 autoFocus
+                dir={contentDir(dialogName)}
                 disabled={isSaving}
                 id="saved-search-name"
                 maxLength={SAVED_SEARCH_NAME_MAX_LENGTH}

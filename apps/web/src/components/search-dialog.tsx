@@ -268,6 +268,16 @@ type SearchDialogProps = {
   initialWorkspaceId?: string | undefined;
 };
 
+const initialSearchFilters = (
+  initialWorkspaceId: string | undefined,
+): SearchFilters => ({
+  editedByUserIds: [],
+  kinds: [],
+  mimeTypes: [],
+  types: [],
+  workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
+});
+
 // eslint-disable-next-line react/react-compiler -- useVirtualizer returns functions that cannot be safely memoized, so React Compiler intentionally skips this component
 export const SearchDialog = ({
   open,
@@ -296,13 +306,9 @@ export const SearchDialog = ({
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
-  const [filters, setFilters] = useState<SearchFilters>({
-    editedByUserIds: [],
-    kinds: [],
-    mimeTypes: [],
-    types: [],
-    workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
-  });
+  const [filters, setFilters] = useState<SearchFilters>(() =>
+    initialSearchFilters(initialWorkspaceId),
+  );
 
   const debouncedSetQuery = useDebouncedCallback((value: string) => {
     setDebouncedQuery(value);
@@ -536,9 +542,14 @@ export const SearchDialog = ({
     summarizeSearchMutation.reset();
   };
 
+  const clearSearch = () => {
+    clearSearchQuery();
+    setFilters(initialSearchFilters(initialWorkspaceId));
+  };
+
   const handleEscapeAction = () => {
-    if (query.trim() || debouncedQuery.trim()) {
-      clearSearchQuery();
+    if (hasVisibleSearch) {
+      clearSearch();
       return;
     }
     onOpenChange(false);
@@ -774,7 +785,7 @@ export const SearchDialog = ({
   const handleCommandInputKeyDownCapture = (
     e: React.KeyboardEvent<HTMLInputElement>,
   ) => {
-    if (e.key === "Escape" && (query.trim() || debouncedQuery.trim())) {
+    if (e.key === "Escape" && hasVisibleSearch) {
       e.preventDefault();
       e.stopPropagation();
       handleEscapeAction();
@@ -925,6 +936,16 @@ export const SearchDialog = ({
               query={query}
               showList={false}
             />
+            {hasVisibleSearch && (
+              <Button
+                className="h-8 shrink-0 sm:hidden"
+                onClick={clearSearch}
+                size="sm"
+                variant="ghost"
+              >
+                {t("common.reset")}
+              </Button>
+            )}
             <Button
               aria-keyshortcuts="Escape"
               aria-label={t("search.escKey")}
