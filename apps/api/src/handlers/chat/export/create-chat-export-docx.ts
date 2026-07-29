@@ -108,8 +108,8 @@ export const createChatExportDocx = async (
   document: Document,
 ): Promise<ArrayBuffer> => {
   const bytes = await createDocx(document);
-  const footnotes = document.package.footnotes ?? [];
-  if (footnotes.length === 0) {
+  const footnotes = document.package.footnotes;
+  if (footnotes === undefined || footnotes.length === 0) {
     return bytes;
   }
 

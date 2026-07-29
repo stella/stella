@@ -164,11 +164,15 @@ export const styleDocumentCitations = (
     return document;
   }
 
-  const existingFootnotes = document.package.footnotes ?? [];
+  const footnotes: Footnote[] = [];
+  const existingFootnotes = document.package.footnotes;
+  if (existingFootnotes !== undefined) {
+    footnotes.push(...existingFootnotes);
+  }
   const context: CitationTransformContext = {
     footnoteByTarget: new Map(),
-    footnotes: [...existingFootnotes],
-    nextFootnoteId: nextFootnoteId(existingFootnotes),
+    footnotes,
+    nextFootnoteId: nextFootnoteId(footnotes),
     style,
   };
   const content = document.package.document.content.map((block) =>
