@@ -11,6 +11,7 @@ import {
 import { installChatRuntimeCleanup } from "@/features/chat/queries";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { STALE_TIME } from "@/lib/consts";
+import { isExternalSharePath } from "@/lib/external-share-privacy";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { routeTree } from "@/routeTree.gen";
 
@@ -56,6 +57,13 @@ export function getRouter() {
     const path = router.state.matches.at(-1)?.fullPath;
     if (path === undefined) {
       return;
+    }
+    if (isExternalSharePath(path)) {
+      analyticsValue.client?.opt_out_capturing();
+      return;
+    }
+    if (analyticsValue.client?.has_opted_out_capturing()) {
+      analyticsValue.client.opt_in_capturing();
     }
     analyticsValue.analytics.capturePageViewed({ path });
   });

@@ -33,6 +33,7 @@ export const statements = {
   organizationSettings: ["update"],
   auditLog: ["read"],
   agentSkill: ["create", "update", "delete"],
+  shareSpace: ["create", "read", "update", "revoke", "audit"],
 } as const;
 
 type PermissionMap = {
@@ -72,6 +73,7 @@ const memberAc = ac.newRole({
   organizationSettings: [],
   auditLog: [],
   agentSkill: ["create", "update", "delete"],
+  shareSpace: ["create", "read", "update", "revoke", "audit"],
 });
 
 export const roles = {
@@ -100,6 +102,7 @@ export const roles = {
     organizationSettings: ["update"],
     auditLog: ["read"],
     agentSkill: ["create", "update", "delete"],
+    shareSpace: ["create", "read", "update", "revoke", "audit"],
   }),
   admin: ac.newRole({
     organization: ["update"],
@@ -126,6 +129,7 @@ export const roles = {
     organizationSettings: ["update"],
     auditLog: ["read"],
     agentSkill: ["create", "update", "delete"],
+    shareSpace: ["create", "read", "update", "revoke", "audit"],
   }),
   member: memberAc,
   intern: ac.newRole({
@@ -153,6 +157,7 @@ export const roles = {
     organizationSettings: [],
     auditLog: [],
     agentSkill: [],
+    shareSpace: [],
   }),
   external: ac.newRole({
     organization: [],
@@ -179,5 +184,6 @@ export const roles = {
     organizationSettings: [],
     auditLog: [],
     agentSkill: [],
+    shareSpace: [],
   }),
 };

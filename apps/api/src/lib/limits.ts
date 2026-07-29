@@ -186,6 +186,8 @@ export const LIMITS = {
   reportExportsPageSizeMax: 100,
   auditLogPageSizeDefault: 50,
   auditLogPageSizeMax: 200,
+  shareSpacesPageSizeDefault: 25,
+  shareSpacesPageSizeMax: 100,
   /** Page sizes for the operator recent-registrations listing. */
   operatorRegistrationsPageSizeDefault: 50,
   operatorRegistrationsPageSizeMax: 200,
@@ -405,4 +407,6 @@ export const API_RATE_LIMITS = {
   /** Two-factor management (enable/disable/get-totp-uri/regenerate-backup-codes)
    *  confirmation OTP email request limit: 5 requests per minute. */
   twoFactorManageOtp: { duration: 60_000, max: 5 },
+  /** Email-gated external shares: cap invitation-targeted OTP sends per IP. */
+  shareSpaceOtp: { duration: 60_000, max: 5 },
 } as const;

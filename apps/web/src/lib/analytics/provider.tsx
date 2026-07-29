@@ -5,6 +5,7 @@ import { hasPostHogConfig } from "@/lib/analytics/config";
 import { noopAnalytics } from "@/lib/analytics/noop";
 import { createPostHogAnalytics } from "@/lib/analytics/posthog";
 import type { Analytics } from "@/lib/analytics/types";
+import { isExternalSharePath } from "@/lib/external-share-privacy";
 
 export const AnalyticsContext = createContext(noopAnalytics);
 let globalAnalytics: Analytics = noopAnalytics;
@@ -32,6 +33,10 @@ export const createAnalyticsValue = (): AnalyticsValue => {
   };
   const shouldEnablePostHog =
     hasPostHogConfig(posthogConfig) &&
+    !(
+      typeof window !== "undefined" &&
+      isExternalSharePath(window.location.pathname)
+    ) &&
     (!import.meta.env.DEV || env.VITE_POSTHOG_LOCAL_DEBUG);
   const value = shouldEnablePostHog
     ? createPostHogAnalytics(posthogConfig.key, posthogConfig.host)

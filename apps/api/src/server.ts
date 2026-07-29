@@ -61,6 +61,11 @@ import { initReportExportWorker } from "@/api/handlers/reports/report-export-que
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
+import {
+  shareSpaceAccessRoute,
+  shareSpacesRoute,
+} from "@/api/handlers/share-spaces/routes";
+import { initSharePublicationWorker } from "@/api/handlers/share-spaces/share-publish-queue";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
@@ -478,6 +483,8 @@ const api = new Elysia()
       .use(playbooksRoute)
       .use(playbookRunsRoute)
       .use(reportsRoute)
+      .use(shareSpaceAccessRoute)
+      .use(shareSpacesRoute)
       .use(flowsRoute)
       .use(flowRunsRoute)
       .use(documentTypesRoute)
@@ -609,6 +616,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for queued view→report exports.
   const reportExportWorker = initReportExportWorker();
 
+  // BullMQ worker for immutable Share Space snapshot copies.
+  const sharePublicationWorker = initSharePublicationWorker();
+
   api.listen(getApiPort());
 
   // Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ
@@ -640,6 +650,7 @@ const startServer = async (): Promise<void> => {
         accountDeletionCleanupWorker.close(),
         styleSetPackageCleanupWorker.close(),
         reportExportWorker.close(),
+        sharePublicationWorker.close(),
       ]),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);

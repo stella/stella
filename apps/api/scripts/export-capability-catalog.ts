@@ -199,6 +199,10 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // matters-write consent), a report export is a genuine workspace write, so a
   // dedicated read-only scope would understate what it does.
   reports: "stella:matters_write",
+  // Publishing a Share Space reads one exact matter document version and
+  // creates workspace-owned external snapshot state, so it requires the
+  // existing matter-write consent bucket.
+  "share-spaces": "stella:matters_write",
   skills: "stella:skills",
   "style-sets": "stella:templates",
   tasks: "stella:matters_write",

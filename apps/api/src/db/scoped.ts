@@ -11,6 +11,7 @@ import type { SQLWrapper } from "drizzle-orm";
 import {
   SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_ORGANIZATION_ID,
+  SETTING_SHARE_SPACE_IDS,
   SETTING_USER_ID,
   SETTING_WORKSPACE_IDS,
   WORKSPACE_ACCESS_MODE,
@@ -142,6 +143,60 @@ export const createScopedDb =
       fn,
     });
 
+type RunShareScopedTransactionOptions<
+  TTransaction extends ScopedTransactionBase,
+  T,
+> = {
+  database: RlsDatabase<TTransaction>;
+  fn: (tx: TTransaction) => Promise<T>;
+  shareSpaceId: SafeId<"shareSpace">;
+  userId: SafeId<"user">;
+};
+
+/**
+ * Run one recipient-facing transaction with a single server-validated Share
+ * Space and no organization or workspace visibility.
+ *
+ * Clearing the ordinary tenant settings is intentional defence in depth: the
+ * same `stella` role serves authenticated workspace traffic, so a share route
+ * must not inherit or synthesize an organization scope merely because the
+ * publication belongs to one. Share-table RLS is the only data boundary that
+ * is active here.
+ */
+const runShareScopedTransaction = async <
+  TTransaction extends ScopedTransactionBase,
+  T,
+>({
+  database,
+  fn,
+  shareSpaceId,
+  userId,
+}: RunShareScopedTransactionOptions<TTransaction, T>): Promise<T> =>
+  await database.transaction(async (tx: TTransaction) => {
+    const shareSpaceIds = `{${shareSpaceId}}`;
+
+    await tx.execute(
+      sql`SELECT
+        set_config('role', '${sql.raw(stella.name)}', true),
+        set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', '{}', true),
+        set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${WORKSPACE_ACCESS_MODE.explicit}, true),
+        set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', '', true),
+        set_config('${sql.raw(SETTING_USER_ID)}', ${userId}, true),
+        set_config('${sql.raw(SETTING_SHARE_SPACE_IDS)}', ${shareSpaceIds}, true)`,
+    );
+
+    return await fn(tx);
+  });
+
+export const createShareScopedDb =
+  <TTransaction extends ScopedTransactionBase>(
+    database: RlsDatabase<TTransaction>,
+    shareSpaceId: SafeId<"shareSpace">,
+    userId: SafeId<"user">,
+  ) =>
+  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+    await runShareScopedTransaction({ database, shareSpaceId, userId, fn });
+
 type MembershipScopedDbOptions = {
   organizationId: SafeId<"organization">;
   /**
@@ -271,6 +326,31 @@ export const createMembershipSafeDb =
               serverValidatedWorkspaceIds,
             },
             organizationId,
+            userId,
+            fn,
+          }),
+        catch: toSafeDbError,
+      },
+      retry,
+    );
+
+/** Result-wrapped share scope for future recipient-facing safe handlers. */
+export const createShareSafeDb =
+  <TTransaction extends ScopedTransactionBase>(
+    database: RlsDatabase<TTransaction>,
+    shareSpaceId: SafeId<"shareSpace">,
+    userId: SafeId<"user">,
+  ) =>
+  async <T>(
+    fn: (tx: TTransaction) => Promise<T>,
+    retry?: SafeDbRetryConfig<SafeDbError>,
+  ) =>
+    await Result.tryPromise(
+      {
+        try: async () =>
+          await runShareScopedTransaction({
+            database,
+            shareSpaceId,
             userId,
             fn,
           }),

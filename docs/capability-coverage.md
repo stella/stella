@@ -264,6 +264,15 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `reports.list-templates` | read   | stella:read          | —       | generic invoke → `stella capability reports list-templates` |
 | `reports.read-export`    | write  | stella:matters_write | —       | generic invoke → `stella capability reports read-export`    |
 
+## share-spaces
+
+| Capability                        | Access | Scope                | Feature | Reachable via                                                        |
+| --------------------------------- | ------ | -------------------- | ------- | -------------------------------------------------------------------- |
+| `share-spaces.create`             | write  | stella:matters_write | —       | generic invoke → `stella capability share-spaces create`             |
+| `share-spaces.get`                | read   | stella:read          | —       | generic invoke → `stella capability share-spaces get`                |
+| `share-spaces.list`               | read   | stella:read          | —       | generic invoke → `stella capability share-spaces list`               |
+| `share-spaces.revocations.create` | write  | stella:matters_write | —       | generic invoke → `stella capability share-spaces revocations-create` |
+
 ## skills
 
 | Capability                 | Access             | Scope         | Feature | Reachable via                                                        |
@@ -454,7 +463,7 @@ mechanics, and similar), not gaps in coverage.
 | ---------------------- | ----- |
 | account_lifecycle      | 4     |
 | assistant_chat         | 7     |
-| auth_plumbing          | 7     |
+| auth_plumbing          | 11    |
 | chat_thread_ui         | 1     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
@@ -471,4 +480,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 4     |
 | url_preview            | 2     |
 
-Total: 98
+Total: 102
