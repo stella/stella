@@ -191,7 +191,7 @@ const mergeAdjacentSqlTextTokens = (
   for (const token of tokens) {
     const previous = merged.at(-1);
     if (token.type === "text" && previous?.type === "text") {
-      previous.value += token.value;
+      previous.value += ` ${token.value}`;
       continue;
     }
     if (token.type === "text") {
