@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { ENTITY_KINDS } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -111,7 +112,7 @@ export const validateSavedSearchCriteria = (
     kinds: [...parsed.output.kinds],
     editedByUserIds: parsed.output.editedByUserIds.map(brandPersistedUserId),
     mimeTypes: [...parsed.output.mimeTypes],
-    time: parsed.output.time,
+    ...(parsed.output.time !== undefined && { time: parsed.output.time }),
     sort: parsed.output.sort,
   };
 
@@ -122,6 +123,22 @@ export const validateSavedSearchCriteria = (
   }
   if (!hasValidCustomTimeRange(criteria.time)) {
     return criteriaError("The updated date range is invalid");
+  }
+
+  return Result.ok(criteria);
+};
+
+export const validateSavedSearchWorkspaceAccess = (
+  criteria: SavedSearchCriteria,
+  activeWorkspaceIds: readonly SafeId<"workspace">[],
+): Result<SavedSearchCriteria, HandlerError<422>> => {
+  const activeWorkspaceIdSet = new Set<string>(activeWorkspaceIds);
+  for (const workspaceId of criteria.workspaceIds) {
+    if (!activeWorkspaceIdSet.has(workspaceId)) {
+      return criteriaError(
+        "Saved search includes an inaccessible or inactive workspace",
+      );
+    }
   }
 
   return Result.ok(criteria);

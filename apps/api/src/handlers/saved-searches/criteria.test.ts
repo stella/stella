@@ -1,7 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { validateSavedSearchCriteria } from "./criteria";
+import { toSafeId } from "@/api/lib/branded-types";
+
+import {
+  validateSavedSearchCriteria,
+  validateSavedSearchWorkspaceAccess,
+} from "./criteria";
 
 const WORKSPACE_ID = "019857da-1f4b-7000-8000-000000000001";
 
@@ -75,5 +80,23 @@ describe("saved search criteria", () => {
     );
 
     expect(Result.isError(result)).toBe(true);
+  });
+
+  test("accepts only active workspace scopes", () => {
+    const parsed = validateSavedSearchCriteria(
+      criteria({ workspaceIds: [WORKSPACE_ID] }),
+    );
+    expect(Result.isOk(parsed)).toBe(true);
+    if (Result.isError(parsed)) {
+      return;
+    }
+
+    const allowed = validateSavedSearchWorkspaceAccess(parsed.value, [
+      toSafeId<"workspace">(WORKSPACE_ID),
+    ]);
+    const inaccessible = validateSavedSearchWorkspaceAccess(parsed.value, []);
+
+    expect(Result.isOk(allowed)).toBe(true);
+    expect(Result.isError(inaccessible)).toBe(true);
   });
 });

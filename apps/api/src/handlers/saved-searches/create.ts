@@ -11,6 +11,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   validateSavedSearchCriteria,
   validateSavedSearchName,
+  validateSavedSearchWorkspaceAccess,
 } from "./criteria";
 import { toSavedSearchResponse } from "./response";
 import { createSavedSearchBodySchema } from "./schema";
@@ -23,7 +24,14 @@ const config = {
 
 const createSavedSearch = createSafeRootHandler(
   config,
-  async function* ({ body, recordAuditEvent, safeDb, session, user }) {
+  async function* ({
+    body,
+    getActiveWorkspaceIds,
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+  }) {
     const name = validateSavedSearchName(body.name);
     if (Result.isError(name)) {
       return Result.err(name.error);
@@ -31,6 +39,20 @@ const createSavedSearch = createSafeRootHandler(
     const criteria = validateSavedSearchCriteria(body.criteria);
     if (Result.isError(criteria)) {
       return Result.err(criteria.error);
+    }
+    let accessibleCriteria = criteria.value;
+    if (criteria.value.workspaceIds.length > 0) {
+      const activeWorkspaceIds = yield* Result.await(
+        Result.tryPromise(async () => await getActiveWorkspaceIds()),
+      );
+      const accessValidation = validateSavedSearchWorkspaceAccess(
+        criteria.value,
+        activeWorkspaceIds,
+      );
+      if (Result.isError(accessValidation)) {
+        return Result.err(accessValidation.error);
+      }
+      accessibleCriteria = accessValidation.value;
     }
 
     const created = yield* Result.await(
@@ -57,7 +79,7 @@ const createSavedSearch = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             userId: user.id,
             name: name.value,
-            criteria: criteria.value,
+            criteria: accessibleCriteria,
           })
           .returning();
         if (!savedSearch) {
@@ -71,7 +93,7 @@ const createSavedSearch = createSafeRootHandler(
           changes: {
             created: {
               old: null,
-              new: { criteriaVersion: criteria.value.version },
+              new: { criteriaVersion: accessibleCriteria.version },
             },
           },
         });

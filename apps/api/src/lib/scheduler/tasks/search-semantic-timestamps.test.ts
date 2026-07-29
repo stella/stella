@@ -51,9 +51,8 @@ test("repairs one bounded batch and checkpoints after the update", async () => {
     "sd.updated_at IS DISTINCT FROM COALESCE(e.updated_at, e.created_at)",
   );
   expect(repairQuery.params).toContain(500);
-  expect(checkpointQuery.sql).toContain(
-    "SET payload = jsonb_build_object('cursor'",
-  );
+  expect(checkpointQuery.sql).toContain("SET payload = jsonb_build_object(");
+  expect(checkpointQuery.sql).toContain("'cursor'");
   expect(checkpointQuery.params).toContain(entityId);
 });
 
@@ -63,7 +62,7 @@ test("requires a clean verification pass before disabling the job", async () => 
   const restartOutcome = await repairSearchSemanticTimestamps({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
-    payload: { cursor: "11111111-1111-4111-8111-111111111111" },
+    payload: null,
     signal: new AbortController().signal,
   });
 

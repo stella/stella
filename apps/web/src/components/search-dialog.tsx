@@ -351,11 +351,14 @@ export const SearchDialog = ({
 
   const {
     data,
+    error: searchError,
+    isError: isSearchError,
     isLoading,
     isFetching,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
+    refetch: refetchSearch,
   } = useInfiniteQuery(
     searchInfiniteOptions({
       enabled: hasActiveSearch,
@@ -381,7 +384,8 @@ export const SearchDialog = ({
   // Counts and facets are computed only on the first page (see backend);
   // ignore them entirely while the query is empty so a cleared input
   // doesn't leave stale numbers in the sidebar.
-  const firstPage = hasActiveSearch ? data?.pages.at(0) : undefined;
+  const firstPage =
+    hasActiveSearch && !isSearchError ? data?.pages.at(0) : undefined;
   const facets = firstPage?.facets;
   const typeBuckets = facets ? facets.type : EMPTY_FACET_BUCKETS;
   const mimeTypeBuckets = facets ? facets.mimeType : EMPTY_FACET_BUCKETS;
@@ -441,6 +445,12 @@ export const SearchDialog = ({
   };
 
   const analytics = useAnalytics();
+  useExternalSyncEffect(() => {
+    if (searchError) {
+      analytics.captureError(searchError);
+    }
+  }, [analytics, searchError]);
+
   // summarizeSearchEndpoint (POST /search/summary) and the follow-up
   // "Ask about these results" chat (POST /search/summary/chat) both
   // require chat:create; hide the AI summary control for roles that
@@ -773,8 +783,12 @@ export const SearchDialog = ({
 
   const hasResults = allHits.length > 0;
   const shouldShowResults =
-    hasVisibleSearch && !hasUnavailableSelectedType && hasResults;
-  const commandHits = hasActiveSearch && hasResults ? allHits : [];
+    hasVisibleSearch &&
+    !hasUnavailableSelectedType &&
+    !isSearchError &&
+    hasResults;
+  const commandHits =
+    hasActiveSearch && !isSearchError && hasResults ? allHits : [];
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
   // Clear any prior AI summary whenever the effective search changes. The
@@ -1050,13 +1064,34 @@ export const SearchDialog = ({
               {hasVisibleSearch && hasUnavailableSelectedType && (
                 <div className="flex h-full items-center justify-center px-4 py-8">
                   <p className="text-muted-foreground text-sm">
-                    {t("common.unavailable")}
+                    {t("ai.unavailable")}
                   </p>
                 </div>
               )}
 
               {hasVisibleSearch &&
                 !hasUnavailableSelectedType &&
+                hasActiveSearch &&
+                isSearchError && (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-8">
+                    <p className="text-muted-foreground text-sm">
+                      {t("common.somethingWentWrong")}
+                    </p>
+                    <Button
+                      onClick={() => {
+                        detached(refetchSearch(), "SearchDialog");
+                      }}
+                      size="sm"
+                      variant="outline"
+                    >
+                      {t("common.retry")}
+                    </Button>
+                  </div>
+                )}
+
+              {hasVisibleSearch &&
+                !hasUnavailableSelectedType &&
+                !isSearchError &&
                 !hasResults &&
                 (!hasActiveSearch || isLoading) && (
                   <div className="space-y-3 px-4 py-3">
@@ -1072,6 +1107,7 @@ export const SearchDialog = ({
 
               {hasVisibleSearch &&
                 hasActiveSearch &&
+                !isSearchError &&
                 !isLoading &&
                 !hasResults && (
                   <div className="flex h-full items-center justify-center px-4 py-8">

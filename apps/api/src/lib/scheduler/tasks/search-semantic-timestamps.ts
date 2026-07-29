@@ -45,11 +45,15 @@ type RepairState = {
 };
 
 const repairState = (payload: SchedulerPayload | null): RepairState => {
+  if (payload?.["pass"] === REPAIR_PASS.verify) {
+    return { cursor: null, pass: REPAIR_PASS.verify };
+  }
+
   const cursor = payload?.["cursor"];
   if (typeof cursor === "string") {
     return { cursor, pass: REPAIR_PASS.repair };
   }
-  return { cursor: null, pass: REPAIR_PASS.verify };
+  return { cursor: null, pass: REPAIR_PASS.repair };
 };
 
 export const repairSearchSemanticTimestamps = async ({

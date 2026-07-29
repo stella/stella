@@ -115,14 +115,16 @@ export const SavedSearches = ({
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
       const criteria = toSavedSearchCriteria({ filters, query });
+      const { time, workspaceIds, ...requiredCriteria } = criteria;
       return unwrapEden(
         await api["saved-searches"].post({
           name,
           criteria: {
-            ...criteria,
-            workspaceIds: criteria.workspaceIds.map((workspaceId) =>
+            ...requiredCriteria,
+            workspaceIds: workspaceIds.map((workspaceId) =>
               toSafeId<"workspace">(workspaceId),
             ),
+            ...(time !== undefined && { time }),
           },
         }),
       );

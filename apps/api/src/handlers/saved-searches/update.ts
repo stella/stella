@@ -11,6 +11,7 @@ import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import {
   validateSavedSearchCriteria,
   validateSavedSearchName,
+  validateSavedSearchWorkspaceAccess,
 } from "./criteria";
 import { toSavedSearchResponse } from "./response";
 import { savedSearchParamsSchema, updateSavedSearchBodySchema } from "./schema";
@@ -30,7 +31,15 @@ type SavedSearchUpdates = {
 
 const updateSavedSearch = createSafeRootHandler(
   config,
-  async function* ({ body, params, recordAuditEvent, safeDb, session, user }) {
+  async function* ({
+    body,
+    getActiveWorkspaceIds,
+    params,
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+  }) {
     if (body.name === undefined && body.criteria === undefined) {
       return Result.err(
         new HandlerError({ status: 422, message: "No saved search changes" }),
@@ -42,12 +51,26 @@ const updateSavedSearch = createSafeRootHandler(
     if (name && Result.isError(name)) {
       return Result.err(name.error);
     }
-    const criteria =
-      body.criteria === undefined
-        ? undefined
-        : validateSavedSearchCriteria(body.criteria);
-    if (criteria && Result.isError(criteria)) {
-      return Result.err(criteria.error);
+    let criteria: SavedSearchCriteria | undefined;
+    if (body.criteria !== undefined) {
+      const parsedCriteria = validateSavedSearchCriteria(body.criteria);
+      if (Result.isError(parsedCriteria)) {
+        return Result.err(parsedCriteria.error);
+      }
+      criteria = parsedCriteria.value;
+      if (parsedCriteria.value.workspaceIds.length > 0) {
+        const activeWorkspaceIds = yield* Result.await(
+          Result.tryPromise(async () => await getActiveWorkspaceIds()),
+        );
+        const accessValidation = validateSavedSearchWorkspaceAccess(
+          parsedCriteria.value,
+          activeWorkspaceIds,
+        );
+        if (Result.isError(accessValidation)) {
+          return Result.err(accessValidation.error);
+        }
+        criteria = accessValidation.value;
+      }
     }
 
     const updates: SavedSearchUpdates = { updatedAt: new Date() };
@@ -56,8 +79,8 @@ const updateSavedSearch = createSafeRootHandler(
       updates.name = name.value;
       changedFields.push("name");
     }
-    if (criteria && Result.isOk(criteria)) {
-      updates.criteria = criteria.value;
+    if (criteria) {
+      updates.criteria = criteria;
       changedFields.push("criteria");
     }
 

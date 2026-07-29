@@ -25,6 +25,6 @@ export type SavedSearchCriteria = {
   kinds: EntityKind[];
   editedByUserIds: string[];
   mimeTypes: string[];
-  time?: SavedSearchTimeFilter | undefined;
+  time?: SavedSearchTimeFilter;
   sort: SavedSearchSort;
 };
