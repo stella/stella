@@ -92,6 +92,29 @@ const unsafeMergeUsingEntity = sql`
     INSERT (id) VALUES (sd.entity_id)
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves MERGE ON cannot authorize source rows used by WHEN NOT MATCHED
+const unsafeMergeOnScopeEntity = sql`
+  MERGE INTO entities e
+  USING search_documents sd
+  ON e.id = sd.entity_id
+    AND true ${entityWorkspaceFilter}
+  WHEN NOT MATCHED THEN
+    INSERT (id) VALUES (sd.entity_id)
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a scope outside a nested MERGE cannot authorize its source query
+const unsafeNestedMergeSource = sql`
+  WITH merged_entities AS (
+    MERGE INTO entities e
+    USING search_documents sd
+    ON e.id = sd.entity_id
+    WHEN MATCHED THEN
+      UPDATE SET title = sd.title
+  )
+  SELECT * FROM merged_entities me
+  WHERE true ${entityWorkspaceFilter}
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves counts cannot omit authorization either
 const unsafeChatCount = sql`SELECT count(*) FROM chat_thread_search_documents cst`;
 
@@ -211,6 +234,21 @@ const privateFromHelper = () => sql`FROM search_documents sd`;
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a local zero-argument helper cannot hide a private projection
 const unsafeLocalHelperPrivateRead = sql`SELECT * ${privateFromHelper()}`;
 
+const privateFromHelperAlias = privateFromHelper;
+const privateFromHelperAliasChain = privateFromHelperAlias;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves recursively const-aliased direct helpers cannot hide a private projection
+const unsafeAliasedLocalHelperPrivateRead = sql`
+  SELECT * ${privateFromHelperAliasChain()}
+`;
+
+const scopedFromHelper = (scope: unknown) =>
+  sql`FROM search_documents sd WHERE true ${scope}`;
+const scopedFromHelperAlias = scopedFromHelper;
+const scopedAliasedLocalHelperRead = sql`
+  SELECT * ${scopedFromHelperAlias(entityWorkspaceFilter)}
+`;
+
 // oxlint-disable-next-line arrow-body-style -- block body exercises block-return helper analysis
 const privateFromBlock = () => {
   return sql`FROM search_documents sd`;
@@ -255,6 +293,28 @@ const memberSqlHelpers = {
     return sql`FROM search_documents sd WHERE true ${scope}`;
   },
 };
+
+const computedPrivateHelperDefinitionKey = "fromPrivate";
+const computedPrivateHelperDefinitionKeyAlias =
+  computedPrivateHelperDefinitionKey;
+const computedDefinitionSqlHelpers = {
+  [computedPrivateHelperDefinitionKeyAlias]() {
+    return sql`FROM search_documents sd`;
+  },
+  scoped(scope: unknown) {
+    return sql`FROM search_documents sd WHERE true ${scope}`;
+  },
+};
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a const-computed object definition key cannot hide a private helper
+const unsafeComputedDefinitionMemberHelperRead = sql`
+  SELECT * ${computedDefinitionSqlHelpers.fromPrivate()}
+`;
+
+const scopedComputedDefinitionMemberHelperRead = sql`
+  SELECT *
+  ${computedDefinitionSqlHelpers.scoped(entityWorkspaceFilter)}
+`;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a statically selected object method cannot hide a private projection
 const unsafeMemberHelperRead = sql`
@@ -384,6 +444,17 @@ const unsafeRootJoinedPrivateRead = sql.join([
   sql`documents sd`,
 ]);
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.fromList preserves exact composition when the private relation is split across chunks
+const unsafeRootFromListPrivateRead = sql.fromList([
+  sql`SELECT * FROM search_`,
+  sql`documents sd`,
+]);
+
+const scopedRootFromListPrivateRead = sql.fromList([
+  sql`SELECT * FROM search_documents sd WHERE true `,
+  entityWorkspaceFilter,
+]);
+
 const unsafeAppendRoot = sql`SELECT * FROM `;
 const unsafeAppendAlias = unsafeAppendRoot;
 
@@ -427,6 +498,33 @@ const escapedRawEntityTemplate = `SELECT * FROM search_\x64ocuments sd`;
 const unsafeEscapedRawTemplateEntity = sql.raw(escapedRawEntityTemplate);
 
 const privateRawRelation = sql.raw("search_documents");
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a static sql.identifier relation is analyzed as exact quoted SQL
+const unsafeStaticIdentifierEntity = sql`
+  SELECT * FROM ${sql.identifier("search_documents")} sd
+`;
+
+const scopedStaticIdentifierEntity = sql`
+  SELECT * FROM ${drizzleSqlAlias.identifier("search_documents")} sd
+  WHERE true ${entityWorkspaceFilter}
+`;
+
+const publicStaticIdentifierEntity = sql`
+  SELECT * FROM ${sql.identifier("entities")} e
+`;
+
+declare const dynamicRelationName: string;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a dynamic sql.identifier relation is rejected when its authorization cannot be verified
+const unsafeDynamicIdentifierRelation = sql`
+  SELECT * FROM ${sql.identifier(dynamicRelationName)} relation
+`;
+
+declare const dynamicColumnName: string;
+const dynamicIdentifierColumnControl = sql`
+  SELECT ${sql.identifier(dynamicColumnName)}
+  FROM entities e
+`;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves raw relation fragments preserve SQL lexical continuity
 const unsafeRawRelationFragment = sql`
@@ -814,10 +912,29 @@ const scopedInterpolatedDeleteUsingEntity = sql`
 
 const scopedMergeUsingEntity = sql`
   MERGE INTO entities e
-  USING search_documents sd
-  ON true ${entityWorkspaceFilter}
+  USING (
+    SELECT *
+    FROM search_documents sd
+    WHERE true ${entityWorkspaceFilter}
+  ) sd
+  ON e.id = sd.entity_id
   WHEN NOT MATCHED THEN
     INSERT (id) VALUES (sd.entity_id)
+`;
+
+const scopedNestedMergeSource = sql`
+  WITH merged_entities AS (
+    MERGE INTO entities e
+    USING (
+      SELECT *
+      FROM search_documents sd
+      WHERE true ${entityWorkspaceFilter}
+    ) sd
+    ON e.id = sd.entity_id
+    WHEN MATCHED THEN
+      UPDATE SET title = sd.title
+  )
+  SELECT * FROM merged_entities
 `;
 
 const scopedUpdateCte = sql`
@@ -1259,6 +1376,8 @@ void [
   unsafeDeleteUsingEntity,
   unsafeInterpolatedDeleteUsingEntity,
   unsafeMergeUsingEntity,
+  unsafeMergeOnScopeEntity,
+  unsafeNestedMergeSource,
   unsafeChatCount,
   unsafeConditionalScope,
   unsafeNestedHelper,
@@ -1280,11 +1399,13 @@ void [
   unsafeCommaOnlyInterpolatedEntity,
   unsafeComposedPrivateRead,
   unsafeLocalHelperPrivateRead,
+  unsafeAliasedLocalHelperPrivateRead,
   unsafeBlockHelperPrivateRead,
   unsafeParameterizedHelperRead,
   unsafeDeclaredHelperRead,
   unsafeBranchedParameterizedHelperRead,
   unsafeMemberHelperRead,
+  unsafeComputedDefinitionMemberHelperRead,
   unsafeMissingArgumentMemberHelperRead,
   unsafeDynamicMemberHelperRead,
   unsafeMemberFragmentRead,
@@ -1298,12 +1419,15 @@ void [
   unsafeSplitJoinedPrivateFragment,
   unsafeJoinedMultiBranch,
   unsafeRootJoinedPrivateRead,
+  unsafeRootFromListPrivateRead,
   unsafeAppendedPrivateRead,
   separatedAppendPrivateRead,
   unsafeOpaqueRootJoinedPrivateRead,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
   unsafeEscapedRawTemplateEntity,
+  unsafeStaticIdentifierEntity,
+  unsafeDynamicIdentifierRelation,
   unsafeRawRelationFragment,
   unsafeSplitRawRelationFragment,
   unsafeSplitTemplateRelationFragment,
@@ -1363,6 +1487,7 @@ void [
   scopedDeleteUsingEntity,
   scopedInterpolatedDeleteUsingEntity,
   scopedMergeUsingEntity,
+  scopedNestedMergeSource,
   scopedUpdateCte,
   scopedDeleteCte,
   scopedExplicitAlias,
@@ -1382,11 +1507,13 @@ void [
   scopedNestedPrivateRead,
   scopedComposedRead,
   scopedLocalHelperPrivateRead,
+  scopedAliasedLocalHelperRead,
   scopedBlockHelperPrivateRead,
   scopedParameterizedHelperRead,
   publicParameterizedHelperRead,
   scopedBranchedParameterizedHelperRead,
   scopedMemberHelperRead,
+  scopedComputedDefinitionMemberHelperRead,
   scopedDynamicMemberHelperRead,
   publicMissingArgumentMemberHelperRead,
   shadowedParameterControl,
@@ -1408,6 +1535,10 @@ void [
   scopedJoinedMultiBranch,
   scopedRawJoinedMultiBranch,
   scopedRootJoinedPrivateRead,
+  scopedRootFromListPrivateRead,
+  scopedStaticIdentifierEntity,
+  publicStaticIdentifierEntity,
+  dynamicIdentifierColumnControl,
   scopedOrdinaryDoubledQuote,
   scopedEscapeStringRead,
   scopedSplitEscapeStringRead,

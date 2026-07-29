@@ -42,6 +42,10 @@ type RuleContext = {
           node: unknown;
         }
       | {
+          messageId: "unavailableIdentifier";
+          node: unknown;
+        }
+      | {
           messageId: "unavailableCooked";
           node: unknown;
         },
@@ -196,7 +200,8 @@ const staticTemplateLiteralText = (node: unknown): string | null => {
 
 type SqlTemplateToken =
   | { type: "expression"; value: unknown }
-  | { type: "text"; value: string };
+  | { type: "text"; value: string }
+  | { type: "unavailable-identifier" };
 
 const mergeAdjacentSqlTextTokens = (
   tokens: readonly SqlTemplateToken[],
@@ -210,8 +215,10 @@ const mergeAdjacentSqlTextTokens = (
     }
     if (token.type === "text") {
       merged.push({ type: "text", value: token.value });
-    } else {
+    } else if (token.type === "expression") {
       merged.push({ type: "expression", value: token.value });
+    } else {
+      merged.push({ type: "unavailable-identifier" });
     }
   }
   return merged;
@@ -660,7 +667,7 @@ type SqlQueryNestingEvent =
   | { queryId: number; type: "end-query" };
 
 const SQL_QUERY_NESTING_TOKEN =
-  /[()]|\b(?:delete|select|table|update|values|with)\b/giu;
+  /[()]|\b(?:delete|merge|select|table|update|values|with)\b/giu;
 
 const sqlQueryNestingEvents = (
   text: string,
@@ -787,6 +794,7 @@ type SqlScopeContext = {
   functionArgumentDepth: number;
   functionArgumentOuterClause: SqlScopeClause | null;
   hasNonConjunctiveFilter: boolean;
+  isMergeStatement: boolean;
   pendingJoinIsOuter: boolean;
   pendingAggregateFilter: boolean;
 };
@@ -801,6 +809,7 @@ const INITIAL_SQL_SCOPE_CONTEXT: SqlScopeContext = {
   functionArgumentDepth: 0,
   functionArgumentOuterClause: null,
   hasNonConjunctiveFilter: false,
+  isMergeStatement: false,
   pendingJoinIsOuter: false,
   pendingAggregateFilter: false,
 };
@@ -910,6 +919,7 @@ const SQL_CLAUSE_KEYWORDS = [
   "join",
   "left",
   "limit",
+  "merge",
   "offset",
   "on",
   "or",
@@ -932,7 +942,7 @@ const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
   SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
 
 const SQL_SCOPE_CONTEXT_TOKEN =
-  /[()]|\b(?:not\s+)?in\s*\(\s*(?:false|true)\s*\)|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|(?:<=|>=|<|>)\s*\b(?:false|true)\b|\b(?:false|true)\b\s*(?:<=|>=|<|>)|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|using|values|when|where|window)\b/giu;
+  /[()]|\b(?:not\s+)?in\s*\(\s*(?:false|true)\s*\)|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|(?:<=|>=|<|>)\s*\b(?:false|true)\b|\b(?:false|true)\b\s*(?:<=|>=|<|>)|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|merge|not|offset|on|or|order|returning|right|select|set|using|values|when|where|window)\b/giu;
 
 const INVERSE_BOOLEAN_MEMBERSHIP_TESTS = new Set(["in(false)", "notin(true)"]);
 
@@ -1091,9 +1101,16 @@ const sqlScopeContextAfter = (
         });
         break;
       case "on":
-        context.clause = context.currentJoinIsOuter
-          ? "non-filtering"
-          : "inner-join-on";
+        context.clause =
+          context.isMergeStatement || context.currentJoinIsOuter
+            ? "non-filtering"
+            : "inner-join-on";
+        break;
+      case "merge":
+        Object.assign(context, {
+          clause: "non-filtering",
+          isMergeStatement: true,
+        });
         break;
       case "having":
         context.clause = "non-filtering";
@@ -1142,6 +1159,9 @@ export default {
             "Raw read from private search projection `{{table}}` must " +
             "compose an approved workspace/contact/chat authorization scope " +
             "fragment. Add the appropriate scope helper; do not post-filter.",
+          unavailableIdentifier:
+            "A relation passed to sql.identifier must be statically known so " +
+            "private search projection authorization can be verified.",
           unavailableCooked:
             "SQL template text must have a statically available cooked value " +
             "so authorization scope can be verified.",
@@ -1213,7 +1233,7 @@ export default {
 
         const isSqlMethodCall = (
           expression: unknown,
-          method: "join" | "raw",
+          method: "fromList" | "identifier" | "join" | "raw",
         ): boolean => {
           const unwrapped = unwrapExpression(expression);
           if (
@@ -1224,7 +1244,7 @@ export default {
           ) {
             return false;
           }
-          const object = unwrapExpression(unwrapped.callee.object);
+          const object = resolveConstInitializer(unwrapped.callee.object);
           if (
             !isIdentifier(object) ||
             !isApprovedImport(object, DRIZZLE_SQL_IMPORTS)
@@ -1401,7 +1421,7 @@ export default {
 
         const staticObjectPropertyKey = (property: AstNode): string | null => {
           if (property.computed === true) {
-            return staticLiteralPropertyKey(property.key);
+            return resolveStaticPropertyKey(property.key, new Set());
           }
           if (isIdentifier(property.key)) {
             return property.key.name;
@@ -1619,9 +1639,15 @@ export default {
 
         const directIdentifierFunctionNodes = (
           identifier: AstNode & { name: string },
+          ancestors: ReadonlySet<ScopeVariable> = new Set(),
         ): AstNode[] => {
           const variable = resolveVariable(identifier);
-          return (variable?.defs ?? []).flatMap((definition) => {
+          if (variable === null || ancestors.has(variable)) {
+            return [];
+          }
+          const nextAncestors = new Set(ancestors);
+          nextAncestors.add(variable);
+          return variable.defs.flatMap((definition) => {
             if (
               definition.type === "FunctionName" &&
               isAstNode(definition.node) &&
@@ -1640,10 +1666,15 @@ export default {
               return [];
             }
             const initializer = unwrapExpression(definition.node.init);
-            return isAstNode(initializer) &&
+            if (
+              isAstNode(initializer) &&
               (initializer.type === "ArrowFunctionExpression" ||
                 initializer.type === "FunctionExpression")
-              ? [initializer]
+            ) {
+              return [initializer];
+            }
+            return isIdentifier(initializer)
+              ? directIdentifierFunctionNodes(initializer, nextAncestors)
               : [];
           });
         };
@@ -1775,7 +1806,7 @@ export default {
           ],
         ];
 
-        const staticRawSqlText = (
+        const staticSqlStringArgument = (
           call: AstNode,
           parameterBindings: SqlParameterBindings = new Map(),
         ): string | null => {
@@ -1982,10 +2013,49 @@ export default {
             const nextAncestors = new Set(ancestors);
             nextAncestors.add(resolved);
             if (isSqlMethodCall(resolved, "raw")) {
-              const rawText = staticRawSqlText(resolved, parameterBindings);
+              const rawText = staticSqlStringArgument(
+                resolved,
+                parameterBindings,
+              );
               return rawText === null
                 ? null
                 : [[{ type: "text", value: rawText }]];
+            }
+            if (isSqlMethodCall(resolved, "identifier")) {
+              const identifier = staticSqlStringArgument(
+                resolved,
+                parameterBindings,
+              );
+              return identifier === null
+                ? [[{ type: "unavailable-identifier" }]]
+                : [
+                    [
+                      {
+                        type: "text",
+                        value: `"${identifier.replaceAll('"', '""')}"`,
+                      },
+                    ],
+                  ];
+            }
+            if (isSqlMethodCall(resolved, "fromList")) {
+              const values = resolved.arguments.at(0);
+              if (values === undefined) {
+                return null;
+              }
+              const elements = resolveSqlArrayElements(
+                values,
+                nextAncestors,
+                parameterBindings,
+              );
+              return elements === null
+                ? flattenSqlExpression(values, nextAncestors, parameterBindings)
+                : flattenSqlSequence({
+                    ancestors: nextAncestors,
+                    expressions: elements,
+                    isKnownSqlSequence: true,
+                    parameterBindings,
+                    textBoundary: "exact",
+                  });
             }
             if (isSqlMethodCall(resolved, "join")) {
               const values = resolved.arguments.at(0);
@@ -2242,6 +2312,21 @@ export default {
           if (!SQL_READ_CAPABLE_ROOT.test(text)) {
             return;
           }
+          if (
+            mergedTokenPaths.some((tokens) =>
+              tokens.some(
+                (token, index) =>
+                  token.type === "unavailable-identifier" &&
+                  hasProjectionReadIntroducer(tokens, index) &&
+                  !interpolationIsDeleteTarget(tokens, index),
+              ),
+            )
+          ) {
+            context.report({
+              node,
+              messageId: "unavailableIdentifier",
+            });
+          }
 
           for (const [table, projection] of Object.entries(
             PRIVATE_SEARCH_PROJECTIONS,
@@ -2322,6 +2407,9 @@ export default {
                       }
                     }
                   }
+                  continue;
+                }
+                if (token.type === "unavailable-identifier") {
                   continue;
                 }
                 const queryState = queryStateFor(
@@ -2439,21 +2527,24 @@ export default {
           }
         };
 
-        const hasVerifiedEnclosingSqlJoin = (node: AstNode): boolean => {
+        const hasVerifiedEnclosingSqlComposition = (node: AstNode): boolean => {
           const visited = new Set<unknown>([node]);
           let child = node;
           let parent = isAstNode(node.parent) ? node.parent : null;
           while (parent !== null && !visited.has(parent)) {
             visited.add(parent);
-            if (isSqlMethodCall(parent, "join")) {
+            if (
+              isSqlMethodCall(parent, "fromList") ||
+              isSqlMethodCall(parent, "join")
+            ) {
               if (
                 !Array.isArray(parent.arguments) ||
                 !parent.arguments.some((argument) => argument === child)
               ) {
                 return false;
               }
-              // The sql.join visitor inspects this same flattened composition.
-              // An opaque join leaves the child to be inspected independently.
+              // The composition call's visitor inspects this same flattened
+              // SQL. An opaque composition leaves the child independent.
               return flattenSqlExpression(parent, new Set()) !== null;
             }
             if (!isVerifiedSqlCompositionParent(child, parent)) {
@@ -2494,7 +2585,7 @@ export default {
               });
               return;
             }
-            if (hasVerifiedEnclosingSqlJoin(node)) {
+            if (hasVerifiedEnclosingSqlComposition(node)) {
               return;
             }
             inspectSqlTokenPaths(node, tokenPaths);
@@ -2525,14 +2616,17 @@ export default {
               return;
             }
             if (isSqlMethodCall(node, "raw")) {
-              const rawText = staticRawSqlText(node);
+              const rawText = staticSqlStringArgument(node);
               if (rawText === null) {
                 return;
               }
               inspectSqlTokenPaths(node, [[{ type: "text", value: rawText }]]);
               return;
             }
-            if (!isSqlMethodCall(node, "join")) {
+            if (
+              !isSqlMethodCall(node, "fromList") &&
+              !isSqlMethodCall(node, "join")
+            ) {
               return;
             }
             const tokenPaths = flattenSqlExpression(node, new Set());
