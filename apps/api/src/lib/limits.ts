@@ -298,6 +298,8 @@ export const LIMITS = {
   matterActivityPageSizeMax: 50,
   matterActivityActorPageSizeDefault: 50,
   matterActivityActorPageSizeMax: 100,
+  shareSpacesPageSizeDefault: 25,
+  shareSpacesPageSizeMax: 100,
   /** Page sizes for the operator recent-registrations listing. */
   operatorRegistrationsPageSizeDefault: 50,
   operatorRegistrationsPageSizeMax: 200,

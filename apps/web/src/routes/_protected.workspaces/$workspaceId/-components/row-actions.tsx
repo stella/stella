@@ -23,6 +23,7 @@ import {
   PencilIcon,
   RefreshCwIcon,
   ScanTextIcon,
+  Share2Icon,
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
@@ -132,6 +133,7 @@ import {
   type OcrSource,
   type RowActionContext,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+import { ShareDocumentDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/share-document-dialog";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
 import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";
 
@@ -342,6 +344,7 @@ export const RowActions = ({
   const retryCell = useRetryCell(toSafeId<"workspace">(workspaceId));
   const canCreateEntity = usePermissions({ entity: ["create"] });
   const [copyToMatterOpen, setCopyToMatterOpen] = useState(false);
+  const [shareDocumentOpen, setShareDocumentOpen] = useState(false);
   const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(
     null,
   );
@@ -1025,6 +1028,7 @@ export const RowActions = ({
           onChatAbout={handleChatAbout}
           onOpenVersionHistory={openVersionHistory}
           onEditPages={openPDFPageEditor}
+          onShare={() => setShareDocumentOpen(true)}
           onTranslate={openTranslationDialog}
           translationTarget={translationTarget}
         />
@@ -1055,6 +1059,13 @@ export const RowActions = ({
         onOpenChange={handleCopyToMatterOpenChange}
         open={copyToMatterOpen}
         sourceWorkspaceId={workspaceId}
+      />
+      <ShareDocumentDialog
+        entityId={entity.entityId}
+        entityName={name}
+        onOpenChange={setShareDocumentOpen}
+        open={shareDocumentOpen}
+        workspaceId={workspaceId}
       />
       {deleteRequest !== null && (
         <RowDeleteDialog
@@ -1309,6 +1320,7 @@ const RowFeatureMenuActions = ({
   onChatAbout,
   onEditPages,
   onOpenVersionHistory,
+  onShare,
   onTranslate,
   translationTarget,
 }: {
@@ -1320,6 +1332,7 @@ const RowFeatureMenuActions = ({
   onChatAbout: () => void;
   onEditPages: (() => void) | undefined;
   onOpenVersionHistory: (() => void) | undefined;
+  onShare: () => void;
   onTranslate: () => void;
   translationTarget: TranslationTarget | null;
 }) => {
@@ -1336,6 +1349,12 @@ const RowFeatureMenuActions = ({
             {t("workspaces.pdf.fullView")}
           </MenuItem>
         )}
+      {!isBulk && !isFolder && entity.kind !== "task" && file !== null && (
+        <MenuItem onClick={onShare}>
+          <Share2Icon />
+          {t("sharing.dialog.title")}
+        </MenuItem>
+      )}
       {onEditPages !== undefined && (
         <MenuItem onClick={onEditPages}>
           <FilePenLineIcon />

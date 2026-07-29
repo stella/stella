@@ -31,6 +31,8 @@ import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
 import { Route as DevAvtRouteImport } from './routes/dev_.avt'
 import { Route as LawIndexRouteImport } from './routes/law/index'
 import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
+import { Route as ShareInvitationSecretRouteImport } from './routes/share.$invitationSecret'
+import { Route as SharedShareSpaceIdRouteImport } from './routes/shared.$shareSpaceId'
 import { Route as SitemapsLawDotxmlRouteImport } from './routes/sitemaps/law[.]xml'
 import { Route as SitemapsToolsDotxmlRouteImport } from './routes/sitemaps/tools[.]xml'
 import { Route as ToolsIndexRouteImport } from './routes/tools/index'
@@ -81,6 +83,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from '.
 import { Route as ProtectedWorkspacesWorkspaceIdExpensesRouteImport } from './routes/_protected.workspaces/$workspaceId/expenses'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices'
 import { Route as ProtectedWorkspacesWorkspaceIdListsRouteImport } from './routes/_protected.workspaces/$workspaceId/lists'
+import { Route as ProtectedWorkspacesWorkspaceIdSharesRouteImport } from './routes/_protected.workspaces/$workspaceId/shares'
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
 import { Route as ProtectedWorkspacesWorkspaceIdWorkflowsRouteImport } from './routes/_protected.workspaces/$workspaceId/workflows'
 import { Route as LawCountryStatutesIndexRouteImport } from './routes/law/$country/statutes/index'
@@ -205,6 +208,16 @@ const LawIndexRoute = LawIndexRouteImport.update({
 const McpOauthCallbackRoute = McpOauthCallbackRouteImport.update({
   id: '/mcp/oauth-callback',
   path: '/mcp/oauth-callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareInvitationSecretRoute = ShareInvitationSecretRouteImport.update({
+  id: '/share/$invitationSecret',
+  path: '/share/$invitationSecret',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SharedShareSpaceIdRoute = SharedShareSpaceIdRouteImport.update({
+  id: '/shared/$shareSpaceId',
+  path: '/shared/$shareSpaceId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapsLawDotxmlRoute = SitemapsLawDotxmlRouteImport.update({
@@ -490,6 +503,12 @@ const ProtectedWorkspacesWorkspaceIdListsRoute =
     path: '/lists',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
+const ProtectedWorkspacesWorkspaceIdSharesRoute =
+  ProtectedWorkspacesWorkspaceIdSharesRouteImport.update({
+    id: '/shares',
+    path: '/shares',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdTimesheetsRoute =
   ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport.update({
     id: '/timesheets',
@@ -604,6 +623,8 @@ export interface FileRoutesByFullPath {
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/dev/avt': typeof DevAvtRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
+  '/share/$invitationSecret': typeof ShareInvitationSecretRoute
+  '/shared/$shareSpaceId': typeof SharedShareSpaceIdRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
   '/tools/$slug': typeof ToolsSlugRoute
@@ -654,6 +675,7 @@ export interface FileRoutesByFullPath {
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
+  '/workspaces/$workspaceId/shares': typeof ProtectedWorkspacesWorkspaceIdSharesRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   '/law/$country/statutes/$documentId': typeof LawCountryStatutesDocumentIdRoute
@@ -687,6 +709,8 @@ export interface FileRoutesByTo {
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/dev/avt': typeof DevAvtRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
+  '/share/$invitationSecret': typeof ShareInvitationSecretRoute
+  '/shared/$shareSpaceId': typeof SharedShareSpaceIdRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
   '/tools/$slug': typeof ToolsSlugRoute
@@ -734,6 +758,7 @@ export interface FileRoutesByTo {
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
+  '/workspaces/$workspaceId/shares': typeof ProtectedWorkspacesWorkspaceIdSharesRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   '/law/$country/statutes/$documentId': typeof LawCountryStatutesDocumentIdRoute
@@ -775,6 +800,8 @@ export interface FileRoutesById {
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/dev_/avt': typeof DevAvtRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
+  '/share/$invitationSecret': typeof ShareInvitationSecretRoute
+  '/shared/$shareSpaceId': typeof SharedShareSpaceIdRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
   '/tools/$slug': typeof ToolsSlugRoute
@@ -825,6 +852,7 @@ export interface FileRoutesById {
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/_protected/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   '/_protected/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
+  '/_protected/workspaces/$workspaceId/shares': typeof ProtectedWorkspacesWorkspaceIdSharesRoute
   '/_protected/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/_protected/workspaces/$workspaceId/workflows': typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   '/law/$country/statutes/$documentId': typeof LawCountryStatutesDocumentIdRoute
@@ -866,6 +894,8 @@ export interface FileRouteTypes {
     | '/auth/two-factor'
     | '/dev/avt'
     | '/mcp/oauth-callback'
+    | '/share/$invitationSecret'
+    | '/shared/$shareSpaceId'
     | '/sitemaps/law.xml'
     | '/sitemaps/tools.xml'
     | '/tools/$slug'
@@ -916,6 +946,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
     | '/workspaces/$workspaceId/lists'
+    | '/workspaces/$workspaceId/shares'
     | '/workspaces/$workspaceId/timesheets'
     | '/workspaces/$workspaceId/workflows'
     | '/law/$country/statutes/$documentId'
@@ -949,6 +980,8 @@ export interface FileRouteTypes {
     | '/auth/two-factor'
     | '/dev/avt'
     | '/mcp/oauth-callback'
+    | '/share/$invitationSecret'
+    | '/shared/$shareSpaceId'
     | '/sitemaps/law.xml'
     | '/sitemaps/tools.xml'
     | '/tools/$slug'
@@ -996,6 +1029,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
     | '/workspaces/$workspaceId/lists'
+    | '/workspaces/$workspaceId/shares'
     | '/workspaces/$workspaceId/timesheets'
     | '/workspaces/$workspaceId/workflows'
     | '/law/$country/statutes/$documentId'
@@ -1036,6 +1070,8 @@ export interface FileRouteTypes {
     | '/auth/two-factor'
     | '/dev_/avt'
     | '/mcp/oauth-callback'
+    | '/share/$invitationSecret'
+    | '/shared/$shareSpaceId'
     | '/sitemaps/law.xml'
     | '/sitemaps/tools.xml'
     | '/tools/$slug'
@@ -1086,6 +1122,7 @@ export interface FileRouteTypes {
     | '/_protected/workspaces/$workspaceId/expenses'
     | '/_protected/workspaces/$workspaceId/invoices'
     | '/_protected/workspaces/$workspaceId/lists'
+    | '/_protected/workspaces/$workspaceId/shares'
     | '/_protected/workspaces/$workspaceId/timesheets'
     | '/_protected/workspaces/$workspaceId/workflows'
     | '/law/$country/statutes/$documentId'
@@ -1120,6 +1157,8 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   DevAvtRoute: typeof DevAvtRoute
   McpOauthCallbackRoute: typeof McpOauthCallbackRoute
+  ShareInvitationSecretRoute: typeof ShareInvitationSecretRoute
+  SharedShareSpaceIdRoute: typeof SharedShareSpaceIdRoute
   SitemapsLawDotxmlRoute: typeof SitemapsLawDotxmlRoute
   SitemapsToolsDotxmlRoute: typeof SitemapsToolsDotxmlRoute
   SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute: typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
@@ -1280,6 +1319,20 @@ declare module '@tanstack/react-router' {
       path: '/mcp/oauth-callback'
       fullPath: '/mcp/oauth-callback'
       preLoaderRoute: typeof McpOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share/$invitationSecret': {
+      id: '/share/$invitationSecret'
+      path: '/share/$invitationSecret'
+      fullPath: '/share/$invitationSecret'
+      preLoaderRoute: typeof ShareInvitationSecretRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shared/$shareSpaceId': {
+      id: '/shared/$shareSpaceId'
+      path: '/shared/$shareSpaceId'
+      fullPath: '/shared/$shareSpaceId'
+      preLoaderRoute: typeof SharedShareSpaceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemaps/law.xml': {
@@ -1632,6 +1685,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdListsRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
+    '/_protected/workspaces/$workspaceId/shares': {
+      id: '/_protected/workspaces/$workspaceId/shares'
+      path: '/shares'
+      fullPath: '/workspaces/$workspaceId/shares'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdSharesRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
     '/_protected/workspaces/$workspaceId/timesheets': {
       id: '/_protected/workspaces/$workspaceId/timesheets'
       path: '/timesheets'
@@ -1970,6 +2030,7 @@ interface ProtectedWorkspacesWorkspaceIdRouteRouteChildren {
   ProtectedWorkspacesWorkspaceIdExpensesRoute: typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   ProtectedWorkspacesWorkspaceIdInvoicesRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
   ProtectedWorkspacesWorkspaceIdListsRoute: typeof ProtectedWorkspacesWorkspaceIdListsRoute
+  ProtectedWorkspacesWorkspaceIdSharesRoute: typeof ProtectedWorkspacesWorkspaceIdSharesRoute
   ProtectedWorkspacesWorkspaceIdTimesheetsRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   ProtectedWorkspacesWorkspaceIdWorkflowsRoute: typeof ProtectedWorkspacesWorkspaceIdWorkflowsRoute
   ProtectedWorkspacesWorkspaceIdIndexRoute: typeof ProtectedWorkspacesWorkspaceIdIndexRoute
@@ -1986,6 +2047,8 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorks
       ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren,
     ProtectedWorkspacesWorkspaceIdListsRoute:
       ProtectedWorkspacesWorkspaceIdListsRoute,
+    ProtectedWorkspacesWorkspaceIdSharesRoute:
+      ProtectedWorkspacesWorkspaceIdSharesRoute,
     ProtectedWorkspacesWorkspaceIdTimesheetsRoute:
       ProtectedWorkspacesWorkspaceIdTimesheetsRoute,
     ProtectedWorkspacesWorkspaceIdWorkflowsRoute:
@@ -2048,6 +2111,8 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   DevAvtRoute: DevAvtRoute,
   McpOauthCallbackRoute: McpOauthCallbackRoute,
+  ShareInvitationSecretRoute: ShareInvitationSecretRoute,
+  SharedShareSpaceIdRoute: SharedShareSpaceIdRoute,
   SitemapsLawDotxmlRoute: SitemapsLawDotxmlRoute,
   SitemapsToolsDotxmlRoute: SitemapsToolsDotxmlRoute,
   SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute:
@@ -2058,12 +2123,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

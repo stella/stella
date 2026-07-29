@@ -74,6 +74,11 @@ import { initReportExportWorker } from "@/api/handlers/reports/report-export-que
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
+import {
+  shareSpaceAccessRoute,
+  shareSpacesRoute,
+} from "@/api/handlers/share-spaces/routes";
+import { initSharePublicationWorker } from "@/api/handlers/share-spaces/share-publish-queue";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { signalsRoute } from "@/api/handlers/signals/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
@@ -635,6 +640,8 @@ const api = new Elysia()
       .use(documentTranslationsRoute)
       .use(bilingualTranslationsRoute)
       .use(reportsRoute)
+      .use(shareSpaceAccessRoute)
+      .use(shareSpacesRoute)
       .use(flowsRoute)
       .use(signalsRoute)
       .use(flowRunsRoute)
@@ -815,6 +822,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for queued view→report exports.
   const reportExportWorker = initReportExportWorker();
 
+  // BullMQ worker for immutable Share Space snapshot copies.
+  const sharePublicationWorker = initSharePublicationWorker();
+
   // BullMQ worker for durable document review runs.
   const documentReviewRunWorker = initDocumentReviewRunWorker();
 
@@ -882,6 +892,7 @@ const startServer = async (): Promise<void> => {
         entityDeletionCleanupWorker.close(),
         styleSetPackageCleanupWorker.close(),
         reportExportWorker.close(),
+        sharePublicationWorker.close(),
         documentReviewRunWorker.close(),
         documentTranslationRunWorker.close(),
         documentDeadlineScoutWorker.close(),

@@ -29,6 +29,7 @@ export const stellaCaseLawAnalysisWriter = p
 export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
 export const SETTING_ORGANIZATION_ID = "app.organization_id";
+export const SETTING_SHARE_SPACE_IDS = "app.share_space_ids";
 export const SETTING_USER_ID = "app.user_id";
 
 export const WORKSPACE_ACCESS_MODE = {
@@ -77,6 +78,26 @@ const workspaceAccessCheck = (workspaceId: SQL) => sql`CASE
 END`;
 
 export const workspaceCheck = workspaceAccessCheck(sql`workspace_id`);
+
+/**
+ * Share Space IDs are pinned only after a server-side recipient authorization
+ * check. Unlike workspace membership mode, this setting has no database view
+ * fallback: a guest transaction can see only the single explicitly validated
+ * publication passed to `createShareScopedDb`.
+ */
+export const shareSpaceAccessCheck = (
+  shareSpaceId: SQL,
+) => sql`${shareSpaceId} = ANY(
+  COALESCE(
+    NULLIF(
+      (SELECT pg_catalog.current_setting(
+        '${sql.raw(SETTING_SHARE_SPACE_IDS)}', true
+      )),
+      ''
+    )::uuid[],
+    ARRAY[]::uuid[]
+  )
+)`;
 
 /** Check the row's `id` against the transaction workspace authorization.
  * Used by `workspaces`, which scopes on `id` rather than `workspace_id`. */

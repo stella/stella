@@ -28,6 +28,7 @@ export * from "./schema/reports";
 export * from "./schema/skills";
 export * from "./schema/style-sets";
 export * from "./schema/saved-searches";
+export * from "./schema/sharing";
 export * from "./schema/usage";
 export * from "./schema/workflow";
 export * from "./schema/signals";
