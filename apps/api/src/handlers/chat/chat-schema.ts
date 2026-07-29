@@ -408,15 +408,6 @@ const validateIncomingChatMetadata = (
     validated.docxEditPreferences = parsed;
   }
 
-  const sourceDocuments = metadata["sourceDocuments"];
-  if (sourceDocuments !== undefined) {
-    const parsed = parseSourceDocumentsMetadata(sourceDocuments);
-    if (parsed === null) {
-      return Result.err(invalidChatMetadataError());
-    }
-    validated.sourceDocuments = parsed;
-  }
-
   const usage = metadata["usage"];
   if (usage !== undefined) {
     const parsed = parseUsageMetadata(usage);
@@ -530,52 +521,6 @@ const parseDocxEditPreferencesMetadata = (
     ...(editApplyMode === undefined ? {} : { editApplyMode }),
     ...(docxEditRepresentation === undefined ? {} : { docxEditRepresentation }),
   };
-};
-
-const parseSourceDocumentsMetadata = (
-  value: unknown,
-): ChatMessageMetadata["sourceDocuments"] | null => {
-  if (!Array.isArray(value)) {
-    return null;
-  }
-
-  const documents = [];
-  for (const document of value) {
-    if (!isJsonRecord(document)) {
-      return null;
-    }
-
-    const entityId = document["entityId"];
-    const kind = document["kind"];
-    const mimeType = document["mimeType"];
-    const title = document["title"];
-    const workspaceId = document["workspaceId"];
-    if (
-      typeof entityId !== "string" ||
-      typeof kind !== "string" ||
-      (typeof mimeType !== "string" && mimeType !== null) ||
-      typeof title !== "string" ||
-      (typeof workspaceId !== "string" && workspaceId !== null)
-    ) {
-      return null;
-    }
-
-    const parsed: NonNullable<ChatMessageMetadata["sourceDocuments"]>[number] =
-      { entityId, kind, mimeType, title, workspaceId };
-    for (const key of ["entityRef", "matterRef", "mention"] as const) {
-      const optionalValue = document[key];
-      if (optionalValue === undefined) {
-        continue;
-      }
-      if (typeof optionalValue !== "string") {
-        return null;
-      }
-      parsed[key] = optionalValue;
-    }
-    documents.push(parsed);
-  }
-
-  return documents;
 };
 
 const parseUsageMetadata = (

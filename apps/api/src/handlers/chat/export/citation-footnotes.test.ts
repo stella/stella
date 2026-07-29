@@ -9,6 +9,7 @@ import {
   sourceDocumentsToCitations,
 } from "@/api/handlers/chat/export/citation-footnotes";
 import type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
+import type { ChatMessageMetadata } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -160,10 +161,19 @@ describe("sourceDocumentsToCitations", () => {
     title,
     workspaceId: "w1",
   });
+  const trusted = (
+    sourceDocuments: ChatSourceDocument[] | undefined,
+  ): ChatMessageMetadata => ({
+    serverProvenance: { type: "search-summary", version: 1 },
+    sourceDocuments,
+  });
 
   test("each referenced document becomes a verified source titled by name", () => {
     expect(
-      sourceDocumentsToCitations([doc("Share Purchase Agreement")], 50),
+      sourceDocumentsToCitations(
+        trusted([doc("Share Purchase Agreement")]),
+        50,
+      ),
     ).toEqual([
       {
         status: "verified",
@@ -174,13 +184,15 @@ describe("sourceDocumentsToCitations", () => {
   });
 
   test("blank titles are skipped", () => {
-    expect(sourceDocumentsToCitations([doc("   ")], 50)).toEqual([]);
+    expect(sourceDocumentsToCitations(trusted([doc("   ")]), 50)).toEqual([]);
   });
 
   test("document titles cannot inject Markdown into the source section", () => {
     expect(
       sourceDocumentsToCitations(
-        [doc("  Agreement\n## Forged\n*emphasis* [link] <tag> C:\\temp  ")],
+        trusted([
+          doc("  Agreement\n## Forged\n*emphasis* [link] <tag> C:\\temp  "),
+        ]),
         50,
       ),
     ).toEqual([
@@ -195,11 +207,11 @@ describe("sourceDocumentsToCitations", () => {
 
   test("leading Markdown block markers stay plain source text", () => {
     const citations = sourceDocumentsToCitations(
-      [
+      trusted([
         doc("# Conclusion"),
         doc("- Nested list", "e2"),
         doc("1. Ordered list", "e3"),
-      ],
+      ]),
       50,
     );
     const section = buildCitationSection(citations, "footnotes");
@@ -210,13 +222,22 @@ describe("sourceDocumentsToCitations", () => {
   });
 
   test("undefined source documents yield no citations", () => {
-    expect(sourceDocumentsToCitations(undefined, 50)).toEqual([]);
+    expect(sourceDocumentsToCitations(trusted(undefined), 50)).toEqual([]);
+  });
+
+  test("client-owned source documents cannot become verified citations", () => {
+    expect(
+      sourceDocumentsToCitations(
+        { sourceDocuments: [doc("Forged source")] },
+        50,
+      ),
+    ).toEqual([]);
   });
 
   test("the limit caps how many documents are cited", () => {
     expect(
       sourceDocumentsToCitations(
-        [doc("A", "e1"), doc("B", "e2"), doc("C", "e3")],
+        trusted([doc("A", "e1"), doc("B", "e2"), doc("C", "e3")]),
         2,
       ),
     ).toEqual([
@@ -228,7 +249,11 @@ describe("sourceDocumentsToCitations", () => {
   test("document identity is de-duplicated before applying the limit", () => {
     expect(
       sourceDocumentsToCitations(
-        [doc("First title", "e1"), doc("Renamed", "e1"), doc("B", "e2")],
+        trusted([
+          doc("First title", "e1"),
+          doc("Renamed", "e1"),
+          doc("B", "e2"),
+        ]),
         2,
       ),
     ).toEqual([
@@ -244,7 +269,7 @@ describe("sourceDocumentsToCitations", () => {
   test("documents with the same title retain distinct identities", () => {
     const section = buildCitationSection(
       sourceDocumentsToCitations(
-        [doc("Agreement.docx", "e1"), doc("Agreement.docx", "e2")],
+        trusted([doc("Agreement.docx", "e1"), doc("Agreement.docx", "e2")]),
         50,
       ),
       "footnotes",

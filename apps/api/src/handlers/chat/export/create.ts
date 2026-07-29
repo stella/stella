@@ -28,6 +28,7 @@ import {
   buildCitationSection,
   getChatExportCitationLabels,
   sourceDocumentsToCitations,
+  trustedSourceDocumentsForExport,
 } from "@/api/handlers/chat/export/citation-footnotes";
 import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-export-docx";
 import {
@@ -180,12 +181,10 @@ const createMessageExport = createSafeRootHandler(
       extractLangFromRequest(request),
     );
     const persistedSearchSources = extractPersistedSearchSummarySources(body);
+    const trustedSourceDocuments = trustedSourceDocumentsForExport(metadata);
     const sourceCitations =
       persistedSearchSources === null
-        ? sourceDocumentsToCitations(
-            metadata.sourceDocuments,
-            CHAT_EXPORT_MAX_SOURCE_DOCUMENTS,
-          )
+        ? sourceDocumentsToCitations(metadata, CHAT_EXPORT_MAX_SOURCE_DOCUMENTS)
         : [];
     const section = buildCitationSection(
       sourceCitations,
@@ -212,9 +211,7 @@ const createMessageExport = createSafeRootHandler(
             markdownToStellaDocument(markdown),
             citationStyle,
             {
-              folioSourceTitle: onlySourceDocumentTitle(
-                metadata.sourceDocuments,
-              ),
+              folioSourceTitle: onlySourceDocumentTitle(trustedSourceDocuments),
               internalCitationFallback: citationLabels.citation,
               internalReferenceMode: internalReferenceModeFor(
                 persistedSearchSources,

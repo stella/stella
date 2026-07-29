@@ -21,7 +21,7 @@
 import type { UiLocale } from "@stll/locales";
 
 import type { JustificationBlock } from "@/api/db/schema";
-import type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
+import type { ChatMessageMetadata } from "@/api/handlers/chat/types";
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 
 // Derived from the block union rather than imported from the schema barrel:
@@ -260,19 +260,33 @@ export const resolveExportCitations = (
 };
 
 /**
- * Turn the documents an assistant answer referenced (its message
- * `sourceDocuments`) into export citations. A referenced document is a grounded
- * source, so each becomes a verified source line titled by the document. This
- * is the per-message provenance available today; the richer
- * {@link resolveExportCitations} path lights up once messages persist per-claim
- * justification blocks.
+ * Resolve server-owned source metadata. Both the provenance discriminator and
+ * the documents are stripped at the incoming client boundary; requiring the
+ * discriminator here prevents legacy or forged metadata from becoming
+ * authoritative-looking export sources.
  */
+export const trustedSourceDocumentsForExport = (
+  metadata: Pick<ChatMessageMetadata, "serverProvenance" | "sourceDocuments">,
+) => {
+  const provenance = metadata.serverProvenance;
+  if (provenance === undefined) {
+    return undefined;
+  }
+  switch (provenance.type) {
+    case "search-summary":
+      return metadata.sourceDocuments;
+    default:
+      return provenance satisfies never;
+  }
+};
+
 export const sourceDocumentsToCitations = (
-  sourceDocuments: readonly ChatSourceDocument[] | undefined,
+  metadata: Pick<ChatMessageMetadata, "serverProvenance" | "sourceDocuments">,
   limit: number,
 ): ResolvedExportCitation[] => {
   const citations: ResolvedExportCitation[] = [];
   const seen = new Set<string>();
+  const sourceDocuments = trustedSourceDocumentsForExport(metadata);
   if (sourceDocuments === undefined) {
     return citations;
   }
