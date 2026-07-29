@@ -118,6 +118,7 @@ let _scopedClientPromises = new Map<string, Promise<CachedScopedClient>>();
 const CLIENT_MAX_AGE_MS = 50 * 60 * 1000;
 const SCOPED_SESSION_SECONDS = 3600;
 const SCOPED_CLIENT_REFRESH_SKEW_MS = 60 * 1000;
+const AWS_SDK_REQUEST_TIMEOUT_MS = 30_000;
 const TEMP_UPLOAD_TAG_KEY = "stella-upload-stage";
 const TEMP_UPLOAD_TAG_VALUE = "tmp";
 const TEMP_UPLOAD_TAGGING = `${TEMP_UPLOAD_TAG_KEY}=${TEMP_UPLOAD_TAG_VALUE}`;
@@ -300,6 +301,7 @@ const buildScopedAwsS3Client = async (
       DurationSeconds: SCOPED_SESSION_SECONDS,
       Policy: scopedSessionPolicy(scope, actions),
     }),
+    { abortSignal: AbortSignal.timeout(AWS_SDK_REQUEST_TIMEOUT_MS) },
   );
   const credentials = assumed.Credentials;
   if (
@@ -560,6 +562,7 @@ export const headObject = async (
           Key: key,
           ChecksumMode: "ENABLED",
         }),
+        { abortSignal: AbortSignal.timeout(AWS_SDK_REQUEST_TIMEOUT_MS) },
       );
       return {
         contentLength: response.ContentLength ?? 0,
@@ -598,6 +601,7 @@ export const copyObject = async (
           TaggingDirective: "REPLACE",
           Tagging: "",
         }),
+        { abortSignal: AbortSignal.timeout(AWS_SDK_REQUEST_TIMEOUT_MS) },
       );
     },
     catch: (cause) =>

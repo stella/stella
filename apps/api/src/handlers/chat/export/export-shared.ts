@@ -49,10 +49,16 @@ export const composeExportMarkdown = (
 };
 
 export type PersistedSearchSummarySources = {
-  bodyWithSources: string;
   bodyWithoutSources: string;
   sourceCount: number;
+  sourcesMarkdown: string;
 };
+
+export const composePersistedSearchSummaryMarkdown = (
+  sources: PersistedSearchSummarySources,
+  sourcesHeading: string,
+): string =>
+  `${sources.bodyWithoutSources}\n\n### ${sourcesHeading}${sources.sourcesMarkdown}`;
 
 /**
  * Recognize the trailing Sources block written by `/search/summary/chat`.
@@ -94,13 +100,11 @@ export const extractPersistedSearchSummarySources = (
       ? 0
       : sources.split("\n").filter((line) => line.startsWith("- ")).length;
   return {
-    bodyWithSources: isMarked
-      ? `${body.slice(0, markedHeadingIndex)}${body.slice(headingIndex)}`
-      : body,
     bodyWithoutSources: body
       .slice(0, isMarked ? markedHeadingIndex : headingIndex)
       .trimEnd(),
     sourceCount,
+    sourcesMarkdown: sources,
   };
 };
 

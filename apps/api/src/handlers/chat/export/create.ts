@@ -33,6 +33,7 @@ import { createChatExportDocx } from "@/api/handlers/chat/export/create-chat-exp
 import {
   assembleMessageMarkdown,
   buildChatExportDownload,
+  composePersistedSearchSummaryMarkdown,
   composeExportMarkdown,
   extractPersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
@@ -183,7 +184,10 @@ const createMessageExport = createSafeRootHandler(
       exportBody =
         citationStyle === "none"
           ? persistedSearchSources.bodyWithoutSources
-          : persistedSearchSources.bodyWithSources;
+          : composePersistedSearchSummaryMarkdown(
+              persistedSearchSources,
+              citationLabels.sources,
+            );
     }
     const markdown = composeExportMarkdown(exportBody, section);
 

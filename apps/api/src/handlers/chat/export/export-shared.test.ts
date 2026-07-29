@@ -5,6 +5,7 @@ import type { CitationSection } from "@/api/handlers/chat/export/citation-footno
 import {
   assembleMessageMarkdown,
   buildChatExportDownload,
+  composePersistedSearchSummaryMarkdown,
   composeExportMarkdown,
   extractPersistedSearchSummarySources,
 } from "@/api/handlers/chat/export/export-shared";
@@ -67,10 +68,9 @@ describe("extractPersistedSearchSummarySources", () => {
         "## Result\n\nSummary.\n\n### Sources\n\n- Matter\n\n- Decision",
       ),
     ).toEqual({
-      bodyWithSources:
-        "## Result\n\nSummary.\n\n### Sources\n\n- Matter\n\n- Decision",
       bodyWithoutSources: "## Result\n\nSummary.",
       sourceCount: 2,
+      sourcesMarkdown: "\n\n- Matter\n\n- Decision",
     });
   });
 
@@ -80,9 +80,9 @@ describe("extractPersistedSearchSummarySources", () => {
         "## Result\n\nSummary.\n\n### Sources",
       ),
     ).toEqual({
-      bodyWithSources: "## Result\n\nSummary.\n\n### Sources",
       bodyWithoutSources: "## Result\n\nSummary.",
       sourceCount: 0,
+      sourcesMarkdown: "",
     });
   });
 
@@ -95,15 +95,20 @@ describe("extractPersistedSearchSummarySources", () => {
   });
 
   test("extracts marked provenance without leaking the marker", () => {
-    expect(
-      extractPersistedSearchSummarySources(
-        `## Result\n\nSummary.\n\n${SEARCH_SUMMARY_SOURCES_MARKER}\n\n### Sources\n\n- Matter`,
-      ),
-    ).toEqual({
-      bodyWithSources: "## Result\n\nSummary.\n\n### Sources\n\n- Matter",
+    const sources = extractPersistedSearchSummarySources(
+      `## Result\n\nSummary.\n\n${SEARCH_SUMMARY_SOURCES_MARKER}\n\n### Sources\n\n- Matter`,
+    );
+    expect(sources).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
       sourceCount: 1,
+      sourcesMarkdown: "\n\n- Matter",
     });
+    if (sources === null) {
+      return;
+    }
+    expect(composePersistedSearchSummaryMarkdown(sources, "Zdroje")).toBe(
+      "## Result\n\nSummary.\n\n### Zdroje\n\n- Matter",
+    );
   });
 
   test("rejects a legacy Sources list followed by more answer content", () => {
