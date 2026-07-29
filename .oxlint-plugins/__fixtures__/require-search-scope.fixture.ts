@@ -498,6 +498,36 @@ const escapedRawEntityTemplate = `SELECT * FROM search_\x64ocuments sd`;
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.raw analyzes the cooked value of a static template
 const unsafeEscapedRawTemplateEntity = sql.raw(escapedRawEntityTemplate);
 
+declare const dynamicRawSql: string;
+const drizzleRawAlias = sql.raw;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a standalone dynamic sql.raw root fails closed
+const unsafeDynamicRawRoot = sql.raw(dynamicRawSql);
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a const alias cannot hide a standalone dynamic sql.raw root
+const unsafeAliasedDynamicRawRoot = drizzleRawAlias(dynamicRawSql);
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves dynamic raw text cannot hide a private relation inside a composed read
+const unsafeComposedDynamicRawEntity = sql`
+  SELECT * ${sql.raw(dynamicRawSql)}
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves dynamic raw expressions cannot inject a private FROM clause into an otherwise public root
+const unsafeDynamicRawSelectExpression = sql`
+  SELECT ${sql.raw(dynamicRawSql)}
+  FROM entities e
+`;
+
+declare const dynamicPgArrayType: "text" | "uuid";
+const dynamicRawNonRootTypeFragment = sql`
+  ARRAY[]::${sql.raw(dynamicPgArrayType)}[]
+`;
+
+const staticRawPublicExpression = sql`
+  SELECT ${drizzleRawAlias("e.id")}
+  FROM entities e
+`;
+
 const privateRawRelation = sql.raw("search_documents");
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a static sql.identifier relation is analyzed as exact quoted SQL
@@ -525,6 +555,37 @@ declare const dynamicColumnName: string;
 const dynamicIdentifierColumnControl = sql`
   SELECT ${sql.identifier(dynamicColumnName)}
   FROM entities e
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a PostgreSQL Unicode-escaped relation cannot hide the private projection
+const unsafeUnicodeEscapedEntity = sql`
+  SELECT * FROM U&"search\\005fdocuments" sd
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a custom UESCAPE character cannot hide the private projection
+const unsafeCustomUnicodeEscapedEntity = sql`
+  SELECT * FROM U&"search!005fdocuments" UESCAPE '!' AS sd
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves the lowercase PostgreSQL Unicode-identifier prefix is equivalent
+const unsafeLowercaseUnicodeEscapedEntity = sql`
+  SELECT * FROM u&"search!005fdocuments"UESCAPE'!' AS sd
+`;
+
+const scopedCustomUnicodeEscapedEntity = sql`
+  SELECT *
+  FROM U&"search!005fdocuments" UESCAPE '!'
+    AS U&"s!0064" UESCAPE '!'
+  WHERE true ${entityWorkspaceFilter}
+`;
+
+const publicUnicodeEscapedEntity = sql`
+  SELECT * FROM U&"entit!0069es" UESCAPE '!' e
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves unsupported Unicode relation syntax fails closed
+const unsafeUnsupportedUnicodeEscapeEntity = sql`
+  SELECT * FROM U&"search!005fdocuments" UESCAPE '!!' sd
 `;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves raw relation fragments preserve SQL lexical continuity
@@ -1427,8 +1488,16 @@ void [
   unsafeRawEntity,
   unsafeRawTemplateEntity,
   unsafeEscapedRawTemplateEntity,
+  unsafeDynamicRawRoot,
+  unsafeAliasedDynamicRawRoot,
+  unsafeComposedDynamicRawEntity,
+  unsafeDynamicRawSelectExpression,
   unsafeStaticIdentifierEntity,
   unsafeDynamicIdentifierRelation,
+  unsafeUnicodeEscapedEntity,
+  unsafeCustomUnicodeEscapedEntity,
+  unsafeLowercaseUnicodeEscapedEntity,
+  unsafeUnsupportedUnicodeEscapeEntity,
   unsafeRawRelationFragment,
   unsafeSplitRawRelationFragment,
   unsafeSplitTemplateRelationFragment,
@@ -1540,6 +1609,10 @@ void [
   scopedStaticIdentifierEntity,
   publicStaticIdentifierEntity,
   dynamicIdentifierColumnControl,
+  dynamicRawNonRootTypeFragment,
+  staticRawPublicExpression,
+  scopedCustomUnicodeEscapedEntity,
+  publicUnicodeEscapedEntity,
   scopedOrdinaryDoubledQuote,
   scopedEscapeStringRead,
   scopedSplitEscapeStringRead,

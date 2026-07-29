@@ -46,6 +46,10 @@ type RuleContext = {
           node: unknown;
         }
       | {
+          messageId: "unavailableRaw";
+          node: unknown;
+        }
+      | {
           messageId: "unavailableCooked";
           node: unknown;
         },
@@ -201,7 +205,8 @@ const staticTemplateLiteralText = (node: unknown): string | null => {
 type SqlTemplateToken =
   | { type: "expression"; value: unknown }
   | { type: "text"; value: string }
-  | { type: "unavailable-identifier" };
+  | { type: "unavailable-identifier" }
+  | { type: "unavailable-raw" };
 
 const mergeAdjacentSqlTextTokens = (
   tokens: readonly SqlTemplateToken[],
@@ -217,8 +222,10 @@ const mergeAdjacentSqlTextTokens = (
       merged.push({ type: "text", value: token.value });
     } else if (token.type === "expression") {
       merged.push({ type: "expression", value: token.value });
-    } else {
+    } else if (token.type === "unavailable-identifier") {
       merged.push({ type: "unavailable-identifier" });
+    } else {
+      merged.push({ type: "unavailable-raw" });
     }
   }
   return merged;
@@ -270,14 +277,21 @@ const normalizeProjectionAlias = (alias: string | undefined): string | null => {
   if (!alias) {
     return null;
   }
-  if (alias.startsWith('"') && alias.endsWith('"')) {
-    return alias.slice(1, -1).replaceAll('""', '"');
+  const normalized = normalizeSqlIdentifier(alias);
+  if (normalized === null) {
+    return null;
   }
-  const normalized = alias.toLowerCase();
+  if (alias.startsWith('"') || /^U&"/iu.test(alias)) {
+    return normalized;
+  }
   return SQL_ALIAS_STOP_WORDS.has(normalized) ? null : normalized;
 };
 
-const SQL_IDENTIFIER_PATTERN = `(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)`;
+const SQL_UNICODE_IDENTIFIER_PATTERN =
+  `U&"(?:[^"]|"")*"` + `(?:\\s*UESCAPE\\s*'(?:[^']|'')*')?`;
+const SQL_IDENTIFIER_PATTERN =
+  `(?:${SQL_UNICODE_IDENTIFIER_PATTERN}|` +
+  `"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)`;
 const SQL_RELATION_PATH_PATTERN =
   `${SQL_IDENTIFIER_PATTERN}` + `(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*`;
 const SQL_RELATION_REFERENCE = new RegExp(
@@ -290,7 +304,85 @@ const SQL_RELATION_REFERENCE = new RegExp(
 const SQL_FROM_CLAUSE_BOUNDARY =
   /\b(?:except|from|group|having|intersect|limit|offset|order|returning|union|using|where|window)\b/giu;
 
-const normalizeSqlIdentifier = (identifier: string): string => {
+const unicodeEscapedIdentifierValue = (identifier: string): string | null => {
+  const match = identifier.match(
+    /^U&"((?:[^"]|"")*)"(?:\s*UESCAPE\s*'((?:[^']|'')*)')?$/iu,
+  );
+  const encoded = match?.at(1);
+  if (encoded === undefined) {
+    return null;
+  }
+  const escapeCharacter = (match?.at(2) ?? "\\").replaceAll("''", "'");
+  if (escapeCharacter.length !== 1 || /[+\s'"0-9A-F]/iu.test(escapeCharacter)) {
+    return null;
+  }
+
+  let decoded = "";
+  for (let index = 0; index < encoded.length; index += 1) {
+    const character = encoded[index];
+    const next = encoded[index + 1];
+    if (character === '"' && next === '"') {
+      decoded += '"';
+      index += 1;
+      continue;
+    }
+    if (character !== escapeCharacter) {
+      decoded += character;
+      continue;
+    }
+    if (next === escapeCharacter) {
+      decoded += escapeCharacter;
+      index += 1;
+      continue;
+    }
+
+    const usesSixDigits = next === "+";
+    const digitsStart = index + (usesSixDigits ? 2 : 1);
+    const digitCount = usesSixDigits ? 6 : 4;
+    const digits = encoded.slice(digitsStart, digitsStart + digitCount);
+    if (digits.length !== digitCount || !/^[0-9A-F]+$/iu.test(digits)) {
+      return null;
+    }
+    const codePoint = Number.parseInt(digits, 16);
+    index = digitsStart + digitCount - 1;
+    if (
+      codePoint === 0 ||
+      codePoint > 0x10_ffff ||
+      (usesSixDigits && codePoint >= 0xd800 && codePoint <= 0xdfff)
+    ) {
+      return null;
+    }
+    if (codePoint < 0xd800 || codePoint > 0xdfff) {
+      decoded += String.fromCodePoint(codePoint);
+      continue;
+    }
+    if (codePoint > 0xdbff) {
+      return null;
+    }
+    const lowSurrogatePrefix = encoded.slice(index + 1, index + 2);
+    const lowSurrogateDigits = encoded.slice(index + 2, index + 6);
+    if (
+      lowSurrogatePrefix !== escapeCharacter ||
+      !/^[0-9A-F]{4}$/iu.test(lowSurrogateDigits)
+    ) {
+      return null;
+    }
+    const lowSurrogate = Number.parseInt(lowSurrogateDigits, 16);
+    if (lowSurrogate < 0xdc00 || lowSurrogate > 0xdfff) {
+      return null;
+    }
+    decoded += String.fromCodePoint(
+      0x10_000 + (codePoint - 0xd800) * 0x400 + lowSurrogate - 0xdc00,
+    );
+    index += 5;
+  }
+  return decoded;
+};
+
+const normalizeSqlIdentifier = (identifier: string): string | null => {
+  if (/^U&"/iu.test(identifier)) {
+    return unicodeEscapedIdentifierValue(identifier);
+  }
   if (identifier.startsWith('"') && identifier.endsWith('"')) {
     return identifier.slice(1, -1).replaceAll('""', '"');
   }
@@ -298,7 +390,7 @@ const normalizeSqlIdentifier = (identifier: string): string => {
 };
 
 const finalRelationIdentifier = (path: string): string | null => {
-  const identifiers = path.match(new RegExp(SQL_IDENTIFIER_PATTERN, "gu"));
+  const identifiers = path.match(new RegExp(SQL_IDENTIFIER_PATTERN, "giu"));
   const finalIdentifier = identifiers?.at(-1);
   return finalIdentifier === undefined
     ? null
@@ -378,6 +470,31 @@ const projectionReadAliases = (
   return aliases;
 };
 
+const hasUnsupportedUnicodeRelationIdentifier = (
+  text: string,
+  initialLexState: SqlLexState,
+): boolean => {
+  const structuralText = sqlStructuralText(text, initialLexState);
+  for (const match of structuralText.matchAll(SQL_RELATION_REFERENCE)) {
+    const relationPath = match.at(1);
+    if (relationPath === undefined) {
+      continue;
+    }
+    const identifiers =
+      relationPath.match(new RegExp(SQL_IDENTIFIER_PATTERN, "giu")) ?? [];
+    if (
+      identifiers.some(
+        (identifier) =>
+          /^U&"/iu.test(identifier) &&
+          normalizeSqlIdentifier(identifier) === null,
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const leadingProjectionAlias = (text: string): string | null => {
   const match = text.match(
     new RegExp(
@@ -439,7 +556,8 @@ type SqlLexState =
   | { type: "escape-string" }
   | { type: "line-comment" }
   | { type: "normal" }
-  | { type: "single-quote" };
+  | { type: "single-quote" }
+  | { type: "unicode-escape-string" };
 
 const DOLLAR_QUOTE_START = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/u;
 const SQL_IDENTIFIER_CONTINUATION = /[A-Za-z0-9_$]/u;
@@ -452,6 +570,9 @@ const startsPostgresEscapeString = (text: string, index: number): boolean => {
   const previous = text[index - 1];
   return previous === undefined || !SQL_IDENTIFIER_CONTINUATION.test(previous);
 };
+
+const startsUnicodeEscapeSpecifier = (text: string, index: number): boolean =>
+  text[index] === "'" && /\buescape\s*$/iu.test(text.slice(0, index));
 
 const sqlLexStateAfter = (
   text: string,
@@ -472,6 +593,8 @@ const sqlLexStateAfter = (
         } else if (startsPostgresEscapeString(text, index)) {
           state = { type: "escape-string" };
           index += 1;
+        } else if (startsUnicodeEscapeSpecifier(text, index)) {
+          state = { type: "unicode-escape-string" };
         } else if (char === "'") {
           state = { type: "single-quote" };
         } else if (char === '"') {
@@ -502,6 +625,13 @@ const sqlLexStateAfter = (
         }
         break;
       case "single-quote":
+        if (char === "'" && next === "'") {
+          index += 1;
+        } else if (char === "'") {
+          state = { type: "normal" };
+        }
+        break;
+      case "unicode-escape-string":
         if (char === "'" && next === "'") {
           index += 1;
         } else if (char === "'") {
@@ -559,6 +689,9 @@ const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
           structuralText += "  ";
           state = { type: "escape-string" };
           index += 1;
+        } else if (char === "'" && /\buescape\s*$/iu.test(structuralText)) {
+          structuralText += char;
+          state = { type: "unicode-escape-string" };
         } else if (char === "'") {
           structuralText += " ";
           state = { type: "single-quote" };
@@ -603,6 +736,15 @@ const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
         structuralText += " ";
         if (char === "'" && next === "'") {
           structuralText += " ";
+          index += 1;
+        } else if (char === "'") {
+          state = { type: "normal" };
+        }
+        break;
+      case "unicode-escape-string":
+        structuralText += char;
+        if (char === "'" && next === "'") {
+          structuralText += next;
           index += 1;
         } else if (char === "'") {
           state = { type: "normal" };
@@ -971,15 +1113,17 @@ const isFunctionArgumentOpening = (
     .match(
       new RegExp(
         `(${SQL_IDENTIFIER_PATTERN})(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*\\s*$`,
-        "u",
+        "iu",
       ),
     )
     ?.at(1);
   if (identifier === undefined) {
     return false;
   }
-  return !SQL_BOOLEAN_GROUPING_PREFIXES.has(
-    normalizeSqlIdentifier(identifier).toLowerCase(),
+  const normalized = normalizeSqlIdentifier(identifier);
+  return (
+    normalized === null ||
+    !SQL_BOOLEAN_GROUPING_PREFIXES.has(normalized.toLowerCase())
   );
 };
 
@@ -1160,8 +1304,11 @@ export default {
             "compose an approved workspace/contact/chat authorization scope " +
             "fragment. Add the appropriate scope helper; do not post-filter.",
           unavailableIdentifier:
-            "A relation passed to sql.identifier must be statically known so " +
+            "Relation identifier syntax must be statically recognizable so " +
             "private search projection authorization can be verified.",
+          unavailableRaw:
+            "Dynamic sql.raw text cannot be verified for private search " +
+            "projection authorization. Use a static SQL fragment or bind a value.",
           unavailableCooked:
             "SQL template text must have a statically available cooked value " +
             "so authorization scope can be verified.",
@@ -1239,24 +1386,27 @@ export default {
           if (
             !isAstNode(unwrapped) ||
             unwrapped.type !== "CallExpression" ||
-            !isAstNode(unwrapped.callee) ||
-            unwrapped.callee.type !== "MemberExpression"
+            !isAstNode(unwrapped.callee)
           ) {
             return false;
           }
-          const object = resolveConstInitializer(unwrapped.callee.object);
+          const callee = resolveConstInitializer(unwrapped.callee);
+          if (!isAstNode(callee) || callee.type !== "MemberExpression") {
+            return false;
+          }
+          const object = resolveConstInitializer(callee.object);
           if (
             !isIdentifier(object) ||
             !isApprovedImport(object, DRIZZLE_SQL_IMPORTS)
           ) {
             return false;
           }
-          const property = unwrapped.callee.property;
+          const property = callee.property;
           return (
             (isIdentifier(property) &&
-              unwrapped.callee.computed !== true &&
+              callee.computed !== true &&
               property.name === method) ||
-            (unwrapped.callee.computed === true &&
+            (callee.computed === true &&
               isStringLiteral(property) &&
               property.value === method)
           );
@@ -2018,7 +2168,7 @@ export default {
                 parameterBindings,
               );
               return rawText === null
-                ? null
+                ? [[{ type: "unavailable-raw" }]]
                 : [[{ type: "text", value: rawText }]];
             }
             if (isSqlMethodCall(resolved, "identifier")) {
@@ -2314,13 +2464,38 @@ export default {
           }
           if (
             mergedTokenPaths.some((tokens) =>
+              tokens.some((token) => token.type === "unavailable-raw"),
+            )
+          ) {
+            context.report({
+              node,
+              messageId: "unavailableRaw",
+            });
+          }
+          if (
+            mergedTokenPaths.some((tokens) =>
               tokens.some(
                 (token, index) =>
                   token.type === "unavailable-identifier" &&
                   hasProjectionReadIntroducer(tokens, index) &&
                   !interpolationIsDeleteTarget(tokens, index),
               ),
-            )
+            ) ||
+            mergedTokenPaths.some((tokens) => {
+              let lexState: SqlLexState = { type: "normal" };
+              for (const token of tokens) {
+                if (token.type !== "text") {
+                  continue;
+                }
+                if (
+                  hasUnsupportedUnicodeRelationIdentifier(token.value, lexState)
+                ) {
+                  return true;
+                }
+                lexState = sqlLexStateAfter(token.value, lexState);
+              }
+              return false;
+            })
           ) {
             context.report({
               node,
@@ -2409,7 +2584,10 @@ export default {
                   }
                   continue;
                 }
-                if (token.type === "unavailable-identifier") {
+                if (
+                  token.type === "unavailable-identifier" ||
+                  token.type === "unavailable-raw"
+                ) {
                   continue;
                 }
                 const queryState = queryStateFor(
@@ -2493,7 +2671,7 @@ export default {
           parent: AstNode,
         ): boolean => {
           // Deferral is safe only through shapes the SQL flattener is
-          // guaranteed to consume on its way to the enclosing join.
+          // guaranteed to consume on its way to an enclosing composition.
           switch (parent.type) {
             case "ArrayExpression":
               return (
@@ -2508,6 +2686,8 @@ export default {
               return parent.consequent === child || parent.alternate === child;
             case "LogicalExpression":
               return parent.left === child || parent.right === child;
+            case "MemberExpression":
+              return parent.object === child;
             case "SequenceExpression":
               return (
                 Array.isArray(parent.expressions) &&
@@ -2533,6 +2713,24 @@ export default {
           let parent = isAstNode(node.parent) ? node.parent : null;
           while (parent !== null && !visited.has(parent)) {
             visited.add(parent);
+            if (parent.type === "TaggedTemplateExpression") {
+              if (
+                parent.quasi !== child ||
+                !isApprovedSqlTaggedTemplate(parent)
+              ) {
+                return false;
+              }
+              return flattenSqlExpression(parent, new Set()) !== null;
+            }
+            const appendParts = sqlAppendCallParts(parent);
+            if (
+              appendParts !== null &&
+              (appendParts.fragment === child ||
+                appendParts.receiver === child ||
+                visited.has(appendParts.receiver))
+            ) {
+              return flattenSqlExpression(parent, new Set()) !== null;
+            }
             if (
               isSqlMethodCall(parent, "fromList") ||
               isSqlMethodCall(parent, "join")
@@ -2616,8 +2814,15 @@ export default {
               return;
             }
             if (isSqlMethodCall(node, "raw")) {
+              if (hasVerifiedEnclosingSqlComposition(node)) {
+                return;
+              }
               const rawText = staticSqlStringArgument(node);
               if (rawText === null) {
+                context.report({
+                  node,
+                  messageId: "unavailableRaw",
+                });
                 return;
               }
               inspectSqlTokenPaths(node, [[{ type: "text", value: rawText }]]);
