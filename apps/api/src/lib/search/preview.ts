@@ -42,11 +42,45 @@ const SEARCH_PREVIEW_BODY_MAX_CHUNK_START =
   1 + (SEARCH_PREVIEW_BODY_CHUNK_LIMIT - 1) * SEARCH_PREVIEW_BODY_CHUNK_STEP;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 
-const previewBodyExcerpt = (title: SQL, body: SQL, tsQuery: SQL) => sql`
+type PreviewTextConfig = {
+  normalize: (text: SQL) => SQL;
+  regconfig: SQL;
+};
+
+type PreviewHeadlineOptions = PreviewTextConfig & {
+  body: SQL;
+  title: SQL;
+  tsQuery: SQL;
+};
+
+type PreviewContentOptions = PreviewTextConfig & {
+  body: SQL;
+  title: SQL;
+  tsQuery: SQL | null;
+};
+
+const normalizeSearchPreviewText = (text: SQL): SQL =>
+  sql`unaccent(arabic_normalize(${text}))`;
+
+const normalizeCaseLawPreviewText = (text: SQL): SQL => sql`
+  CASE
+    WHEN coalesce(clfc.use_unaccent, true)
+    THEN unaccent(arabic_normalize(${text}))
+    ELSE arabic_normalize(${text})
+  END
+`;
+
+const previewBodyExcerpt = ({
+  body,
+  normalize,
+  regconfig,
+  title,
+  tsQuery,
+}: PreviewHeadlineOptions) => sql`
   CASE
     WHEN to_tsvector(
-      'public.stella_unaccent'::regconfig,
-      left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
+      ${regconfig},
+      ${normalize(sql`left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})`)}
     ) @@ ${tsQuery}
     THEN left(${body}, ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT})
     ELSE coalesce(
@@ -62,14 +96,15 @@ const previewBodyExcerpt = (title: SQL, body: SQL, tsQuery: SQL) => sql`
           ${SEARCH_PREVIEW_BODY_CHUNK_STEP}
         ) AS chunks(chunk_start)
         WHERE to_tsvector(
-            'public.stella_unaccent'::regconfig,
-            left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
-              || ' ' ||
-            substring(
+            ${regconfig},
+            ${normalize(sql`
+              left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
+                || ' ' ||
+              substring(
                 ${body}
                 FROM chunk_start
                 FOR ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}
-              )
+              )`)}
           ) @@ ${tsQuery}
         ORDER BY chunk_start
         LIMIT 1
@@ -79,14 +114,14 @@ const previewBodyExcerpt = (title: SQL, body: SQL, tsQuery: SQL) => sql`
   END
 `;
 
-const previewHeadline = (title: SQL, body: SQL, tsQuery: SQL) => sql`
+const previewHeadline = (options: PreviewHeadlineOptions) => sql`
   left(
     ts_headline(
-      'public.stella_unaccent'::regconfig,
-      left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
+      ${options.regconfig},
+      left(${options.title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
         || ' ' ||
-      ${previewBodyExcerpt(title, body, tsQuery)},
-      ${tsQuery},
+      ${previewBodyExcerpt(options)},
+      ${options.tsQuery},
       ${SEARCH_PREVIEW_HEADLINE_CONFIG}
     ),
     ${SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT}
@@ -102,9 +137,21 @@ const previewUnhighlighted = (title: SQL, body: SQL) => sql`
   ) AS content
 `;
 
-const previewContent = (title: SQL, body: SQL, tsQuery: SQL | null): SQL =>
+const previewContent = ({
+  body,
+  normalize,
+  regconfig,
+  title,
+  tsQuery,
+}: PreviewContentOptions): SQL =>
   tsQuery
-    ? previewHeadline(title, body, tsQuery)
+    ? previewHeadline({
+        body,
+        normalize,
+        regconfig,
+        title,
+        tsQuery,
+      })
     : previewUnhighlighted(title, body);
 
 const previewTextFilter = (searchVector: SQL, tsQuery: SQL | null): SQL =>
@@ -127,11 +174,13 @@ export const buildSearchPreviewQuery = ({
   switch (type) {
     case "matter":
       return sql`
-        SELECT ${previewContent(
-          sql`wsd.title`,
-          sql`wsd.searchable_text`,
+        SELECT ${previewContent({
+          body: sql`wsd.searchable_text`,
+          normalize: normalizeSearchPreviewText,
+          regconfig: sql`'simple'::regconfig`,
+          title: sql`wsd.title`,
           tsQuery,
-        )}
+        })}
         FROM workspace_search_documents wsd
         WHERE wsd.workspace_id = ${resultId}
           AND wsd.organization_id = ${organizationId}
@@ -143,11 +192,13 @@ export const buildSearchPreviewQuery = ({
       `;
     case "contact":
       return sql`
-        SELECT ${previewContent(
-          sql`csd.title`,
-          sql`csd.searchable_text`,
+        SELECT ${previewContent({
+          body: sql`csd.searchable_text`,
+          normalize: normalizeSearchPreviewText,
+          regconfig: sql`'simple'::regconfig`,
+          title: sql`csd.title`,
           tsQuery,
-        )}
+        })}
         FROM contact_search_documents csd
         WHERE csd.contact_id = ${resultId}
           AND csd.organization_id = ${organizationId}
@@ -160,13 +211,16 @@ export const buildSearchPreviewQuery = ({
       `;
     case "case-law":
       return sql`
-        SELECT ${previewContent(
-          sql`clsd.title`,
-          sql`clsd.searchable_text`,
+        SELECT ${previewContent({
+          body: sql`clsd.searchable_text`,
+          normalize: normalizeCaseLawPreviewText,
+          regconfig: sql`clsd.regconfig::regconfig`,
+          title: sql`clsd.title`,
           tsQuery,
-        )}
+        })}
         FROM case_law_search_documents clsd
         JOIN case_law_decisions d ON d.id = clsd.decision_id
+        LEFT JOIN case_law_fts_configs clfc ON clfc.language = clsd.language
         ${redistributableSourceJoin}
         WHERE clsd.decision_id = ${resultId}
           ${previewTextFilter(sql`clsd.tsv`, tsQuery)}
@@ -174,11 +228,13 @@ export const buildSearchPreviewQuery = ({
       `;
     case "chat":
       return sql`
-        SELECT ${previewContent(
-          sql`cst.title`,
-          sql`cst.searchable_text`,
+        SELECT ${previewContent({
+          body: sql`cst.searchable_text`,
+          normalize: normalizeSearchPreviewText,
+          regconfig: sql`'simple'::regconfig`,
+          title: sql`cst.title`,
           tsQuery,
-        )}
+        })}
         FROM chat_thread_search_documents cst
         JOIN chat_threads t ON t.id = cst.thread_id
         WHERE cst.thread_id = ${resultId}
@@ -197,11 +253,13 @@ export const buildSearchPreviewQuery = ({
     case "message":
     case "link":
       return sql`
-        SELECT ${previewContent(
-          sql`sd.title`,
-          sql`sd.searchable_text`,
+        SELECT ${previewContent({
+          body: sql`sd.searchable_text`,
+          normalize: normalizeSearchPreviewText,
+          regconfig: sql`coalesce(sd.language, 'simple')::regconfig`,
+          title: sql`sd.title`,
           tsQuery,
-        )}
+        })}
         FROM search_documents sd
         WHERE sd.entity_id = ${resultId}
           AND sd.kind = ${type}

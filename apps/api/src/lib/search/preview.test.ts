@@ -60,6 +60,30 @@ describe("search preview authorization scope", () => {
     ).toBe(SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT);
   });
 
+  test("matches document passages with the indexed normalization and config", () => {
+    const compiled = compilePreview("document");
+
+    expect(compiled.sql).toContain(
+      "coalesce(sd.language, 'simple')::regconfig",
+    );
+    expect(compiled.sql).toContain("unaccent(arabic_normalize(");
+    expect(compiled.sql).not.toContain("public.stella_unaccent");
+  });
+
+  test("matches simple-config projections with their indexed normalization", () => {
+    const projectionTypes = [
+      "matter",
+      "contact",
+      "chat",
+    ] as const satisfies readonly GlobalSearchResultType[];
+
+    for (const type of projectionTypes) {
+      const compiled = compilePreview(type);
+      expect(compiled.sql).toContain("'simple'::regconfig");
+      expect(compiled.sql).toContain("unaccent(arabic_normalize(");
+    }
+  });
+
   test("returns a bounded unhighlighted excerpt for filter-only searches", () => {
     const compiled = compilePreview("document", "");
 
@@ -133,6 +157,13 @@ describe("search preview authorization scope", () => {
     expect(compiled.sql).toContain(
       "JOIN case_law_sources\n    ON case_law_sources.id = d.source_id",
     );
+    expect(compiled.sql).toContain(
+      "LEFT JOIN case_law_fts_configs clfc ON clfc.language = clsd.language",
+    );
+    expect(compiled.sql).toContain("clsd.regconfig::regconfig");
+    expect(compiled.sql).toContain("coalesce(clfc.use_unaccent, true)");
+    expect(compiled.sql).toContain("unaccent(arabic_normalize(");
+    expect(compiled.sql).toContain("ELSE arabic_normalize(");
     expect(compiled.sql).toContain("allowsRedistribution");
     expect(compiled.sql).not.toContain("organization_id");
     expect(compiled.sql).not.toContain("workspace_id");
