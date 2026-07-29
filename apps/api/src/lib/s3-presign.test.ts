@@ -70,6 +70,25 @@ describe("isS3KeyInSigningScope", () => {
       }),
     ).toBe(false);
   });
+
+  test("scopes lifecycle-managed exports inside their tenant", () => {
+    const scope = {
+      keyspace: "exports",
+      organizationId: "org_1",
+      workspaceId: "ws_1",
+    } as const;
+
+    expect(isS3KeyInSigningScope("exports/org_1/ws_1/report.docx", scope)).toBe(
+      true,
+    );
+    expect(isS3KeyInSigningScope("org_1/ws_1/report.docx", scope)).toBe(false);
+    expect(isS3KeyInSigningScope("exports/org_2/ws_1/report.docx", scope)).toBe(
+      false,
+    );
+    expect(
+      isS3KeyInSigningScope("exports/org_1/ws_10/report.docx", scope),
+    ).toBe(false);
+  });
 });
 
 describe("presignUploadUrl", () => {

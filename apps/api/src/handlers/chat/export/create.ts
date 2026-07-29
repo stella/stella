@@ -201,10 +201,13 @@ const createMessageExport = createSafeRootHandler(
     const fileName = sanitizeFilenamePreservingExtension(
       `${thread.title}.docx`,
     );
-    // `exports/` must lead the key so object-lifecycle prefix filters anchor at
-    // the key start; org + thread keep it tenant-scoped, the random suffix
-    // avoids collisions across concurrent exports of the same message.
-    const key = `exports/${session.activeOrganizationId}/chat/${threadId}/${messageId}-${Bun.randomUUIDv7()}.docx`;
+    // `exports/` leads the key for object-lifecycle cleanup. The download
+    // signer receives the matching exports keyspace plus tenant scope.
+    const exportScopePrefix =
+      thread.workspaceId === null
+        ? session.activeOrganizationId
+        : `${session.activeOrganizationId}/${thread.workspaceId}`;
+    const key = `exports/${exportScopePrefix}/chat/${threadId}/${messageId}-${Bun.randomUUIDv7()}.docx`;
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -234,6 +237,7 @@ const createMessageExport = createSafeRootHandler(
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
             resourceId: messageId,
             s3Key: key,
+            s3Keyspace: "exports",
             expiresInSeconds: CHAT_EXPORT_URL_TTL_SECONDS,
             fileName,
             organizationId: session.activeOrganizationId,

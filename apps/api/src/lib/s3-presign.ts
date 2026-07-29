@@ -101,7 +101,11 @@ const isAwsS3Endpoint = (endpoint: string): boolean => {
 type CachedClient = { client: AwsS3Client; createdAt: number };
 type CachedStsClient = { client: STSClient; createdAt: number };
 type CachedScopedClient = { client: AwsS3Client; expiresAt: number };
+export const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
+export type S3SigningKeyspace = (typeof S3_SIGNING_KEYSPACES)[number];
+
 export type S3SigningScope = {
+  keyspace?: S3SigningKeyspace;
   organizationId: string;
   workspaceId?: string | null;
 };
@@ -194,10 +198,15 @@ const shouldUseScopedSigning = (): boolean =>
   !!envBase.S3_SCOPED_SIGNING_ROLE_ARN && isAwsS3Endpoint(envBase.S3_ENDPOINT);
 
 const s3SigningScopePrefix = ({
+  keyspace = "tenant",
   organizationId,
   workspaceId,
-}: S3SigningScope): string =>
-  workspaceId ? `${organizationId}/${workspaceId}/` : `${organizationId}/`;
+}: S3SigningScope): string => {
+  const tenantPrefix = workspaceId
+    ? `${organizationId}/${workspaceId}/`
+    : `${organizationId}/`;
+  return keyspace === "exports" ? `exports/${tenantPrefix}` : tenantPrefix;
+};
 
 export const isS3KeyInSigningScope = (
   key: string,

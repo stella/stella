@@ -3,6 +3,7 @@ import type { AuditRecorder, AuditResourceType } from "@/api/lib/audit-log";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
+import type { S3SigningKeyspace } from "@/api/lib/s3-presign";
 
 type AuditedPresignDownloadOptions = {
   tx: Transaction;
@@ -23,6 +24,7 @@ type AuditedPresignDownloadOptions = {
   /** Additional audit metadata (e.g., sizeBytes, contentType). */
   metadata?: Record<string, unknown>;
   organizationId?: SafeId<"organization"> | null;
+  s3Keyspace?: S3SigningKeyspace;
   workspaceId?: SafeId<"workspace"> | null;
 };
 
@@ -47,6 +49,7 @@ export const auditedPresignDownload = async ({
   fileName,
   metadata,
   organizationId,
+  s3Keyspace,
   workspaceId,
 }: AuditedPresignDownloadOptions): Promise<string> => {
   await recordAuditEvent(tx, {
@@ -67,7 +70,13 @@ export const auditedPresignDownload = async ({
     expiresIn: expiresInSeconds,
     ...(fileName ? { fileName } : {}),
     ...(organizationId
-      ? { scope: { organizationId, workspaceId: workspaceId ?? null } }
+      ? {
+          scope: {
+            organizationId,
+            workspaceId: workspaceId ?? null,
+            ...(s3Keyspace === undefined ? {} : { keyspace: s3Keyspace }),
+          },
+        }
       : {}),
   });
 };

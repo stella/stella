@@ -108,6 +108,7 @@ const readReportExport = createSafeHandler(
                 expiresIn: DOWNLOAD_URL_EXPIRES_SECONDS,
                 fileName: downloadFileName(resultS3Key),
                 scope: {
+                  keyspace: "exports",
                   organizationId: session.activeOrganizationId,
                   workspaceId,
                 },
