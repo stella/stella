@@ -823,7 +823,7 @@ type ScopeSuffixDisposition = "invalid" | "pending" | "safe";
 const SQL_TRUTH_PRESERVING_SCOPE_TEST =
   /^(?:=\s*true\b|(?:!=|<>)\s*false\b|is\s+(?:true\b|not\s+false\b|not\s+distinct\s+from\s+true\b|distinct\s+from\s+false\b)|in\s*\(\s*true\s*\)|not\s+in\s*\(\s*false\s*\))/iu;
 const SQL_SCOPE_SUFFIX_BOUNDARY =
-  /^(?:and\b|except\b|fetch\b|for\b|group\b|having\b|intersect\b|limit\b|offset\b|order\b|returning\b|union\b|window\b|;)/iu;
+  /^(?:and\b|except\b|fetch\b|for\b|group\b|having\b|intersect\b|limit\b|offset\b|order\b|returning\b|union\b|when\b|window\b|;)/iu;
 
 const scopeSuffixDisposition = (
   text: string,
@@ -1356,8 +1356,7 @@ export default {
             if (
               !isAstNode(property) ||
               property.type !== "Property" ||
-              property.kind !== "init" ||
-              property.method === true
+              property.kind !== "init"
             ) {
               return null;
             }
@@ -1539,52 +1538,55 @@ export default {
           returns: unknown[];
         };
 
-        const resolveLocalSqlHelper = (
+        const localFunctionNodes = (expression: unknown): AstNode[] => {
+          const resolved = resolveStaticConstValue(expression, new Set());
+          if (
+            isAstNode(resolved) &&
+            (resolved.type === "ArrowFunctionExpression" ||
+              resolved.type === "FunctionExpression")
+          ) {
+            return [resolved];
+          }
+          if (!isIdentifier(resolved)) {
+            return [];
+          }
+          const variable = resolveVariable(resolved);
+          return (variable?.defs ?? []).flatMap((definition) =>
+            definition.type === "FunctionName" &&
+            isAstNode(definition.node) &&
+            definition.node.type === "FunctionDeclaration"
+              ? [definition.node]
+              : [],
+          );
+        };
+
+        const resolveLocalSqlHelpers = (
           call: AstNode,
           outerBindings: SqlParameterBindings,
-        ): LocalSqlHelper | null => {
+        ): LocalSqlHelper[] => {
           if (
             !Array.isArray(call.arguments) ||
             call.arguments.some(
               (argument) =>
                 isAstNode(argument) && argument.type === "SpreadElement",
-            ) ||
-            !isIdentifier(call.callee)
+            )
           ) {
-            return null;
+            return [];
           }
-          const variable = resolveVariable(call.callee);
-          for (const definition of variable?.defs ?? []) {
-            let functionNode: AstNode | null = null;
+          const dynamicCalleeAlternatives = resolveDynamicMemberAlternatives(
+            call.callee,
+            new Set(),
+          );
+          const calleeCandidates = dynamicCalleeAlternatives ?? [call.callee];
+          const functionNodes = new Set(
+            calleeCandidates.flatMap(localFunctionNodes),
+          );
+          const helpers: LocalSqlHelper[] = [];
+          for (const functionNode of functionNodes) {
             if (
-              definition.type === "FunctionName" &&
-              isAstNode(definition.node) &&
-              definition.node.type === "FunctionDeclaration"
-            ) {
-              functionNode = definition.node;
-            } else if (
-              definition.type === "Variable" &&
-              isAstNode(definition.node) &&
-              definition.node.type === "VariableDeclarator" &&
-              isAstNode(definition.parent) &&
-              definition.parent.type === "VariableDeclaration" &&
-              definition.parent.kind === "const"
-            ) {
-              const initializer = unwrapExpression(definition.node.init);
-              if (
-                isAstNode(initializer) &&
-                (initializer.type === "ArrowFunctionExpression" ||
-                  initializer.type === "FunctionExpression")
-              ) {
-                functionNode = initializer;
-              }
-            }
-            if (
-              functionNode === null ||
               !Array.isArray(functionNode.params) ||
               functionNode.async === true ||
               functionNode.generator === true ||
-              functionNode.params.length !== call.arguments.length ||
               functionNode.params.some(
                 (parameter) =>
                   !isIdentifier(parameter) || parameter.optional === true,
@@ -1603,23 +1605,24 @@ export default {
               const argument = call.arguments.at(index);
               if (
                 parameterVariable === null ||
-                argument === undefined ||
                 parameterBindings.has(parameterVariable)
               ) {
                 hasAmbiguousParameter = true;
                 break;
               }
-              parameterBindings.set(parameterVariable, argument);
+              if (argument !== undefined) {
+                parameterBindings.set(parameterVariable, argument);
+              }
             }
             if (hasAmbiguousParameter) {
               continue;
             }
             const returns = functionReturnExpressions(functionNode);
             if (returns.length > 0) {
-              return { functionNode, parameterBindings, returns };
+              helpers.push({ functionNode, parameterBindings, returns });
             }
           }
-          return null;
+          return helpers;
         };
 
         const expressionTokenPaths = (value: unknown): SqlTemplateToken[][] => [
@@ -1889,20 +1892,32 @@ export default {
                 textBoundary: "exact",
               });
             }
-            const localHelper = resolveLocalSqlHelper(
+            const localHelpers = resolveLocalSqlHelpers(
               resolved,
               parameterBindings,
             );
-            if (
-              localHelper !== null &&
-              !nextAncestors.has(localHelper.functionNode)
-            ) {
-              nextAncestors.add(localHelper.functionNode);
-              return flattenSqlAlternatives(
-                localHelper.returns,
-                nextAncestors,
-                localHelper.parameterBindings,
-              );
+            if (localHelpers.length > 0) {
+              const paths: SqlTemplateToken[][] = [];
+              let hasEligibleHelper = false;
+              for (const localHelper of localHelpers) {
+                if (nextAncestors.has(localHelper.functionNode)) {
+                  continue;
+                }
+                hasEligibleHelper = true;
+                const helperAncestors = new Set(nextAncestors);
+                helperAncestors.add(localHelper.functionNode);
+                const helperPaths = flattenSqlAlternatives(
+                  localHelper.returns,
+                  helperAncestors,
+                  localHelper.parameterBindings,
+                );
+                if (helperPaths !== null) {
+                  paths.push(...helperPaths);
+                }
+              }
+              if (hasEligibleHelper) {
+                return paths.length > 0 ? paths : null;
+              }
             }
             return flattenSqlAlternatives(
               resolved.arguments,
@@ -2041,7 +2056,7 @@ export default {
             )
             .map((token) => token.value)
             .join(" ");
-          if (!/\b(?:delete|select|table|update)\b/iu.test(text)) {
+          if (!/\b(?:delete|merge|select|table|update)\b/iu.test(text)) {
             return;
           }
 

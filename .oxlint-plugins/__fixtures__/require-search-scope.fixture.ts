@@ -82,6 +82,15 @@ const unsafeInterpolatedDeleteUsingEntity = sql`
   WHERE e.id = sd.entity_id
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves insert-only MERGE actions cannot read an unscoped private source
+const unsafeMergeUsingEntity = sql`
+  MERGE INTO entities e
+  USING search_documents sd
+  ON false
+  WHEN NOT MATCHED THEN
+    INSERT (id) VALUES (sd.entity_id)
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves counts cannot omit authorization either
 const unsafeChatCount = sql`SELECT count(*) FROM chat_thread_search_documents cst`;
 
@@ -213,6 +222,67 @@ const unsafeBranchedParameterizedHelperRead = sql`
   ${fromEitherTable(
     enabled ? searchDocuments : sql`entities`,
     sql`workspaces w`,
+  )}
+`;
+
+const memberSqlHelpers = {
+  fromPrivate() {
+    return sql`FROM search_documents sd`;
+  },
+  fromScoped(scope: unknown) {
+    return sql`FROM search_documents sd WHERE true ${scope}`;
+  },
+};
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a statically selected object method cannot hide a private projection
+const unsafeMemberHelperRead = sql`
+  SELECT * ${memberSqlHelpers.fromPrivate()}
+`;
+
+const scopedMemberHelperRead = sql`
+  SELECT * ${memberSqlHelpers.fromScoped(entityWorkspaceFilter)}
+`;
+
+const missingArgumentMemberSqlHelpers = {
+  fromPrivate(_scope: unknown) {
+    return sql`FROM search_documents sd`;
+  },
+  fromPublic(_scope: unknown) {
+    return sql`FROM entities e`;
+  },
+};
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a missing unused helper argument cannot hide a private projection
+const unsafeMissingArgumentMemberHelperRead = sql`
+  SELECT * ${missingArgumentMemberSqlHelpers.fromPrivate()}
+`;
+
+const publicMissingArgumentMemberHelperRead = sql`
+  SELECT * ${missingArgumentMemberSqlHelpers.fromPublic()}
+`;
+
+declare const dynamicMemberHelperKey: "fromPrivate" | "fromScoped";
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves every callable dynamic object member is inspected independently
+const unsafeDynamicMemberHelperRead = sql`
+  SELECT *
+  ${memberSqlHelpers[dynamicMemberHelperKey](entityWorkspaceFilter)}
+`;
+
+const scopedDynamicMemberSqlHelpers = {
+  fromEntity(scope: unknown) {
+    return sql`FROM search_documents sd WHERE true ${scope}`;
+  },
+  fromPublic(_scope: unknown) {
+    return sql`FROM entities e`;
+  },
+};
+
+declare const scopedDynamicMemberHelperKey: "fromEntity" | "fromPublic";
+const scopedDynamicMemberHelperRead = sql`
+  SELECT *
+  ${scopedDynamicMemberSqlHelpers[scopedDynamicMemberHelperKey](
+    entityWorkspaceFilter,
   )}
 `;
 
@@ -700,6 +770,14 @@ const scopedInterpolatedDeleteUsingEntity = sql`
     AND true ${entityWorkspaceFilter}
 `;
 
+const scopedMergeUsingEntity = sql`
+  MERGE INTO entities e
+  USING search_documents sd
+  ON true ${entityWorkspaceFilter}
+  WHEN NOT MATCHED THEN
+    INSERT (id) VALUES (sd.entity_id)
+`;
+
 const scopedUpdateCte = sql`
   WITH updated_entities AS (
     UPDATE entities e
@@ -1087,6 +1165,14 @@ const writeOnlyInterpolatedDeleteEntityProjection = sql`
   WHERE entity_id = ${organizationId}
 `;
 
+const writeOnlyMergeEntityProjection = sql`
+  MERGE INTO search_documents sd
+  USING entities e
+  ON false
+  WHEN NOT MATCHED THEN
+    INSERT (entity_id) VALUES (e.id)
+`;
+
 // Public case law is intentionally organization-independent.
 const publicCaseLaw = sql`SELECT * FROM case_law_search_documents clsd`;
 
@@ -1103,6 +1189,7 @@ void [
   unsafeInterpolatedUpdateFromEntity,
   unsafeDeleteUsingEntity,
   unsafeInterpolatedDeleteUsingEntity,
+  unsafeMergeUsingEntity,
   unsafeChatCount,
   unsafeConditionalScope,
   unsafeNestedHelper,
@@ -1125,6 +1212,9 @@ void [
   unsafeParameterizedHelperRead,
   unsafeDeclaredHelperRead,
   unsafeBranchedParameterizedHelperRead,
+  unsafeMemberHelperRead,
+  unsafeMissingArgumentMemberHelperRead,
+  unsafeDynamicMemberHelperRead,
   unsafeMemberFragmentRead,
   unsafeTupleFragmentRead,
   unsafeComputedMemberFragmentRead,
@@ -1198,6 +1288,7 @@ void [
   scopedInterpolatedUpdateFromEntity,
   scopedDeleteUsingEntity,
   scopedInterpolatedDeleteUsingEntity,
+  scopedMergeUsingEntity,
   scopedUpdateCte,
   scopedDeleteCte,
   scopedExplicitAlias,
@@ -1221,6 +1312,9 @@ void [
   scopedParameterizedHelperRead,
   publicParameterizedHelperRead,
   scopedBranchedParameterizedHelperRead,
+  scopedMemberHelperRead,
+  scopedDynamicMemberHelperRead,
+  publicMissingArgumentMemberHelperRead,
   shadowedParameterControl,
   scopedMemberFragmentRead,
   scopedTupleFragmentRead,
@@ -1257,5 +1351,6 @@ void [
   writeOnlyInterpolatedUpdateEntityProjection,
   writeOnlyDeleteEntityProjection,
   writeOnlyInterpolatedDeleteEntityProjection,
+  writeOnlyMergeEntityProjection,
   publicCaseLaw,
 ];
