@@ -5,6 +5,7 @@ import { entities, searchDocuments } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { workspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
@@ -55,19 +56,17 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const { organizationId, limit } = query;
 
   const orgFilter = sql`sd.organization_id = ${organizationId}`;
-  const workspaceAccessFilter = (() => {
-    if (!query.workspaceIds) {
-      return sql`AND sd.workspace_id = ${query.workspaceId}`;
-    }
-    if (query.workspaceIds.length > 0) {
-      return sql`AND sd.workspace_id = ANY(${typedPgArray(query.workspaceIds, "uuid")})`;
-    }
-    return sql`AND false`;
-  })();
-  const workspaceSelectionFilter =
-    query.workspaceIds && query.workspaceId
-      ? sql`AND sd.workspace_id = ${query.workspaceId}`
-      : sql``;
+  const workspaceAccessFilter = query.workspaceIds
+    ? workspaceAccessSql({
+        column: sql`sd.workspace_id`,
+        accessibleWorkspaceIds: query.workspaceIds,
+        selectedWorkspaceIds: query.workspaceId ? [query.workspaceId] : [],
+      })
+    : workspaceAccessSql({
+        column: sql`sd.workspace_id`,
+        accessibleWorkspaceIds: [query.workspaceId],
+        selectedWorkspaceIds: [],
+      });
   const kindFilter =
     query.kinds && query.kinds.length > 0
       ? sql`AND sd.kind = ANY(${typedPgArray(query.kinds, "text")})`
@@ -110,7 +109,6 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     JOIN workspaces w ON w.id = sd.workspace_id
     WHERE ${orgFilter}
       ${workspaceAccessFilter}
-      ${workspaceSelectionFilter}
       ${kindFilter}
       ${cursorFilter}
       AND sd.tsv @@ ${tsQuery}
@@ -123,7 +121,6 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     FROM search_documents sd
     WHERE ${orgFilter}
       ${workspaceAccessFilter}
-      ${workspaceSelectionFilter}
       ${kindFilter}
       AND sd.tsv @@ ${tsQuery}
   `;
@@ -136,7 +133,6 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     FROM search_documents sd
     WHERE ${orgFilter}
       ${workspaceAccessFilter}
-      ${workspaceSelectionFilter}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.kind
     ORDER BY count DESC
@@ -209,7 +205,11 @@ const searchContent = async (
 ): Promise<ContentSearchResult> => {
   const { organizationId, workspaceId, limit } = query;
   const tsQuery = buildSearchTsQuery(query.query);
-  const singleWorkspaceFilter = sql`AND sd.workspace_id = ${workspaceId}`;
+  const singleWorkspaceFilter = workspaceAccessSql({
+    column: sql`sd.workspace_id`,
+    accessibleWorkspaceIds: [workspaceId],
+    selectedWorkspaceIds: [],
+  });
 
   const [hitsResult, countResult] = await Promise.all([
     rootDb.execute(sql`

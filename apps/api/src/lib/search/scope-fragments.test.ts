@@ -1,16 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
-// `mock-root-db` must be imported before any module that pulls in the real
-// `rootDb` singleton (index-global.ts does), so chatThreadScopeSql can be
-// exercised without opening a database connection.
-import "@/api/tests/helpers/mock-root-db";
+import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
   resolveWorkspaceScope,
 } from "@/api/lib/search/contact-workspace-access-sql";
-
-const { chatThreadScopeSql } = await import("@/api/lib/search/index-global");
 
 const organizationId = toSafeId<"organization">("org_1");
 const userId = toSafeId<"user">("user_1");

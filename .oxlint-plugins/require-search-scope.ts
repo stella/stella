@@ -4,11 +4,32 @@
 // could leak result titles, snippets, counts, or facets across workspaces.
 //
 // This rule is intentionally syntactic. It proves that a query composes one
-// of the small approved scope builders (or a branded single-workspace scope);
-// compiled-SQL and adversarial integration tests prove the predicates that
-// those builders emit.
+// of the small approved, import-verified scope builders; compiled-SQL and
+// adversarial integration tests prove the predicates those builders emit.
 
-type AstNode = Record<string, unknown> & { type: string };
+import {
+  getImportedName,
+  isAstNode,
+  isIdentifier,
+  isStringLiteral,
+  unwrapExpression,
+} from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+
+type ScopeDefinition = {
+  node: unknown;
+  parent?: unknown;
+  type: string;
+};
+
+type ScopeVariable = {
+  defs: ScopeDefinition[];
+};
+
+type Scope = {
+  set: Map<string, ScopeVariable>;
+  upper: Scope | null;
+};
 
 type RuleContext = {
   report: (descriptor: {
@@ -16,35 +37,42 @@ type RuleContext = {
     messageId: "missingScope";
     node: unknown;
   }) => void;
+  sourceCode: {
+    getScope: (node: unknown) => Scope;
+  };
 };
 
 const PRIVATE_SEARCH_PROJECTIONS = {
-  search_documents: new Set([
-    "entityWorkspaceFilter",
-    "entityWorkspaceFacetFilter",
-    "singleWorkspaceFilter",
-    "workspaceAccessFilter",
-    "workspaceAccessSql",
-  ]),
-  workspace_search_documents: new Set([
-    "matterWorkspaceFilter",
-    "matterWorkspaceFacetFilter",
-    "workspaceAccessSql",
-  ]),
-  contact_search_documents: new Set([
-    "contactWorkspaceFilter",
-    "contactWorkspaceAccessSql",
-  ]),
-  chat_thread_search_documents: new Set(["chatScope", "chatThreadScopeSql"]),
+  search_documents: [
+    {
+      importedName: "workspaceAccessSql",
+      module: "@/api/lib/search/contact-workspace-access-sql",
+    },
+  ],
+  workspace_search_documents: [
+    {
+      importedName: "workspaceAccessSql",
+      module: "@/api/lib/search/contact-workspace-access-sql",
+    },
+  ],
+  contact_search_documents: [
+    {
+      importedName: "contactWorkspaceAccessSql",
+      module: "@/api/lib/search/contact-workspace-access-sql",
+    },
+  ],
+  chat_thread_search_documents: [
+    {
+      importedName: "chatThreadScopeSql",
+      module: "@/api/lib/search/chat-thread-scope-sql",
+    },
+  ],
 } as const;
 
-const isAstNode = (node: unknown): node is AstNode =>
-  typeof node === "object" &&
-  node !== null &&
-  "type" in node &&
-  typeof node.type === "string";
+type ApprovedScopeImport =
+  (typeof PRIVATE_SEARCH_PROJECTIONS)[keyof typeof PRIVATE_SEARCH_PROJECTIONS][number];
 
-const templateText = (node: AstNode): string => {
+const templateText = (node: Record<string, unknown>): string => {
   const quasi = node.quasi;
   if (!isAstNode(quasi) || !Array.isArray(quasi.quasis)) {
     return "";
@@ -65,36 +93,12 @@ const templateText = (node: AstNode): string => {
     .join(" ");
 };
 
-const directExpressionName = (expression: unknown): string | null => {
-  if (!isAstNode(expression)) {
-    return null;
-  }
-  if (expression.type === "Identifier" && typeof expression.name === "string") {
-    return expression.name;
-  }
-  if (expression.type !== "CallExpression") {
-    return null;
-  }
-  const callee = expression.callee;
-  return isAstNode(callee) &&
-    callee.type === "Identifier" &&
-    typeof callee.name === "string"
-    ? callee.name
-    : null;
-};
-
-const templateDirectExpressionNames = (node: AstNode): Set<string> => {
+const templateExpressions = (node: Record<string, unknown>): unknown[] => {
   const quasi = node.quasi;
-  const names = new Set<string>();
   if (isAstNode(quasi) && Array.isArray(quasi.expressions)) {
-    for (const expression of quasi.expressions) {
-      const name = directExpressionName(expression);
-      if (name) {
-        names.add(name);
-      }
-    }
+    return quasi.expressions;
   }
-  return names;
+  return [];
 };
 
 export default {
@@ -111,6 +115,89 @@ export default {
         },
       },
       create(context: RuleContext) {
+        const resolveVariable = (
+          identifier: AstNode & { name: string },
+        ): ScopeVariable | null => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope) {
+            const variable = scope.set.get(identifier.name);
+            if (variable) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        const isApprovedScopeImport = (
+          identifier: AstNode & { name: string },
+          approvedImports: readonly ApprovedScopeImport[],
+        ): boolean => {
+          const variable = resolveVariable(identifier);
+          return (
+            variable?.defs.some((definition) => {
+              if (
+                definition.type !== "ImportBinding" ||
+                !isAstNode(definition.node) ||
+                !isAstNode(definition.parent) ||
+                definition.parent.type !== "ImportDeclaration" ||
+                !isStringLiteral(definition.parent.source)
+              ) {
+                return false;
+              }
+              const importedName = getImportedName(definition.node);
+              const source = definition.parent.source;
+              return approvedImports.some(
+                (approved) =>
+                  approved.importedName === importedName &&
+                  approved.module === source.value,
+              );
+            }) === true
+          );
+        };
+
+        const isApprovedScopeCall = (
+          expression: unknown,
+          approvedImports: readonly ApprovedScopeImport[],
+        ): boolean => {
+          const unwrapped = unwrapExpression(expression);
+          return (
+            isAstNode(unwrapped) &&
+            unwrapped.type === "CallExpression" &&
+            isIdentifier(unwrapped.callee) &&
+            isApprovedScopeImport(unwrapped.callee, approvedImports)
+          );
+        };
+
+        const isApprovedScopeFragment = (
+          expression: unknown,
+          approvedImports: readonly ApprovedScopeImport[],
+        ): boolean => {
+          const unwrapped = unwrapExpression(expression);
+          if (isApprovedScopeCall(unwrapped, approvedImports)) {
+            return true;
+          }
+          if (!isIdentifier(unwrapped)) {
+            return false;
+          }
+          const variable = resolveVariable(unwrapped);
+          return (
+            variable?.defs.some((definition) => {
+              if (
+                definition.type !== "Variable" ||
+                !isAstNode(definition.node) ||
+                definition.node.type !== "VariableDeclarator" ||
+                !isAstNode(definition.parent) ||
+                definition.parent.type !== "VariableDeclaration" ||
+                definition.parent.kind !== "const"
+              ) {
+                return false;
+              }
+              return isApprovedScopeCall(definition.node.init, approvedImports);
+            }) === true
+          );
+        };
+
         return {
           TaggedTemplateExpression(node: unknown) {
             if (!isAstNode(node)) {
@@ -121,14 +208,18 @@ export default {
               return;
             }
 
-            const names = templateDirectExpressionNames(node);
-            for (const [table, approvedNames] of Object.entries(
+            const expressions = templateExpressions(node);
+            for (const [table, approvedImports] of Object.entries(
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
               if (!new RegExp(`\\b${table}\\b`, "u").test(text)) {
                 continue;
               }
-              if ([...approvedNames].some((name) => names.has(name))) {
+              if (
+                expressions.some((expression) =>
+                  isApprovedScopeFragment(expression, approvedImports),
+                )
+              ) {
                 continue;
               }
               context.report({

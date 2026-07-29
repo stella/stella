@@ -1036,7 +1036,7 @@ export const SearchDialog = ({
             <div
               className={cn(
                 "hidden w-56 shrink-0 overflow-y-auto border-e px-3 py-3",
-                previewEnabled ? "xl:block" : "sm:block",
+                showPreview ? "xl:block" : "sm:block",
               )}
             >
               <TimeFacetGroup

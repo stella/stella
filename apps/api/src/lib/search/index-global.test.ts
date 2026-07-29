@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import { contactWorkspaceAccessSql } from "@/api/lib/search/contact-workspace-access-sql";
 import { mapEntityHit } from "@/api/lib/search/global-search-mappers";
-import { chatThreadScopeSql } from "@/api/lib/search/index-global";
 import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
 
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";

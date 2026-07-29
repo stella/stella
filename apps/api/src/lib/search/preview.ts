@@ -3,6 +3,7 @@ import type { SQL } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
   contactWorkspaceAccessSql,
   workspaceAccessSql,
@@ -11,7 +12,6 @@ import {
   escapeAndHighlight,
   SEARCH_PREVIEW_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
-import { chatThreadScopeSql } from "@/api/lib/search/index-global";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import type { GlobalSearchResultType } from "@/api/lib/search/types";
 
