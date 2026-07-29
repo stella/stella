@@ -38,7 +38,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isDataUrlSizeLimitError, parseDataUrl } from "@/api/lib/data-url";
+import {
+  isDataUrlSizeLimitError,
+  parseDataUrl,
+  toDataUrl,
+} from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
@@ -288,16 +292,27 @@ export const createRawChatFilePart = ({
   mimeType: string;
 }): ChatAttachmentPart => {
   const metadata = { filename: fileName };
-  const source = {
-    type: "data" as const,
-    value: Buffer.from(bytes).toString("base64"),
-    mimeType,
-  };
 
   if (mimeType.startsWith("image/")) {
-    return { type: "image", source, metadata };
+    return {
+      type: "image",
+      source: {
+        type: "url",
+        value: toDataUrl(bytes, mimeType),
+        mimeType,
+      },
+      metadata,
+    };
   }
-  return { type: "document", source, metadata };
+  return {
+    type: "document",
+    source: {
+      type: "data",
+      value: Buffer.from(bytes).toString("base64"),
+      mimeType,
+    },
+    metadata,
+  };
 };
 
 /**
