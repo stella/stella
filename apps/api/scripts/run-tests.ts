@@ -27,7 +27,7 @@ const MODULE_MOCK_TEST_BATCH_SIZE = 4;
 // db via context, and module-level singletons are lazy per the side-effect
 // conventions). The path fallback catches integration suites that reach the
 // db through their own local setup.
-const DB_TEST_BATCH_SIZE = 4;
+const DB_TEST_BATCH_SIZE = 3;
 const DB_TEST_MARKERS = [
   "tests/security/rls-helpers",
   "tests/security/rls-fixture",
