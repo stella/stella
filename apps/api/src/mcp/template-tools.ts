@@ -894,6 +894,81 @@ const resolveFilledDocxName = ({
   return DOCX_EXT_RE.test(sanitized) ? sanitized : `${sanitized}.docx`;
 };
 
+const validateFilledTemplateDestination = async ({
+  action,
+  context,
+  entityId,
+  parentId,
+  workspaceId,
+}: {
+  action: "create_document" | "create_version";
+  context: McpRequestContext;
+  entityId?: string | undefined;
+  parentId?: string | undefined;
+  workspaceId: McpRequestContext["accessibleWorkspaceIds"][number];
+}): Promise<string | null> => {
+  if (action === "create_document") {
+    if (parentId === undefined) {
+      return null;
+    }
+    const parentResult = await context.safeDb((tx) =>
+      tx.query.entities.findFirst({
+        where: {
+          id: { eq: brandPersistedEntityId(parentId) },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { kind: true },
+      }),
+    );
+    if (Result.isError(parentResult)) {
+      throw parentResult.error;
+    }
+    const parent = parentResult.value;
+    if (!parent) {
+      return "Parent entity not found in this workspace";
+    }
+    return parent.kind === "folder" ? null : "Parent entity must be a folder";
+  }
+
+  const entityResult = await context.safeDb((tx) =>
+    tx.query.entities.findFirst({
+      where: {
+        id: {
+          eq: brandPersistedEntityId(
+            entityId ?? panic("create_version preflight requires entity_id"),
+          ),
+        },
+        workspaceId: { eq: workspaceId },
+      },
+      columns: { currentVersionId: true, readOnly: true },
+      with: {
+        currentVersion: {
+          columns: {},
+          with: {
+            fields: { columns: { content: true } },
+          },
+        },
+      },
+    }),
+  );
+  if (Result.isError(entityResult)) {
+    throw entityResult.error;
+  }
+  const entity = entityResult.value;
+  if (!entity?.currentVersionId || !entity.currentVersion) {
+    return "Entity not found";
+  }
+  if (entity.readOnly) {
+    return "Entity is read-only";
+  }
+  if (
+    !entity.currentVersion.fields.some((field) => field.content.type === "file")
+  ) {
+    return "Entity has no file field";
+  }
+  return null;
+};
+
 const handleSaveFilledTemplateTool: McpToolHandler = async ({
   args,
   context,
@@ -958,6 +1033,17 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
   }
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
   const templateId = brandPersistedTemplateId(input.template_id);
+
+  const destinationError = await validateFilledTemplateDestination({
+    action: input.action,
+    context,
+    entityId: input.entity_id,
+    parentId: input.parent_id,
+    workspaceId,
+  });
+  if (destinationError !== null) {
+    return errorResult(destinationError);
+  }
 
   const orgAIConfig = await loadOrgAIConfig(context.organizationId);
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
@@ -1100,6 +1186,7 @@ const handleSaveFilledTemplateTool: McpToolHandler = async ({
           format: "docx",
           unmatchedCount: filled.unmatchedPlaceholders.length,
           unusedCount: filled.unusedValues.length,
+          structureErrors: filled.structureErrors,
           workspaceId,
           recordAuditEvent,
         }),

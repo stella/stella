@@ -11,6 +11,7 @@ import {
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
+  discloseRegisteredOAuthClientScopes,
   getAuth,
   isSixDigitOtpBody,
   isTwoFactorRedirectResponse,
@@ -453,5 +454,28 @@ describe("native OAuth plugin order", () => {
     expect(pluginIds.indexOf("expo")).toBeGreaterThan(
       pluginIds.indexOf("stella-social-two-factor-redirect"),
     );
+  });
+});
+
+describe("OAuth client scope disclosure", () => {
+  test("adds only the registered scope metadata to the public client", () => {
+    expect(
+      discloseRegisteredOAuthClientScopes({
+        client: { client_id: "client-1", client_name: "CLI" },
+        registeredScopes: ["openid", "stella:read"],
+      }),
+    ).toEqual({
+      client_id: "client-1",
+      client_name: "CLI",
+      scope: "openid stella:read",
+    });
+  });
+
+  test("runs after the OAuth provider endpoint", () => {
+    const pluginIds = getAuth().options.plugins.map((plugin) => plugin.id);
+
+    expect(
+      pluginIds.indexOf("stella-oauth-client-scope-disclosure"),
+    ).toBeGreaterThan(pluginIds.indexOf("oauth-provider"));
   });
 });

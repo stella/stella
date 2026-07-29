@@ -7,6 +7,7 @@ import {
   getOauthRedirectUrl,
   getSignedOauthQueryFromHash,
   hasSignedOauthQuery,
+  oauthClientAllowsScopes,
 } from "@/lib/oauth-provider";
 
 describe("getExpandedOauthAuthorizationUrl", () => {
@@ -63,6 +64,19 @@ describe("getExpandedOauthAuthorizationUrl", () => {
     ).toBe("select_account consent");
   });
 
+  test("preserves all compatible prompt tokens regardless of order", () => {
+    const result = getExpandedOauthAuthorizationUrl({
+      apiBaseUrl: "https://api.example.com",
+      oauthQuery:
+        "client_id=client-123&redirect_uri=https%3A%2F%2Fchat.example%2Fcallback&response_type=code&prompt=consent+login&sig=abc123",
+      scopes: ["stella:read"],
+    });
+
+    expect(
+      new URL(result ?? "https://invalid.example").searchParams.get("prompt"),
+    ).toBe("consent login");
+  });
+
   test("rejects unsigned or incomplete continuation queries", () => {
     expect(
       getExpandedOauthAuthorizationUrl({
@@ -79,6 +93,25 @@ describe("getExpandedOauthAuthorizationUrl", () => {
         scopes: ["stella:read"],
       }),
     ).toBeNull();
+  });
+});
+
+describe("oauthClientAllowsScopes", () => {
+  test("allows expansion only within the registered client scope set", () => {
+    const client = { scope: "openid stella:read stella:matters_write" };
+
+    expect(
+      oauthClientAllowsScopes(client, ["stella:read", "stella:matters_write"]),
+    ).toBe(true);
+    expect(
+      oauthClientAllowsScopes(client, [
+        "stella:read",
+        "stella:documents_write",
+      ]),
+    ).toBe(false);
+    expect(
+      oauthClientAllowsScopes({ client_name: "CLI" }, ["stella:read"]),
+    ).toBe(false);
   });
 });
 

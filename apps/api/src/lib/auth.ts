@@ -534,6 +534,58 @@ const socialSignInTwoFactorRedirectPlugin = {
   },
 } satisfies BetterAuthPlugin;
 
+export const discloseRegisteredOAuthClientScopes = ({
+  client,
+  registeredScopes,
+}: {
+  client: unknown;
+  registeredScopes: readonly string[];
+}): unknown => {
+  if (
+    typeof client !== "object" ||
+    client === null ||
+    !("client_id" in client) ||
+    typeof client.client_id !== "string"
+  ) {
+    return client;
+  }
+  return { ...client, scope: registeredScopes.join(" ") };
+};
+
+const oauthClientScopeDisclosurePlugin = {
+  id: "stella-oauth-client-scope-disclosure",
+  hooks: {
+    after: [
+      {
+        matcher: (ctx: HookEndpointContext) =>
+          ctx.path === "/oauth2/public-client",
+        handler: createAuthMiddleware(async (ctx) => {
+          const returned = ctx.context.returned;
+          if (
+            typeof returned !== "object" ||
+            returned === null ||
+            !("client_id" in returned) ||
+            typeof returned.client_id !== "string"
+          ) {
+            return;
+          }
+          const client = await rootDb.query.oauthClient.findFirst({
+            where: { clientId: { eq: returned.client_id } },
+            columns: { scopes: true },
+          });
+          if (!client) {
+            return;
+          }
+          ctx.context.returned = discloseRegisteredOAuthClientScopes({
+            client: returned,
+            registeredScopes: client.scopes ?? MCP_OAUTH_SCOPES,
+          });
+        }),
+      },
+    ],
+  },
+} satisfies BetterAuthPlugin;
+
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
@@ -932,6 +984,12 @@ const createAuth = () => {
           oauthAuthServerConfig: true,
         },
       }),
+      // The consent UI may offer a broader grant only when the client's
+      // registered allow-list contains it. Better Auth's public-client endpoint
+      // intentionally omits `scope`, so disclose that standard registration
+      // metadata to authenticated consent pages after the provider resolves
+      // the client. No secret or redirect metadata is added.
+      oauthClientScopeDisclosurePlugin,
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {

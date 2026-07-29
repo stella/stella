@@ -79,6 +79,23 @@ export const getOauthRedirectUrl = (value: unknown): string | null => {
   return null;
 };
 
+export const oauthClientAllowsScopes = (
+  value: unknown,
+  scopes: readonly string[],
+): boolean => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("scope" in value) ||
+    typeof value.scope !== "string"
+  ) {
+    return false;
+  }
+
+  const registeredScopes = new Set(value.scope.split(" ").filter(Boolean));
+  return scopes.every((scope) => registeredScopes.has(scope));
+};
+
 /**
  * Restarts a Better Auth authorization request with a broader scope set.
  * Consent continuations are signed, so their scope cannot be edited in place:
@@ -129,11 +146,10 @@ export const getExpandedOauthAuthorizationUrl = ({
 };
 
 const addConsentPrompt = (prompt: string | null): string => {
-  if (prompt === "login" || prompt === "login consent") {
-    return "login consent";
+  const tokens = prompt ? prompt.split(" ").filter(Boolean) : [];
+  const compatibleTokens = tokens.filter((token) => token !== "none");
+  if (!compatibleTokens.includes("consent")) {
+    compatibleTokens.push("consent");
   }
-  if (prompt === "select_account" || prompt === "select_account consent") {
-    return "select_account consent";
-  }
-  return "consent";
+  return [...new Set(compatibleTokens)].join(" ");
 };

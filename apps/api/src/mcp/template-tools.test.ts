@@ -116,7 +116,19 @@ const validationEnvelope = (
   return payload["error"];
 };
 
-const createScopedDb = (templates: unknown[] = []) =>
+type SeededEntityTarget =
+  | {
+      currentVersionId: string;
+      readOnly: boolean;
+      currentVersion: { fields: { content: { type: string } }[] };
+    }
+  | { kind: "folder" | "document" }
+  | null;
+
+const createScopedDb = (
+  templates: unknown[] = [],
+  entityTargets: Record<string, SeededEntityTarget> = {},
+) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (run: (tx: unknown) => unknown) => {
       // list_templates now uses the core query builder; the chain ignores its
@@ -133,7 +145,27 @@ const createScopedDb = (templates: unknown[] = []) =>
       };
       return await run({
         ...builder,
-        query: { templates: { findMany: async () => templates } },
+        query: {
+          entities: {
+            findFirst: async ({ where }: { where: { id: { eq: string } } }) => {
+              const id = where.id.eq;
+              if (Object.hasOwn(entityTargets, id)) {
+                return entityTargets[id];
+              }
+              if (id === "folder_1") {
+                return { kind: "folder" };
+              }
+              return {
+                currentVersionId: "version_1",
+                readOnly: false,
+                currentVersion: {
+                  fields: [{ content: { type: "file" } }],
+                },
+              };
+            },
+          },
+          templates: { findMany: async () => templates },
+        },
       });
     }),
   );
@@ -761,6 +793,13 @@ describe("MCP template tools", () => {
       buffer: Buffer.from("filled docx v2"),
       unmatchedPlaceholders: ["signature"],
       unusedValues: [],
+      structureErrors: [
+        {
+          directive: "#if signature",
+          message: "Missing closing directive",
+          paragraphIndex: 4,
+        },
+      ],
     });
     createEntityVersionFromBufferMock.mockResolvedValue(
       Result.ok({
@@ -793,7 +832,16 @@ describe("MCP template tools", () => {
       }),
     );
     expect(recordTemplateFillMock).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: "ws_1" }),
+      expect.objectContaining({
+        structureErrors: [
+          {
+            directive: "#if signature",
+            message: "Missing closing directive",
+            paragraphIndex: 4,
+          },
+        ],
+        workspaceId: "ws_1",
+      }),
     );
     expect(parseToolPayload(result)).toEqual({
       action: "create_version",
@@ -851,6 +899,98 @@ describe("MCP template tools", () => {
     expect(forbidden.content.at(0)).toMatchObject({
       type: "text",
       text: "Forbidden",
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
+  });
+
+  test("save_filled_template preflights persisted targets before fill work", async () => {
+    const invalidTargets = createScopedDb([], {
+      folder_missing: null,
+      not_a_folder: { kind: "document" },
+      version_missing: null,
+      version_read_only: {
+        currentVersionId: "version_1",
+        readOnly: true,
+        currentVersion: { fields: [{ content: { type: "file" } }] },
+      },
+      version_without_file: {
+        currentVersionId: "version_1",
+        readOnly: false,
+        currentVersion: { fields: [{ content: { type: "text" } }] },
+      },
+    });
+    const context = createContext({ scopedDb: invalidTargets });
+
+    const missingParent = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: "t1",
+        matter_id: "ws_1",
+        parent_id: "folder_missing",
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+    const nonFolderParent = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: "t1",
+        matter_id: "ws_1",
+        parent_id: "not_a_folder",
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+    const missingVersionTarget = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: "t1",
+        matter_id: "ws_1",
+        entity_id: "version_missing",
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+    const readOnlyVersionTarget = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: "t1",
+        matter_id: "ws_1",
+        entity_id: "version_read_only",
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+    const nonFileVersionTarget = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: "t1",
+        matter_id: "ws_1",
+        entity_id: "version_without_file",
+        values: {},
+      },
+      context,
+      toolName: "save_filled_template",
+    });
+
+    expect(missingParent.content.at(0)).toMatchObject({
+      text: "Parent entity not found in this workspace",
+    });
+    expect(nonFolderParent.content.at(0)).toMatchObject({
+      text: "Parent entity must be a folder",
+    });
+    expect(missingVersionTarget.content.at(0)).toMatchObject({
+      text: "Entity not found",
+    });
+    expect(readOnlyVersionTarget.content.at(0)).toMatchObject({
+      text: "Entity is read-only",
+    });
+    expect(nonFileVersionTarget.content.at(0)).toMatchObject({
+      text: "Entity has no file field",
     });
     expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
   });

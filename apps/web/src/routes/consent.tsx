@@ -34,6 +34,7 @@ import {
   getOauthClientDisplayName,
   getOauthRedirectUrl,
   getSignedOauthQueryFromHash,
+  oauthClientAllowsScopes,
 } from "@/lib/oauth-provider";
 import type { OAuthScopeDisplayEntry } from "@/lib/oauth-scopes";
 import {
@@ -163,7 +164,8 @@ function ConsentPage() {
   const canRequestFullAccess =
     bridgedQuery !== null &&
     requestsStellaWorkspaceAccess(scopes) &&
-    !includesFullStellaAccess(scopes);
+    !includesFullStellaAccess(scopes) &&
+    oauthClientAllowsScopes(clientQuery.data, FULL_STELLA_ACCESS_SCOPES);
 
   const handleRequestFullAccess = () => {
     if (!bridgedQuery) {
