@@ -36,6 +36,9 @@ if (!Number.isInteger(sampleTarget) || sampleTarget <= 0 || sampleTarget > 60) {
   process.exit(2);
 }
 
+let s3Attempts = 0;
+let s3Failures = 0;
+
 /** Run thunks with bounded concurrency, tolerating individual failures. */
 const settleInBatches = async <T>(
   thunks: readonly (() => Promise<T>)[],
@@ -45,7 +48,7 @@ const settleInBatches = async <T>(
   for (let i = 0; i < thunks.length; i += 8) {
     // oxlint-disable-next-line no-await-in-loop -- bounded batches: each 8-wide slice settles before the next to cap S3 pressure
     const settled = await Promise.allSettled(
-      thunks.slice(i, i + 8).map((thunk) => thunk()),
+      thunks.slice(i, i + 8).map(async (thunk) => await thunk()),
     );
     for (const outcome of settled) {
       if (outcome.status === "fulfilled") {
@@ -60,6 +63,8 @@ const settleInBatches = async <T>(
       `citation-probe: ${failures} S3 operations failed; continuing`,
     );
   }
+  s3Attempts += thunks.length;
+  s3Failures += failures;
   return results;
 };
 
@@ -349,3 +354,10 @@ for (const doc of docs) {
 console.log(
   `SUMMARY docs=${docs.length - emptyDocs} empty=${emptyDocs} extracted=${totalExtracted} residual-candidates=${totalResiduals}`,
 );
+
+// A run that could not read anything is a failure, not a clean zero: the
+// scheduled reviewer must see a non-zero exit instead of an empty SUMMARY.
+if (s3Attempts > 0 && s3Failures >= s3Attempts) {
+  console.error("citation-probe: every S3 operation failed; unusable run");
+  process.exit(1);
+}
