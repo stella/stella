@@ -88,7 +88,8 @@ type Sizes = Record<GroupKey, number>;
 // calls hydrateRoot) plus the Rolldown module runtime (`rolldown-runtime-<hash>
 // .js`) it imports. Both are loaded on every cold visit and are neither a
 // vendor chunk nor a route chunk. A heavy dep escaping manualChunks lands here.
-const ENTRY_RE = new RegExp(`^(?:index|rolldown-runtime)-${HASH}\\.js$`, "u");
+const INDEX_RE = new RegExp(`^index-${HASH}\\.js$`, "u");
+const RUNTIME_RE = new RegExp(`^rolldown-runtime-${HASH}\\.js$`, "u");
 
 const vendorRe = (name: VendorGroup): RegExp =>
   new RegExp(`^${name}-${HASH}\\.js$`, "u");
@@ -96,8 +97,17 @@ const vendorRe = (name: VendorGroup): RegExp =>
 // Returns the group a client JS file belongs to. Everything that is not the
 // entry or a named vendor chunk (route chunks, locale chunks, workers, the big
 // lazy `global-*` chunk, pdf/katex, ...) falls into the catch-all "routes".
-const classifyChunk = (fileName: string): "entry" | VendorGroup | "routes" => {
-  if (ENTRY_RE.test(fileName)) {
+const classifyChunk = (
+  fileName: string,
+  source = "",
+): "entry" | VendorGroup | "routes" => {
+  // Plugins may also emit `index-<hash>.js` assets (the anonymize WASM glue
+  // does this). The real client bootstrap imports the named React vendor
+  // chunk, which distinguishes it from those unrelated index assets.
+  if (
+    RUNTIME_RE.test(fileName) ||
+    (INDEX_RE.test(fileName) && source.includes("vendor-react-"))
+  ) {
     return "entry";
   }
   for (const name of VENDOR_GROUPS) {
@@ -153,9 +163,11 @@ const measure = (assetsDir: string): MeasureResult => {
   let largestRoute = 0;
 
   for (const file of files) {
-    const gz = gzipSize(path.join(assetsDir, file));
+    const absPath = path.join(assetsDir, file);
+    const gz = gzipSize(absPath);
     sizes.total += gz;
-    const group = classifyChunk(file);
+    const source = INDEX_RE.test(file) ? readFileSync(absPath, "utf-8") : "";
+    const group = classifyChunk(file, source);
     if (group === "routes") {
       sizes.routes += gz;
       largestRoute = Math.max(largestRoute, gz);
@@ -375,15 +387,20 @@ const runCheck = (): number => {
 const runSelfTest = (): number => {
   const failures: string[] = [];
 
-  const expectClass = (fileName: string, expected: string) => {
-    const actual = classifyChunk(fileName);
+  const expectClass = (fileName: string, expected: string, source = "") => {
+    const actual = classifyChunk(fileName, source);
     if (actual !== expected) {
       failures.push(
         `classifyChunk("${fileName}") = ${actual}, want ${expected}`,
       );
     }
   };
-  expectClass("index-BUgUF89h.js", "entry");
+  expectClass(
+    "index-BUgUF89h.js",
+    "entry",
+    'import "./vendor-react-DTPWpeFk.js";',
+  );
+  expectClass("index-D1PgnKxZ.js", "routes", "export class WasmBinding {}");
   expectClass("rolldown-runtime-CJJwijRH.js", "entry");
   expectClass("vendor-react-DTPWpeFk.js", "vendor-react");
   expectClass("vendor-tanstack-C8imk9BY.js", "vendor-tanstack");

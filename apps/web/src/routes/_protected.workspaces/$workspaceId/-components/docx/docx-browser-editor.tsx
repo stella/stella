@@ -615,7 +615,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     [fitZoomRef],
   );
   const t = useTranslations();
-  /* eslint-disable react/react-compiler -- optimistic preview is deliberately carried across the finalize/refetch window in a mutable ref */
+  /* eslint-disable react/react-compiler -- optimistic preview and its derived query data are deliberately carried across the finalize/refetch window in a mutable ref */
   const optimisticPreview = optimisticPreviewRef.current;
   const previewPlaceholderData =
     optimisticPreview?.fieldId === fieldId
@@ -652,7 +652,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     throw previewFileQuery.error;
   }
 
-  /* eslint-disable react/react-compiler -- select the optimistic preview from the same deliberate render-time ref snapshot */
   const previewFile = previewFileQuery.data
     ? selectPreviewFile({
         file: previewFileQuery.data,
@@ -660,6 +659,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         fieldId,
       })
     : null;
+  /* eslint-enable react/react-compiler */
   const {
     state,
     isDirty,
@@ -1391,7 +1391,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // "saving" with no buffer of its own). Without this we'd reload the
   // editor against `previewFile.buffer` for the few hundred ms before
   // the parent unmounts us — and the Stella fallback would flash.
-  /* eslint-disable react/react-compiler -- editing buffers are intentionally latched in refs across the save transition */
+  /* eslint-disable react/react-compiler -- editing buffers and the derived editor buffer are intentionally latched in refs across the save transition */
   const preservedLoadedBufferSnapshot = preservedLoadedBufferRef.current;
   const preservedLoadedBuffer =
     preservedLoadedBufferSnapshot?.fieldId === fieldId
@@ -1415,6 +1415,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     lastEditingBufferRef.current = editorBuffer;
     preservedLoadedBufferRef.current = null;
   }
+  /* eslint-enable react/react-compiler */
   const finishEditingLabel = t("folio.finishEditing");
 
   const toolbarExtra = (() => {
