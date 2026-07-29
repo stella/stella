@@ -77,6 +77,32 @@ test("skips alternative corpus counts for an upper-bound-only search", async () 
   expect(caseLawQueries).toHaveLength(0);
 });
 
+test("caps alternative case-law counts for an old lower bound", async () => {
+  await searchGlobal({
+    accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
+    editedByUserIds: [],
+    limit: 10,
+    mimeTypes: [],
+    organizationId: toSafeId<"organization">("org_1"),
+    query: "",
+    selectedWorkspaceIds: [],
+    types: ["document"],
+    updatedFrom: "1970-01-01T00:00:00.000Z",
+    userId: toSafeId<"user">("user_1"),
+  });
+
+  const dialect = new PgDialect();
+  const caseLawQueries = rootDbExecuteMock.mock.calls
+    .map(([query]) => dialect.sqlToQuery(query))
+    .filter(({ sql: query }) =>
+      query.includes("FROM case_law_search_documents"),
+    );
+
+  expect(caseLawQueries).toHaveLength(1);
+  expect(caseLawQueries.at(0)?.sql).toContain("bounded_case_law");
+  expect(caseLawQueries.at(0)?.params).toContain(1000);
+});
+
 test("normalizes numeric-offset filters to UTC before binding SQL", async () => {
   await searchGlobal({
     accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],

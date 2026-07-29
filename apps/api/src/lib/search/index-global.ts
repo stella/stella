@@ -936,15 +936,7 @@ export const searchGlobal = async ({
 
   const caseLawTypeFacetCountPromise = countWhen(
     shouldCountAlternativeTypeFacet("case-law"),
-    () =>
-      rootDb.execute(sql`
-      SELECT count(*)::int AS total
-      FROM case_law_search_documents clsd
-      JOIN case_law_decisions d ON d.id = clsd.decision_id
-      WHERE TRUE
-        ${caseLawTextSearchFilter}
-        ${caseLawUpdatedFilter}
-    `),
+    () => rootDb.execute(caseLawCountQuery),
   );
 
   const chatTypeFacetCountPromise = countWhen(
