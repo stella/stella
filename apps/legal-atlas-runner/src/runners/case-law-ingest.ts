@@ -1053,9 +1053,10 @@ export const runCaseLawIngest = async (
             "[citation-authority] Idle (no resolved citations to rank yet)",
           );
         } else if (startupFreshnessPending) {
-          startupFreshnessPending = false;
           // oxlint-disable-next-line no-await-in-loop -- one-time probe per process start
           const latest = await ingestionDb(latestCitationAuthorityRecomputeAt);
+          // Cleared only once the probe answered (a throw keeps it armed).
+          startupFreshnessPending = false;
           const ageMs = latest
             ? Date.now() - latest.getTime()
             : Number.POSITIVE_INFINITY;
@@ -1100,6 +1101,12 @@ export const runCaseLawIngest = async (
         } else {
           logError("[citation-authority] Recompute error:", error);
         }
+      }
+      if (outcome === RECOMPUTE_OUTCOME.SKIPPED) {
+        // The lock holder's commit is exactly what the retry must observe:
+        // a skip re-arms the freshness probe so the contender waits out the
+        // interval instead of repeating the freshly committed recompute.
+        startupFreshnessPending = true;
       }
       consecutiveFailures =
         outcome === RECOMPUTE_OUTCOME.FAILED ? consecutiveFailures + 1 : 0;
