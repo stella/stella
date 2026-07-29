@@ -66,6 +66,14 @@ const unsafeComposedPrivateRead = (() => {
   return sql`SELECT * ${privateFrom}`;
 })();
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a fixed scope alias cannot authorize a differently aliased private projection
+const unsafeWrongProjectionAlias = sql`
+  SELECT private_sd.*
+  FROM search_documents private_sd
+  JOIN workspaces sd ON sd.id = private_sd.workspace_id
+  WHERE true ${entityWorkspaceFilter}
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves every UNION branch needs its own verified scope
 const unsafeMultiBranch = sql`
   SELECT * FROM search_documents sd
@@ -90,6 +98,10 @@ const scopedSingleWorkspace = sql`
 
 const scopedInterpolatedEntity = sql`
   SELECT * FROM ${searchDocuments} sd WHERE true ${entityWorkspaceFilter}
+`;
+
+const scopedExplicitAlias = sql`
+  SELECT * FROM search_documents AS sd WHERE true ${entityWorkspaceFilter}
 `;
 
 const scopedAfterLineComment = sql`
@@ -144,10 +156,12 @@ void [
   unsafeLineCommentScope,
   unsafeBlockCommentScope,
   unsafeComposedPrivateRead,
+  unsafeWrongProjectionAlias,
   unsafeMultiBranch,
   scopedEntity,
   scopedSingleWorkspace,
   scopedInterpolatedEntity,
+  scopedExplicitAlias,
   scopedAfterLineComment,
   scopedComposedRead,
   scopedMultiBranch,

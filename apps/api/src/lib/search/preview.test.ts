@@ -48,6 +48,7 @@ describe("search preview authorization scope", () => {
     expect(compiled.sql).toContain("CASE");
     expect(compiled.sql).toContain("generate_series");
     expect(compiled.sql).toContain("to_tsvector");
+    expect(compiled.sql).toContain("|| ' ' ||");
     expect(
       SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT +
         1 +

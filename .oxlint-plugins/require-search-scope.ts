@@ -49,6 +49,7 @@ type ApprovedImport = {
 
 const PRIVATE_SEARCH_PROJECTIONS = {
   search_documents: {
+    expectedAlias: "sd",
     scopeImports: [
       {
         importedName: "searchDocumentsAccessSql",
@@ -64,6 +65,7 @@ const PRIVATE_SEARCH_PROJECTIONS = {
     ],
   },
   workspace_search_documents: {
+    expectedAlias: "wsd",
     scopeImports: [
       {
         importedName: "workspaceSearchDocumentsAccessSql",
@@ -79,6 +81,7 @@ const PRIVATE_SEARCH_PROJECTIONS = {
     ],
   },
   contact_search_documents: {
+    expectedAlias: "csd",
     scopeImports: [
       {
         importedName: "contactWorkspaceAccessSql",
@@ -94,6 +97,7 @@ const PRIVATE_SEARCH_PROJECTIONS = {
     ],
   },
   chat_thread_search_documents: {
+    expectedAlias: "cst",
     scopeImports: [
       {
         importedName: "chatThreadScopeSql",
@@ -111,6 +115,7 @@ const PRIVATE_SEARCH_PROJECTIONS = {
 } as const satisfies Record<
   string,
   {
+    expectedAlias: string;
     scopeImports: readonly ApprovedImport[];
     tableImports: readonly ApprovedImport[];
   }
@@ -147,8 +152,54 @@ type SqlTemplateToken =
   | { type: "expression"; value: unknown }
   | { type: "text"; value: string };
 
-const projectionReadCount = (text: string, table: string): number =>
-  text.match(new RegExp(`\\b${table}\\b`, "giu"))?.length ?? 0;
+const SQL_ALIAS_STOP_WORDS = new Set([
+  "cross",
+  "except",
+  "full",
+  "group",
+  "inner",
+  "intersect",
+  "join",
+  "left",
+  "limit",
+  "offset",
+  "on",
+  "order",
+  "outer",
+  "returning",
+  "right",
+  "set",
+  "union",
+  "values",
+  "where",
+  "window",
+]);
+
+const normalizeProjectionAlias = (alias: string | undefined): string | null => {
+  if (!alias) {
+    return null;
+  }
+  const normalized = alias.toLowerCase();
+  return SQL_ALIAS_STOP_WORDS.has(normalized) ? null : normalized;
+};
+
+const projectionReadAliases = (
+  text: string,
+  table: string,
+): (string | null)[] => {
+  const matches = text.matchAll(
+    new RegExp(
+      `\\b${table}\\b(?:\\s+(?:as\\s+)?([A-Za-z_][A-Za-z0-9_]*))?`,
+      "giu",
+    ),
+  );
+  return [...matches].map((match) => normalizeProjectionAlias(match.at(1)));
+};
+
+const leadingProjectionAlias = (text: string): string | null => {
+  const match = text.match(/^\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*)\b/iu);
+  return normalizeProjectionAlias(match?.at(1));
+};
 
 type SqlLexState =
   | "block-comment"
@@ -402,10 +453,15 @@ export default {
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
               let unscopedReadCount = 0;
+              let scopeEligibleReadCount = 0;
               let sqlLexState: SqlLexState = "normal";
-              for (const token of tokens) {
+              for (const [index, token] of tokens.entries()) {
                 if (token.type === "text") {
-                  unscopedReadCount += projectionReadCount(token.value, table);
+                  const aliases = projectionReadAliases(token.value, table);
+                  unscopedReadCount += aliases.length;
+                  scopeEligibleReadCount += aliases.filter(
+                    (alias) => alias === projection.expectedAlias,
+                  ).length;
                   sqlLexState = sqlLexStateAfter(token.value, sqlLexState);
                   continue;
                 }
@@ -417,13 +473,23 @@ export default {
                   )
                 ) {
                   unscopedReadCount += 1;
+                  const nextToken = tokens.at(index + 1);
+                  if (
+                    nextToken?.type === "text" &&
+                    leadingProjectionAlias(nextToken.value) ===
+                      projection.expectedAlias
+                  ) {
+                    scopeEligibleReadCount += 1;
+                  }
                 }
                 if (
                   unscopedReadCount > 0 &&
+                  scopeEligibleReadCount > 0 &&
                   sqlLexState === "normal" &&
                   isApprovedScopeFragment(token.value, projection.scopeImports)
                 ) {
                   unscopedReadCount -= 1;
+                  scopeEligibleReadCount -= 1;
                 }
               }
               if (unscopedReadCount === 0) {

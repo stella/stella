@@ -63,11 +63,13 @@ const previewBodyExcerpt = (title: SQL, body: SQL, tsQuery: SQL) => sql`
         WHERE chunk_start <= char_length(${body})
           AND to_tsvector(
             'public.stella_unaccent'::regconfig,
+            left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
+              || ' ' ||
             substring(
-              ${body}
-              FROM chunk_start
-              FOR ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}
-            )
+                ${body}
+                FROM chunk_start
+                FOR ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}
+              )
           ) @@ ${tsQuery}
         ORDER BY chunk_start
         LIMIT 1
