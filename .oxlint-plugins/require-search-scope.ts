@@ -1581,18 +1581,6 @@ export default {
           if (!isAstNode(unwrapped) || ancestors.has(unwrapped)) {
             return null;
           }
-          const dynamicMemberAlternatives = resolveDynamicMemberAlternatives(
-            unwrapped,
-            ancestors,
-          );
-          if (dynamicMemberAlternatives !== null) {
-            const nextAncestors = new Set(ancestors);
-            nextAncestors.add(unwrapped);
-            return flattenSqlAlternatives(
-              dynamicMemberAlternatives,
-              nextAncestors,
-            );
-          }
           const resolved = resolveConstInitializer(unwrapped);
           if (resolved !== unwrapped) {
             const nextAncestors = new Set(ancestors);
@@ -1670,6 +1658,18 @@ export default {
           const unwrapped = unwrapExpression(expression);
           if (!isAstNode(unwrapped) || ancestors.has(unwrapped)) {
             return null;
+          }
+          const dynamicMemberAlternatives = resolveDynamicMemberAlternatives(
+            unwrapped,
+            ancestors,
+          );
+          if (dynamicMemberAlternatives !== null) {
+            const nextAncestors = new Set(ancestors);
+            nextAncestors.add(unwrapped);
+            return flattenSqlAlternatives(
+              dynamicMemberAlternatives,
+              nextAncestors,
+            );
           }
           const resolved = resolveConstInitializer(unwrapped);
           if (resolved !== unwrapped) {
