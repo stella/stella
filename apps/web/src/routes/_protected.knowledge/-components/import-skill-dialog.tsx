@@ -142,7 +142,7 @@ const ImportSkillDialogBody = ({
           failed: result.failed.length,
           installed: result.installed.length,
         }),
-        description: result.failed.at(0)?.message,
+        description: t("common.unexpectedError"),
         type: "warning",
       });
     },

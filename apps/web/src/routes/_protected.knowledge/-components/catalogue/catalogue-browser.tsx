@@ -93,9 +93,9 @@ type CatalogueBrowserProps = {
    */
   showAddCustom?: boolean;
   /**
-   * Caller-resolved permission gate for creating custom team tools. The route
-   * owns role loading so this browser cannot trigger a cold non-suspense query
-   * during mount.
+   * Caller-resolved permission gate for creating custom team tools. Members
+   * can still import private skills. The route owns role loading so this
+   * browser cannot trigger a cold non-suspense query during mount.
    */
   canManageCustomTools: boolean;
   /**
@@ -286,7 +286,7 @@ export const CatalogueBrowser = ({
   );
   const otherFiltered = filtered.filter((entry) => !entry.isRecommendedForOrg);
   const hasMcpEntries = entries.some((entry) => entry.kind === "mcp");
-  const canShowAddCustom = showAddCustom && canManageCustomTools;
+  const showAddCustomMenu = showAddCustom;
   // On a truly empty MCP catalogue, replace the generic "no entries" + reset
   // line with a prominent add-MCP call to action. Gated to admins/owners
   // like the add-custom menu, since members can't create connectors.
@@ -438,7 +438,7 @@ export const CatalogueBrowser = ({
           </Popover>
         </ResponsiveActionToolbarItem>
 
-        {canShowAddCustom && (
+        {showAddCustomMenu && (
           <ResponsiveActionToolbarItem
             className="ms-auto sm:ms-0"
             slot="action"
@@ -452,14 +452,18 @@ export const CatalogueBrowser = ({
                 <ChevronDownIcon className="size-3.5" />
               </MenuTrigger>
               <MenuPopup align="end" className="w-56">
-                <MenuItem onClick={() => setAddMcpOpen(true)}>
-                  <McpIcon className="size-4" />
-                  {t("catalogue.addCustomMcp")}
-                </MenuItem>
-                <MenuItem onClick={() => setBlueprintGalleryOpen(true)}>
-                  <GraduationCapIcon className="size-4" />
-                  {t("catalogue.addCustomSkill")}
-                </MenuItem>
+                {canManageCustomTools ? (
+                  <>
+                    <MenuItem onClick={() => setAddMcpOpen(true)}>
+                      <McpIcon className="size-4" />
+                      {t("catalogue.addCustomMcp")}
+                    </MenuItem>
+                    <MenuItem onClick={() => setBlueprintGalleryOpen(true)}>
+                      <GraduationCapIcon className="size-4" />
+                      {t("catalogue.addCustomSkill")}
+                    </MenuItem>
+                  </>
+                ) : null}
                 <MenuItem onClick={() => setImportSkillOpen(true)}>
                   <FileDownIcon className="size-4" />
                   {t("knowledge.agentSkills.importSkill")}
