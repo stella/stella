@@ -26,6 +26,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspacePropertyOption } from "@/lib/types";
@@ -512,19 +513,19 @@ const DraftCard = ({
   const chipDefs = useChipDefinitions();
   const suggestPrompt = useSuggestPrompt();
   const editorRef = useRef<Editor | null>(null);
+  const [initialPrompt] = useState(() => draft.prompt);
+  const handlePromptChange = useLatestCallback((next: string) => {
+    onChange({ prompt: next });
+  });
 
   const promptField: PropertyPromptFieldHandle = useMemo(
     () => ({
       name: `draft-${draft.id}`,
-      state: { value: draft.prompt },
-      handleChange: (next) => onChange({ prompt: next }),
+      state: { value: initialPrompt },
+      handleChange: handlePromptChange,
       handleBlur: () => undefined,
     }),
-    // The editor reads `state.value` only on init; subsequent updates
-    // flow through `handleChange`, so a stable handle is fine.
-    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this editor handle out of compiler memoization
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- draft.prompt/onChange intentionally excluded; the editor reads state.value only on init, so the handle must stay stable across keystrokes
-    [draft.id],
+    [draft.id, handlePromptChange, initialPrompt],
   );
 
   const handleMentions = useCallback(

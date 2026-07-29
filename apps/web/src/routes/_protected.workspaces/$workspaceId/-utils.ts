@@ -177,8 +177,8 @@ export const formatRelativeTime = (
 };
 
 /** Start of the current week (local time), per the locale's first weekday. */
-export const getWeekStart = (locale: string): Date =>
-  startOfWeek(new Date(), locale);
+export const getWeekStart = (locale: string, date = new Date()): Date =>
+  startOfWeek(date, locale);
 
 /** Format a Date as `YYYY-MM-DD` in local time (not UTC). */
 export const toISODate = (d: Date): string => {

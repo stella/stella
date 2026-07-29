@@ -569,7 +569,6 @@ export const ExternalReferencePanel = ({
       tab.sourceToolName !== undefined ||
       storedSource?.connectorSlug !== undefined ||
       storedSource?.sourceToolName !== undefined);
-  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- translation function is a stable runtime service, not preview cache identity
   const { data: fetchedPreview, isLoading: previewLoading } = useQuery({
     queryKey: ["external-preview", tab.url],
     queryFn: async ({ signal }) => {

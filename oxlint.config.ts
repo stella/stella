@@ -828,6 +828,15 @@ export default defineConfig({
       },
     },
     {
+      files: ["apps/web/src/hooks/use-effect.ts"],
+      rules: {
+        // These generic wrappers intentionally accept opaque callbacks and
+        // dependency arrays. Their call sites own dependency correctness, so
+        // the compiler cannot analyze them as ordinary component hooks.
+        "react/react-compiler": "off",
+      },
+    },
+    {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "react/jsx-key": "error",

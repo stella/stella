@@ -13,7 +13,6 @@ import type { DependencyList, EffectCallback } from "react";
  * with a `key` instead of adding a dependency here.
  */
 export const useMountEffect = (effect: EffectCallback) => {
-  // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this wrapper out of compiler memoization
   // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design; `effect` is intentionally excluded so it runs exactly once
   useEffect(effect, []);
 };
@@ -28,7 +27,6 @@ export const useExternalSyncEffect = (
   effect: EffectCallback,
   deps: DependencyList,
 ) => {
-  // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this wrapper out of compiler memoization
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the wrapper forwards the caller's deps verbatim; correctness of `deps` is the caller's contract
   useEffect(effect, deps);
 };

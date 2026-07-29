@@ -259,6 +259,7 @@ type SearchDialogProps = {
   initialWorkspaceId?: string | undefined;
 };
 
+// eslint-disable-next-line react/react-compiler -- useVirtualizer returns functions that cannot be safely memoized, so React Compiler intentionally skips this component
 export const SearchDialog = ({
   open,
   onOpenChange,
@@ -303,10 +304,11 @@ export const SearchDialog = ({
   // whenever the user picks a new preset or runs a new query, while
   // staying stable across pagination so `fetchNextPage` keeps using
   // the same cutoff as page 1.
-  const updatedFrom = useMemo(
-    () => resolveUpdatedFrom(filters.time),
-    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this cutoff memo out of compiler memoization
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: include searchQuery so each new query gets a fresh preset cutoff
+  const { updatedFrom } = useMemo(
+    () => ({
+      searchQuery,
+      updatedFrom: resolveUpdatedFrom(filters.time),
+    }),
     [filters.time, searchQuery],
   );
   const updatedTo = resolveUpdatedTo(filters.time);

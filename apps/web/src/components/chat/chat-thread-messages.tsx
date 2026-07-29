@@ -53,6 +53,7 @@ import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
 import { dedupeById } from "@/lib/dedupe-by-id";
@@ -93,12 +94,9 @@ export const ChatThreadMessages = ({
   // The transcript can briefly hold both the optimistic streamed copy and the
   // persisted copy of one message during the per-turn refetch handoff; both
   // carry the same id, so React would render it twice. Collapse by id before
-  // any downstream read. Memoized because this component bails out of React
-  // Compiler (see below), so the manual memos here need a stable `messages`.
+  // any downstream read.
   const messages = useMemo(() => dedupeById(rawMessages), [rawMessages]);
   const generationActive = error === undefined && isGenerating;
-  // This component bails out of React Compiler (a suppression below), so its
-  // manual memoization is kept (RC will not auto-memoize a bailed component).
   const retryableAssistantMessageId = useMemo(
     () => getRetryableAssistantMessageId(messages),
     [messages],
@@ -119,13 +117,13 @@ export const ChatThreadMessages = ({
   const anchorScrollHeightRef = useRef<number | null>(null);
   const canLoadOlder = hasOlderMessages && onLoadOlder !== undefined;
 
-  const triggerLoadOlder = () => {
+  const triggerLoadOlder = useLatestCallback(() => {
     const container = scrollRef?.current;
     if (container) {
       anchorScrollHeightRef.current = container.scrollHeight;
     }
     detached(onLoadOlder?.(), "triggerLoadOlder");
-  };
+  });
 
   // Drive the trigger from a top sentinel: when it scrolls into view
   // (with a buffer) and an older page exists, fetch it. The observer
@@ -134,7 +132,14 @@ export const ChatThreadMessages = ({
   useExternalSyncEffect(() => {
     const root = scrollRef?.current;
     const target = sentinelRef.current;
-    if (!root || !target || !canLoadOlder || isLoadingOlder || loadOlderError) {
+    if (
+      !root ||
+      !target ||
+      !hasOlderMessages ||
+      onLoadOlder === undefined ||
+      isLoadingOlder ||
+      loadOlderError
+    ) {
       return undefined;
     }
 
@@ -156,9 +161,14 @@ export const ChatThreadMessages = ({
     // fetching the previous thread's older page into the current transcript.
     // `loadOlderError` keeps the observer detached after a failure so it
     // cannot loop the request; the manual button is the only retry path.
-    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this scroll effect out of compiler memoization
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder/scrollRef are stable refs; onLoadOlder tracks the active thread
-  }, [canLoadOlder, isLoadingOlder, loadOlderError, onLoadOlder]);
+  }, [
+    hasOlderMessages,
+    isLoadingOlder,
+    loadOlderError,
+    onLoadOlder,
+    scrollRef,
+    triggerLoadOlder,
+  ]);
 
   // Scroll anchoring: a prepend changes the first message id and grows
   // scrollHeight above the viewport. Restore the previous offset before
@@ -166,6 +176,7 @@ export const ChatThreadMessages = ({
   // and streaming keep the first id, so they skip this and stick-to-
   // bottom handles them; a thread switch changes the id too but has no
   // captured anchor, so it is also skipped.
+  // eslint-disable-next-line react/react-compiler -- scroll anchoring mutates the forwarded DOM scroll container in a layout effect
   useLayoutEffect(() => {
     const previousFirstId = prevFirstMessageIdRef.current;
     prevFirstMessageIdRef.current = firstMessageId;
@@ -178,6 +189,7 @@ export const ChatThreadMessages = ({
     if (!container) {
       return;
     }
+    // eslint-disable-next-line react/react-compiler -- adjust the forwarded DOM node after a prepend to preserve the viewport anchor
     container.scrollTop += container.scrollHeight - previousScrollHeight;
   }, [firstMessageId, scrollRef]);
 

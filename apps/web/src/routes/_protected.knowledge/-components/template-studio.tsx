@@ -26,6 +26,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME } from "@/lib/consts";
@@ -298,6 +299,7 @@ export const TemplateStudioPage = ({
           return;
         }
         frames += 1;
+        // eslint-disable-next-line react/react-compiler -- recursive local function is not a reactive dependency
         requestAnimationFrame(poll);
       };
       requestAnimationFrame(poll);
@@ -390,7 +392,7 @@ export const TemplateStudioPage = ({
   // History tab in the global inspector; tear both down when the page unmounts
   // (leaving the studio). Keyed on templateId so editing the manifest in the
   // tab doesn't re-seed and discard in-progress edits.
-  useExternalSyncEffect(() => {
+  const setupTemplateSession = useLatestCallback(() => {
     init({
       templateId,
       fields: parseFields(manifest),
@@ -406,9 +408,11 @@ export const TemplateStudioPage = ({
       closeTab(templateStudioTabId(templateId));
       reset(templateId);
     };
-    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this seed effect out of compiler memoization
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per template; the manifest is the fixed source doc for this templateId and re-seeding would discard edits made in the inspector tab.
-  }, [templateId]);
+  });
+  useExternalSyncEffect(setupTemplateSession, [
+    templateId,
+    setupTemplateSession,
+  ]);
 
   // The eye toggles the preview between accented and plain rendering.
   useExternalSyncEffect(() => {
@@ -1345,6 +1349,7 @@ export const TemplateStudioPage = ({
     return result !== null;
   };
 
+  // eslint-disable-next-line react/react-compiler -- latest-value store action relay, read only outside render by the registered handlers
   actionsRef.current = {
     toggleDirectives: () => setShowDirectives((visible) => !visible),
     deleteField: (path) => {

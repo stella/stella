@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -35,6 +35,7 @@ import {
   handlePromptEditorSelectAll,
 } from "@/components/prompt-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
 
@@ -126,8 +127,7 @@ export const AIPromptInput = ({
     }
     detached(fetchNextSkillPage(), "AIPromptInput");
   }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
-  const slashItemsRef = useRef<SlashItem[]>([]);
-  slashItemsRef.current = useMemo<SlashItem[]>(
+  const slashItems = useMemo<SlashItem[]>(
     () =>
       buildChatSlashItems({
         shortcuts: slashShortcutRows,
@@ -135,6 +135,7 @@ export const AIPromptInput = ({
       }),
     [slashShortcutRows, skillPages],
   );
+  const getSlashItems = useLatestCallback(() => slashItems);
 
   const readValue = (editor: Editor): string =>
     valueFormat === "text" ? editor.getText() : editor.getHTML();
@@ -164,7 +165,7 @@ export const AIPromptInput = ({
       }),
       ...(mentionExtension ? [mentionExtension] : []),
       PromptSlash.configure({
-        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
+        suggestion: createPromptSlashSuggestion(getSlashItems),
       }),
       History,
     ],
@@ -219,16 +220,18 @@ export const AIPromptInput = ({
   // editor's serialized value diverges from `value`. `emitUpdate: false` keeps
   // this from looping back through `onUpdate` → `onChange`; the equality guard
   // makes the editor's own edits a no-op so the caret is never disturbed.
-  useExternalSyncEffect(() => {
+  const syncControlledValue = useLatestCallback(() => {
     if (editor.isDestroyed || readValue(editor) === value) {
       return;
     }
     editor.commands.setContent(initialContent, { emitUpdate: false });
-    // `readValue`/`initialContent` derive solely from `value`/`valueFormat`,
-    // which are the tracked deps.
-    // eslint-disable-next-line react/react-compiler -- the exhaustive-deps exception below intentionally opts this synchronization effect out of compiler memoization
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- readValue and initialContent derive only from the tracked value/valueFormat inputs
-  }, [editor, value, valueFormat]);
+  });
+  useExternalSyncEffect(syncControlledValue, [
+    editor,
+    value,
+    valueFormat,
+    syncControlledValue,
+  ]);
 
   return (
     <div className={cn("relative w-full", className)}>

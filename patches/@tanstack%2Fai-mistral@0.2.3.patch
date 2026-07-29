@@ -1,5 +1,5 @@
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index f9627b9147623292d8f17153be3138e539957d20..438a1b3ab2bcc8808543bef8835b177ca32ab039 100644
+index f9627b9..438a1b3 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
 @@ -1,15 +1,16 @@
