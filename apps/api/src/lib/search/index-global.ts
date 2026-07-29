@@ -790,27 +790,20 @@ export const searchGlobal = async ({
     `),
   );
 
-  const hasBoundedCorpusPredicate = hasSearchQuery || updatedFrom !== undefined;
-  const caseLawCountQuery = hasBoundedCorpusPredicate
-    ? sql`
-        SELECT count(*)::int AS total
-        FROM case_law_search_documents clsd
-        JOIN case_law_decisions d ON d.id = clsd.decision_id
-        WHERE TRUE
-          ${caseLawTextSearchFilter}
-          ${caseLawUpdatedFilter}
-      `
-    : sql`
-        SELECT count(*)::int AS total
-        FROM (
-          SELECT 1
-          FROM case_law_search_documents clsd
-          JOIN case_law_decisions d ON d.id = clsd.decision_id
-          WHERE TRUE
-            ${caseLawUpdatedFilter}
-          LIMIT ${GLOBAL_SEARCH_MAX_OFFSET}
-        ) bounded_case_law
-      `;
+  const hasAlternativeFacetPredicate =
+    hasSearchQuery || updatedFrom !== undefined;
+  const caseLawCountQuery = sql`
+    SELECT count(*)::int AS total
+    FROM (
+      SELECT 1
+      FROM case_law_search_documents clsd
+      JOIN case_law_decisions d ON d.id = clsd.decision_id
+      WHERE TRUE
+        ${caseLawTextSearchFilter}
+        ${caseLawUpdatedFilter}
+      LIMIT ${GLOBAL_SEARCH_MAX_OFFSET}
+    ) bounded_case_law
+  `;
 
   const countPromises = [
     countWhen(isFirstPage && hasSelectedEntityType(selected), () =>
@@ -903,16 +896,16 @@ export const searchGlobal = async ({
   );
 
   // The primary count already covers a selected type (or every type when no
-  // type is selected). Only query an alternative type bucket when a text/date
-  // predicate keeps that count bounded. A blank type-only search must not turn
-  // into an exact count over an unrelated full corpus.
+  // type is selected). Only query alternative buckets for a text or lower-date
+  // search, not for blank type-only or upper-bound-only browsing. Public
+  // case-law counts are independently capped at the pagination horizon.
   const shouldCountAlternativeTypeFacet = (
     type: GlobalSearchResultType,
   ): boolean =>
     isFirstPage &&
     !restrictToEntities &&
     !shouldSearchType(selected, type) &&
-    hasBoundedCorpusPredicate;
+    hasAlternativeFacetPredicate;
 
   const matterTypeFacetCountPromise = countWhen(
     shouldCountAlternativeTypeFacet("matter"),

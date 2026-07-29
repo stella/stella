@@ -137,7 +137,7 @@ test("uses authoritative decision timestamps for filter-only case law", async ()
     query: "",
     selectedWorkspaceIds: [],
     types: ["case-law"],
-    updatedFrom: "2026-07-28T00:00:00.000Z",
+    updatedFrom: "1970-01-01T00:00:00.000Z",
     userId: toSafeId<"user">("user_1"),
   });
 
@@ -158,10 +158,14 @@ test("uses authoritative decision timestamps for filter-only case law", async ()
   const hitQuery = caseLawQueries.find((query) =>
     query.includes("clsd.decision_id AS id"),
   );
+  const countQuery = caseLawQueries.find((query) =>
+    query.includes("bounded_case_law"),
+  );
   expect(hitQuery).toContain("d.updated_at");
   expect(hitQuery).toContain(
     "ORDER BY d.updated_at DESC, clsd.decision_id DESC",
   );
+  expect(countQuery).toContain("LIMIT");
 });
 
 test("caps corpus-wide case-law counts at the pagination horizon", async () => {

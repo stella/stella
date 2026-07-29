@@ -353,9 +353,18 @@ export const SearchDialog = ({
     updatedFrom,
     updatedTo,
   });
+  const hasExplicitSearchFilters = hasSearchQueryOrSelectiveFilter({
+    query: "",
+    types: filters.types,
+    kinds: filters.kinds,
+    editedByUserIds: filters.editedByUserIds,
+    mimeTypes: filters.mimeTypes,
+    updatedFrom,
+    updatedTo,
+  });
   const hasActiveSearch = hasSearchCriteria && !hasUnavailableSelectedType;
   const hasTypedQuery = query.trim().length > 0;
-  const hasVisibleSearch = hasTypedQuery || hasSearchCriteria;
+  const hasVisibleSearch = hasTypedQuery || hasExplicitSearchFilters;
 
   const {
     data,
@@ -788,16 +797,6 @@ export const SearchDialog = ({
     });
   };
 
-  const handleCommandInputKeyDownCapture = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-  ) => {
-    if (e.key === "Escape" && hasVisibleSearch) {
-      e.preventDefault();
-      e.stopPropagation();
-      handleEscapeAction();
-    }
-  };
-
   const hasResults = allHits.length > 0;
   const shouldShowResults =
     hasVisibleSearch &&
@@ -879,7 +878,21 @@ export const SearchDialog = ({
   };
 
   return (
-    <CommandDialog onOpenChange={onOpenChange} open={open}>
+    <CommandDialog
+      onOpenChange={(nextOpen, eventDetails) => {
+        if (
+          !nextOpen &&
+          eventDetails.reason === "escape-key" &&
+          hasVisibleSearch
+        ) {
+          eventDetails.cancel();
+          clearSearch();
+          return;
+        }
+        onOpenChange(nextOpen);
+      }}
+      open={open}
+    >
       <CommandDialogPopup
         className="flex h-[calc(100dvh-32px)] w-[calc(100vw-16px)] max-w-none flex-col overflow-hidden sm:h-[min(720px,calc(100dvh-96px))] sm:w-[min(960px,calc(100vw-32px))]"
         showCloseButton={false}
@@ -912,7 +925,6 @@ export const SearchDialog = ({
               autoFocus
               className="text-sm"
               dir={contentDir(query)}
-              onKeyDownCapture={handleCommandInputKeyDownCapture}
               placeholder={t("search.placeholder")}
               ref={searchInputRef}
             />
