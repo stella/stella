@@ -3,6 +3,8 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { toSafeId } from "@/api/lib/branded-types";
+
 const executeMock = mock(
   async (_query: SQL): Promise<Record<string, unknown>[]> => [],
 );
@@ -19,7 +21,7 @@ beforeEach(() => {
 });
 
 test("repairs one bounded batch and checkpoints after the update", async () => {
-  const entityId = "11111111-1111-4111-8111-111111111111";
+  const entityId = toSafeId<"entity">("11111111-1111-4111-8111-111111111111");
   executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
 
   const outcome = await repairSearchSemanticTimestamps({
@@ -78,13 +80,13 @@ test("does not touch durable state after cancellation", async () => {
   const controller = new AbortController();
   controller.abort();
 
-  await expect(
-    repairSearchSemanticTimestamps({
-      jobId: "search.repairSemanticTimestamps.v1",
-      leaseToken: "runner#lease-1",
-      payload: null,
-      signal: controller.signal,
-    }),
-  ).resolves.toEqual({ status: "aborted" });
+  const outcome = await repairSearchSemanticTimestamps({
+    jobId: "search.repairSemanticTimestamps.v1",
+    leaseToken: "runner#lease-1",
+    payload: null,
+    signal: controller.signal,
+  });
+
+  expect(outcome).toEqual({ status: "aborted" });
   expect(executeMock).not.toHaveBeenCalled();
 });

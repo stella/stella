@@ -128,7 +128,9 @@ export const repairSearchSemanticTimestampsTask: SchedulerTask = async ({
       return;
     default: {
       const _exhaustive: never = outcome;
-      return _exhaustive;
+      panic(
+        `Unhandled search timestamp repair outcome: ${String(_exhaustive)}`,
+      );
     }
   }
 };
