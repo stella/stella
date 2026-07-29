@@ -1063,6 +1063,7 @@ export const PENDING_UPLOAD_PURPOSES = [
   "entity_create",
   "entity_version",
   "agent_skill",
+  "email_ingest",
 ] as const;
 
 export type PendingUploadPurposeData =
@@ -1092,6 +1093,11 @@ export type PendingUploadPurposeData =
       // Kept inline (not aliased to `AgentSkillScope`) because that
       // type is declared further down the file.
       scope: "team" | "private";
+    }
+  | {
+      type: "email_ingest";
+      propertyId: SafeId<"property">;
+      parentId?: SafeId<"entity"> | null;
     };
 
 export type PendingUploadFinalizedResult =
@@ -1102,6 +1108,15 @@ export type PendingUploadFinalizedResult =
       fileId: string;
       fileName: string;
       renamed: boolean;
+    }
+  | {
+      type: "email_ingest";
+      entityId: SafeId<"entity">;
+      /** UUIDv7 stored on `fields.content.id`; not a branded SafeId. */
+      fileId: string;
+      fileName: string;
+      renamed: boolean;
+      attachmentEntityIds: SafeId<"entity">[];
     }
   | {
       type: "entity_version";

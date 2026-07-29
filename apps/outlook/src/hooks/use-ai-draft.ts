@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/api-error";
 import type { MailSnapshot } from "@/types";
 
 export type AIDraftState =

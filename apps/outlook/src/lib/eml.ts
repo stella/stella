@@ -75,16 +75,21 @@ export const buildEmlFile = async ({
 
   message.addMessage({ contentType: "text/plain", data: snapshot.bodyText });
 
-  for (const attachment of attachments) {
-    if (attachment.type !== "downloaded") {
-      continue;
-    }
-    const bytes = new Uint8Array(await attachment.file.arrayBuffer());
+  const encodedAttachments = await Promise.all(
+    attachments
+      .filter((attachment) => attachment.type === "downloaded")
+      .map(async ({ file }) => ({
+        data: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
+        file,
+      })),
+  );
+
+  for (const { data, file } of encodedAttachments) {
     message.addAttachment({
-      filename: attachment.file.name,
-      contentType: attachment.file.type || "application/octet-stream",
+      filename: file.name,
+      contentType: file.type || "application/octet-stream",
       encoding: "base64",
-      data: bytesToBase64(bytes),
+      data,
     });
   }
 

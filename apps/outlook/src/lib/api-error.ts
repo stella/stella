@@ -5,10 +5,6 @@ export class APIError extends TaggedError("ApiError")<{
   message: string;
 }>() {}
 
-export class OutlookError extends TaggedError("OutlookError")<{
-  message: string;
-}>() {}
-
 type ToAPIErrorProps = {
   status: number;
   value:

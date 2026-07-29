@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { MailSnapshot, WorkspaceSummary } from "@/types";
 
@@ -22,7 +22,7 @@ export const useWorkspaceSelection = ({
   workspaces: WorkspaceSummary[];
 }): UseWorkspaceSelection => {
   const [query, setQuery] = useState("");
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(
+  const [explicitWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(
     null,
   );
 
@@ -30,11 +30,7 @@ export const useWorkspaceSelection = ({
     ? suggestWorkspaceId({ snapshot, workspaces })
     : null;
 
-  useEffect(() => {
-    if (!selectedWorkspaceId && suggestedWorkspaceId) {
-      setSelectedWorkspaceId(suggestedWorkspaceId);
-    }
-  }, [selectedWorkspaceId, suggestedWorkspaceId]);
+  const selectedWorkspaceId = explicitWorkspaceId ?? suggestedWorkspaceId;
 
   const filteredWorkspaces = filterWorkspaces({ query, workspaces });
   const selectedWorkspace =

@@ -6,15 +6,15 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 
 import { type ManifestEnv, renderManifest } from "./render-manifest";
 import { validateManifestFile } from "./validate-manifest";
 
-const APP_ROOT = resolve(import.meta.dirname, "..");
-const DIST_DIR = resolve(APP_ROOT, "dist");
-const DIST_ASSETS_DIR = resolve(DIST_DIR, "assets");
-const PUBLIC_ASSETS_DIR = resolve(APP_ROOT, "public", "assets");
+const APP_ROOT = path.resolve(import.meta.dirname, "..");
+const DIST_DIR = path.resolve(APP_ROOT, "dist");
+const DIST_ASSETS_DIR = path.resolve(DIST_DIR, "assets");
+const PUBLIC_ASSETS_DIR = path.resolve(APP_ROOT, "public", "assets");
 
 const parseEnv = (): ManifestEnv => {
   const flag = process.argv.find((arg) => arg.startsWith("--env="));
@@ -87,13 +87,13 @@ for (const fileName of readdirSync(PUBLIC_ASSETS_DIR)) {
     continue;
   }
   copyFileSync(
-    resolve(PUBLIC_ASSETS_DIR, fileName),
-    resolve(DIST_ASSETS_DIR, fileName),
+    path.resolve(PUBLIC_ASSETS_DIR, fileName),
+    path.resolve(DIST_ASSETS_DIR, fileName),
   );
 }
 
 writeFileSync(
-  resolve(DIST_DIR, "taskpane.html"),
+  path.resolve(DIST_DIR, "taskpane.html"),
   `<!doctype html>
 <html lang="en" data-framework="typescript">
   <head>
@@ -126,7 +126,7 @@ writeFileSync(
 );
 
 writeFileSync(
-  resolve(DIST_DIR, "commands.html"),
+  path.resolve(DIST_DIR, "commands.html"),
   `<!doctype html>
 <html lang="en">
   <head>
@@ -144,13 +144,13 @@ writeFileSync(
 );
 
 const manifest = renderManifest(targetEnv);
-writeFileSync(resolve(DIST_DIR, "manifest.xml"), manifest);
+writeFileSync(path.resolve(DIST_DIR, "manifest.xml"), manifest);
 if (targetEnv === "dev") {
-  writeFileSync(resolve(APP_ROOT, "manifest.xml"), manifest);
+  writeFileSync(path.resolve(APP_ROOT, "manifest.xml"), manifest);
 }
 
 // Validate the rendered manifest against Microsoft's official XSD set so a
 // schema-invalid manifest fails the build instead of failing at sideload.
-validateManifestFile(resolve(DIST_DIR, "manifest.xml"));
+validateManifestFile(path.resolve(DIST_DIR, "manifest.xml"));
 
 console.log(`Built Outlook add-in (${targetEnv}) to apps/outlook/dist`);

@@ -11,7 +11,7 @@ provider; the token arrives through an Office Dialog handoff served by
 `manifest.template.xml` is the single source of truth. The build script
 substitutes `{{TASKPANE_ORIGIN}}` / `{{API_ORIGIN}}` / `{{WEB_ORIGIN}}` /
 `{{SUPPORT_URL}}` / `{{PROVIDER_NAME}}` / `{{VERSION}}` and writes
-`dist/manifest.xml`. The GUID stays fixed across environments — never
+`dist/manifest.xml`. The GUID stays fixed across environments; never
 regenerate it (Microsoft uses it as the identity for AppSource updates).
 
 ```sh
@@ -67,8 +67,9 @@ changes without an extra step.
    You should see a "Sign in with Microsoft" panel on first visit. The
    panel opens a dialog at `/sign-in-outlook` on the web app, which runs
    the OAuth round-trip and delivers a bearer token back via
-   `Office.context.ui.messageParent`. The token is persisted in Outlook's
-   `roamingSettings` and survives task-pane reloads.
+   `Office.context.ui.messageParent`. Both sides validate the configured
+   origin. The task pane keeps the token in memory only, so a reload
+   requires a new handoff.
 
 6. **Outlook sideload:**
    - Open Outlook on the web (outlook.office.com or outlook.live.com).
@@ -91,22 +92,21 @@ changes without an extra step.
 │                │                  │  reads session.token      │
 │                │  messageParent   │                          │
 │  ◄─────────────┼──────────────────│  posts                    │
-│  roamingSettings.set(token)        │  {type, token}           │
+│  keep token in memory              │  {type, token}           │
 │  Eden + Bearer                     └──────────────────────────┘
 └────────────────┘
 ```
 
-No third-party cookies, no Azure AD app of our own — the Office Dialog is
+No third-party cookies or separate Azure AD app are required: the Office Dialog is
 a real browser window same-origin with `my.stll.app`, so better-auth's
 existing Microsoft provider works as it does for any browser sign-in.
 
-## Production hosting (not in this repo)
+## Production hosting
 
-The production task pane lives at `https://outlook.stll.app`. Hosting is
-managed in `stella-infra` (Terraform-managed CloudFront + S3). The CI
-upload step on the stella side is gated on that infra landing first; see
-the `domain strategy` and `cross-repo deploy ordering` notes in stella's
-internal docs.
+The production manifest expects the task pane at
+`https://outlook.stll.app`. This repository builds the static assets and
+manifest but does not deploy them. Publish `apps/outlook/dist` to that
+origin before distributing the production manifest.
 
 ## AppSource submission checklist
 

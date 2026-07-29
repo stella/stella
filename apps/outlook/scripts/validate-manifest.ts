@@ -2,12 +2,12 @@ import { panic } from "better-result";
 import { XmlDocument, XmlValidateError, XsdValidator } from "libxml2-wasm";
 import { xmlRegisterFsInputProviders } from "libxml2-wasm/lib/nodejs.mjs";
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const APP_ROOT = resolve(import.meta.dirname, "..");
-const SCHEMA_DIR = resolve(APP_ROOT, "schemas");
-const ROOT_SCHEMA = resolve(SCHEMA_DIR, "OfficeAppManifestV1_1.xsd");
+const APP_ROOT = path.resolve(import.meta.dirname, "..");
+const SCHEMA_DIR = path.resolve(APP_ROOT, "schemas");
+const ROOT_SCHEMA = path.resolve(SCHEMA_DIR, "OfficeAppManifestV1_1.xsd");
 
 export class ManifestValidationError extends Error {
   override readonly name = "ManifestValidationError";
@@ -47,8 +47,8 @@ const buildValidator = (): XsdValidator => {
   }
 };
 
-export const validateManifestFile = (path: string): void => {
-  const manifestPath = resolve(path);
+export const validateManifestFile = (manifest: string): void => {
+  const manifestPath = path.resolve(manifest);
   if (!existsSync(manifestPath)) {
     panic(`Manifest not found: ${manifestPath}`);
   }
@@ -85,6 +85,6 @@ if (import.meta.main) {
     throw error;
   }
   process.stdout.write(
-    `OK: ${resolve(target)} is a valid Outlook add-in manifest\n`,
+    `OK: ${path.resolve(target)} is a valid Outlook add-in manifest\n`,
   );
 }
