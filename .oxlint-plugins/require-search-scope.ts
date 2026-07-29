@@ -761,6 +761,7 @@ const INITIAL_SQL_SCOPE_CONTEXT: SqlScopeContext = {
 };
 
 type ProjectionQueryState = {
+  pendingScopeSuffix: boolean;
   protectedReadCount: number;
   scopeContext: SqlScopeContext;
   scopeEligibleReadCount: number;
@@ -769,6 +770,7 @@ type ProjectionQueryState = {
 };
 
 const createProjectionQueryState = (): ProjectionQueryState => ({
+  pendingScopeSuffix: false,
   protectedReadCount: 0,
   scopeContext: INITIAL_SQL_SCOPE_CONTEXT,
   scopeEligibleReadCount: 0,
@@ -777,6 +779,7 @@ const createProjectionQueryState = (): ProjectionQueryState => ({
 });
 
 const resetProjectionQueryBranch = (state: ProjectionQueryState): void => {
+  state.pendingScopeSuffix = false;
   state.protectedReadCount = 0;
   state.scopeContext = INITIAL_SQL_SCOPE_CONTEXT;
   state.scopeEligibleReadCount = 0;
@@ -799,6 +802,57 @@ const finishProjectionQuery = (
   }
   queryStates.delete(queryId);
   return projectionQueryBranchIsUnscoped(queryState);
+};
+
+type ScopeSuffixDisposition = "invalid" | "pending" | "safe";
+
+const SQL_TRUTH_PRESERVING_SCOPE_TEST =
+  /^(?:=\s*true\b|(?:!=|<>)\s*false\b|is\s+(?:true\b|not\s+false\b|not\s+distinct\s+from\s+true\b|distinct\s+from\s+false\b)|in\s*\(\s*true\s*\)|not\s+in\s*\(\s*false\s*\))/iu;
+const SQL_SCOPE_SUFFIX_BOUNDARY =
+  /^(?:and\b|except\b|fetch\b|for\b|group\b|having\b|intersect\b|limit\b|offset\b|order\b|returning\b|union\b|window\b|;)/iu;
+
+const scopeSuffixDisposition = (
+  text: string,
+  initialLexState: SqlLexState,
+): ScopeSuffixDisposition => {
+  let remainder = sqlStructuralText(text, initialLexState).replace(
+    /^(?:\s|\))+/u,
+    "",
+  );
+  if (remainder.length === 0) {
+    return "pending";
+  }
+  const safeTest = remainder.match(SQL_TRUTH_PRESERVING_SCOPE_TEST)?.at(0);
+  if (safeTest !== undefined) {
+    remainder = remainder.slice(safeTest.length).replace(/^(?:\s|\))+/u, "");
+    if (remainder.length === 0) {
+      return "pending";
+    }
+  }
+  return SQL_SCOPE_SUFFIX_BOUNDARY.test(remainder) ? "safe" : "invalid";
+};
+
+const interpolationIsUnsafeScopeOperand = (
+  tokens: readonly SqlTemplateToken[],
+  expressionIndex: number,
+): boolean => {
+  let precedingText = "";
+  for (let index = expressionIndex - 1; index >= 0; index -= 1) {
+    const token = tokens.at(index);
+    if (token?.type !== "text") {
+      break;
+    }
+    precedingText = token.value + precedingText;
+  }
+  return (
+    /\b(?:not\s+)?between\s*(?:\(\s*)*(?:true\s+)?$/iu.test(precedingText) ||
+    /\b(?:not\s+)?between\s+(?:false|true)\s+and\s*(?:\(\s*)*(?:true\s+)?$/iu.test(
+      precedingText,
+    ) ||
+    /(?:!=|!~|&&|<=|<>|>=|\|\||[*/%+<=>~-])\s*(?:\(\s*)*true\s*$/u.test(
+      precedingText,
+    )
+  );
 };
 
 const SQL_CLAUSE_KEYWORDS = [
@@ -1202,11 +1256,39 @@ export default {
           return String(unwrapped.value);
         };
 
-        const staticMemberPropertyKey = (member: AstNode): string | null => {
+        const resolveStaticPropertyKey = (
+          expression: unknown,
+          ancestors: ReadonlySet<unknown>,
+        ): string | null => {
+          const literalKey = staticLiteralPropertyKey(expression);
+          if (literalKey !== null) {
+            return literalKey;
+          }
+          const templateKey = staticTemplateLiteralText(expression);
+          if (templateKey !== null) {
+            return templateKey;
+          }
+          const unwrapped = unwrapExpression(expression);
+          if (!isIdentifier(unwrapped) || ancestors.has(unwrapped)) {
+            return null;
+          }
+          const initializer = constIdentifierInitializer(unwrapped);
+          if (initializer === null) {
+            return null;
+          }
+          const nextAncestors = new Set(ancestors);
+          nextAncestors.add(unwrapped);
+          return resolveStaticPropertyKey(initializer, nextAncestors);
+        };
+
+        const staticMemberPropertyKey = (
+          member: AstNode,
+          ancestors: ReadonlySet<unknown>,
+        ): string | null => {
           if (member.computed === false) {
             return isIdentifier(member.property) ? member.property.name : null;
           }
-          return staticLiteralPropertyKey(member.property);
+          return resolveStaticPropertyKey(member.property, ancestors);
         };
 
         const staticObjectPropertyKey = (property: AstNode): string | null => {
@@ -1220,6 +1302,34 @@ export default {
         };
 
         type StaticSelection = { value: unknown };
+
+        const staticObjectValuesByKey = (
+          container: AstNode,
+        ): Map<string, unknown> | null => {
+          if (
+            container.type !== "ObjectExpression" ||
+            !Array.isArray(container.properties)
+          ) {
+            return null;
+          }
+          const values = new Map<string, unknown>();
+          for (const property of container.properties) {
+            if (
+              !isAstNode(property) ||
+              property.type !== "Property" ||
+              property.kind !== "init" ||
+              property.method === true
+            ) {
+              return null;
+            }
+            const key = staticObjectPropertyKey(property);
+            if (key === null || key === "__proto__") {
+              return null;
+            }
+            values.set(key, property.value);
+          }
+          return values;
+        };
 
         const selectStaticMember = (
           container: AstNode,
@@ -1248,32 +1358,9 @@ export default {
             const value = container.elements.at(index);
             return value === null || value === undefined ? null : { value };
           }
-          if (
-            container.type !== "ObjectExpression" ||
-            !Array.isArray(container.properties)
-          ) {
-            return null;
-          }
-
-          let selected: StaticSelection | null = null;
-          for (const property of container.properties) {
-            if (
-              !isAstNode(property) ||
-              property.type !== "Property" ||
-              property.kind !== "init" ||
-              property.method === true
-            ) {
-              return null;
-            }
-            const key = staticObjectPropertyKey(property);
-            if (key === null) {
-              return null;
-            }
-            if (key === propertyKey) {
-              selected = { value: property.value };
-            }
-          }
-          return selected;
+          const values = staticObjectValuesByKey(container);
+          const value = values?.get(propertyKey);
+          return value === undefined ? null : { value };
         };
 
         const resolveStaticConstValue = (
@@ -1295,7 +1382,7 @@ export default {
           if (unwrapped.type !== "MemberExpression") {
             return unwrapped;
           }
-          const propertyKey = staticMemberPropertyKey(unwrapped);
+          const propertyKey = staticMemberPropertyKey(unwrapped, nextAncestors);
           if (propertyKey === null) {
             return unwrapped;
           }
@@ -1310,6 +1397,49 @@ export default {
           return selected === null
             ? unwrapped
             : resolveStaticConstValue(selected.value, nextAncestors);
+        };
+
+        const resolveDynamicMemberAlternatives = (
+          expression: unknown,
+          ancestors: ReadonlySet<unknown>,
+        ): unknown[] | null => {
+          const member = unwrapExpression(expression);
+          if (
+            !isAstNode(member) ||
+            member.type !== "MemberExpression" ||
+            member.computed !== true ||
+            ancestors.has(member)
+          ) {
+            return null;
+          }
+          const nextAncestors = new Set(ancestors);
+          nextAncestors.add(member);
+          if (staticMemberPropertyKey(member, nextAncestors) !== null) {
+            return null;
+          }
+          const container = resolveStaticConstValue(
+            member.object,
+            nextAncestors,
+          );
+          if (!isAstNode(container)) {
+            return null;
+          }
+          if (
+            container.type === "ArrayExpression" &&
+            Array.isArray(container.elements)
+          ) {
+            if (
+              container.elements.some(
+                (element) =>
+                  isAstNode(element) && element.type === "SpreadElement",
+              )
+            ) {
+              return null;
+            }
+            return container.elements.filter((element) => element !== null);
+          }
+          const values = staticObjectValuesByKey(container);
+          return values === null ? null : [...values.values()];
         };
 
         const resolveConstInitializer = (expression: unknown): unknown =>
@@ -1451,6 +1581,18 @@ export default {
           if (!isAstNode(unwrapped) || ancestors.has(unwrapped)) {
             return null;
           }
+          const dynamicMemberAlternatives = resolveDynamicMemberAlternatives(
+            unwrapped,
+            ancestors,
+          );
+          if (dynamicMemberAlternatives !== null) {
+            const nextAncestors = new Set(ancestors);
+            nextAncestors.add(unwrapped);
+            return flattenSqlAlternatives(
+              dynamicMemberAlternatives,
+              nextAncestors,
+            );
+          }
           const resolved = resolveConstInitializer(unwrapped);
           if (resolved !== unwrapped) {
             const nextAncestors = new Set(ancestors);
@@ -1500,10 +1642,11 @@ export default {
           const expressions = templateExpressions(node);
           let paths: SqlTemplateToken[][] = [[]];
           for (const [index, quasiText] of quasiTexts.entries()) {
-            paths = paths.map((path): SqlTemplateToken[] => [
-              ...path,
-              { type: "text", value: quasiText },
-            ]);
+            paths = paths.map((path) =>
+              concatenateSqlTokenPaths(path, [
+                { type: "text", value: quasiText },
+              ]),
+            );
             const expression = expressions.at(index);
             if (expression === undefined) {
               continue;
@@ -1512,7 +1655,9 @@ export default {
               flattenSqlExpression(expression, nextAncestors) ??
               expressionTokenPaths(expression);
             paths = paths.flatMap((path) =>
-              nestedPaths.map((nestedPath) => path.concat(nestedPath)),
+              nestedPaths.map((nestedPath) =>
+                concatenateSqlTokenPaths(path, nestedPath),
+              ),
             );
           }
           return paths;
@@ -1770,6 +1915,20 @@ export default {
                       event.text,
                       queryState.sqlLexState,
                     )) {
+                      if (queryState.pendingScopeSuffix) {
+                        const disposition = scopeSuffixDisposition(
+                          part.text,
+                          queryState.sqlLexState,
+                        );
+                        queryState.pendingScopeSuffix =
+                          disposition === "pending";
+                        if (disposition === "invalid") {
+                          queryState.scopeContext = {
+                            ...queryState.scopeContext,
+                            hasNonConjunctiveFilter: true,
+                          };
+                        }
+                      }
                       const aliases = projectionReadAliases(
                         part.text,
                         table,
@@ -1801,6 +1960,18 @@ export default {
                 const queryState = queryStateFor(
                   queryNestingState.currentQueryId,
                 );
+                const approvedScopeFragment =
+                  queryState.sqlLexState.type === "normal" &&
+                  isApprovedScopeFragment(token.value, projection.scopeImports);
+                if (queryState.pendingScopeSuffix) {
+                  queryState.pendingScopeSuffix = false;
+                  if (!approvedScopeFragment) {
+                    queryState.scopeContext = {
+                      ...queryState.scopeContext,
+                      hasNonConjunctiveFilter: true,
+                    };
+                  }
+                }
                 if (
                   queryState.sqlLexState.type === "normal" &&
                   hasProjectionReadIntroducer(tokens, index) &&
@@ -1821,16 +1992,27 @@ export default {
                     queryState.scopeEligibleReadCount += 1;
                   }
                 }
+                const scopeIsUnsafeOperand =
+                  approvedScopeFragment &&
+                  interpolationIsUnsafeScopeOperand(tokens, index);
+                if (scopeIsUnsafeOperand) {
+                  queryState.scopeContext = {
+                    ...queryState.scopeContext,
+                    hasNonConjunctiveFilter: true,
+                  };
+                }
                 if (
                   queryState.unscopedReadCount > 0 &&
                   queryState.scopeEligibleReadCount > 0 &&
                   queryState.scopeContext.clause !== "non-filtering" &&
                   !queryState.scopeContext.hasNonConjunctiveFilter &&
                   queryState.sqlLexState.type === "normal" &&
-                  isApprovedScopeFragment(token.value, projection.scopeImports)
+                  approvedScopeFragment &&
+                  !scopeIsUnsafeOperand
                 ) {
                   queryState.unscopedReadCount -= 1;
                   queryState.scopeEligibleReadCount -= 1;
+                  queryState.pendingScopeSuffix = true;
                 }
               }
               for (const queryId of [...queryStates.keys()]) {

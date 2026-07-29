@@ -190,6 +190,36 @@ const tupleFragments = [
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a statically selected tuple fragment cannot hide a private projection
 const unsafeTupleFragmentRead = sql`SELECT * ${tupleFragments[0]}`;
 
+const memberFragmentKey = "from";
+const memberFragmentKeyAlias = memberFragmentKey;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a recursively resolved const-computed object key cannot hide a private projection
+const unsafeComputedMemberFragmentRead = sql`
+  SELECT * ${memberFragments[memberFragmentKeyAlias]}
+`;
+
+const tupleFragmentIndex = 0;
+const tupleFragmentIndexAlias = tupleFragmentIndex;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a recursively resolved const-computed tuple index cannot hide a private projection
+const unsafeComputedTupleFragmentRead = sql`
+  SELECT * ${tupleFragments[tupleFragmentIndexAlias]}
+`;
+
+declare const dynamicMemberFragmentKey: "from" | "publicFrom";
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves every selectable value of a mixed dynamic object is inspected
+const unsafeDynamicMemberFragmentRead = sql`
+  SELECT * ${memberFragments[dynamicMemberFragmentKey]}
+`;
+
+declare const dynamicTupleFragmentIndex: 0 | 1;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves every selectable value of a mixed dynamic tuple is inspected
+const unsafeDynamicTupleFragmentRead = sql`
+  SELECT * ${tupleFragments[dynamicTupleFragmentIndex]}
+`;
+
 const unsafeJoinedPrivateFragment = (() => {
   const privateFragments = [sql`FROM search_documents sd`];
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves call-composed SQL fragments cannot hide a private projection
@@ -224,6 +254,20 @@ const privateRawRelation = sql.raw("search_documents");
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves raw relation fragments preserve SQL lexical continuity
 const unsafeRawRelationFragment = sql`
   SELECT * FROM ${privateRawRelation} sd
+`;
+
+const privateRawRelationPrefix = sql.raw("search_");
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves verified raw fragments preserve exact SQL text boundaries
+const unsafeSplitRawRelationFragment = sql`
+  SELECT * FROM ${privateRawRelationPrefix}documents sd
+`;
+
+const privateTemplateRelationPrefix = sql`search_`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves verified nested templates preserve exact SQL text boundaries
+const unsafeSplitTemplateRelationFragment = sql`
+  SELECT * FROM ${privateTemplateRelationPrefix}documents sd
 `;
 
 const relationNameStringLiteral = sql`
@@ -456,6 +500,42 @@ const unsafeTrueLessThanOrEqualScope = sql`
   WHERE TRUE <= (true ${entityWorkspaceFilter})
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves BETWEEN cannot test an approved scope as a Boolean value
+const unsafeScopeBetweenFalse = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) BETWEEN FALSE AND FALSE
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves NOT BETWEEN cannot invert an approved scope as a Boolean value
+const unsafeScopeNotBetweenTrue = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) NOT BETWEEN TRUE AND TRUE
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an approved scope cannot become a BETWEEN lower bound
+const unsafeScopeAsBetweenLowerBound = sql`
+  SELECT * FROM search_documents sd
+  WHERE FALSE BETWEEN (true ${entityWorkspaceFilter}) AND TRUE
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an approved scope cannot become a BETWEEN upper bound
+const unsafeScopeAsBetweenUpperBound = sql`
+  SELECT * FROM search_documents sd
+  WHERE FALSE BETWEEN TRUE AND (true ${entityWorkspaceFilter})
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a postfix cast cannot turn an approved Boolean scope into an inverse test
+const unsafeCastScopeComparedToZero = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter})::int = 0
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a cast scope cannot become the right operand of an inverse operator test
+const unsafeZeroComparedToCastScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE 0 = (true ${entityWorkspaceFilter})::int
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a nested query cannot authorize an outer private read through an alias shadow
 const unsafeScopeInNestedQuery = sql`
   SELECT sd.*
@@ -634,6 +714,24 @@ const scopedWithNumericOrdering = sql`
     AND true ${entityWorkspaceFilter}
 `;
 
+const scopedAfterNumericBetween = sql`
+  SELECT * FROM search_documents sd
+  WHERE rank BETWEEN 0 AND 10
+    AND true ${entityWorkspaceFilter}
+`;
+
+const scopedBeforeNumericBetween = sql`
+  SELECT * FROM search_documents sd
+  WHERE true ${entityWorkspaceFilter}
+    AND rank BETWEEN 0 AND 10
+`;
+
+const scopedAfterOrdinaryCast = sql`
+  SELECT * FROM search_documents sd
+  WHERE rank::int = 0
+    AND true ${entityWorkspaceFilter}
+`;
+
 const scopedNestedPrivateRead = sql`
   SELECT EXISTS (
     SELECT 1
@@ -677,11 +775,75 @@ const scopedTupleFragmentRead = sql`
   SELECT * ${scopedTupleFragments[0]} ${scopedTupleFragments[1]}
 `;
 
+const scopedMemberFromKey = "from";
+const scopedMemberWhereKey = "where";
+const scopedComputedMemberFragmentRead = sql`
+  SELECT *
+  ${scopedMemberFragments[scopedMemberFromKey]}
+  ${scopedMemberFragments[scopedMemberWhereKey]}
+`;
+
+const scopedTupleFromIndex = 0;
+const scopedTupleWhereIndex = 1;
+const scopedComputedTupleFragmentRead = sql`
+  SELECT *
+  ${scopedTupleFragments[scopedTupleFromIndex]}
+  ${scopedTupleFragments[scopedTupleWhereIndex]}
+`;
+
 // Exact static selection must not inspect an unselected private sibling.
 const selectedPublicMemberFragment = sql`
   SELECT * ${memberFragments.publicFrom}
 `;
 const selectedPublicTupleFragment = sql`SELECT * ${tupleFragments[1]}`;
+
+declare const dynamicPublicFragmentKey: "first" | "second";
+const dynamicPublicFragments = {
+  first: sql`FROM entities e`,
+  second: sql`FROM workspaces w`,
+};
+const dynamicPublicMemberFragment = sql`
+  SELECT * ${dynamicPublicFragments[dynamicPublicFragmentKey]}
+`;
+
+declare const dynamicScopedFragmentKey: "privateFrom" | "publicFrom";
+const dynamicScopedFragments = {
+  privateFrom: sql`
+    FROM search_documents sd
+    WHERE true ${entityWorkspaceFilter}
+  `,
+  publicFrom: sql`FROM entities e`,
+};
+const scopedDynamicMemberFragment = sql`
+  SELECT * ${dynamicScopedFragments[dynamicScopedFragmentKey]}
+`;
+
+declare const dynamicScopedTupleIndex: 0 | 1;
+const dynamicScopedTupleFragments = [
+  sql`
+    FROM search_documents sd
+    WHERE true ${entityWorkspaceFilter}
+  `,
+  sql`FROM entities e`,
+] as const;
+const scopedDynamicTupleFragment = sql`
+  SELECT * ${dynamicScopedTupleFragments[dynamicScopedTupleIndex]}
+`;
+
+const scopedSplitRawRelationFragment = sql`
+  SELECT * FROM ${privateRawRelationPrefix}documents sd
+  WHERE true ${entityWorkspaceFilter}
+`;
+
+const scopedSplitTemplateRelationFragment = sql`
+  SELECT * FROM ${privateTemplateRelationPrefix}documents sd
+  WHERE true ${entityWorkspaceFilter}
+`;
+
+// Opaque parameter expressions must remain a boundary between SQL text chunks.
+const opaqueParameterBoundary = sql`
+  SELECT * FROM ${organizationId}search_documents sd
+`;
 
 const scopedJoinedPrivateFragment = (() => {
   const fragments = [
@@ -826,12 +988,18 @@ void [
   unsafeBlockHelperPrivateRead,
   unsafeMemberFragmentRead,
   unsafeTupleFragmentRead,
+  unsafeComputedMemberFragmentRead,
+  unsafeComputedTupleFragmentRead,
+  unsafeDynamicMemberFragmentRead,
+  unsafeDynamicTupleFragmentRead,
   unsafeJoinedPrivateFragment,
   unsafeSplitJoinedPrivateFragment,
   unsafeJoinedMultiBranch,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
   unsafeRawRelationFragment,
+  unsafeSplitRawRelationFragment,
+  unsafeSplitTemplateRelationFragment,
   relationNameStringLiteral,
   relationNameLineComment,
   relationNameBlockComment,
@@ -869,6 +1037,12 @@ void [
   unsafeFalseLessThanScope,
   unsafeFalseGreaterThanOrEqualScope,
   unsafeTrueLessThanOrEqualScope,
+  unsafeScopeBetweenFalse,
+  unsafeScopeNotBetweenTrue,
+  unsafeScopeAsBetweenLowerBound,
+  unsafeScopeAsBetweenUpperBound,
+  unsafeCastScopeComparedToZero,
+  unsafeZeroComparedToCastScope,
   unsafeScopeInNestedQuery,
   unsafeScopeInSiblingQuery,
   unsafeScopeOutsideUpdateCte,
@@ -894,14 +1068,25 @@ void [
   scopedNotInFalseMembership,
   scopedComparedToTrue,
   scopedWithNumericOrdering,
+  scopedAfterNumericBetween,
+  scopedBeforeNumericBetween,
+  scopedAfterOrdinaryCast,
   scopedNestedPrivateRead,
   scopedComposedRead,
   scopedLocalHelperPrivateRead,
   scopedBlockHelperPrivateRead,
   scopedMemberFragmentRead,
   scopedTupleFragmentRead,
+  scopedComputedMemberFragmentRead,
+  scopedComputedTupleFragmentRead,
   selectedPublicMemberFragment,
   selectedPublicTupleFragment,
+  dynamicPublicMemberFragment,
+  scopedDynamicMemberFragment,
+  scopedDynamicTupleFragment,
+  scopedSplitRawRelationFragment,
+  scopedSplitTemplateRelationFragment,
+  opaqueParameterBoundary,
   scopedJoinedPrivateFragment,
   scopedParenthesizedJoinedEntity,
   scopedParenthesizedJoinedInterpolatedEntity,
