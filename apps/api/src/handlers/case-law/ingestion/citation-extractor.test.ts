@@ -34,8 +34,9 @@ describe("extractCitations", () => {
   });
 
   test("extracts two-digit-year citations from real NS prose", () => {
-    // Verbatim shapes from prod decisions 22 Cdo 1534/2020 and
-    // 25 Cdo 2181/2002: pre-2000 citations use two-digit years.
+    // Verbatim prose quoted from prod decisions 22 Cdo 1534/2020 and
+    // 25 Cdo 2181/2002, whose citations to pre-2000 decisions
+    // (2 Cdon 808/97, 9 C 2058/96) use two-digit years.
     const text =
       "usnesení Nejvyššího soudu ze dne 27. 5. 1999, sp. zn. 2 Cdon 808/97, " +
       "vedené u Okresního soudu v Děčíně pod sp. zn. 9 C 2058/96";
@@ -62,6 +63,23 @@ describe("extractCitations", () => {
     );
     expect(texts).toContain("IV. ÚS 23/05");
     expect(texts).toContain("Pl. ÚS 12/94");
+  });
+
+  test("treats hyphen variants of a CJEU number as one citation and as self", () => {
+    const text = "věc C‑128/22 a rozsudek C-128/22";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(
+      isSelfCitation("C‑128/22", { caseNumber: "C-128/22", ecli: null }),
+    ).toBe(true);
+  });
+
+  test("extracts Civil Service Tribunal case numbers", () => {
+    const citations = extractCitations([
+      { index: 0, text: "rozsudek F-100/09" },
+    ]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("F-100/09");
   });
 
   test("extracts CJEU case numbers with plain and non-breaking hyphens", () => {

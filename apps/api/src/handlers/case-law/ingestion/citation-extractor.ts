@@ -26,7 +26,7 @@ const CITATION_PATTERNS: RegExp[] = [
   // Czech case number: "sp. zn. 21 Cdo 1234/2020". Two-digit years
   // ("2 Cdon 808/97") are the standard form for pre-2000 decisions, and
   // registry codes can carry diacritics, so the registry is a letter run
-  // and the year is 2 or 4 digits; the resolver owns century mapping.
+  // and the year is 2 to 4 digits; the resolver owns century mapping.
   /sp\.\s*zn\.\s*(?<caseNumber>\d{1,3}\s+\p{L}{1,6}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Czech senate file number: "sen. zn. 29 NSČR 55/2013" (grand panel,
@@ -46,9 +46,10 @@ const CITATION_PATTERNS: RegExp[] = [
   // "sp. zn. IV. ÚS 23/05" spelling.
   /\b(?<caseNumber>(?:[IVX]{1,4}|Pl)\.\s*ÚS\s+\d{1,5}\/\d{2,4})(?!\d)/gu,
 
-  // CJEU: "C-283/81", "T-13/99", including the non-breaking hyphen the
-  // publications office uses ("C‑283/81").
-  /\b(?<caseNumber>[CT][-‑]\d{1,4}\/\d{2})(?!\d)/gu,
+  // CJEU: "C-283/81", "T-13/99", "F-100/09" (Court of Justice, General
+  // Court, Civil Service Tribunal), including the non-breaking hyphen
+  // the publications office uses ("C‑283/81").
+  /\b(?<caseNumber>[CTF][-‑]\d{1,4}\/\d{2})(?!\d)/gu,
 
   // ECLI: "ECLI:CZ:NS:2020:21.CDO.1234.2020.1"
   /ECLI:[A-Z]{2}:[A-Z]{1,8}:\d{4}:[\w.]+/gu,
@@ -72,6 +73,13 @@ const CITATION_PATTERNS: RegExp[] = [
   // being captured as a phantom citation.
   /\b[IVX]{2,4}\s+(?:[A-Z]{2,5}|[A-Z]{1,4}[az])\s+\d{1,6}\/\d{2,4}\b/gu,
 ];
+
+/**
+ * The publications office typesets CJEU numbers with U+2011; the
+ * corpus stores the ASCII form. Comparisons and dedup keys must not
+ * treat the two spellings as different citations.
+ */
+const normalizeDashes = (text: string): string => text.replace(/[‑–]/gu, "-");
 
 /** Strip known prefixes to get the bare case number. */
 const stripPrefix = (text: string): string => {
@@ -125,8 +133,8 @@ export const isSelfCitation = (
   }
 
   // Compare bare case numbers (case-insensitive)
-  const bareCitation = stripPrefix(trimmed).toLowerCase();
-  const bareSelf = decision.caseNumber.toLowerCase().trim();
+  const bareCitation = normalizeDashes(stripPrefix(trimmed)).toLowerCase();
+  const bareSelf = normalizeDashes(decision.caseNumber).toLowerCase().trim();
 
   return bareCitation === bareSelf;
 };
@@ -158,7 +166,9 @@ export const extractCitations = (
         // canonical dedup key so both "sygn. akt II CSK 123/20"
         // and "II CSK 123/20" resolve to the same key regardless
         // of which fires first.
-        const dedupKey = match.groups?.["caseNumber"]?.trim() ?? citationText;
+        const dedupKey = normalizeDashes(
+          match.groups?.["caseNumber"]?.trim() ?? citationText,
+        );
 
         const existing = byKey.get(dedupKey);
         if (!existing) {
