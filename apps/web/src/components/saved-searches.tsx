@@ -47,6 +47,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
+import { toSafeId } from "@/lib/safe-id";
 
 const SAVED_SEARCHES_PAGE_SIZE = 25;
 
@@ -112,13 +113,20 @@ export const SavedSearches = ({
     await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
 
   const createMutation = useMutation({
-    mutationFn: async (name: string) =>
-      unwrapEden(
+    mutationFn: async (name: string) => {
+      const criteria = toSavedSearchCriteria({ filters, query });
+      return unwrapEden(
         await api["saved-searches"].post({
           name,
-          criteria: toSavedSearchCriteria({ filters, query }),
+          criteria: {
+            ...criteria,
+            workspaceIds: criteria.workspaceIds.map((workspaceId) =>
+              toSafeId<"workspace">(workspaceId),
+            ),
+          },
         }),
-      ),
+      );
+    },
     onSuccess: async () => {
       setDialog({ type: "closed" });
       await invalidateSavedSearches();
@@ -383,11 +391,11 @@ export const SavedSearches = ({
             <AlertDialogTitle>{t("search.deleteSearchTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
               {dialog.type === "delete" && (
-                <>
+                <BidiText as="span">
                   {t("search.deleteSearchDescription", {
-                    name: <BidiText>{dialog.search.name}</BidiText>,
+                    name: dialog.search.name,
                   })}
-                </>
+                </BidiText>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

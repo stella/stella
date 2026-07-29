@@ -1,4 +1,4 @@
-import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
+import type { SavedSearchCriteria } from "@stll/api/types";
 
 import {
   resolveUpdatedFrom,
@@ -10,21 +10,9 @@ import type {
 } from "@/components/search-filters.logic";
 import { hasSearchQueryOrSelectiveFilter } from "@/lib/search";
 
-type SavedSearchTime =
-  | { type: "preset"; preset: "day" | "week" | "month" | "year" }
-  | { type: "custom"; updatedFrom?: string; updatedTo?: string };
+type SavedSearchTime = NonNullable<SavedSearchCriteria["time"]>;
 
-export type SavedSearchCriteria = {
-  version: 1;
-  query: string;
-  workspaceIds: string[];
-  types: GlobalSearchResultType[];
-  kinds: EntityKind[];
-  editedByUserIds: string[];
-  mimeTypes: string[];
-  time?: SavedSearchTime;
-  sort: "relevance";
-};
+export type { SavedSearchCriteria };
 
 type SavedSearchOwner = {
   organizationId: string;
