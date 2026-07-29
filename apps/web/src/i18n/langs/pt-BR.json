@@ -2313,7 +2313,7 @@
     "continueInChat": "Continuar no bate-papo",
     "dateFrom": "De",
     "dateTo": "Para",
-    "deleteSearchDescription": "Isto excluirá \"{name}\" permanentemente.",
+    "deleteSearchDescription": "Isto excluirá \"<bdi>{name}</bdi>\" permanentemente.",
     "deleteSearchTitle": "Excluir pesquisa salva",
     "editedBy": "Editado por",
     "emptyState": "Comece a digitar para pesquisar em todos os casos.",

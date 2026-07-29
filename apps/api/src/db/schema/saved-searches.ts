@@ -36,7 +36,7 @@ export const savedSearches = p.pgTable(
       .on(table.organizationId, table.userId, table.updatedAt, table.id),
     p.check(
       "saved_searches_criteria_version_check",
-      sql`jsonb_typeof(${table.criteria}) = 'object' AND ${table.criteria}->>'version' = '1'`,
+      sql`(jsonb_typeof(${table.criteria}) = 'object' AND ${table.criteria}->'version' = '1'::jsonb) IS TRUE`,
     ),
     ...savedSearchPolicies(),
   ],

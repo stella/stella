@@ -2313,7 +2313,7 @@
     "continueInChat": "المتابعة في المحادثة",
     "dateFrom": "من",
     "dateTo": "إلى",
-    "deleteSearchDescription": "سيؤدي هذا إلى حذف \"{name}\" نهائياً.",
+    "deleteSearchDescription": "سيؤدي هذا إلى حذف \"<bdi>{name}</bdi>\" نهائياً.",
     "deleteSearchTitle": "حذف البحث المحفوظ",
     "editedBy": "عُدِّل بواسطة",
     "emptyState": "ابدأ الكتابة للبحث عبر جميع الملفات.",

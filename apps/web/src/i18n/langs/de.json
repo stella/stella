@@ -2313,7 +2313,7 @@
     "continueInChat": "Im Chat fortsetzen",
     "dateFrom": "Von",
     "dateTo": "Bis",
-    "deleteSearchDescription": "\"{name}\" wird dauerhaft gelöscht.",
+    "deleteSearchDescription": "\"<bdi>{name}</bdi>\" wird dauerhaft gelöscht.",
     "deleteSearchTitle": "Gespeicherte Suche löschen",
     "editedBy": "Bearbeitet von",
     "emptyState": "Tippen Sie, um alle Akten zu durchsuchen.",

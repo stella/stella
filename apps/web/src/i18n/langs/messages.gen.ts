@@ -2316,7 +2316,7 @@ type Messages = {
     "continueInChat": "Continue in chat";
     "dateFrom": "From";
     "dateTo": "To";
-    "deleteSearchDescription": "This will permanently delete \"{name}\".";
+    "deleteSearchDescription": "This will permanently delete \"<bdi>{name}</bdi>\".";
     "deleteSearchTitle": "Delete saved search";
     "editedBy": "Edited by";
     "emptyState": "Start typing to search across all matters.";

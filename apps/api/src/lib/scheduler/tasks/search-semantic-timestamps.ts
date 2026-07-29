@@ -12,7 +12,9 @@ export const REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK =
 
 /** Keep every repair transaction small while the versioned job drains. */
 const REPAIR_BATCH_SIZE = 500;
-const MISSING_INDEX_CONCURRENCY = 4;
+const REINDEX_CONCURRENCY = 4;
+const REQUIRED_CLEAN_VERIFICATION_PASSES = 2;
+const VERIFICATION_QUIET_PERIOD_MS = 15 * 60 * 1000;
 const REPAIR_PASS = {
   repair: "repair",
   verify: "verify",
@@ -22,13 +24,13 @@ type RepairPass = (typeof REPAIR_PASS)[keyof typeof REPAIR_PASS];
 
 type RepairPageRow = {
   entityId: SafeId<"entity">;
-  repairedEntityId: SafeId<"entity"> | null;
-  searchDocumentMissing: boolean;
+  needsReindex: boolean;
 };
 
 type RepairSearchSemanticTimestampsOptions = {
   jobId: string;
   leaseToken: string;
+  now?: Date;
   payload: SchedulerPayload | null;
   signal: AbortSignal;
 };
@@ -44,24 +46,45 @@ type RepairSearchSemanticTimestampsOutcome =
     };
 
 type RepairState = {
+  cleanPasses: number;
   cursor: string | null;
+  dirty: boolean;
   pass: RepairPass;
+  quietSince: string | null;
 };
 
 const repairState = (payload: SchedulerPayload | null): RepairState => {
   const cursor = payload?.["cursor"];
+  const pass =
+    payload?.["pass"] === REPAIR_PASS.verify
+      ? REPAIR_PASS.verify
+      : REPAIR_PASS.repair;
+  const cleanPasses = payload?.["cleanPasses"];
+  const quietSince = payload?.["quietSince"];
   return {
+    cleanPasses:
+      pass === REPAIR_PASS.verify &&
+      typeof cleanPasses === "number" &&
+      Number.isInteger(cleanPasses) &&
+      cleanPasses >= 0
+        ? Math.min(cleanPasses, REQUIRED_CLEAN_VERIFICATION_PASSES)
+        : 0,
     cursor: typeof cursor === "string" ? cursor : null,
-    pass:
-      payload?.["pass"] === REPAIR_PASS.verify
-        ? REPAIR_PASS.verify
-        : REPAIR_PASS.repair,
+    dirty: pass === REPAIR_PASS.verify && payload?.["dirty"] === true,
+    pass,
+    quietSince:
+      pass === REPAIR_PASS.verify &&
+      typeof quietSince === "string" &&
+      !Number.isNaN(Date.parse(quietSince))
+        ? quietSince
+        : null,
   };
 };
 
 export const repairSearchSemanticTimestamps = async ({
   jobId,
   leaseToken,
+  now = new Date(),
   payload,
   signal,
 }: RepairSearchSemanticTimestampsOptions): Promise<RepairSearchSemanticTimestampsOutcome> => {
@@ -73,44 +96,69 @@ export const repairSearchSemanticTimestamps = async ({
   // audit: skip — this changes only a derived search projection; the
   // scheduler run and versioned job cursor are the durable operator trail.
   const pageRows = await rootDb.execute<RepairPageRow>(sql`
-    WITH page AS MATERIALIZED (
+    WITH source_page AS MATERIALIZED (
       SELECT
         e.id AS entity_id,
         COALESCE(e.updated_at, e.created_at) AS semantic_updated_at,
-        sd.entity_id IS NULL AS search_document_missing
+        sd.updated_at AS indexed_updated_at
       FROM entities e
       LEFT JOIN search_documents sd ON sd.entity_id = e.id
       WHERE (${state.cursor}::uuid IS NULL OR e.id > ${state.cursor}::uuid)
         AND e.current_version_id IS NOT NULL
       ORDER BY e.id
       LIMIT ${REPAIR_BATCH_SIZE}
-    ),
-    repaired AS (
-      UPDATE search_documents sd
-      SET updated_at = page.semantic_updated_at
-      FROM page
-      WHERE sd.entity_id = page.entity_id
-        AND sd.updated_at IS DISTINCT FROM page.semantic_updated_at
-      RETURNING sd.entity_id
     )
     SELECT
-      page.entity_id AS "entityId",
-      repaired.entity_id AS "repairedEntityId",
-      page.search_document_missing AS "searchDocumentMissing"
-    FROM page
-    LEFT JOIN repaired ON repaired.entity_id = page.entity_id
-    ORDER BY page.entity_id
+      source_page.entity_id AS "entityId",
+      (
+        source_page.indexed_updated_at IS NULL
+        OR source_page.indexed_updated_at
+          IS DISTINCT FROM source_page.semantic_updated_at
+      ) AS "needsReindex"
+    FROM source_page
+    ORDER BY source_page.entity_id
   `);
   const last = pageRows.at(-1);
+  const nowIso = now.toISOString();
 
   if (!last) {
     if (state.pass === REPAIR_PASS.repair) {
-      // The database write guard rejects legacy indexers that still send
-      // reindex time during a rolling deployment. A clean second pass can
-      // therefore prove this fixed point before the one-shot job disables.
+      // Old application instances can still write reindex time during a
+      // rolling deployment. Persist a quiet-window start, then require two
+      // complete clean passes before disabling this one-shot repair.
       await rootDb.execute(sql`
         UPDATE scheduler_jobs
-        SET payload = jsonb_build_object('pass', ${REPAIR_PASS.verify})
+        SET payload = jsonb_build_object(
+          'pass', ${REPAIR_PASS.verify},
+          'dirty', false,
+          'cleanPasses', 0,
+          'quietSince', ${nowIso}
+        )
+        WHERE id = ${jobId}
+          AND locked_by = ${leaseToken}
+      `);
+      return { status: "restart" };
+    }
+
+    const cleanPasses = state.dirty
+      ? 0
+      : Math.min(state.cleanPasses + 1, REQUIRED_CLEAN_VERIFICATION_PASSES);
+    const quietSince = state.quietSince ?? nowIso;
+    const quietPeriodElapsed =
+      now.getTime() - Date.parse(quietSince) >= VERIFICATION_QUIET_PERIOD_MS;
+    if (
+      state.dirty ||
+      cleanPasses < REQUIRED_CLEAN_VERIFICATION_PASSES ||
+      !quietPeriodElapsed
+    ) {
+      await rootDb.execute(sql`
+        UPDATE scheduler_jobs
+        SET payload = jsonb_build_object(
+          'pass', ${REPAIR_PASS.verify},
+          'dirty', false,
+          'cleanPasses', ${cleanPasses},
+          'quietSince', ${quietSince}
+        )
         WHERE id = ${jobId}
           AND locked_by = ${leaseToken}
       `);
@@ -128,43 +176,84 @@ export const repairSearchSemanticTimestamps = async ({
     return { status: "complete" };
   }
 
-  const missingEntityIds = pageRows.flatMap((row) =>
-    row.searchDocumentMissing ? [row.entityId] : [],
+  const reindexEntityIds = pageRows.flatMap((row) =>
+    row.needsReindex ? [row.entityId] : [],
   );
-  for (
-    let start = 0;
-    start < missingEntityIds.length;
-    start += MISSING_INDEX_CONCURRENCY
-  ) {
-    if (signal.aborted) {
-      return { status: "aborted" };
-    }
-    // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- bounded repair: each four-entity chunk drains before the next so decrypt and projection work cannot overwhelm Postgres
-    await Promise.all(
-      missingEntityIds
-        .slice(start, start + MISSING_INDEX_CONCURRENCY)
-        .map(upsertSearchDocument),
-    );
+  const verificationDirty =
+    state.pass === REPAIR_PASS.verify &&
+    (state.dirty || reindexEntityIds.length > 0);
+  const quietSince =
+    state.pass === REPAIR_PASS.verify && reindexEntityIds.length === 0
+      ? (state.quietSince ?? nowIso)
+      : nowIso;
+
+  if (state.pass === REPAIR_PASS.verify && reindexEntityIds.length > 0) {
+    // Mark the pass dirty before external projection work. A crash can replay
+    // the page, but cannot lose the quiet-window reset.
+    await rootDb.execute(sql`
+      UPDATE scheduler_jobs
+      SET payload = jsonb_build_object(
+        'cursor', ${state.cursor}::text,
+        'pass', ${REPAIR_PASS.verify},
+        'dirty', true,
+        'cleanPasses', 0,
+        'quietSince', ${nowIso}
+      )
+      WHERE id = ${jobId}
+        AND locked_by = ${leaseToken}
+    `);
   }
 
-  // Checkpoint last: a replay after the projection update but before this
-  // write safely finds no mismatch and advances again.
-  await rootDb.execute(sql`
-    UPDATE scheduler_jobs
-    SET payload = jsonb_build_object(
-      'cursor', ${last.entityId}::text,
-      'pass', ${state.pass}
-    )
-    WHERE id = ${jobId}
-      AND locked_by = ${leaseToken}
-  `);
+  let nextReindexIndex = 0;
+  const reindexNext = async (): Promise<void> => {
+    const entityId = reindexEntityIds.at(nextReindexIndex);
+    nextReindexIndex += 1;
+    if (!entityId) {
+      return;
+    }
+    await upsertSearchDocument(entityId);
+    await reindexNext();
+  };
+  await Promise.all(
+    Array.from(
+      {
+        length: Math.min(REINDEX_CONCURRENCY, reindexEntityIds.length),
+      },
+      reindexNext,
+    ),
+  );
+
+  if (state.pass === REPAIR_PASS.verify) {
+    await rootDb.execute(sql`
+      UPDATE scheduler_jobs
+      SET payload = jsonb_build_object(
+        'cursor', ${last.entityId}::text,
+        'pass', ${REPAIR_PASS.verify},
+        'dirty', ${verificationDirty},
+        'cleanPasses', ${verificationDirty ? 0 : state.cleanPasses},
+        'quietSince', ${quietSince}
+      )
+      WHERE id = ${jobId}
+        AND locked_by = ${leaseToken}
+    `);
+  } else {
+    // Checkpoint last: a replay after the projection update but before this
+    // write safely finds no mismatch and advances again.
+    await rootDb.execute(sql`
+      UPDATE scheduler_jobs
+      SET payload = jsonb_build_object(
+        'cursor', ${last.entityId}::text,
+        'pass', ${REPAIR_PASS.repair}
+      )
+      WHERE id = ${jobId}
+        AND locked_by = ${leaseToken}
+    `);
+  }
 
   return {
     status: "progress",
     cursor: last.entityId,
-    repaired:
-      pageRows.filter((row) => row.repairedEntityId !== null).length +
-      missingEntityIds.length,
+    repaired: reindexEntityIds.length,
   };
 };
 

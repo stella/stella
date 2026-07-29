@@ -2313,7 +2313,7 @@
     "continueInChat": "Pokračovať v chate",
     "dateFrom": "Od",
     "dateTo": "Do",
-    "deleteSearchDescription": "Týmto natrvalo odstránite \"{name}\".",
+    "deleteSearchDescription": "Týmto natrvalo odstránite \"<bdi>{name}</bdi>\".",
     "deleteSearchTitle": "Odstrániť uložené vyhľadávanie",
     "editedBy": "Upravil/a",
     "emptyState": "Začnite písať a vyhľadajte vo všetkých spisoch.",

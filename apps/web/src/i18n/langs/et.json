@@ -2313,7 +2313,7 @@
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
     "dateTo": "Kuni",
-    "deleteSearchDescription": "See kustutab \"{name}\" jäädavalt.",
+    "deleteSearchDescription": "See kustutab \"<bdi>{name}</bdi>\" jäädavalt.",
     "deleteSearchTitle": "Kustuta salvestatud otsing",
     "editedBy": "Muutja",
     "emptyState": "Alustage tippimist, et otsida kõigist asjadest.",

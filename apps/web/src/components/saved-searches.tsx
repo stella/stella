@@ -399,13 +399,11 @@ export const SavedSearches = ({
           <AlertDialogHeader>
             <AlertDialogTitle>{t("search.deleteSearchTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {dialog.type === "delete" && (
-                <BidiText as="span">
-                  {t("search.deleteSearchDescription", {
-                    name: dialog.search.name,
-                  })}
-                </BidiText>
-              )}
+              {dialog.type === "delete" &&
+                t.rich("search.deleteSearchDescription", {
+                  bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+                  name: dialog.search.name,
+                })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

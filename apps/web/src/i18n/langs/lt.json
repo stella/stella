@@ -2313,7 +2313,7 @@
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
     "dateTo": "Iki",
-    "deleteSearchDescription": "\"{name}\" bus ištrinta visam laikui.",
+    "deleteSearchDescription": "\"<bdi>{name}</bdi>\" bus ištrinta visam laikui.",
     "deleteSearchTitle": "Ištrinti išsaugotą paiešką",
     "editedBy": "Redagavo",
     "emptyState": "Pradėkite rašyti, kad ieškotumėte visose bylose.",

@@ -9,7 +9,10 @@ CREATE TABLE "saved_searches" (
   "created_at" timestamp DEFAULT now() NOT NULL,
   "updated_at" timestamp DEFAULT now() NOT NULL,
   CONSTRAINT "saved_searches_criteria_version_check"
-    CHECK (jsonb_typeof("criteria") = 'object' AND "criteria"->>'version' = '1')
+    CHECK ((
+      jsonb_typeof("criteria") = 'object'
+      AND "criteria"->'version' = '1'::jsonb
+    ) IS TRUE)
 );
 --> statement-breakpoint
 ALTER TABLE "saved_searches" ENABLE ROW LEVEL SECURITY;

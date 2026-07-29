@@ -26,14 +26,13 @@ beforeEach(() => {
   upsertSearchDocumentMock.mockClear();
 });
 
-test("repairs one bounded batch and checkpoints after the update", async () => {
+test("rebuilds one bounded page and checkpoints after the projection", async () => {
   const entityId = toSafeId<"entity">("11111111-1111-4111-8111-111111111111");
   executeMock
     .mockResolvedValueOnce([
       {
         entityId,
-        repairedEntityId: entityId,
-        searchDocumentMissing: false,
+        needsReindex: true,
       },
     ])
     .mockResolvedValueOnce([]);
@@ -64,13 +63,13 @@ test("repairs one bounded batch and checkpoints after the update", async () => {
   expect(repairQuery.sql.indexOf("LIMIT")).toBeLessThan(
     repairQuery.sql.indexOf("IS DISTINCT FROM"),
   );
-  expect(repairQuery.sql).toContain(
-    "sd.updated_at IS DISTINCT FROM page.semantic_updated_at",
-  );
+  expect(repairQuery.sql).toContain("source_page.indexed_updated_at");
+  expect(repairQuery.sql).not.toContain("UPDATE search_documents");
   expect(repairQuery.params).toContain(500);
   expect(checkpointQuery.sql).toContain("SET payload = jsonb_build_object(");
   expect(checkpointQuery.sql).toContain("'cursor'");
   expect(checkpointQuery.params).toContain(entityId);
+  expect(upsertSearchDocumentMock).toHaveBeenCalledWith(entityId);
 });
 
 test("checkpoints the last scanned row when a clean page needs no repair", async () => {
@@ -79,8 +78,7 @@ test("checkpoints the last scanned row when a clean page needs no repair", async
     .mockResolvedValueOnce([
       {
         entityId,
-        repairedEntityId: null,
-        searchDocumentMissing: false,
+        needsReindex: false,
       },
     ])
     .mockResolvedValueOnce([]);
@@ -88,7 +86,13 @@ test("checkpoints the last scanned row when a clean page needs no repair", async
   const outcome = await repairSearchSemanticTimestamps({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
-    payload: { pass: "verify" },
+    now: new Date("2026-07-29T00:05:00.000Z"),
+    payload: {
+      pass: "verify",
+      cleanPasses: 0,
+      dirty: false,
+      quietSince: "2026-07-29T00:00:00.000Z",
+    },
     signal: new AbortController().signal,
   });
 
@@ -104,22 +108,28 @@ test("checkpoints the last scanned row when a clean page needs no repair", async
   expect(checkpointQuery.params).toContain("verify");
 });
 
-test("rebuilds a missing projection before checkpointing its entity", async () => {
+test("durably marks verification dirty before rebuilding a mismatch", async () => {
   const entityId = toSafeId<"entity">("11111111-1111-4111-8111-111111111111");
   executeMock
     .mockResolvedValueOnce([
       {
         entityId,
-        repairedEntityId: null,
-        searchDocumentMissing: true,
+        needsReindex: true,
       },
     ])
+    .mockResolvedValueOnce([])
     .mockResolvedValueOnce([]);
 
   const outcome = await repairSearchSemanticTimestamps({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
-    payload: null,
+    now: new Date("2026-07-29T00:05:00.000Z"),
+    payload: {
+      pass: "verify",
+      cleanPasses: 1,
+      dirty: false,
+      quietSince: "2026-07-29T00:00:00.000Z",
+    },
     signal: new AbortController().signal,
   });
 
@@ -128,11 +138,18 @@ test("rebuilds a missing projection before checkpointing its entity", async () =
     cursor: entityId,
     repaired: 1,
   });
+  const dirtyCheckpoint = new PgDialect().sqlToQuery(
+    executeMock.mock.calls.at(1)?.at(0) ?? sql``,
+  );
+  expect(dirtyCheckpoint.params).toContain(true);
+  expect(dirtyCheckpoint.params).toContain("2026-07-29T00:05:00.000Z");
   expect(upsertSearchDocumentMock).toHaveBeenCalledWith(entityId);
 });
 
-test("requires a clean verification pass before disabling the job", async () => {
+test("requires a quiet two-pass fixed point before disabling the job", async () => {
   executeMock
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([])
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([])
@@ -141,6 +158,7 @@ test("requires a clean verification pass before disabling the job", async () => 
   const restartOutcome = await repairSearchSemanticTimestamps({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
+    now: new Date("2026-07-29T00:00:00.000Z"),
     payload: null,
     signal: new AbortController().signal,
   });
@@ -149,19 +167,43 @@ test("requires a clean verification pass before disabling the job", async () => 
   const restartQuery = new PgDialect().sqlToQuery(
     executeMock.mock.calls.at(1)?.at(0) ?? sql``,
   );
-  expect(restartQuery.sql).toContain("SET payload = jsonb_build_object('pass'");
+  expect(restartQuery.sql).toContain("SET payload = jsonb_build_object(");
+  expect(restartQuery.sql).toContain("'pass'");
+
+  const firstCleanOutcome = await repairSearchSemanticTimestamps({
+    jobId: "search.repairSemanticTimestamps.v1",
+    leaseToken: "runner#lease-1",
+    now: new Date("2026-07-29T00:20:00.000Z"),
+    payload: {
+      pass: "verify",
+      cleanPasses: 0,
+      dirty: false,
+      quietSince: "2026-07-29T00:00:00.000Z",
+    },
+    signal: new AbortController().signal,
+  });
+  expect(firstCleanOutcome).toEqual({ status: "restart" });
+  const firstCleanCheckpoint = new PgDialect().sqlToQuery(
+    executeMock.mock.calls.at(3)?.at(0) ?? sql``,
+  );
+  expect(firstCleanCheckpoint.params).toContain(1);
 
   const completeOutcome = await repairSearchSemanticTimestamps({
     jobId: "search.repairSemanticTimestamps.v1",
     leaseToken: "runner#lease-1",
-    payload: { pass: "verify" },
+    now: new Date("2026-07-29T00:21:00.000Z"),
+    payload: {
+      pass: "verify",
+      cleanPasses: 1,
+      dirty: false,
+      quietSince: "2026-07-29T00:00:00.000Z",
+    },
     signal: new AbortController().signal,
   });
-
   expect(completeOutcome).toEqual({ status: "complete" });
-  expect(executeMock).toHaveBeenCalledTimes(4);
+  expect(executeMock).toHaveBeenCalledTimes(6);
   const disableQuery = new PgDialect().sqlToQuery(
-    executeMock.mock.calls.at(3)?.at(0) ?? sql``,
+    executeMock.mock.calls.at(5)?.at(0) ?? sql``,
   );
   expect(disableQuery.sql).toContain("SET enabled = false");
 });

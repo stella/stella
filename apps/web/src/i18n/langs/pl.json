@@ -2313,7 +2313,7 @@
     "continueInChat": "Kontynuuj na czacie",
     "dateFrom": "Od",
     "dateTo": "Do",
-    "deleteSearchDescription": "Spowoduje to trwałe usunięcie \"{name}\".",
+    "deleteSearchDescription": "Spowoduje to trwałe usunięcie \"<bdi>{name}</bdi>\".",
     "deleteSearchTitle": "Usuń zapisane wyszukiwanie",
     "editedBy": "Edytowane przez",
     "emptyState": "Zacznij pisać, aby przeszukać wszystkie sprawy.",

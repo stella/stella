@@ -2313,7 +2313,7 @@
     "continueInChat": "Turpināt tērzēšanā",
     "dateFrom": "No",
     "dateTo": "Līdz",
-    "deleteSearchDescription": "\"{name}\" tiks neatgriezeniski dzēsts.",
+    "deleteSearchDescription": "\"<bdi>{name}</bdi>\" tiks neatgriezeniski dzēsts.",
     "deleteSearchTitle": "Dzēst saglabāto meklējumu",
     "editedBy": "Rediģēja",
     "emptyState": "Sāciet rakstīt, lai meklētu visās lietās.",

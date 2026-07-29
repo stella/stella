@@ -2313,7 +2313,7 @@
     "continueInChat": "Continuer dans le chat",
     "dateFrom": "Du",
     "dateTo": "Au",
-    "deleteSearchDescription": "Cette action supprimera définitivement \"{name}\".",
+    "deleteSearchDescription": "Cette action supprimera définitivement \"<bdi>{name}</bdi>\".",
     "deleteSearchTitle": "Supprimer la recherche enregistrée",
     "editedBy": "Modifié par",
     "emptyState": "Commencez à saisir pour rechercher dans tous les dossiers.",
