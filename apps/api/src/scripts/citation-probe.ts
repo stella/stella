@@ -313,7 +313,16 @@ const probeKey = async (
       match !== null;
       match = detector.exec(text)
     ) {
-      const candidate = match[0].replaceAll(/\s+/gu, " ").trim();
+      let candidate = match[0].replaceAll(/\s+/gu, " ").trim();
+      // A greedy tail can swallow a second prefixed reference into one
+      // candidate, hiding it behind the first one's coverage; cut the
+      // candidate at any embedded prefix so each reference stands alone.
+      const embedded = candidate
+        .slice(4)
+        .search(/(?:sp\.\s?zn\.|sen\.\s?zn\.|sygn\.|[čc]\.\s?j\.)/iu);
+      if (embedded !== -1) {
+        candidate = candidate.slice(0, embedded + 4).trim();
+      }
       if (!covered(candidate) && !isBenign(candidate)) {
         residuals.add(candidate);
       }
@@ -374,9 +383,9 @@ console.log(
 // A run that probed nothing is a failure, not a clean zero: the scheduled
 // reviewer must see a non-zero exit instead of an empty SUMMARY — whether
 // every operation failed or the listings succeeded and every get did not.
-if (docs.length === 0) {
+if (docs.length === 0 || docs.every((doc) => doc.empty)) {
   console.error(
-    `citation-probe: no documents probed (${s3Failures}/${s3Attempts} S3 operations failed); unusable run`,
+    `citation-probe: no usable documents probed (${docs.length} sampled, ${s3Failures}/${s3Attempts} S3 operations failed); unusable run`,
   );
   process.exit(1);
 }
