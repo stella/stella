@@ -18,6 +18,7 @@ const ENTITY_REFERENCE_PREFIX = "#stella-entity=";
 const WORKSPACE_REFERENCE_PREFIX = "#stella-workspace=";
 const SEARCH_SUMMARY_CITATION_TARGET_PREFIX = "#stella-search-summary=";
 const SEARCH_SUMMARY_CITATION_MARKER = /\[(?<number>[1-9]\d*)\]/gu;
+const SEARCH_SUMMARY_SOURCE_NUMBER = /^\[(?<number>[1-9]\d*)\]/u;
 
 type InternalReferenceMode =
   | "references"
@@ -181,7 +182,7 @@ const isTrustedSearchSummarySourceParagraph = (
       .join("");
   }
   const number = Number(
-    text.match(/^\[(?<number>[1-9]\d*)\]/u)?.groups?.number,
+    SEARCH_SUMMARY_SOURCE_NUMBER.exec(text)?.groups?.["number"],
   );
   return context.trustedSearchSummaryCitationByNumber.has(number);
 };
@@ -209,9 +210,9 @@ const transformSearchSummaryCitationMarkers = (
     for (const match of runContent.text.matchAll(
       SEARCH_SUMMARY_CITATION_MARKER,
     )) {
-      const number = Number(match.groups?.number);
+      const number = Number(match.groups?.["number"]);
       const source = context.trustedSearchSummaryCitationByNumber.get(number);
-      if (source === undefined || match.index === undefined) {
+      if (source === undefined) {
         continue;
       }
       changed = true;

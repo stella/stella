@@ -70,12 +70,12 @@ const extractPersistedSearchSummaryCitationSources = (
   const sources: PersistedSearchSummaryCitationSource[] = [];
   const seen = new Set<number>();
   for (const line of sourcesMarkdown.split("\n")) {
-    const groups = line.match(SEARCH_SUMMARY_CITATION_SOURCE)?.groups;
+    const groups = SEARCH_SUMMARY_CITATION_SOURCE.exec(line)?.groups;
     if (groups === undefined) {
       continue;
     }
-    const number = Number(groups.linkedNumber ?? groups.plainNumber);
-    const source = groups.linkedSource ?? groups.plainSource;
+    const number = Number(groups["linkedNumber"] ?? groups["plainNumber"]);
+    const source = groups["linkedSource"] ?? groups["plainSource"];
     if (
       !Number.isSafeInteger(number) ||
       number < 1 ||
