@@ -80,7 +80,7 @@
   },
   "dependencies": {
     "@stll/country-codes": "workspace:*",
-    "@stll/stdnum": "^2.3.0"
+    "@stll/stdnum": "^2.3.1"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
