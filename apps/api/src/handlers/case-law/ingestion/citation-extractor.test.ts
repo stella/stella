@@ -132,6 +132,21 @@ describe("extractCitations", () => {
     expect(texts).toContain("C- 303/20");
   });
 
+  test("does not re-extract a bare CJEU number after a spaced hyphen prefix", () => {
+    // The ECLI-anchored bare-number pattern's negative lookbehind must
+    // reject the same spaced-hyphen prefix the CJEU C/T/F pattern itself
+    // tolerates ("C- 679/18"), not just the tight "C-679/18" form --
+    // otherwise "679/18" would also be captured as a phantom bare
+    // pre-1989 number just because an ECLI suffix follows.
+    const text = "rozsudek ve věci C- 679/18, EU:C:2020:123 ze dne 5. 3. 2020";
+    const texts = extractCitations([{ index: 0, text }]).map(
+      (c) => c.citationText,
+    );
+    expect(texts).toContain("C- 679/18");
+    expect(texts).toContain("EU:C:2020:123");
+    expect(texts).not.toContain("679/18");
+  });
+
   test("extracts letter-first registries without a senate number", () => {
     const text =
       "usnesení sp. zn. Nt 408/2023 a rozhodnutí sp. zn. A 9/2003, " +
@@ -724,7 +739,7 @@ describe("extractCitations", () => {
   test("dedupes a case number containing a non-breaking space", () => {
     // A non-breaking space (U+00A0) between tokens, as PDF extraction
     // sometimes produces, must dedupe against the plain-space spelling.
-    const nbspText = "sp. zn. 21 Cdo 1234/2020";
+    const nbspText = "sp. zn. 21 Cdo 1234/2020";
     const plainText = "sp. zn. 21 Cdo 1234/2020";
 
     const combined = extractCitations([
@@ -750,6 +765,19 @@ describe("extractCitations", () => {
     const text =
       "Rozsudek Nejvyššího soudu sp. zn. 21 Cdo 1234/2020 uvedl, že ... " +
       "Později bylo rozhodnutí, sp. zn. 21\nCdo 1234/2020, citováno znovu.";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+  });
+
+  test("matches and dedupes a case number wrapped across a Windows-style CRLF", () => {
+    // A CRLF line-wrap ("\r\n") lands two whitespace characters where the
+    // source normally has one space or none at all. The shared
+    // Czech/Slovak case-number body must still match across the CRLF, and
+    // the CRLF-wrapped mention must dedupe against a clean re-quote of the
+    // same case elsewhere in the document.
+    const text =
+      "Rozsudek Nejvyššího soudu sp. zn. 21\r\nCdo 1234/2020 uvedl, že ... " +
+      "Později bylo rozhodnutí, sp. zn. 21 Cdo 1234/2020, citováno znovu.";
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
   });
@@ -905,6 +933,23 @@ describe("extractCitations", () => {
     expect(
       extractCitations([{ index: 0, text: gluedTwoWord }])[0]?.citationText,
     ).toBe("sygn. akt IA Ca 835/97");
+  });
+
+  test("dedupes a Polish case number cited both glued and spaced", () => {
+    // The same civil-division case is cited once with the roman numeral
+    // glued to the registry letter ("IC 1523/96") and once spaced ("I C
+    // 1523/96") elsewhere in the same document; the dedup key must
+    // normalize the roman-to-registry boundary so both resolve to one
+    // citation.
+    const citations = extractCitations([
+      {
+        index: 0,
+        text:
+          "wyrokiem z 4 listopada 1997 r., sygn. akt IC 1523/96 i Sąd " +
+          "ponownie powołał się na sygn. akt I C 1523/96 w uzasadnieniu",
+      },
+    ]);
+    expect(citations).toHaveLength(1);
   });
 
   test("extracts Polish sygn. akt with a no-space roman-numeral/division compound", () => {
@@ -1164,15 +1209,15 @@ describe("extractCitations", () => {
     expect(citations[0]?.citationText).toBe("sygn. Akt X Ga 109/05");
   });
 
-  test("normalizes an embedded line-wrap inside a matched citation", () => {
-    // A citation whose parts span a source line-wrap otherwise keeps the
-    // raw newline in citationText, so the same case cited again on one
-    // line elsewhere in the document dedups under a different key and
-    // never compares equal downstream.
+  test("keeps the raw line-wrap newline in the stored citation text", () => {
+    // citationText is stored verbatim so exact-passage anchoring can find
+    // it in the source document; the embedded newline from the line-wrap
+    // must survive, even though the dedup key (see the next test) still
+    // collapses it against a clean re-quote of the same case.
     const text = "sygn.\nakt III CZP 55/84";
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
-    expect(citations[0]?.citationText).toBe("sygn. akt III CZP 55/84");
+    expect(citations[0]?.citationText).toBe("sygn.\nakt III CZP 55/84");
   });
 
   test("dedupes a line-wrapped citation against a clean re-quote of the same case", () => {
@@ -1187,15 +1232,16 @@ describe("extractCitations", () => {
     expect(citations).toHaveLength(1);
   });
 
-  test("collapses a line-wrapped citation to single spaces", () => {
+  test("keeps a line-wrapped citation's raw newline verbatim", () => {
     // Verbatim from a prod decision where the case number wraps onto the
-    // next line ("sygn. akt\nIV U 120/13"); the stored citation text must
-    // not carry the raw newline through to downstream consumers.
+    // next line ("sygn. akt\nIV U 120/13"); the stored citation text is
+    // the exact source spelling, newline included, so it remains
+    // source-locatable for exact-passage anchoring.
     const text =
       "wydanym w sprawie o sygn. akt\nIV U 120/13 Sąd Rejonowy – Sąd Pracy";
     const citations = extractCitations([{ index: 0, text }]);
     expect(citations).toHaveLength(1);
-    expect(citations[0]?.citationText).toBe("sygn. akt IV U 120/13");
+    expect(citations[0]?.citationText).toBe("sygn. akt\nIV U 120/13");
   });
 
   test("extracts a Polish Constitutional Tribunal case number", () => {

@@ -42,18 +42,19 @@ type ExtractedCitation = {
 // inconsistently -- attached ("5Cdo/260/2008"), fully spaced
 // ("21 Cdo 1234/2020", "33 Cb/209/2010"), or attached-then-spaced
 // ("10C 84/97", two-digit year) all name the same kind of case number.
-// Each gap allows at most one optional/single-character separator, so
-// the pattern resolves in one pass with no repeated alternation to
-// backtrack through. `canonicalizeDedupKey` collapses the resulting
-// spelling variance to one dedup key.
-const CASE_NUMBER_BODY = String.raw`(?<caseNumber>\d{1,3}\s?\p{L}{1,6}[\s/]\d{1,6}\/\d{2,4})(?!\d)`;
+// Each gap is a bounded whitespace/slash run (not a single optional
+// character), so a double space or a CRLF line-wrap ("21\r\nCdo") still
+// matches; the bound keeps the pattern resolving in one pass with no
+// repeated alternation to backtrack through. `canonicalizeDedupKey`
+// collapses the resulting spelling variance to one dedup key.
+const CASE_NUMBER_BODY = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}\/\d{2,4})(?!\d)`;
 
 // Same shape, but the docket number may join a second, comma-separated
 // docket that shares the trailing year: courts consolidating appeals
 // into one ruling cite both numbers together under a single registry,
 // e.g. "č. j. 27 Co 116, 119/2007-94" (appeals 116 and 119, both /2007)
 // or "36 Co 52,53/2023" (no space after the comma).
-const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s?\p{L}{1,6}[\s/]\d{1,6}(?:,\s?\d{1,6})?\/\d{2,4})(?!\d)`;
+const CASE_NUMBER_BODY_COMMA = String.raw`(?<caseNumber>\d{1,3}\s{0,3}\p{L}{1,6}[\s/]{1,3}\d{1,6}(?:,\s{0,3}\d{1,6})?\/\d{2,4})(?!\d)`;
 
 // Shared "sygn." lead-in, covering every registrar spelling seen in the
 // corpus: title-case "Sygn." at the start of a document header vs.
@@ -108,10 +109,8 @@ const PL_TK_PATTERN = new RegExp(
   "gu",
 );
 
-const PL_TK_BARE_PATTERN = new RegExp(
-  String.raw`(?<!\b[IVX]+\s)\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp)\.?\s*\d{1,4}\/\d{2,4})(?!\d)`,
-  "gu",
-);
+const PL_TK_BARE_PATTERN =
+  /(?<!\b[IVX]+\s)\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp)\.?\s*\d{1,4}\/\d{2,4})(?!\d)/gu;
 
 // Polish bare-symbol pattern: other tribunals and disciplinary registries
 // cite by a 1-3 letter symbol with no Roman-numeral chamber at all --
@@ -228,8 +227,10 @@ const CITATION_PATTERNS: RegExp[] = [
   // above follows immediately, which no directive or report number ever
   // has. The negative lookbehind stops this from also re-matching the
   // bare tail of an already-prefixed number ("T‑381/15" must not also
-  // yield a phantom "381/15").
-  /(?<![CTF][-‑])\b(?<caseNumber>\d{1,4}\/\d{2})(?!\d)(?=[\s,]*(?:(?:and|e)\s+\d{1,4}\/\d{2}(?!\d)[\s,]*)?EU:[CTF]:\d{4}:\d+)/gu,
+  // yield a phantom "381/15"), including when the hyphen is spaced the
+  // same way the CJEU C/T/F pattern above tolerates ("C- 679/18" must not
+  // also yield a phantom "679/18").
+  /(?<![CTF]\s{0,4}[-‑]\s{0,4})\b(?<caseNumber>\d{1,4}\/\d{2})(?!\d)(?=[\s,]*(?:(?:and|e)\s+\d{1,4}\/\d{2}(?!\d)[\s,]*)?EU:[CTF]:\d{4}:\d+)/gu,
 
   // Czech collection: "č. 123/2020 Sb. rozh. tr." (Nejvyšší soud, civil or
   // criminal) or "č. 2018/2010 Sb. NSS" (Nejvyšší správní soud, a
@@ -294,6 +295,15 @@ const SEPARATOR_NORMALIZE_RE =
   /^(?<number>\d{1,3})\s?(?<registry>\p{L}{1,6})[\s/](?<docket>\d{1,6}\/\d{2,4})$/u;
 
 /**
+ * Matches a Polish roman-numeral-chamber case number after whitespace
+ * normalization, splitting off the chamber from the division code so the
+ * dedup key can rebuild the boundary with one canonical (glued) spelling:
+ * "IC 1523/96" (glued) and "I C 1523/96" (spaced) must share one key.
+ */
+const POLISH_ROMAN_DIVISION_RE =
+  /^(?<roman>[IVX]{1,6})\s?(?<division>[A-Za-z]{1,5}\s.*)$/u;
+
+/**
  * Collapse spelling variants that would otherwise fracture one real
  * citation into several dedup keys:
  *  - soft hyphens (U+00AD) and NBSP (U+00A0), both seen in the corpus
@@ -309,12 +319,14 @@ const SEPARATOR_NORMALIZE_RE =
  *  - the separator between a case's registry code and its docket number,
  *    which filings write as a space or a slash interchangeably ("5 Cdo
  *    260/2008" vs "5Cdo/260/2008", "10C 84/97" vs "10C/84/97", "6CoE
- *    14/2007" vs "6 CoE 14/2007" vs "6CoE/14/2007").
+ *    14/2007" vs "6 CoE 14/2007" vs "6CoE/14/2007");
+ *  - the boundary between a Polish roman-numeral chamber and its division
+ *    code, glued or spaced ("IC 1523/96" vs "I C 1523/96").
  */
 const canonicalizeDedupKey = (text: string): string => {
   const cleaned = normalizeDashes(text)
     .replace(/­/gu, "") // soft hyphen: invisible, never load-bearing
-    .replace(/ /gu, " ") // NBSP -> space
+    .replace(/\u00A0/gu, " ") // NBSP -> space
     .replace(/\s+/gu, " ") // collapse line-wraps and repeated spaces
     .replace(/\s{0,4}-\s{0,4}/gu, "-") // collapse whitespace around a hyphen
     .replace(/\s{0,4}\/\s{0,4}/gu, "/") // collapse whitespace around a slash
@@ -322,22 +334,18 @@ const canonicalizeDedupKey = (text: string): string => {
     .trim();
 
   const numeric = SEPARATOR_NORMALIZE_RE.exec(cleaned);
-  const canonical = numeric?.groups
-    ? `${numeric.groups["number"]}${numeric.groups["registry"]}/${numeric.groups["docket"]}`
+  if (numeric?.groups) {
+    const canonical = `${numeric.groups["number"]}${numeric.groups["registry"]}/${numeric.groups["docket"]}`;
+    return canonical.toLowerCase();
+  }
+
+  const romanDivision = POLISH_ROMAN_DIVISION_RE.exec(cleaned);
+  const canonical = romanDivision?.groups
+    ? `${romanDivision.groups["roman"]}${romanDivision.groups["division"]}`
     : cleaned;
 
   return canonical.toLowerCase();
 };
-
-/**
- * PDF-derived decision text sometimes hard-wraps a citation mid-token
- * ("sygn. akt\nIV U 120/13"). The patterns above use `\s` so the match
- * still succeeds, but the raw newline would otherwise leak into the
- * stored citation text, splitting one citation into two differently
- * spaced entries downstream. Collapse to single spaces.
- */
-const normalizeWhitespace = (text: string): string =>
-  text.replace(/\s+/gu, " ").trim();
 
 /** Strip known prefixes to get the bare case number. */
 const stripPrefix = (text: string): string => {
@@ -436,7 +444,12 @@ export const extractCitations = (
         match !== null;
         match = pattern.exec(section.text)
       ) {
-        const citationText = normalizeWhitespace(match[0]);
+        // citationText is stored verbatim (only edge-trimmed), never
+        // whitespace-normalized: exact-passage anchoring must be able to
+        // find this exact string in the source document, including an
+        // embedded line-wrap newline. Only the dedup key below is
+        // canonicalized.
+        const citationText = match[0].trim();
         // For patterns with a capture group (e.g. the Polish prefixed
         // pattern), use the bare case number as the canonical dedup key
         // so both "sygn. akt II CSK 123/20" and "II CSK 123/20" resolve
