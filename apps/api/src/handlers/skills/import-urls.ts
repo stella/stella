@@ -5,8 +5,10 @@ import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
+import { deduplicateSkillImportItems } from "./import-urls.logic";
 import { authorizeSkillInstallScope, installSkill } from "./install";
 import {
+  createSkillPackageFetchContext,
   fetchSkillPackageFromUrl,
   verifySkillPackageIntegrity,
 } from "./skill-package";
@@ -24,6 +26,7 @@ const importSkillsBodySchema = t.Object({
           value: t.String({ pattern: CONTENT_HASH_PATTERN }),
         }),
         t.Object({
+          entrypointHash: t.String({ pattern: CONTENT_HASH_PATTERN }),
           type: t.Literal("github-commit"),
           value: t.String({ pattern: GITHUB_COMMIT_SHA_PATTERN }),
         }),
@@ -63,25 +66,17 @@ const importSkillsFromUrls = createSafeRootHandler(
     }
 
     const installed: { id: string; sourceUrl: string }[] = [];
-    const failed: { message: string; sourceUrl: string }[] = [];
-    const itemsBySourceUrl = new Map(
-      body.items.map((item) => [
-        item.sourceUrl.trim(),
-        {
-          integrity: item.integrity,
-          sourceUrl: item.sourceUrl.trim(),
-        },
-      ]),
-    );
-
-    const items = [...itemsBySourceUrl.values()];
+    const deduplicated = deduplicateSkillImportItems(body.items);
+    const failed = [...deduplicated.failed];
+    const { items } = deduplicated;
+    const fetchContext = createSkillPackageFetchContext();
     const importAt = async (index: number): Promise<void> => {
       const item = items.at(index);
       if (item === undefined) {
         return;
       }
       const { integrity, sourceUrl } = item;
-      const parsed = await fetchSkillPackageFromUrl(sourceUrl);
+      const parsed = await fetchSkillPackageFromUrl(sourceUrl, fetchContext);
       if (Result.isError(parsed)) {
         failed.push({ message: parsed.error.message, sourceUrl });
         return importAt(index + 1);

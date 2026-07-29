@@ -5,9 +5,12 @@ import JSZip from "jszip";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
+  createSkillPackageFetchContext,
+  decodeGithubPathParts,
   discoverSkillPackagesFromUrl,
   fetchSkillPackageFromUrl,
   findGithubSkillEntrypoints,
+  getOrCreateGithubTreeRequest,
   isZipSkillSource,
   parseUploadedSkillPackage,
   redactSkillSourceUrlForStorage,
@@ -41,6 +44,7 @@ Follow the checklist.`,
     expect(result.value.license).toBe("Apache-2.0");
     expect(result.value.resources).toEqual([]);
     expect(result.value.contentHash).toHaveLength(64);
+    expect(result.value.entrypointHash).toHaveLength(64);
     expect(
       Result.isOk(
         verifySkillPackageIntegrity({
@@ -66,7 +70,11 @@ Follow the checklist.`,
     expect(
       Result.isOk(
         verifySkillPackageIntegrity({
-          integrity: { type: "github-commit", value: commitSha },
+          integrity: {
+            type: "github-commit",
+            entrypointHash: result.value.entrypointHash,
+            value: commitSha,
+          },
           parsed: result.value,
           sourceUrl: `https://github.com/example/skills/tree/${commitSha}/review`,
         }),
@@ -75,9 +83,26 @@ Follow the checklist.`,
     expect(
       Result.isError(
         verifySkillPackageIntegrity({
-          integrity: { type: "github-commit", value: commitSha },
+          integrity: {
+            type: "github-commit",
+            entrypointHash: result.value.entrypointHash,
+            value: commitSha,
+          },
           parsed: result.value,
           sourceUrl: "https://github.com/example/skills/tree/main/review",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      Result.isError(
+        verifySkillPackageIntegrity({
+          integrity: {
+            type: "github-commit",
+            entrypointHash: "0".repeat(64),
+            value: commitSha,
+          },
+          parsed: result.value,
+          sourceUrl: `https://github.com/example/skills/tree/${commitSha}/review`,
         }),
       ),
     ).toBe(true);
@@ -111,6 +136,21 @@ Use the references.`,
       "assets/example.txt",
       "references/checklist.md",
     ]);
+    expect(result.value.contentHash).not.toBe(result.value.entrypointHash);
+    const commitSha = "b".repeat(40);
+    expect(
+      Result.isOk(
+        verifySkillPackageIntegrity({
+          integrity: {
+            type: "github-commit",
+            entrypointHash: result.value.entrypointHash,
+            value: commitSha,
+          },
+          parsed: result.value,
+          sourceUrl: `https://github.com/example/skills/tree/${commitSha}/nda-review`,
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("rejects skill names that cannot be used as a load-skill id", async () => {
@@ -238,11 +278,58 @@ Instructions.`,
   });
 
   test("rejects malformed GitHub repository coordinates before fetching", async () => {
-    const result = await discoverSkillPackagesFromUrl(
+    const malformedUrls = [
       "https://github.com/not_valid/repository",
-    );
+      "https://github.com/example/...",
+    ];
 
-    expect(Result.isError(result)).toBe(true);
+    for (const url of malformedUrls) {
+      // oxlint-disable-next-line no-await-in-loop -- fixed security-boundary cases must each fail before outbound fetch
+      const result = await discoverSkillPackagesFromUrl(url);
+      expect(Result.isError(result)).toBe(true);
+    }
+  });
+
+  test("decodes GitHub path segments exactly once", () => {
+    expect(
+      decodeGithubPathParts(
+        "/example/skills/tree/0123456789abcdef0123456789abcdef01234567/legal%20review/%25-check",
+      ),
+    ).toEqual([
+      "example",
+      "skills",
+      "tree",
+      "0123456789abcdef0123456789abcdef01234567",
+      "legal review",
+      "%-check",
+    ]);
+    expect(() =>
+      decodeGithubPathParts("/example/skills/tree/main/legal%2Freview"),
+    ).toThrow("GitHub URL path is invalid");
+  });
+
+  test("shares one GitHub tree request across a repository import batch", async () => {
+    const context = createSkillPackageFetchContext();
+    let loadCount = 0;
+    const load = async () => {
+      loadCount += 1;
+      return [{ path: "review/SKILL.md", type: "blob" }];
+    };
+
+    const first = getOrCreateGithubTreeRequest({
+      cacheKey: "example\u0000skills\u0000commit",
+      context,
+      load,
+    });
+    const second = getOrCreateGithubTreeRequest({
+      cacheKey: "example\u0000skills\u0000commit",
+      context,
+      load,
+    });
+
+    expect(second).toBe(first);
+    expect(await second).toEqual([{ path: "review/SKILL.md", type: "blob" }]);
+    expect(loadCount).toBe(1);
   });
 
   test("discovers only SKILL.md entrypoints inside the selected folder", () => {

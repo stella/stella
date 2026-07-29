@@ -50,6 +50,7 @@ const buildParsedBlueprint = (
     compatibility: metadata.compatibility ?? null,
     contentHash,
     description: metadata.description,
+    entrypointHash: contentHash,
     license: metadata.license ?? null,
     metadata: { blueprintId: blueprint.id },
     name: metadata.name,

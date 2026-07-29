@@ -373,6 +373,10 @@ export const API_RATE_LIMITS = {
   /** REST API: 1000 req/min per IP. Covers normal navigation
    *  (5-10 requests per page load × frequent workspace switching). */
   api: { duration: 60_000, max: 1000 },
+  /** Skill URL discovery/import: 10 req/min per IP. Each request performs
+   *  bounded outbound source fetches, so this separate cap prevents the
+   *  general API budget from amplifying third-party traffic. */
+  skillSource: { duration: 60_000, max: 10 },
   /** File uploads: 500 req/min (separate budget). */
   upload: { duration: 60_000, max: 500 },
   /** Folio collaborative-edit token endpoints: 30 req/min per IP.

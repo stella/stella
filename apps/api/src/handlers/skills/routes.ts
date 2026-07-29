@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { rateLimit } from "elysia-rate-limit";
 
 import createSkill from "@/api/handlers/skills/create";
 import deleteSkill from "@/api/handlers/skills/delete";
@@ -17,15 +18,30 @@ import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
 import updateSkillResource from "@/api/handlers/skills/resources/update";
 import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import seedSkills from "@/api/handlers/skills/seed";
+import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-rate-limit";
 import updateSkill from "@/api/handlers/skills/update";
 import uploadSkill from "@/api/handlers/skills/upload";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
+import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 export const skillsRoute = new Elysia({ prefix: "/skills" })
   .use(authMacro)
   .use(permissionMacro)
   .use(invalidateQuery)
+  .use(
+    rateLimit({
+      scoping: "scoped",
+      duration: API_RATE_LIMITS.skillSource.duration,
+      max: API_RATE_LIMITS.skillSource.max,
+      ...createRedisRateLimit({
+        failurePolicy: "fail_open_local",
+        scope: "skill-source",
+      }),
+      skip: (request) => !isSkillSourceRateLimitedRequest(request),
+    }),
+  )
   .guard({ validateAuth: true })
   .get("/", listSkills.handler, {
     permissions: listSkills.config.permissions,

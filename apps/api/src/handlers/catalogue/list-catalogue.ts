@@ -178,7 +178,6 @@ const listCatalogue = createSafeRootHandler(
             name: agentSkills.name,
             description: agentSkills.description,
             license: agentSkills.license,
-            origin: agentSkills.origin,
           })
           .from(agentSkills)
           .where(
@@ -521,7 +520,6 @@ type CustomSkillRow = {
   name: string;
   description: string;
   license: string | null;
-  origin: AgentSkillOrigin;
 };
 
 type AppendCustomSkillsArgs = {
@@ -570,7 +568,7 @@ const buildCustomSkillCatalogueEntry = (
   displayName: skill.name,
   description: skill.description,
   author: organizationId,
-  license: skill.origin === "authored" ? "MIT" : skill.license,
+  license: skill.license,
   cost: "free",
   setup: "none",
   tags: [],

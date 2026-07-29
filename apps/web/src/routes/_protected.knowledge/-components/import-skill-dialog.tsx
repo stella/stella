@@ -33,25 +33,14 @@ const MAX_SELECTED_SKILLS = 20;
 
 type SkillScope = "team" | "private";
 
-type DiscoveredSkill = {
-  compatibility: string | null;
-  description: string;
-  integrity:
-    | { type: "content-hash"; value: string }
-    | { type: "github-commit"; value: string };
-  license: string | null;
-  name: string;
-  path: string | null;
-  sourceUrl: string;
-  version: string | null;
-};
+type DiscoverResponse = Awaited<
+  ReturnType<(typeof api.skills)["discover-url"]["post"]>
+>;
 
-type SkillDiscovery = {
-  commitSha: string | null;
-  invalidSkillCount: number;
-  repositoryUrl: string | null;
-  skills: DiscoveredSkill[];
-};
+type SkillDiscovery = Exclude<
+  NonNullable<Extract<DiscoverResponse, { data: unknown }>["data"]>,
+  Response
+>;
 
 type ImportSkillDialogProps = {
   canManageTeam: boolean;
