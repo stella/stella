@@ -16,6 +16,8 @@ const FOLIO_CITATION_PREFIX = "#folio:";
 const DECISION_CITATION_PREFIX = "#stella-decision=";
 const ENTITY_REFERENCE_PREFIX = "#stella-entity=";
 const WORKSPACE_REFERENCE_PREFIX = "#stella-workspace=";
+const SEARCH_SUMMARY_CITATION_TARGET_PREFIX = "#stella-search-summary=";
+const SEARCH_SUMMARY_CITATION_MARKER = /\[(?<number>[1-9]\d*)\]/gu;
 
 type InternalReferenceMode =
   | "references"
@@ -88,10 +90,11 @@ type CitationTransformContext = {
   internalCitationFallback: string;
   internalReferenceMode: InternalReferenceMode;
   nextFootnoteId: number;
-  style: Exclude<ChatExportCitationStyle, "inline">;
+  style: ChatExportCitationStyle;
   unverifiedCitationLabel: string;
   verifiedCitationCount: number;
   unverifiedCitationCount: number;
+  trustedSearchSummaryCitationByNumber: ReadonlyMap<number, string>;
 };
 
 const isVerifiedSearchSummaryTarget = (
@@ -157,14 +160,106 @@ const transformHyperlink = (
   return [...hyperlink.children, createFootnoteReference(id)];
 };
 
+const isTrustedSearchSummarySourceParagraph = (
+  paragraph: Paragraph,
+  context: CitationTransformContext,
+): boolean => {
+  if (!paragraph.listRendering?.isBullet) {
+    return false;
+  }
+  const first = paragraph.content.at(0);
+  if (first === undefined) {
+    return false;
+  }
+  let text = "";
+  if (first.type === "hyperlink") {
+    text = hyperlinkVisibleText(first);
+  } else if (first.type === "run") {
+    text = first.content
+      .filter((content) => content.type === "text")
+      .map((content) => content.text)
+      .join("");
+  }
+  const number = Number(
+    text.match(/^\[(?<number>[1-9]\d*)\]/u)?.groups?.number,
+  );
+  return context.trustedSearchSummaryCitationByNumber.has(number);
+};
+
+const transformSearchSummaryCitationMarkers = (
+  run: Run,
+  context: CitationTransformContext,
+): ParagraphContent[] => {
+  if (
+    context.style === "inline" ||
+    context.trustedSearchSummaryCitationByNumber.size === 0
+  ) {
+    return [run];
+  }
+
+  const transformed: ParagraphContent[] = [];
+  let changed = false;
+  for (const runContent of run.content) {
+    if (runContent.type !== "text") {
+      transformed.push({ ...run, content: [runContent] });
+      continue;
+    }
+
+    let textStart = 0;
+    for (const match of runContent.text.matchAll(
+      SEARCH_SUMMARY_CITATION_MARKER,
+    )) {
+      const number = Number(match.groups?.number);
+      const source = context.trustedSearchSummaryCitationByNumber.get(number);
+      if (source === undefined || match.index === undefined) {
+        continue;
+      }
+      changed = true;
+      const before = runContent.text.slice(textStart, match.index);
+      if (before.length > 0) {
+        transformed.push({ ...run, content: [{ type: "text", text: before }] });
+      }
+      if (context.style === "footnotes") {
+        const target = `${SEARCH_SUMMARY_CITATION_TARGET_PREFIX}${number}`;
+        let id = context.footnoteByTarget.get(target);
+        if (id === undefined) {
+          id = context.nextFootnoteId;
+          context.nextFootnoteId += 1;
+          context.footnoteByTarget.set(target, id);
+          context.verifiedCitationCount += 1;
+          context.footnotes.push(createFootnote(id, source));
+        }
+        transformed.push(createFootnoteReference(id));
+      }
+      textStart = match.index + match[0].length;
+    }
+    const remaining = runContent.text.slice(textStart);
+    if (remaining.length > 0) {
+      transformed.push({
+        ...run,
+        content: [{ type: "text", text: remaining }],
+      });
+    }
+  }
+  return changed ? transformed : [run];
+};
+
 const transformParagraph = (
   paragraph: Paragraph,
   context: CitationTransformContext,
 ): Paragraph => {
+  const isTrustedSourceParagraph = isTrustedSearchSummarySourceParagraph(
+    paragraph,
+    context,
+  );
   const content: ParagraphContent[] = [];
   for (const item of paragraph.content) {
-    if (item.type === "hyperlink") {
+    if (item.type === "hyperlink" && !isTrustedSourceParagraph) {
       content.push(...transformHyperlink(item, context));
+      continue;
+    }
+    if (item.type === "run" && !isTrustedSourceParagraph) {
+      content.push(...transformSearchSummaryCitationMarkers(item, context));
       continue;
     }
     content.push(item);
@@ -235,6 +330,11 @@ type StyleDocumentCitationsOptions = {
   folioSourceTitle: string | undefined;
   internalCitationFallback: string;
   internalReferenceMode: InternalReferenceMode;
+  /** Parsed from a persisted search-summary Sources block. This remains
+   * untrusted unless `internalReferenceMode` is `verified-citations`. */
+  trustedSearchSummaryCitationSources?:
+    | readonly { number: number; source: string }[]
+    | undefined;
   unverifiedCitationLabel: string;
 };
 
@@ -246,6 +346,20 @@ type StyleDocumentCitationsResult = {
   document: Document;
 };
 
+const trustedSearchSummaryCitationByNumber = (
+  internalReferenceMode: InternalReferenceMode,
+  sources: readonly { number: number; source: string }[] | undefined,
+): ReadonlyMap<number, string> => {
+  const citations = new Map<number, string>();
+  if (internalReferenceMode !== "verified-citations" || sources === undefined) {
+    return citations;
+  }
+  for (const { number, source } of sources) {
+    citations.set(number, source);
+  }
+  return citations;
+};
+
 export const styleDocumentCitationsWithCounts = (
   document: Document,
   style: ChatExportCitationStyle,
@@ -253,16 +367,10 @@ export const styleDocumentCitationsWithCounts = (
     folioSourceTitle,
     internalCitationFallback,
     internalReferenceMode,
+    trustedSearchSummaryCitationSources,
     unverifiedCitationLabel,
   }: StyleDocumentCitationsOptions,
 ): StyleDocumentCitationsResult => {
-  if (style === "inline") {
-    return {
-      citationCounts: { unverified: 0, verified: 0 },
-      document,
-    };
-  }
-
   const footnotes: Footnote[] = [];
   const existingFootnotes = document.package.footnotes;
   if (existingFootnotes !== undefined) {
@@ -279,7 +387,67 @@ export const styleDocumentCitationsWithCounts = (
     unverifiedCitationLabel,
     verifiedCitationCount: 0,
     unverifiedCitationCount: 0,
+    trustedSearchSummaryCitationByNumber: trustedSearchSummaryCitationByNumber(
+      internalReferenceMode,
+      trustedSearchSummaryCitationSources,
+    ),
   };
+  if (style === "inline") {
+    const countedTargets = new Set<string>();
+    const countInlineCitations = (block: BlockContent): void => {
+      switch (block.type) {
+        case "paragraph":
+          for (const content of block.content) {
+            if (
+              content.type === "hyperlink" &&
+              isCitationHyperlink(content, context.internalReferenceMode) &&
+              !countedTargets.has(citationTarget(content))
+            ) {
+              countedTargets.add(citationTarget(content));
+              if (
+                isVerifiedSearchSummaryTarget(
+                  citationTarget(content),
+                  context.internalReferenceMode,
+                )
+              ) {
+                context.verifiedCitationCount += 1;
+              } else {
+                context.unverifiedCitationCount += 1;
+              }
+            }
+          }
+          return;
+        case "table":
+          for (const row of block.rows) {
+            for (const cell of row.cells) {
+              for (const child of cell.content) {
+                countInlineCitations(child);
+              }
+            }
+          }
+          return;
+        case "blockSdt":
+          for (const child of block.content) {
+            countInlineCitations(child);
+          }
+          return;
+        default:
+          return unreachable(
+            `Unhandled document block: ${JSON.stringify(block)}`,
+          );
+      }
+    };
+    for (const block of document.package.document.content) {
+      countInlineCitations(block);
+    }
+    return {
+      citationCounts: {
+        unverified: context.unverifiedCitationCount,
+        verified: context.verifiedCitationCount,
+      },
+      document,
+    };
+  }
   const content = document.package.document.content.map((block) =>
     transformBlock(block, context),
   );

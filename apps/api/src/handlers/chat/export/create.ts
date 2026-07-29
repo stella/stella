@@ -220,6 +220,10 @@ const createMessageExport = createSafeRootHandler(
                 persistedSearchSources,
                 metadata.serverProvenance?.type === "search-summary",
               ),
+              trustedSearchSummaryCitationSources:
+                metadata.serverProvenance?.type === "search-summary"
+                  ? persistedSearchSources?.citationSources
+                  : undefined,
               unverifiedCitationLabel: citationLabels.unverifiedCitation,
             },
           );

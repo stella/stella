@@ -68,6 +68,7 @@ describe("extractPersistedSearchSummarySources", () => {
       ),
     ).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
+      citationSources: [],
       sourceCount: 2,
       sourcesMarkdown: "\n\n- Matter\n\n- Decision",
     });
@@ -80,8 +81,30 @@ describe("extractPersistedSearchSummarySources", () => {
       ),
     ).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
+      citationSources: [],
       sourceCount: 0,
       sourcesMarkdown: "",
+    });
+  });
+
+  test("maps generated claim markers to their displayed sources", () => {
+    expect(
+      extractPersistedSearchSummarySources(
+        [
+          "Summary [1][3].",
+          "",
+          "### Sources",
+          "",
+          "- [[1] Matter](#stella-workspace=matter): reason",
+          "",
+          "- [3] Contact: reason",
+        ].join("\n"),
+      ),
+    ).toMatchObject({
+      citationSources: [
+        { number: 1, source: "[1] Matter" },
+        { number: 3, source: "[3] Contact" },
+      ],
     });
   });
 
@@ -99,6 +122,7 @@ describe("extractPersistedSearchSummarySources", () => {
     );
     expect(sources).toEqual({
       bodyWithoutSources: "## Result\n\nSummary.",
+      citationSources: [],
       sourceCount: 1,
       sourcesMarkdown: "\n\n- Matter",
     });

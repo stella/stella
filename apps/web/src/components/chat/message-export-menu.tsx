@@ -48,6 +48,11 @@ const CITATION_STYLE_OPTIONS = [
 // stalled object-store fetch surfaces an error instead of hanging.
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 
+// DOCX generation happens synchronously before the API returns its presigned
+// download URL. Allow time for a substantial document, but still release the
+// pending state and surface the existing export error when the request stalls.
+const EXPORT_REQUEST_TIMEOUT_MS = 130_000;
+
 type MessageExportMenuProps = {
   threadRef: ChatThreadRef;
   messageId: string;
@@ -79,6 +84,9 @@ export const MessageExportMenu = ({
               threadRef.scope === "workspace"
                 ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
                 : {},
+            fetch: {
+              signal: AbortSignal.timeout(EXPORT_REQUEST_TIMEOUT_MS),
+            },
           },
         );
       const { downloadUrl, fileName } = unwrapEden(response);

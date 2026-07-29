@@ -93,6 +93,15 @@ const options = {
   unverifiedCitationLabel: "Unverified citation",
 } as const;
 
+const trustedSearchSummaryOptions = {
+  ...options,
+  internalReferenceMode: "verified-citations",
+  trustedSearchSummaryCitationSources: [
+    { number: 1, source: "[1] Matter" },
+    { number: 3, source: "[3] Decision" },
+  ],
+} as const;
+
 describe("styleDocumentCitations", () => {
   test("inline preserves every hyperlink and returns the same document", () => {
     const document = markdownToStellaDocument(markdown);
@@ -140,6 +149,66 @@ describe("styleDocumentCitations", () => {
     ).toEqual(["matter", "document"]);
   });
 
+  test("trusted search-summary claim markers become footnotes at the claims", () => {
+    const result = styleDocumentCitationsWithCounts(
+      markdownToStellaDocument(
+        [
+          "Claim supported by [1][3].",
+          "",
+          "### Sources",
+          "",
+          "- [[1] Matter](#stella-workspace=w): source reason",
+          "",
+          "- [[3] Decision](#stella-decision=3): source reason",
+        ].join("\n"),
+      ),
+      "footnotes",
+      trustedSearchSummaryOptions,
+    );
+
+    expect(result.citationCounts).toEqual({ unverified: 0, verified: 2 });
+    expect(
+      collectFootnoteReferenceIds(result.document.package.document.content),
+    ).toEqual([1, 2]);
+    expect(
+      result.document.package.footnotes?.map(({ content }) =>
+        collectText(content),
+      ),
+    ).toEqual(["[1] Matter", "[3] Decision"]);
+    expect(
+      collectHyperlinkTargets(result.document.package.document.content),
+    ).toEqual(["#stella-workspace=w", "#stella-decision=3"]);
+  });
+
+  test("none removes trusted search-summary claim markers", () => {
+    const styled = styleDocumentCitations(
+      markdownToStellaDocument("Claim supported by [1][3]."),
+      "none",
+      trustedSearchSummaryOptions,
+    );
+
+    expect(collectText(styled.package.document.content)).toBe(
+      "Claim supported by .",
+    );
+  });
+
+  test("untrusted marker maps cannot create verified search-summary footnotes", () => {
+    const result = styleDocumentCitationsWithCounts(
+      markdownToStellaDocument("Claim supported by [1]."),
+      "footnotes",
+      {
+        ...trustedSearchSummaryOptions,
+        internalReferenceMode: "unverified-citations",
+      },
+    );
+
+    expect(result.citationCounts).toEqual({ unverified: 0, verified: 0 });
+    expect(collectText(result.document.package.document.content)).toBe(
+      "Claim supported by [1].",
+    );
+    expect(result.document.package.footnotes).toEqual([]);
+  });
+
   test("legacy search-summary links are explicitly unverified", () => {
     const result = styleDocumentCitationsWithCounts(
       markdownToStellaDocument(
@@ -158,6 +227,20 @@ describe("styleDocumentCitations", () => {
         collectText(content),
       ),
     ).toEqual(["Unverified citation: matter", "Unverified citation: document"]);
+  });
+
+  test("inline counts distinct unverified citations without changing the document", () => {
+    const document = markdownToStellaDocument(
+      "[first](https://example.com) [repeat](https://example.com) [folio](#folio:A)",
+    );
+    const result = styleDocumentCitationsWithCounts(
+      document,
+      "inline",
+      options,
+    );
+
+    expect(result.document).toBe(document);
+    expect(result.citationCounts).toEqual({ unverified: 2, verified: 0 });
   });
 
   test("footnotes are real, destination-deduplicated, and recursive", () => {

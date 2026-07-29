@@ -10,6 +10,9 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 
 const SEARCH_SUMMARY_SOURCES_HEADING = "\n\n### Sources";
 
+const SEARCH_SUMMARY_CITATION_SOURCE =
+  /^- (?:\[\[(?<linkedNumber>[1-9]\d*)\] (?<linkedSource>.+?)\]\([^\n]*\)|\[(?<plainNumber>[1-9]\d*)\] (?<plainSource>.+?))(?::|$)/u;
+
 const isLegacySearchSummarySourceLine = (line: string): boolean =>
   line.length === 0 || line.startsWith("- ") || line.startsWith("  Excerpt: ");
 
@@ -48,8 +51,43 @@ export const composeExportMarkdown = (
 
 export type PersistedSearchSummarySources = {
   bodyWithoutSources: string;
+  citationSources: readonly PersistedSearchSummaryCitationSource[];
   sourceCount: number;
   sourcesMarkdown: string;
+};
+
+/** A source label assigned by the search-summary producer to a claim marker.
+ * The caller still requires server-owned provenance before treating this
+ * layout-derived mapping as verified. */
+export type PersistedSearchSummaryCitationSource = {
+  number: number;
+  source: string;
+};
+
+const extractPersistedSearchSummaryCitationSources = (
+  sourcesMarkdown: string,
+): PersistedSearchSummaryCitationSource[] => {
+  const sources: PersistedSearchSummaryCitationSource[] = [];
+  const seen = new Set<number>();
+  for (const line of sourcesMarkdown.split("\n")) {
+    const groups = line.match(SEARCH_SUMMARY_CITATION_SOURCE)?.groups;
+    if (groups === undefined) {
+      continue;
+    }
+    const number = Number(groups.linkedNumber ?? groups.plainNumber);
+    const source = groups.linkedSource ?? groups.plainSource;
+    if (
+      !Number.isSafeInteger(number) ||
+      number < 1 ||
+      !source ||
+      seen.has(number)
+    ) {
+      continue;
+    }
+    seen.add(number);
+    sources.push({ number, source: `[${number}] ${source}` });
+  }
+  return sources;
 };
 
 export const composePersistedSearchSummaryMarkdown = (
@@ -92,6 +130,7 @@ export const extractPersistedSearchSummarySources = (
       : sources.split("\n").filter((line) => line.startsWith("- ")).length;
   return {
     bodyWithoutSources: body.slice(0, headingIndex).trimEnd(),
+    citationSources: extractPersistedSearchSummaryCitationSources(sources),
     sourceCount,
     sourcesMarkdown: sources,
   };
