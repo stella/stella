@@ -126,7 +126,6 @@ export const MessageExportMenu = ({
             {t("common.export.title")}
           </Button>
         }
-        tooltip={t("common.export.title")}
       />
       <PopoverPopup align="end" className="w-64 p-3" side="top">
         <div className="flex flex-col gap-3">
