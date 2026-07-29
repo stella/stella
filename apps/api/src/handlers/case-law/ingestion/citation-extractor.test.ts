@@ -65,6 +65,13 @@ describe("extractCitations", () => {
     expect(texts).toContain("Pl. ÚS 12/94");
   });
 
+  test("extracts Slovak Constitutional Court citations without the senate dot", () => {
+    const text = "nález sp. zn. III ÚS 154/2011 z 13. 4. 2011";
+    const citations = extractCitations([{ index: 0, text }]);
+    expect(citations).toHaveLength(1);
+    expect(citations[0]?.citationText).toBe("III ÚS 154/2011");
+  });
+
   test("treats hyphen variants of a CJEU number as one citation and as self", () => {
     const text = "věc C‑128/22 a rozsudek C-128/22";
     const citations = extractCitations([{ index: 0, text }]);

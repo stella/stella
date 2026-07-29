@@ -40,11 +40,12 @@ const CITATION_PATTERNS: RegExp[] = [
   // ("MSP-725/2022") out.
   /sp\.\s*zn\.\s*(?<caseNumber>\p{L}{1,4}\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
-  // Czech Constitutional Court: "IV. ÚS 23/05", "Pl. ÚS 12/94" — the
-  // senate is a Roman numeral (or Pl. for the plenum), so the digit-led
-  // pattern above never matches these. The bare form also covers the
-  // "sp. zn. IV. ÚS 23/05" spelling.
-  /\b(?<caseNumber>(?:[IVX]{1,4}|Pl)\.\s*ÚS\s+\d{1,5}\/\d{2,4})(?!\d)/gu,
+  // Constitutional Courts: "IV. ÚS 23/05", "Pl. ÚS 12/94" (Czech, with a
+  // dot after the senate numeral) and "III ÚS 154/2011" (Slovak, without
+  // one). The senate is a Roman numeral (or Pl. for the plenum), so the
+  // digit-led pattern above never matches these; the bare form also
+  // covers the "sp. zn. IV. ÚS 23/05" spelling.
+  /\b(?<caseNumber>(?:[IVX]{1,4}|Pl)\.?\s*ÚS\s+\d{1,5}\/\d{2,4})(?!\d)/gu,
 
   // CJEU: "C-283/81", "T-13/99", "F-100/09" (Court of Justice, General
   // Court, Civil Service Tribunal), including the non-breaking hyphen
