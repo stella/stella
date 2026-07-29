@@ -38,9 +38,6 @@ const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT =
   SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT -
   1;
 const SEARCH_PREVIEW_BODY_CHUNK_STEP = 24_000;
-const SEARCH_PREVIEW_BODY_CHUNK_LIMIT = 8;
-const SEARCH_PREVIEW_BODY_MAX_CHUNK_START =
-  1 + (SEARCH_PREVIEW_BODY_CHUNK_LIMIT - 1) * SEARCH_PREVIEW_BODY_CHUNK_STEP;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 
 type PreviewTextConfig = {
@@ -92,11 +89,21 @@ const previewBodyExcerpt = ({
           FROM chunk_start
           FOR ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}
         )
-        FROM generate_series(
-          1,
-          ${SEARCH_PREVIEW_BODY_MAX_CHUNK_START},
-          ${SEARCH_PREVIEW_BODY_CHUNK_STEP}
-        ) AS chunks(chunk_start)
+        FROM (
+          SELECT generate_series(
+            1,
+            greatest(
+              char_length(${body}) - ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT} + 1,
+              1
+            ),
+            ${SEARCH_PREVIEW_BODY_CHUNK_STEP}
+          ) AS chunk_start
+          UNION
+          SELECT greatest(
+            char_length(${body}) - ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT} + 1,
+            1
+          )
+        ) AS chunks
         WHERE to_tsvector(
             ${regconfig},
             ${normalize(sql`

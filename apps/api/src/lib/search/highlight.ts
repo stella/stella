@@ -7,6 +7,7 @@ import { normalizeSearchText, stripDiacritics } from "@stll/text-normalize";
 export const HIGHLIGHT_START = "__HL_START__";
 export const HIGHLIGHT_STOP = "__HL_STOP__";
 export const SEARCH_PREVIEW_FRAGMENT_DELIMITER = "__HL_FRAGMENT__";
+export const SEARCH_PREVIEW_FRAGMENT_SEPARATOR = "...\n\n";
 
 // `MaxFragments=3` splits the headline into up to 3 separate
 // excerpts joined by `...`, surfacing more occurrences without
@@ -28,29 +29,115 @@ const SEARCH_WHITESPACE =
   /^[ \t\n\v\f\r\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/u;
 const NORMALIZATION_UNIT =
   /[ \t\n\v\f\r\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|\P{Mark}\p{Mark}*|\p{Mark}+/gu;
-
+// PostgreSQL's unaccent.rules transliterates common Latin letters that
+// Unicode NFD leaves intact. Keep the restoration key aligned with the
+// normalized text passed to ts_headline.
+const POSTGRES_UNACCENT_LATIN_RE = /[ÆÐØÞßæðøþĐđĦħıĸŁłŉŊŋŒœŦŧ]/gu;
+const POSTGRES_UNACCENT_LATIN_FOLDS: Readonly<Record<string, string>> = {
+  Æ: "AE",
+  Ð: "D",
+  Ø: "O",
+  Þ: "TH",
+  ß: "ss",
+  æ: "ae",
+  ð: "d",
+  ø: "o",
+  þ: "th",
+  Đ: "D",
+  đ: "d",
+  Ħ: "H",
+  ħ: "h",
+  ı: "i",
+  ĸ: "q",
+  Ł: "L",
+  ł: "l",
+  ŉ: "'n",
+  Ŋ: "N",
+  ŋ: "n",
+  Œ: "OE",
+  œ: "oe",
+  Ŧ: "T",
+  ŧ: "t",
+};
 type SourceSpan = {
   end: number;
   start: number;
 };
 
+type SourceMapping =
+  | {
+      normalizedEnd: number;
+      normalizedStart: number;
+      sourceEnd: number;
+      sourceStart: number;
+      type: "atomic";
+    }
+  | {
+      normalizedEnd: number;
+      normalizedStart: number;
+      sourceEnd: number;
+      sourceStart: number;
+      type: "linear";
+    };
+
 type NormalizedSource = {
-  spans: SourceSpan[];
+  mappings: SourceMapping[];
   text: string;
 };
 
 const normalizePreviewUnit = (text: string, useUnaccent: boolean): string => {
   const normalized = normalizeSearchText(text);
-  return useUnaccent ? stripDiacritics(normalized) : normalized;
+  if (!useUnaccent) {
+    return normalized;
+  }
+  return stripDiacritics(normalized).replace(
+    POSTGRES_UNACCENT_LATIN_RE,
+    (value) => POSTGRES_UNACCENT_LATIN_FOLDS[value] ?? value,
+  );
 };
 
-const normalizeSourceWithSpans = (
+const normalizeSourceWithMappings = (
   source: string,
   useUnaccent: boolean,
 ): NormalizedSource => {
   let text = "";
-  const spans: SourceSpan[] = [];
+  const mappings: SourceMapping[] = [];
   let pendingWhitespace: SourceSpan | null = null;
+
+  const append = (normalized: string, span: SourceSpan) => {
+    const normalizedStart = text.length;
+    text += normalized;
+    const normalizedEnd = text.length;
+    const isLinear = normalized.length === span.end - span.start;
+    const previous = mappings.at(-1);
+    if (
+      isLinear &&
+      previous?.type === "linear" &&
+      previous.normalizedEnd === normalizedStart &&
+      previous.sourceEnd === span.start
+    ) {
+      previous.normalizedEnd = normalizedEnd;
+      previous.sourceEnd = span.end;
+      return;
+    }
+    if (isLinear) {
+      mappings.push({
+        type: "linear",
+        normalizedStart,
+        normalizedEnd,
+        sourceStart: span.start,
+        sourceEnd: span.end,
+      });
+      return;
+    }
+    mappings.push({
+      type: "atomic",
+      normalizedStart,
+      normalizedEnd,
+      sourceStart: span.start,
+      sourceEnd: span.end,
+    });
+  };
 
   for (const match of source.matchAll(NORMALIZATION_UNIT)) {
     const value = match[0];
@@ -68,19 +155,49 @@ const normalizeSourceWithSpans = (
       continue;
     }
     if (pendingWhitespace && text.length > 0) {
-      text += " ";
-      spans.push(pendingWhitespace);
+      append(" ", pendingWhitespace);
     }
     pendingWhitespace = null;
-    text += normalized;
-    let remainingCodeUnits = normalized.length;
-    while (remainingCodeUnits > 0) {
-      spans.push(span);
-      remainingCodeUnits -= 1;
-    }
+    append(normalized, span);
   }
 
-  return { spans, text };
+  return { mappings, text };
+};
+
+const sourceSpanAt = (
+  normalizedSource: NormalizedSource,
+  normalizedIndex: number,
+): SourceSpan | null => {
+  if (normalizedIndex < 0 || normalizedIndex >= normalizedSource.text.length) {
+    return null;
+  }
+
+  let low = 0;
+  let high = normalizedSource.mappings.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const mapping = normalizedSource.mappings.at(middle);
+    if (!mapping) {
+      return null;
+    }
+    if (normalizedIndex < mapping.normalizedStart) {
+      high = middle - 1;
+      continue;
+    }
+    if (normalizedIndex >= mapping.normalizedEnd) {
+      low = middle + 1;
+      continue;
+    }
+    if (mapping.type === "atomic") {
+      return { start: mapping.sourceStart, end: mapping.sourceEnd };
+    }
+    const offset = normalizedIndex - mapping.normalizedStart;
+    return {
+      start: mapping.sourceStart + offset,
+      end: mapping.sourceStart + offset + 1,
+    };
+  }
+  return null;
 };
 
 type ParsedHeadlineFragment = {
@@ -144,8 +261,8 @@ const restoreFragment = ({
     return null;
   }
   const normalizedEnd = normalizedStart + fragment.text.length;
-  const firstSpan = normalizedSource.spans.at(normalizedStart);
-  const lastSpan = normalizedSource.spans.at(normalizedEnd - 1);
+  const firstSpan = sourceSpanAt(normalizedSource, normalizedStart);
+  const lastSpan = sourceSpanAt(normalizedSource, normalizedEnd - 1);
   if (!firstSpan || !lastSpan) {
     return null;
   }
@@ -154,10 +271,15 @@ const restoreFragment = ({
   const sourceEnd = lastSpan.end;
   let text = source.slice(sourceStart, sourceEnd);
   const restoredHighlights = fragment.highlights.flatMap((highlight) => {
-    const firstHighlightSpan = normalizedSource.spans.at(
+    if (highlight.start >= highlight.end) {
+      return [];
+    }
+    const firstHighlightSpan = sourceSpanAt(
+      normalizedSource,
       normalizedStart + highlight.start,
     );
-    const lastHighlightSpan = normalizedSource.spans.at(
+    const lastHighlightSpan = sourceSpanAt(
+      normalizedSource,
       normalizedStart + highlight.end - 1,
     );
     return firstHighlightSpan && lastHighlightSpan
@@ -180,6 +302,59 @@ const restoreFragment = ({
   return { nextSearchFrom: normalizedEnd, text };
 };
 
+const truncateHighlightAware = (text: string, maxLength: number): string => {
+  if (maxLength <= 0) {
+    return "";
+  }
+
+  let cursor = 0;
+  let highlightOpen = false;
+  let highlightSuppressed = false;
+  let truncated = "";
+  while (cursor < text.length) {
+    if (text.startsWith(HIGHLIGHT_START, cursor)) {
+      cursor += HIGHLIGHT_START.length;
+      if (
+        !highlightOpen &&
+        !highlightSuppressed &&
+        truncated.length + HIGHLIGHT_START.length + HIGHLIGHT_STOP.length <=
+          maxLength
+      ) {
+        truncated += HIGHLIGHT_START;
+        highlightOpen = true;
+      } else {
+        highlightSuppressed = true;
+      }
+      continue;
+    }
+    if (text.startsWith(HIGHLIGHT_STOP, cursor)) {
+      cursor += HIGHLIGHT_STOP.length;
+      if (highlightOpen) {
+        truncated += HIGHLIGHT_STOP;
+        highlightOpen = false;
+      }
+      highlightSuppressed = false;
+      continue;
+    }
+
+    const codePoint = text.codePointAt(cursor);
+    if (codePoint === undefined) {
+      break;
+    }
+    const value = String.fromCodePoint(codePoint);
+    const reservedLength = highlightOpen ? HIGHLIGHT_STOP.length : 0;
+    if (truncated.length + value.length + reservedLength > maxLength) {
+      break;
+    }
+    truncated += value;
+    cursor += value.length;
+  }
+  if (highlightOpen) {
+    truncated += HIGHLIGHT_STOP;
+  }
+  return truncated;
+};
+
 export const restoreOriginalSearchPreview = ({
   headline,
   maxLength,
@@ -191,23 +366,31 @@ export const restoreOriginalSearchPreview = ({
   source: string;
   useUnaccent: boolean;
 }): string => {
-  const normalizedSource = normalizeSourceWithSpans(source, useUnaccent);
+  const normalizedSource = normalizeSourceWithMappings(source, useUnaccent);
   const restored: string[] = [];
   let searchFrom = 0;
   for (const rawFragment of headline.split(SEARCH_PREVIEW_FRAGMENT_DELIMITER)) {
+    const parsedFragment = parseHeadlineFragment(rawFragment);
+    if (!parsedFragment.text) {
+      continue;
+    }
     const fragment = restoreFragment({
-      fragment: parseHeadlineFragment(rawFragment),
+      fragment: parsedFragment,
       normalizedSource,
       searchFrom,
       source,
     });
     if (!fragment) {
-      return source.slice(0, maxLength);
+      break;
     }
     restored.push(fragment.text);
     searchFrom = fragment.nextSearchFrom;
   }
-  return restored.join("...\n\n").slice(0, maxLength);
+  const content =
+    restored.length > 0
+      ? restored.join(SEARCH_PREVIEW_FRAGMENT_SEPARATOR)
+      : source;
+  return truncateHighlightAware(content, maxLength);
 };
 
 /** HTML-escape text, then replace highlight markers with `<mark>` tags. */

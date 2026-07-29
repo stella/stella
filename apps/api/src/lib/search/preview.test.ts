@@ -18,9 +18,6 @@ const SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT = 50_000;
 const SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT = 1000;
 const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT = 48_999;
 const SEARCH_PREVIEW_BODY_CHUNK_STEP = 24_000;
-const SEARCH_PREVIEW_BODY_CHUNK_LIMIT = 8;
-const SEARCH_PREVIEW_BODY_MAX_CHUNK_START =
-  1 + (SEARCH_PREVIEW_BODY_CHUNK_LIMIT - 1) * SEARCH_PREVIEW_BODY_CHUNK_STEP;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 
 const compilePreview = (
@@ -41,23 +38,27 @@ const compilePreview = (
 };
 
 describe("search preview authorization scope", () => {
-  test("bounds both source processing and response characters", () => {
+  test("bounds the selected source while searching the entire body", () => {
     const compiled = compilePreview("document");
     expect(compiled.params).toContain(SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT);
     expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHARACTER_LIMIT);
     expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHUNK_STEP);
-    expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_MAX_CHUNK_START);
     expect(compiled.params).toContain(SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT);
     expect(compiled.sql).toContain("CASE");
     expect(compiled.sql).toContain("generate_series");
+    expect(compiled.sql).toContain("char_length(sd.searchable_text)");
+    expect(compiled.sql).toContain("greatest");
+    expect(compiled.sql).toContain("UNION");
     expect(compiled.sql).toContain("to_tsvector");
     expect(compiled.sql).toContain("|| ' ' ||");
-    expect(compiled.sql).not.toContain("char_length");
     expect(
       SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT +
         1 +
         SEARCH_PREVIEW_BODY_CHARACTER_LIMIT,
     ).toBe(SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT);
+    expect(SEARCH_PREVIEW_BODY_CHUNK_STEP).toBeLessThanOrEqual(
+      SEARCH_PREVIEW_BODY_CHARACTER_LIMIT,
+    );
   });
 
   test("matches document passages with the indexed normalization and config", () => {
