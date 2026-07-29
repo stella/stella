@@ -22,6 +22,26 @@ const unsafeEntity = sql`SELECT * FROM search_documents sd WHERE sd.organization
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL-equivalent uppercase identifiers are protected
 const unsafeUppercaseEntity = sql`SELECT * FROM SEARCH_DOCUMENTS sd`;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves schema qualification cannot hide a private projection
+const unsafeQualifiedEntity = sql`SELECT * FROM public.search_documents sd`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves quoted identifiers cannot hide a private projection
+const unsafeQuotedEntity = sql`
+  SELECT * FROM "public"."search_documents" AS "sd"
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves comma-form relations cannot hide a private projection
+const unsafeCommaFormEntity = sql`
+  SELECT *
+  FROM entities e, search_documents sd
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves comma-form interpolated relations cannot hide a private projection
+const unsafeCommaFormInterpolatedEntity = sql`
+  SELECT *
+  FROM entities e, ${searchDocuments} sd
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an interpolated private schema table cannot bypass the guard
 const unsafeInterpolatedEntity = sql`SELECT * FROM ${searchDocuments} sd`;
 
@@ -100,6 +120,30 @@ const rawEntityTemplate = `SELECT * FROM search_documents sd`;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves const-bound static template literals cannot bypass sql.raw inspection
 const unsafeRawTemplateEntity = sql.raw(rawEntityTemplate);
+
+const privateRawRelation = sql.raw("search_documents");
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves raw relation fragments preserve SQL lexical continuity
+const unsafeRawRelationFragment = sql`
+  SELECT * FROM ${privateRawRelation} sd
+`;
+
+const relationNameStringLiteral = sql`
+  SELECT 'FROM search_documents sd'
+`;
+const relationNameLineComment = sql`
+  SELECT 1
+  -- FROM search_documents sd
+`;
+const relationNameBlockComment = sql`
+  SELECT 1 /* FROM search_documents sd */
+`;
+const relationNameDollarQuote = sql`
+  SELECT $note$FROM search_documents sd$note$
+`;
+const distinctQuotedRelation = sql`
+  SELECT * FROM "SEARCH_DOCUMENTS" sd
+`;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves opaque helpers expose each SQL-bearing argument as an alternative
 const unsafeOpaqueHelperCall = sql`
@@ -212,6 +256,12 @@ const unsafeScopeInCaseCondition = sql`
   END
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a function argument is not a dominating query predicate
+const unsafeScopeInFunctionArgument = sql`
+  SELECT * FROM search_documents sd
+  WHERE coalesce(true, true ${entityWorkspaceFilter})
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a postfix false test cannot invert an approved scope
 const unsafeScopeTestedAsFalse = sql`
   SELECT * FROM search_documents sd
@@ -290,6 +340,16 @@ const scopedAfterDollarQuote = sql`
 const scopedParenthesizedFilter = sql`
   SELECT * FROM search_documents sd
   WHERE (true AND (${entityWorkspaceFilter}))
+`;
+
+const scopedAfterFunctionArgument = sql`
+  SELECT * FROM search_documents sd
+  WHERE coalesce(false, false) ${entityWorkspaceFilter}
+`;
+
+const scopedAfterNestedQuery = sql`
+  SELECT * FROM search_documents sd
+  WHERE EXISTS (SELECT 1) ${entityWorkspaceFilter}
 `;
 
 const scopedTestedAsTrue = sql`
@@ -375,6 +435,10 @@ const publicCaseLaw = sql`SELECT * FROM case_law_search_documents clsd`;
 void [
   unsafeEntity,
   unsafeUppercaseEntity,
+  unsafeQualifiedEntity,
+  unsafeQuotedEntity,
+  unsafeCommaFormEntity,
+  unsafeCommaFormInterpolatedEntity,
   unsafeInterpolatedEntity,
   unsafeAliasedInterpolatedEntity,
   unsafeChatCount,
@@ -390,6 +454,12 @@ void [
   unsafeJoinedPrivateFragment,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
+  unsafeRawRelationFragment,
+  relationNameStringLiteral,
+  relationNameLineComment,
+  relationNameBlockComment,
+  relationNameDollarQuote,
+  distinctQuotedRelation,
   unsafeOpaqueHelperCall,
   unsafeConditionalPrivateFragment,
   unsafeLogicalPrivateFragment,
@@ -405,6 +475,7 @@ void [
   unsafeComposedAggregateFilterScope,
   unsafeScopeInOrBranch,
   unsafeScopeInCaseCondition,
+  unsafeScopeInFunctionArgument,
   unsafeScopeTestedAsFalse,
   unsafeScopeComparedToFalse,
   unsafeScopeDistinctFromTrue,
@@ -418,6 +489,8 @@ void [
   scopedAfterLineComment,
   scopedAfterDollarQuote,
   scopedParenthesizedFilter,
+  scopedAfterFunctionArgument,
+  scopedAfterNestedQuery,
   scopedTestedAsTrue,
   scopedNestedPrivateRead,
   scopedComposedRead,

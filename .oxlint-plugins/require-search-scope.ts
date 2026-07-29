@@ -184,6 +184,25 @@ type SqlTemplateToken =
   | { type: "expression"; value: unknown }
   | { type: "text"; value: string };
 
+const mergeAdjacentSqlTextTokens = (
+  tokens: readonly SqlTemplateToken[],
+): SqlTemplateToken[] => {
+  const merged: SqlTemplateToken[] = [];
+  for (const token of tokens) {
+    const previous = merged.at(-1);
+    if (token.type === "text" && previous?.type === "text") {
+      previous.value += token.value;
+      continue;
+    }
+    if (token.type === "text") {
+      merged.push({ type: "text", value: token.value });
+    } else {
+      merged.push({ type: "expression", value: token.value });
+    }
+  }
+  return merged;
+};
+
 const SQL_ALIAS_STOP_WORDS = new Set([
   "cross",
   "except",
@@ -211,26 +230,105 @@ const normalizeProjectionAlias = (alias: string | undefined): string | null => {
   if (!alias) {
     return null;
   }
+  if (alias.startsWith('"') && alias.endsWith('"')) {
+    return alias.slice(1, -1).replaceAll('""', '"');
+  }
   const normalized = alias.toLowerCase();
   return SQL_ALIAS_STOP_WORDS.has(normalized) ? null : normalized;
+};
+
+const SQL_IDENTIFIER_PATTERN = `(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)`;
+const SQL_RELATION_PATH_PATTERN =
+  `${SQL_IDENTIFIER_PATTERN}` + `(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*`;
+const SQL_RELATION_REFERENCE = new RegExp(
+  `(?:\\b(?:from|join|table)\\s+|,\\s*)` +
+    `(${SQL_RELATION_PATH_PATTERN})` +
+    `(?:\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN}))?`,
+  "giu",
+);
+const SQL_FROM_CLAUSE_BOUNDARY =
+  /\b(?:except|from|group|having|intersect|limit|offset|order|returning|union|where|window)\b/giu;
+
+const normalizeSqlIdentifier = (identifier: string): string => {
+  if (identifier.startsWith('"') && identifier.endsWith('"')) {
+    return identifier.slice(1, -1).replaceAll('""', '"');
+  }
+  return identifier.toLowerCase();
+};
+
+const finalRelationIdentifier = (path: string): string | null => {
+  const identifiers = path.match(new RegExp(SQL_IDENTIFIER_PATTERN, "gu"));
+  const finalIdentifier = identifiers?.at(-1);
+  return finalIdentifier === undefined
+    ? null
+    : normalizeSqlIdentifier(finalIdentifier);
+};
+
+const commaIntroducesFromRelation = (
+  text: string,
+  commaIndex: number,
+): boolean => {
+  const precedingText = text
+    .slice(0, commaIndex)
+    .replaceAll(/"(?:[^"]|"")*"/gu, (identifier) =>
+      " ".repeat(identifier.length),
+    );
+  const boundaries = [...precedingText.matchAll(SQL_FROM_CLAUSE_BOUNDARY)];
+  const latestBoundary = boundaries.at(-1);
+  if (latestBoundary?.at(0)?.toLowerCase() !== "from") {
+    return false;
+  }
+  const fromIndex = latestBoundary.index;
+  if (fromIndex === undefined) {
+    return false;
+  }
+  let parenthesisDepth = 0;
+  for (const character of precedingText.slice(fromIndex)) {
+    if (character === "(") {
+      parenthesisDepth += 1;
+    } else if (character === ")") {
+      parenthesisDepth -= 1;
+    }
+  }
+  return parenthesisDepth === 0;
 };
 
 const projectionReadAliases = (
   text: string,
   table: string,
+  initialLexState: SqlLexState,
 ): (string | null)[] => {
-  const matches = text.matchAll(
-    new RegExp(
-      `\\b(?:from|join|table)\\s+${table}\\b` +
-        `(?:\\s+(?:as\\s+)?([A-Za-z_][A-Za-z0-9_]*))?`,
-      "giu",
-    ),
-  );
-  return [...matches].map((match) => normalizeProjectionAlias(match.at(1)));
+  const structuralText = sqlStructuralText(text, initialLexState);
+  const aliases: (string | null)[] = [];
+  for (const match of structuralText.matchAll(SQL_RELATION_REFERENCE)) {
+    const relationPath = match.at(1);
+    const fullMatch = match.at(0);
+    if (
+      relationPath === undefined ||
+      fullMatch === undefined ||
+      finalRelationIdentifier(relationPath) !== table
+    ) {
+      continue;
+    }
+    if (
+      fullMatch.trimStart().startsWith(",") &&
+      (match.index === undefined ||
+        !commaIntroducesFromRelation(structuralText, match.index))
+    ) {
+      continue;
+    }
+    aliases.push(normalizeProjectionAlias(match.at(2)));
+  }
+  return aliases;
 };
 
 const leadingProjectionAlias = (text: string): string | null => {
-  const match = text.match(/^\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*)\b/iu);
+  const match = text.match(
+    new RegExp(
+      `^\\s+(?:as\\s+)?(${SQL_IDENTIFIER_PATTERN})(?=\\s|$|[,;)])`,
+      "iu",
+    ),
+  );
   return normalizeProjectionAlias(match?.at(1));
 };
 
@@ -246,7 +344,13 @@ const hasProjectionReadIntroducer = (
     }
     precedingText = token.value + precedingText;
   }
-  return /\b(?:from|join|table)\s*$/iu.test(precedingText);
+  if (/\b(?:from|join|table)\s*$/iu.test(precedingText)) {
+    return true;
+  }
+  const commaIndex = precedingText.search(/,\s*$/u);
+  return (
+    commaIndex >= 0 && commaIntroducesFromRelation(precedingText, commaIndex)
+  );
 };
 
 type SqlLexState =
@@ -337,6 +441,104 @@ const sqlLexStateAfter = (
   return state;
 };
 
+const sqlStructuralText = (text: string, initialState: SqlLexState): string => {
+  let state = initialState;
+  let structuralText = "";
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+    switch (state.type) {
+      case "normal":
+        if (char === "-" && next === "-") {
+          structuralText += "  ";
+          state = { type: "line-comment" };
+          index += 1;
+        } else if (char === "/" && next === "*") {
+          structuralText += "  ";
+          state = { type: "block-comment", depth: 1 };
+          index += 1;
+        } else if (char === "'") {
+          structuralText += " ";
+          state = { type: "single-quote" };
+        } else if (char === '"') {
+          structuralText += char;
+          state = { type: "double-quote" };
+        } else if (char === "$") {
+          const delimiter = text.slice(index).match(DOLLAR_QUOTE_START)?.at(0);
+          if (delimiter) {
+            structuralText += " ".repeat(delimiter.length);
+            state = { type: "dollar-quote", delimiter };
+            index += delimiter.length - 1;
+          } else {
+            structuralText += char;
+          }
+        } else {
+          structuralText += char;
+        }
+        break;
+      case "line-comment":
+        structuralText += char === "\n" || char === "\r" ? char : " ";
+        if (char === "\n" || char === "\r") {
+          state = { type: "normal" };
+        }
+        break;
+      case "block-comment":
+        structuralText += " ";
+        if (char === "/" && next === "*") {
+          structuralText += " ";
+          state = { type: "block-comment", depth: state.depth + 1 };
+          index += 1;
+        } else if (char === "*" && next === "/") {
+          structuralText += " ";
+          state =
+            state.depth === 1
+              ? { type: "normal" }
+              : { type: "block-comment", depth: state.depth - 1 };
+          index += 1;
+        }
+        break;
+      case "single-quote":
+        structuralText += " ";
+        if (char === "\\" && next !== undefined) {
+          structuralText += " ";
+          index += 1;
+        } else if (char === "'" && next === "'") {
+          structuralText += " ";
+          index += 1;
+        } else if (char === "'") {
+          state = { type: "normal" };
+        }
+        break;
+      case "double-quote":
+        structuralText += char;
+        if (char === "\\" && next !== undefined) {
+          structuralText += next;
+          index += 1;
+        } else if (char === '"' && next === '"') {
+          structuralText += next;
+          index += 1;
+        } else if (char === '"') {
+          state = { type: "normal" };
+        }
+        break;
+      case "dollar-quote":
+        if (text.startsWith(state.delimiter, index)) {
+          structuralText += " ".repeat(state.delimiter.length);
+          index += state.delimiter.length - 1;
+          state = { type: "normal" };
+        } else {
+          structuralText += char === "\n" || char === "\r" ? char : " ";
+        }
+        break;
+      default: {
+        const exhaustive: never = state;
+        return exhaustive;
+      }
+    }
+  }
+  return structuralText;
+};
+
 type SqlBranchTextPart = {
   endsBranch: boolean;
   text: string;
@@ -404,6 +606,11 @@ const sqlQueryNestingEvents = (
       }
       events.push({ type: "end-query", queryId: frame.queryId });
       state.currentQueryId = frame.parentQueryId;
+      events.push({
+        type: "text",
+        queryId: state.currentQueryId,
+        text: matchText,
+      });
       partStart = scanCursor;
       continue;
     }
@@ -475,6 +682,8 @@ type SqlScopeContext = {
   caseOuterClause: SqlScopeClause | null;
   clause: SqlScopeClause;
   currentJoinIsOuter: boolean;
+  functionArgumentDepth: number;
+  functionArgumentOuterClause: SqlScopeClause | null;
   hasNonConjunctiveFilter: boolean;
   pendingJoinIsOuter: boolean;
   pendingAggregateFilter: boolean;
@@ -487,6 +696,8 @@ const INITIAL_SQL_SCOPE_CONTEXT: SqlScopeContext = {
   caseOuterClause: null,
   clause: "non-filtering",
   currentJoinIsOuter: false,
+  functionArgumentDepth: 0,
+  functionArgumentOuterClause: null,
   hasNonConjunctiveFilter: false,
   pendingJoinIsOuter: false,
   pendingAggregateFilter: false,
@@ -565,6 +776,40 @@ const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
 const SQL_SCOPE_CONTEXT_TOKEN =
   /[()]|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|values|where|window)\b/giu;
 
+const SQL_BOOLEAN_GROUPING_PREFIXES = new Set([
+  "and",
+  "else",
+  "having",
+  "not",
+  "on",
+  "or",
+  "then",
+  "when",
+  "where",
+]);
+
+const isFunctionArgumentOpening = (
+  text: string,
+  index: number,
+  initialLexState: SqlLexState,
+): boolean => {
+  const prefix = sqlStructuralText(text.slice(0, index), initialLexState);
+  const identifier = prefix
+    .match(
+      new RegExp(
+        `(${SQL_IDENTIFIER_PATTERN})(?:\\s*\\.\\s*${SQL_IDENTIFIER_PATTERN})*\\s*$`,
+        "u",
+      ),
+    )
+    ?.at(1);
+  if (identifier === undefined) {
+    return false;
+  }
+  return !SQL_BOOLEAN_GROUPING_PREFIXES.has(
+    normalizeSqlIdentifier(identifier).toLowerCase(),
+  );
+};
+
 const sqlScopeContextAfter = (
   text: string,
   initialLexState: SqlLexState,
@@ -614,6 +859,17 @@ const sqlScopeContextAfter = (
         });
       } else if (context.aggregateFilterDepth > 0) {
         context.aggregateFilterDepth += 1;
+      } else if (context.functionArgumentDepth > 0) {
+        context.functionArgumentDepth += 1;
+      } else if (
+        context.clause !== "non-filtering" &&
+        isFunctionArgumentOpening(text, matchIndex, initialLexState)
+      ) {
+        Object.assign(context, {
+          clause: "non-filtering",
+          functionArgumentDepth: 1,
+          functionArgumentOuterClause: context.clause,
+        });
       }
       continue;
     }
@@ -626,6 +882,14 @@ const sqlScopeContextAfter = (
         });
       } else if (context.aggregateFilterDepth > 1) {
         context.aggregateFilterDepth -= 1;
+      } else if (context.functionArgumentDepth === 1) {
+        Object.assign(context, {
+          clause: context.functionArgumentOuterClause ?? "non-filtering",
+          functionArgumentDepth: 0,
+          functionArgumentOuterClause: null,
+        });
+      } else if (context.functionArgumentDepth > 1) {
+        context.functionArgumentDepth -= 1;
       }
       continue;
     }
@@ -1051,7 +1315,8 @@ export default {
           node: AstNode,
           tokenPaths: SqlTemplateToken[][],
         ): void => {
-          const text = tokenPaths
+          const mergedTokenPaths = tokenPaths.map(mergeAdjacentSqlTextTokens);
+          const text = mergedTokenPaths
             .flat()
             .filter(
               (token): token is Extract<SqlTemplateToken, { type: "text" }> =>
@@ -1067,7 +1332,7 @@ export default {
             PRIVATE_SEARCH_PROJECTIONS,
           )) {
             let hasUnscopedQuery = false;
-            for (const tokens of tokenPaths) {
+            for (const tokens of mergedTokenPaths) {
               const queryStates = new Map<number, ProjectionQueryState>();
               const queryNestingState: SqlQueryNestingState = {
                 currentQueryId: 0,
@@ -1102,7 +1367,11 @@ export default {
                       event.text,
                       queryState.sqlLexState,
                     )) {
-                      const aliases = projectionReadAliases(part.text, table);
+                      const aliases = projectionReadAliases(
+                        part.text,
+                        table,
+                        queryState.sqlLexState,
+                      );
                       queryState.protectedReadCount += aliases.length;
                       queryState.unscopedReadCount += aliases.length;
                       queryState.scopeEligibleReadCount += aliases.filter(
