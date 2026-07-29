@@ -112,6 +112,21 @@ const stripPrefix = (text: string): string => {
   return trimmed;
 };
 
+/**
+ * Canonical comparison key for a citation or case number: prefix
+ * stripped, typographic dashes normalized, case-folded. Two spellings
+ * of the same case number share one key.
+ */
+export const bareCitationKey = (text: string): string =>
+  normalizeDashes(stripPrefix(text.trim()))
+    .toLowerCase()
+    .replaceAll(/\s+/gu, " ")
+    // After whitespace collapses, slash spacing is at most one space per
+    // side; plain string replaces keep the scan linear.
+    .replaceAll(" /", "/")
+    .replaceAll("/ ", "/")
+    .trim();
+
 type DecisionIdentity = {
   caseNumber: string;
   ecli?: string | null;
@@ -133,10 +148,7 @@ export const isSelfCitation = (
   }
 
   // Compare bare case numbers (case-insensitive)
-  const bareCitation = normalizeDashes(stripPrefix(trimmed)).toLowerCase();
-  const bareSelf = normalizeDashes(decision.caseNumber).toLowerCase().trim();
-
-  return bareCitation === bareSelf;
+  return bareCitationKey(trimmed) === bareCitationKey(decision.caseNumber);
 };
 
 /**

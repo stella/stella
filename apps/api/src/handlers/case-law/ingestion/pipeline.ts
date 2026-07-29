@@ -39,6 +39,7 @@ import {
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
+import { publisherCitationGap } from "@/api/handlers/case-law/ingestion/citation-recall";
 import { storedDecisionSignal } from "@/api/handlers/case-law/ingestion/parsers/validate-ast";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import {
@@ -234,6 +235,12 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
     sourceUrl: strip(r.sourceUrl),
     documentUrl: strip(r.documentUrl),
     metadata: sanitizeMetadata(r.metadata),
+    // Publisher-supplied case numbers are compared against citations
+    // extracted from the sanitized text; an unsanitized zero-width char
+    // here would break that key equality.
+    publisherCitedCases: r.publisherCitedCases?.map((cited) =>
+      stripDangerousChars(cited),
+    ),
     // Adapter-supplied sections come from court HTML like every other
     // field and must go through the same strip. The fallback path was
     // safe only incidentally: `segmentDecision` runs on the already
@@ -665,6 +672,42 @@ export const processDecision = async (
         ecli: result.ecli ?? null,
       }),
   );
+
+  // Where the publisher supplies its own cited-decisions list, it is the
+  // one ground truth extraction can be measured against without measuring
+  // it against itself. Computed here, emitted only after the row write
+  // commits (a replayed decision must not re-count) — and emitted for
+  // zero-gap decisions too, or aggregated events could not produce a
+  // recall denominator.
+  // Measured only when the incoming payload carries a document: an empty
+  // payload has nothing for extraction to find, so every publisher
+  // citation would read as missed — on document-preserving refreshes and
+  // equally when a concurrent backfill wins the row between the read and
+  // the transaction. Emitted here rather than after the write because an
+  // ambiguous timeout can commit the row yet throw, and the replay
+  // dedup-skips before re-measuring; the source hash is the identity a
+  // consumer deduplicates retries on.
+  if (
+    incomingCarriesDocument &&
+    !preserveStoredDocument &&
+    result.publisherCitedCases &&
+    result.publisherCitedCases.length > 0
+  ) {
+    const recall = publisherCitationGap({
+      extracted: citations.map((c) => c.citationText),
+      publisherCited: result.publisherCitedCases,
+    });
+    const level = recall.missed.length > 0 ? "warn" : "info";
+    logger[level]("case_law.ingestion.citation_recall", {
+      caseNumber: result.caseNumber,
+      language: result.language,
+      url: result.sourceUrl ?? "",
+      sourceHash: result.rawHash,
+      publisherCitedCount: recall.publisherCitedCount,
+      missedCount: recall.missed.length,
+      missed: recall.missed.slice(0, 10).join("; "),
+    });
+  }
 
   const languageGroupKey = result.ecli || `${sourceId}:${result.caseNumber}`;
 
