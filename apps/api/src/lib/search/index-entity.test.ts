@@ -11,6 +11,9 @@ process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
 
 const semanticUpdatedAt = new Date("2026-04-30T08:00:00.000Z");
+// SAFETY: tests fabricate the branded token the relational query normally
+// selects as `COALESCE(updated_at, created_at)::text`.
+// eslint-disable-next-line typescript/no-unsafe-type-assertion
 const semanticUpdatedAtToken =
   "2026-04-30 08:00:00.000123" as TimestampCasToken;
 const executeMock = mock(async (_query: SQL) => [
@@ -107,7 +110,7 @@ test("rejects an out-of-order projection against the authoritative entity", asyn
   expect(compiled.sql).toContain("WITH authoritative_source AS MATERIALIZED");
   expect(compiled.sql).toContain("e.current_version_id =");
   expect(compiled.sql).toMatch(
-    /COALESCE\(e\.updated_at, e\.created_at\)\s+IS NOT DISTINCT FROM/,
+    /COALESCE\(e\.updated_at, e\.created_at\)\s+IS NOT DISTINCT FROM/u,
   );
   expect(compiled.sql).toContain("::timestamp");
   expect(compiled.sql).toContain("FOR UPDATE");
