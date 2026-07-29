@@ -889,6 +889,19 @@ describe("help surfaces --input for inputOnly tools", () => {
     expect(result.stdout).toContain("fields");
   });
 
+  test("template save-filled help uses the selected destination in its example", async () => {
+    const server = startMockServer(() => ({ toolPayload: {} }));
+    const result = await runCli({
+      args: ["template", "save-filled", "new-version", "--help"],
+      url: server.url,
+      token: makeToken(["documents_write"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain('"action":"create_version"');
+    expect(result.stdout).not.toContain('"action":"create_document"');
+  });
+
   test("clause save --help documents both --input-only fields", async () => {
     const server = startMockServer(() => ({ toolPayload: {} }));
     const result = await runCli({
@@ -1000,6 +1013,42 @@ describe("template fill strictness policies", () => {
       template_id: "template-1",
       values: { name: "ACME" },
       completion_mode: "allow_partial",
+    });
+  });
+});
+
+describe("template persistence discriminator split", () => {
+  test("new-version injects the destination and forwards values through --input", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: { entityId: "entity_1", versionNumber: 2 },
+    }));
+    const result = await runCli({
+      args: [
+        "template",
+        "save-filled",
+        "new-version",
+        "--template-id",
+        "template_1",
+        "--matter-id",
+        "matter_1",
+        "--entity-id",
+        "entity_1",
+        "--input",
+        '{"values":{"tenant.name":"ACME"}}',
+      ],
+      url: server.url,
+      token: makeToken(["documents_write"]),
+    });
+    server.stop();
+
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.name).toBe("save_filled_template");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      action: "create_version",
+      template_id: "template_1",
+      matter_id: "matter_1",
+      entity_id: "entity_1",
+      values: { "tenant.name": "ACME" },
     });
   });
 });

@@ -21,6 +21,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { StellaMark } from "@/components/stella-mark";
+import { env } from "@/env";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
@@ -28,6 +29,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
+  getExpandedOauthAuthorizationUrl,
   getOauthHashFragment,
   getOauthClientDisplayName,
   getOauthRedirectUrl,
@@ -35,6 +37,9 @@ import {
 } from "@/lib/oauth-provider";
 import type { OAuthScopeDisplayEntry } from "@/lib/oauth-scopes";
 import {
+  FULL_STELLA_ACCESS_SCOPES,
+  includesFullStellaAccess,
+  requestsStellaWorkspaceAccess,
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
 } from "@/lib/oauth-scopes";
@@ -155,6 +160,29 @@ function ConsentPage() {
   // grants: unknown scopes fall back to the raw scope string instead of
   // being silently skipped.
   const scopeEntries = toOAuthScopeDisplayEntries(scopes);
+  const canRequestFullAccess =
+    bridgedQuery !== null &&
+    requestsStellaWorkspaceAccess(scopes) &&
+    !includesFullStellaAccess(scopes);
+
+  const handleRequestFullAccess = () => {
+    if (!bridgedQuery) {
+      return;
+    }
+
+    const authorizationUrl = getExpandedOauthAuthorizationUrl({
+      apiBaseUrl: env.VITE_API_URL,
+      oauthQuery: bridgedQuery,
+      scopes: FULL_STELLA_ACCESS_SCOPES,
+    });
+    if (!authorizationUrl) {
+      setHasError(true);
+      stellaToast.add({ title: t("consent.error"), type: "error" });
+      return;
+    }
+
+    window.location.href = authorizationUrl;
+  };
 
   const handleConsent = async (accept: boolean) => {
     setIsPending(true);
@@ -252,29 +280,49 @@ function ConsentPage() {
           {hasError ? (
             <p className="text-destructive text-sm">{t("consent.error")}</p>
           ) : null}
-          <div className="border-border/64 flex flex-col gap-2 border-t pt-4 sm:flex-row sm:justify-end">
-            <Button
-              className="w-full sm:w-auto"
-              disabled={isPending}
-              onClick={() => {
-                detached(handleConsent(false), "ConsentPage");
-              }}
-              type="button"
-              variant="ghost"
-            >
-              {t("common.decline")}
-            </Button>
-            <Button
-              className="w-full sm:w-auto"
-              disabled={isPending}
-              loading={isPending}
-              onClick={() => {
-                detached(handleConsent(true), "ConsentPage");
-              }}
-              type="button"
-            >
-              {t("consent.allow")}
-            </Button>
+          <div className="border-border/64 flex flex-col gap-2 border-t pt-4">
+            {canRequestFullAccess ? (
+              <>
+                <Button
+                  className="w-full"
+                  disabled={isPending}
+                  onClick={handleRequestFullAccess}
+                  type="button"
+                >
+                  {t("consent.requestFullAccess")}
+                </Button>
+                <p className="text-muted-foreground text-center text-xs">
+                  {t("consent.requestFullAccessHint")}
+                </p>
+              </>
+            ) : null}
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                className="w-full sm:w-auto"
+                disabled={isPending}
+                onClick={() => {
+                  detached(handleConsent(false), "ConsentPage");
+                }}
+                type="button"
+                variant="ghost"
+              >
+                {t("common.decline")}
+              </Button>
+              <Button
+                className="w-full sm:w-auto"
+                disabled={isPending}
+                loading={isPending}
+                onClick={() => {
+                  detached(handleConsent(true), "ConsentPage");
+                }}
+                type="button"
+                variant={canRequestFullAccess ? "outline" : "default"}
+              >
+                {canRequestFullAccess
+                  ? t("consent.allowRequestedAccess")
+                  : t("consent.allow")}
+              </Button>
+            </div>
           </div>
         </FramePanel>
       </Frame>

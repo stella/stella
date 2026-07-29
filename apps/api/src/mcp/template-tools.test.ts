@@ -9,8 +9,11 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const describeStoredTemplateMock = mock();
+const fillStoredTemplateDocxMock = mock();
 const fillStoredTemplateWithTextMock = mock();
 const fillStoredTemplateWithTextStrictMock = mock();
+const createEntityFromBufferMock = mock();
+const createEntityVersionFromBufferMock = mock();
 const createStoredTemplateMock = mock();
 const recordTemplateFillMock = mock();
 const configureTemplateFieldsMock = mock();
@@ -44,9 +47,14 @@ void mock.module("@/api/handlers/templates/template-fill-service", () => ({
   fillStoredTemplateWithText: fillStoredTemplateWithTextMock,
   fillStoredTemplateWithTextStrict: fillStoredTemplateWithTextStrictMock,
   fillStoredTemplate: mock(),
-  fillStoredTemplateDocx: mock(),
+  fillStoredTemplateDocx: fillStoredTemplateDocxMock,
   fillTemplateDocx: mock(),
   fillTemplateDocxStrict: mock(),
+}));
+
+void mock.module("@/api/mcp/template-persistence", () => ({
+  persistFilledTemplateDocument: createEntityFromBufferMock,
+  persistFilledTemplateVersion: createEntityVersionFromBufferMock,
 }));
 
 void mock.module("@/api/handlers/templates/create-template-service", () => ({
@@ -133,13 +141,15 @@ const createScopedDb = (templates: unknown[] = []) =>
 const createContext = ({
   memberRole = "owner",
   scopedDb = createScopedDb(),
+  workspaceStatus = "active",
 }: {
   memberRole?: McpRequestContext["memberRole"];
   scopedDb?: McpRequestContext["scopedDb"];
+  workspaceStatus?: "active" | "archived";
 } = {}): McpRequestContext => ({
   accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
   accessibleWorkspaceIdSet: new Set(["ws_1"]),
-  accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
+  accessibleWorkspaceStatusById: new Map([["ws_1", workspaceStatus]]),
   accessibleWorkspaces: [],
   grantedScopes: [],
   memberRole,
@@ -171,8 +181,11 @@ const makeValidDocxBase64 = async (): Promise<string> => {
 describe("MCP template tools", () => {
   beforeEach(() => {
     describeStoredTemplateMock.mockReset();
+    fillStoredTemplateDocxMock.mockReset();
     fillStoredTemplateWithTextMock.mockReset();
     fillStoredTemplateWithTextStrictMock.mockReset();
+    createEntityFromBufferMock.mockReset();
+    createEntityVersionFromBufferMock.mockReset();
     createStoredTemplateMock.mockReset();
     recordTemplateFillMock.mockReset();
     configureTemplateFieldsMock.mockReset();
@@ -197,6 +210,7 @@ describe("MCP template tools", () => {
     // moved to an MCP resource (M5).
     expect(names).toContain("list_templates");
     expect(names).toContain("fill_template");
+    expect(names).toContain("save_filled_template");
     expect(names).toContain("save_template");
     expect(names).not.toContain("describe_template");
     expect(names).not.toContain("create_template");
@@ -209,6 +223,10 @@ describe("MCP template tools", () => {
         "stella:templates",
       );
     }
+    expect(
+      (await getMcpToolDefinition("save_filled_template", createContext()))
+        ?.scope,
+    ).toBe("stella:documents_write");
   });
 
   test("the read template tool is on the anonymized surface; writes are not", async () => {
@@ -219,6 +237,7 @@ describe("MCP template tools", () => {
     // tools stay off the egress-only surface.
     expect(names).toContain("list_templates");
     expect(names).not.toContain("fill_template");
+    expect(names).not.toContain("save_filled_template");
     expect(names).not.toContain("save_template");
   });
 
@@ -689,6 +708,147 @@ describe("MCP template tools", () => {
     expect(result.content).toEqual([
       { type: "text", text: "Monthly AI usage limit reached." },
     ]);
+  });
+
+  test("save_filled_template creates a document without returning base64", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "lease.docx",
+      buffer: Buffer.from("filled docx"),
+      unmatchedPlaceholders: [],
+      unusedValues: ["unused"],
+    });
+    createEntityFromBufferMock.mockResolvedValue(
+      Result.ok({
+        entityId: "entity_new",
+        fieldId: "field_new",
+        fileName: "Example Lease.docx",
+      }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: "t1",
+        matter_id: "ws_1",
+        parent_id: "folder_1",
+        name: "Example Lease",
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(createEntityFromBufferMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws_1",
+        parentId: "folder_1",
+        fileName: "Example Lease.docx",
+      }),
+    );
+    expect(parseToolPayload(result)).toEqual({
+      action: "create_document",
+      entityId: "entity_new",
+      fileName: "Example Lease.docx",
+      unmatchedPlaceholders: [],
+      unusedValues: ["unused"],
+    });
+    expect(JSON.stringify(parseToolPayload(result))).not.toContain("base64");
+  });
+
+  test("save_filled_template appends a version through the shared buffer service", async () => {
+    fillStoredTemplateDocxMock.mockResolvedValue({
+      fileName: "lease.docx",
+      buffer: Buffer.from("filled docx v2"),
+      unmatchedPlaceholders: ["signature"],
+      unusedValues: [],
+    });
+    createEntityVersionFromBufferMock.mockResolvedValue(
+      Result.ok({
+        entityId: "entity_1",
+        entityVersionId: "version_2",
+        fieldId: "field_2",
+        fileName: "lease.docx",
+        versionNumber: 2,
+      }),
+    );
+
+    const result = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: "t1",
+        matter_id: "ws_1",
+        entity_id: "entity_1",
+        values: { "tenant.name": "ACME" },
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+
+    expect(createEntityVersionFromBufferMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "ws_1",
+        entityId: "entity_1",
+        fileName: "lease.docx",
+      }),
+    );
+    expect(parseToolPayload(result)).toEqual({
+      action: "create_version",
+      entityId: "entity_1",
+      entityVersionId: "version_2",
+      versionNumber: 2,
+      fileName: "lease.docx",
+      unmatchedPlaceholders: ["signature"],
+      unusedValues: [],
+    });
+  });
+
+  test("save_filled_template validates its destination before filling", async () => {
+    const missingEntity = await handleMcpToolCall({
+      args: {
+        action: "create_version",
+        template_id: "t1",
+        matter_id: "ws_1",
+        values: {},
+      },
+      context: createContext(),
+      toolName: "save_filled_template",
+    });
+    const archived = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: "t1",
+        matter_id: "ws_1",
+        values: {},
+      },
+      context: createContext({ workspaceStatus: "archived" }),
+      toolName: "save_filled_template",
+    });
+    const forbidden = await handleMcpToolCall({
+      args: {
+        action: "create_document",
+        template_id: "t1",
+        matter_id: "ws_1",
+        values: {},
+      },
+      context: createContext({ memberRole: "intern" }),
+      toolName: "save_filled_template",
+    });
+
+    expect(missingEntity.isError).toBe(true);
+    expect(validationEnvelope(missingEntity)).toMatchObject({
+      code: "validation_error",
+    });
+    expect(archived.isError).toBe(true);
+    expect(archived.content.at(0)).toMatchObject({
+      type: "text",
+      text: "Matter is archived; unarchive it first",
+    });
+    expect(forbidden.isError).toBe(true);
+    expect(forbidden.content.at(0)).toMatchObject({
+      type: "text",
+      text: "Forbidden",
+    });
+    expect(fillStoredTemplateDocxMock).not.toHaveBeenCalled();
   });
 
   test("save_template (create) validates the DOCX and returns the new template id", async () => {

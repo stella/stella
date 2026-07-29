@@ -36,6 +36,31 @@ export type OAuthScopeKey = keyof typeof OAUTH_SCOPE_LABELS;
 type OAuthScopeLabel = (typeof OAUTH_SCOPE_LABELS)[OAuthScopeKey];
 type OAuthScopeTranslator = (key: OAuthScopeLabel) => string;
 
+/**
+ * The complete non-anonymized stella resource grant. Protocol identity scopes
+ * (openid/profile/email/offline_access) stay under the client's control, and
+ * anonymized scopes belong to the separate anonymized MCP resource.
+ *
+ * Deriving this from the exhaustive label map means a newly grantable stella
+ * scope is included automatically once its mandatory disclosure label lands.
+ */
+export const FULL_STELLA_ACCESS_SCOPES = Object.keys(OAUTH_SCOPE_LABELS).filter(
+  (scope): scope is OAuthScopeKey =>
+    scope.startsWith("stella:") && !scope.endsWith("_anonymized"),
+);
+
+export const requestsStellaWorkspaceAccess = (
+  scopes: readonly string[],
+): boolean =>
+  scopes.some((scope) =>
+    FULL_STELLA_ACCESS_SCOPES.some(
+      (fullAccessScope) => fullAccessScope === scope,
+    ),
+  );
+
+export const includesFullStellaAccess = (scopes: readonly string[]): boolean =>
+  FULL_STELLA_ACCESS_SCOPES.every((scope) => scopes.includes(scope));
+
 export const isOAuthScopeKey = (scope: string): scope is OAuthScopeKey =>
   scope in OAUTH_SCOPE_LABELS;
 

@@ -1000,12 +1000,15 @@ type Messages = {
   };
   "consent": {
     "allow": "Allow";
+    "allowRequestedAccess": "Allow requested access";
     "completeSetup": "Complete setup";
     "defaultClientName": "An application";
     "description": "{clientName} wants to access your stella workspace";
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "permissions": "This will allow the application to:";
+    "requestFullAccess": "Request full access";
+    "requestFullAccessHint": "You will review all stella permissions before approving.";
     "scopeAdminRead": "Read your organization's audit log";
     "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";

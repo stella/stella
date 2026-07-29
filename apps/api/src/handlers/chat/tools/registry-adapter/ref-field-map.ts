@@ -769,6 +769,15 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     outputRefs: [],
     passthroughIdPaths: [],
   },
+  // Compound template persistence is an MCP/CLI convenience for clients that
+  // cannot PUT bytes. Chat already has first-class template/document flows;
+  // projecting this would duplicate that surface and its approval UX.
+  save_filled_template: {
+    chatProjectable: false,
+    inputRefs: [],
+    outputRefs: [],
+    passthroughIdPaths: [],
+  },
   save_template: {
     chatProjectable: true,
     // `template_id` is an org template handle, not a chat ref: passes through.

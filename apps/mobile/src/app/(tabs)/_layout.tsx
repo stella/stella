@@ -1,4 +1,5 @@
-import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { CircleCheck, Folder, MessageCircle } from "lucide-react-native";
 
 import { useAppColors } from "@/theme";
 
@@ -8,31 +9,31 @@ export default function TabLayout() {
   return (
     <NativeTabs minimizeBehavior="onScrollDown" tintColor={colors.accent}>
       <NativeTabs.Trigger name="(chats)">
-        <NativeTabs.Trigger.Icon
-          md="chat"
+        <Icon
+          androidSrc={<MessageCircle />}
           sf={{
             default: "bubble.left.and.bubble.right",
             selected: "bubble.left.and.bubble.right.fill",
           }}
         />
-        <NativeTabs.Trigger.Label>Chats</NativeTabs.Trigger.Label>
+        <Label>Chats</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="tasks">
-        <NativeTabs.Trigger.Icon
-          md="check_circle"
+        <Icon
+          androidSrc={<CircleCheck />}
           sf={{
             default: "checkmark.circle",
             selected: "checkmark.circle.fill",
           }}
         />
-        <NativeTabs.Trigger.Label>Tasks</NativeTabs.Trigger.Label>
+        <Label>Tasks</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="matters">
-        <NativeTabs.Trigger.Icon
-          md="folder"
+        <Icon
+          androidSrc={<Folder />}
           sf={{ default: "folder", selected: "folder.fill" }}
         />
-        <NativeTabs.Trigger.Label>Matters</NativeTabs.Trigger.Label>
+        <Label>Matters</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

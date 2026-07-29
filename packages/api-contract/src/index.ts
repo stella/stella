@@ -26,8 +26,11 @@ export type {
 /** Path prefix shared by the REST router and direct-fetch clients. */
 export const STELLA_API_VERSION_PREFIX = "/v1" as const;
 
+/** Builds an absolute URL for an unversioned API route such as auth or MCP. */
+export const buildApiUrl = (origin: string, path: `/${string}`): string =>
+  `${origin.endsWith("/") ? origin.slice(0, -1) : origin}${path}`;
+
 export const buildVersionedApiUrl = (
   origin: string,
   path: `/${string}`,
-): string =>
-  `${origin.endsWith("/") ? origin.slice(0, -1) : origin}${STELLA_API_VERSION_PREFIX}${path}`;
+): string => buildApiUrl(origin, `${STELLA_API_VERSION_PREFIX}${path}`);

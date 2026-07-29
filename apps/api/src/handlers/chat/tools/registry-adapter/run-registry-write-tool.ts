@@ -58,6 +58,7 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   manage_organization: RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization,
   set_practice_jurisdictions: STELLA_TOOL_HANDLERS.set_practice_jurisdictions,
   fill_template: TEMPLATE_TOOL_HANDLERS.fill_template,
+  save_filled_template: TEMPLATE_TOOL_HANDLERS.save_filled_template,
   save_template: TEMPLATE_TOOL_HANDLERS.save_template,
   // Non-projectable (`chatProjectable: false`): the orchestrator refuses it
   // before reaching a handler, but the map stays exhaustive over every write

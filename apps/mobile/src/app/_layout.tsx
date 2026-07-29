@@ -1,6 +1,6 @@
+import { ThemeProvider } from "@react-navigation/native";
 /* oxlint-disable react/style-prop-object -- Expo StatusBar uses `style` as an appearance enum, not a React Native style object. */
 import { QueryClientProvider } from "@tanstack/react-query";
-import { ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 

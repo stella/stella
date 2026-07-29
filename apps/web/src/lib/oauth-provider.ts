@@ -1,5 +1,14 @@
+import { buildApiUrl } from "@stll/api-contract";
+
 const OAUTH_SIGNATURE_PARAM = "sig";
 const OAUTH_QUERY_HASH_PARAM = "oauth_query";
+const BETTER_AUTH_INTERNAL_QUERY_PARAMS = [
+  OAUTH_SIGNATURE_PARAM,
+  "exp",
+  "ba_iat",
+  "ba_pl",
+  "ba_param",
+] as const;
 
 export const hasSignedOauthQuery = (search: string) => {
   const query = search.startsWith("?") ? search.slice(1) : search;
@@ -68,4 +77,63 @@ export const getOauthRedirectUrl = (value: unknown): string | null => {
   }
 
   return null;
+};
+
+/**
+ * Restarts a Better Auth authorization request with a broader scope set.
+ * Consent continuations are signed, so their scope cannot be edited in place:
+ * copy the original OAuth parameters, remove Better Auth's continuation-only
+ * signature metadata, and send a fresh request through the authorization
+ * endpoint. The provider revalidates the client, redirect URI and PKCE before
+ * showing the expanded consent screen.
+ */
+export const getExpandedOauthAuthorizationUrl = ({
+  apiBaseUrl,
+  oauthQuery,
+  scopes,
+}: {
+  apiBaseUrl: string;
+  oauthQuery: string;
+  scopes: readonly string[];
+}): string | null => {
+  if (!hasSignedOauthQuery(oauthQuery)) {
+    return null;
+  }
+
+  const params = new URLSearchParams(oauthQuery);
+  for (const key of BETTER_AUTH_INTERNAL_QUERY_PARAMS) {
+    params.delete(key);
+  }
+
+  const requiredParameters = [
+    "client_id",
+    "redirect_uri",
+    "response_type",
+  ] as const;
+  if (requiredParameters.some((key) => !params.has(key))) {
+    return null;
+  }
+
+  const expandedScopes = new Set(
+    params.get("scope")?.split(" ").filter(Boolean),
+  );
+  for (const scope of scopes) {
+    expandedScopes.add(scope);
+  }
+  params.set("scope", [...expandedScopes].join(" "));
+  params.set("prompt", addConsentPrompt(params.get("prompt")));
+
+  const url = new URL(buildApiUrl(apiBaseUrl, "/api/auth/oauth2/authorize"));
+  url.search = params.toString();
+  return url.toString();
+};
+
+const addConsentPrompt = (prompt: string | null): string => {
+  if (prompt === "login" || prompt === "login consent") {
+    return "login consent";
+  }
+  if (prompt === "select_account" || prompt === "select_account consent") {
+    return "select_account consent";
+  }
+  return "consent";
 };

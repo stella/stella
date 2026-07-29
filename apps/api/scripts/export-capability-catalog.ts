@@ -275,6 +275,10 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
   "entities.update-version-description": "stella:documents_write",
   "entities.update-version-label": "stella:documents_write",
   "fields.upsert-by-id": "stella:documents_write",
+  // Filling is template-domain work, but this endpoint persists a new matter
+  // entity and is covered by save_filled_template. Generic invocation must
+  // therefore require the same document-write consent as the named tool.
+  "templates.fill-to-workspace": "stella:documents_write",
 };
 
 /**
