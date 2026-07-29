@@ -113,6 +113,18 @@ const unsafeLineCommentScope = sql`
   SELECT * FROM search_documents sd -- ${entityWorkspaceFilter}
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves cooked escape text can comment out an authorization scope
+const unsafeEscapedLineCommentScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE true \x2d\x2d ${entityWorkspaceFilter}
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves SQL templates without a cooked runtime value are rejected
+const unsafeUnavailableCookedSql = sql`
+  SELECT * FROM search_documents sd
+  WHERE true \unicode ${entityWorkspaceFilter}
+`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves block-comment interpolation cannot authorize a private read
 const unsafeBlockCommentScope = sql`
   SELECT * FROM search_documents sd /* ${entityWorkspaceFilter} */
@@ -228,6 +240,11 @@ const unsafeComputedMemberFragmentRead = sql`
   SELECT * ${memberFragments[memberFragmentKeyAlias]}
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves cooked static template keys select the runtime fragment
+const unsafeEscapedTemplateMemberFragmentRead = sql`
+  SELECT * ${memberFragments[`fr\x6fm`]}
+`;
+
 const tupleFragmentIndex = 0;
 const tupleFragmentIndexAlias = tupleFragmentIndex;
 
@@ -291,6 +308,11 @@ const rawEntityTemplate = `SELECT * FROM search_documents sd`;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves const-bound static template literals cannot bypass sql.raw inspection
 const unsafeRawTemplateEntity = sql.raw(rawEntityTemplate);
+
+const escapedRawEntityTemplate = `SELECT * FROM search_\x64ocuments sd`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.raw analyzes the cooked value of a static template
+const unsafeEscapedRawTemplateEntity = sql.raw(escapedRawEntityTemplate);
 
 const privateRawRelation = sql.raw("search_documents");
 
@@ -966,6 +988,17 @@ const scopedRootJoinedPrivateRead = sql.join([
   entityWorkspaceFilter,
 ]);
 
+const scopedEscapedKeyword = sql`
+  SELECT * FROM search_documents sd
+  WHERE tr\x75e ${entityWorkspaceFilter}
+`;
+
+const scopedEscapedCommentMarkerString = sql`
+  SELECT '\x2d\x2d' AS marker, sd.*
+  FROM search_documents sd
+  WHERE true ${entityWorkspaceFilter}
+`;
+
 const scopedInterpolatedRootJoinedPrivateRead = sql`
   ${sql.join([
     sql`SELECT * FROM search_documents sd WHERE true `,
@@ -1075,6 +1108,8 @@ void [
   unsafeNestedHelper,
   unsafeShadowedHelper,
   unsafeLineCommentScope,
+  unsafeEscapedLineCommentScope,
+  unsafeUnavailableCookedSql,
   unsafeBlockCommentScope,
   unsafeNestedBlockCommentScope,
   unsafeDollarQuotedScope,
@@ -1093,6 +1128,7 @@ void [
   unsafeMemberFragmentRead,
   unsafeTupleFragmentRead,
   unsafeComputedMemberFragmentRead,
+  unsafeEscapedTemplateMemberFragmentRead,
   unsafeComputedTupleFragmentRead,
   unsafeDynamicMemberFragmentRead,
   unsafeDynamicTupleFragmentRead,
@@ -1103,6 +1139,7 @@ void [
   unsafeOpaqueRootJoinedPrivateRead,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
+  unsafeEscapedRawTemplateEntity,
   unsafeRawRelationFragment,
   unsafeSplitRawRelationFragment,
   unsafeSplitTemplateRelationFragment,
@@ -1203,6 +1240,8 @@ void [
   scopedJoinedMultiBranch,
   scopedRawJoinedMultiBranch,
   scopedRootJoinedPrivateRead,
+  scopedEscapedKeyword,
+  scopedEscapedCommentMarkerString,
   scopedInterpolatedRootJoinedPrivateRead,
   scopedNestedRootJoinedPrivateRead,
   publicRootJoinedRead,

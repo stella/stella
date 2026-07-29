@@ -34,11 +34,18 @@ type Scope = {
 };
 
 type RuleContext = {
-  report: (descriptor: {
-    data: { table: string };
-    messageId: "missingScope";
-    node: unknown;
-  }) => void;
+  report: (
+    descriptor:
+      | {
+          data: { table: string };
+          messageId: "missingScope";
+          node: unknown;
+        }
+      | {
+          messageId: "unavailableCooked";
+          node: unknown;
+        },
+  ) => void;
   sourceCode: {
     getScope: (node: unknown) => Scope;
   };
@@ -127,23 +134,28 @@ const PRIVATE_SEARCH_PROJECTIONS = {
   }
 >;
 
-const templateQuasiTexts = (node: Record<string, unknown>): string[] => {
+const templateQuasiTexts = (node: Record<string, unknown>): string[] | null => {
   const quasi = node.quasi;
   if (!isAstNode(quasi) || !Array.isArray(quasi.quasis)) {
-    return [];
+    return null;
   }
 
-  return quasi.quasis.map((element) => {
+  const texts: string[] = [];
+  for (const element of quasi.quasis) {
     if (!isAstNode(element)) {
-      return "";
+      return null;
     }
     const value = element.value;
-    if (typeof value !== "object" || value === null || !("raw" in value)) {
-      return "";
+    if (typeof value !== "object" || value === null || !("cooked" in value)) {
+      return null;
     }
-    const raw = value.raw;
-    return typeof raw === "string" ? raw : "";
-  });
+    const cooked = value.cooked;
+    if (typeof cooked !== "string") {
+      return null;
+    }
+    texts.push(cooked);
+  }
+  return texts;
 };
 
 const templateExpressions = (node: Record<string, unknown>): unknown[] => {
@@ -170,14 +182,14 @@ const staticTemplateLiteralText = (node: unknown): string | null => {
       return null;
     }
     const value = element.value;
-    if (typeof value !== "object" || value === null || !("raw" in value)) {
+    if (typeof value !== "object" || value === null || !("cooked" in value)) {
       return null;
     }
-    const raw = value.raw;
-    if (typeof raw !== "string") {
+    const cooked = value.cooked;
+    if (typeof cooked !== "string") {
       return null;
     }
-    parts.push(raw);
+    parts.push(cooked);
   }
   return parts.join("");
 };
@@ -1097,6 +1109,9 @@ export default {
             "Raw read from private search projection `{{table}}` must " +
             "compose an approved workspace/contact/chat authorization scope " +
             "fragment. Add the appropriate scope helper; do not post-filter.",
+          unavailableCooked:
+            "SQL template text must have a statically available cooked value " +
+            "so authorization scope can be verified.",
         },
       },
       create(context: RuleContext) {
@@ -1702,13 +1717,16 @@ export default {
           node: AstNode,
           ancestors: ReadonlySet<unknown> = new Set(),
           parameterBindings: SqlParameterBindings = new Map(),
-        ): SqlTemplateToken[][] => {
+        ): SqlTemplateToken[][] | null => {
           if (ancestors.has(node)) {
-            return [];
+            return null;
           }
           const nextAncestors = new Set(ancestors);
           nextAncestors.add(node);
           const quasiTexts = templateQuasiTexts(node);
+          if (quasiTexts === null) {
+            return null;
+          }
           const expressions = templateExpressions(node);
           let paths: SqlTemplateToken[][] = [[]];
           for (const [index, quasiText] of quasiTexts.entries()) {
@@ -2254,10 +2272,18 @@ export default {
             if (!isAstNode(node)) {
               return;
             }
+            const tokenPaths = flattenSqlTemplate(node);
+            if (tokenPaths === null) {
+              context.report({
+                node,
+                messageId: "unavailableCooked",
+              });
+              return;
+            }
             if (hasVerifiedEnclosingSqlJoin(node)) {
               return;
             }
-            inspectSqlTokenPaths(node, flattenSqlTemplate(node));
+            inspectSqlTokenPaths(node, tokenPaths);
           },
           CallExpression(node: unknown) {
             if (!isAstNode(node)) {
