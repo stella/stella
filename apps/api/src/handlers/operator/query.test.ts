@@ -211,6 +211,7 @@ describe("queryRegistrationsPage", () => {
       for (const item of firstPage.items) {
         expect(Object.keys(item).sort()).toEqual([
           "createdAt",
+          "detectedCountry",
           "email",
           "id",
           "name",
@@ -220,6 +221,7 @@ describe("queryRegistrationsPage", () => {
         id: "op-reg-a",
         name: "Registration A",
         email: "op-reg-a@example.test",
+        detectedCountry: null,
         createdAt: expect.any(Date),
       });
 

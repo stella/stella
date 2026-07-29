@@ -127,6 +127,7 @@ export const OnboardingWizard = () => {
   const suggestedCountryCodes = getSuggestedCountryCodes({
     email: userEmail,
     locale: navigatorLocale,
+    detectedCountry: sessionData?.user.detectedCountry,
   });
   const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =
     useState(false);

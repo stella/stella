@@ -41,6 +41,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { isUuid, tUuid } from "@/api/lib/custom-schema";
+import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import {
@@ -551,6 +552,13 @@ const createAuth = () => {
           type: "string",
           required: false,
         },
+        // Server-owned: captured from the edge's viewer-country header in
+        // the user-create hook below; client input is ignored.
+        detectedCountry: {
+          type: "string",
+          required: false,
+          input: false,
+        },
       },
     },
     session: {
@@ -616,7 +624,7 @@ const createAuth = () => {
     databaseHooks: {
       user: {
         create: {
-          before: async (user) => {
+          before: async (user, ctx) => {
             validateTimezoneId(user["timezoneId"]);
             // Email-OTP and some social providers leave `name` blank.
             // The `notNull` schema constraint allows empty strings, which
@@ -625,7 +633,10 @@ const createAuth = () => {
             // Then trim `preferredName` / `wordEditShortcut` (Word author /
             // initials prefs) before persisting.
             const data = normalizeUserPreferences(ensureDisplayName(user));
-            return await Promise.resolve({ data });
+            const detectedCountry = detectedCountryFromRequestContext(ctx);
+            return await Promise.resolve({
+              data: detectedCountry ? { ...data, detectedCountry } : data,
+            });
           },
         },
         update: {
