@@ -145,15 +145,16 @@ describe("extractCitations", () => {
   });
 
   test("extracts a letter-first registry with a trailing dot", () => {
-    // Verbatim: "sp. zn. Spr. 2158/03" (court-administration file
-    // number). The registry run excluded a trailing dot, so any
-    // occurrence spelled with one was dropped entirely.
+    // Verbatim: "sp. zn. Spr. 2158/03" is the court-administration
+    // agenda (správa súdu), not adjudication — deliberately excluded
+    // even though it wears the sp. zn. prefix.
     const text =
       "odpoveď okresného súdu sp. zn. Spr. 2158/03 z 31. júla 2003 na " +
-      "jej sťažnosť";
-    const citations = extractCitations([{ index: 0, text }]);
-    expect(citations).toHaveLength(1);
-    expect(citations[0]?.citationText).toBe("sp. zn. Spr. 2158/03");
+      "jej sťažnosť, viz sp. zn. Nt 408/2023";
+    const texts = extractCitations([{ index: 0, text }]).map(
+      (c) => c.citationText,
+    );
+    expect(texts).toEqual(["sp. zn. Nt 408/2023"]);
   });
 
   test("extracts č. j. with the senate number and chamber code joined", () => {
@@ -1294,8 +1295,11 @@ describe("extractCitations", () => {
       (c) => c.citationText,
     );
     expect(texts).toContain("SK 19/02");
-    expect(texts).toContain("K 36/98");
-    expect(texts).toContain("P 13/11");
+    // Bare single-letter Tribunal symbols stay unextracted without a
+    // sygn. anchor — the documented precision trade-off (they collide
+    // with prose and district-court registries).
+    expect(texts).not.toContain("K 36/98");
+    expect(texts).not.toContain("P 13/11");
     expect(texts).toContain("Sygn. akt P 20/03");
   });
 
@@ -1374,7 +1378,11 @@ describe("extractCitations", () => {
       (c) => c.citationText,
     );
     expect(texts).toContain("sygn.: P. 12/98");
-    expect(texts).toContain("P. 8/99");
+    // The second item of the enumeration is lexically bare; the
+    // anchor-mandatory rule for single-letter symbols drops it. If the
+    // recall gate shows list continuations matter, revisit with a
+    // dedicated enumeration pattern rather than loosening the anchor.
+    expect(texts).not.toContain("P. 8/99");
   });
 
   test("extracts a Polish Constitutional Tribunal case number split across sygn. akt/bare spellings", () => {

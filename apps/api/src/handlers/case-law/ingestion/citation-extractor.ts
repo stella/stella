@@ -98,8 +98,18 @@ const PL_THREE_TOKEN_PATTERN =
 // phantom-duplicating the tail of an ordinary Roman-numeral-prefixed
 // citation immediately before it ("sygn. akt II K 796/13" is one citation,
 // not also a bare "K 796/13").
+// Single-letter symbols (K, P, U) require the "sygn." anchor: bare they
+// collide with ordinary prose and district-court registries (an
+// SAOS-quantified precision trade-off). Multi-letter symbols are
+// distinctive enough to match bare, still guarded against
+// phantom-duplicating a Roman-numeral-prefixed citation's tail.
 const PL_TK_PATTERN = new RegExp(
-  String.raw`(?:${PL_SYGN_PREFIX})?(?<!\b[IVX]+\s)\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp|K|P|U)\.?\s*\d{1,4}\/\d{2,4})(?!\d)`,
+  String.raw`${PL_SYGN_PREFIX}(?<!\b[IVX]+\s)\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp|K|P|U)\.?\s*\d{1,4}\/\d{2,4})(?!\d)`,
+  "gu",
+);
+
+const PL_TK_BARE_PATTERN = new RegExp(
+  String.raw`(?<!\b[IVX]+\s)\b(?<caseNumber>(?:Kpt|Kp|Ts|SK|Tw|Pp)\.?\s*\d{1,4}\/\d{2,4})(?!\d)`,
   "gu",
 );
 
@@ -163,11 +173,11 @@ const CITATION_PATTERNS: RegExp[] = [
 
   // Czech letter-first registries without a senate number: "sp. zn. Nt
   // 408/2023" (criminal auxiliary), "sp. zn. A 9/2003" (pre-2003
-  // administrative), "sp. zn. Spr. 2158/03" (court-administration file,
-  // dot after the registry). The registry run is short and must be
-  // followed by an optional dot then a space and digits, which keeps
-  // agency file numbers ("MSP-725/2022") out.
-  /sp\.\s*zn\.:?\s*(?<caseNumber>\p{L}{1,4}\.?\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
+  // administrative). The registry run is short with an optional trailing
+  // dot, then a space and digits, which keeps agency file numbers
+  // ("MSP-725/2022") out; "Spr"/"Spr." is the court-administration
+  // agenda, not adjudication, and stays excluded.
+  /sp\.\s*zn\.:?\s*(?!Spr\.?\s)(?<caseNumber>\p{L}{1,4}\.?\s+\d{1,6}\/\d{2,4})(?!\d)/gu,
 
   // Czech Supreme Court plenary/collegium opinions ("stanoviska"), civil
   // (Cpjn) and criminal (Tpjn), are routinely cited bare after the first
@@ -250,6 +260,7 @@ const CITATION_PATTERNS: RegExp[] = [
   PL_PREFIXED_PATTERN,
   PL_THREE_TOKEN_PATTERN,
   PL_TK_PATTERN,
+  PL_TK_BARE_PATTERN,
   PL_BARE_SYMBOL_PATTERN,
   PL_NSA_WSA_PATTERN,
 
