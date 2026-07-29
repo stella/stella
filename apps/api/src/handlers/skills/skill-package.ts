@@ -594,7 +594,10 @@ export const findGithubSkillEntrypoints = ({
   rootPath: string;
   tree: readonly GithubTreeItem[];
 }): string[] => {
-  const normalizedRoot = rootPath.replace(/^\/+|\/+$/gu, "");
+  const normalizedRoot = rootPath
+    .split("/")
+    .filter((part) => part.length > 0)
+    .join("/");
   const rootPrefix = normalizedRoot ? `${normalizedRoot}/` : "";
   const skillPaths: string[] = [];
 
@@ -623,8 +626,15 @@ export const findGithubSkillEntrypoints = ({
     }
   }
 
-  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- repository paths need deterministic code-point ordering, not linguistic collation
-  return skillPaths.toSorted((left, right) => left.localeCompare(right));
+  return skillPaths.toSorted((left, right) => {
+    if (left < right) {
+      return -1;
+    }
+    if (left > right) {
+      return 1;
+    }
+    return 0;
+  });
 };
 
 const relativeGithubSkillPath = ({
@@ -1405,21 +1415,17 @@ const mapWithConcurrency = async <R>({
 }): Promise<R[]> => {
   const results: R[] = [];
   let nextIndex = 0;
-  const workers = Array.from(
-    { length: Math.min(limit, items.length) },
-    async () => {
-      while (nextIndex < items.length) {
-        const index = nextIndex;
-        nextIndex += 1;
-        const item = items.at(index);
-        if (item !== undefined) {
-          // oxlint-disable-next-line no-await-in-loop -- each worker claims one bounded queue item at a time
-          results[index] = await transform(item);
-        }
-      }
-      return undefined;
-    },
-  );
+  const work = async (): Promise<void> => {
+    const index = nextIndex;
+    nextIndex += 1;
+    const item = items.at(index);
+    if (item === undefined) {
+      return;
+    }
+    results[index] = await transform(item);
+    return work();
+  };
+  const workers = Array.from({ length: Math.min(limit, items.length) }, work);
   await Promise.all(workers);
   return results;
 };

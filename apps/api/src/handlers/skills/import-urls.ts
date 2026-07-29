@@ -46,7 +46,6 @@ const config = {
 
 const importSkillsFromUrls = createSafeRootHandler(
   config,
-  // eslint-disable-next-line require-yield -- createSafeRootHandler expects a Result generator; per-item failures are collected instead of yielded.
   async function* ({
     body,
     memberRole,
@@ -60,7 +59,7 @@ const importSkillsFromUrls = createSafeRootHandler(
       scope: body.scope,
     });
     if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
+      return yield* Result.err(authorization.error);
     }
 
     const installed: { id: string; sourceUrl: string }[] = [];
@@ -75,12 +74,17 @@ const importSkillsFromUrls = createSafeRootHandler(
       ]),
     );
 
-    for (const { integrity, sourceUrl } of itemsBySourceUrl.values()) {
-      // oxlint-disable-next-line no-await-in-loop -- imports are sequential to bound external fetches and database transactions
+    const items = [...itemsBySourceUrl.values()];
+    const importAt = async (index: number): Promise<void> => {
+      const item = items.at(index);
+      if (item === undefined) {
+        return;
+      }
+      const { integrity, sourceUrl } = item;
       const parsed = await fetchSkillPackageFromUrl(sourceUrl);
       if (Result.isError(parsed)) {
         failed.push({ message: parsed.error.message, sourceUrl });
-        continue;
+        return importAt(index + 1);
       }
 
       const verification = verifySkillPackageIntegrity({
@@ -90,10 +94,9 @@ const importSkillsFromUrls = createSafeRootHandler(
       });
       if (Result.isError(verification)) {
         failed.push({ message: verification.error.message, sourceUrl });
-        continue;
+        return importAt(index + 1);
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- each install has its own audited transaction; a failed item must not roll back successful siblings
       const result = await installSkill({
         memberRole,
         origin: "url",
@@ -106,10 +109,13 @@ const importSkillsFromUrls = createSafeRootHandler(
       });
       if (result.isErr()) {
         failed.push({ message: result.error.message, sourceUrl });
-        continue;
+        return importAt(index + 1);
       }
       installed.push({ id: result.value.id, sourceUrl });
-    }
+      return importAt(index + 1);
+    };
+
+    await importAt(0);
 
     return Result.ok({ failed, installed });
   },

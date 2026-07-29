@@ -106,13 +106,14 @@ const ImportSkillDialogBody = ({
   const importSkills = useMutation({
     mutationFn: async () => {
       const response = await api.skills["import-urls"].post({
-        items:
-          discovery?.skills
-            .filter((skill) => selected.has(skill.sourceUrl))
-            .map((skill) => ({
-              integrity: skill.integrity,
-              sourceUrl: skill.sourceUrl,
-            })) ?? [],
+        items: discovery
+          ? discovery.skills
+              .filter((skill) => selected.has(skill.sourceUrl))
+              .map((skill) => ({
+                integrity: skill.integrity,
+                sourceUrl: skill.sourceUrl,
+              }))
+          : [],
         queryKey: ["skills"],
         scope,
       });
