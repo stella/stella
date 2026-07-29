@@ -22,7 +22,7 @@ const PLACEHOLDER_DEFAULTS: Record<ManifestEnv, ManifestPlaceholders> = {
     PROVIDER_NAME: "stella (dev)",
     SUPPORT_URL: "https://stll.app",
     TASKPANE_ORIGIN: "https://localhost:3002",
-    VERSION: "0.1.0.0",
+    VERSION: "1.0.0.0",
     WEB_ORIGIN: "http://localhost:3000",
   },
   prod: {
@@ -30,7 +30,7 @@ const PLACEHOLDER_DEFAULTS: Record<ManifestEnv, ManifestPlaceholders> = {
     PROVIDER_NAME: "stella",
     SUPPORT_URL: "https://stll.app",
     TASKPANE_ORIGIN: "https://outlook.stll.app",
-    VERSION: "0.1.0.0",
+    VERSION: "1.0.0.0",
     WEB_ORIGIN: "https://my.stll.app",
   },
 };

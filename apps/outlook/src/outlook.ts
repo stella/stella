@@ -1,3 +1,4 @@
+import { env } from "@/env";
 import { OutlookError } from "@/lib/outlook-error";
 import type {
   AttachmentDownloadResult,
@@ -153,10 +154,33 @@ export const waitForOffice = async (): Promise<void> => {
   await office.onReady();
 };
 
+export const subscribeMailboxItemChanges = (
+  subscriber: () => void,
+): (() => void) => {
+  const office = getOffice();
+  const mailbox = office?.context.mailbox;
+  if (!office || !mailbox?.addHandlerAsync) {
+    return () => undefined;
+  }
+
+  const handler = () => subscriber();
+  mailbox.addHandlerAsync(office.EventType.ItemChanged, handler);
+
+  return () => {
+    mailbox.removeHandlerAsync?.(office.EventType.ItemChanged, { handler });
+  };
+};
+
 export const loadMailSnapshot = async (): Promise<MailSnapshot> => {
   const office = getOffice();
   if (!office) {
-    return createBrowserSampleSnapshot();
+    if (env.buildEnvironment === "dev") {
+      return createBrowserSampleSnapshot();
+    }
+    throw new OutlookError({
+      message:
+        "The Outlook runtime is unavailable. Reopen the stella add-in from Outlook.",
+    });
   }
 
   const item = office.context.mailbox.item ?? null;

@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Result } from "better-result";
 
-import { loadMailSnapshot } from "@/outlook";
+import { loadMailSnapshot, subscribeMailboxItemChanges } from "@/outlook";
 import type { MailSnapshot } from "@/types";
 
 export type MailSnapshotState =
@@ -17,38 +17,49 @@ type UseMailSnapshot = {
 
 export const useMailSnapshot = (errorFallback: string): UseMailSnapshot => {
   const [state, setState] = useState<MailSnapshotState>({ type: "loading" });
+  const loadSequence = useRef(0);
 
-  const load = useCallback(async (): Promise<MailSnapshotState> => {
+  const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     const result = await Result.tryPromise(
       async () => await loadMailSnapshot(),
     );
+    if (sequence !== loadSequence.current) {
+      return;
+    }
     if (Result.isError(result)) {
       const { error } = result;
-      return {
+      setState({
         message: error instanceof Error ? error.message : errorFallback,
         type: "error",
-      };
+      });
+      return;
     }
-    return { snapshot: result.value, type: "ready" };
+    setState({ snapshot: result.value, type: "ready" });
   }, [errorFallback]);
 
   useEffect(() => {
     let active = true;
-    void load().then((nextState) => {
+    queueMicrotask(() => {
       if (active) {
-        setState(nextState);
+        void load();
       }
-      return nextState;
+    });
+    const unsubscribe = subscribeMailboxItemChanges(() => {
+      setState({ type: "loading" });
+      void load();
     });
     return () => {
       active = false;
+      loadSequence.current += 1;
+      unsubscribe();
     };
   }, [load]);
 
   return {
     refresh: () => {
       setState({ type: "loading" });
-      void load().then(setState);
+      void load();
     },
     state,
   };

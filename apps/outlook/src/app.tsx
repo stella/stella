@@ -83,82 +83,6 @@ const AuthedApp = ({ t }: { t: Translate }) => {
 
   const snapshot = loadState.type === "ready" ? loadState.snapshot : null;
 
-  const {
-    filteredWorkspaces,
-    query,
-    selectedWorkspace,
-    selectedWorkspaceId,
-    setQuery,
-    setSelectedWorkspaceId,
-    suggestedWorkspaceId,
-  } = useWorkspaceSelection({ snapshot, workspaces });
-
-  const summary = useAISummary(t("saveErrorFallback"));
-  const aiDraft = useAIDraft(t("saveErrorFallback"));
-  const ingest = useIngestEmail(t("saveErrorFallback"));
-
-  const [attachmentSelection, setAttachmentSelection] =
-    useState<AttachmentSelection | null>(null);
-  const [draftIntent, setDraftIntent] = useState("");
-  const [draftEdit, setDraftEdit] = useState<DraftEdit | null>(null);
-  const [placementState, setPlacementState] =
-    useState<DraftPlacementState | null>(null);
-
-  const defaultAttachmentIds = snapshot
-    ? new Set(
-        snapshot.attachments
-          .filter((attachment) => !attachment.isInline)
-          .map((attachment) => attachment.id),
-      )
-    : new Set<string>();
-  const selectedAttachmentIds =
-    attachmentSelection?.source === snapshot
-      ? attachmentSelection.ids
-      : defaultAttachmentIds;
-  const draftSource = aiDraft.state.type === "ready" ? aiDraft.state : null;
-  const draft =
-    draftEdit?.source === draftSource
-      ? draftEdit.value
-      : (draftSource?.draft ?? "");
-  const draftPlacement =
-    placementState?.source === draft ? placementState.value : null;
-  const checks = snapshot
-    ? runDraftChecks({ selectedWorkspaceId, snapshot })
-    : [];
-
-  const handlePlaceDraft = async () => {
-    if (!draft) {
-      return;
-    }
-    setPlacementState({ source: draft, value: await placeDraft(draft) });
-  };
-
-  const handleSave = () => {
-    if (!snapshot || !selectedWorkspaceId) {
-      return;
-    }
-    ingest.save({
-      attachments: snapshot.attachments.filter((attachment) =>
-        selectedAttachmentIds.has(attachment.id),
-      ),
-      snapshot,
-      workspaceId: selectedWorkspaceId,
-    });
-  };
-
-  const toggleAttachment = (attachmentId: string) => {
-    if (!snapshot) {
-      return;
-    }
-    const ids = new Set(selectedAttachmentIds);
-    if (ids.has(attachmentId)) {
-      ids.delete(attachmentId);
-    } else {
-      ids.add(attachmentId);
-    }
-    setAttachmentSelection({ ids, source: snapshot });
-  };
-
   return (
     <div className="min-h-screen">
       <AppHeader
@@ -189,51 +113,147 @@ const AuthedApp = ({ t }: { t: Translate }) => {
           </Notice>
         ) : null}
         {snapshot ? (
-          <>
-            <EmailSnapshotPanel snapshot={snapshot} t={t} />
-            <MatterPanel
-              onQueryChange={setQuery}
-              onSelect={setSelectedWorkspaceId}
-              query={query}
-              selectedWorkspaceId={selectedWorkspaceId}
-              suggestedWorkspaceId={suggestedWorkspaceId}
-              t={t}
-              workspaceError={workspaceError}
-              workspaces={filteredWorkspaces}
-            />
-            <ActionPanel
-              checks={checks}
-              draft={draft}
-              draftIntent={draftIntent}
-              draftPlacement={draftPlacement}
-              draftState={aiDraft.state}
-              onDraftChange={(value) =>
-                setDraftEdit({ source: draftSource, value })
-              }
-              onDraftReply={() =>
-                aiDraft.draftReply({ intent: draftIntent, snapshot })
-              }
-              onIntentChange={setDraftIntent}
-              onPlaceDraft={() => void handlePlaceDraft()}
-              onSummarize={() => summary.summarize({ text: snapshot.bodyText })}
-              summaryState={summary.state}
-              t={t}
-            />
-            <SavePanel
-              attachments={snapshot.attachments}
-              onSave={handleSave}
-              onToggleAttachment={toggleAttachment}
-              saveState={ingest.state}
-              selectedAttachmentIds={selectedAttachmentIds}
-              selectedWorkspace={selectedWorkspace}
-              t={t}
-            />
-          </>
+          <MessageApp
+            key={snapshotKey(snapshot)}
+            snapshot={snapshot}
+            t={t}
+            workspaceError={workspaceError}
+            workspaces={workspaces}
+          />
         ) : null}
       </div>
     </div>
   );
 };
+
+const MessageApp = ({
+  snapshot,
+  t,
+  workspaceError,
+  workspaces,
+}: {
+  snapshot: MailSnapshot;
+  t: Translate;
+  workspaceError: string | null;
+  workspaces: ReturnType<typeof useWorkspaces>["workspaces"];
+}) => {
+  const {
+    filteredWorkspaces,
+    query,
+    selectedWorkspace,
+    selectedWorkspaceId,
+    setQuery,
+    setSelectedWorkspaceId,
+    suggestedWorkspaceId,
+  } = useWorkspaceSelection({ snapshot, workspaces });
+
+  const summary = useAISummary(t("saveErrorFallback"));
+  const aiDraft = useAIDraft(t("saveErrorFallback"));
+  const ingest = useIngestEmail(t("saveErrorFallback"));
+
+  const [attachmentSelection, setAttachmentSelection] =
+    useState<AttachmentSelection | null>(null);
+  const [draftIntent, setDraftIntent] = useState("");
+  const [draftEdit, setDraftEdit] = useState<DraftEdit | null>(null);
+  const [placementState, setPlacementState] =
+    useState<DraftPlacementState | null>(null);
+
+  const defaultAttachmentIds = new Set(
+    snapshot.attachments
+      .filter((attachment) => !attachment.isInline)
+      .map((attachment) => attachment.id),
+  );
+  const selectedAttachmentIds =
+    attachmentSelection?.source === snapshot
+      ? attachmentSelection.ids
+      : defaultAttachmentIds;
+  const draftSource = aiDraft.state.type === "ready" ? aiDraft.state : null;
+  const draft =
+    draftEdit?.source === draftSource
+      ? draftEdit.value
+      : (draftSource?.draft ?? "");
+  const draftPlacement =
+    placementState?.source === draft ? placementState.value : null;
+  const checks = runDraftChecks({ selectedWorkspaceId, snapshot });
+
+  const handlePlaceDraft = async () => {
+    if (!draft) {
+      return;
+    }
+    setPlacementState({ source: draft, value: await placeDraft(draft) });
+  };
+
+  const handleSave = () => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+    ingest.save({
+      attachments: snapshot.attachments.filter((attachment) =>
+        selectedAttachmentIds.has(attachment.id),
+      ),
+      snapshot,
+      workspaceId: selectedWorkspaceId,
+    });
+  };
+
+  const toggleAttachment = (attachmentId: string) => {
+    const ids = new Set(selectedAttachmentIds);
+    if (ids.has(attachmentId)) {
+      ids.delete(attachmentId);
+    } else {
+      ids.add(attachmentId);
+    }
+    setAttachmentSelection({ ids, source: snapshot });
+  };
+
+  return (
+    <>
+      <EmailSnapshotPanel snapshot={snapshot} t={t} />
+      <MatterPanel
+        onQueryChange={setQuery}
+        onSelect={setSelectedWorkspaceId}
+        query={query}
+        selectedWorkspaceId={selectedWorkspaceId}
+        suggestedWorkspaceId={suggestedWorkspaceId}
+        t={t}
+        workspaceError={workspaceError}
+        workspaces={filteredWorkspaces}
+      />
+      <ActionPanel
+        canSummarize={snapshot.bodyText.trim().length > 0}
+        checks={checks}
+        draft={draft}
+        draftIntent={draftIntent}
+        draftPlacement={draftPlacement}
+        draftState={aiDraft.state}
+        onDraftChange={(value) => setDraftEdit({ source: draftSource, value })}
+        onDraftReply={() =>
+          aiDraft.draftReply({ intent: draftIntent, snapshot })
+        }
+        onIntentChange={setDraftIntent}
+        onPlaceDraft={() => void handlePlaceDraft()}
+        onSummarize={() => summary.summarize({ text: snapshot.bodyText })}
+        summaryState={summary.state}
+        t={t}
+      />
+      <SavePanel
+        attachments={snapshot.attachments}
+        onSave={handleSave}
+        onToggleAttachment={toggleAttachment}
+        saveState={ingest.state}
+        selectedAttachmentIds={selectedAttachmentIds}
+        selectedWorkspace={selectedWorkspace}
+        t={t}
+      />
+    </>
+  );
+};
+
+const snapshotKey = (snapshot: MailSnapshot): string =>
+  snapshot.itemId ??
+  snapshot.internetMessageId ??
+  snapshot.conversationId ??
+  [snapshot.mode, snapshot.subject, snapshot.sentAt].join(":");
 
 const modeLabel = (
   mode: "browser" | "compose" | "read",

@@ -37449,6 +37449,76 @@ export const generatedRouteMap: RouteNode = {
                             },
                           },
                         },
+                        {
+                          type: "object",
+                          required: [
+                            "purpose",
+                            "propertyId",
+                            "name",
+                            "mimeType",
+                            "size",
+                            "sha256Hex",
+                          ],
+                          properties: {
+                            purpose: {
+                              const: "email_ingest",
+                              type: "string",
+                            },
+                            propertyId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            parentId: {
+                              nullable: true,
+                              anyOf: [
+                                {
+                                  minLength: 36,
+                                  maxLength: 36,
+                                  pattern:
+                                    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                  type: "string",
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            name: {
+                              minLength: 1,
+                              maxLength: 256,
+                              type: "string",
+                            },
+                            mimeType: {
+                              minLength: 1,
+                              maxLength: 255,
+                              type: "string",
+                            },
+                            size: {
+                              minimum: 1,
+                              maximum: 52428800,
+                              anyOf: [
+                                {
+                                  format: "integer",
+                                  default: 0,
+                                  type: "string",
+                                },
+                                {
+                                  minimum: 1,
+                                  maximum: 52428800,
+                                  type: "integer",
+                                },
+                              ],
+                            },
+                            sha256Hex: {
+                              type: "RegExp",
+                              source: "^[0-9a-f]{64}$",
+                              flags: "u",
+                            },
+                          },
+                        },
                       ],
                     },
                     params: {

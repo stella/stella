@@ -35,6 +35,10 @@ export const SavePanel = ({
   const saveLabel = selectedWorkspace
     ? t("saveButtonLabel", { matterName: selectedWorkspace.name })
     : t("chooseMatter");
+  const savedEmailUrl =
+    saveState.type === "saved"
+      ? buildEntityUrl(saveState.workspaceId, saveState.entityId)
+      : null;
 
   return (
     <Panel className="pb-4">
@@ -59,12 +63,16 @@ export const SavePanel = ({
       </div>
       <Button
         className="w-full"
-        disabled={!selectedWorkspace}
+        disabled={
+          !selectedWorkspace ||
+          saveState.type === "saving" ||
+          saveState.type === "saved"
+        }
         loading={saveState.type === "saving"}
         onClick={onSave}
       >
         <SaveIcon />
-        {saveLabel}
+        {saveState.type === "saved" ? t("saved") : saveLabel}
       </Button>
       {saveState.type === "saved" ? (
         <Notice title={t("saveSuccess")} tone="success">
@@ -75,15 +83,17 @@ export const SavePanel = ({
               {saveState.skippedAttachments.join("; ")}
             </span>
           ) : null}
-          <a
-            className="text-primary mt-1 inline-flex items-center gap-1 underline"
-            href={env.stellaWebUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
-            {t("openStella")}
-            <ExternalLinkIcon className="size-3" />
-          </a>
+          {savedEmailUrl ? (
+            <a
+              className="text-primary mt-1 inline-flex items-center gap-1 underline"
+              href={savedEmailUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {t("openSavedEmail")}
+              <ExternalLinkIcon className="size-3" />
+            </a>
+          ) : null}
         </Notice>
       ) : null}
       {saveState.type === "error" ? (
@@ -117,6 +127,12 @@ const AttachmentRow = ({
     </span>
   </label>
 );
+
+const buildEntityUrl = (workspaceId: string, entityId: string): string =>
+  new URL(
+    `/workspaces/${encodeURIComponent(workspaceId)}/entities/${encodeURIComponent(entityId)}`,
+    env.stellaWebUrl,
+  ).toString();
 
 const formatBytes = (value: number | null): string => {
   if (value === null) {
