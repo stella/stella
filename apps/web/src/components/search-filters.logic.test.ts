@@ -48,7 +48,7 @@ describe("active search types", () => {
     expect(
       hasUnavailableSearchType({
         availableTypes: ["matter", "contact", "document"],
-        kinds: ["case-law"],
+        kinds: ["task"],
         selectedTypes: [],
       }),
     ).toBe(true);
