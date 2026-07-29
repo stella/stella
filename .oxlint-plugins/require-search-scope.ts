@@ -1617,6 +1617,37 @@ export default {
           returns: unknown[];
         };
 
+        const directIdentifierFunctionNodes = (
+          identifier: AstNode & { name: string },
+        ): AstNode[] => {
+          const variable = resolveVariable(identifier);
+          return (variable?.defs ?? []).flatMap((definition) => {
+            if (
+              definition.type === "FunctionName" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "FunctionDeclaration"
+            ) {
+              return [definition.node];
+            }
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const"
+            ) {
+              return [];
+            }
+            const initializer = unwrapExpression(definition.node.init);
+            return isAstNode(initializer) &&
+              (initializer.type === "ArrowFunctionExpression" ||
+                initializer.type === "FunctionExpression")
+              ? [initializer]
+              : [];
+          });
+        };
+
         const staticallySelectedFunctionNodes = (
           expression: unknown,
         ): AstNode[] => {
@@ -1680,11 +1711,14 @@ export default {
           if (!isIdentifier(callee) && !isMemberCall) {
             return [];
           }
-          const calleeCandidates = isMemberCall
-            ? (resolveDynamicMemberAlternatives(callee, new Set()) ?? [callee])
-            : [callee];
           const functionNodes = new Set(
-            calleeCandidates.flatMap(staticallySelectedFunctionNodes),
+            isIdentifier(callee)
+              ? directIdentifierFunctionNodes(callee)
+              : (
+                  resolveDynamicMemberAlternatives(callee, new Set()) ?? [
+                    callee,
+                  ]
+                ).flatMap(staticallySelectedFunctionNodes),
           );
           const helpers: LocalSqlHelper[] = [];
           for (const functionNode of functionNodes) {
