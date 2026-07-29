@@ -177,7 +177,11 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
     if (keys.size >= want) {
       break;
     }
-    const textEntries = (listed.contents ?? []).filter((entry) =>
+    const contents = listed.contents;
+    if (!contents) {
+      continue;
+    }
+    const textEntries = contents.filter((entry) =>
       entry.key.endsWith("/text.zst"),
     );
     // A backfilled document can leave an orphaned older content-addressed
@@ -189,9 +193,12 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
       const sameDoc = textEntries.filter(
         (entry) => docOf(entry.key) === docOf(first.key),
       );
-      const newest = sameDoc.reduce((a, b) =>
-        (a.lastModified ?? "") > (b.lastModified ?? "") ? a : b,
-      );
+      let newest = first;
+      for (const entry of sameDoc) {
+        if ((entry.lastModified ?? "") > (newest.lastModified ?? "")) {
+          newest = entry;
+        }
+      }
       keys.add(newest.key);
     }
   }
@@ -238,9 +245,9 @@ const probeKey = async (
       .trim();
   const extractedKeys = extracted.map((c) => stripCitePrefix(c.citationText));
   const covered = (candidate: string): boolean => {
-    const key = stripCitePrefix(candidate);
+    const candidateKey = stripCitePrefix(candidate);
     return extractedKeys.some(
-      (have) => key.includes(have) || have.includes(key),
+      (have) => candidateKey.includes(have) || have.includes(candidateKey),
     );
   };
   const residuals = new Set<string>();
