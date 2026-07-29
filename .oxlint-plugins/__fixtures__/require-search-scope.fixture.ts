@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import { searchDocuments } from "@/api/db/schema";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
 import {
@@ -6,12 +8,9 @@ import {
   workspaceSearchDocumentsAccessSql,
 } from "@/api/lib/search/contact-workspace-access-sql";
 
-declare const sql: {
-  (strings: TemplateStringsArray, ...values: unknown[]): unknown;
-  join: (values: readonly unknown[]) => unknown;
-};
 declare const enabled: boolean;
 declare const organizationId: string;
+declare const pickFirst: (...values: unknown[]) => unknown;
 
 const entityWorkspaceFilter = searchDocumentsAccessSql({});
 const privateSearchTable = searchDocuments;
@@ -93,6 +92,18 @@ const unsafeJoinedPrivateFragment = (() => {
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves call-composed SQL fragments cannot hide a private projection
   return sql`SELECT * ${sql.join(privateFragments)}`;
 })();
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.raw cannot bypass private projection detection
+const unsafeRawEntity = sql.raw("SELECT * FROM search_documents sd");
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves opaque helpers expose each SQL-bearing argument as an alternative
+const unsafeOpaqueHelperCall = sql`
+  SELECT *
+  ${pickFirst(
+    sql`FROM search_documents sd`,
+    sql`WHERE true ${entityWorkspaceFilter}`,
+  )}
+`;
 
 const unsafeConditionalPrivateFragment = (() => {
   const privateFrom = enabled
@@ -304,6 +315,12 @@ const scopedJoinedPrivateFragment = (() => {
   return sql`SELECT * ${sql.join(fragments)}`;
 })();
 
+const scopedOpaquePrivateFragment = sql`
+  SELECT *
+  ${pickFirst(sql`FROM search_documents sd`)}
+  WHERE true ${entityWorkspaceFilter}
+`;
+
 const scopedConditionalPrivateFragment = (() => {
   const privateFrom = enabled
     ? sql`FROM search_documents sd`
@@ -356,6 +373,8 @@ void [
   unsafeTableRead,
   unsafeComposedPrivateRead,
   unsafeJoinedPrivateFragment,
+  unsafeRawEntity,
+  unsafeOpaqueHelperCall,
   unsafeConditionalPrivateFragment,
   unsafeLogicalPrivateFragment,
   unsafeSequencePrivateFragment,
@@ -387,6 +406,7 @@ void [
   scopedNestedPrivateRead,
   scopedComposedRead,
   scopedJoinedPrivateFragment,
+  scopedOpaquePrivateFragment,
   scopedConditionalPrivateFragment,
   scopedMultiBranch,
   scopedMatter,

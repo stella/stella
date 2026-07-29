@@ -1313,8 +1313,9 @@ export const SearchDialog = ({
               <SearchPreviewPanel
                 hit={previewHit}
                 onOpen={openSearchResult}
-                organizationId={user.activeOrganizationId}
+                organizationId={searchRecentsScope.organizationId}
                 query={searchQuery}
+                userId={searchRecentsScope.userId}
               />
             )}
           </div>
@@ -1328,6 +1329,7 @@ type SearchPreviewPanelProps = {
   hit: GlobalSearchHit | null;
   organizationId: string;
   query: string;
+  userId: string;
   onOpen: (hit: GlobalSearchHit) => void;
 };
 
@@ -1335,6 +1337,7 @@ const SearchPreviewPanel = ({
   hit,
   organizationId,
   query,
+  userId,
   onOpen,
 }: SearchPreviewPanelProps) => {
   const t = useTranslations();
@@ -1348,6 +1351,7 @@ const SearchPreviewPanel = ({
           onOpen={onOpen}
           organizationId={organizationId}
           query={query}
+          userId={userId}
         />
       ) : (
         <>
@@ -1367,6 +1371,7 @@ type SearchPreviewContentProps = {
   hit: GlobalSearchHit;
   organizationId: string;
   query: string;
+  userId: string;
   onOpen: (hit: GlobalSearchHit) => void;
 };
 
@@ -1374,6 +1379,7 @@ const SearchPreviewContent = ({
   hit,
   organizationId,
   query,
+  userId,
   onOpen,
 }: SearchPreviewContentProps) => {
   const t = useTranslations();
@@ -1386,6 +1392,7 @@ const SearchPreviewContent = ({
       resultId: target.resultId,
       type: target.type,
       updatedAt: hit.updatedAt,
+      userId,
     }),
   );
   const location =

@@ -129,16 +129,16 @@ const searchKeys = {
     ] as const,
   preview: ({
     organizationId,
+    userId,
     query,
     resultId,
     type,
     updatedAt,
   }: SearchPreviewParams) =>
     [
-      ...searchKeys.all,
+      ...searchKeys.owner({ organizationId, userId }),
       "preview",
       {
-        organizationId,
         query: normalizeSearchQuery(query),
         resultId,
         type,
@@ -216,6 +216,7 @@ export const searchInfiniteOptions = (params: SearchParams) =>
 
 type SearchPreviewParams = {
   organizationId: string;
+  userId: string;
   query: string;
   resultId: string;
   type: GlobalSearchResultType;
@@ -224,6 +225,7 @@ type SearchPreviewParams = {
 
 export const searchPreviewOptions = ({
   organizationId,
+  userId,
   query,
   resultId,
   type,
@@ -232,6 +234,7 @@ export const searchPreviewOptions = ({
   queryOptions({
     queryKey: searchKeys.preview({
       organizationId,
+      userId,
       query,
       resultId,
       type,

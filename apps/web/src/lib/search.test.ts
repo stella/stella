@@ -11,8 +11,11 @@ import {
 
 process.env["VITE_API_URL"] ??= "http://localhost:3001";
 
-const { hasSearchQueryOrSelectiveFilter, searchInfiniteOptions } =
-  await import("@/lib/search");
+const {
+  hasSearchQueryOrSelectiveFilter,
+  searchInfiniteOptions,
+  searchPreviewOptions,
+} = await import("@/lib/search");
 
 const emptySearch = () => ({
   editedByUserIds: [],
@@ -116,6 +119,26 @@ describe("search preview targets", () => {
     lastEditedByImage: null,
     mimeType: null,
   } as const satisfies GlobalSearchHit;
+
+  test("isolates cached previews by organization and user", () => {
+    const params = {
+      organizationId: "org_1",
+      userId: "user_1",
+      query: "current terms",
+      resultId: "entity_1",
+      type: "document",
+      updatedAt: previewHit.updatedAt,
+    } as const;
+    const ownerA = searchPreviewOptions(params);
+    const organizationB = searchPreviewOptions({
+      ...params,
+      organizationId: "org_2",
+    });
+    const userB = searchPreviewOptions({ ...params, userId: "user_2" });
+
+    expect(organizationB.queryKey).not.toEqual(ownerA.queryKey);
+    expect(userB.queryKey).not.toEqual(ownerA.queryKey);
+  });
 
   test("withholds previews while hits belong to the previous query", () => {
     expect(
