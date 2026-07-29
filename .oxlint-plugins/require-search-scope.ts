@@ -890,6 +890,7 @@ const SQL_CLAUSE_KEYWORDS = [
   "not",
   "using",
   "values",
+  "when",
   "where",
   "window",
 ] as const;
@@ -900,7 +901,7 @@ const isSqlClauseKeyword = (value: string): value is SqlClauseKeyword =>
   SQL_CLAUSE_KEYWORDS.some((keyword) => keyword === value);
 
 const SQL_SCOPE_CONTEXT_TOKEN =
-  /[()]|\b(?:not\s+)?in\s*\(\s*(?:false|true)\s*\)|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|(?:<=|>=|<|>)\s*\b(?:false|true)\b|\b(?:false|true)\b\s*(?:<=|>=|<|>)|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|using|values|where|window)\b/giu;
+  /[()]|\b(?:not\s+)?in\s*\(\s*(?:false|true)\s*\)|\bis\s+(?:false|unknown|null|not\s+(?:true|unknown|null)|distinct\s+from\s+true|not\s+distinct\s+from\s+false)\b|=\s*\bfalse\b|(?:!=|<>)\s*\btrue\b|(?:<=|>=|<|>)\s*\b(?:false|true)\b|\b(?:false|true)\b\s*(?:<=|>=|<|>)|\bfalse\b\s*(?:=|is\s+not\s+distinct\s+from)|\btrue\b\s*(?:!=|<>|is\s+distinct\s+from)|\b(?:case|cross|end|filter|from|full|group|having|inner|join|left|limit|not|offset|on|or|order|returning|right|select|set|using|values|when|where|window)\b/giu;
 
 const INVERSE_BOOLEAN_MEMBERSHIP_TESTS = new Set(["in(false)", "notin(true)"]);
 
@@ -1086,6 +1087,7 @@ const sqlScopeContextAfter = (
       case "set":
       case "using":
       case "values":
+      case "when":
       case "window":
         context.clause = "non-filtering";
         break;

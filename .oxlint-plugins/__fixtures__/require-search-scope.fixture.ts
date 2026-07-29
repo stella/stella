@@ -310,7 +310,7 @@ const unsafeComputedMemberFragmentRead = sql`
   SELECT * ${memberFragments[memberFragmentKeyAlias]}
 `;
 
-// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves cooked static template keys select the runtime fragment
+// oxlint-disable-next-line require-search-scope/require-search-scope, typescript/dot-notation -- fixture proves cooked static template keys select the runtime fragment
 const unsafeEscapedTemplateMemberFragmentRead = sql`
   SELECT * ${memberFragments[`fr\x6fm`]}
 `;
