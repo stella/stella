@@ -875,7 +875,7 @@ const githubRequestTimeoutMs = (
   const remainingMs = budget.deadlineAt - Date.now();
   if (remainingMs <= 0) {
     throw new HandlerError({
-      status: 408,
+      status: 400,
       message: "GitHub skill discovery timed out",
     });
   }
@@ -896,7 +896,7 @@ const githubRefKindExists = async ({
   ref,
   repo,
 }: {
-  budget?: GithubRequestBudget;
+  budget: GithubRequestBudget | undefined;
   kind: GithubRefKind;
   owner: string;
   ref: string;
