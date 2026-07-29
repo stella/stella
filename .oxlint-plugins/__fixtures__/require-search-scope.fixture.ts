@@ -96,6 +96,11 @@ const unsafeJoinedPrivateFragment = (() => {
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.raw cannot bypass private projection detection
 const unsafeRawEntity = sql.raw("SELECT * FROM search_documents sd");
 
+const rawEntityTemplate = `SELECT * FROM search_documents sd`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves const-bound static template literals cannot bypass sql.raw inspection
+const unsafeRawTemplateEntity = sql.raw(rawEntityTemplate);
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves opaque helpers expose each SQL-bearing argument as an alternative
 const unsafeOpaqueHelperCall = sql`
   SELECT *
@@ -384,6 +389,7 @@ void [
   unsafeComposedPrivateRead,
   unsafeJoinedPrivateFragment,
   unsafeRawEntity,
+  unsafeRawTemplateEntity,
   unsafeOpaqueHelperCall,
   unsafeConditionalPrivateFragment,
   unsafeLogicalPrivateFragment,

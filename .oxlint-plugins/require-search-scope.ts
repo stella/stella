@@ -152,6 +152,34 @@ const templateExpressions = (node: Record<string, unknown>): unknown[] => {
   return [];
 };
 
+const staticTemplateLiteralText = (node: unknown): string | null => {
+  if (
+    !isAstNode(node) ||
+    node.type !== "TemplateLiteral" ||
+    !Array.isArray(node.expressions) ||
+    node.expressions.length > 0 ||
+    !Array.isArray(node.quasis)
+  ) {
+    return null;
+  }
+  const parts: string[] = [];
+  for (const element of node.quasis) {
+    if (!isAstNode(element)) {
+      return null;
+    }
+    const value = element.value;
+    if (typeof value !== "object" || value === null || !("raw" in value)) {
+      return null;
+    }
+    const raw = value.raw;
+    if (typeof raw !== "string") {
+      return null;
+    }
+    parts.push(raw);
+  }
+  return parts.join("");
+};
+
 type SqlTemplateToken =
   | { type: "expression"; value: unknown }
   | { type: "text"; value: string };
@@ -846,7 +874,9 @@ export default {
             return null;
           }
           const resolved = resolveConstInitializer(argument);
-          return isStringLiteral(resolved) ? resolved.value : null;
+          return isStringLiteral(resolved)
+            ? resolved.value
+            : staticTemplateLiteralText(resolved);
         };
 
         const flattenSqlTemplate = (
