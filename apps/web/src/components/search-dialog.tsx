@@ -1337,6 +1337,7 @@ const SearchPreviewPanel = ({
       {hit ? (
         <SearchPreviewContent
           hit={hit}
+          key={`${hit.type}:${hit.id}:${hit.updatedAt}`}
           onOpen={onOpen}
           organizationId={organizationId}
           query={query}

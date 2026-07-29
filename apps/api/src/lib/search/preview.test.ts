@@ -15,6 +15,8 @@ const accessibleWorkspaceIds = [
 ];
 const resultId = "00000000-0000-4000-8000-000000000004";
 const SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT = 50_000;
+const SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT = 1_000;
+const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT = 48_999;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 
 const compilePreview = (type: GlobalSearchResultType) => {
@@ -34,9 +36,15 @@ const compilePreview = (type: GlobalSearchResultType) => {
 describe("search preview authorization scope", () => {
   test("bounds both source processing and response characters", () => {
     const compiled = compilePreview("document");
-    expect(compiled.sql.match(/\bleft\(/gu)).toHaveLength(2);
-    expect(compiled.params).toContain(SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT);
+    expect(compiled.sql.match(/\bleft\(/gu)).toHaveLength(3);
+    expect(compiled.params).toContain(SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT);
+    expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHARACTER_LIMIT);
     expect(compiled.params).toContain(SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT);
+    expect(
+      SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT +
+        1 +
+        SEARCH_PREVIEW_BODY_CHARACTER_LIMIT,
+    ).toBe(SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT);
   });
 
   test("every workspace entity kind is constrained by org and workspace", () => {

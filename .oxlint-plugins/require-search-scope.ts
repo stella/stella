@@ -72,26 +72,27 @@ const PRIVATE_SEARCH_PROJECTIONS = {
 type ApprovedScopeImport =
   (typeof PRIVATE_SEARCH_PROJECTIONS)[keyof typeof PRIVATE_SEARCH_PROJECTIONS][number];
 
-const templateText = (node: Record<string, unknown>): string => {
+const templateQuasiTexts = (node: Record<string, unknown>): string[] => {
   const quasi = node.quasi;
   if (!isAstNode(quasi) || !Array.isArray(quasi.quasis)) {
-    return "";
+    return [];
   }
 
-  return quasi.quasis
-    .flatMap((element) => {
-      if (!isAstNode(element)) {
-        return [];
-      }
-      const value = element.value;
-      if (typeof value !== "object" || value === null || !("raw" in value)) {
-        return [];
-      }
-      const raw = value.raw;
-      return typeof raw === "string" ? [raw] : [];
-    })
-    .join(" ");
+  return quasi.quasis.map((element) => {
+    if (!isAstNode(element)) {
+      return "";
+    }
+    const value = element.value;
+    if (typeof value !== "object" || value === null || !("raw" in value)) {
+      return "";
+    }
+    const raw = value.raw;
+    return typeof raw === "string" ? raw : "";
+  });
 };
+
+const templateText = (node: Record<string, unknown>): string =>
+  templateQuasiTexts(node).join(" ");
 
 const templateExpressions = (node: Record<string, unknown>): unknown[] => {
   const quasi = node.quasi;
@@ -100,6 +101,9 @@ const templateExpressions = (node: Record<string, unknown>): unknown[] => {
   }
   return [];
 };
+
+const projectionReadCount = (text: string, table: string): number =>
+  text.match(new RegExp(`\\b${table}\\b`, "giu"))?.length ?? 0;
 
 export default {
   meta: { name: "require-search-scope" },
@@ -209,17 +213,23 @@ export default {
             }
 
             const expressions = templateExpressions(node);
+            const quasiTexts = templateQuasiTexts(node);
             for (const [table, approvedImports] of Object.entries(
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
-              if (!new RegExp(`\\b${table}\\b`, "u").test(text)) {
-                continue;
+              let unscopedReadCount = 0;
+              for (const [index, quasiText] of quasiTexts.entries()) {
+                unscopedReadCount += projectionReadCount(quasiText, table);
+                const expression = expressions.at(index);
+                if (
+                  unscopedReadCount > 0 &&
+                  expression !== undefined &&
+                  isApprovedScopeFragment(expression, approvedImports)
+                ) {
+                  unscopedReadCount -= 1;
+                }
               }
-              if (
-                expressions.some((expression) =>
-                  isApprovedScopeFragment(expression, approvedImports),
-                )
-              ) {
+              if (unscopedReadCount === 0) {
                 continue;
               }
               context.report({

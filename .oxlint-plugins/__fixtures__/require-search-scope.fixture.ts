@@ -16,6 +16,9 @@ const singleWorkspaceFilter = workspaceAccessSql({});
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an unscoped private projection read is rejected
 const unsafeEntity = sql`SELECT * FROM search_documents sd WHERE sd.organization_id = ${organizationId}`;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves PostgreSQL-equivalent uppercase identifiers are protected
+const unsafeUppercaseEntity = sql`SELECT * FROM SEARCH_DOCUMENTS sd`;
+
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves counts cannot omit authorization either
 const unsafeChatCount = sql`SELECT count(*) FROM chat_thread_search_documents cst`;
 
@@ -42,6 +45,14 @@ const unsafeShadowedHelper = (() => {
   return sql`SELECT * FROM search_documents sd WHERE true ${workspaceAccessSql({})}`;
 })();
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves every UNION branch needs its own verified scope
+const unsafeMultiBranch = sql`
+  SELECT * FROM search_documents sd
+  WHERE true ${entityWorkspaceFilter} ${singleWorkspaceFilter}
+  UNION ALL
+  SELECT * FROM search_documents sd WHERE true
+`;
+
 const scopedEntity = sql`
   SELECT *
   FROM search_documents sd
@@ -54,6 +65,12 @@ const scopedSingleWorkspace = sql`
   FROM search_documents sd
   WHERE true
     ${singleWorkspaceFilter}
+`;
+
+const scopedMultiBranch = sql`
+  SELECT * FROM search_documents sd WHERE true ${entityWorkspaceFilter}
+  UNION ALL
+  SELECT * FROM search_documents sd WHERE true ${singleWorkspaceFilter}
 `;
 
 const scopedMatter = sql`
@@ -81,12 +98,15 @@ const publicCaseLaw = sql`SELECT * FROM case_law_search_documents clsd`;
 
 void [
   unsafeEntity,
+  unsafeUppercaseEntity,
   unsafeChatCount,
   unsafeConditionalScope,
   unsafeNestedHelper,
   unsafeShadowedHelper,
+  unsafeMultiBranch,
   scopedEntity,
   scopedSingleWorkspace,
+  scopedMultiBranch,
   scopedMatter,
   scopedContact,
   scopedChat,

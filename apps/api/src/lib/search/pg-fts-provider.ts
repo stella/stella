@@ -63,6 +63,11 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
   const workspaceAccessFilter = workspaceAccessSql({
     column: sql`sd.workspace_id`,
     accessibleWorkspaceIds,
+    selectedWorkspaceIds: [],
+  });
+  const workspaceSelectionFilter = workspaceAccessSql({
+    column: sql`sd.workspace_id`,
+    accessibleWorkspaceIds,
     selectedWorkspaceIds,
   });
   const kindFilter =
@@ -106,7 +111,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     FROM search_documents sd
     JOIN workspaces w ON w.id = sd.workspace_id
     WHERE ${orgFilter}
-      ${workspaceAccessFilter}
+      ${workspaceSelectionFilter}
       ${kindFilter}
       ${cursorFilter}
       AND sd.tsv @@ ${tsQuery}
@@ -118,7 +123,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     SELECT count(*)::int AS total
     FROM search_documents sd
     WHERE ${orgFilter}
-      ${workspaceAccessFilter}
+      ${workspaceSelectionFilter}
       ${kindFilter}
       AND sd.tsv @@ ${tsQuery}
   `;
@@ -130,7 +135,7 @@ const search = async (query: SearchQuery): Promise<SearchResult> => {
     SELECT sd.kind AS value, count(*)::int AS count
     FROM search_documents sd
     WHERE ${orgFilter}
-      ${workspaceAccessFilter}
+      ${workspaceSelectionFilter}
       AND sd.tsv @@ ${tsQuery}
     GROUP BY sd.kind
     ORDER BY count DESC

@@ -29,13 +29,20 @@ type SearchPreview = {
 };
 
 const SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT = 50_000;
+const SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT = 1_000;
+const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT =
+  SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT -
+  SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT -
+  1;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
 
-const previewHeadline = (source: SQL, tsQuery: SQL) => sql`
+const previewHeadline = (title: SQL, body: SQL, tsQuery: SQL) => sql`
   left(
     ts_headline(
       'public.stella_unaccent'::regconfig,
-      left(${source}, ${SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT}),
+      left(${title}, ${SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT})
+        || ' ' ||
+      left(${body}, ${SEARCH_PREVIEW_BODY_CHARACTER_LIMIT}),
       ${tsQuery},
       ${SEARCH_PREVIEW_HEADLINE_CONFIG}
     ),
@@ -61,7 +68,8 @@ export const buildSearchPreviewQuery = ({
     case "matter":
       return sql`
         SELECT ${previewHeadline(
-          sql`wsd.title || ' ' || wsd.searchable_text`,
+          sql`wsd.title`,
+          sql`wsd.searchable_text`,
           tsQuery,
         )}
         FROM workspace_search_documents wsd
@@ -77,7 +85,8 @@ export const buildSearchPreviewQuery = ({
     case "contact":
       return sql`
         SELECT ${previewHeadline(
-          sql`csd.title || ' ' || csd.searchable_text`,
+          sql`csd.title`,
+          sql`csd.searchable_text`,
           tsQuery,
         )}
         FROM contact_search_documents csd
@@ -93,7 +102,8 @@ export const buildSearchPreviewQuery = ({
     case "case-law":
       return sql`
         SELECT ${previewHeadline(
-          sql`clsd.title || ' ' || clsd.searchable_text`,
+          sql`clsd.title`,
+          sql`clsd.searchable_text`,
           tsQuery,
         )}
         FROM case_law_search_documents clsd
@@ -104,7 +114,8 @@ export const buildSearchPreviewQuery = ({
     case "chat":
       return sql`
         SELECT ${previewHeadline(
-          sql`cst.title || ' ' || cst.searchable_text`,
+          sql`cst.title`,
+          sql`cst.searchable_text`,
           tsQuery,
         )}
         FROM chat_thread_search_documents cst
@@ -126,7 +137,8 @@ export const buildSearchPreviewQuery = ({
     case "link":
       return sql`
         SELECT ${previewHeadline(
-          sql`sd.title || ' ' || sd.searchable_text`,
+          sql`sd.title`,
+          sql`sd.searchable_text`,
           tsQuery,
         )}
         FROM search_documents sd
