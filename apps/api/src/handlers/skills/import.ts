@@ -27,6 +27,7 @@ const importSkillsBodySchema = t.Object({
         }),
         t.Object({
           entrypointHash: t.String({ pattern: CONTENT_HASH_PATTERN }),
+          sourceUrl: t.String({ minLength: 1, maxLength: 2048 }),
           type: t.Literal("github-commit"),
           value: t.String({ pattern: GITHUB_COMMIT_SHA_PATTERN }),
         }),

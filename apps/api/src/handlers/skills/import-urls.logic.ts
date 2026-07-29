@@ -20,7 +20,7 @@ const skillIntegrityKey = (integrity: SkillSourceIntegrity): string => {
     case "content-hash":
       return `${integrity.type}:${integrity.value}`;
     case "github-commit":
-      return `${integrity.type}:${integrity.value}:${integrity.entrypointHash}`;
+      return `${integrity.type}:${integrity.value}:${integrity.entrypointHash}:${integrity.sourceUrl}`;
     default:
       return unreachable("Unknown skill source integrity type");
   }
@@ -34,13 +34,23 @@ export const deduplicateSkillImportItems = (
   const itemsBySourceUrl = new Map<string, SkillImportItem>();
   for (const item of requestedItems) {
     const requestedSourceUrl = item.sourceUrl.trim();
-    const sourceUrl =
-      item.integrity.type === "github-commit"
-        ? canonicalizeGithubCommitSkillUrl({
-            commitSha: item.integrity.value,
-            rawUrl: requestedSourceUrl,
-          })
-        : requestedSourceUrl;
+    let sourceUrl: string | null = requestedSourceUrl;
+    let integrity = item.integrity;
+    if (integrity.type === "github-commit") {
+      sourceUrl = canonicalizeGithubCommitSkillUrl({
+        commitSha: integrity.value,
+        rawUrl: requestedSourceUrl,
+      });
+      const integritySourceUrl = canonicalizeGithubCommitSkillUrl({
+        commitSha: integrity.value,
+        rawUrl: integrity.sourceUrl,
+      });
+      if (sourceUrl !== integritySourceUrl) {
+        sourceUrl = null;
+      } else if (integritySourceUrl !== null) {
+        integrity = { ...integrity, sourceUrl: integritySourceUrl };
+      }
+    }
     if (sourceUrl === null) {
       failed.push({
         message: "Skill source changed after discovery; review it again",
@@ -54,14 +64,13 @@ export const deduplicateSkillImportItems = (
     const existing = itemsBySourceUrl.get(sourceUrl);
     if (!existing) {
       itemsBySourceUrl.set(sourceUrl, {
-        integrity: item.integrity,
+        integrity,
         sourceUrl,
       });
       continue;
     }
     if (
-      skillIntegrityKey(existing.integrity) ===
-      skillIntegrityKey(item.integrity)
+      skillIntegrityKey(existing.integrity) === skillIntegrityKey(integrity)
     ) {
       continue;
     }

@@ -50018,12 +50018,18 @@ export const generatedRouteMap: RouteNode = {
                                     type: "object",
                                     required: [
                                       "entrypointHash",
+                                      "sourceUrl",
                                       "type",
                                       "value",
                                     ],
                                     properties: {
                                       entrypointHash: {
                                         pattern: "^[a-f0-9]{64}$",
+                                        type: "string",
+                                      },
+                                      sourceUrl: {
+                                        minLength: 1,
+                                        maxLength: 2048,
                                         type: "string",
                                       },
                                       type: {

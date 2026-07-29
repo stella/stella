@@ -59,7 +59,12 @@ export type ParsedSkillPackage = {
 
 export type SkillSourceIntegrity =
   | { type: "content-hash"; value: string }
-  | { type: "github-commit"; entrypointHash: string; value: string };
+  | {
+      type: "github-commit";
+      entrypointHash: string;
+      sourceUrl: string;
+      value: string;
+    };
 
 export type DiscoveredSkillPackage = {
   compatibility: string | null;
@@ -1164,20 +1169,22 @@ const discoverGithubSkillPackages = async (
           skillPath === SKILL_FILE_NAME
             ? ""
             : skillPath.slice(0, -`/${SKILL_FILE_NAME}`.length);
+        const sourceUrl = githubPinnedSkillUrl({
+          commitSha,
+          owner: target.owner,
+          repo: target.repo,
+          skillDir,
+        });
         return toDiscoveredSkill({
           integrity: {
             type: "github-commit",
             entrypointHash: parsed.entrypointHash,
+            sourceUrl,
             value: commitSha,
           },
           path: skillDir || ".",
           parsed,
-          sourceUrl: githubPinnedSkillUrl({
-            commitSha,
-            owner: target.owner,
-            repo: target.repo,
-            skillDir,
-          }),
+          sourceUrl,
         });
       } catch {
         return null;
@@ -1244,17 +1251,26 @@ export const verifySkillPackageIntegrity = ({
         return Result.ok(undefined);
       }
       break;
-    case "github-commit":
+    case "github-commit": {
+      if (integrity.entrypointHash !== parsed.entrypointHash) {
+        break;
+      }
+      const canonicalSourceUrl = canonicalizeGithubCommitSkillUrl({
+        commitSha: integrity.value,
+        rawUrl: sourceUrl,
+      });
+      const canonicalIntegritySourceUrl = canonicalizeGithubCommitSkillUrl({
+        commitSha: integrity.value,
+        rawUrl: integrity.sourceUrl,
+      });
       if (
-        integrity.entrypointHash === parsed.entrypointHash &&
-        isGithubSkillSourcePinnedToCommit({
-          commitSha: integrity.value,
-          rawUrl: sourceUrl,
-        })
+        canonicalSourceUrl !== null &&
+        canonicalSourceUrl === canonicalIntegritySourceUrl
       ) {
         return Result.ok(undefined);
       }
       break;
+    }
     default:
       return unreachable("Unknown skill source integrity type");
   }
@@ -1266,14 +1282,6 @@ export const verifySkillPackageIntegrity = ({
     }),
   );
 };
-
-const isGithubSkillSourcePinnedToCommit = ({
-  commitSha,
-  rawUrl,
-}: {
-  commitSha: string;
-  rawUrl: string;
-}): boolean => canonicalizeGithubCommitSkillUrl({ commitSha, rawUrl }) !== null;
 
 export const canonicalizeGithubCommitSkillUrl = ({
   commitSha,

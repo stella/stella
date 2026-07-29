@@ -67,16 +67,18 @@ Follow the checklist.`,
       ),
     ).toBe(true);
     const commitSha = "a".repeat(40);
+    const pinnedSourceUrl = `https://github.com/example/skills/tree/${commitSha}/review`;
     expect(
       Result.isOk(
         verifySkillPackageIntegrity({
           integrity: {
             type: "github-commit",
             entrypointHash: result.value.entrypointHash,
+            sourceUrl: pinnedSourceUrl,
             value: commitSha,
           },
           parsed: result.value,
-          sourceUrl: `https://github.com/example/skills/tree/${commitSha}/review`,
+          sourceUrl: pinnedSourceUrl,
         }),
       ),
     ).toBe(true);
@@ -86,6 +88,21 @@ Follow the checklist.`,
           integrity: {
             type: "github-commit",
             entrypointHash: result.value.entrypointHash,
+            sourceUrl: pinnedSourceUrl,
+            value: commitSha,
+          },
+          parsed: result.value,
+          sourceUrl: `https://github.com/example/skills/tree/${commitSha}/other`,
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      Result.isError(
+        verifySkillPackageIntegrity({
+          integrity: {
+            type: "github-commit",
+            entrypointHash: result.value.entrypointHash,
+            sourceUrl: pinnedSourceUrl,
             value: commitSha,
           },
           parsed: result.value,
@@ -99,6 +116,7 @@ Follow the checklist.`,
           integrity: {
             type: "github-commit",
             entrypointHash: "0".repeat(64),
+            sourceUrl: pinnedSourceUrl,
             value: commitSha,
           },
           parsed: result.value,
@@ -138,16 +156,18 @@ Use the references.`,
     ]);
     expect(result.value.contentHash).not.toBe(result.value.entrypointHash);
     const commitSha = "b".repeat(40);
+    const pinnedSourceUrl = `https://github.com/example/skills/tree/${commitSha}/nda-review`;
     expect(
       Result.isOk(
         verifySkillPackageIntegrity({
           integrity: {
             type: "github-commit",
             entrypointHash: result.value.entrypointHash,
+            sourceUrl: pinnedSourceUrl,
             value: commitSha,
           },
           parsed: result.value,
-          sourceUrl: `https://github.com/example/skills/tree/${commitSha}/nda-review`,
+          sourceUrl: pinnedSourceUrl,
         }),
       ),
     ).toBe(true);

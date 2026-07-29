@@ -7,8 +7,13 @@ const contentIntegrity = (value: string) => ({
   value,
 });
 
-const githubIntegrity = (value: string, entrypointHash: string) => ({
+const githubIntegrity = (
+  value: string,
+  entrypointHash: string,
+  sourceUrl: string,
+) => ({
   entrypointHash,
+  sourceUrl,
   type: "github-commit" as const,
   value,
 });
@@ -50,7 +55,11 @@ describe("skill URL import batches", () => {
 
   test("keeps identical GitHub commit previews as one import", () => {
     const sourceUrl = `https://github.com/example/skills/tree/${"a".repeat(40)}/review`;
-    const integrity = githubIntegrity("a".repeat(40), "b".repeat(64));
+    const integrity = githubIntegrity(
+      "a".repeat(40),
+      "b".repeat(64),
+      sourceUrl,
+    );
     const result = deduplicateSkillImportItems([
       { integrity, sourceUrl },
       { integrity, sourceUrl },
@@ -66,11 +75,11 @@ describe("skill URL import batches", () => {
     const sourceUrl = `https://github.com/example/skills/tree/${"a".repeat(40)}/review`;
     const result = deduplicateSkillImportItems([
       {
-        integrity: githubIntegrity("a".repeat(40), "b".repeat(64)),
+        integrity: githubIntegrity("a".repeat(40), "b".repeat(64), sourceUrl),
         sourceUrl,
       },
       {
-        integrity: githubIntegrity("a".repeat(40), "c".repeat(64)),
+        integrity: githubIntegrity("a".repeat(40), "c".repeat(64), sourceUrl),
         sourceUrl,
       },
     ]);
@@ -86,8 +95,12 @@ describe("skill URL import batches", () => {
 
   test("canonicalizes equivalent pinned GitHub URLs before deduplicating", () => {
     const commitSha = "a".repeat(40);
-    const integrity = githubIntegrity(commitSha, "b".repeat(64));
     const canonicalSourceUrl = `https://github.com/example/skills/tree/${commitSha}/Review%20Skill`;
+    const integrity = githubIntegrity(
+      commitSha,
+      "b".repeat(64),
+      canonicalSourceUrl,
+    );
     const result = deduplicateSkillImportItems([
       {
         integrity,
@@ -105,9 +118,14 @@ describe("skill URL import batches", () => {
   test("rejects unpinned GitHub commit items before import fetching", () => {
     const sourceUrl =
       "https://github.com/example/skills/tree/main/review/SKILL.md";
+    const commitSha = "a".repeat(40);
     const result = deduplicateSkillImportItems([
       {
-        integrity: githubIntegrity("a".repeat(40), "b".repeat(64)),
+        integrity: githubIntegrity(
+          commitSha,
+          "b".repeat(64),
+          `https://github.com/example/skills/tree/${commitSha}/review`,
+        ),
         sourceUrl,
       },
     ]);
@@ -117,6 +135,30 @@ describe("skill URL import batches", () => {
       {
         message: "Skill source changed after discovery; review it again",
         sourceUrl,
+      },
+    ]);
+  });
+
+  test("rejects a different GitHub skill path before import fetching", () => {
+    const commitSha = "a".repeat(40);
+    const discoveredSourceUrl = `https://github.com/example/skills/tree/${commitSha}/reviewed`;
+    const requestedSourceUrl = `https://github.com/example/skills/tree/${commitSha}/other`;
+    const result = deduplicateSkillImportItems([
+      {
+        integrity: githubIntegrity(
+          commitSha,
+          "b".repeat(64),
+          discoveredSourceUrl,
+        ),
+        sourceUrl: requestedSourceUrl,
+      },
+    ]);
+
+    expect(result.items).toEqual([]);
+    expect(result.failed).toEqual([
+      {
+        message: "Skill source changed after discovery; review it again",
+        sourceUrl: requestedSourceUrl,
       },
     ]);
   });
