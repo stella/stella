@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { loadDocsForBatch } from "@/api/handlers/legislation/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 
@@ -30,7 +31,10 @@ const makeRow = ({ id, contentHash, textS3Key }: MakeRowOptions) => ({
   contentHash,
   indexedHash: null,
   indexedGeneration: null,
-  updatedAt: new Date("2024-01-01T00:00:00Z"),
+  // SAFETY: tests fabricate the branded token the adapters normally
+  // select as `updated_at::text`.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  updatedAtToken: "2024-01-01 00:00:00" as TimestampCasToken,
 });
 
 describe("legislation loadDocsForBatch read-failure isolation", () => {
