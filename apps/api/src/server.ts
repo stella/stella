@@ -59,6 +59,7 @@ import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { reportsRoute } from "@/api/handlers/reports/routes";
+import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
@@ -528,6 +529,7 @@ const api = new Elysia()
       .use(legislationRoute)
       .use(legislationCorpusRoute)
       .use(searchRoute)
+      .use(savedSearchesRoute)
       .use(auditLogsRoute)
       .use(caseLawRoute)
       .use(chatRoute)

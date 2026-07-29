@@ -603,6 +603,34 @@ export const workspaceViewTemplatePolicies = () => [
   }),
 ];
 
+const savedSearchCheck = sql`(
+  ${organizationCheck} AND ${userCheck}
+)`;
+
+export const savedSearchPolicies = () => [
+  p.pgPolicy("saved_search_select", {
+    for: "select",
+    to: stella,
+    using: savedSearchCheck,
+  }),
+  p.pgPolicy("saved_search_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: savedSearchCheck,
+  }),
+  p.pgPolicy("saved_search_update", {
+    for: "update",
+    to: stella,
+    using: savedSearchCheck,
+    withCheck: savedSearchCheck,
+  }),
+  p.pgPolicy("saved_search_delete", {
+    for: "delete",
+    to: stella,
+    using: savedSearchCheck,
+  }),
+];
+
 const agentSkillVisibleCheck = sql`(
   ${organizationCheck} AND (scope = 'team' OR ${userCheck})
 )`;

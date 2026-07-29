@@ -203,6 +203,9 @@ export const LIMITS = {
   searchQueryMaxLength: 500,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
+  savedSearchesPerUser: 100,
+  savedSearchesPageSizeDefault: 50,
+  savedSearchesPageSizeMax: 100,
   /** Cap on the rolled-up message text indexed per chat thread for
    *  global search. Bounds the stored tsv so a long conversation
    *  cannot blow up the index; the headline only reads the first

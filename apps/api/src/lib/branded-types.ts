@@ -73,6 +73,7 @@ export type SafeIdType =
   | "propertyDependency"
   | "rateEntry"
   | "rateTable"
+  | "savedSearch"
   | "reportExport"
   | "schedulerJobRun"
   | "sharepointConnection"

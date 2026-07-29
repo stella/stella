@@ -17,6 +17,7 @@ const baseFilters = (
 ): SearchFilters => ({
   workspaceIds: [],
   types: [],
+  kinds: [],
   editedByUserIds: [],
   mimeTypes: [],
   ...overrides,

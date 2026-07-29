@@ -14,7 +14,6 @@ const isoDateTime = t.String({ format: "date-time" });
 
 export const searchBodySchema = t.Object({
   query: t.String({
-    minLength: 1,
     maxLength: LIMITS.searchQueryMaxLength,
   }),
   workspaceIds: t.Array(tSafeId("workspace"), { maxItems: 64 }),
@@ -37,6 +36,38 @@ export const searchBodySchema = t.Object({
 });
 
 type SearchBodySchema = Static<typeof searchBodySchema>;
+
+type SearchFilterInput = {
+  query: string;
+  types: readonly unknown[];
+  kinds?: readonly unknown[] | undefined;
+  editedByUserIds: readonly unknown[];
+  mimeTypes: readonly unknown[];
+  updatedFrom?: string | undefined;
+  updatedTo?: string | undefined;
+};
+
+/**
+ * A caller's workspace allowlist is an authorization boundary, not a search
+ * filter. An explicit workspace selection alone would still list an entire
+ * matter, so an empty text query needs a selective non-workspace filter.
+ */
+export const hasSearchQueryOrSelectiveFilter = ({
+  query,
+  types,
+  kinds,
+  editedByUserIds,
+  mimeTypes,
+  updatedFrom,
+  updatedTo,
+}: SearchFilterInput): boolean =>
+  query.trim().length > 0 ||
+  types.length > 0 ||
+  (kinds?.length ?? 0) > 0 ||
+  editedByUserIds.length > 0 ||
+  mimeTypes.length > 0 ||
+  updatedFrom !== undefined ||
+  updatedTo !== undefined;
 
 type WorkspaceNotFoundError = ReturnType<
   typeof status<400, { message: "Workspace not found in organization" }>
@@ -112,6 +143,12 @@ export const searchHandler = async ({
   body,
   search = searchGlobal,
 }: SearchHandlerProps) => {
+  if (!hasSearchQueryOrSelectiveFilter(body)) {
+    return status(400, {
+      message: "Provide a search query or at least one filter",
+    });
+  }
+
   const resolved = await resolveSelectedWorkspaceIds({
     scopedDb,
     organizationId,

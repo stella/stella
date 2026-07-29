@@ -190,7 +190,7 @@ export const upsertSearchDocument = async (
       ${doc.title},
       ${doc.searchableText},
       ${doc.language},
-      now(),
+      ${doc.updatedAt},
       to_tsvector(
         ${regconfig}::regconfig,
         unaccent(arabic_normalize(

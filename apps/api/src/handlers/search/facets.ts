@@ -1,10 +1,13 @@
-import { t } from "elysia";
+import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
-import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
+import {
+  hasSearchQueryOrSelectiveFilter,
+  resolveSelectedWorkspaceIds,
+} from "@/api/handlers/search/search";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
@@ -24,7 +27,6 @@ export const searchFacetsBodySchema = t.Object({
   facet: t.UnionEnum(FACET_NAMES),
   search: t.String({ maxLength: FACET_SEARCH_MAX, default: "" }),
   query: t.String({
-    minLength: 1,
     maxLength: LIMITS.searchQueryMaxLength,
   }),
   workspaceIds: t.Array(tSafeId("workspace"), { maxItems: 64 }),
@@ -62,6 +64,12 @@ export const searchFacetsHandler = async ({
   accessibleWorkspaceIds,
   body,
 }: SearchFacetsHandlerProps) => {
+  if (!hasSearchQueryOrSelectiveFilter(body)) {
+    return status(400, {
+      message: "Provide a search query or at least one filter",
+    });
+  }
+
   const resolved = await resolveSelectedWorkspaceIds({
     scopedDb,
     organizationId,

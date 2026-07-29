@@ -1,4 +1,4 @@
-import type { GlobalSearchResultType } from "@stll/api/types";
+import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 
 import { presetUpdatedFrom } from "@/lib/search";
 import type { TimePreset } from "@/lib/search";
@@ -10,6 +10,7 @@ export type TimeFilter =
 export type SearchFilters = {
   workspaceIds: string[];
   types: GlobalSearchResultType[];
+  kinds: EntityKind[];
   editedByUserIds: string[];
   mimeTypes: string[];
   time?: TimeFilter;

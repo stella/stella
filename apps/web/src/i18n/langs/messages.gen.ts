@@ -2316,6 +2316,8 @@ type Messages = {
     "continueInChat": "Continue in chat";
     "dateFrom": "From";
     "dateTo": "To";
+    "deleteSearchDescription": "This will permanently delete \"{name}\".";
+    "deleteSearchTitle": "Delete saved search";
     "editedBy": "Edited by";
     "emptyState": "Start typing to search across all matters.";
     "escKey": "ESC";
@@ -2334,7 +2336,13 @@ type Messages = {
     "placeholder": "Search across all matters...";
     "recentSearches": "Recent searches";
     "recentlyOpenedFiles": "Recently opened files";
+    "renameSearchTitle": "Rename saved search";
     "resultCount": "{count, plural, one {# result} other {# results}}";
+    "saveSearch": "Save search";
+    "saveSearchNamePlaceholder": "e.g. Recent PDFs";
+    "saveSearchTitle": "Save search";
+    "savedSearches": "Saved searches";
+    "savedSearchesEmpty": "Save a search to reuse it.";
     "summaryAction": "Summarize top results";
     "summaryError": "Summary unavailable";
     "summaryLoading": "Summarizing results...";

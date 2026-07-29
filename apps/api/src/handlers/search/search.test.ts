@@ -88,6 +88,51 @@ describe("search handler workspace scoping", () => {
     });
   });
 
+  test("rejects a blank query scoped only to a workspace", async () => {
+    const result = await searchHandler({
+      accessibleWorkspaceIds,
+      body: {
+        ...emptySearchFilters(),
+        query: "  ",
+        workspaceIds: [accessibleWorkspaceIds[0]],
+      },
+      organizationId,
+      userId,
+      search: searchMock,
+      scopedDb: unusedScopedDb,
+    });
+
+    expect(result).toMatchObject({
+      code: 400,
+      response: {
+        message: "Provide a search query or at least one filter",
+      },
+    });
+    expect(searchMock).not.toHaveBeenCalled();
+  });
+
+  test("runs a blank query when an entity-kind filter is selected", async () => {
+    await searchHandler({
+      accessibleWorkspaceIds,
+      body: {
+        ...emptySearchFilters(),
+        kinds: ["document"],
+        query: "",
+      },
+      organizationId,
+      userId,
+      search: searchMock,
+      scopedDb: unusedScopedDb,
+    });
+
+    expect(searchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: "",
+        types: ["document"],
+      }),
+    );
+  });
+
   test("validates and forwards the user's workspace selection", async () => {
     const workspaceId = toSafeId<"workspace">("ws_1");
     const findManyMock = mock(async () => [{ id: workspaceId }]);

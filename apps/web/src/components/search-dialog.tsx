@@ -43,6 +43,11 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { MatterIcon } from "@/components/matter-icon";
+import { SavedSearches } from "@/components/saved-searches";
+import {
+  toSearchFilters,
+  type SavedSearchCriteria,
+} from "@/components/saved-searches.logic";
 import { getChatHitRoute } from "@/components/search-dialog.logic";
 import {
   clearTime,
@@ -76,6 +81,7 @@ import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   searchFacetOptions,
+  hasSearchQueryOrSelectiveFilter,
   searchInfiniteOptions,
   TIME_PRESETS,
 } from "@/lib/search";
@@ -289,6 +295,7 @@ export const SearchDialog = ({
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const [filters, setFilters] = useState<SearchFilters>({
     editedByUserIds: [],
+    kinds: [],
     mimeTypes: [],
     types: [],
     workspaceIds: initialWorkspaceId ? [initialWorkspaceId] : [],
@@ -323,6 +330,18 @@ export const SearchDialog = ({
       : SEARCH_KIND_TYPES.filter((type) =>
           isAvailableSearchKind(type, publicLawPreviewEnabled),
         );
+  const hasQuery = searchQuery.trim().length > 0;
+  const hasActiveSearch = hasSearchQueryOrSelectiveFilter({
+    query: searchQuery,
+    types: filters.types,
+    kinds: filters.kinds,
+    editedByUserIds: filters.editedByUserIds,
+    mimeTypes: filters.mimeTypes,
+    updatedFrom,
+    updatedTo,
+  });
+  const hasTypedQuery = query.trim().length > 0;
+  const hasVisibleSearch = hasTypedQuery || hasActiveSearch;
 
   const {
     data,
@@ -333,9 +352,10 @@ export const SearchDialog = ({
     isFetchingNextPage,
   } = useInfiniteQuery(
     searchInfiniteOptions({
+      enabled: hasActiveSearch,
       query: searchQuery,
       workspaceIds: filters.workspaceIds,
-      kinds: [],
+      kinds: filters.kinds,
       types: activeSearchTypes,
       editedByUserIds: filters.editedByUserIds,
       mimeTypes: filters.mimeTypes,
@@ -355,7 +375,7 @@ export const SearchDialog = ({
   // Counts and facets are computed only on the first page (see backend);
   // ignore them entirely while the query is empty so a cleared input
   // doesn't leave stale numbers in the sidebar.
-  const firstPage = searchQuery.length > 0 ? data?.pages.at(0) : undefined;
+  const firstPage = hasActiveSearch ? data?.pages.at(0) : undefined;
   const facets = firstPage?.facets;
   const typeBuckets = facets ? facets.type : EMPTY_FACET_BUCKETS;
   const mimeTypeBuckets = facets ? facets.mimeType : EMPTY_FACET_BUCKETS;
@@ -363,6 +383,7 @@ export const SearchDialog = ({
   const workspaceBuckets = facets ? facets.workspace : EMPTY_FACET_BUCKETS;
   const totalCount = firstPage?.totalCount ?? 0;
   const filterTypesKey = filters.types.join("|");
+  const filterKindsKey = filters.kinds.join("|");
   const filterMimeTypesKey = filters.mimeTypes.join("|");
   const filterWorkspaceIdsKey = filters.workspaceIds.join("|");
 
@@ -407,8 +428,9 @@ export const SearchDialog = ({
   };
 
   const facetSearchParams = {
+    enabled: hasActiveSearch,
     query: searchQuery,
-    kinds: [] satisfies EntityKind[],
+    kinds: filters.kinds,
     ...searchFilterParams,
   };
 
@@ -740,9 +762,7 @@ export const SearchDialog = ({
   };
 
   const hasResults = allHits.length > 0;
-  const hasQuery = searchQuery.length > 0;
-  const hasTypedQuery = query.trim().length > 0;
-  const commandHits = hasTypedQuery && hasResults ? allHits : [];
+  const commandHits = hasVisibleSearch && hasResults ? allHits : [];
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
   // Clear any prior AI summary whenever the effective search changes. The
@@ -760,6 +780,7 @@ export const SearchDialog = ({
     resetSummarizeSearch();
   }, [
     filterEditorIdsKey,
+    filterKindsKey,
     filterMimeTypesKey,
     filterTypesKey,
     filterWorkspaceIdsKey,
@@ -771,7 +792,7 @@ export const SearchDialog = ({
   const loadMoreRef = useCallback(
     (target: HTMLDivElement | null) => {
       const root = resultsElement;
-      if (!hasQuery || !hasNextPage || !root || !target) {
+      if (!hasActiveSearch || !hasNextPage || !root || !target) {
         return undefined;
       }
 
@@ -789,8 +810,32 @@ export const SearchDialog = ({
       observer.observe(target);
       return () => observer.disconnect();
     },
-    [fetchNextPage, hasNextPage, hasQuery, isFetchingNextPage, resultsElement],
+    [
+      fetchNextPage,
+      hasActiveSearch,
+      hasNextPage,
+      isFetchingNextPage,
+      resultsElement,
+    ],
   );
+
+  const applySavedSearch = (criteria: SavedSearchCriteria) => {
+    const savedFilters = toSearchFilters(criteria);
+    debouncedSetQuery.cancel();
+    setQuery(criteria.query);
+    setDebouncedQuery(criteria.query);
+    setFilters({
+      workspaceIds: savedFilters.workspaceIds,
+      types: savedFilters.types.filter((type) =>
+        isAvailableSearchKind(type, publicLawPreviewEnabled),
+      ),
+      kinds: savedFilters.kinds,
+      editedByUserIds: savedFilters.editedByUserIds,
+      mimeTypes: savedFilters.mimeTypes,
+      ...(savedFilters.time !== undefined && { time: savedFilters.time }),
+    });
+    summarizeSearchMutation.reset();
+  };
 
   return (
     <CommandDialog onOpenChange={onOpenChange} open={open}>
@@ -849,6 +894,14 @@ export const SearchDialog = ({
                 <WandSparklesIcon className="size-4" />
               )}
             </Button>
+            <SavedSearches
+              filters={filters}
+              hasActiveCriteria={hasActiveSearch}
+              isOpen={open}
+              onApply={applySavedSearch}
+              query={query}
+              showList={false}
+            />
             <Button
               aria-keyshortcuts="Escape"
               aria-label={t("search.escKey")}
@@ -880,7 +933,7 @@ export const SearchDialog = ({
                 time={filters.time}
               />
 
-              {hasQuery && (
+              {hasActiveSearch && (
                 <>
                   {(facets?.type.length ?? 0) + filters.types.length > 0 && (
                     <div className="mt-4">
@@ -967,38 +1020,53 @@ export const SearchDialog = ({
               className="max-h-none min-w-0 flex-1 overflow-y-auto"
               ref={setResultsElement}
             >
-              {!hasTypedQuery && (
-                <SearchRecents
-                  onFileClick={openRecentFile}
-                  onSearchClick={applyRecentSearch}
-                  recentFiles={recentFiles}
-                  recentSearches={recentSearches}
-                />
+              {!hasVisibleSearch && (
+                <>
+                  <SavedSearches
+                    filters={filters}
+                    hasActiveCriteria={hasActiveSearch}
+                    isOpen={open}
+                    onApply={applySavedSearch}
+                    query={query}
+                    showTrigger={false}
+                  />
+                  <SearchRecents
+                    onFileClick={openRecentFile}
+                    onSearchClick={applyRecentSearch}
+                    recentFiles={recentFiles}
+                    recentSearches={recentSearches}
+                  />
+                </>
               )}
 
-              {hasTypedQuery && !hasResults && (!hasQuery || isLoading) && (
-                <div className="space-y-3 px-4 py-3">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    // eslint-disable-next-line react/no-array-index-key -- static skeleton-loader placeholder, never reorders
-                    <div className="space-y-2" key={`skeleton-${i}`}>
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                    </div>
-                  ))}
-                </div>
-              )}
+              {hasVisibleSearch &&
+                !hasResults &&
+                (!hasActiveSearch || isLoading) && (
+                  <div className="space-y-3 px-4 py-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      // eslint-disable-next-line react/no-array-index-key -- static skeleton-loader placeholder, never reorders
+                      <div className="space-y-2" key={`skeleton-${i}`}>
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-              {hasTypedQuery && hasQuery && !isLoading && !hasResults && (
-                <div className="flex h-full items-center justify-center px-4 py-8">
-                  <p className="text-muted-foreground text-sm">
-                    {t("search.noResults", {
-                      query: searchQuery,
-                    })}
-                  </p>
-                </div>
-              )}
+              {hasVisibleSearch &&
+                hasActiveSearch &&
+                !isLoading &&
+                !hasResults && (
+                  <div className="flex h-full items-center justify-center px-4 py-8">
+                    <p className="text-muted-foreground text-sm">
+                      {hasQuery
+                        ? t("search.noResults", { query: searchQuery })
+                        : t("common.noResults")}
+                    </p>
+                  </div>
+                )}
 
-              {hasTypedQuery && hasResults && (
+              {hasVisibleSearch && hasResults && (
                 <div className="px-2 py-2">
                   <p className="text-muted-foreground px-2 pb-2 text-xs">
                     {t("search.resultCount", {
@@ -1535,6 +1603,7 @@ type SearchableFacetGroupProps = {
   selected: string[];
   onChange: (value: string) => void;
   searchParams: {
+    enabled: boolean;
     query: string;
     workspaceIds: string[];
     types: GlobalSearchResultType[];
@@ -1573,7 +1642,7 @@ const SearchableFacetGroup = ({
       limit: FACET_SEARCH_LIMIT,
       ...searchParams,
     }),
-    enabled: isSearching && searchParams.query.length > 0,
+    enabled: isSearching && searchParams.enabled,
   });
 
   const resolveLabel = (bucket: FacetBucket): string =>
