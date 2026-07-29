@@ -67,6 +67,7 @@ const buildSearchDocument = async (
       kind: true,
       name: true,
       metadata: true,
+      createdAt: true,
       updatedAt: true,
     },
     with: {
@@ -159,7 +160,7 @@ const buildSearchDocument = async (
     title,
     searchableText: fieldTexts.join(" "),
     language,
-    updatedAt: entity.updatedAt ?? new Date(),
+    updatedAt: entity.updatedAt ?? entity.createdAt,
   };
 };
 

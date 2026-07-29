@@ -15,6 +15,10 @@ import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
+import {
+  REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+  repairSearchSemanticTimestampsTask,
+} from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import type {
   SchedulerTask,
   SchedulerTaskRegistry,
@@ -32,4 +36,8 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
     [FLOW_RUN_TASK, runScheduledFlow],
     [BACKFILL_SK_DOCUMENTS_TASK, backfillSkDocuments],
+    [
+      REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+      repairSearchSemanticTimestampsTask,
+    ],
   ]);

@@ -1,9 +1,14 @@
 import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 
+import {
+  resolveUpdatedFrom,
+  resolveUpdatedTo,
+} from "@/components/search-filters.logic";
 import type {
   SearchFilters,
   TimeFilter,
 } from "@/components/search-filters.logic";
+import { hasSearchQueryOrSelectiveFilter } from "@/lib/search";
 
 type SavedSearchTime =
   | { type: "preset"; preset: "day" | "week" | "month" | "year" }
@@ -20,6 +25,34 @@ export type SavedSearchCriteria = {
   time?: SavedSearchTime;
   sort: "relevance";
 };
+
+type SavedSearchOwner = {
+  organizationId: string;
+  userId: string;
+};
+
+export const savedSearchKeys = {
+  all: ["saved-searches"] as const,
+  list: ({ organizationId, userId }: SavedSearchOwner) =>
+    ["saved-searches", { organizationId, userId }] as const,
+};
+
+export const canSaveSearch = ({
+  filters,
+  query,
+}: {
+  filters: SearchFilters;
+  query: string;
+}): boolean =>
+  hasSearchQueryOrSelectiveFilter({
+    query,
+    types: filters.types,
+    kinds: filters.kinds,
+    editedByUserIds: filters.editedByUserIds,
+    mimeTypes: filters.mimeTypes,
+    updatedFrom: resolveUpdatedFrom(filters.time),
+    updatedTo: resolveUpdatedTo(filters.time),
+  });
 
 const toSavedSearchTime = (time: TimeFilter): SavedSearchTime => {
   if (time.mode === "preset") {
@@ -67,8 +100,8 @@ export const toSearchFilters = (
   criteria: SavedSearchCriteria,
 ): SearchFilters => ({
   workspaceIds: [...criteria.workspaceIds],
-  types: [...criteria.types],
-  kinds: [...criteria.kinds],
+  types: criteria.types.length > 0 ? [...criteria.types] : [...criteria.kinds],
+  kinds: [],
   editedByUserIds: [...criteria.editedByUserIds],
   mimeTypes: [...criteria.mimeTypes],
   ...(criteria.time !== undefined && { time: toSearchTime(criteria.time) }),

@@ -7,6 +7,7 @@ import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { BACKFILL_SK_DOCUMENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-sk-documents";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
+import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 
 type SchedulerJobDefinition = {
   id: string;
@@ -63,6 +64,27 @@ export const ensureSchedulerJob = async ({
     });
 };
 
+const ensureOneShotSchedulerJob = async ({
+  description,
+  id,
+  payload = null,
+  schedule,
+  task,
+}: Omit<SchedulerJobDefinition, "enabled">): Promise<void> => {
+  await rootDb
+    .insert(schedulerJobs)
+    .values({
+      description,
+      enabled: true,
+      id,
+      nextRunAt: computeNextRunAt(schedule),
+      payload,
+      schedule,
+      task,
+    })
+    .onConflictDoNothing({ target: schedulerJobs.id });
+};
+
 const sameSchedule = (
   left: SchedulerSchedule,
   right: SchedulerSchedule,
@@ -87,6 +109,17 @@ const sameSchedule = (
 };
 
 export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
+  await ensureOneShotSchedulerJob({
+    description:
+      "Repair legacy entity search timestamps to their semantic update time",
+    id: "search.repairSemanticTimestamps.v1",
+    schedule: {
+      type: "interval",
+      everyMs: 60_000,
+    },
+    task: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+  });
+
   await ensureSchedulerJob({
     description: "Sync tracked InfoSoud cases into matter agenda",
     id: "infosoud.syncTrackedCases.nightly",

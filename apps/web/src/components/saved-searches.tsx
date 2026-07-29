@@ -34,20 +34,21 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { toSavedSearchCriteria } from "@/components/saved-searches.logic";
+import {
+  canSaveSearch,
+  savedSearchKeys,
+  toSavedSearchCriteria,
+} from "@/components/saved-searches.logic";
 import type { SearchFilters } from "@/components/search-filters.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 const SAVED_SEARCHES_PAGE_SIZE = 25;
-
-const savedSearchKeys = {
-  all: ["saved-searches"] as const,
-};
 
 type SavedSearchPage = NonNullable<
   Awaited<ReturnType<(typeof api)["saved-searches"]["get"]>>["data"]
@@ -62,7 +63,6 @@ type SavedSearchDialog =
 
 type SavedSearchesProps = {
   filters: SearchFilters;
-  hasActiveCriteria: boolean;
   isOpen: boolean;
   query: string;
   onApply: (criteria: SavedSearch["criteria"]) => void;
@@ -72,7 +72,6 @@ type SavedSearchesProps = {
 
 export const SavedSearches = ({
   filters,
-  hasActiveCriteria,
   isOpen,
   query,
   onApply,
@@ -80,12 +79,19 @@ export const SavedSearches = ({
   showTrigger = true,
 }: SavedSearchesProps) => {
   const analytics = useAnalytics();
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const queryClient = useQueryClient();
   const t = useTranslations();
   const [dialog, setDialog] = useState<SavedSearchDialog>({ type: "closed" });
 
+  const savedSearchQueryKey = savedSearchKeys.list({
+    organizationId: activeOrganizationId,
+    userId,
+  });
+  const hasActiveCriteria = canSaveSearch({ filters, query });
+
   const savedSearchesQuery = useInfiniteQuery({
-    queryKey: savedSearchKeys.all,
+    queryKey: savedSearchQueryKey,
     queryFn: async ({ pageParam, signal }) => {
       const response = await api["saved-searches"].get({
         query: {
@@ -103,7 +109,7 @@ export const SavedSearches = ({
   });
 
   const invalidateSavedSearches = async () =>
-    await queryClient.invalidateQueries({ queryKey: savedSearchKeys.all });
+    await queryClient.invalidateQueries({ queryKey: savedSearchQueryKey });
 
   const createMutation = useMutation({
     mutationFn: async (name: string) =>

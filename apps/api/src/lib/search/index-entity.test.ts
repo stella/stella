@@ -20,6 +20,7 @@ void mock.module("@/api/db/root", () => ({
       entities: {
         findFirst: mock(async () => ({
           currentVersion: { fields: [], id: toSafeId<"entityVersion">("v_1") },
+          createdAt: new Date("2026-04-01T08:00:00.000Z"),
           extractedContent: null,
           id: toSafeId<"entity">("entity_1"),
           kind: "document" as const,

@@ -903,7 +903,6 @@ export const SearchDialog = ({
             </Button>
             <SavedSearches
               filters={filters}
-              hasActiveCriteria={hasActiveSearch}
               isOpen={open}
               onApply={applySavedSearch}
               query={query}
@@ -1031,7 +1030,6 @@ export const SearchDialog = ({
                 <>
                   <SavedSearches
                     filters={filters}
-                    hasActiveCriteria={hasActiveSearch}
                     isOpen={open}
                     onApply={applySavedSearch}
                     query={query}

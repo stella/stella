@@ -375,6 +375,9 @@ export const caseLawSearchDocuments = p.pgTable(
   },
   (table) => [
     p.index("case_law_search_docs_tsv_idx").using("gin", table.tsv),
+    p
+      .index("case_law_search_docs_updated_id_idx")
+      .on(table.updatedAt.desc(), table.decisionId.desc()),
     ...globalCaseLawPolicies(),
   ],
 );
