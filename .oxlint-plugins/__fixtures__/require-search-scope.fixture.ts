@@ -444,12 +444,13 @@ const unsafeRootJoinedPrivateRead = sql.join([
   sql`documents sd`,
 ]);
 
-// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.fromList preserves exact composition when the private relation is split across chunks
+// oxlint-disable-next-line require-search-scope/require-search-scope, typescript/no-deprecated -- fixture proves deprecated but callable sql.fromList preserves exact composition when the private relation is split across chunks
 const unsafeRootFromListPrivateRead = sql.fromList([
   sql`SELECT * FROM search_`,
   sql`documents sd`,
 ]);
 
+// oxlint-disable-next-line typescript/no-deprecated -- valid control for the deprecated but callable composition bypass fixture above
 const scopedRootFromListPrivateRead = sql.fromList([
   sql`SELECT * FROM search_documents sd WHERE true `,
   entityWorkspaceFilter,
