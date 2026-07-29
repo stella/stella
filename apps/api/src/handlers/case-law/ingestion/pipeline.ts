@@ -235,6 +235,12 @@ export const sanitizeResult = (r: IngestionResult): IngestionResult => {
     sourceUrl: strip(r.sourceUrl),
     documentUrl: strip(r.documentUrl),
     metadata: sanitizeMetadata(r.metadata),
+    // Publisher-supplied case numbers are compared against citations
+    // extracted from the sanitized text; an unsanitized zero-width char
+    // here would break that key equality.
+    publisherCitedCases: r.publisherCitedCases?.map((cited) =>
+      stripDangerousChars(cited),
+    ),
     // Adapter-supplied sections come from court HTML like every other
     // field and must go through the same strip. The fallback path was
     // safe only incidentally: `segmentDecision` runs on the already
