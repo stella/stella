@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { frontendOrigins, mobileAppOrigins } from "@/api/lib/dev-origins";
+import {
+  expoWebOrigins,
+  frontendOrigins,
+  mobileAppOrigins,
+} from "@/api/lib/dev-origins";
 
 describe("frontend origins", () => {
   test("keeps production origins exact", () => {
@@ -71,5 +75,25 @@ describe("mobile app origins", () => {
 
   test("adds Expo development schemes only in development", () => {
     expect(mobileAppOrigins(true)).toEqual(["stella://", "exp://", "exp://**"]);
+  });
+});
+
+describe("Expo web origins", () => {
+  test("accepts both loopback aliases in development", () => {
+    expect(
+      expoWebOrigins({
+        expoWebOrigin: "http://localhost:8081",
+        isDev: true,
+      }),
+    ).toEqual(["http://localhost:8081", "http://127.0.0.1:8081"]);
+  });
+
+  test("does not trust the preview origin in production", () => {
+    expect(
+      expoWebOrigins({
+        expoWebOrigin: "http://localhost:8081",
+        isDev: false,
+      }),
+    ).toEqual([]);
   });
 });

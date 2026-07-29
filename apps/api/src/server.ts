@@ -94,7 +94,11 @@ import {
 } from "@/api/lib/db-query-counter";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { detached } from "@/api/lib/detached";
-import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
+import {
+  DEV_INSPECTOR_ORIGINS,
+  expoWebOrigins,
+  frontendOrigins,
+} from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
 import {
   errorFingerprint,
@@ -276,6 +280,12 @@ const api = new Elysia()
           isDev: env.isDev,
         });
         if (env.isDev) {
+          origins.push(
+            ...expoWebOrigins({
+              expoWebOrigin: env.EXPO_WEB_ORIGIN,
+              isDev: env.isDev,
+            }),
+          );
           origins.push(/^chrome-extension:\/\//u);
           origins.push(...DEV_INSPECTOR_ORIGINS);
         }

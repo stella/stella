@@ -50,6 +50,7 @@ import { isUuid, tUuid } from "@/api/lib/custom-schema";
 import { detectedCountryFromRequestContext } from "@/api/lib/detected-country";
 import {
   DEV_INSPECTOR_ORIGINS,
+  expoWebOrigins,
   frontendOrigins,
   mobileAppOrigins,
 } from "@/api/lib/dev-origins";
@@ -606,6 +607,10 @@ const createAuth = () => {
     trustedOrigins: [
       ...frontendOrigins({
         frontendUrl: env.FRONTEND_URL,
+        isDev: env.isDev,
+      }),
+      ...expoWebOrigins({
+        expoWebOrigin: env.EXPO_WEB_ORIGIN,
         isDev: env.isDev,
       }),
       ...mobileAppOrigins(env.isDev),

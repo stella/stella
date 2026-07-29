@@ -455,6 +455,15 @@ describe("native OAuth plugin order", () => {
       pluginIds.indexOf("stella-social-two-factor-redirect"),
     );
   });
+
+  test("trusts both Expo web loopback origins in development", () => {
+    expect(getAuth().options.trustedOrigins).toEqual(
+      expect.arrayContaining([
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
+      ]),
+    );
+  });
 });
 
 describe("OAuth client scope disclosure", () => {

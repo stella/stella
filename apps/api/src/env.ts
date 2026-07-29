@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { DEPLOYED_NODE_ENVS, envBase } from "@/api/env-base";
+import { DEFAULT_EXPO_WEB_ORIGIN } from "@/api/lib/dev-origins";
 
 const featureFlagSchema = v.optional(
   v.pipe(v.string(), v.parseBoolean()),
@@ -180,6 +181,10 @@ const envApi = createEnv({
       "https://api.stll.app/public/feedback",
     ),
     FRONTEND_URL: v.pipe(v.string(), v.url()),
+    EXPO_WEB_ORIGIN: v.optional(
+      v.pipe(v.string(), v.url()),
+      DEFAULT_EXPO_WEB_ORIGIN,
+    ),
     PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
     GOTENBERG_URL: v.pipe(v.string(), v.url()),
     GOTENBERG_USERNAME: v.string(),

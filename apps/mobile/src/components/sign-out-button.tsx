@@ -8,6 +8,8 @@ import { useAuthSessionActions } from "@/features/auth/auth-session-boundary";
 import { authClient } from "@/lib/auth-client";
 import { useAppColors } from "@/theme";
 
+const MINIMUM_TOUCH_TARGET = 44;
+
 export const SignOutButton = () => {
   const colors = useAppColors();
   const { refreshSession } = useAuthSessionActions();
@@ -66,6 +68,10 @@ export const SignOutButton = () => {
 
 const styles = StyleSheet.create({
   button: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: MINIMUM_TOUCH_TARGET,
+    minWidth: MINIMUM_TOUCH_TARGET,
     paddingHorizontal: 4,
     paddingVertical: 8,
   },

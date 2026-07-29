@@ -507,6 +507,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     },
     annotations: { idempotentHint: false, openWorldHint: true },
     access: "write",
+    additionalScopes: ["stella:templates"],
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_filled_template",
     scope: "stella:documents_write",
@@ -829,6 +830,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
           format: "docx",
           unmatchedCount: filled.unmatchedPlaceholders.length,
           unusedCount: filled.unusedValues.length,
+          structureErrors: filled.structureErrors,
           recordAuditEvent: context.recordAuditEvent,
         }),
     )

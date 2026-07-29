@@ -637,6 +637,9 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   {
     "name": "save_filled_template",
     "scope": "stella:documents_write",
+    "additionalScopes": [
+      "stella:templates"
+    ],
     "access": "write",
     "description": "Fill a registered template and persist the generated DOCX directly in a matter, without requiring the client to upload bytes. Use action='create_document' to create a new document (optionally inside parent_id), or action='create_version' with entity_id to append a version to an existing document. Call list_templates first to learn the field paths. Returns the entity and version identifiers plus any unmatched placeholders or unused values.",
     "annotations": {

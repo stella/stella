@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog.json";
+import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
+import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 
 describe("template persistence capability scope parity", () => {
   test("fill-to-workspace requires the same document-write consent as its covering tool", () => {
@@ -17,5 +19,17 @@ describe("template persistence capability scope parity", () => {
       template: ["use"],
       entity: ["create"],
     });
+
+    const saveFilledTemplate = getStaticMcpToolDefinition(
+      "save_filled_template",
+    );
+    expect(saveFilledTemplate?.scope).toBe("stella:documents_write");
+    expect(saveFilledTemplate?.additionalScopes).toEqual(["stella:templates"]);
+    expect(DEFAULT_MCP_CLI_ANNOTATIONS.save_filled_template).toEqual(
+      expect.objectContaining({
+        scope: "documents_write",
+        additionalScopes: ["templates"],
+      }),
+    );
   });
 });

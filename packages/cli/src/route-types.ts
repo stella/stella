@@ -47,6 +47,7 @@ export type DiscriminatorSubcommand = {
 /** Baked-in per-tool annotation (spec S1), keyed by tool name and merged with the listing. */
 export type ToolAnnotation = {
   command: readonly string[];
+  additionalScopes?: readonly ToolScope[];
   excluded?: true;
   scope?: ToolScope;
   itemsKey?: string;
@@ -103,6 +104,7 @@ export type FlagSpec = {
 /** The generator's per-leaf output before handing to stricli's `buildCommand`. */
 export type LeafCommandSpec = {
   commandPath: readonly string[];
+  additionalScopes?: readonly ToolScope[];
   toolName: string;
   discriminatorInject?: Record<string, string>;
   flags: readonly FlagSpec[];

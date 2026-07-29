@@ -1608,6 +1608,7 @@ export const generatedRouteMap: RouteNode = {
                 paginated: false,
                 windowedText: false,
                 destructive: false,
+                additionalScopes: ["templates"],
                 scope: "documents_write",
                 inputSchema: {
                   type: "object",
@@ -1699,6 +1700,7 @@ export const generatedRouteMap: RouteNode = {
                 paginated: false,
                 windowedText: false,
                 destructive: false,
+                additionalScopes: ["templates"],
                 scope: "documents_write",
                 inputSchema: {
                   type: "object",

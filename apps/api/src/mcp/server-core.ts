@@ -276,8 +276,14 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
+      const missingAdditionalScope = definition.additionalScopes?.find(
+        (scope) => !session.scopes.includes(scope),
+      );
       if (!session.scopes.includes(definition.scope)) {
         return missingScopeResult(definition.scope);
+      }
+      if (missingAdditionalScope !== undefined) {
+        return missingScopeResult(missingAdditionalScope);
       }
 
       return await handleMcpToolCall({

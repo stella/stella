@@ -588,6 +588,7 @@ export type FillTemplateWithDocxResult =
       text: string;
       unmatchedPlaceholders: string[];
       unusedValues: string[];
+      structureErrors: FilledDocx["structureErrors"];
     }
   | { error: string };
 
@@ -610,6 +611,7 @@ const withExtractedText = async (
       .trim(),
     unmatchedPlaceholders: filled.unmatchedPlaceholders,
     unusedValues: filled.unusedValues,
+    structureErrors: filled.structureErrors,
   };
 };
 

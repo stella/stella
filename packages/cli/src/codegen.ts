@@ -71,6 +71,7 @@ const discriminatorSubcommandSchema = v.looseObject({
 
 const cliAnnotationSchema = v.looseObject({
   command: stringArraySchema,
+  additionalScopes: v.optional(v.array(v.picklist(toolScopes))),
   excluded: v.optional(v.literal(true)),
   scope: v.optional(v.picklist(toolScopes)),
   itemsKey: v.optional(v.string()),
@@ -112,6 +113,9 @@ const projectDiscriminatorSubcommand = (
 
 const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
   const annotation: ToolAnnotation = { command: cli.command };
+  if (cli.additionalScopes !== undefined) {
+    annotation.additionalScopes = cli.additionalScopes;
+  }
   if (cli.excluded !== undefined) {
     annotation.excluded = cli.excluded;
   }

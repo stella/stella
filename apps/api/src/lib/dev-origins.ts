@@ -6,6 +6,7 @@ export const DEV_INSPECTOR_ORIGINS = [
 ] as const;
 
 const EXPO_DEV_ORIGINS = ["exp://", "exp://**"] as const;
+export const DEFAULT_EXPO_WEB_ORIGIN = "http://localhost:8081";
 
 /** Custom-scheme origins accepted from the native client. */
 export const mobileAppOrigins = (isDev: boolean) => {
@@ -27,6 +28,15 @@ export const frontendOrigins = ({
   }
   return expandLoopbackOrigin(frontendUrl);
 };
+
+/** Browser origins accepted from the Expo web development server. */
+export const expoWebOrigins = ({
+  expoWebOrigin,
+  isDev,
+}: {
+  expoWebOrigin: string;
+  isDev: boolean;
+}) => (isDev ? expandLoopbackOrigin(expoWebOrigin) : []);
 
 const expandLoopbackOrigin = (origin: string) => {
   const parsed = safeParseUrl(origin);

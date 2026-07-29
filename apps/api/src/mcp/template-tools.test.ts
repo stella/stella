@@ -269,6 +269,10 @@ describe("MCP template tools", () => {
       (await getMcpToolDefinition("save_filled_template", createContext()))
         ?.scope,
     ).toBe("stella:documents_write");
+    expect(
+      (await getMcpToolDefinition("save_filled_template", createContext()))
+        ?.additionalScopes,
+    ).toEqual(["stella:templates"]);
   });
 
   test("the read template tool is on the anonymized surface; writes are not", async () => {
@@ -549,6 +553,13 @@ describe("MCP template tools", () => {
       text: "Lease between ACME and Tenant.",
       unmatchedPlaceholders: [],
       unusedValues: [],
+      structureErrors: [
+        {
+          directive: "#if signature",
+          message: "Missing closing directive",
+          paragraphIndex: 4,
+        },
+      ],
     });
 
     const result = await handleMcpToolCall({
@@ -582,6 +593,13 @@ describe("MCP template tools", () => {
         format: "docx",
         unmatchedCount: 0,
         unusedCount: 0,
+        structureErrors: [
+          {
+            directive: "#if signature",
+            message: "Missing closing directive",
+            paragraphIndex: 4,
+          },
+        ],
       }),
     );
   });

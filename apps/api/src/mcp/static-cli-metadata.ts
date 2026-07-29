@@ -133,6 +133,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     fill_template: { command: ["template", "fill"], scope: "templates" },
     save_filled_template: {
       command: ["template", "save-filled"],
+      additionalScopes: ["templates"],
       scope: "documents_write",
       inputOnly: ["values"],
       discriminator: {

@@ -312,6 +312,7 @@ const serializeToolSurface = (
     definitions.map(
       ({
         access,
+        additionalScopes,
         annotations,
         description,
         feature,
@@ -321,6 +322,7 @@ const serializeToolSurface = (
       }) => ({
         name,
         scope,
+        additionalScopes,
         // Serialized so a change to a tool's read/write classification is a
         // visible snapshot diff, not a silent surface change.
         access,

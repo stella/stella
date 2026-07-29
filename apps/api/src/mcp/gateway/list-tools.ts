@@ -124,6 +124,10 @@ export const listGatewayMcpToolDefinitions = async ({
   const staticDefinitions = listStaticMcpToolDefinitions(mode).filter(
     (definition) =>
       hasGrantedScope(scopes, definition.scope) &&
+      (definition.additionalScopes === undefined ||
+        definition.additionalScopes.every((scope) =>
+          hasGrantedScope(scopes, scope),
+        )) &&
       isMcpToolFeatureEnabled(definition.feature),
   );
   // The anonymized tools/list is a tenant-neutral pure projection (see

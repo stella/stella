@@ -221,7 +221,7 @@ describe("generateRouteMap: discriminator split (S2)", () => {
     expect(registry?.required).toBe(true);
   });
 
-  test("save_filled_template exposes both destinations under document-write scope", () => {
+  test("save_filled_template exposes both destinations under its compound scopes", () => {
     const newDocument = findLeaf(tree, [
       "template",
       "save-filled",
@@ -237,6 +237,8 @@ describe("generateRouteMap: discriminator split (S2)", () => {
     expect(newVersion?.toolName).toBe("save_filled_template");
     expect(newDocument?.scope).toBe("documents_write");
     expect(newVersion?.scope).toBe("documents_write");
+    expect(newDocument?.additionalScopes).toEqual(["templates"]);
+    expect(newVersion?.additionalScopes).toEqual(["templates"]);
     expect(newDocument?.discriminatorInject).toEqual({
       action: "create_document",
     });

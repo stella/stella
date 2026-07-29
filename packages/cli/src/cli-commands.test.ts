@@ -9,6 +9,8 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { EXIT_CODES } from "./mcp-constants.js";
+
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
 
 const base64url = (value: object): string =>
@@ -1018,7 +1020,7 @@ describe("template fill strictness policies", () => {
 });
 
 describe("template persistence discriminator split", () => {
-  test("new-version injects the destination and forwards values through --input", async () => {
+  test("requires template consent as well as document-write consent", async () => {
     const server = startMockServer(() => ({
       toolPayload: { entityId: "entity_1", versionNumber: 2 },
     }));
@@ -1038,6 +1040,34 @@ describe("template persistence discriminator split", () => {
       ],
       url: server.url,
       token: makeToken(["documents_write"]),
+    });
+    server.stop();
+
+    expect(result.exitCode).toBe(EXIT_CODES.auth);
+    expect(result.stderr).toContain("Missing scope stella:templates");
+    expect(server.requests).toHaveLength(0);
+  });
+
+  test("new-version injects the destination and forwards values through --input", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: { entityId: "entity_1", versionNumber: 2 },
+    }));
+    const result = await runCli({
+      args: [
+        "template",
+        "save-filled",
+        "new-version",
+        "--template-id",
+        "template_1",
+        "--matter-id",
+        "matter_1",
+        "--entity-id",
+        "entity_1",
+        "--input",
+        '{"values":{"tenant.name":"ACME"}}',
+      ],
+      url: server.url,
+      token: makeToken(["documents_write", "templates"]),
     });
     server.stop();
 

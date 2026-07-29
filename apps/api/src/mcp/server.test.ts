@@ -353,6 +353,50 @@ describe("handleMcpHttpRequest", () => {
     });
   });
 
+  test("rejects tool calls missing an additional compound scope", async () => {
+    const context = { type: "mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:documents_write"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    getMcpToolScopeHintMock.mockReturnValue("stella:documents_write");
+    getMcpToolDefinitionMock.mockResolvedValue({
+      access: "write",
+      additionalScopes: ["stella:templates"],
+      anonymized: { exposure: "excluded", reason: "write" },
+      description: "Fill and persist a template",
+      inputSchema: { type: "object", properties: {} },
+      name: "save_filled_template",
+      scope: "stella:documents_write",
+    });
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: {
+          arguments: {},
+          name: "save_filled_template",
+        },
+      }),
+    );
+    const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
+    const item = body.result.content.at(0);
+    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
+
+    expect(response.status).toBe(200);
+    expect(parsed?.error).toEqual(
+      expect.objectContaining({
+        code: "missing_scope",
+        message: "Insufficient permissions. Required scope: stella:templates",
+      }),
+    );
+    expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+  });
+
   test("returns an unknown_tool envelope with closest-name hints", async () => {
     const context = { type: "mcp-context" };
     authenticateMcpRequestMock.mockResolvedValue({

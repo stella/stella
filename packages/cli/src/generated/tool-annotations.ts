@@ -66,6 +66,7 @@ export const generatedToolAnnotations: Readonly<
   },
   save_filled_template: {
     command: ["template", "save-filled"],
+    additionalScopes: ["templates"],
     scope: "documents_write",
     inputOnly: ["values"],
     discriminator: {
