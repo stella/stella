@@ -123,6 +123,24 @@ const unsafeScopeInOrBranch = sql`
   WHERE true OR (false ${entityWorkspaceFilter})
 `;
 
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a nested query cannot authorize an outer private read through an alias shadow
+const unsafeScopeInNestedQuery = sql`
+  SELECT sd.*
+  FROM search_documents sd
+  WHERE EXISTS (
+    SELECT 1 FROM entities sd WHERE true ${entityWorkspaceFilter}
+  )
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a sibling nested query cannot authorize an earlier private read at the same parenthesis depth
+const unsafeScopeInSiblingQuery = sql`
+  SELECT EXISTS (
+    SELECT 1 FROM search_documents sd
+  ) OR EXISTS (
+    SELECT 1 FROM entities sd WHERE true ${entityWorkspaceFilter}
+  )
+`;
+
 const scopedEntity = sql`
   SELECT *
   FROM search_documents sd
@@ -154,6 +172,19 @@ const scopedAfterLineComment = sql`
 const scopedAfterDollarQuote = sql`
   SELECT * FROM search_documents sd
   WHERE $note$literal$note$ <> '' ${entityWorkspaceFilter}
+`;
+
+const scopedParenthesizedFilter = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true AND (${entityWorkspaceFilter}))
+`;
+
+const scopedNestedPrivateRead = sql`
+  SELECT EXISTS (
+    SELECT 1
+    FROM search_documents sd
+    WHERE true ${entityWorkspaceFilter}
+  )
 `;
 
 const scopedComposedRead = (() => {
@@ -211,12 +242,16 @@ void [
   unsafeScopeInLaterStatement,
   unsafeScopeInOuterJoin,
   unsafeScopeInOrBranch,
+  unsafeScopeInNestedQuery,
+  unsafeScopeInSiblingQuery,
   scopedEntity,
   scopedSingleWorkspace,
   scopedInterpolatedEntity,
   scopedExplicitAlias,
   scopedAfterLineComment,
   scopedAfterDollarQuote,
+  scopedParenthesizedFilter,
+  scopedNestedPrivateRead,
   scopedComposedRead,
   scopedMultiBranch,
   scopedMatter,

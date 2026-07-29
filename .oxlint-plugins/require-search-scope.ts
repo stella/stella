@@ -294,6 +294,100 @@ type SqlBranchTextPart = {
   text: string;
 };
 
+type SqlQueryNestingState = {
+  currentQueryId: number;
+  lexState: SqlLexState;
+  nextQueryId: number;
+  parentheses: {
+    parentQueryId: number;
+    queryId: number | null;
+  }[];
+};
+
+type SqlQueryNestingEvent =
+  | { queryId: number; text: string; type: "text" }
+  | { queryId: number; type: "end-query" };
+
+const SQL_QUERY_NESTING_TOKEN = /[()]|\b(?:select|table|values|with)\b/giu;
+
+const sqlQueryNestingEvents = (
+  text: string,
+  state: SqlQueryNestingState,
+): SqlQueryNestingEvent[] => {
+  const events: SqlQueryNestingEvent[] = [];
+  let partStart = 0;
+  let scanCursor = 0;
+  for (const match of text.matchAll(SQL_QUERY_NESTING_TOKEN)) {
+    const matchIndex = match.index;
+    const matchText = match.at(0);
+    if (matchIndex === undefined || matchText === undefined) {
+      continue;
+    }
+    state.lexState = sqlLexStateAfter(
+      text.slice(scanCursor, matchIndex),
+      state.lexState,
+    );
+    const isStructuralToken = state.lexState.type === "normal";
+    state.lexState = sqlLexStateAfter(matchText, state.lexState);
+    scanCursor = matchIndex + matchText.length;
+    if (!isStructuralToken) {
+      continue;
+    }
+
+    if (matchText === "(") {
+      state.parentheses.push({
+        parentQueryId: state.currentQueryId,
+        queryId: null,
+      });
+      continue;
+    }
+
+    if (matchText === ")") {
+      const frame = state.parentheses.pop();
+      if (frame?.queryId === null || frame === undefined) {
+        continue;
+      }
+      if (partStart < matchIndex) {
+        events.push({
+          type: "text",
+          queryId: state.currentQueryId,
+          text: text.slice(partStart, matchIndex),
+        });
+      }
+      events.push({ type: "end-query", queryId: frame.queryId });
+      state.currentQueryId = frame.parentQueryId;
+      partStart = scanCursor;
+      continue;
+    }
+
+    const frame = state.parentheses.at(-1);
+    if (!frame || frame.queryId !== null) {
+      continue;
+    }
+    if (partStart < matchIndex) {
+      events.push({
+        type: "text",
+        queryId: state.currentQueryId,
+        text: text.slice(partStart, matchIndex),
+      });
+    }
+    frame.queryId = state.nextQueryId;
+    state.currentQueryId = state.nextQueryId;
+    state.nextQueryId += 1;
+    partStart = matchIndex;
+  }
+
+  state.lexState = sqlLexStateAfter(text.slice(scanCursor), state.lexState);
+  if (partStart < text.length) {
+    events.push({
+      type: "text",
+      queryId: state.currentQueryId,
+      text: text.slice(partStart),
+    });
+  }
+  return events;
+};
+
 const SQL_QUERY_BOUNDARY = /;|\b(?:except|intersect|union(?:\s+all)?)\b/giu;
 
 const splitAtSqlQueryBoundaries = (
@@ -337,6 +431,35 @@ const INITIAL_SQL_SCOPE_CONTEXT: SqlScopeContext = {
   hasNonConjunctiveFilter: false,
   pendingJoinIsOuter: false,
 };
+
+type ProjectionQueryState = {
+  protectedReadCount: number;
+  scopeContext: SqlScopeContext;
+  scopeEligibleReadCount: number;
+  sqlLexState: SqlLexState;
+  unscopedReadCount: number;
+};
+
+const createProjectionQueryState = (): ProjectionQueryState => ({
+  protectedReadCount: 0,
+  scopeContext: INITIAL_SQL_SCOPE_CONTEXT,
+  scopeEligibleReadCount: 0,
+  sqlLexState: { type: "normal" },
+  unscopedReadCount: 0,
+});
+
+const resetProjectionQueryBranch = (state: ProjectionQueryState): void => {
+  state.protectedReadCount = 0;
+  state.scopeContext = INITIAL_SQL_SCOPE_CONTEXT;
+  state.scopeEligibleReadCount = 0;
+  state.unscopedReadCount = 0;
+};
+
+const projectionQueryBranchIsUnscoped = (
+  state: ProjectionQueryState,
+): boolean =>
+  state.unscopedReadCount > 0 ||
+  (state.protectedReadCount > 0 && state.scopeContext.hasNonConjunctiveFilter);
 
 const SQL_CLAUSE_KEYWORDS = [
   "cross",
@@ -648,81 +771,109 @@ export default {
             for (const [table, projection] of Object.entries(
               PRIVATE_SEARCH_PROJECTIONS,
             )) {
-              let hasUnscopedBranch = false;
-              let branchProtectedReadCount = 0;
-              let unscopedReadCount = 0;
-              let scopeEligibleReadCount = 0;
-              let sqlLexState: SqlLexState = { type: "normal" };
-              let sqlScopeContext = INITIAL_SQL_SCOPE_CONTEXT;
+              let hasUnscopedQuery = false;
+              const queryStates = new Map<number, ProjectionQueryState>();
+              const queryNestingState: SqlQueryNestingState = {
+                currentQueryId: 0,
+                lexState: { type: "normal" },
+                nextQueryId: 1,
+                parentheses: [],
+              };
+              const queryStateFor = (queryId: number): ProjectionQueryState => {
+                const existing = queryStates.get(queryId);
+                if (existing) {
+                  return existing;
+                }
+                const created = createProjectionQueryState();
+                queryStates.set(queryId, created);
+                return created;
+              };
+              const finishQuery = (queryId: number): void => {
+                const queryState = queryStates.get(queryId);
+                if (!queryState) {
+                  return;
+                }
+                hasUnscopedQuery ||=
+                  projectionQueryBranchIsUnscoped(queryState);
+                queryStates.delete(queryId);
+              };
+
               for (const [index, token] of tokens.entries()) {
                 if (token.type === "text") {
-                  for (const part of splitAtSqlQueryBoundaries(
+                  for (const event of sqlQueryNestingEvents(
                     token.value,
-                    sqlLexState,
+                    queryNestingState,
                   )) {
-                    const aliases = projectionReadAliases(part.text, table);
-                    branchProtectedReadCount += aliases.length;
-                    unscopedReadCount += aliases.length;
-                    scopeEligibleReadCount += aliases.filter(
-                      (alias) => alias === projection.expectedAlias,
-                    ).length;
-                    sqlScopeContext = sqlScopeContextAfter(
-                      part.text,
-                      sqlLexState,
-                      sqlScopeContext,
-                    );
-                    sqlLexState = sqlLexStateAfter(part.text, sqlLexState);
-                    if (part.endsBranch) {
-                      hasUnscopedBranch ||=
-                        unscopedReadCount > 0 ||
-                        (branchProtectedReadCount > 0 &&
-                          sqlScopeContext.hasNonConjunctiveFilter);
-                      branchProtectedReadCount = 0;
-                      unscopedReadCount = 0;
-                      scopeEligibleReadCount = 0;
-                      sqlScopeContext = INITIAL_SQL_SCOPE_CONTEXT;
+                    if (event.type === "end-query") {
+                      finishQuery(event.queryId);
+                      continue;
+                    }
+                    const queryState = queryStateFor(event.queryId);
+                    for (const part of splitAtSqlQueryBoundaries(
+                      event.text,
+                      queryState.sqlLexState,
+                    )) {
+                      const aliases = projectionReadAliases(part.text, table);
+                      queryState.protectedReadCount += aliases.length;
+                      queryState.unscopedReadCount += aliases.length;
+                      queryState.scopeEligibleReadCount += aliases.filter(
+                        (alias) => alias === projection.expectedAlias,
+                      ).length;
+                      queryState.scopeContext = sqlScopeContextAfter(
+                        part.text,
+                        queryState.sqlLexState,
+                        queryState.scopeContext,
+                      );
+                      queryState.sqlLexState = sqlLexStateAfter(
+                        part.text,
+                        queryState.sqlLexState,
+                      );
+                      if (part.endsBranch) {
+                        hasUnscopedQuery ||=
+                          projectionQueryBranchIsUnscoped(queryState);
+                        resetProjectionQueryBranch(queryState);
+                      }
                     }
                   }
                   continue;
                 }
+                const queryState = queryStateFor(
+                  queryNestingState.currentQueryId,
+                );
                 if (
-                  sqlLexState.type === "normal" &&
+                  queryState.sqlLexState.type === "normal" &&
                   isPrivateProjectionInterpolation(
                     token.value,
                     projection.tableImports,
                   )
                 ) {
-                  branchProtectedReadCount += 1;
-                  unscopedReadCount += 1;
+                  queryState.protectedReadCount += 1;
+                  queryState.unscopedReadCount += 1;
                   const nextToken = tokens.at(index + 1);
                   if (
                     nextToken?.type === "text" &&
                     leadingProjectionAlias(nextToken.value) ===
                       projection.expectedAlias
                   ) {
-                    scopeEligibleReadCount += 1;
+                    queryState.scopeEligibleReadCount += 1;
                   }
                 }
                 if (
-                  unscopedReadCount > 0 &&
-                  scopeEligibleReadCount > 0 &&
-                  sqlScopeContext.clause === "filtering" &&
-                  !sqlScopeContext.hasNonConjunctiveFilter &&
-                  sqlLexState.type === "normal" &&
+                  queryState.unscopedReadCount > 0 &&
+                  queryState.scopeEligibleReadCount > 0 &&
+                  queryState.scopeContext.clause === "filtering" &&
+                  !queryState.scopeContext.hasNonConjunctiveFilter &&
+                  queryState.sqlLexState.type === "normal" &&
                   isApprovedScopeFragment(token.value, projection.scopeImports)
                 ) {
-                  unscopedReadCount -= 1;
-                  scopeEligibleReadCount -= 1;
+                  queryState.unscopedReadCount -= 1;
+                  queryState.scopeEligibleReadCount -= 1;
                 }
               }
-              if (
-                !hasUnscopedBranch &&
-                unscopedReadCount === 0 &&
-                !(
-                  branchProtectedReadCount > 0 &&
-                  sqlScopeContext.hasNonConjunctiveFilter
-                )
-              ) {
+              for (const queryId of [...queryStates.keys()]) {
+                finishQuery(queryId);
+              }
+              if (!hasUnscopedQuery) {
                 continue;
               }
               context.report({
