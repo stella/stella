@@ -9,8 +9,10 @@ const emptySearch = () => ({
   editedByUserIds: [],
   kinds: [],
   mimeTypes: [],
+  organizationId: "org_1",
   query: "",
   types: [],
+  userId: "user_1",
 });
 
 type SearchEnablementParams = Parameters<
@@ -65,5 +67,18 @@ describe("search query enablement", () => {
     expect(disabled.enabled).toBeFalse();
     expect(enabled.enabled).toBeTrue();
     expect(enabled.queryKey).toEqual(disabled.queryKey);
+  });
+
+  test("isolates cached results by organization and user", () => {
+    const params = { ...emptySearch(), enabled: true, workspaceIds: [] };
+    const ownerA = searchInfiniteOptions(params);
+    const organizationB = searchInfiniteOptions({
+      ...params,
+      organizationId: "org_2",
+    });
+    const userB = searchInfiniteOptions({ ...params, userId: "user_2" });
+
+    expect(organizationB.queryKey).not.toEqual(ownerA.queryKey);
+    expect(userB.queryKey).not.toEqual(ownerA.queryKey);
   });
 });

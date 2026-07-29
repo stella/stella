@@ -370,6 +370,8 @@ export const SearchDialog = ({
   } = useInfiniteQuery(
     searchInfiniteOptions({
       enabled: hasActiveSearch,
+      organizationId: searchRecentsScope.organizationId,
+      userId: searchRecentsScope.userId,
       query: searchQuery,
       workspaceIds: filters.workspaceIds,
       kinds: filters.kinds,
@@ -447,6 +449,8 @@ export const SearchDialog = ({
 
   const facetSearchParams = {
     enabled: hasActiveSearch,
+    organizationId: searchRecentsScope.organizationId,
+    userId: searchRecentsScope.userId,
     query: searchQuery,
     kinds: filters.kinds,
     ...searchFilterParams,
@@ -1682,6 +1686,8 @@ type SearchableFacetGroupProps = {
   onChange: (value: string) => void;
   searchParams: {
     enabled: boolean;
+    organizationId: string;
+    userId: string;
     query: string;
     workspaceIds: string[];
     types: GlobalSearchResultType[];

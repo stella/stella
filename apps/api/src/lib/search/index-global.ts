@@ -877,8 +877,20 @@ export const searchGlobal = async ({
     `),
   );
 
+  // The primary count already covers a selected type (or every type when no
+  // type is selected). Only query an alternative type bucket when a text/date
+  // predicate keeps that count bounded. A blank type-only search must not turn
+  // into an exact count over an unrelated full corpus.
+  const shouldCountAlternativeTypeFacet = (
+    type: GlobalSearchResultType,
+  ): boolean =>
+    isFirstPage &&
+    !restrictToEntities &&
+    !shouldSearchType(selected, type) &&
+    (hasSearchQuery || updatedFrom !== undefined || updatedTo !== undefined);
+
   const matterTypeFacetCountPromise = countWhen(
-    isFirstPage && !restrictToEntities,
+    shouldCountAlternativeTypeFacet("matter"),
     () =>
       rootDb.execute(sql`
       SELECT count(*)::int AS total
@@ -891,7 +903,8 @@ export const searchGlobal = async ({
   );
 
   const contactTypeFacetCountPromise = countWhen(
-    isFirstPage && !restrictToEntities && accessibleWorkspaceIds.length > 0,
+    shouldCountAlternativeTypeFacet("contact") &&
+      accessibleWorkspaceIds.length > 0,
     () =>
       rootDb.execute(sql`
         SELECT count(*)::int AS total
@@ -904,7 +917,7 @@ export const searchGlobal = async ({
   );
 
   const caseLawTypeFacetCountPromise = countWhen(
-    isFirstPage && !restrictToEntities,
+    shouldCountAlternativeTypeFacet("case-law"),
     () =>
       rootDb.execute(sql`
       SELECT count(*)::int AS total
@@ -917,7 +930,7 @@ export const searchGlobal = async ({
   );
 
   const chatTypeFacetCountPromise = countWhen(
-    isFirstPage && !restrictToEntities,
+    shouldCountAlternativeTypeFacet("chat"),
     () =>
       rootDb.execute(sql`
       SELECT count(*)::int AS total
@@ -1091,10 +1104,18 @@ export const searchGlobal = async ({
   for (const row of entityTypeFacetRows) {
     typeFacetMap.set(String(row["value"]), { count: Number(row["count"]) });
   }
-  const matterFacetCount = totalFrom(matterTypeFacetCount);
-  const contactFacetCount = totalFrom(contactTypeFacetCount);
-  const caseLawFacetCount = totalFrom(caseLawTypeFacetCount);
-  const chatFacetCount = totalFrom(chatTypeFacetCount);
+  const matterFacetCount = shouldSearchType(selected, "matter")
+    ? totalMatters
+    : totalFrom(matterTypeFacetCount);
+  const contactFacetCount = shouldSearchType(selected, "contact")
+    ? totalContacts
+    : totalFrom(contactTypeFacetCount);
+  const caseLawFacetCount = shouldSearchType(selected, "case-law")
+    ? totalCaseLaw
+    : totalFrom(caseLawTypeFacetCount);
+  const chatFacetCount = shouldSearchType(selected, "chat")
+    ? totalChat
+    : totalFrom(chatTypeFacetCount);
   if (matterFacetCount > 0) {
     typeFacetMap.set("matter", { count: matterFacetCount });
   }

@@ -97,6 +97,20 @@ describe("saved search criteria", () => {
     expect(Result.isOk(result)).toBe(true);
   });
 
+  test("accepts RFC 3339 timestamps with numeric offsets", () => {
+    const result = validateSavedSearchCriteria(
+      criteria({
+        query: "",
+        time: {
+          type: "custom",
+          updatedFrom: "2026-07-29T12:00:00+02:00",
+        },
+      }),
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
   test("accepts only active workspace scopes", () => {
     const parsed = validateSavedSearchCriteria(
       criteria({ workspaceIds: [WORKSPACE_ID] }),

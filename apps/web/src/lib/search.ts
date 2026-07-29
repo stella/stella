@@ -1,8 +1,4 @@
-import {
-  infiniteQueryOptions,
-  keepPreviousData,
-  queryOptions,
-} from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 import { DAY_IN_MS } from "@stll/time";
@@ -36,6 +32,8 @@ export type SearchableFacet = "editor" | "workspace" | "mimeType";
 export type SearchParams = {
   /** UI-owned gate derived from the raw query and explicit user filters. */
   enabled: boolean;
+  organizationId: string;
+  userId: string;
   query: string;
   workspaceIds: string[];
   types: GlobalSearchResultType[];
@@ -104,6 +102,8 @@ const searchKeys = {
   query: (params: SearchParams) =>
     [
       ...searchKeys.all,
+      params.organizationId,
+      params.userId,
       {
         query: params.query,
         workspaceIds: params.workspaceIds,
@@ -119,6 +119,8 @@ const searchKeys = {
   facet: (params: SearchFacetParams) =>
     [
       ...searchKeys.all,
+      params.organizationId,
+      params.userId,
       "facet",
       {
         facet: params.facet,
@@ -162,7 +164,11 @@ export const searchInfiniteOptions = (params: SearchParams) =>
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery?.queryKey.at(1) === params.organizationId &&
+      previousQuery.queryKey.at(2) === params.userId
+        ? previousData
+        : undefined,
     enabled: params.enabled,
   });
 
@@ -192,5 +198,9 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
       return unwrapEden(response);
     },
     enabled: params.enabled,
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery?.queryKey.at(1) === params.organizationId &&
+      previousQuery.queryKey.at(2) === params.userId
+        ? previousData
+        : undefined,
   });

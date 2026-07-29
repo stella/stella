@@ -31,8 +31,12 @@ test("filter-only global search skips full-text matching and projections", async
   const searchDocumentQueries = rootDbExecuteMock.mock.calls
     .map(([query]) => dialect.sqlToQuery(query).sql)
     .filter((query) => query.includes("FROM search_documents"));
+  const caseLawQueries = rootDbExecuteMock.mock.calls
+    .map(([query]) => dialect.sqlToQuery(query).sql)
+    .filter((query) => query.includes("FROM case_law_search_documents"));
 
   expect(searchDocumentQueries.length).toBeGreaterThan(0);
+  expect(caseLawQueries).toHaveLength(0);
   for (const query of searchDocumentQueries) {
     expect(query).not.toContain("@@");
     expect(query).not.toContain("ts_headline");
@@ -93,7 +97,7 @@ test("uses authoritative decision timestamps for filter-only case law", async ()
     .map(([query]) => dialect.sqlToQuery(query).sql)
     .filter((query) => query.includes("FROM case_law_search_documents clsd"));
 
-  expect(caseLawQueries.length).toBeGreaterThan(0);
+  expect(caseLawQueries).toHaveLength(2);
   for (const query of caseLawQueries) {
     expect(query).toContain(
       "JOIN case_law_decisions d ON d.id = clsd.decision_id",
