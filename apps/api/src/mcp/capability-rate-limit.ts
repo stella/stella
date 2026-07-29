@@ -78,8 +78,18 @@ export const INVOKE_RATE_LIMIT_OVERRIDES: Record<string, InvokeRateLimit> = {
   },
 };
 
+/** Capabilities whose REST routes consume one shared rate-limit scope. */
+const INVOKE_RATE_LIMIT_KEY_OVERRIDES: Record<string, string> = {
+  "skills.discover": "skill-source",
+  "skills.import": "skill-source",
+  "skills.import-url": "skill-source",
+};
+
 export const resolveInvokeRateLimit = (capabilityId: string): InvokeRateLimit =>
   INVOKE_RATE_LIMIT_OVERRIDES[capabilityId] ?? DEFAULT_INVOKE_RATE_LIMIT;
+
+const resolveInvokeRateLimitKey = (capabilityId: string): string =>
+  INVOKE_RATE_LIMIT_KEY_OVERRIDES[capabilityId] ?? capabilityId;
 
 /** Process-wide limiter instance; its own guards so it never shares counters. */
 const invokeCapabilityGuards = createFeedbackIntakeGuards();
@@ -103,7 +113,7 @@ export const consumeInvokeCapabilityRateLimit = async ({
   const limit = resolveInvokeRateLimit(capabilityId);
   const ok = await guards.consumeCounter({
     bucket: INVOKE_CAPABILITY_BUCKET,
-    key: `${organizationId}:${capabilityId}`,
+    key: `${organizationId}:${resolveInvokeRateLimitKey(capabilityId)}`,
     windowMs: limit.windowMs,
     max: limit.max,
   });

@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { LoaderIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -30,6 +31,10 @@ import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 const MAX_SELECTED_SKILLS = 20;
+const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
+const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
+const isolateBidi = (value: string): string =>
+  `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
 
 type SkillScope = "team" | "private";
 
@@ -303,9 +308,12 @@ const ImportSkillDialogBody = ({
                       <span className="text-foreground text-sm font-medium">
                         <bdi>{skill.name}</bdi>
                       </span>
-                      <span className="text-muted-foreground text-sm">
+                      <BidiText
+                        as="span"
+                        className="text-muted-foreground text-sm"
+                      >
                         {skill.description}
-                      </span>
+                      </BidiText>
                       <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
                         {skill.path && (
                           <code dir="ltr">
@@ -314,12 +322,16 @@ const ImportSkillDialogBody = ({
                         )}
                         {skill.version && (
                           <span>
-                            {tSkills("version", { version: skill.version })}
+                            {tSkills("version", {
+                              version: isolateBidi(skill.version),
+                            })}
                           </span>
                         )}
                         {skill.license && (
                           <span>
-                            {tSkills("license", { license: skill.license })}
+                            {tSkills("license", {
+                              license: isolateBidi(skill.license),
+                            })}
                           </span>
                         )}
                       </span>

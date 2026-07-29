@@ -102,6 +102,38 @@ describe("consumeInvokeCapabilityRateLimit", () => {
     ).toBe(true);
   });
 
+  test("skill source capabilities share one outbound-fetch budget", async () => {
+    const guards = freshGuards();
+    const max = INVOKE_RATE_LIMIT_OVERRIDES["skills.discover"]?.max ?? 0;
+    for (let i = 0; i < max - 1; i += 1) {
+      // eslint-disable-next-line no-await-in-loop -- sequential counter increments are the unit under test
+      await consumeInvokeCapabilityRateLimit({
+        capabilityId: "skills.discover",
+        organizationId: org("org_a"),
+        guards,
+      });
+    }
+
+    expect(
+      (
+        await consumeInvokeCapabilityRateLimit({
+          capabilityId: "skills.import",
+          organizationId: org("org_a"),
+          guards,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (
+        await consumeInvokeCapabilityRateLimit({
+          capabilityId: "skills.import-url",
+          organizationId: org("org_a"),
+          guards,
+        })
+      ).ok,
+    ).toBe(false);
+  });
+
   test("distinct organizations share no budget", async () => {
     const guards = freshGuards();
     const max = INVOKE_RATE_LIMIT_OVERRIDES["entities.translate"]?.max ?? 0;
