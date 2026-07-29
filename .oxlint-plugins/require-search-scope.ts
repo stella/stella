@@ -26,6 +26,8 @@ type ScopeVariable = {
   defs: ScopeDefinition[];
 };
 
+type SqlParameterBindings = ReadonlyMap<ScopeVariable, unknown>;
+
 type Scope = {
   set: Map<string, ScopeVariable>;
   upper: Scope | null;
@@ -1112,6 +1114,28 @@ export default {
           return null;
         };
 
+        const resolveBoundArgument = (
+          expression: unknown,
+          parameterBindings: SqlParameterBindings,
+          ancestors: ReadonlySet<unknown> = new Set(),
+        ): unknown => {
+          const unwrapped = unwrapExpression(expression);
+          if (!isIdentifier(unwrapped) || ancestors.has(unwrapped)) {
+            return unwrapped;
+          }
+          const variable = resolveVariable(unwrapped);
+          if (variable === null || !parameterBindings.has(variable)) {
+            return unwrapped;
+          }
+          const nextAncestors = new Set(ancestors);
+          nextAncestors.add(unwrapped);
+          return resolveBoundArgument(
+            parameterBindings.get(variable),
+            parameterBindings,
+            nextAncestors,
+          );
+        };
+
         const isApprovedImport = (
           identifier: AstNode & { name: string },
           approvedImports: readonly ApprovedImport[],
@@ -1496,15 +1520,20 @@ export default {
 
         type LocalSqlHelper = {
           functionNode: AstNode;
+          parameterBindings: SqlParameterBindings;
           returns: unknown[];
         };
 
-        const resolveLocalZeroArgumentHelper = (
+        const resolveLocalSqlHelper = (
           call: AstNode,
+          outerBindings: SqlParameterBindings,
         ): LocalSqlHelper | null => {
           if (
             !Array.isArray(call.arguments) ||
-            call.arguments.length > 0 ||
+            call.arguments.some(
+              (argument) =>
+                isAstNode(argument) && argument.type === "SpreadElement",
+            ) ||
             !isIdentifier(call.callee)
           ) {
             return null;
@@ -1538,13 +1567,41 @@ export default {
             if (
               functionNode === null ||
               !Array.isArray(functionNode.params) ||
-              functionNode.params.length > 0
+              functionNode.async === true ||
+              functionNode.generator === true ||
+              functionNode.params.length !== call.arguments.length ||
+              functionNode.params.some(
+                (parameter) =>
+                  !isIdentifier(parameter) || parameter.optional === true,
+              )
             ) {
+              continue;
+            }
+            const parameterBindings = new Map(outerBindings);
+            let hasAmbiguousParameter = false;
+            for (const [index, parameter] of functionNode.params.entries()) {
+              if (!isIdentifier(parameter)) {
+                hasAmbiguousParameter = true;
+                break;
+              }
+              const parameterVariable = resolveVariable(parameter);
+              const argument = call.arguments.at(index);
+              if (
+                parameterVariable === null ||
+                argument === undefined ||
+                parameterBindings.has(parameterVariable)
+              ) {
+                hasAmbiguousParameter = true;
+                break;
+              }
+              parameterBindings.set(parameterVariable, argument);
+            }
+            if (hasAmbiguousParameter) {
               continue;
             }
             const returns = functionReturnExpressions(functionNode);
             if (returns.length > 0) {
-              return { functionNode, returns };
+              return { functionNode, parameterBindings, returns };
             }
           }
           return null;
@@ -1559,7 +1616,10 @@ export default {
           ],
         ];
 
-        const staticRawSqlText = (call: AstNode): string | null => {
+        const staticRawSqlText = (
+          call: AstNode,
+          parameterBindings: SqlParameterBindings = new Map(),
+        ): string | null => {
           if (!Array.isArray(call.arguments)) {
             return null;
           }
@@ -1567,7 +1627,9 @@ export default {
           if (argument === undefined) {
             return null;
           }
-          const resolved = resolveConstInitializer(argument);
+          const resolved = resolveConstInitializer(
+            resolveBoundArgument(argument, parameterBindings),
+          );
           return isStringLiteral(resolved)
             ? resolved.value
             : staticTemplateLiteralText(resolved);
@@ -1576,16 +1638,34 @@ export default {
         const resolveSqlArrayElements = (
           expression: unknown,
           ancestors: ReadonlySet<unknown>,
+          parameterBindings: SqlParameterBindings,
         ): unknown[] | null => {
           const unwrapped = unwrapExpression(expression);
           if (!isAstNode(unwrapped) || ancestors.has(unwrapped)) {
             return null;
           }
+          const boundArgument = resolveBoundArgument(
+            unwrapped,
+            parameterBindings,
+          );
+          if (boundArgument !== unwrapped) {
+            const nextAncestors = new Set(ancestors);
+            nextAncestors.add(unwrapped);
+            return resolveSqlArrayElements(
+              boundArgument,
+              nextAncestors,
+              parameterBindings,
+            );
+          }
           const resolved = resolveConstInitializer(unwrapped);
           if (resolved !== unwrapped) {
             const nextAncestors = new Set(ancestors);
             nextAncestors.add(unwrapped);
-            return resolveSqlArrayElements(resolved, nextAncestors);
+            return resolveSqlArrayElements(
+              resolved,
+              nextAncestors,
+              parameterBindings,
+            );
           }
           if (
             !isAstNode(resolved) ||
@@ -1605,6 +1685,7 @@ export default {
               const spreadElements = resolveSqlArrayElements(
                 element.argument,
                 nextAncestors,
+                parameterBindings,
               );
               if (spreadElements === null) {
                 return null;
@@ -1620,6 +1701,7 @@ export default {
         const flattenSqlTemplate = (
           node: AstNode,
           ancestors: ReadonlySet<unknown> = new Set(),
+          parameterBindings: SqlParameterBindings = new Map(),
         ): SqlTemplateToken[][] => {
           if (ancestors.has(node)) {
             return [];
@@ -1640,8 +1722,11 @@ export default {
               continue;
             }
             const nestedPaths =
-              flattenSqlExpression(expression, nextAncestors) ??
-              expressionTokenPaths(expression);
+              flattenSqlExpression(
+                expression,
+                nextAncestors,
+                parameterBindings,
+              ) ?? expressionTokenPaths(expression);
             paths = paths.flatMap((path) =>
               nestedPaths.map((nestedPath) =>
                 concatenateSqlTokenPaths(path, nestedPath),
@@ -1654,10 +1739,26 @@ export default {
         const flattenSqlExpression = (
           expression: unknown,
           ancestors: ReadonlySet<unknown>,
+          parameterBindings: SqlParameterBindings = new Map(),
         ): SqlTemplateToken[][] | null => {
           const unwrapped = unwrapExpression(expression);
           if (!isAstNode(unwrapped) || ancestors.has(unwrapped)) {
             return null;
+          }
+          const boundArgument = resolveBoundArgument(
+            unwrapped,
+            parameterBindings,
+          );
+          if (boundArgument !== unwrapped) {
+            const nextAncestors = new Set(ancestors);
+            nextAncestors.add(unwrapped);
+            return (
+              flattenSqlExpression(
+                boundArgument,
+                nextAncestors,
+                parameterBindings,
+              ) ?? expressionTokenPaths(boundArgument)
+            );
           }
           const dynamicMemberAlternatives = resolveDynamicMemberAlternatives(
             unwrapped,
@@ -1669,6 +1770,7 @@ export default {
             return flattenSqlAlternatives(
               dynamicMemberAlternatives,
               nextAncestors,
+              parameterBindings,
             );
           }
           const resolved = resolveConstInitializer(unwrapped);
@@ -1676,18 +1778,25 @@ export default {
             const nextAncestors = new Set(ancestors);
             nextAncestors.add(unwrapped);
             return (
-              flattenSqlExpression(resolved, nextAncestors) ??
-              expressionTokenPaths(resolved)
+              flattenSqlExpression(
+                resolved,
+                nextAncestors,
+                parameterBindings,
+              ) ?? expressionTokenPaths(resolved)
             );
           }
           if (!isAstNode(resolved)) {
             return null;
           }
           if (resolved.type === "TaggedTemplateExpression") {
-            return flattenSqlTemplate(resolved, ancestors);
+            return flattenSqlTemplate(resolved, ancestors, parameterBindings);
           }
           if (resolved.type === "SpreadElement") {
-            return flattenSqlExpression(resolved.argument, ancestors);
+            return flattenSqlExpression(
+              resolved.argument,
+              ancestors,
+              parameterBindings,
+            );
           }
           if (
             resolved.type === "ArrayExpression" &&
@@ -1699,6 +1808,7 @@ export default {
               ancestors: nextAncestors,
               expressions: resolved.elements,
               isKnownSqlSequence: true,
+              parameterBindings,
             });
           }
           if (
@@ -1708,7 +1818,7 @@ export default {
             const nextAncestors = new Set(ancestors);
             nextAncestors.add(resolved);
             if (isSqlMethodCall(resolved, "raw")) {
-              const rawText = staticRawSqlText(resolved);
+              const rawText = staticRawSqlText(resolved, parameterBindings);
               return rawText === null
                 ? null
                 : [[{ type: "text", value: rawText }]];
@@ -1718,9 +1828,17 @@ export default {
               if (values === undefined) {
                 return null;
               }
-              const elements = resolveSqlArrayElements(values, nextAncestors);
+              const elements = resolveSqlArrayElements(
+                values,
+                nextAncestors,
+                parameterBindings,
+              );
               if (elements === null) {
-                return flattenSqlExpression(values, nextAncestors);
+                return flattenSqlExpression(
+                  values,
+                  nextAncestors,
+                  parameterBindings,
+                );
               }
               const separator = resolved.arguments.at(1);
               if (separator === undefined) {
@@ -1728,33 +1846,51 @@ export default {
                   ancestors: nextAncestors,
                   expressions: elements,
                   isKnownSqlSequence: true,
+                  parameterBindings,
                   textBoundary: "exact",
                 });
               }
               const separatorPaths = flattenSqlExpression(
                 separator,
                 nextAncestors,
+                parameterBindings,
               );
               if (separatorPaths === null) {
-                return flattenSqlAlternatives(elements, nextAncestors);
+                return flattenSqlAlternatives(
+                  elements,
+                  nextAncestors,
+                  parameterBindings,
+                );
               }
               return flattenSqlSequence({
                 ancestors: nextAncestors,
                 expressions: elements,
                 isKnownSqlSequence: true,
+                parameterBindings,
                 separatorPaths,
                 textBoundary: "exact",
               });
             }
-            const localHelper = resolveLocalZeroArgumentHelper(resolved);
+            const localHelper = resolveLocalSqlHelper(
+              resolved,
+              parameterBindings,
+            );
             if (
               localHelper !== null &&
               !nextAncestors.has(localHelper.functionNode)
             ) {
               nextAncestors.add(localHelper.functionNode);
-              return flattenSqlAlternatives(localHelper.returns, nextAncestors);
+              return flattenSqlAlternatives(
+                localHelper.returns,
+                nextAncestors,
+                localHelper.parameterBindings,
+              );
             }
-            return flattenSqlAlternatives(resolved.arguments, nextAncestors);
+            return flattenSqlAlternatives(
+              resolved.arguments,
+              nextAncestors,
+              parameterBindings,
+            );
           }
           if (
             resolved.type === "SequenceExpression" &&
@@ -1763,7 +1899,11 @@ export default {
             const finalExpression = resolved.expressions.at(-1);
             return finalExpression === undefined
               ? null
-              : flattenSqlExpression(finalExpression, ancestors);
+              : flattenSqlExpression(
+                  finalExpression,
+                  ancestors,
+                  parameterBindings,
+                );
           }
           if (
             resolved.type !== "ConditionalExpression" &&
@@ -1780,7 +1920,7 @@ export default {
               : [resolved.left, resolved.right];
           return branches.flatMap(
             (branch) =>
-              flattenSqlExpression(branch, nextAncestors) ??
+              flattenSqlExpression(branch, nextAncestors, parameterBindings) ??
               expressionTokenPaths(branch),
           );
         };
@@ -1789,6 +1929,7 @@ export default {
           ancestors: ReadonlySet<unknown>;
           expressions: readonly unknown[];
           isKnownSqlSequence: boolean;
+          parameterBindings: SqlParameterBindings;
           separatorPaths?: readonly SqlTemplateToken[][] | undefined;
           textBoundary?: "exact" | "independent" | undefined;
         };
@@ -1797,6 +1938,7 @@ export default {
           ancestors,
           expressions,
           isKnownSqlSequence,
+          parameterBindings,
           separatorPaths = [[]],
           textBoundary = "independent",
         }: FlattenSqlSequenceOptions): SqlTemplateToken[][] | null => {
@@ -1807,7 +1949,11 @@ export default {
             if (expression === null) {
               continue;
             }
-            const flattened = flattenSqlExpression(expression, ancestors);
+            const flattened = flattenSqlExpression(
+              expression,
+              ancestors,
+              parameterBindings,
+            );
             if (flattened) {
               hasSqlStructure = true;
             }
@@ -1837,6 +1983,7 @@ export default {
         const flattenSqlAlternatives = (
           expressions: readonly unknown[],
           ancestors: ReadonlySet<unknown>,
+          parameterBindings: SqlParameterBindings,
         ): SqlTemplateToken[][] | null => {
           let hasSqlStructure = false;
           const paths: SqlTemplateToken[][] = [];
@@ -1844,7 +1991,11 @@ export default {
             if (expression === null) {
               continue;
             }
-            const flattened = flattenSqlExpression(expression, ancestors);
+            const flattened = flattenSqlExpression(
+              expression,
+              ancestors,
+              parameterBindings,
+            );
             if (flattened) {
               hasSqlStructure = true;
               for (const path of flattened) {
@@ -2041,14 +2192,24 @@ export default {
             inspectSqlTokenPaths(node, flattenSqlTemplate(node));
           },
           CallExpression(node: unknown) {
-            if (!isAstNode(node) || !isSqlMethodCall(node, "raw")) {
+            if (!isAstNode(node)) {
               return;
             }
-            const rawText = staticRawSqlText(node);
-            if (rawText === null) {
+            if (isSqlMethodCall(node, "raw")) {
+              const rawText = staticRawSqlText(node);
+              if (rawText === null) {
+                return;
+              }
+              inspectSqlTokenPaths(node, [[{ type: "text", value: rawText }]]);
               return;
             }
-            inspectSqlTokenPaths(node, [[{ type: "text", value: rawText }]]);
+            if (!isSqlMethodCall(node, "join")) {
+              return;
+            }
+            const tokenPaths = flattenSqlExpression(node, new Set());
+            if (tokenPaths !== null) {
+              inspectSqlTokenPaths(node, tokenPaths);
+            }
           },
         };
       },

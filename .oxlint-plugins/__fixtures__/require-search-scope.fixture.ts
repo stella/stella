@@ -174,6 +174,34 @@ const privateFromBlock = () => {
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves block-returning local helpers cannot hide a private projection
 const unsafeBlockHelperPrivateRead = sql`SELECT * ${privateFromBlock()}`;
 
+const fromTable = (table: unknown) => sql`FROM ${table} sd`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves parameterized local SQL helpers cannot hide an interpolated private table
+const unsafeParameterizedHelperRead = sql`
+  SELECT * ${fromTable(searchDocuments)}
+`;
+
+function declaredFromTable(table: unknown) {
+  return sql`FROM ${table} sd`;
+}
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves parameter substitution also applies to function declarations
+const unsafeDeclaredHelperRead = sql`
+  SELECT * ${declaredFromTable(searchDocuments)}
+`;
+
+const fromEitherTable = (primary: unknown, fallback: unknown) =>
+  enabled ? sql`FROM ${primary} sd` : sql`FROM ${fallback}`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves dynamic argument branches and multiple parameters are inspected independently
+const unsafeBranchedParameterizedHelperRead = sql`
+  SELECT *
+  ${fromEitherTable(
+    enabled ? searchDocuments : sql`entities`,
+    sql`workspaces w`,
+  )}
+`;
+
 const memberFragments = {
   from: sql`FROM search_documents sd`,
   publicFrom: sql`FROM entities e`,
@@ -240,6 +268,12 @@ const unsafeJoinedMultiBranch = (() => {
   // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a sql.join separator preserves query branch boundaries
   return sql`SELECT ${sql.join(branches, sql` UNION ALL SELECT `)}`;
 })();
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a root sql.join call is inspected with exact text boundaries
+const unsafeRootJoinedPrivateRead = sql.join([
+  sql`SELECT * FROM search_`,
+  sql`documents sd`,
+]);
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves sql.raw cannot bypass private projection detection
 const unsafeRawEntity = sql.raw("SELECT * FROM search_documents sd");
@@ -759,6 +793,42 @@ const scopedBlockHelperPrivateRead = sql`
   WHERE true ${entityWorkspaceFilter}
 `;
 
+const scopedFromTable = (table: unknown, scope: unknown) =>
+  sql`FROM ${table} sd WHERE true ${scope}`;
+const scopedParameterizedHelperRead = sql`
+  SELECT *
+  ${scopedFromTable(searchDocuments, entityWorkspaceFilter)}
+`;
+
+const publicParameterizedHelperRead = sql`
+  SELECT * ${fromTable(sql`entities`)}
+`;
+
+const scopedFromEitherTable = (
+  table: unknown,
+  scope: unknown,
+  fallback: unknown,
+) =>
+  enabled ? sql`FROM ${table} sd WHERE true ${scope}` : sql`FROM ${fallback}`;
+const scopedBranchedParameterizedHelperRead = sql`
+  SELECT *
+  ${scopedFromEitherTable(
+    searchDocuments,
+    entityWorkspaceFilter,
+    sql`entities e`,
+  )}
+`;
+
+const shadowedParameterHelper = (table: unknown) => {
+  void table;
+  // oxlint-disable-next-line no-shadow -- fixture proves parameter substitution uses binding identity rather than names
+  const selectPublic = (table: unknown) => sql`FROM ${table}`;
+  return selectPublic(sql`entities e`);
+};
+const shadowedParameterControl = sql`
+  SELECT * ${shadowedParameterHelper(searchDocuments)}
+`;
+
 const scopedMemberFragments = {
   from: sql`FROM search_documents sd`,
   where: sql`WHERE true ${entityWorkspaceFilter}`,
@@ -882,6 +952,16 @@ const scopedRawJoinedMultiBranch = (() => {
   return sql`SELECT ${sql.join(branches, sql.raw(" UNION ALL SELECT "))}`;
 })();
 
+const scopedRootJoinedPrivateRead = sql.join([
+  sql`SELECT * FROM search_documents sd WHERE true `,
+  entityWorkspaceFilter,
+]);
+
+const publicRootJoinedRead = sql.join([
+  sql`SELECT * FROM entities e`,
+  sql` WHERE e.id IS NOT NULL`,
+]);
+
 const scopedOpaquePrivateFragment = sql`
   SELECT *
   ${pickFirst(sql`FROM search_documents sd`)}
@@ -986,6 +1066,9 @@ void [
   unsafeComposedPrivateRead,
   unsafeLocalHelperPrivateRead,
   unsafeBlockHelperPrivateRead,
+  unsafeParameterizedHelperRead,
+  unsafeDeclaredHelperRead,
+  unsafeBranchedParameterizedHelperRead,
   unsafeMemberFragmentRead,
   unsafeTupleFragmentRead,
   unsafeComputedMemberFragmentRead,
@@ -995,6 +1078,7 @@ void [
   unsafeJoinedPrivateFragment,
   unsafeSplitJoinedPrivateFragment,
   unsafeJoinedMultiBranch,
+  unsafeRootJoinedPrivateRead,
   unsafeRawEntity,
   unsafeRawTemplateEntity,
   unsafeRawRelationFragment,
@@ -1075,6 +1159,10 @@ void [
   scopedComposedRead,
   scopedLocalHelperPrivateRead,
   scopedBlockHelperPrivateRead,
+  scopedParameterizedHelperRead,
+  publicParameterizedHelperRead,
+  scopedBranchedParameterizedHelperRead,
+  shadowedParameterControl,
   scopedMemberFragmentRead,
   scopedTupleFragmentRead,
   scopedComputedMemberFragmentRead,
@@ -1092,6 +1180,8 @@ void [
   scopedParenthesizedJoinedInterpolatedEntity,
   scopedJoinedMultiBranch,
   scopedRawJoinedMultiBranch,
+  scopedRootJoinedPrivateRead,
+  publicRootJoinedRead,
   scopedOpaquePrivateFragment,
   scopedConditionalPrivateFragment,
   scopedMultiBranch,
