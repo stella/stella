@@ -5,6 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
 import {
   getCorpusIndexClient,
@@ -117,7 +118,12 @@ export type CorpusIndexRow<TBrand extends SafeIdType> = {
   contentHash: string | null;
   indexedHash: string | null;
   indexedGeneration: string | null;
-  updatedAt: Date;
+  /**
+   * Exact-precision CAS token for `updated_at` (see `lib/db/timestamp-cas`).
+   * Never a `Date`: the millisecond round-trip made every microsecond-
+   * precision row unmatchable.
+   */
+  updatedAtToken: TimestampCasToken;
 };
 
 /**

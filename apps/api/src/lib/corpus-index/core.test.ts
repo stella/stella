@@ -8,6 +8,7 @@ import {
   settleBoth,
   splitIngestRequests,
 } from "@/api/lib/corpus-index/core";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 
 /**
@@ -188,7 +189,10 @@ describe("failed index jobs always reach the audit trail", () => {
     contentHash: `hash-${id}`,
     indexedHash: null,
     indexedGeneration: null,
-    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    // SAFETY: tests fabricate the branded token the adapters normally
+    // select as `updated_at::text`.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
   });
 
   beforeEach(() => {

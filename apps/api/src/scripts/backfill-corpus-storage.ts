@@ -46,6 +46,11 @@ import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  timestampCasToken,
+  type TimestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 
 const BATCH_SIZE = 50;
@@ -60,7 +65,7 @@ type BackfillRow = {
   sections: DecisionSection[] | null;
   documentAst: DocumentAst | EmptyAst | null;
   contentHash: string | null;
-  updatedAt: Date;
+  updatedAtToken: TimestampCasToken;
 };
 
 /** Never written to object storage. */
@@ -93,6 +98,7 @@ console.log(
 
 let lastId: SafeId<"caseLawDecision"> | null = null;
 let written = 0;
+let skipped = 0;
 let failed = 0;
 
 const backfillRow = async (row: BackfillRow): Promise<void> => {
@@ -104,7 +110,7 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
       sections: row.sections,
       ast: row.documentAst,
     });
-    await ingestionDb((tx) =>
+    const recorded = await ingestionDb((tx) =>
       tx
         .update(caseLawDecisions)
         .set({
@@ -123,11 +129,21 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
           and(
             eq(caseLawDecisions.id, row.id),
             sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
-            sql`${caseLawDecisions.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
+            timestampMatchesCasToken(
+              caseLawDecisions.updatedAt,
+              row.updatedAtToken,
+            ),
           ),
-        ),
+        )
+        .returning({ id: caseLawDecisions.id }),
     );
-    written += 1;
+    // A refused CAS is not success: the row changed under the scan and
+    // still points at its own payload, so nothing was recorded.
+    if (recorded.length > 0) {
+      written += 1;
+    } else {
+      skipped += 1;
+    }
   } catch (error) {
     failed += 1;
     captureError(error, { decisionId: row.id, step: "backfillCorpusStorage" });
@@ -151,7 +167,7 @@ while (true) {
         sections: caseLawDecisions.sections,
         documentAst: caseLawDecisions.documentAst,
         contentHash: caseLawDecisions.contentHash,
-        updatedAt: caseLawDecisions.updatedAt,
+        updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
       })
       .from(caseLawDecisions)
       .where(where)
@@ -169,10 +185,12 @@ while (true) {
   }
 
   lastId = rows.at(-1)?.id ?? lastId;
-  console.log(`  written=${written} failed=${failed}`);
+  console.log(`  written=${written} skipped=${skipped} failed=${failed}`);
 }
 
-console.log(`Done. Wrote ${written} decisions, ${failed} failed.`);
+console.log(
+  `Done. Wrote ${written} decisions, skipped ${skipped}, ${failed} failed.`,
+);
 
 // Non-zero on partial failure: the cutover checklist treats this run as
 // green only when every decision has its corpus objects.

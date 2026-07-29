@@ -13,6 +13,10 @@ import {
   createCorpusIndexer,
   resolveMarkedRowIds,
 } from "@/api/lib/corpus-index/core";
+import {
+  timestampCasToken,
+  type TimestampCasToken,
+} from "@/api/lib/db/timestamp-cas";
 
 /**
  * corpus index projection for the `legislation` family. Domain adapter over the
@@ -47,7 +51,7 @@ type IndexableRow = {
   contentHash: string | null;
   indexedHash: string | null;
   indexedGeneration: string | null;
-  updatedAt: Date;
+  updatedAtToken: TimestampCasToken;
 };
 
 // Deliberately excludes `fulltext` (see the case-law indexer): the fallback
@@ -71,7 +75,7 @@ const SELECT_COLUMNS = {
   contentHash: legislationDocuments.contentHash,
   indexedHash: legislationDocuments.indexedHash,
   indexedGeneration: legislationDocuments.indexedGeneration,
-  updatedAt: legislationDocuments.updatedAt,
+  updatedAtToken: timestampCasToken(legislationDocuments.updatedAt),
 };
 
 const hasContent = sql`${legislationDocuments.contentHash} IS NOT NULL`;
@@ -212,7 +216,7 @@ const indexer = createCorpusIndexer<"legislationDocument", IndexableRow>({
     const tuples = sql.join(
       rows.map(
         (row) =>
-          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAt.toISOString()}::timestamp)`,
+          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAtToken}::timestamp)`,
       ),
       sql`, `,
     );

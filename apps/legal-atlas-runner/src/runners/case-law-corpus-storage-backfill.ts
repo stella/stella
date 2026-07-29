@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -11,6 +11,11 @@ import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  timestampCasToken,
+  type TimestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import {
   isCorpusS3Stale,
@@ -30,7 +35,7 @@ type BackfillRow = {
   fulltext: string | null;
   sections: DecisionSection[] | null;
   documentAst: DocumentAst | EmptyAst | null;
-  updatedAt: Date;
+  updatedAtToken: TimestampCasToken;
 };
 
 type LegislationBackfillRow = {
@@ -39,7 +44,7 @@ type LegislationBackfillRow = {
   fulltext: string | null;
   sections: DecisionSection[] | null;
   documentAst: DocumentAst | EmptyAst | null;
-  updatedAt: Date;
+  updatedAtToken: TimestampCasToken;
 };
 
 type BackfillOptions = {
@@ -163,7 +168,9 @@ const parseArgs = (argv: readonly string[]): ParseResult => {
   return { ok: true, options };
 };
 
-const backfillRow = async (row: BackfillRow): Promise<boolean> => {
+const backfillRow = async (
+  row: BackfillRow,
+): Promise<"written" | "skipped" | "failed"> => {
   try {
     const result = await writeCorpusDocument({
       documentId: row.id,
@@ -173,7 +180,7 @@ const backfillRow = async (row: BackfillRow): Promise<boolean> => {
       ast: row.documentAst,
     });
 
-    await ingestionDb((tx) =>
+    const recorded = await ingestionDb((tx) =>
       tx
         .update(caseLawDecisions)
         .set({
@@ -190,24 +197,30 @@ const backfillRow = async (row: BackfillRow): Promise<boolean> => {
           and(
             eq(caseLawDecisions.id, row.id),
             isNull(caseLawDecisions.textS3Key),
-            sql`${caseLawDecisions.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
+            timestampMatchesCasToken(
+              caseLawDecisions.updatedAt,
+              row.updatedAtToken,
+            ),
           ),
-        ),
+        )
+        .returning({ id: caseLawDecisions.id }),
     );
 
-    return true;
+    // A refused CAS is not success: the objects exist but the row still
+    // points nowhere, and only the recording makes the work durable.
+    return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
     captureError(error, {
       decisionId: row.id,
       step: "caseLawCorpusStorageBackfill",
     });
-    return false;
+    return "failed";
   }
 };
 
 const backfillLegislationRow = async (
   row: LegislationBackfillRow,
-): Promise<boolean> => {
+): Promise<"written" | "skipped" | "failed"> => {
   try {
     const result = await writeCorpusDocument({
       documentId: row.id,
@@ -217,7 +230,7 @@ const backfillLegislationRow = async (
       ast: row.documentAst,
     });
 
-    await ingestionDb((tx) =>
+    const recorded = await ingestionDb((tx) =>
       tx
         .update(legislationDocuments)
         .set({
@@ -234,23 +247,28 @@ const backfillLegislationRow = async (
           and(
             eq(legislationDocuments.id, row.id),
             isNull(legislationDocuments.textS3Key),
-            sql`${legislationDocuments.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
+            timestampMatchesCasToken(
+              legislationDocuments.updatedAt,
+              row.updatedAtToken,
+            ),
           ),
-        ),
+        )
+        .returning({ id: legislationDocuments.id }),
     );
 
-    return true;
+    return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
     captureError(error, {
       documentId: row.id,
       step: "legislationCorpusStorageBackfill",
     });
-    return false;
+    return "failed";
   }
 };
 
 type BackfillResult = {
   written: number;
+  skipped: number;
   failed: number;
 };
 
@@ -281,10 +299,11 @@ const backfillCaseLaw = async (
 ): Promise<BackfillResult> => {
   let lastId: SafeId<"caseLawDecision"> | null = null;
   let written = 0;
+  let skipped = 0;
   let failed = 0;
 
   while (true) {
-    const batchSize = nextBatchSize(limit, written + failed);
+    const batchSize = nextBatchSize(limit, written + skipped + failed);
     if (batchSize === 0) {
       break;
     }
@@ -306,7 +325,7 @@ const backfillCaseLaw = async (
           fulltext: caseLawDecisions.fulltext,
           sections: caseLawDecisions.sections,
           documentAst: caseLawDecisions.documentAst,
-          updatedAt: caseLawDecisions.updatedAt,
+          updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
         })
         .from(caseLawDecisions)
         .where(where)
@@ -324,8 +343,10 @@ const backfillCaseLaw = async (
         rows.slice(i, i + CONCURRENCY).map(backfillRow),
       );
       for (const outcome of outcomes) {
-        if (outcome) {
+        if (outcome === "written") {
           written += 1;
+        } else if (outcome === "skipped") {
+          skipped += 1;
         } else {
           failed += 1;
         }
@@ -333,10 +354,12 @@ const backfillCaseLaw = async (
     }
 
     lastId = rows.at(-1)?.id ?? lastId;
-    logInfo(`  case-law written=${written} failed=${failed}`);
+    logInfo(
+      `  case-law written=${written} skipped=${skipped} failed=${failed}`,
+    );
   }
 
-  return { written, failed };
+  return { written, skipped, failed };
 };
 
 const backfillLegislation = async (
@@ -344,10 +367,11 @@ const backfillLegislation = async (
 ): Promise<BackfillResult> => {
   let lastId: SafeId<"legislationDocument"> | null = null;
   let written = 0;
+  let skipped = 0;
   let failed = 0;
 
   while (true) {
-    const batchSize = nextBatchSize(limit, written + failed);
+    const batchSize = nextBatchSize(limit, written + skipped + failed);
     if (batchSize === 0) {
       break;
     }
@@ -369,7 +393,7 @@ const backfillLegislation = async (
           fulltext: legislationDocuments.fulltext,
           sections: legislationDocuments.sections,
           documentAst: legislationDocuments.documentAst,
-          updatedAt: legislationDocuments.updatedAt,
+          updatedAtToken: timestampCasToken(legislationDocuments.updatedAt),
         })
         .from(legislationDocuments)
         .where(where)
@@ -387,8 +411,10 @@ const backfillLegislation = async (
         rows.slice(i, i + CONCURRENCY).map(backfillLegislationRow),
       );
       for (const outcome of outcomes) {
-        if (outcome) {
+        if (outcome === "written") {
           written += 1;
+        } else if (outcome === "skipped") {
+          skipped += 1;
         } else {
           failed += 1;
         }
@@ -396,10 +422,12 @@ const backfillLegislation = async (
     }
 
     lastId = rows.at(-1)?.id ?? lastId;
-    logInfo(`  legislation written=${written} failed=${failed}`);
+    logInfo(
+      `  legislation written=${written} skipped=${skipped} failed=${failed}`,
+    );
   }
 
-  return { written, failed };
+  return { written, skipped, failed };
 };
 
 type IndexBackfillResult = {
@@ -508,7 +536,7 @@ export const runLegalCorpusStorageBackfill = async (
   );
 
   logInfo(
-    `Done. Case-law wrote ${caseLaw.written}, ${caseLaw.failed} failed. Legislation wrote ${legislation.written}, ${legislation.failed} failed.`,
+    `Done. Case-law wrote ${caseLaw.written}, skipped ${caseLaw.skipped}, ${caseLaw.failed} failed. Legislation wrote ${legislation.written}, skipped ${legislation.skipped}, ${legislation.failed} failed.`,
   );
   return caseLaw.failed === 0 && legislation.failed === 0 ? 0 : 1;
 };
@@ -572,7 +600,7 @@ export const runCaseLawCorpusStorageBackfill = async (
   const caseLaw = await backfillCaseLaw(parsed.options.caseLawLimit);
 
   logInfo(
-    `Done. Wrote ${caseLaw.written} decisions, ${caseLaw.failed} failed.`,
+    `Done. Wrote ${caseLaw.written} decisions, skipped ${caseLaw.skipped}, ${caseLaw.failed} failed.`,
   );
   return caseLaw.failed === 0 ? 0 : 1;
 };

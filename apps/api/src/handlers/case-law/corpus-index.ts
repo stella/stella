@@ -25,6 +25,10 @@ import {
   createCorpusIndexer,
   resolveMarkedRowIds,
 } from "@/api/lib/corpus-index/core";
+import {
+  timestampCasToken,
+  type TimestampCasToken,
+} from "@/api/lib/db/timestamp-cas";
 
 /**
  * corpus index search-projection maintenance for the `case_law` family.
@@ -59,7 +63,7 @@ type IndexableRow = {
   contentHash: string | null;
   indexedHash: string | null;
   indexedGeneration: string | null;
-  updatedAt: Date;
+  updatedAtToken: TimestampCasToken;
 };
 
 // Deliberately excludes `fulltext`: it is only the fallback for rows without
@@ -83,7 +87,7 @@ const SELECT_COLUMNS = {
   contentHash: caseLawDecisions.contentHash,
   indexedHash: caseLawDecisions.indexedHash,
   indexedGeneration: caseLawDecisions.indexedGeneration,
-  updatedAt: caseLawDecisions.updatedAt,
+  updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
 };
 
 // A row is indexable once its canonical payload is in object storage.
@@ -297,7 +301,7 @@ export const caseLawCorpusIndexAdapter = {
     const tuples = sql.join(
       rows.map(
         (row) =>
-          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAt.toISOString()}::timestamp)`,
+          sql`(${row.id}::uuid, ${row.contentHash}::text, ${row.indexedHash}::text, ${row.indexedGeneration}::text, ${row.updatedAtToken}::timestamp)`,
       ),
       sql`, `,
     );

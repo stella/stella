@@ -37,6 +37,11 @@ import { payloadCarriesDocument } from "@/api/handlers/case-law/stored-payload";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  timestampCasToken,
+  type TimestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import { LIMITS } from "@/api/lib/limits";
 import { getCorpusS3, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -61,7 +66,7 @@ type TrimRow = {
   fulltext: string | null;
   sections: DecisionSection[] | null;
   documentAst: DocumentAst | EmptyAst | null;
-  updatedAt: Date;
+  updatedAtToken: TimestampCasToken;
 };
 
 const parsed = parseColumnTrimArgs(Bun.argv.slice(2));
@@ -226,7 +231,10 @@ const trimRow = async (row: TrimRow): Promise<void> => {
           and(
             eq(caseLawDecisions.id, row.id),
             sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
-            sql`${caseLawDecisions.updatedAt} IS NOT DISTINCT FROM ${row.updatedAt}`,
+            timestampMatchesCasToken(
+              caseLawDecisions.updatedAt,
+              row.updatedAtToken,
+            ),
           ),
         )
         .returning({ id: caseLawDecisions.id });
@@ -278,7 +286,7 @@ while (true) {
         fulltext: caseLawDecisions.fulltext,
         sections: caseLawDecisions.sections,
         documentAst: caseLawDecisions.documentAst,
-        updatedAt: caseLawDecisions.updatedAt,
+        updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
       })
       .from(caseLawDecisions)
       .where(idFilter ? and(candidateFilter, idFilter) : candidateFilter)

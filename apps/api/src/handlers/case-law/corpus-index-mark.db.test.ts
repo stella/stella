@@ -11,6 +11,7 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { caseLawCorpusIndexAdapter } from "@/api/handlers/case-law/corpus-index";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import {
   createSchemaPglite,
   installPgliteSchemaPrerequisites,
@@ -99,6 +100,13 @@ beforeAll(
         indexedGeneration: OLD_GENERATION,
       },
     ]);
+    // SQL now() carries microseconds, which a JS Date round-trip silently
+    // truncates: the CAS must match against the exact stored value, which
+    // is the whole point of the text token. Every row in this fixture gets
+    // a microsecond timestamp so a Date regression fails the test.
+    await db.execute(
+      sql`UPDATE ${caseLawDecisions} SET updated_at = now() + interval '123 microseconds'`,
+    );
   },
   { timeout: 30_000 },
 );
@@ -117,7 +125,7 @@ const loadRow = async (id: SafeId<"caseLawDecision">) => {
       contentHash: caseLawDecisions.contentHash,
       indexedHash: caseLawDecisions.indexedHash,
       indexedGeneration: caseLawDecisions.indexedGeneration,
-      updatedAt: caseLawDecisions.updatedAt,
+      updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
     })
     .from(caseLawDecisions)
     .where(sql`${caseLawDecisions.id} = ${id}`);
@@ -161,7 +169,7 @@ test(
     expect(freshAfter.indexedHash).toBe("hash-fresh");
     // Bookkeeping must not read as a content change: the trim scan and the
     // ingest refresh both compare-and-set on updated_at.
-    expect(freshAfter.updatedAt).toEqual(fresh.updatedAt);
+    expect(freshAfter.updatedAtToken).toBe(fresh.updatedAtToken);
     const movedAfter = await loadRow(movedId);
     expect(movedAfter.indexedGeneration).toBeNull();
 
