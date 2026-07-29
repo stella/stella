@@ -202,29 +202,41 @@ const sampleKeys = async (jurisdiction: string, want: number) => {
     cursors.map(
       (cursor) => async () =>
         await withDeadline(
-          s3.list({ prefix, startAfter: `${prefix}${cursor}`, maxKeys: 8 }),
+          s3.list({ prefix, startAfter: `${prefix}${cursor}`, maxKeys: 2 }),
           "s3.list",
         ),
     ),
   );
-  const keys = new Set<string>();
+  const docPrefixes = new Set<string>();
   for (const listed of listings) {
-    if (keys.size >= want) {
+    if (docPrefixes.size >= want) {
       break;
     }
     const landed = listed.contents?.at(0)?.key;
-    if (!landed) {
+    if (landed) {
+      docPrefixes.add(`${landed.split("/").slice(0, 4).join("/")}/`);
+    }
+  }
+  // Enumerate each landed document's own prefix: three objects per
+  // content version means a short window can miss the newest text
+  // object entirely. Settled batches, so one failed enumeration costs
+  // one document.
+  const docListings = await settleInBatches(
+    [...docPrefixes].map(
+      (docPrefix) => async () =>
+        await withDeadline(
+          s3.list({ prefix: docPrefix, maxKeys: 64 }),
+          "s3.list-doc",
+        ),
+    ),
+  );
+  const keys = new Set<string>();
+  for (const docListing of docListings) {
+    const contents = docListing.contents;
+    if (!contents) {
       continue;
     }
-    const docPrefix = landed.split("/").slice(0, 4).join("/") + "/";
-    // Enumerate the landed document's own prefix: three objects per
-    // content version means a short window can miss the newest text
-    // object entirely.
-    const docListing = await withDeadline(
-      s3.list({ prefix: docPrefix, maxKeys: 64 }),
-      "s3.list-doc",
-    );
-    const textEntries = (docListing.contents ?? []).filter((entry) =>
+    const textEntries = contents.filter((entry) =>
       entry.key.endsWith("/text.zst"),
     );
     // A backfilled document can leave an orphaned content-addressed
