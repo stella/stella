@@ -17,13 +17,14 @@ describe("AI provider PDF canary contract", () => {
   test("sends a real inline PDF rather than a text-only pdf-role probe", () => {
     const message = createPdfCanaryMessages().at(0);
     expect(message?.role).toBe("user");
-    if (!message || typeof message.content === "string") {
+    const content = message?.content;
+    if (!Array.isArray(content)) {
       throw new Error("Expected multimodal PDF canary message");
     }
 
-    const text = message.content.find((part) => part.type === "text");
+    const text = content.find((part) => part.type === "text");
     expect(text?.content).not.toContain(PDF_CANARY_TOKEN);
-    const document = message.content.find((part) => part.type === "document");
+    const document = content.find((part) => part.type === "document");
     expect(document?.source.type).toBe("data");
     if (!document || document.source.type !== "data") {
       throw new Error("Expected inline PDF canary data");
