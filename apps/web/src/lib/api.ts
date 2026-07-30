@@ -1,7 +1,7 @@
 import { posthog } from "posthog-js";
 
 import { createStellaEdenClient } from "@stll/api-client";
-import type { API } from "@stll/api/types";
+import type { WebAPI } from "@stll/api/types";
 
 import { env } from "@/env";
 import { getFormattingLocale, getMessageLocale } from "@/i18n/i18n-store";
@@ -9,7 +9,7 @@ import { getSimulateSlowLoadDelayMs } from "@/lib/dev-store";
 
 const FORMATTING_LOCALE_HEADER = "x-stella-formatting-locale";
 
-const eden = createStellaEdenClient<API>(env.VITE_API_URL, {
+const eden = createStellaEdenClient<WebAPI>(env.VITE_API_URL, {
   async onRequest() {
     const delayMs = getSimulateSlowLoadDelayMs();
     if (delayMs > 0) {

@@ -1,9 +1,44 @@
+import type Elysia from "elysia";
+
 import type { properties } from "@/api/db/schema";
 import type * as SchemaValidators from "@/api/db/schema-validators";
 import type * as ViewSchemas from "@/api/lib/views-schema";
 import type api from "@/api/server.js";
 
 export type API = typeof api;
+
+type ApiRoutes = (typeof api)["~Routes"];
+type ApiV1Routes = ApiRoutes["v1"];
+type ApiEntityRoutes = ApiV1Routes["entities"];
+type ApiWorkspaceEntityRoutes = ApiEntityRoutes[":workspaceId"];
+type ApiEntityResourceRoutes = ApiWorkspaceEntityRoutes["entity"];
+type ApiEntityByIdRoutes = ApiEntityResourceRoutes[":entityId"];
+type WebApiRoutes = Omit<ApiRoutes, "v1"> & {
+  v1: Omit<ApiV1Routes, "entities"> & {
+    entities: Omit<ApiEntityRoutes, ":workspaceId"> & {
+      ":workspaceId": Omit<ApiWorkspaceEntityRoutes, "entity"> & {
+        entity: Omit<ApiEntityResourceRoutes, ":entityId"> & {
+          ":entityId": Omit<ApiEntityByIdRoutes, "ocr">;
+        };
+      };
+    };
+  };
+};
+
+/**
+ * Browser Eden surface. Small, isolated direct-fetch routes stay out of Eden's
+ * recursive route mapping when adding them would breach the web type-cost
+ * budget; their clients validate the shared HTTP contract at runtime.
+ */
+export type WebAPI = Elysia<
+  (typeof api)["~Prefix"],
+  (typeof api)["~Singleton"],
+  (typeof api)["~Definitions"],
+  (typeof api)["~Metadata"],
+  WebApiRoutes,
+  (typeof api)["~Ephemeral"],
+  (typeof api)["~Volatile"]
+>;
 
 export { toSafeId } from "@/api/lib/branded-types";
 export type { SafeId, SafeIdType } from "@/api/lib/branded-types";

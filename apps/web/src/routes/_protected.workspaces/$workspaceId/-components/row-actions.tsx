@@ -83,6 +83,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { requestManualOcr } from "@/routes/_protected.workspaces/$workspaceId/-components/request-manual-ocr";
 import {
   getDesktopEditLockState,
   getPdfDownloadFileName,
@@ -594,11 +595,11 @@ export const RowActions = ({
 
     setIsOcrPending(true);
     try {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .entity({ entityId: entity.entityId })
-        .ocr.post({ fieldId: file.fieldId });
-      const { outcome } = unwrapEden(response);
+      const { outcome } = await requestManualOcr({
+        entityId: entity.entityId,
+        fieldId: file.fieldId,
+        workspaceId,
+      });
       await queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       });
