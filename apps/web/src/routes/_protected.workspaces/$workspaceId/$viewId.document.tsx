@@ -491,10 +491,14 @@ function RouteComponentInner({
     activeFileField === undefined &&
     activeVersionFile === null &&
     versionDataQuery.isSuccess;
-  const fieldFileQuery = useQuery({
-    ...fieldFileOptions({ workspaceId, entityId, fieldId }),
-    enabled: needsFieldFileLookup,
-  });
+  const fieldFileQuery = useQuery(
+    fieldFileOptions({
+      workspaceId,
+      entityId,
+      fieldId,
+      enabled: needsFieldFileLookup,
+    }),
+  );
   const resolvedVersionFile =
     activeVersionFile ?? fieldFileQuery.data?.file ?? null;
   const activeFileContent =
