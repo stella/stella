@@ -503,6 +503,7 @@
     "modelMode": {
       "deepThinking": "Głębokie myślenie",
       "deepThinkingDescription": "Złożone rozumowanie i analiza",
+      "exactModels": "Konkretny model",
       "fastDescription": "Szybkie, codzienne pytania",
       "select": "Wybierz tryb odpowiedzi",
       "standard": "Standardowy",

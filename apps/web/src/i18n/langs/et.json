@@ -503,6 +503,7 @@
     "modelMode": {
       "deepThinking": "Süvamõtlemine",
       "deepThinkingDescription": "Keerukas arutlus ja analüüs",
+      "exactModels": "Konkreetne mudel",
       "fastDescription": "Kiired igapäevased küsimused",
       "select": "Vali vastamisrežiim",
       "standard": "Standardne",

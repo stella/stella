@@ -503,6 +503,7 @@
     "modelMode": {
       "deepThinking": "Padziļināta domāšana",
       "deepThinkingDescription": "Sarežģīta argumentācija un analīze",
+      "exactModels": "Konkrēts modelis",
       "fastDescription": "Ātri ikdienas jautājumi",
       "select": "Atlasīt atbildes režīmu",
       "standard": "Standarta",

@@ -503,6 +503,7 @@
     "modelMode": {
       "deepThinking": "Gilus mąstymas",
       "deepThinkingDescription": "Sudėtingas samprotavimas ir analizė",
+      "exactModels": "Konkretus modelis",
       "fastDescription": "Greiti kasdieniai klausimai",
       "select": "Pasirinkti atsakymo režimą",
       "standard": "Standartinis",

@@ -503,6 +503,7 @@
     "modelMode": {
       "deepThinking": "تفكير عميق",
       "deepThinkingDescription": "استدلال وتحليل معقدان",
+      "exactModels": "نموذج محدد",
       "fastDescription": "أسئلة يومية سريعة",
       "select": "اختيار وضع الإجابة",
       "standard": "قياسي",

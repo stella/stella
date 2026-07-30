@@ -298,14 +298,6 @@ export const ChatInputSurface = ({
                   : undefined
               }
             />
-            {models && (
-              <ChatModelModeSelector disabled={inputDisabled} models={models} />
-            )}
-            <ChatPromptImproveButton
-              anonymized={anonymized}
-              controller={controller}
-              disabled={inputDisabled || isBlank}
-            />
           </div>
           <input
             accept={fileInputAccept}
@@ -316,6 +308,14 @@ export const ChatInputSurface = ({
             ref={fileInputRef}
             type="file"
           />
+          <ChatPromptImproveButton
+            anonymized={anonymized}
+            controller={controller}
+            disabled={inputDisabled || isBlank}
+          />
+          {models && (
+            <ChatModelModeSelector disabled={inputDisabled} models={models} />
+          )}
           {/* The single primary affordance morphs in place: the button
               itself resolves send vs. stop from the state it is fed, so
               this surface cannot render a second, parallel control. */}

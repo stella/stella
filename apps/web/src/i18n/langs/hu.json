@@ -503,6 +503,7 @@
     "modelMode": {
       "deepThinking": "Mély gondolkodás",
       "deepThinkingDescription": "Összetett érvelés és elemzés",
+      "exactModels": "Konkrét modell",
       "fastDescription": "Gyors, mindennapi kérdések",
       "select": "Válaszmód kiválasztása",
       "standard": "Általános",

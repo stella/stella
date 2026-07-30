@@ -99,7 +99,7 @@ export const ChatPromptImproveButton = ({
       render={
         <Button
           aria-label={label}
-          className="text-muted-foreground hover:text-foreground"
+          className="text-muted-foreground hover:text-foreground relative before:absolute before:-inset-2"
           disabled={anonymized || disabled || isPending}
           onClick={() => {
             detached(improvePrompt(), "ChatPromptImproveButton");

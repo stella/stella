@@ -503,6 +503,7 @@
     "modelMode": {
       "deepThinking": "Hloubkové myšlení",
       "deepThinkingDescription": "Složitá argumentace a analýza",
+      "exactModels": "Konkrétní model",
       "fastDescription": "Rychlé každodenní dotazy",
       "select": "Vybrat režim odpovědi",
       "standard": "Standardní",

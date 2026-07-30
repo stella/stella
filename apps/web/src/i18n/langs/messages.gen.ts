@@ -506,6 +506,7 @@ type Messages = {
     "modelMode": {
       "deepThinking": "Deep Thinking";
       "deepThinkingDescription": "Complex reasoning and analysis";
+      "exactModels": "Exact model";
       "fastDescription": "Quick, everyday questions";
       "select": "Select response mode";
       "standard": "Standard";
