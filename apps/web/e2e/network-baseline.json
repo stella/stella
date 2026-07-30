@@ -1163,6 +1163,7 @@
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/organization-settings/ai-config",
       "GET /v1/organization-settings/deepl-config",
+      "GET /v1/organization-settings/document-ocr-availability",
       "GET /v1/organization-settings/web-search-config",
       "GET /v1/workspaces/navigation"
     ],
@@ -1176,6 +1177,7 @@
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/organization-settings/ai-config": 1,
       "GET /v1/organization-settings/deepl-config": 1,
+      "GET /v1/organization-settings/document-ocr-availability": 1,
       "GET /v1/organization-settings/web-search-config": 1,
       "GET /v1/workspaces/navigation": 1
     },
@@ -1189,6 +1191,7 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/organization-settings/ai-config": 6,
       "GET /v1/organization-settings/deepl-config": 6,
+      "GET /v1/organization-settings/document-ocr-availability": 4,
       "GET /v1/organization-settings/web-search-config": 6,
       "GET /v1/workspaces/navigation": 6
     },
@@ -1202,6 +1205,7 @@
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/organization-settings/ai-config": 1024,
       "GET /v1/organization-settings/deepl-config": 1024,
+      "GET /v1/organization-settings/document-ocr-availability": 1024,
       "GET /v1/organization-settings/web-search-config": 1024,
       "GET /v1/workspaces/navigation": 20480
     }
