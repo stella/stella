@@ -558,6 +558,17 @@ const interpolationMayIntroduceReadRelation = (
   return /\bselect\s+(?:distinct\s+)?\*\s*$/iu.test(precedingText);
 };
 
+const interpolationHasFollowingTokenBoundary = (
+  tokens: readonly SqlTemplateToken[],
+  expressionIndex: number,
+): boolean => {
+  const nextToken = tokens.at(expressionIndex + 1);
+  if (nextToken === undefined || nextToken.type !== "text") {
+    return true;
+  }
+  return nextToken.value.length === 0 || /^(?:\s|[,;)])/u.test(nextToken.value);
+};
+
 const interpolationIsDeleteTarget = (
   tokens: readonly SqlTemplateToken[],
   expressionIndex: number,
@@ -1602,6 +1613,41 @@ export default {
             return isImportBackedInterpolation(unwrapped.object);
           }
           return false;
+        };
+
+        const isSqlWrapperInterpolation = (expression: unknown): boolean => {
+          const unwrapped = unwrapExpression(expression);
+          if (!isAstNode(unwrapped)) {
+            return false;
+          }
+          if (
+            unwrapped.type === "TaggedTemplateExpression" &&
+            isIdentifier(unwrapped.tag) &&
+            isApprovedImport(unwrapped.tag, DRIZZLE_SQL_IMPORTS)
+          ) {
+            return true;
+          }
+          if (
+            unwrapped.type === "CallExpression" &&
+            (isSqlMethodCall(unwrapped, "fromList") ||
+              isSqlMethodCall(unwrapped, "identifier") ||
+              isSqlMethodCall(unwrapped, "join") ||
+              isSqlMethodCall(unwrapped, "raw"))
+          ) {
+            return true;
+          }
+          if (!isIdentifier(unwrapped)) {
+            return false;
+          }
+          return (
+            resolveVariable(unwrapped)?.defs.some(
+              (definition) =>
+                definition.type === "Variable" &&
+                isAstNode(definition.node) &&
+                definition.node.type === "VariableDeclarator" &&
+                isSqlWrapperInterpolation(definition.node.init),
+            ) === true
+          );
         };
 
         const constIdentifierInitializer = (
@@ -2693,6 +2739,9 @@ export default {
                 (token, index) =>
                   token.type === "expression" &&
                   interpolationMayIntroduceReadRelation(tokens, index) &&
+                  (isImportBackedInterpolation(token.value) ||
+                    interpolationHasFollowingTokenBoundary(tokens, index) ||
+                    isSqlWrapperInterpolation(token.value)) &&
                   !interpolationIsDeleteTarget(tokens, index) &&
                   !isKnownPrivateProjectionInterpolation(token.value),
               ),

@@ -560,6 +560,7 @@ const unsafeOpaqueRelationWithAttachedAlias = sql`
   SELECT * ${opaqueRelationWithAttachedAlias}sd
 `;
 opaqueRelationWithAttachedAlias = sql.raw("FROM entities ");
+void opaqueRelationWithAttachedAlias;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves dynamic raw expressions cannot inject a private FROM clause into an otherwise public root
 const unsafeDynamicRawSelectExpression = sql`
