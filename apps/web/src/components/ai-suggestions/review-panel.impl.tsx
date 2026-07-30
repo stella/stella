@@ -9,7 +9,6 @@ import { useRef, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   ArrowRightIcon,
@@ -65,6 +64,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { compareByLocale } from "@/lib/collation";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -191,14 +191,7 @@ export const ReviewPanelImpl = ({
   // (preferredName / wordEditShortcut). The popover next to
   // "Tracked changes" exposes them read-only with a deep link to
   // account settings — single source of truth, no in-panel state.
-  const user = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ({
-      name: ctx.user.name ?? null,
-      preferredName: ctx.user.preferredName ?? null,
-      wordEditShortcut: ctx.user.wordEditShortcut ?? null,
-    }),
-  });
+  const user = useAuthenticatedUser();
   const wordAuthor = getWordEditAuthorName(user);
   const wordShortcut =
     getWordEditShortcut(user) || computeInitialsFrom(wordAuthor);

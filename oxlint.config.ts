@@ -1038,6 +1038,57 @@ export default defineConfig({
       },
     },
     {
+      // AI suggestion surfaces are shared lazy components. They can render
+      // while the router is activating a match, so user data must come from
+      // AuthenticatedUserProvider rather than a route-match store.
+      files: ["apps/web/src/components/ai-suggestions/**/*.{ts,tsx}"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
+              {
+                name: "@tanstack/react-router",
+                importNames: ["getRouteApi", "useRouteContext"],
+                message:
+                  "Shared AI suggestion components must read authenticated user data from '@/lib/authenticated-user-context', not an active route match.",
+              },
+            ],
+            patterns: [
+              {
+                group: ["@/api/*", "@/api/**/*"],
+                message: "Use '@stll/api/types' instead of '@/api/'.",
+              },
+              {
+                group: ["@stll/api", "@stll/api/**", "!@stll/api/types"],
+                message:
+                  "apps/web may only import the public '@stll/api/types' surface.",
+              },
+              {
+                group: [
+                  "@stll/desktop",
+                  "@stll/desktop/**",
+                  "@stll/landing",
+                  "@stll/landing/**",
+                ],
+                message:
+                  "apps/web must not import other app workspaces directly.",
+              },
+              {
+                group: ["@stll/ui/components/date-picker-popover"],
+                message:
+                  "Use '@/components/date-picker-popover' so locale labels are injected.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: [
         "apps/web/src/routes/law/**/*.{ts,tsx}",
         "apps/web/src/features/case-law/**/*.{ts,tsx}",

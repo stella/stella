@@ -1,6 +1,12 @@
-import { lazy, Suspense, useCallback } from "react";
+import { lazy, useCallback, useState } from "react";
 
+import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
+
+import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 import type { FileViewerWithAIProps } from "./file-viewer-with-ai.impl";
 
@@ -11,10 +17,11 @@ import type { FileViewerWithAIProps } from "./file-viewer-with-ai.impl";
 // (~490 KB gz) from being preloaded on the homepage. The wrapper just
 // keeps the file viewer mounted while the AI overlay chunk is in flight,
 // so the visible viewer never pauses or remounts for AI bytes.
-const LazyFileChatOverlayHost = lazy(async () => {
-  const m = await import("./file-viewer-with-ai.impl");
-  return { default: m.FileChatOverlayHost };
-});
+const createLazyFileChatOverlayHost = () =>
+  lazy(async () => {
+    const m = await import("./file-viewer-with-ai.impl");
+    return { default: m.FileChatOverlayHost };
+  });
 
 export const FileViewerWithAI = ({
   workspaceId,
@@ -37,6 +44,17 @@ export const FileViewerWithAI = ({
     activeFile?.fileFieldId ?? "",
     activeExternal?.url ?? "",
   ].join(":");
+  const [LazyFileChatOverlayHost, setLazyFileChatOverlayHost] = useState(
+    createLazyFileChatOverlayHost,
+  );
+  const [overlayThread, setOverlayThread] = useState<{
+    overlayKey: string;
+    threadId: ChatThreadId | undefined;
+  }>(() => ({ overlayKey, threadId: chatThreadId }));
+  const activeChatThreadId =
+    overlayThread.overlayKey === overlayKey
+      ? overlayThread.threadId
+      : chatThreadId;
 
   return (
     <div
@@ -44,22 +62,57 @@ export const FileViewerWithAI = ({
       data-file-viewer-ai="true"
     >
       {children}
-      <Suspense fallback={null}>
+      <QuerySuspenseBoundary
+        area="file-chat-overlay"
+        errorFallback={({ reset }) => (
+          <FileChatOverlayErrorFallback
+            onRetry={() => {
+              // React.lazy caches a rejected thenable. Recreate the lazy type
+              // before resetting the boundary so a transient chunk failure
+              // gets a genuinely fresh import attempt.
+              setLazyFileChatOverlayHost(() => createLazyFileChatOverlayHost());
+              reset();
+            }}
+          />
+        )}
+        resetKeys={[overlayKey]}
+        suspenseFallback={null}
+      >
         <LazyFileChatOverlayHost
           activeExternal={activeExternal}
           activeFile={activeFile}
-          chatThreadId={chatThreadId}
+          chatThreadId={activeChatThreadId}
           docxComments={docxComments}
           docxEditable={docxEditable}
           docxEditSafety={docxEditSafety}
           docxEditorRef={docxEditorRef}
           key={overlayKey}
+          onChatThreadIdChange={(threadId) => {
+            setOverlayThread({ overlayKey, threadId });
+          }}
           onDocxCommentsChange={onDocxCommentsChange}
           requestDocxEditMode={requestDocxEditMode}
           workspaceId={workspaceId}
         />
-      </Suspense>
+      </QuerySuspenseBoundary>
       {docxEditorRef !== undefined && <DocxHorizontalScrollbar />}
+    </div>
+  );
+};
+
+const FileChatOverlayErrorFallback = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations();
+
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
+      <div className="bg-background/95 pointer-events-auto flex items-center gap-3 rounded-md border px-3 py-2 shadow-sm">
+        <span className="text-muted-foreground text-sm">
+          {t("common.somethingWentWrong")}
+        </span>
+        <Button onClick={onRetry} size="sm" variant="outline">
+          {t("common.tryAgain")}
+        </Button>
+      </div>
     </div>
   );
 };

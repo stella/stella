@@ -14,7 +14,7 @@
  */
 
 import type { ReactNode, RefObject } from "react";
-import { startTransition, useState } from "react";
+import { startTransition } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 
@@ -91,11 +91,13 @@ export type FileViewerWithAIProps = {
 type FileChatOverlayHostProps = Omit<
   FileViewerWithAIProps,
   "children" | "className"
->;
+> & {
+  onChatThreadIdChange: (threadId: ChatThreadId) => void;
+};
 
 export const FileChatOverlayHost = ({
   workspaceId,
-  chatThreadId: initialChatThreadId,
+  chatThreadId,
   activeFile,
   activeExternal,
   docxEditable,
@@ -103,11 +105,9 @@ export const FileChatOverlayHost = ({
   docxEditorRef,
   docxComments,
   onDocxCommentsChange,
+  onChatThreadIdChange,
   requestDocxEditMode,
 }: FileChatOverlayHostProps) => {
-  const [currentChatThreadId, setCurrentChatThreadId] =
-    useState(initialChatThreadId);
-
   const handleNewThread = () => {
     // The previous thread's queued/accepted/rejected suggestions
     // belong to that thread's history. Carrying them into a fresh
@@ -122,7 +122,7 @@ export const FileChatOverlayHost = ({
     // instead of unmounting back to the Suspense spinner. The fresh
     // thread snaps in atomically once its (empty) state is ready.
     startTransition(() => {
-      setCurrentChatThreadId(createChatThreadId());
+      onChatThreadIdChange(createChatThreadId());
     });
   };
 
@@ -130,7 +130,7 @@ export const FileChatOverlayHost = ({
     <FileChatOverlay
       activeExternal={activeExternal}
       activeFile={activeFile}
-      chatThreadId={currentChatThreadId}
+      chatThreadId={chatThreadId}
       docxComments={docxComments}
       docxEditable={docxEditable}
       docxEditSafety={docxEditSafety}
