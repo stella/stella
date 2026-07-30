@@ -20,6 +20,7 @@ import {
 import { ExternalReferencePanel } from "@/components/inspector/external-reference-panel";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { FileTabPanel } from "@/components/inspector/file-tab-panel";
+import { resolveFileFieldPropertyId } from "@/components/inspector/inspector-panel.logic";
 import { InspectorRail } from "@/components/inspector/inspector-rail";
 import {
   isGenericInspectorTab,
@@ -626,12 +627,18 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     }
     return field.id === tab.id;
   });
+  const filePropertyId = resolveFileFieldPropertyId({
+    activeFilePropertyId: activeFileField?.propertyId,
+    currentFileFieldIdsByProperty,
+    fieldId: tab.id,
+    tabPropertyId: tab.propertyId,
+  });
   const latestFileFieldForProperty =
-    tab.propertyId === undefined
+    filePropertyId === undefined
       ? undefined
       : entity?.fields.findLast(
           (field) =>
-            field.propertyId === tab.propertyId &&
+            field.propertyId === filePropertyId &&
             field.content.type === "file",
         );
 
