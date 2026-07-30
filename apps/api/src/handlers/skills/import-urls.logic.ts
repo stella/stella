@@ -10,10 +10,25 @@ type SkillImportItem = {
   sourceUrl: string;
 };
 
+type DeduplicatedSkillImportItem = SkillImportItem & {
+  reportedSourceUrl: string;
+};
+
 type DeduplicateSkillImportItemsResult = {
   failed: { message: string; sourceUrl: string }[];
-  items: SkillImportItem[];
+  items: DeduplicatedSkillImportItem[];
 };
+
+export const skillImportRequestBudget = ({
+  maxGithubDirectories,
+  maxImports,
+  maxResourcesPerSkill,
+}: {
+  maxGithubDirectories: number;
+  maxImports: number;
+  maxResourcesPerSkill: number;
+}): number =>
+  maxImports * (maxGithubDirectories + 2 * maxResourcesPerSkill + 2);
 
 const skillIntegrityKey = (integrity: SkillSourceIntegrity): string => {
   switch (integrity.type) {
@@ -39,7 +54,7 @@ export const deduplicateSkillImportItems = (
 ): DeduplicateSkillImportItemsResult => {
   const failed: { message: string; sourceUrl: string }[] = [];
   const conflictingSourceUrls = new Set<string>();
-  const itemsBySourceUrl = new Map<string, SkillImportItem>();
+  const itemsBySourceUrl = new Map<string, DeduplicatedSkillImportItem>();
   for (const item of requestedItems) {
     const requestedSourceUrl = item.sourceUrl.trim();
     let integrity = item.integrity;
@@ -75,6 +90,7 @@ export const deduplicateSkillImportItems = (
     if (!existing) {
       itemsBySourceUrl.set(sourceUrl, {
         integrity,
+        reportedSourceUrl: requestedSourceUrl,
         sourceUrl,
       });
       continue;
@@ -88,7 +104,7 @@ export const deduplicateSkillImportItems = (
     conflictingSourceUrls.add(sourceUrl);
     failed.push({
       message: "Duplicate skill URL has conflicting integrity values",
-      sourceUrl,
+      sourceUrl: existing.reportedSourceUrl,
     });
   }
   const contentHashes = new Set<string>();

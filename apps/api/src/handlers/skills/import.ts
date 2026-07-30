@@ -4,8 +4,12 @@ import { t } from "elysia";
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { LIMITS } from "@/api/lib/limits";
 
-import { deduplicateSkillImportItems } from "./import-urls.logic";
+import {
+  deduplicateSkillImportItems,
+  skillImportRequestBudget,
+} from "./import-urls.logic";
 import { authorizeSkillInstallScope, installSkill } from "./install";
 import {
   createSkillPackageFetchContext,
@@ -14,11 +18,19 @@ import {
 } from "./skill-package";
 
 const MAX_SKILL_IMPORTS = 20;
-// Bound the whole batch, not each raw file independently. The request cap
-// accommodates typical multi-skill repositories while preventing a maximal
-// 20-skill selection from issuing more than a small fixed number of requests.
 const SKILL_IMPORT_TIMEOUT_MS = 30_000;
-const SKILL_IMPORT_MAX_REQUESTS = 128;
+// A selected GitHub skill can require one direct tree request per directory
+// plus the selected directory, one recursive tree per resource root, and one
+// raw request for SKILL.md plus every resource. A resource root must contain a
+// resource to affect the package, so resourcesPerSkill also bounds those tree
+// requests. Derive the batch cap from the accepted package limits so a valid
+// shape is never rejected by an unrelated lower request ceiling; the shared
+// deadline remains the runtime bound.
+const SKILL_IMPORT_MAX_REQUESTS = skillImportRequestBudget({
+  maxGithubDirectories: LIMITS.agentSkillGithubDirectoriesMax,
+  maxImports: MAX_SKILL_IMPORTS,
+  maxResourcesPerSkill: LIMITS.agentSkillResourcesPerSkill,
+});
 const CONTENT_HASH_PATTERN = "^[a-f0-9]{64}$";
 const GITHUB_COMMIT_SHA_PATTERN = "^[a-f0-9]{40}$";
 const importSkillScopeValues = [
@@ -99,10 +111,13 @@ const importSkillsFromUrls = createSafeRootHandler(
       if (item === undefined) {
         return;
       }
-      const { integrity, sourceUrl } = item;
+      const { integrity, reportedSourceUrl, sourceUrl } = item;
       const parsed = await fetchSkillPackageFromUrl(sourceUrl, fetchContext);
       if (Result.isError(parsed)) {
-        failed.push({ message: parsed.error.message, sourceUrl });
+        failed.push({
+          message: parsed.error.message,
+          sourceUrl: reportedSourceUrl,
+        });
         return importAt(index + 1);
       }
 
@@ -112,7 +127,10 @@ const importSkillsFromUrls = createSafeRootHandler(
         sourceUrl,
       });
       if (Result.isError(verification)) {
-        failed.push({ message: verification.error.message, sourceUrl });
+        failed.push({
+          message: verification.error.message,
+          sourceUrl: reportedSourceUrl,
+        });
         return importAt(index + 1);
       }
 
@@ -128,10 +146,13 @@ const importSkillsFromUrls = createSafeRootHandler(
         user,
       });
       if (result.isErr()) {
-        failed.push({ message: result.error.message, sourceUrl });
+        failed.push({
+          message: result.error.message,
+          sourceUrl: reportedSourceUrl,
+        });
         return importAt(index + 1);
       }
-      installed.push({ id: result.value.id, sourceUrl });
+      installed.push({ id: result.value.id, sourceUrl: reportedSourceUrl });
       return importAt(index + 1);
     };
 

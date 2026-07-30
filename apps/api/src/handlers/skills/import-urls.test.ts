@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { deduplicateSkillImportItems } from "./import-urls.logic";
+import {
+  deduplicateSkillImportItems,
+  skillImportRequestBudget,
+} from "./import-urls.logic";
 
 const contentIntegrity = (value: string) => ({
   type: "content-hash" as const,
@@ -19,6 +22,16 @@ const githubIntegrity = (
 });
 
 describe("skill URL import batches", () => {
+  test("derives a request budget that covers every accepted package shape", () => {
+    expect(
+      skillImportRequestBudget({
+        maxGithubDirectories: 76,
+        maxImports: 1,
+        maxResourcesPerSkill: 50,
+      }),
+    ).toBeGreaterThanOrEqual(129);
+  });
+
   test("keeps identical duplicates as one import", () => {
     const integrity = contentIntegrity("a".repeat(64));
     const result = deduplicateSkillImportItems([
@@ -31,6 +44,7 @@ describe("skill URL import batches", () => {
       items: [
         {
           integrity,
+          reportedSourceUrl: "https://example.com/SKILL.md",
           sourceUrl: "https://example.com/SKILL.md",
         },
       ],
@@ -49,6 +63,7 @@ describe("skill URL import batches", () => {
       items: [
         {
           integrity,
+          reportedSourceUrl: "https://EXAMPLE.com:443/SKILL.md",
           sourceUrl: "https://example.com/SKILL.md",
         },
       ],
@@ -67,6 +82,7 @@ describe("skill URL import batches", () => {
       items: [
         {
           integrity,
+          reportedSourceUrl: "https://primary.example/SKILL.md",
           sourceUrl: "https://primary.example/SKILL.md",
         },
       ],
@@ -103,7 +119,7 @@ describe("skill URL import batches", () => {
 
     expect(result).toEqual({
       failed: [],
-      items: [{ integrity, sourceUrl }],
+      items: [{ integrity, reportedSourceUrl: sourceUrl, sourceUrl }],
     });
   });
 
@@ -147,7 +163,13 @@ describe("skill URL import batches", () => {
 
     expect(result).toEqual({
       failed: [],
-      items: [{ integrity, sourceUrl: canonicalSourceUrl }],
+      items: [
+        {
+          integrity,
+          reportedSourceUrl: `https://github.com/Example/Skills.git/tree/${commitSha}/Review%20Skill/`,
+          sourceUrl: canonicalSourceUrl,
+        },
+      ],
     });
   });
 
