@@ -1,7 +1,7 @@
 ---
 import { productHref } from "../data/products/links";
 import type { ProductSlug } from "../data/products/pillars";
-import { resolveProductEyebrows } from "../data/site-nav";
+import { resolveProductDiscoverLabels } from "../data/site-nav";
 import { resolveSceneWindowLabels } from "../data/product-story";
 import type { TranslationKey } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
@@ -15,8 +15,7 @@ const t = getTranslations(locale);
 const sceneWindowLabels = resolveSceneWindowLabels(t);
 // Chapter scenes navigate like the hero's windows: the whole visual links to
 // the chapter's first product page, announced by the same discover chip.
-const discoverLabel = t("story.discover");
-const productNames = resolveProductEyebrows(t);
+const discoverLabels = resolveProductDiscoverLabels(t);
 // Same <gh>…</gh> contract as the hero: the locale marks its own open-source
 // phrase and the marked span links to the repository.
 const controlBody = requireLinkedSegment(
@@ -182,12 +181,18 @@ const proofItems = [
               data-reveal
               style={`--reveal-delay: ${120 + index * 30}ms`}
               class:list={[
-                "product-chapter-visual relative lg:col-span-8",
+                "product-chapter-visual lg:col-span-8",
                 index % 2 === 1 ? "lg:col-start-1 lg:row-start-1" : "lg:col-start-5",
               ]}
 >
+              <div
+                class:list={[
+                  "story-window",
+                  chapter.id === "data" && "story-window-shot",
+                ]}
+              >
               {chapter.id === "workspace" && (
-                <div class="story-window">
+                <Fragment>
                   <CliMcpPreview
                     client:visible
                     backdrop="transparent"
@@ -196,10 +201,10 @@ const proofItems = [
                     showCompanions={false}
                     windowLabels={sceneWindowLabels}
                   />
-                </div>
+                </Fragment>
               )}
               {chapter.id === "agent" && (
-                <div class="story-window">
+                <Fragment>
                   <CliMcpPreview
                     client:visible
                     backdrop="transparent"
@@ -208,10 +213,9 @@ const proofItems = [
                     showCompanions={false}
                     windowLabels={sceneWindowLabels}
                   />
-                </div>
+                </Fragment>
               )}
               {chapter.id === "data" && (
-                <div class="story-window story-window-shot">
                   <div class="story-shot-main mac-window">
                     <div class="mac-titlebar relative flex shrink-0 items-center">
                       <div aria-hidden="true" class="mac-traffic-lights">
@@ -249,21 +253,21 @@ const proofItems = [
                       }
                     </div>
                   </div>
-                </div>
               )}
-              <a
-                class="story-visual-link absolute inset-0 z-10 flex items-end justify-center"
-                href={productHref(chapter.links[0].slug, locale)}
-                aria-label={`${discoverLabel} ${productNames[chapter.links[0].slug]}`}
-              >
-                <span
-                  class="story-visual-chip inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold shadow-md"
-                  style="background: var(--primary); color: var(--primary-foreground)"
+                <a
+                  class="story-visual-link absolute z-10 flex items-end justify-center"
+                  href={productHref(chapter.links[0].slug, locale)}
+                  aria-label={discoverLabels[chapter.links[0].slug]}
                 >
-                  {discoverLabel} {productNames[chapter.links[0].slug]}
-                  <span aria-hidden="true" class="rtl:inline-block rtl:-scale-x-100">→</span>
-                </span>
-              </a>
+                  <span
+                    class="story-visual-chip inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold shadow-md"
+                    style="background: var(--primary); color: var(--primary-foreground)"
+                  >
+                    {discoverLabels[chapter.links[0].slug]}
+                    <span aria-hidden="true" class="rtl:inline-block rtl:-scale-x-100">→</span>
+                  </span>
+                </a>
+              </div>
             </div>
           </article>
         ))
@@ -348,12 +352,21 @@ const proofItems = [
 
   /* The visual's link overlay: nothing until the pointer is over the scene,
      then the hero's own selection frame (.cli-selected) and discover chip,
-     so both surfaces answer a hover the same way. */
+     so both surfaces answer a hover the same way. It anchors to the window,
+     not the grid cell: the scene bleeds past the cell on wide screens, and
+     the scene chapters inset their window by 3% (.cli-story-scene-only). */
   .story-visual-link {
+    position: absolute;
+    inset: 3%;
     border-radius: clamp(0.62rem, 1vw, 0.9rem);
     outline: 2px solid transparent;
     outline-offset: 5px;
     transition: outline-color 200ms;
+  }
+
+  /* The data chapter's window fills its box, so the overlay does too. */
+  .story-window-shot .story-visual-link {
+    inset: 0;
   }
 
   .story-visual-link:hover,

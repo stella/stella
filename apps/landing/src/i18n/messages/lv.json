@@ -104,41 +104,49 @@
     "products": {
       "agent": {
         "blurb": "Sarunājieties ar savām lietām, dokumentiem, reģistriem un pievienotajiem rīkiem vienuviet. AI aģents rīkojas ar apstiprinājumu un avotu priekšskatījumiem, atbildes balsta uz citātiem un paplašinās ar prasmēm un ārējiem savienotājiem.",
+        "discover": "Atklājiet AI aģentu",
         "eyebrow": "AI aģents",
         "title": "AI aģents, kas strādā ar jūsu lietām, failiem un rīkiem."
       },
       "anonymization": {
         "blurb": "Noņemiet vārdus, subjektus un identificējošu informāciju, pirms materiāls nonāk pie AI, tieši no tērzēšanas un dokumentu pārskatīšanas, ar aizklātu rezultātu, ko pārbaudāt, pirms turpināt.",
+        "discover": "Atklājiet Anonimizāciju",
         "eyebrow": "Anonimizācija",
         "title": "Sagatavojiet materiālu AI, neatklājot identificējošu informāciju."
       },
       "cli-mcp": {
         "blurb": "Meklējiet, lasiet un strādājiet ar lietotni stella no komandrindas vai no jebkura ar MCP saderīga klienta. Abas saskarnes izmanto to pašu iespēju reģistru, tās pašas atļaujas un tos pašus darbvietas datus.",
+        "discover": "Atklājiet CLI & MCP",
         "eyebrow": "CLI & MCP",
         "title": "Viena darbvieta, pieejama no ikviena rīka."
       },
       "editor": {
         "blurb": "Atveriet un rediģējiet Word .docx failus tieši pārlūkā: bez instalēšanas un bez pārveidošanas citā formātā. Lietotnes stella tiešsaistes DOCX redaktors saglabā sākotnējo formatējumu un izmaiņu izsekošanu, patur failu saistītu ar tā lietu un katru saglabājumu ieraksta dokumenta versiju vēsturē.",
+        "discover": "Atklājiet Redaktoru",
         "eyebrow": "Redaktors",
         "title": "Rediģējiet Word dokumentus pārlūkā, nepametot lietu."
       },
       "public-data": {
         "blurb": "Tiesu prakse un uzņēmumu reģistri no oficiāliem publiskiem avotiem, ko lietotnes stella Legal Atlas apkopo, saglabājot to struktūru. Izlasiet nolēmumu, pārbaudiet uzņēmumu, sekojiet citātiem un atsaucieties uz jebkuru no tiem lietā vai nododiet to AI aģentam.",
+        "discover": "Atklājiet Publiskos datus",
         "eyebrow": "Publiskie dati",
         "title": "Juridiskie dati, gatavi ienešanai lietā."
       },
       "tabular-review": {
         "blurb": "Uzdodiet jautājumus visai dokumentu kopai un saņemiet strukturētas atbildes tabulā tieši lietā: to var kārtot, filtrēt un izsekot līdz avota tekstam. Veidota due diligence pārbaudēm, pierādījumu analīzei un izpētei.",
+        "discover": "Atklājiet Tabulāro pārskatīšanu",
         "eyebrow": "Tabulāra pārskatīšana",
         "title": "Pārvērtiet dokumentu kaudzi tabulā, ko var pārskatīt."
       },
       "templates": {
         "blurb": "Definējiet veidni vienu reizi, ar laukiem un nosacījuma klauzulām, un pēc tam aizpildiet to manuāli vai ļaujiet lietotnei stella sagatavot projektu no lietas datiem. Gatavais dokuments nonāk lietā, un to varat turpināt rediģēt.",
+        "discover": "Atklājiet Veidnes",
         "eyebrow": "Veidnes",
         "title": "Veidojiet atkārtoti izmantojamas veidnes un ļaujiet AI tās aizpildīt."
       },
       "workspace": {
         "blurb": "Darbvieta vienuviet satur lietas dokumentus, Word .docx rediģēšanu, pārskatīšanu, izpēti un tērzēšanu, tāpēc darbs paliek kontekstā no avota materiāliem līdz atbildei.",
+        "discover": "Atklājiet Darbvietu",
         "eyebrow": "Darbvieta",
         "title": "Lietas, dokumenti, pārskatīšana un tērzēšana vienā darbvietā."
       }
@@ -884,7 +892,6 @@
     "dataEyebrow": "Juridiskie dati",
     "dataMainAlt": "Oficiāls tiesas nolēmums, atvērts lietotnē stella",
     "dataTitle": "Tiesu prakse un reģistri pa rokai.",
-    "discover": "Atklājiet",
     "exploreAgent": "Iepazīt AI aģentu",
     "exploreAnonymization": "Iepazīt anonimizāciju",
     "explorePublicData": "Iepazīt publiskos datus",

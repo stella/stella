@@ -104,41 +104,49 @@
     "products": {
       "agent": {
         "blurb": "Rozmawiaj ze swoimi sprawami, dokumentami, rejestrami i podłączonymi narzędziami w jednym miejscu. Agent AI pyta o zatwierdzenie i pokazuje podgląd źródeł, opiera odpowiedzi na cytowaniach, a rozszerzysz go o umiejętności i zewnętrzne konektory.",
+        "discover": "Poznaj Agenta AI",
         "eyebrow": "Agent AI",
         "title": "Agent AI, który działa w Twoich sprawach, plikach i narzędziach."
       },
       "anonymization": {
         "blurb": "Usuń nazwiska, podmioty i dane identyfikujące, zanim materiały trafią do AI, prosto z czatu i z przeglądu dokumentów, z zanonimizowanym wynikiem, który sprawdzisz, zanim cokolwiek pójdzie dalej.",
+        "discover": "Poznaj Anonimizację",
         "eyebrow": "Anonimizacja",
         "title": "Przygotuj materiały dla AI bez ujawniania danych identyfikujących."
       },
       "cli-mcp": {
         "blurb": "Szukaj, czytaj i pracuj z aplikacją stella z wiersza poleceń albo z dowolnego klienta zgodnego z MCP. Oba interfejsy korzystają z tego samego rejestru możliwości, uprawnień i danych obszaru roboczego.",
+        "discover": "Poznaj CLI & MCP",
         "eyebrow": "CLI & MCP",
         "title": "Jeden obszar roboczy, dostępny z każdego narzędzia."
       },
       "editor": {
         "blurb": "Otwórz i edytuj pliki Word .docx prosto w przeglądarce: bez instalacji i bez konwersji na inny format. Edytor DOCX online w aplikacji stella zachowuje oryginalne formatowanie i śledzenie zmian, utrzymuje powiązanie pliku ze sprawą i zapisuje każdą wersję w historii dokumentu.",
+        "discover": "Poznaj Edytor",
         "eyebrow": "Edytor",
         "title": "Edytuj dokumenty Word w przeglądarce, nie opuszczając sprawy."
       },
       "public-data": {
         "blurb": "Orzecznictwo i rejestry spółek z oficjalnych źródeł publicznych, zbierane z zachowaniem struktury przez Legal Atlas w aplikacji stella. Przeczytaj orzeczenie, sprawdź spółkę, prześledź cytowania i powołaj się na dowolne z nich ze sprawy albo przekaż je agentowi AI.",
+        "discover": "Poznaj Dane publiczne",
         "eyebrow": "Dane publiczne",
         "title": "Dane prawne gotowe do użycia w sprawie."
       },
       "tabular-review": {
         "blurb": "Zadaj pytania całemu zbiorowi dokumentów i otrzymaj ustrukturyzowane odpowiedzi jako tabelę w sprawie: sortuj, filtruj i sprawdzaj każdą odpowiedź w tekście źródłowym. Sprawdza się w due diligence, analizie umów i researchu.",
+        "discover": "Poznaj Przegląd tabelaryczny",
         "eyebrow": "Przegląd tabelaryczny",
         "title": "Zamień stos dokumentów w tabelę gotową do przeglądu."
       },
       "templates": {
         "blurb": "Zdefiniuj szablon raz, z polami i klauzulami warunkowymi, a potem wypełnij go ręcznie albo pozwól aplikacji stella przygotować projekt z danych sprawy. Gotowy dokument trafia do sprawy i od razu możesz go dalej edytować.",
+        "discover": "Poznaj Szablony",
         "eyebrow": "Szablony",
         "title": "Twórz szablony wielokrotnego użytku i pozwól AI je wypełnić."
       },
       "workspace": {
         "blurb": "Obszar roboczy trzyma dokumenty sprawy, edycję plików Word .docx, przegląd, research i czat w jednym miejscu, dzięki czemu praca zostaje w kontekście od materiałów źródłowych po odpowiedź.",
+        "discover": "Poznaj Obszar roboczy",
         "eyebrow": "Obszar roboczy",
         "title": "Sprawy, dokumenty, przegląd i czat w jednym obszarze roboczym."
       }
@@ -884,7 +892,6 @@
     "dataEyebrow": "Dane prawne",
     "dataMainAlt": "Oficjalne orzeczenie sądu otwarte w aplikacji stella",
     "dataTitle": "Orzecznictwo i rejestry pod ręką.",
-    "discover": "Poznaj",
     "exploreAgent": "Poznaj agenta AI",
     "exploreAnonymization": "Poznaj anonimizację",
     "explorePublicData": "Poznaj dane publiczne",

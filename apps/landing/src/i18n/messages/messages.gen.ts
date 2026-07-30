@@ -107,41 +107,49 @@ type Messages = {
     "products": {
       "agent": {
         "blurb": "Chat with your matters, documents, registries, and connected tools in one place. The AI agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.";
+        "discover": "Discover the AI agent";
         "eyebrow": "AI agent";
         "title": "An AI agent that works across your matters, files, and tools.";
       };
       "anonymization": {
         "blurb": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check before anything moves on.";
+        "discover": "Discover Anonymization";
         "eyebrow": "Anonymization";
         "title": "Prepare material for AI without exposing identifying details.";
       };
       "cli-mcp": {
         "blurb": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capability registry, permissions, and workspace data.";
+        "discover": "Discover CLI & MCP";
         "eyebrow": "CLI & MCP";
         "title": "One workspace, from every tool.";
       };
       "editor": {
         "blurb": "Open and edit Word .docx files right in your browser: no install, no converting to another format. stella's online DOCX editor preserves the original formatting and track changes, keeps the file connected to its matter, and saves each revision into the document's version history.";
+        "discover": "Discover the Editor";
         "eyebrow": "Editor";
         "title": "Edit Word documents in the browser, without leaving the matter.";
       };
       "public-data": {
         "blurb": "Case law and company registries from official public sources, collected by stella's Legal Atlas with their structure preserved. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.";
+        "discover": "Discover Public data";
         "eyebrow": "Public data";
         "title": "Legal data, ready to pull into a matter.";
       };
       "tabular-review": {
         "blurb": "Ask questions across a whole document set and get structured answers back as a table in the matter — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.";
+        "discover": "Discover Tabular Review";
         "eyebrow": "Tabular Review";
         "title": "Turn a pile of documents into a table you can review.";
       };
       "templates": {
         "blurb": "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. The finished document lands in the matter, ready to keep editing.";
+        "discover": "Discover Templates";
         "eyebrow": "Templates";
         "title": "Build reusable templates, and let AI fill them in.";
       };
       "workspace": {
         "blurb": "The workspace holds a matter's documents, Word .docx editing, review, research, and chat in one place, so the work stays in context from source material to answer.";
+        "discover": "Discover Workspace";
         "eyebrow": "Workspace";
         "title": "Matters, documents, review, and chat in one workspace.";
       };
@@ -887,7 +895,6 @@ type Messages = {
     "dataEyebrow": "Legal data";
     "dataMainAlt": "An official court decision open in stella";
     "dataTitle": "Bring the law and the data with you.";
-    "discover": "Discover";
     "exploreAgent": "Explore AI agent";
     "exploreAnonymization": "Explore Anonymization";
     "explorePublicData": "Explore Public data";

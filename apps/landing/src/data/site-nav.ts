@@ -112,3 +112,23 @@ export const resolveProductEyebrows = (t: (key: TranslationKey) => string) =>
     workspace: t("nav.products.workspace.eyebrow"),
     "cli-mcp": t("nav.products.cli-mcp.eyebrow"),
   }) satisfies Record<ProductSlug, string>;
+
+/**
+ * The "discover this product" call to action, one whole phrase per product.
+ * It cannot be assembled from a verb plus the product name: languages that
+ * decline put the name in the accusative ("Objevte AI agenta"), and the
+ * Romance languages need an article, so only the translator can write it.
+ */
+export const resolveProductDiscoverLabels = (
+  t: (key: TranslationKey) => string,
+) =>
+  ({
+    "public-data": t("nav.products.public-data.discover"),
+    anonymization: t("nav.products.anonymization.discover"),
+    "tabular-review": t("nav.products.tabular-review.discover"),
+    agent: t("nav.products.agent.discover"),
+    templates: t("nav.products.templates.discover"),
+    editor: t("nav.products.editor.discover"),
+    workspace: t("nav.products.workspace.discover"),
+    "cli-mcp": t("nav.products.cli-mcp.discover"),
+  }) satisfies Record<ProductSlug, string>;

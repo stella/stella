@@ -104,41 +104,49 @@
     "products": {
       "agent": {
         "blurb": "Pýtajte sa svojich spisov, dokumentov, registrov aj pripojených nástrojov na jednom mieste. AI agent koná so schválením a s náhľadmi zdrojov, opiera odpovede o citácie a rozširuje sa pomocou zručností a externých konektorov.",
+        "discover": "Objavte AI agenta",
         "eyebrow": "AI agent",
         "title": "AI agent, ktorý pracuje naprieč vašimi spismi, súbormi aj nástrojmi."
       },
       "anonymization": {
         "blurb": "Odstráňte mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI, priamo z chatu aj z revízie dokumentov, s upraveným výsledkom, ktorý si skontrolujete, kým čokoľvek pôjde ďalej.",
+        "discover": "Objavte Anonymizáciu",
         "eyebrow": "Anonymizácia",
         "title": "Pripravte podklady pre AI bez odhalenia identifikačných údajov."
       },
       "cli-mcp": {
         "blurb": "Vyhľadávajte, čítajte a pracujte s aplikáciou stella z príkazového riadka alebo z ľubovoľného klienta kompatibilného s MCP. Obe rozhrania zdieľajú rovnaký register schopností, oprávnenia aj dáta pracovného priestoru.",
+        "discover": "Objavte CLI & MCP",
         "eyebrow": "CLI & MCP",
         "title": "Jeden pracovný priestor, dostupný z každého nástroja."
       },
       "editor": {
         "blurb": "Otvorte a upravte súbory Word .docx priamo v prehliadači: bez inštalácie a bez prevodu do iného formátu. Online DOCX editor v aplikácii stella zachováva pôvodné formátovanie aj sledovanie zmien, drží súbor prepojený so spisom a každú uloženú úpravu zapisuje do histórie verzií dokumentu.",
+        "discover": "Objavte Editor",
         "eyebrow": "Editor",
         "title": "Upravujte wordové dokumenty v prehliadači bez toho, aby ste opustili spis."
       },
       "public-data": {
         "blurb": "Judikatúra a obchodné registre z oficiálnych verejných zdrojov, ktoré so zachovanou štruktúrou zbiera Legal Atlas aplikácie stella. Prečítajte si rozhodnutie, vyhľadajte spoločnosť, sledujte citácie a odkazujte na čokoľvek z toho zo spisu alebo to odovzdajte AI agentovi.",
+        "discover": "Objavte Verejné dáta",
         "eyebrow": "Verejné dáta",
         "title": "Právne dáta pripravené na načítanie do spisu."
       },
       "tabular-review": {
         "blurb": "Položte otázky nad celou sadou dokumentov a získajte štruktúrované odpovede ako tabuľku priamo v spise: zoraditeľnú, filtrovateľnú a dohľadateľnú až k zdrojovému textu. Pre due diligence aj rešerše.",
+        "discover": "Objavte Tabuľkovú revíziu",
         "eyebrow": "Tabuľková revízia",
         "title": "Premeňte kopu dokumentov na tabuľku pripravenú na revíziu."
       },
       "templates": {
         "blurb": "Nadefinujte vzor raz, s poľami a podmienenými ustanoveniami, a potom ho vyplňte ručne alebo nechajte aplikáciu stella pripraviť návrh z dát spisu. Hotový dokument sa uloží priamo do spisu, pripravený na ďalšie úpravy.",
+        "discover": "Objavte Vzory",
         "eyebrow": "Vzory",
         "title": "Vytvárajte opakovane použiteľné vzory a nechajte ich vyplniť AI."
       },
       "workspace": {
         "blurb": "Pracovný priestor drží pokope dokumenty spisu, úpravy Word .docx, revíziu, rešerše aj chat, takže práca zostáva v kontexte od podkladov až po odpoveď.",
+        "discover": "Objavte Pracovný priestor",
         "eyebrow": "Pracovný priestor",
         "title": "Spisy, dokumenty, revízia a chat v jednom pracovnom priestore."
       }
@@ -884,7 +892,6 @@
     "dataEyebrow": "Právne dáta",
     "dataMainAlt": "Oficiálne súdne rozhodnutie otvorené v aplikácii stella",
     "dataTitle": "Judikatúra a registre po ruke.",
-    "discover": "Objavte",
     "exploreAgent": "Preskúmať AI agenta",
     "exploreAnonymization": "Preskúmať anonymizáciu",
     "explorePublicData": "Preskúmať verejné dáta",

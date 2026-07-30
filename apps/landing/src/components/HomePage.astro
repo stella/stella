@@ -6,7 +6,7 @@ import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import { getChangelogReleases } from "../lib/changelog";
 import { getReleaseKind } from "../lib/changelog-release";
 import { resolveProductHrefs } from "../data/products/links";
-import { resolveProductEyebrows } from "../data/site-nav";
+import { resolveProductDiscoverLabels } from "../data/site-nav";
 import { resolveSceneWindowLabels } from "../data/product-story";
 import { getTranslations, requireLinkedSegment } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
@@ -188,9 +188,8 @@ const subtitle = requireLinkedSegment("hero.subtitle", t("hero.subtitle"));
             revealSideWindowsOnScroll
             backdrop="transparent"
             discover={{
-              label: t("story.discover"),
               productHrefs: resolveProductHrefs(locale),
-              productNames: resolveProductEyebrows(t),
+              productLabels: resolveProductDiscoverLabels(t),
             }}
             windowLabels={resolveSceneWindowLabels(t)}
           />

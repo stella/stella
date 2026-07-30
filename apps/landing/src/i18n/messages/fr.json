@@ -104,41 +104,49 @@
     "products": {
       "agent": {
         "blurb": "Dialoguez avec vos dossiers, vos documents, les registres et vos outils connectés au même endroit. L’agent IA agit avec validation et aperçu des sources, fonde ses réponses sur des citations et s’enrichit de compétences et de connecteurs externes.",
+        "discover": "Découvrir l’agent IA",
         "eyebrow": "Agent IA",
         "title": "Un agent IA qui travaille dans vos dossiers, vos fichiers et vos outils."
       },
       "anonymization": {
         "blurb": "Supprimez les noms, les entités et les éléments identifiants avant qu’un document n’atteigne l’IA, directement depuis le chat et la revue de documents, avec un résultat caviardé à vérifier avant d’aller plus loin.",
+        "discover": "Découvrir l’anonymisation",
         "eyebrow": "Anonymisation",
         "title": "Préparez vos documents pour l’IA sans exposer les éléments identifiants."
       },
       "cli-mcp": {
         "blurb": "Cherchez, lisez et travaillez avec stella depuis la ligne de commande ou depuis n’importe quel client compatible MCP. Les deux surfaces partagent le même registre de capacités, les mêmes permissions et les mêmes données d’espace de travail.",
+        "discover": "Découvrir CLI & MCP",
         "eyebrow": "CLI & MCP",
         "title": "Un seul espace de travail, accessible depuis chaque outil."
       },
       "editor": {
         "blurb": "Ouvrez et modifiez des fichiers Word .docx directement dans votre navigateur : sans installation, sans conversion vers un autre format. L’éditeur DOCX en ligne de stella préserve la mise en forme d’origine et le suivi des modifications, garde le fichier rattaché à son dossier et enregistre chaque révision dans l’historique des versions du document.",
+        "discover": "Découvrir l’éditeur",
         "eyebrow": "Éditeur",
         "title": "Modifiez des documents Word dans le navigateur, sans quitter le dossier."
       },
       "public-data": {
         "blurb": "Jurisprudence et registres d’entreprises issus de sources publiques officielles, collectés par le Legal Atlas de stella en préservant leur structure. Lisez une décision, consultez une entreprise, suivez les citations et référencez tout cela depuis un dossier ou confiez-le à l’agent IA.",
+        "discover": "Découvrir les données publiques",
         "eyebrow": "Données publiques",
         "title": "Des données juridiques, prêtes à verser au dossier."
       },
       "tabular-review": {
         "blurb": "Posez vos questions à tout un ensemble de documents et recevez des réponses structurées sous forme de tableau rattaché au dossier : triable, filtrable et traçable jusqu’au texte source. Conçue pour la due diligence, le contentieux et la recherche.",
+        "discover": "Découvrir la revue tabulaire",
         "eyebrow": "Revue tabulaire",
         "title": "Transformez une pile de documents en un tableau à passer en revue."
       },
       "templates": {
         "blurb": "Définissez un modèle une fois, avec des champs et des clauses conditionnelles, puis remplissez-le à la main ou laissez stella en rédiger un projet à partir des données du dossier. Le document terminé arrive dans le dossier, prêt à être retravaillé.",
+        "discover": "Découvrir les modèles",
         "eyebrow": "Modèles",
         "title": "Créez des modèles réutilisables et laissez l’IA les remplir."
       },
       "workspace": {
         "blurb": "La plateforme réunit les documents d’un dossier, l’édition Word .docx, la revue, la recherche et le chat au même endroit, pour que le travail reste dans son contexte, du document source à la réponse.",
+        "discover": "Découvrir l’espace de travail",
         "eyebrow": "Espace de travail",
         "title": "Dossiers, documents, revue et chat au même endroit."
       }
@@ -884,7 +892,6 @@
     "dataEyebrow": "Données juridiques",
     "dataMainAlt": "Une décision de justice officielle ouverte dans stella",
     "dataTitle": "Jurisprudence et registres à portée de main.",
-    "discover": "Découvrir",
     "exploreAgent": "Découvrir l’agent IA",
     "exploreAnonymization": "Découvrir l’anonymisation",
     "explorePublicData": "Découvrir les données publiques",

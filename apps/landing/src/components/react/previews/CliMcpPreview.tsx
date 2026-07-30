@@ -77,7 +77,7 @@ export const CliMcpPreview = ({
     const slug = slugForWindow(window);
     return {
       href: discover.productHrefs[slug],
-      label: `${discover.label} ${discover.productNames[slug]}`,
+      label: discover.productLabels[slug],
     };
   };
   const focusedWindow = getFocusedWindow({
@@ -622,11 +622,10 @@ export const CliMcpPreview = ({
               : positions[selection.window]
           }
           href={discover.productHrefs[slugForWindow(selection.window)]}
-          label={discover.label}
+          label={discover.productLabels[slugForWindow(selection.window)]}
           onPointerEnter={cancelSelectionClear}
           onPointerLeave={() => scheduleSelectionClear(selection.window)}
           position={selection.tag}
-          productName={discover.productNames[slugForWindow(selection.window)]}
         />
       )}
     </div>
@@ -813,8 +812,7 @@ type CliMcpPreviewProps = {
    * reader on /cs/ to the English page.
    */
   discover?: {
-    label: string;
-    productNames: Record<ProductSlug, string>;
+    productLabels: Record<ProductSlug, string>;
     productHrefs: Record<ProductSlug, string>;
   };
   includeStyles?: boolean;
@@ -1033,7 +1031,6 @@ type DiscoverTagProps = {
   // relative to the scene, without the drag offset (re-applied via
   // `translate`). Physical left/top is safe: the scene root is dir="ltr".
   position: { left: number; top: number };
-  productName: string;
 };
 
 // Selection tag: rendered below the selected window in the style of a
@@ -1046,7 +1043,6 @@ const DiscoverTag = ({
   onPointerEnter,
   onPointerLeave,
   position,
-  productName,
 }: DiscoverTagProps) => (
   <a
     onPointerEnter={onPointerEnter}
@@ -1063,7 +1059,7 @@ const DiscoverTag = ({
       transform: "translateX(-50%)",
     }}
   >
-    {label} {productName}
+    {label}
     <span aria-hidden="true" className="rtl:inline-block rtl:-scale-x-100">
       →
     </span>

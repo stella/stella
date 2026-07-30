@@ -104,41 +104,49 @@
     "products": {
       "agent": {
         "blurb": "Chatten Sie mit Ihren Akten, Dokumenten, Registern und angebundenen Tools an einem Ort. Der KI-Agent handelt mit Freigaben und Quellvorschauen, stützt seine Antworten auf Fundstellen und lässt sich über Skills und externe Konnektoren erweitern.",
+        "discover": "Entdecken Sie den KI-Agenten",
         "eyebrow": "KI-Agent",
         "title": "Ein KI-Agent, der über Ihre Akten, Dateien und Tools hinweg arbeitet."
       },
       "anonymization": {
         "blurb": "Entfernen Sie Namen, Entitäten und identifizierende Angaben, bevor Material die KI erreicht, direkt aus dem Chat und der Dokumentenprüfung, mit einem anonymisierten Ergebnis, das Sie prüfen, bevor irgendetwas weitergeht.",
+        "discover": "Entdecken Sie die Anonymisierung",
         "eyebrow": "Anonymisierung",
         "title": "Material für KI vorbereiten, ohne identifizierende Angaben preiszugeben."
       },
       "cli-mcp": {
         "blurb": "Suchen, lesen und arbeiten Sie mit stella über die Kommandozeile oder jeden MCP-kompatiblen Client. Beide Oberflächen teilen dieselbe Capability-Registry, dieselben Berechtigungen und dieselben Arbeitsbereichsdaten.",
+        "discover": "Entdecken Sie CLI & MCP",
         "eyebrow": "CLI & MCP",
         "title": "Ein Arbeitsbereich, erreichbar aus jedem Werkzeug."
       },
       "editor": {
         "blurb": "Öffnen und bearbeiten Sie Word-.docx-Dateien direkt im Browser: keine Installation, keine Umwandlung in ein anderes Format. Der Online-DOCX-Editor in stella bewahrt die ursprüngliche Formatierung und die Änderungsverfolgung, hält die Datei mit ihrer Akte verbunden und schreibt jede Speicherung in die Versionshistorie des Dokuments.",
+        "discover": "Entdecken Sie den Editor",
         "eyebrow": "Editor",
         "title": "Bearbeiten Sie Word-Dokumente im Browser, ohne die Akte zu verlassen."
       },
       "public-data": {
         "blurb": "Rechtsprechung und Handelsregister aus offiziellen öffentlichen Quellen, gesammelt von Legal Atlas in stella, mit erhaltener Struktur. Lesen Sie eine Entscheidung, schlagen Sie ein Unternehmen nach, folgen Sie Fundstellen und verweisen Sie aus einer Akte auf all das oder übergeben Sie es dem KI-Agenten.",
+        "discover": "Entdecken Sie die öffentlichen Daten",
         "eyebrow": "Öffentliche Daten",
         "title": "Rechtsdaten, bereit für die Akte."
       },
       "tabular-review": {
         "blurb": "Stellen Sie Fragen an einen ganzen Dokumentenbestand und erhalten Sie strukturierte Antworten als Tabelle in der Akte: sortierbar, filterbar und bis zum Ausgangstext nachvollziehbar. Gebaut für Due Diligence, Vertragsanalyse und Recherche.",
+        "discover": "Entdecken Sie die Tabellenprüfung",
         "eyebrow": "Tabellenprüfung",
         "title": "Machen Sie aus einem Dokumentenstapel eine prüfbare Tabelle."
       },
       "templates": {
         "blurb": "Definieren Sie eine Vorlage einmal, mit Feldern und bedingten Klauseln, und füllen Sie sie dann von Hand aus oder lassen Sie stella einen Entwurf aus den Daten der Akte erstellen. Das fertige Dokument landet in der Akte und lässt sich direkt weiterbearbeiten.",
+        "discover": "Entdecken Sie die Vorlagen",
         "eyebrow": "Vorlagen",
         "title": "Bauen Sie wiederverwendbare Vorlagen und lassen Sie KI sie ausfüllen."
       },
       "workspace": {
         "blurb": "Der Arbeitsbereich hält die Dokumente einer Akte, die Word-.docx-Bearbeitung, Prüfung, Recherche und Chat an einem Ort zusammen, damit die Arbeit vom Ausgangsmaterial bis zur Antwort im Kontext bleibt.",
+        "discover": "Entdecken Sie den Arbeitsbereich",
         "eyebrow": "Arbeitsbereich",
         "title": "Akten, Dokumente, Prüfung und Chat in einem Arbeitsbereich."
       }
@@ -884,7 +892,6 @@
     "dataEyebrow": "Juristische Daten",
     "dataMainAlt": "Eine offizielle Gerichtsentscheidung, geöffnet in stella",
     "dataTitle": "Rechtsprechung und Register griffbereit.",
-    "discover": "Entdecken Sie",
     "exploreAgent": "KI-Agent entdecken",
     "exploreAnonymization": "Anonymisierung entdecken",
     "explorePublicData": "Öffentliche Daten entdecken",
