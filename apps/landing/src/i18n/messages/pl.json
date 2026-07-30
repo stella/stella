@@ -325,7 +325,7 @@
       "capabilities": {
         "0": {
           "body": "Korzystaj z generowanych poleceń, takich jak stella search matters, document read czy template fill, ze skryptów albo z terminala.",
-          "title": "Prawdziwy wiersz poleceń"
+          "title": "Praca w terminalu"
         },
         "1": {
           "body": "Podłącz aplikację stella do klientów zgodnych z MCP bez budowania osobnej integracji dla każdego z nich.",
@@ -392,13 +392,16 @@
       "setup": {
         "clients": {
           "0": {
-            "body": "Dodaj serwer jednym poleceniem:"
+            "body": "Włącz tryb dewelopera w Settings → Connectors → Advanced, a potem dodaj konektor z adresem endpointu."
           },
           "1": {
             "body": "W Settings → Connectors dodaj własny konektor z adresem endpointu."
           },
           "2": {
-            "body": "Dodaj serwer do ~/.cursor/mcp.json:"
+            "body": "Dodaj serwer i zaloguj się:"
+          },
+          "3": {
+            "body": "Dodaj serwer jednym poleceniem:"
           }
         },
         "heading": "Podłącz agenta AI",

@@ -29,7 +29,7 @@ export const cliMcp: Product = {
   },
   capabilities: [
     {
-      title: "A real command line",
+      title: "Work from the terminal",
       body: "Use generated commands such as stella search matters, document read, and template fill from scripts or your terminal.",
     },
     {
@@ -95,20 +95,24 @@ export const cliMcp: Product = {
     endpoint: "https://api.stll.app/mcp",
     clients: [
       {
-        name: "Claude Code",
-        body: "Add the server with one command:",
-        snippet:
-          "claude mcp add --transport http stella https://api.stll.app/mcp",
+        name: "ChatGPT",
+        body: "Turn on developer mode under Settings → Connectors → Advanced, then add a connector with the endpoint address.",
       },
       {
         name: "Claude",
         body: "In Settings → Connectors, add a custom connector with the endpoint address.",
       },
       {
-        name: "Cursor",
-        body: "Add the server to ~/.cursor/mcp.json:",
+        name: "Codex",
+        body: "Add the server and sign in:",
         snippet:
-          '{\n  "mcpServers": {\n    "stella": { "url": "https://api.stll.app/mcp" }\n  }\n}',
+          "codex mcp add stella --url https://api.stll.app/mcp\ncodex mcp login stella",
+      },
+      {
+        name: "Claude Code",
+        body: "Add the server with one command:",
+        snippet:
+          "claude mcp add --transport http stella https://api.stll.app/mcp",
       },
     ],
     outro:

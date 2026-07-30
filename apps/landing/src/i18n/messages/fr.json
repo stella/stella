@@ -325,7 +325,7 @@
       "capabilities": {
         "0": {
           "body": "Utilisez les commandes générées comme stella search matters, document read ou template fill depuis vos scripts ou votre terminal.",
-          "title": "Une vraie ligne de commande"
+          "title": "Travaillez depuis le terminal"
         },
         "1": {
           "body": "Reliez stella aux clients compatibles MCP sans construire une intégration pour chacun.",
@@ -392,13 +392,16 @@
       "setup": {
         "clients": {
           "0": {
-            "body": "Ajoutez le serveur en une commande :"
+            "body": "Activez le mode développeur dans Settings → Connectors → Advanced, puis ajoutez un connecteur avec l’adresse du point de terminaison."
           },
           "1": {
             "body": "Dans Settings → Connectors, ajoutez un connecteur personnalisé avec l’adresse du point de terminaison."
           },
           "2": {
-            "body": "Ajoutez le serveur dans ~/.cursor/mcp.json :"
+            "body": "Ajoutez le serveur, puis connectez-vous :"
+          },
+          "3": {
+            "body": "Ajoutez le serveur en une commande :"
           }
         },
         "heading": "Connecter un agent IA",

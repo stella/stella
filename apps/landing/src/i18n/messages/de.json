@@ -325,7 +325,7 @@
       "capabilities": {
         "0": {
           "body": "Nutzen Sie generierte Befehle wie stella search matters, document read und template fill aus Skripten oder Ihrem Terminal.",
-          "title": "Eine echte Kommandozeile"
+          "title": "Arbeiten im Terminal"
         },
         "1": {
           "body": "Verbinden Sie stella mit MCP-kompatiblen Clients, ohne für jeden eine eigene Integration zu bauen.",
@@ -392,13 +392,16 @@
       "setup": {
         "clients": {
           "0": {
-            "body": "Fügen Sie den Server mit einem Befehl hinzu:"
+            "body": "Aktivieren Sie den Entwicklermodus unter Settings → Connectors → Advanced und fügen Sie dann einen Connector mit der Endpunkt-Adresse hinzu."
           },
           "1": {
             "body": "Fügen Sie unter Settings → Connectors einen eigenen Connector mit der Endpunkt-Adresse hinzu."
           },
           "2": {
-            "body": "Tragen Sie den Server in ~/.cursor/mcp.json ein:"
+            "body": "Fügen Sie den Server hinzu und melden Sie sich an:"
+          },
+          "3": {
+            "body": "Fügen Sie den Server mit einem Befehl hinzu:"
           }
         },
         "heading": "Einen KI-Agenten verbinden",

@@ -325,7 +325,7 @@
       "capabilities": {
         "0": {
           "body": "Izmantojiet ģenerētas komandas, piemēram, stella search matters, document read un template fill, no skriptiem vai termināļa.",
-          "title": "Īsta komandrinda"
+          "title": "Darbs terminālī"
         },
         "1": {
           "body": "Savienojiet lietotni stella ar MCP saderīgiem klientiem, neveidojot atsevišķu integrāciju katram.",
@@ -392,13 +392,16 @@
       "setup": {
         "clients": {
           "0": {
-            "body": "Serveri pievienosiet ar vienu komandu:"
+            "body": "Ieslēdziet izstrādātāja režīmu sadaļā Settings → Connectors → Advanced un pēc tam pievienojiet savienotāju ar iepriekš norādīto adresi."
           },
           "1": {
             "body": "Sadaļā Settings → Connectors pievienojiet pielāgotu savienotāju ar iepriekš norādīto adresi."
           },
           "2": {
-            "body": "Pievienojiet serveri failam ~/.cursor/mcp.json:"
+            "body": "Pievienojiet serveri un pierakstieties:"
+          },
+          "3": {
+            "body": "Serveri pievienosiet ar vienu komandu:"
           }
         },
         "heading": "Pievienojiet MI aģentu",

@@ -325,7 +325,7 @@
       "capabilities": {
         "0": {
           "body": "Naudokite sugeneruotas komandas, tokias kaip stella search matters, document read ir template fill, iš scenarijų arba terminalo.",
-          "title": "Tikra komandinė eilutė"
+          "title": "Darbas terminale"
         },
         "1": {
           "body": "Prijunkite programą stella prie su MCP suderinamų klientų nekurdami atskiros integracijos kiekvienam.",
@@ -392,13 +392,16 @@
       "setup": {
         "clients": {
           "0": {
-            "body": "Serverį pridėsite viena komanda:"
+            "body": "Įjunkite kūrėjo režimą skiltyje Settings → Connectors → Advanced ir pridėkite jungtį su pirmiau nurodytu adresu."
           },
           "1": {
             "body": "Skiltyje Settings → Connectors pridėkite savo jungtį su pirmiau nurodytu adresu."
           },
           "2": {
-            "body": "Pridėkite serverį į ~/.cursor/mcp.json:"
+            "body": "Pridėkite serverį ir prisijunkite:"
+          },
+          "3": {
+            "body": "Serverį pridėsite viena komanda:"
           }
         },
         "heading": "Prijunkite DI agentą",

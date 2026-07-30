@@ -325,7 +325,7 @@
       "capabilities": {
         "0": {
           "body": "Kasuta genereeritud käske, nagu stella search matters, document read ja template fill, skriptidest või terminalist.",
-          "title": "Päris käsurida"
+          "title": "Töö terminalis"
         },
         "1": {
           "body": "Ühenda rakendus stella MCP-ga ühilduvate klientidega, ilma et peaksid igaühe jaoks eraldi liidest ehitama.",
@@ -392,13 +392,16 @@
       "setup": {
         "clients": {
           "0": {
-            "body": "Lisa server ühe käsuga:"
+            "body": "Lülita sisse arendajarežiim jaotises Settings → Connectors → Advanced ja lisa seejärel konnektor koos otspunkti aadressiga."
           },
           "1": {
             "body": "Lisa jaotises Settings → Connectors kohandatud konnektor koos otspunkti aadressiga."
           },
           "2": {
-            "body": "Lisa server faili ~/.cursor/mcp.json:"
+            "body": "Lisa server ja logi sisse:"
+          },
+          "3": {
+            "body": "Lisa server ühe käsuga:"
           }
         },
         "heading": "Ühenda tehisintellekti agent",

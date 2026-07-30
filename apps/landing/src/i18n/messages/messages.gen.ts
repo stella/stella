@@ -328,7 +328,7 @@ type Messages = {
       "capabilities": {
         "0": {
           "body": "Use generated commands such as stella search matters, document read, and template fill from scripts or your terminal.";
-          "title": "A real command line";
+          "title": "Work from the terminal";
         };
         "1": {
           "body": "Connect stella to MCP-compatible clients without building a separate integration for each one.";
@@ -395,13 +395,16 @@ type Messages = {
       "setup": {
         "clients": {
           "0": {
-            "body": "Add the server with one command:";
+            "body": "Turn on developer mode under Settings → Connectors → Advanced, then add a connector with the endpoint address.";
           };
           "1": {
             "body": "In Settings → Connectors, add a custom connector with the endpoint address.";
           };
           "2": {
-            "body": "Add the server to ~/.cursor/mcp.json:";
+            "body": "Add the server and sign in:";
+          };
+          "3": {
+            "body": "Add the server with one command:";
           };
         };
         "heading": "Connect an AI agent";

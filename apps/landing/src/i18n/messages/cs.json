@@ -325,7 +325,7 @@
       "capabilities": {
         "0": {
           "body": "Používejte generované příkazy jako stella search matters, document read nebo template fill ze skriptů i z terminálu.",
-          "title": "Opravdová příkazová řádka"
+          "title": "Ovládání z terminálu"
         },
         "1": {
           "body": "Připojte aplikaci stella ke klientům kompatibilním s MCP, aniž byste pro každého stavěli vlastní integraci.",
@@ -392,13 +392,16 @@
       "setup": {
         "clients": {
           "0": {
-            "body": "Server přidáte jedním příkazem:"
+            "body": "Zapněte režim pro vývojáře v Settings → Connectors → Advanced a pak přidejte konektor s adresou endpointu."
           },
           "1": {
             "body": "V Settings → Connectors přidejte vlastní konektor s adresou endpointu."
           },
           "2": {
-            "body": "Přidejte server do ~/.cursor/mcp.json:"
+            "body": "Přidejte server a přihlaste se:"
+          },
+          "3": {
+            "body": "Server přidáte jedním příkazem:"
           }
         },
         "heading": "Připojte AI agenta",

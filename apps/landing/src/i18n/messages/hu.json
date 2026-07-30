@@ -325,7 +325,7 @@
       "capabilities": {
         "0": {
           "body": "Használjon generált parancsokat, például a stella search matters, a document read és a template fill parancsot, szkriptekből vagy a terminálból.",
-          "title": "Igazi parancssor"
+          "title": "Munka a terminálból"
         },
         "1": {
           "body": "Csatlakoztassa a stella alkalmazást MCP-kompatibilis kliensekhez anélkül, hogy mindegyikhez külön integrációt építene.",
@@ -392,13 +392,16 @@
       "setup": {
         "clients": {
           "0": {
-            "body": "A szervert egyetlen paranccsal hozzáadhatja:"
+            "body": "Kapcsolja be a fejlesztői módot a Settings → Connectors → Advanced alatt, majd adjon hozzá konnektort a végpont címével."
           },
           "1": {
             "body": "A Settings → Connectors alatt adjon hozzá egyéni konnektort a végpont címével."
           },
           "2": {
-            "body": "Vegye fel a szervert a ~/.cursor/mcp.json fájlba:"
+            "body": "Adja hozzá a szervert, és jelentkezzen be:"
+          },
+          "3": {
+            "body": "A szervert egyetlen paranccsal hozzáadhatja:"
           }
         },
         "heading": "AI-ügynök csatlakoztatása",
