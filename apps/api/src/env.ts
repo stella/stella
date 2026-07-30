@@ -134,6 +134,21 @@ const envApi = createEnv({
      * 404), mirroring how other optional operational surfaces behave.
      */
     OPERATOR_METRICS_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
+    /**
+     * SHA-256 digest of a deployment-owned decoy machine API key. The
+     * plaintext decoy belongs only in a honey resource; presenting it to any
+     * API route emits a structured security event and stops the request before
+     * authentication. Unset disables the interceptor.
+     */
+    SECURITY_CANARY_API_KEY_SHA256: v.optional(
+      v.pipe(
+        v.string(),
+        v.regex(
+          /^[a-f0-9]{64}$/u,
+          "SECURITY_CANARY_API_KEY_SHA256 must be a lowercase SHA-256 hex digest.",
+        ),
+      ),
+    ),
     EMAIL_PROVIDER: v.pipe(
       v.optional(v.picklist(["ses", "smtp"])),
       v.transform(inferEmailProvider),
