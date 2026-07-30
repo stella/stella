@@ -235,7 +235,7 @@ export const ReviewBar = ({
       aria-label={t("docxReview.barLabel")}
       data-docx-review-bar=""
       className={cn(
-        "bg-popover/90 text-popover-foreground border-border pointer-events-auto absolute start-1/2 bottom-28 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border py-1 ps-2 pe-1.5",
+        "bg-popover/90 text-popover-foreground border-border pointer-events-auto absolute start-1/2 bottom-28 z-50 flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1 rounded-full border py-1 ps-2 pe-1.5",
         "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
         "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_rgb(0_0_0/0.14)]",
         "animate-in fade-in-0 slide-in-from-bottom-1",
@@ -278,8 +278,10 @@ export const ReviewBar = ({
         tooltip={`${t("common.accept")} · ${SHORTCUT_HINTS.accept}`}
         variant="default"
       >
-        <CheckIcon className="me-1 size-3.5" />
-        {t("common.accept")}
+        <CheckIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
+        <span className="@max-[80rem]/file-viewer:hidden">
+          {t("common.accept")}
+        </span>
       </Button>
       <Button
         className="h-7 px-2.5 text-xs"
@@ -288,8 +290,10 @@ export const ReviewBar = ({
         tooltip={`${t("docxReview.reject")} · ${SHORTCUT_HINTS.reject}`}
         variant="outline"
       >
-        <XIcon className="me-1 size-3.5" />
-        {t("docxReview.reject")}
+        <XIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
+        <span className="@max-[80rem]/file-viewer:hidden">
+          {t("docxReview.reject")}
+        </span>
       </Button>
       <AcceptAllButton
         className="h-7 px-2.5 text-xs"
@@ -298,7 +302,9 @@ export const ReviewBar = ({
         size="sm"
         variant="ghost"
       >
-        {t("docxReview.acceptAll")}
+        <span className="@max-[80rem]/file-viewer:hidden">
+          {t("docxReview.acceptAll")}
+        </span>
       </AcceptAllButton>
       <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
       <Select
@@ -311,7 +317,7 @@ export const ReviewBar = ({
       >
         <SelectTrigger
           aria-label={t("docxReview.applyAs")}
-          className="hover:bg-muted h-7 w-auto min-w-0 justify-between gap-1 rounded-full border-0 bg-transparent px-2 text-xs font-medium"
+          className="hover:bg-muted h-7 w-auto max-w-64 min-w-0 justify-between gap-1 rounded-full border-0 bg-transparent px-2 text-xs font-medium @max-[36rem]/file-viewer:max-w-36"
         >
           <SelectValue />
         </SelectTrigger>

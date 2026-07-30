@@ -12,7 +12,7 @@
 import { useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
-import { CheckIcon } from "lucide-react";
+import { CheckCheckIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -119,13 +119,15 @@ export const AcceptAllButton = ({
   return (
     <>
       <Button
+        aria-label={t("docxReview.acceptAll")}
         className={className}
         disabled={pendingItems.length === 0 || isAccepting}
         onClick={handleClick}
         size={buttonSize}
+        tooltip={t("docxReview.acceptAll")}
         variant={buttonVariant}
       >
-        <CheckIcon className="me-1 size-3.5" />
+        <CheckCheckIcon className="me-1 size-3.5" />
         {children}
       </Button>
       <AlertDialog onOpenChange={setConfirmOpen} open={confirmOpen}>
@@ -166,7 +168,7 @@ export const AcceptAllButton = ({
               size="sm"
               variant="default"
             >
-              <CheckIcon className="me-1 size-3.5" />
+              <CheckCheckIcon className="me-1 size-3.5" />
               {t("docxReview.acceptAll")}
             </Button>
           </AlertDialogFooter>
