@@ -1008,8 +1008,11 @@ export const processServerChatStream = async function* ({
   } catch (error) {
     streamFailed = true;
     const kind = classifyAIError(error);
-    reportStreamFailure(error, kind);
     if (abortSignal.aborted) {
+      // An aborted stream is an expected exit (metered cutoff, client
+      // disconnect); its rejection shape is not a stream defect even
+      // when the classifier cannot name it.
+      captureError(error, { kind });
       finishInvoked = await finalizeInterruptedResponseMessage({
         abortSignal,
         getResponseMessage,
@@ -1018,6 +1021,8 @@ export const processServerChatStream = async function* ({
         processor,
         usage,
       });
+    } else {
+      reportStreamFailure(error, kind);
     }
     yield {
       type: EventType.RUN_ERROR,
