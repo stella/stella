@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import {
   fileContentQueryKey,
   fileMetadataQueryKey,
@@ -20,8 +20,6 @@ type FileData = {
   originalMimeType: string;
   buffer: ArrayBuffer;
 };
-
-type FileMetadata = Omit<FileData, "buffer">;
 
 type EmailHtmlPreviewData = {
   fileId: string;
@@ -58,31 +56,6 @@ export const filesKeys = {
 };
 
 type FileOptionsProps = QueryOptionsInput<FileByFieldIdKey>;
-
-export const fileMetadataOptions = (props: FileOptionsProps) =>
-  queryOptions({
-    queryKey: filesKeys.metadataByFieldId(props),
-    enabled: props.enabled ?? true,
-    retry: shouldRetryAPIRequest,
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .files({ workspaceId: props.workspaceId })
-        .url({ fieldId: props.fieldId })
-        .get({
-          query: { purpose: props.purpose ?? "display" },
-          fetch: { signal },
-        });
-
-      const data = unwrapEden(response);
-
-      return {
-        fileId: data.fileId,
-        fileName: data.fileName,
-        mimeType: data.mimeType,
-        originalMimeType: data.originalMimeType,
-      } satisfies FileMetadata;
-    },
-  });
 
 export const fileOptions = (props: FileOptionsProps) =>
   queryOptions({
