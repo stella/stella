@@ -5,6 +5,13 @@ export const rootDbExecuteMock = mock(
   async (_query: SQL): Promise<Record<string, unknown>[]> =>
     await Promise.resolve([]),
 );
+export const rootDbTransactionMock = mock(
+  async (
+    runTransaction: (tx: {
+      execute: typeof rootDbExecuteMock;
+    }) => Promise<unknown>,
+  ) => await runTransaction({ execute: rootDbExecuteMock }),
+);
 export const rootDbLimitMock = mock(
   async (): Promise<Record<string, unknown>[]> =>
     await Promise.resolve([{ searchableText: "Document content" }]),
@@ -23,6 +30,7 @@ export const rootDbChatThreadFindFirstMock = mock(
 void mock.module("@/api/db/root", () => ({
   rootDb: {
     execute: rootDbExecuteMock,
+    transaction: rootDbTransactionMock,
     select: rootDbSelectMock,
     query: {
       caseLawDecisions: {
@@ -40,6 +48,14 @@ export const clearRootDbMocks = () => {
   rootDbExecuteMock.mockImplementation(
     async (_query: SQL): Promise<Record<string, unknown>[]> =>
       await Promise.resolve([]),
+  );
+  rootDbTransactionMock.mockClear();
+  rootDbTransactionMock.mockImplementation(
+    async (
+      runTransaction: (tx: {
+        execute: typeof rootDbExecuteMock;
+      }) => Promise<unknown>,
+    ) => await runTransaction({ execute: rootDbExecuteMock }),
   );
   rootDbSelectMock.mockClear();
   rootDbSelectMock.mockImplementation(() => ({ from: rootDbFromMock }));

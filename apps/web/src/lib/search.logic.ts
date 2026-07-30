@@ -2,6 +2,54 @@ import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
 
 export const normalizeSearchQuery = (query: string): string => query.trim();
 
+export const stripSearchMarkup = (value: string): string =>
+  value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
+
+type SearchPreviewContent =
+  | {
+      content: string;
+      type: "highlighted-html";
+    }
+  | {
+      content: string;
+      type: "plain-text";
+    };
+
+type SearchPreviewRenderContent =
+  | {
+      directionText: string;
+      html: string;
+      type: "highlighted-html";
+    }
+  | {
+      directionText: string;
+      text: string;
+      type: "plain-text";
+    };
+
+export const getSearchPreviewRenderContent = (
+  preview: SearchPreviewContent,
+): SearchPreviewRenderContent => {
+  switch (preview.type) {
+    case "highlighted-html":
+      return {
+        type: preview.type,
+        directionText: stripSearchMarkup(preview.content),
+        html: preview.content,
+      };
+    case "plain-text":
+      return {
+        type: preview.type,
+        directionText: preview.content,
+        text: preview.content,
+      };
+    default: {
+      const exhaustive: never = preview;
+      return exhaustive;
+    }
+  }
+};
+
 type SearchPreviewVisibilityArgs = {
   isMobile: boolean;
   previewEnabled: boolean;

@@ -1074,6 +1074,9 @@ const interpolationIsUnsafeScopeOperand = (
     precedingText = token.value + precedingText;
   }
   return (
+    /\boperator\s*\([^)]*\)\s*(?:\(\s*)*(?:true\s*)?$/iu.test(
+      precedingText,
+    ) ||
     /\b(?:not\s+)?between\s*(?:\(\s*)*(?:true\s+)?$/iu.test(precedingText) ||
     /\b(?:not\s+)?between\s+(?:false|true)\s+and\s*(?:\(\s*)*(?:true\s+)?$/iu.test(
       precedingText,
@@ -1351,6 +1354,32 @@ export default {
         },
       },
       create(context: RuleContext) {
+        type MutableSqlRoot = {
+          declarationContainer: unknown;
+          initializer: unknown;
+          variable: ScopeVariable;
+        };
+
+        type MutableSqlAppendSequence = MutableSqlRoot & {
+          calls: {
+            fragment: unknown;
+            node: AstNode;
+            sharesDeclarationContainer: boolean;
+          }[];
+        };
+
+        const mutableSqlAppendSequences = new Map<
+          ScopeVariable,
+          MutableSqlAppendSequence
+        >();
+        const deferredConstSqlTemplates = new Map<
+          ScopeVariable,
+          {
+            node: AstNode;
+            tokenPaths: SqlTemplateToken[][];
+          }
+        >();
+
         const resolveVariable = (
           identifier: AstNode & { name: string },
         ): ScopeVariable | null => {
@@ -1525,6 +1554,26 @@ export default {
             }) === true
           );
         };
+
+        const withoutApprovedScopeFragments = (
+          tokenPaths: readonly SqlTemplateToken[][],
+        ): SqlTemplateToken[][] =>
+          tokenPaths.map((tokenPath) =>
+            tokenPath.map((token) => {
+              if (
+                token.type !== "expression" ||
+                !Object.values(PRIVATE_SEARCH_PROJECTIONS).some((projection) =>
+                  isApprovedScopeFragment(
+                    token.value,
+                    projection.scopeImports,
+                  ),
+                )
+              ) {
+                return token;
+              }
+              return { type: "expression", value: null };
+            }),
+          );
 
         const isPrivateProjectionInterpolation = (
           expression: unknown,
@@ -1788,6 +1837,79 @@ export default {
 
         const resolveConstInitializer = (expression: unknown): unknown =>
           resolveStaticConstValue(expression, new Set());
+
+        const mutableSqlRoot = (
+          expression: unknown,
+          ancestors: ReadonlySet<ScopeVariable> = new Set(),
+        ): MutableSqlRoot | null => {
+          const unwrapped = unwrapExpression(expression);
+          if (!isIdentifier(unwrapped)) {
+            return null;
+          }
+          const variable = resolveVariable(unwrapped);
+          if (variable === null || ancestors.has(variable)) {
+            return null;
+          }
+          const nextAncestors = new Set(ancestors);
+          nextAncestors.add(variable);
+          for (const definition of variable.defs) {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const"
+            ) {
+              continue;
+            }
+            const initializer = unwrapExpression(definition.node.init);
+            if (isIdentifier(initializer)) {
+              return mutableSqlRoot(initializer, nextAncestors);
+            }
+            if (
+              isAstNode(initializer) &&
+              initializer.type === "TaggedTemplateExpression" &&
+              isApprovedSqlTaggedTemplate(initializer)
+            ) {
+              return {
+                declarationContainer: definition.parent.parent,
+                initializer,
+                variable,
+              };
+            }
+          }
+          return null;
+        };
+
+        const directlyDeclaredSqlTemplateVariable = (
+          node: AstNode,
+        ): ScopeVariable | null => {
+          let expression = node;
+          let parent = isAstNode(expression.parent) ? expression.parent : null;
+          while (
+            parent !== null &&
+            (parent.type === "ChainExpression" ||
+              parent.type === "TSAsExpression" ||
+              parent.type === "TSSatisfiesExpression") &&
+            parent.expression === expression
+          ) {
+            expression = parent;
+            parent = isAstNode(expression.parent) ? expression.parent : null;
+          }
+          if (
+            parent?.type !== "VariableDeclarator" ||
+            parent.init !== expression ||
+            !isIdentifier(parent.id)
+          ) {
+            return null;
+          }
+          const declaration = isAstNode(parent.parent) ? parent.parent : null;
+          return declaration?.type === "VariableDeclaration" &&
+            declaration.kind === "const"
+            ? resolveVariable(parent.id)
+            : null;
+        };
 
         const isApprovedSqlTaggedTemplate = (node: AstNode): boolean => {
           if (node.type !== "TaggedTemplateExpression") {
@@ -2867,6 +2989,42 @@ export default {
         };
 
         return {
+          "Program:exit"() {
+            for (const [variable, deferred] of deferredConstSqlTemplates) {
+              if (!mutableSqlAppendSequences.has(variable)) {
+                inspectSqlTokenPaths(deferred.node, deferred.tokenPaths);
+              }
+            }
+            for (const sequence of mutableSqlAppendSequences.values()) {
+              let tokenPaths =
+                flattenSqlExpression(sequence.initializer, new Set()) ?? [];
+              for (const call of sequence.calls) {
+                const fragmentPaths =
+                  flattenSqlExpression(call.fragment, new Set()) ??
+                  expressionTokenPaths(call.fragment);
+                tokenPaths = tokenPaths.flatMap((tokenPath) =>
+                  fragmentPaths.map((fragmentPath) =>
+                    concatenateSqlTokenPaths(tokenPath, fragmentPath),
+                  ),
+                );
+              }
+              if (
+                sequence.calls.length > 1 ||
+                sequence.calls.some(
+                  (call) => !call.sharesDeclarationContainer,
+                )
+              ) {
+                tokenPaths = withoutApprovedScopeFragments(tokenPaths);
+              }
+              const reportNode = sequence.calls.at(-1)?.node;
+              if (reportNode !== undefined && tokenPaths.length > 0) {
+                inspectSqlTokenPaths(
+                  reportNode,
+                  sqlAppendInspectionPaths(tokenPaths),
+                );
+              }
+            }
+          },
           TaggedTemplateExpression(node: unknown) {
             if (!isAstNode(node)) {
               return;
@@ -2882,6 +3040,14 @@ export default {
               });
               return;
             }
+            const declaredVariable = directlyDeclaredSqlTemplateVariable(node);
+            if (declaredVariable !== null) {
+              deferredConstSqlTemplates.set(declaredVariable, {
+                node,
+                tokenPaths,
+              });
+              return;
+            }
             if (hasVerifiedEnclosingSqlComposition(node)) {
               return;
             }
@@ -2894,6 +3060,28 @@ export default {
             const appendParts = sqlAppendCallParts(node);
             if (appendParts !== null) {
               if (hasEnclosingSqlAppend(node)) {
+                return;
+              }
+              const root = mutableSqlRoot(appendParts.receiver);
+              if (root !== null) {
+                const statement = isAstNode(node.parent) ? node.parent : null;
+                const call = {
+                  fragment: appendParts.fragment,
+                  node,
+                  sharesDeclarationContainer:
+                    statement?.type === "ExpressionStatement" &&
+                    statement.expression === node &&
+                    statement.parent === root.declarationContainer,
+                };
+                const existing = mutableSqlAppendSequences.get(root.variable);
+                if (existing) {
+                  existing.calls.push(call);
+                } else {
+                  mutableSqlAppendSequences.set(root.variable, {
+                    ...root,
+                    calls: [call],
+                  });
+                }
                 return;
               }
               const receiverPaths = flattenSqlExpression(

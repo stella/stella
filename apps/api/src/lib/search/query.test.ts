@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   buildPlainSearchTsQuery,
+  buildSearchPreviewLocatorTsQuery,
   buildSearchTsQuery,
   fileNameSearchText,
   normalizeFileNameForSearch,
@@ -16,6 +17,20 @@ import {
 } from "@/api/lib/search/query";
 
 describe("search query text", () => {
+  test("preview locator ORs positive terms and excludes negated terms", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(
+      buildSearchPreviewLocatorTsQuery(
+        "agreement AND termination NOT superseded",
+      ),
+    );
+
+    expect(compiled.params).toContain("agreement:* | termination:*");
+    expect(compiled.params).not.toContain(
+      expect.stringContaining("superseded"),
+    );
+  });
+
   test("indexes the full file name and a normalized base name", () => {
     expect(fileNameSearchText("Share_Purchase-Agreement.final.pdf")).toBe(
       "Share_Purchase-Agreement.final.pdf Share Purchase Agreement final",

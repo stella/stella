@@ -39,6 +39,7 @@ describe("search result highlighting", () => {
       restoreOriginalSearchPreview({
         headline: `the ${HIGHLIGHT_START}resume${HIGHLIGHT_STOP} was approved.`,
         maxLength: 1000,
+        normalizedSource: "the resume was approved.",
         source: "The résumé was approved.",
         useUnaccent: true,
       }),
@@ -48,12 +49,41 @@ describe("search result highlighting", () => {
   test("restores PostgreSQL unaccent transliterations beyond Unicode decomposition", () => {
     expect(
       restoreOriginalSearchPreview({
-        headline: `${HIGHLIGHT_START}Lodz${HIGHLIGHT_STOP} and AEsir`,
+        headline: `${HIGHLIGHT_START}Lodz${HIGHLIGHT_STOP} and ${HIGHLIGHT_START}AE${HIGHLIGHT_STOP}sir`,
         maxLength: 1000,
+        normalizedSource: "Lodz and AEsir",
         source: "Łódź and Æsir",
         useUnaccent: true,
       }),
-    ).toBe(`${HIGHLIGHT_START}Łódź${HIGHLIGHT_STOP} and Æsir`);
+    ).toBe(
+      `${HIGHLIGHT_START}Łódź${HIGHLIGHT_STOP} and ${HIGHLIGHT_START}Æ${HIGHLIGHT_STOP}sir`,
+    );
+  });
+
+  test("restores unaccent rules absent from Unicode normalization", () => {
+    expect(
+      restoreOriginalSearchPreview({
+        headline: `${HIGHLIGHT_START}Zazou${HIGHLIGHT_STOP} and ${HIGHLIGHT_START}zydeco${HIGHLIGHT_STOP}`,
+        maxLength: 1000,
+        normalizedSource: "Zazou and zydeco",
+        source: "Ƶazou and ƶydeco",
+        useUnaccent: true,
+      }),
+    ).toBe(
+      `${HIGHLIGHT_START}Ƶazou${HIGHLIGHT_STOP} and ${HIGHLIGHT_START}ƶydeco${HIGHLIGHT_STOP}`,
+    );
+  });
+
+  test("preserves positions across consecutive one-to-one unaccent folds", () => {
+    expect(
+      restoreOriginalSearchPreview({
+        headline: `Zz${HIGHLIGHT_START}Zz${HIGHLIGHT_STOP}`,
+        maxLength: 1000,
+        normalizedSource: "ZzZz",
+        source: "ƵƶƵƶ",
+        useUnaccent: true,
+      }),
+    ).toBe(`Ƶƶ${HIGHLIGHT_START}Ƶƶ${HIGHLIGHT_STOP}`);
   });
 
   test("restores Arabic-folded highlights with original orthography", () => {
@@ -61,6 +91,7 @@ describe("search result highlighting", () => {
       restoreOriginalSearchPreview({
         headline: `قرار ${HIGHLIGHT_START}احمد${HIGHLIGHT_STOP} النهايي`,
         maxLength: 1000,
+        normalizedSource: "قرار احمد النهايي",
         source: "قرار أَحْمَد النهائي",
         useUnaccent: true,
       }),
@@ -72,6 +103,7 @@ describe("search result highlighting", () => {
       restoreOriginalSearchPreview({
         headline: `${HIGHLIGHT_START}first${HIGHLIGHT_STOP} resume.${SEARCH_PREVIEW_FRAGMENT_DELIMITER}قرار ${HIGHLIGHT_START}احمد${HIGHLIGHT_STOP}.`,
         maxLength: 1000,
+        normalizedSource: "first resume. omitted middle. قرار احمد.",
         source: "First résumé. Omitted middle. قرار أَحْمَد.",
         useUnaccent: true,
       }),
@@ -85,6 +117,7 @@ describe("search result highlighting", () => {
       restoreOriginalSearchPreview({
         headline: `${HIGHLIGHT_START}${HIGHLIGHT_STOP}resume approved`,
         maxLength: 1000,
+        normalizedSource: "resume approved",
         source: "Résumé approved",
         useUnaccent: true,
       }),
@@ -96,6 +129,7 @@ describe("search result highlighting", () => {
       restoreOriginalSearchPreview({
         headline: `${SEARCH_PREVIEW_FRAGMENT_DELIMITER}${HIGHLIGHT_START}resume${HIGHLIGHT_STOP}${SEARCH_PREVIEW_FRAGMENT_DELIMITER}`,
         maxLength: 1000,
+        normalizedSource: "resume",
         source: "Résumé",
         useUnaccent: true,
       }),
@@ -107,6 +141,7 @@ describe("search result highlighting", () => {
       restoreOriginalSearchPreview({
         headline: `${HIGHLIGHT_START}first${HIGHLIGHT_STOP}${SEARCH_PREVIEW_FRAGMENT_DELIMITER}missing`,
         maxLength: 1000,
+        normalizedSource: "first. later source.",
         source: "First. Later source.",
         useUnaccent: true,
       }),
@@ -118,6 +153,7 @@ describe("search result highlighting", () => {
       restoreOriginalSearchPreview({
         headline: `${HIGHLIGHT_START}missing${HIGHLIGHT_STOP}`,
         maxLength: 12,
+        normalizedSource: "original source text",
         source: "Original source text",
         useUnaccent: true,
       }),
@@ -129,6 +165,7 @@ describe("search result highlighting", () => {
     const restored = restoreOriginalSearchPreview({
       headline: `${HIGHLIGHT_START}resume approval follows${HIGHLIGHT_STOP}`,
       maxLength: maxPreviewLength,
+      normalizedSource: "resume approval follows",
       source: "Résumé approval follows",
       useUnaccent: true,
     });
@@ -138,6 +175,7 @@ describe("search result highlighting", () => {
       const truncated = restoreOriginalSearchPreview({
         headline: `${HIGHLIGHT_START}resume approval follows${HIGHLIGHT_STOP}`,
         maxLength,
+        normalizedSource: "resume approval follows",
         source: "Résumé approval follows",
         useUnaccent: true,
       });

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { GlobalSearchHit } from "@stll/api/types";
 
 import {
+  getSearchPreviewRenderContent,
   getSearchPreviewDate,
   getSearchPreviewTarget,
   normalizeSearchQuery,
@@ -168,7 +169,10 @@ describe("search preview targets", () => {
   });
 
   test("retains authorized data during background refetches", () => {
-    const data = { content: "Privileged preview" };
+    const data = {
+      type: "plain-text",
+      content: "Privileged preview",
+    } as const;
 
     expect(
       selectAuthorizedSearchPreviewData({
@@ -183,7 +187,7 @@ describe("search preview targets", () => {
   test("withholds cached data until mount reauthorization succeeds", () => {
     expect(
       selectAuthorizedSearchPreviewData({
-        data: { content: "Cached preview" },
+        data: { type: "plain-text", content: "Cached preview" },
         isError: false,
         isFetchedAfterMount: false,
         isFetching: true,
@@ -194,12 +198,40 @@ describe("search preview targets", () => {
   test("withholds stale data after a preview authorization error", () => {
     expect(
       selectAuthorizedSearchPreviewData({
-        data: { content: "Previously authorized preview" },
+        data: {
+          type: "plain-text",
+          content: "Previously authorized preview",
+        },
         isError: true,
         isFetchedAfterMount: true,
         isFetching: false,
       }),
     ).toBeUndefined();
+  });
+
+  test("keeps literal highlight sentinels on the plain-text render path", () => {
+    const content = "<script>literal</script> __HL_START__code__HL_STOP__";
+
+    expect(
+      getSearchPreviewRenderContent({ type: "plain-text", content }),
+    ).toEqual({
+      type: "plain-text",
+      directionText: content,
+      text: content,
+    });
+  });
+
+  test("exposes trusted markup only for highlighted preview content", () => {
+    expect(
+      getSearchPreviewRenderContent({
+        type: "highlighted-html",
+        content: "<mark>résumé</mark>",
+      }),
+    ).toEqual({
+      type: "highlighted-html",
+      directionText: "résumé",
+      html: "<mark>résumé</mark>",
+    });
   });
 
   test("withholds previews while hits belong to the previous query", () => {

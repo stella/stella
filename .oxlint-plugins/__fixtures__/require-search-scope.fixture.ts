@@ -466,9 +466,29 @@ const unsafeAppendedPrivateRead = unsafeAppendAlias.append(
 );
 
 const separatedAppendPrivateRead = sql``;
-separatedAppendPrivateRead.append(sql`SELECT * FROM `);
-// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture conservatively rejects a protected relation split across separate mutations
-separatedAppendPrivateRead.append(sql`search_documents sd`);
+separatedAppendPrivateRead.append(sql`SELECT * FROM search_`);
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture tracks separate mutations whose combined text forms a protected relation
+separatedAppendPrivateRead.append(sql`documents sd`);
+
+const multiAppendScopedPrivateRead = sql``;
+multiAppendScopedPrivateRead.append(
+  sql`SELECT * FROM search_documents sd WHERE true `,
+);
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture conservatively rejects scope spread across separate mutable append statements
+multiAppendScopedPrivateRead.append(entityWorkspaceFilter);
+
+const conditionalScopeAppendPrivateRead = sql`
+  SELECT * FROM search_documents sd WHERE true
+`;
+if (enabled) {
+  // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture rejects a conditionally appended scope that may be absent at runtime
+  conditionalScopeAppendPrivateRead.append(entityWorkspaceFilter);
+}
+
+const scopedSingleAppendPrivateRead = sql``;
+scopedSingleAppendPrivateRead.append(
+  sql`SELECT * FROM search_documents sd WHERE true ${entityWorkspaceFilter}`,
+);
 
 const unrelatedAppendControl = {
   append: (fragment: unknown) => fragment,
@@ -786,6 +806,24 @@ const unsafeScopeInCaseCondition = sql`
 const unsafeScopeInFunctionArgument = sql`
   SELECT * FROM search_documents sd
   WHERE coalesce(true, true ${entityWorkspaceFilter})
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an explicit schema-qualified operator cannot invert an approved scope
+const unsafeExplicitOperatorBeforeScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE FALSE OPERATOR(pg_catalog.=) (true ${entityWorkspaceFilter})
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves an explicit operator after an approved scope is not positive conjunct grammar
+const unsafeExplicitOperatorAfterScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE (true ${entityWorkspaceFilter}) OPERATOR(pg_catalog.=) FALSE
+`;
+
+// oxlint-disable-next-line require-search-scope/require-search-scope -- fixture rejects custom explicit operators rather than assuming their Boolean semantics
+const unsafeCustomExplicitOperatorBeforeScope = sql`
+  SELECT * FROM search_documents sd
+  WHERE TRUE OPERATOR(public.==) (true ${entityWorkspaceFilter})
 `;
 
 // oxlint-disable-next-line require-search-scope/require-search-scope -- fixture proves a postfix false test cannot invert an approved scope
@@ -1513,6 +1551,8 @@ void [
   unsafeRootFromListPrivateRead,
   unsafeAppendedPrivateRead,
   separatedAppendPrivateRead,
+  multiAppendScopedPrivateRead,
+  conditionalScopeAppendPrivateRead,
   unsafeOpaqueReceiverPrivateAppend,
   unsafeOpaqueReceiverImportedAppend,
   unsafeOpaqueRootJoinedPrivateRead,
@@ -1557,6 +1597,9 @@ void [
   unsafeScopeInOrBranch,
   unsafeScopeInCaseCondition,
   unsafeScopeInFunctionArgument,
+  unsafeExplicitOperatorBeforeScope,
+  unsafeExplicitOperatorAfterScope,
+  unsafeCustomExplicitOperatorBeforeScope,
   unsafeScopeTestedAsFalse,
   unsafeScopeComparedToFalse,
   unsafeScopeDistinctFromTrue,
@@ -1648,6 +1691,7 @@ void [
   scopedOrdinaryDoubledQuote,
   scopedEscapeStringRead,
   scopedSplitEscapeStringRead,
+  scopedSingleAppendPrivateRead,
   scopedAppendedPrivateRead,
   publicAppendedRead,
   scopedEscapedKeyword,

@@ -110,7 +110,14 @@ export const repairSearchSemanticTimestamps = async ({
       SELECT
         e.id AS entity_id,
         COALESCE(e.updated_at, e.created_at) AS semantic_updated_at,
-        sd.updated_at AS indexed_updated_at
+        sd.updated_at AS indexed_updated_at,
+        sd.preview_generation,
+        EXISTS (
+          SELECT 1
+          FROM search_document_preview_passages passage
+          WHERE passage.entity_id = sd.entity_id
+            AND passage.generation = sd.preview_generation
+        ) AS has_preview_passage
       FROM entities e
       LEFT JOIN search_documents sd ON sd.entity_id = e.id
       WHERE (${state.cursor}::uuid IS NULL OR e.id > ${state.cursor}::uuid)
@@ -122,6 +129,8 @@ export const repairSearchSemanticTimestamps = async ({
       source_page.entity_id AS "entityId",
       (
         source_page.indexed_updated_at IS NULL
+        OR source_page.preview_generation IS NULL
+        OR NOT source_page.has_preview_passage
         OR source_page.indexed_updated_at
           IS DISTINCT FROM source_page.semantic_updated_at
       ) AS "needsReindex"

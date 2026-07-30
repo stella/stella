@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 
 import { rootDb } from "@/api/db/root";
 import { entities } from "@/api/db/schema";
@@ -13,6 +14,10 @@ import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
+import {
+  buildSearchPreviewPassages,
+  buildSearchPreviewPassageValueRows,
+} from "@/api/lib/search/preview-passages";
 import { fileNameSearchText } from "@/api/lib/search/query";
 
 type SearchDocumentRow = typeof searchDocuments.$inferInsert;
@@ -195,6 +200,11 @@ export const upsertSearchDocument = async (
   }
 
   const regconfig = doc.language ?? "simple";
+  const previewGeneration = randomUUID();
+  const previewPassages = buildSearchPreviewPassages(
+    doc.title,
+    doc.searchableText,
+  );
 
   await rootDb.transaction(async (tx) => {
     const indexed = await tx.execute<IndexedSearchDocument>(sql`
@@ -245,6 +255,31 @@ export const upsertSearchDocument = async (
     if (!indexed.at(0)) {
       return;
     }
+    await tx.execute(sql`
+      DELETE FROM search_document_preview_passages
+      WHERE entity_id = ${doc.entityId}
+    `);
+    await tx.execute(sql`
+      INSERT INTO search_document_preview_passages (
+        entity_id, organization_id, workspace_id,
+        generation, ordinal, content, tsv
+      ) VALUES ${buildSearchPreviewPassageValueRows({
+        generation: previewGeneration,
+        leadingValues: [
+          sql`${doc.entityId}`,
+          sql`${doc.organizationId}`,
+          sql`${doc.workspaceId}`,
+        ],
+        passages: previewPassages,
+        regconfig: sql`${regconfig}`,
+        useUnaccent: true,
+      })}
+    `);
+    await tx.execute(sql`
+      UPDATE search_documents
+      SET preview_generation = ${previewGeneration}::uuid
+      WHERE entity_id = ${doc.entityId}
+    `);
     await syncWorkspaceSearchActivity(doc.workspaceId, tx);
   });
 };

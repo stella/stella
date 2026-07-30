@@ -373,11 +373,38 @@ export const caseLawSearchDocuments = p.pgTable(
     searchableText: p.text("searchable_text").notNull().default(""),
     language: p.varchar("language", { length: 10 }),
     regconfig: p.varchar({ length: 64 }).notNull().default("simple"),
+    previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("case_law_search_docs_tsv_idx").using("gin", table.tsv),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+export const caseLawSearchDocumentPreviewPassages = p.pgTable(
+  "case_law_search_document_preview_passages",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id")
+      .notNull()
+      .references(() => caseLawSearchDocuments.decisionId, {
+        onDelete: "cascade",
+      }),
+    generation: p.uuid().notNull(),
+    ordinal: p.integer().notNull(),
+    content: p.text().notNull(),
+    tsv: tsvector().notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.decisionId, table.generation, table.ordinal],
+      name: "case_law_search_document_preview_passages_pk",
+    }),
+    p
+      .index("case_law_preview_passages_lookup_idx")
+      .on(table.decisionId, table.generation, table.ordinal),
+    p.index("case_law_preview_passages_tsv_idx").using("gin", table.tsv),
     ...globalCaseLawPolicies(),
   ],
 );

@@ -269,6 +269,36 @@ const hasPositiveTerm = (ast: SearchAst, negated = false): boolean => {
   }
 };
 
+const collectPositiveLexemes = (
+  ast: SearchAst,
+  lexemes: Set<string>,
+  negated = false,
+): void => {
+  switch (ast.type) {
+    case "term":
+      if (!negated) {
+        for (const group of ast.lexemes) {
+          for (const lexeme of group) {
+            lexemes.add(lexeme);
+          }
+        }
+      }
+      return;
+    case "not":
+      collectPositiveLexemes(ast.child, lexemes, !negated);
+      return;
+    case "and":
+    case "or":
+      collectPositiveLexemes(ast.left, lexemes, negated);
+      collectPositiveLexemes(ast.right, lexemes, negated);
+      return;
+    default: {
+      const exhaustive: never = ast;
+      return exhaustive;
+    }
+  }
+};
+
 export const validateStellaSearchQuery = (
   query: string,
 ): { valid: true } | { valid: false; reason: string } => {
@@ -495,6 +525,38 @@ export const toAdvancedTsQueryText = (query: string): string | null => {
 
   const ast = parseAdvancedSearchAst(query);
   return ast && hasPositiveTerm(ast) ? astToTsQuery(ast) : null;
+};
+
+/**
+ * Build a locator query for persisted preview passages. The parent projection's
+ * full tsvector applies the user's boolean semantics. Passage selection only
+ * needs the earliest positive occurrence, so positive lexemes are ORed and
+ * negated terms are omitted; conjunctive terms may legitimately live in
+ * different passages of one matching document.
+ */
+export const buildSearchPreviewLocatorTsQuery = (query: string): SQL => {
+  const lexemes = new Set<string>();
+  if (isAdvancedQuery(query.trim())) {
+    const ast = parseAdvancedSearchAst(query, "compatible");
+    if (ast) {
+      collectPositiveLexemes(ast, lexemes);
+    }
+  } else {
+    for (const variant of [query, normalizeFileNameVariantForSearch(query)]) {
+      const trimmed = variant?.trim();
+      if (!trimmed) {
+        continue;
+      }
+      for (const group of toSearchLexemeGroups(trimmed, "compatible")) {
+        for (const lexeme of group) {
+          lexemes.add(lexeme);
+        }
+      }
+    }
+  }
+
+  const locator = [...lexemes].map((lexeme) => `${lexeme}:*`).join(" | ");
+  return sql`to_tsquery('simple', unaccent(${locator}))`;
 };
 
 const toCompatibleAdvancedTsQueryText = (query: string): string | null => {

@@ -29,36 +29,8 @@ const SEARCH_WHITESPACE =
   /^[ \t\n\v\f\r\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+$/u;
 const NORMALIZATION_UNIT =
   /[ \t\n\v\f\r\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+|\P{Mark}\p{Mark}*|\p{Mark}+/gu;
-// PostgreSQL's unaccent.rules transliterates common Latin letters that
-// Unicode NFD leaves intact. Keep the restoration key aligned with the
-// normalized text passed to ts_headline.
-const POSTGRES_UNACCENT_LATIN_RE = /[ÆÐØÞßæðøþĐđĦħıĸŁłŉŊŋŒœŦŧ]/gu;
-const POSTGRES_UNACCENT_LATIN_FOLDS: Readonly<Record<string, string>> = {
-  Æ: "AE",
-  Ð: "D",
-  Ø: "O",
-  Þ: "TH",
-  ß: "ss",
-  æ: "ae",
-  ð: "d",
-  ø: "o",
-  þ: "th",
-  Đ: "D",
-  đ: "d",
-  Ħ: "H",
-  ħ: "h",
-  ı: "i",
-  ĸ: "q",
-  Ł: "L",
-  ł: "l",
-  ŉ: "'n",
-  Ŋ: "N",
-  ŋ: "n",
-  Œ: "OE",
-  œ: "oe",
-  Ŧ: "T",
-  ŧ: "t",
-};
+const ALIGNMENT_ANCHOR_LENGTHS = [8, 4, 2, 1] as const;
+const ALIGNMENT_LOOKAHEAD = 256;
 type SourceSpan = {
   end: number;
   start: number;
@@ -87,13 +59,25 @@ type NormalizedSource = {
 
 const normalizePreviewUnit = (text: string, useUnaccent: boolean): string => {
   const normalized = normalizeSearchText(text);
-  if (!useUnaccent) {
-    return normalized;
+  return useUnaccent ? stripDiacritics(normalized) : normalized;
+};
+
+const appendSourceMapping = (
+  mappings: SourceMapping[],
+  mapping: SourceMapping,
+): void => {
+  const previous = mappings.at(-1);
+  if (
+    mapping.type === "linear" &&
+    previous?.type === "linear" &&
+    previous.normalizedEnd === mapping.normalizedStart &&
+    previous.sourceEnd === mapping.sourceStart
+  ) {
+    previous.normalizedEnd = mapping.normalizedEnd;
+    previous.sourceEnd = mapping.sourceEnd;
+    return;
   }
-  return stripDiacritics(normalized).replace(
-    POSTGRES_UNACCENT_LATIN_RE,
-    (value) => POSTGRES_UNACCENT_LATIN_FOLDS[value] ?? value,
-  );
+  mappings.push(mapping);
 };
 
 const normalizeSourceWithMappings = (
@@ -109,19 +93,8 @@ const normalizeSourceWithMappings = (
     text += normalized;
     const normalizedEnd = text.length;
     const isLinear = normalized.length === span.end - span.start;
-    const previous = mappings.at(-1);
-    if (
-      isLinear &&
-      previous?.type === "linear" &&
-      previous.normalizedEnd === normalizedStart &&
-      previous.sourceEnd === span.start
-    ) {
-      previous.normalizedEnd = normalizedEnd;
-      previous.sourceEnd = span.end;
-      return;
-    }
     if (isLinear) {
-      mappings.push({
+      appendSourceMapping(mappings, {
         type: "linear",
         normalizedStart,
         normalizedEnd,
@@ -130,7 +103,7 @@ const normalizeSourceWithMappings = (
       });
       return;
     }
-    mappings.push({
+    appendSourceMapping(mappings, {
       type: "atomic",
       normalizedStart,
       normalizedEnd,
@@ -164,10 +137,10 @@ const normalizeSourceWithMappings = (
   return { mappings, text };
 };
 
-const sourceSpanAt = (
+const sourceMappingIndexAt = (
   normalizedSource: NormalizedSource,
   normalizedIndex: number,
-): SourceSpan | null => {
+): number | null => {
   if (normalizedIndex < 0 || normalizedIndex >= normalizedSource.text.length) {
     return null;
   }
@@ -188,16 +161,273 @@ const sourceSpanAt = (
       low = middle + 1;
       continue;
     }
-    if (mapping.type === "atomic") {
-      return { start: mapping.sourceStart, end: mapping.sourceEnd };
-    }
-    const offset = normalizedIndex - mapping.normalizedStart;
-    return {
-      start: mapping.sourceStart + offset,
-      end: mapping.sourceStart + offset + 1,
-    };
+    return middle;
   }
   return null;
+};
+
+const sourceSpanAt = (
+  normalizedSource: NormalizedSource,
+  normalizedIndex: number,
+): SourceSpan | null => {
+  const mappingIndex = sourceMappingIndexAt(normalizedSource, normalizedIndex);
+  if (mappingIndex === null) {
+    return null;
+  }
+  const mapping = normalizedSource.mappings.at(mappingIndex);
+  if (!mapping) {
+    return null;
+  }
+  if (mapping.type === "atomic") {
+    return { start: mapping.sourceStart, end: mapping.sourceEnd };
+  }
+  const offset = normalizedIndex - mapping.normalizedStart;
+  return {
+    start: mapping.sourceStart + offset,
+    end: mapping.sourceStart + offset + 1,
+  };
+};
+
+type AlignmentAnchor = {
+  normalizedStart: number;
+  scaffoldStart: number;
+};
+
+const findAlignmentAnchor = ({
+  normalized,
+  normalizedFrom,
+  scaffold,
+  scaffoldFrom,
+}: {
+  normalized: string;
+  normalizedFrom: number;
+  scaffold: string;
+  scaffoldFrom: number;
+}): AlignmentAnchor | null => {
+  for (const anchorLength of ALIGNMENT_ANCHOR_LENGTHS) {
+    const normalizedAnchors = new Map<string, number>();
+    const normalizedLimit = Math.min(
+      normalized.length - anchorLength,
+      normalizedFrom + ALIGNMENT_LOOKAHEAD,
+    );
+    for (let index = normalizedFrom + 1; index <= normalizedLimit; index += 1) {
+      const anchor = normalized.slice(index, index + anchorLength);
+      if (!normalizedAnchors.has(anchor)) {
+        normalizedAnchors.set(anchor, index);
+      }
+    }
+
+    const scaffoldLimit = Math.min(
+      scaffold.length - anchorLength,
+      scaffoldFrom + ALIGNMENT_LOOKAHEAD,
+    );
+    let best: AlignmentAnchor | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (let index = scaffoldFrom + 1; index <= scaffoldLimit; index += 1) {
+      const anchor = scaffold.slice(index, index + anchorLength);
+      const normalizedStart = normalizedAnchors.get(anchor);
+      if (normalizedStart === undefined) {
+        continue;
+      }
+      const distance = index - scaffoldFrom + normalizedStart - normalizedFrom;
+      if (distance < bestDistance) {
+        best = { scaffoldStart: index, normalizedStart };
+        bestDistance = distance;
+      }
+    }
+    if (best) {
+      return best;
+    }
+  }
+
+  const scaffoldSpace = scaffold.indexOf(" ", scaffoldFrom);
+  const normalizedSpace = normalized.indexOf(" ", normalizedFrom);
+  return scaffoldSpace <= scaffoldFrom || normalizedSpace <= normalizedFrom
+    ? null
+    : {
+        scaffoldStart: scaffoldSpace,
+        normalizedStart: normalizedSpace,
+      };
+};
+
+const appendPositionAlignedMappings = ({
+  mappings,
+  normalizedStart,
+  scaffold,
+  scaffoldEnd,
+  scaffoldStart,
+}: {
+  mappings: SourceMapping[];
+  normalizedStart: number;
+  scaffold: NormalizedSource;
+  scaffoldEnd: number;
+  scaffoldStart: number;
+}): void => {
+  const firstMappingIndex = sourceMappingIndexAt(scaffold, scaffoldStart);
+  if (firstMappingIndex === null) {
+    return;
+  }
+  for (
+    let mappingIndex = firstMappingIndex;
+    mappingIndex < scaffold.mappings.length;
+    mappingIndex += 1
+  ) {
+    const mapping = scaffold.mappings.at(mappingIndex);
+    if (!mapping || mapping.normalizedStart >= scaffoldEnd) {
+      break;
+    }
+    const overlapStart = Math.max(mapping.normalizedStart, scaffoldStart);
+    const overlapEnd = Math.min(mapping.normalizedEnd, scaffoldEnd);
+    if (overlapStart >= overlapEnd) {
+      continue;
+    }
+    const alignedNormalizedStart =
+      normalizedStart + overlapStart - scaffoldStart;
+    const alignedNormalizedEnd = normalizedStart + overlapEnd - scaffoldStart;
+    if (mapping.type === "atomic") {
+      appendSourceMapping(mappings, {
+        type: "atomic",
+        normalizedStart: alignedNormalizedStart,
+        normalizedEnd: alignedNormalizedEnd,
+        sourceStart: mapping.sourceStart,
+        sourceEnd: mapping.sourceEnd,
+      });
+      continue;
+    }
+    const sourceOffset = overlapStart - mapping.normalizedStart;
+    appendSourceMapping(mappings, {
+      type: "linear",
+      normalizedStart: alignedNormalizedStart,
+      normalizedEnd: alignedNormalizedEnd,
+      sourceStart: mapping.sourceStart + sourceOffset,
+      sourceEnd: mapping.sourceStart + sourceOffset + overlapEnd - overlapStart,
+    });
+  }
+};
+
+const appendChangedAlignment = ({
+  mappings,
+  normalizedEnd,
+  normalizedStart,
+  scaffold,
+  scaffoldEnd,
+  scaffoldStart,
+}: {
+  mappings: SourceMapping[];
+  normalizedEnd: number;
+  normalizedStart: number;
+  scaffold: NormalizedSource;
+  scaffoldEnd: number;
+  scaffoldStart: number;
+}): void => {
+  if (normalizedStart >= normalizedEnd) {
+    return;
+  }
+  if (normalizedEnd - normalizedStart === scaffoldEnd - scaffoldStart) {
+    appendPositionAlignedMappings({
+      mappings,
+      normalizedStart,
+      scaffold,
+      scaffoldEnd,
+      scaffoldStart,
+    });
+    return;
+  }
+  const fallbackSpan =
+    scaffoldStart >= scaffoldEnd
+      ? (sourceSpanAt(scaffold, scaffoldStart - 1) ??
+        sourceSpanAt(scaffold, scaffoldStart))
+      : null;
+  const firstSpan = fallbackSpan ?? sourceSpanAt(scaffold, scaffoldStart);
+  const lastSpan = fallbackSpan ?? sourceSpanAt(scaffold, scaffoldEnd - 1);
+  if (!firstSpan || !lastSpan) {
+    return;
+  }
+  appendSourceMapping(mappings, {
+    type: "atomic",
+    normalizedStart,
+    normalizedEnd,
+    sourceStart: firstSpan.start,
+    sourceEnd: lastSpan.end,
+  });
+};
+
+const alignDatabaseNormalizedSource = ({
+  normalized,
+  source,
+  useUnaccent,
+}: {
+  normalized: string;
+  source: string;
+  useUnaccent: boolean;
+}): NormalizedSource => {
+  // The database value is authoritative for fragment lookup. The local
+  // normalizer only supplies source offsets; any PostgreSQL-only fold becomes
+  // an atomic changed range, so restoration cannot depend on mirroring
+  // unaccent.rules in JavaScript.
+  const scaffold = normalizeSourceWithMappings(source, useUnaccent);
+  const mappings: SourceMapping[] = [];
+  let normalizedCursor = 0;
+  let scaffoldCursor = 0;
+
+  while (
+    normalizedCursor < normalized.length &&
+    scaffoldCursor < scaffold.text.length
+  ) {
+    const exactNormalizedStart = normalizedCursor;
+    const exactScaffoldStart = scaffoldCursor;
+    while (
+      normalizedCursor < normalized.length &&
+      scaffoldCursor < scaffold.text.length &&
+      normalized.charCodeAt(normalizedCursor) ===
+        scaffold.text.charCodeAt(scaffoldCursor)
+    ) {
+      normalizedCursor += 1;
+      scaffoldCursor += 1;
+    }
+    appendPositionAlignedMappings({
+      mappings,
+      normalizedStart: exactNormalizedStart,
+      scaffold,
+      scaffoldEnd: scaffoldCursor,
+      scaffoldStart: exactScaffoldStart,
+    });
+    if (
+      normalizedCursor >= normalized.length ||
+      scaffoldCursor >= scaffold.text.length
+    ) {
+      break;
+    }
+
+    const anchor = findAlignmentAnchor({
+      normalized,
+      normalizedFrom: normalizedCursor,
+      scaffold: scaffold.text,
+      scaffoldFrom: scaffoldCursor,
+    });
+    const nextNormalized = anchor?.normalizedStart ?? normalized.length;
+    const nextScaffold = anchor?.scaffoldStart ?? scaffold.text.length;
+    appendChangedAlignment({
+      mappings,
+      normalizedEnd: nextNormalized,
+      normalizedStart: normalizedCursor,
+      scaffold,
+      scaffoldEnd: nextScaffold,
+      scaffoldStart: scaffoldCursor,
+    });
+    normalizedCursor = nextNormalized;
+    scaffoldCursor = nextScaffold;
+  }
+
+  appendChangedAlignment({
+    mappings,
+    normalizedEnd: normalized.length,
+    normalizedStart: normalizedCursor,
+    scaffold,
+    scaffoldEnd: scaffold.text.length,
+    scaffoldStart: scaffoldCursor,
+  });
+  return { mappings, text: normalized };
 };
 
 type ParsedHeadlineFragment = {
@@ -358,15 +588,21 @@ const truncateHighlightAware = (text: string, maxLength: number): string => {
 export const restoreOriginalSearchPreview = ({
   headline,
   maxLength,
+  normalizedSource,
   source,
   useUnaccent,
 }: {
   headline: string;
   maxLength: number;
+  normalizedSource: string;
   source: string;
   useUnaccent: boolean;
 }): string => {
-  const normalizedSource = normalizeSourceWithMappings(source, useUnaccent);
+  const alignedSource = alignDatabaseNormalizedSource({
+    normalized: normalizedSource,
+    source,
+    useUnaccent,
+  });
   const restored: string[] = [];
   let searchFrom = 0;
   for (const rawFragment of headline.split(SEARCH_PREVIEW_FRAGMENT_DELIMITER)) {
@@ -376,7 +612,7 @@ export const restoreOriginalSearchPreview = ({
     }
     const fragment = restoreFragment({
       fragment: parsedFragment,
-      normalizedSource,
+      normalizedSource: alignedSource,
       searchFrom,
       source,
     });

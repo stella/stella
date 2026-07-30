@@ -18,12 +18,16 @@ const mockMessagePage = (
 ): void => {
   let pageReads = 0;
   rootDbExecuteMock.mockImplementation(async (query: SQL) => {
-    const isPageRead = new PgDialect()
-      .sqlToQuery(query)
-      .sql.includes("FROM chat_messages");
+    const compiled = new PgDialect().sqlToQuery(query).sql;
+    const isPageRead = compiled.includes("FROM chat_messages");
     if (isPageRead) {
       pageReads += 1;
       return await Promise.resolve(pageReads === 1 ? [...messages] : []);
+    }
+    if (compiled.includes("INSERT INTO chat_thread_search_documents")) {
+      return await Promise.resolve([
+        { threadId: toSafeId<"chatThread">("thread_1") },
+      ]);
     }
     return await Promise.resolve([]);
   });
@@ -84,6 +88,10 @@ describe("chat search indexing", () => {
     expect(sqlText).toContain(
       "WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at",
     );
+    expect(
+      findExecutedQuery("INSERT INTO chat_thread_search_preview_passages"),
+    ).toBeDefined();
+    expect(findExecutedQuery("SET preview_generation =")).toBeDefined();
   });
 
   test("does not let stale upserts overwrite newer message search documents", async () => {

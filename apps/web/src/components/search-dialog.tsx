@@ -110,12 +110,14 @@ import type {
   SearchRecentsScope,
 } from "@/lib/search-recents";
 import {
+  getSearchPreviewRenderContent,
   getSearchPreviewDate,
   getSearchPreviewTarget,
   normalizeSearchQuery,
   selectAuthorizedSearchPreviewData,
   selectSearchPreviewHit,
   shouldShowSearchPreview,
+  stripSearchMarkup,
 } from "@/lib/search.logic";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
@@ -141,6 +143,8 @@ const DEBOUNCE_MS = 300;
 const PREVIEW_HIGHLIGHT_DEBOUNCE_MS = 180;
 const VIRTUAL_HIT_ESTIMATE_PX = 76;
 const VIRTUAL_HIT_OVERSCAN = 6;
+const SEARCH_PREVIEW_CONTENT_CLASS_NAME =
+  "text-foreground/90 [&_mark]:bg-highlight [&_mark]:text-highlight-foreground text-sm leading-6 whitespace-pre-wrap [&_mark]:font-medium";
 
 const KIND_ICONS = {
   contact: UserIcon,
@@ -218,9 +222,6 @@ const isAvailableSearchKind = (
   type: GlobalSearchResultType,
   includePublicLaw: boolean,
 ): boolean => type !== "case-law" || includePublicLaw;
-
-const stripSearchMarkup = (value: string): string =>
-  value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
 
 const extractHighlightedText = (headline: string): string => {
   const start = headline.indexOf("<mark>");
@@ -1410,6 +1411,9 @@ const SearchPreviewContent = ({
     isFetchedAfterMount,
     isFetching,
   });
+  const renderContent = authorizedData
+    ? getSearchPreviewRenderContent(authorizedData)
+    : null;
   const location =
     hit.type === "contact" || hit.type === "case-law"
       ? null
@@ -1487,13 +1491,21 @@ const SearchPreviewContent = ({
             </Button>
           </div>
         )}
-        {authorizedData && (
+        {renderContent?.type === "plain-text" && (
           <div
-            className="text-foreground/90 [&_mark]:bg-highlight [&_mark]:text-highlight-foreground text-sm leading-6 whitespace-pre-wrap [&_mark]:font-medium"
-            dir={contentDir(stripSearchMarkup(authorizedData.content))}
+            className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
+            dir={contentDir(renderContent.directionText)}
+          >
+            {renderContent.text}
+          </div>
+        )}
+        {renderContent?.type === "highlighted-html" && (
+          <div
+            className={SEARCH_PREVIEW_CONTENT_CLASS_NAME}
+            dir={contentDir(renderContent.directionText)}
             dangerouslySetInnerHTML={{
               // safe-html: preview content is server-escaped before the trusted <mark> tags are inserted
-              __html: authorizedData.content,
+              __html: renderContent.html,
             }}
           />
         )}

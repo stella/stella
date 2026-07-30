@@ -3,6 +3,7 @@ import {
   bytea,
   jsonb,
   orgPolicies,
+  orgReadOnlyPolicies,
   organization,
   p,
   pUuid,
@@ -12,6 +13,7 @@ import {
   tsvector,
   user,
   wsPolicies,
+  wsOrganizationReadOnlyPolicies,
 } from "./common";
 import type { AnyPgColumn, TemplateManifest } from "./common";
 import { contacts, workspaces } from "./contacts";
@@ -150,6 +152,7 @@ export const searchDocuments = p.pgTable(
     title: p.text().notNull().default(""),
     searchableText: p.text("searchable_text").notNull().default(""),
     language: p.varchar("language", { length: 10 }),
+    previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
@@ -163,6 +166,38 @@ export const searchDocuments = p.pgTable(
       .on(table.organizationId, table.updatedAt.desc(), table.entityId.desc()),
     p.index("search_documents_tsv_idx").using("gin", table.tsv),
     ...wsPolicies(),
+  ],
+);
+
+export const searchDocumentPreviewPassages = p.pgTable(
+  "search_document_preview_passages",
+  {
+    entityId: safeUuid<"entity">("entity_id")
+      .notNull()
+      .references(() => searchDocuments.entityId, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    generation: p.uuid().notNull(),
+    ordinal: p.integer().notNull(),
+    content: p.text().notNull(),
+    tsv: tsvector().notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.entityId, table.generation, table.ordinal],
+      name: "search_document_preview_passages_pk",
+    }),
+    p
+      .index("search_doc_preview_passages_scope_idx")
+      .on(
+        table.organizationId,
+        table.workspaceId,
+        table.entityId,
+        table.generation,
+        table.ordinal,
+      ),
+    p.index("search_doc_preview_passages_tsv_idx").using("gin", table.tsv),
+    ...wsOrganizationReadOnlyPolicies("search_document_preview_passages"),
   ],
 );
 
@@ -182,6 +217,7 @@ export const contactSearchDocuments = p.pgTable(
       .notNull(),
     title: p.text().notNull().default(""),
     searchableText: p.text("searchable_text").notNull().default(""),
+    previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
@@ -198,6 +234,38 @@ export const contactSearchDocuments = p.pgTable(
   ],
 );
 
+export const contactSearchDocumentPreviewPassages = p.pgTable(
+  "contact_search_document_preview_passages",
+  {
+    contactId: safeUuid<"contact">("contact_id")
+      .notNull()
+      .references(() => contactSearchDocuments.contactId, {
+        onDelete: "cascade",
+      }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    generation: p.uuid().notNull(),
+    ordinal: p.integer().notNull(),
+    content: p.text().notNull(),
+    tsv: tsvector().notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.contactId, table.generation, table.ordinal],
+      name: "contact_search_document_preview_passages_pk",
+    }),
+    p
+      .index("contact_preview_passages_scope_idx")
+      .on(
+        table.organizationId,
+        table.contactId,
+        table.generation,
+        table.ordinal,
+      ),
+    p.index("contact_preview_passages_tsv_idx").using("gin", table.tsv),
+    ...orgReadOnlyPolicies("contact_search_document_preview_passages"),
+  ],
+);
+
 export const workspaceSearchDocuments = p.pgTable(
   "workspace_search_documents",
   {
@@ -209,6 +277,7 @@ export const workspaceSearchDocuments = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     title: p.text().notNull().default(""),
     searchableText: p.text("searchable_text").notNull().default(""),
+    previewGeneration: p.uuid("preview_generation"),
     tsv: tsvector(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
@@ -223,6 +292,40 @@ export const workspaceSearchDocuments = p.pgTable(
       ),
     p.index("workspace_search_docs_tsv_idx").using("gin", table.tsv),
     ...wsPolicies(),
+  ],
+);
+
+export const workspaceSearchDocumentPreviewPassages = p.pgTable(
+  "workspace_search_document_preview_passages",
+  {
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaceSearchDocuments.workspaceId, {
+        onDelete: "cascade",
+      }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    generation: p.uuid().notNull(),
+    ordinal: p.integer().notNull(),
+    content: p.text().notNull(),
+    tsv: tsvector().notNull(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.workspaceId, table.generation, table.ordinal],
+      name: "workspace_search_document_preview_passages_pk",
+    }),
+    p
+      .index("workspace_preview_passages_scope_idx")
+      .on(
+        table.organizationId,
+        table.workspaceId,
+        table.generation,
+        table.ordinal,
+      ),
+    p.index("workspace_preview_passages_tsv_idx").using("gin", table.tsv),
+    ...wsOrganizationReadOnlyPolicies(
+      "workspace_search_document_preview_passages",
+    ),
   ],
 );
 

@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 
 import { rootDb } from "@/api/db/root";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
@@ -28,6 +29,10 @@ import {
   GLOBAL_SEARCH_MAX_OFFSET,
   resolveGlobalSearchNextCursor,
 } from "@/api/lib/search/pagination";
+import {
+  buildSearchPreviewPassages,
+  buildSearchPreviewPassageValueRows,
+} from "@/api/lib/search/preview-passages";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { typedPgArray } from "@/api/lib/search/sql";
 import type {
@@ -1335,34 +1340,61 @@ export const upsertContactSearchDocument = async (
     contact.taxId,
     contact.currency,
   ]);
+  const previewGeneration = randomUUID();
+  const previewPassages = buildSearchPreviewPassages(
+    contact.displayName,
+    searchableText,
+  );
 
-  await rootDb.execute(sql`
-    INSERT INTO contact_search_documents (
-      contact_id, organization_id, contact_type,
-      title, searchable_text, updated_at, tsv
-    ) VALUES (
-      ${contact.id},
-      ${contact.organizationId},
-      ${contact.type},
-      ${contact.displayName},
-      ${searchableText},
-      ${contact.updatedAt},
-      to_tsvector(
-        'simple',
-        unaccent(arabic_normalize(
-          coalesce(${contact.displayName}, '') || ' ' ||
-          coalesce(${searchableText}, '')
-        ))
+  await rootDb.transaction(async (tx) => {
+    await tx.execute(sql`
+      INSERT INTO contact_search_documents (
+        contact_id, organization_id, contact_type,
+        title, searchable_text, updated_at, tsv
+      ) VALUES (
+        ${contact.id},
+        ${contact.organizationId},
+        ${contact.type},
+        ${contact.displayName},
+        ${searchableText},
+        ${contact.updatedAt},
+        to_tsvector(
+          'simple',
+          unaccent(arabic_normalize(
+            coalesce(${contact.displayName}, '') || ' ' ||
+            coalesce(${searchableText}, '')
+          ))
+        )
       )
-    )
-    ON CONFLICT (contact_id) DO UPDATE SET
-      organization_id = EXCLUDED.organization_id,
-      contact_type = EXCLUDED.contact_type,
-      title = EXCLUDED.title,
-      searchable_text = EXCLUDED.searchable_text,
-      updated_at = EXCLUDED.updated_at,
-      tsv = EXCLUDED.tsv
-  `);
+      ON CONFLICT (contact_id) DO UPDATE SET
+        organization_id = EXCLUDED.organization_id,
+        contact_type = EXCLUDED.contact_type,
+        title = EXCLUDED.title,
+        searchable_text = EXCLUDED.searchable_text,
+        updated_at = EXCLUDED.updated_at,
+        tsv = EXCLUDED.tsv
+    `);
+    await tx.execute(sql`
+      DELETE FROM contact_search_document_preview_passages
+      WHERE contact_id = ${contact.id}
+    `);
+    await tx.execute(sql`
+      INSERT INTO contact_search_document_preview_passages (
+        contact_id, organization_id, generation, ordinal, content, tsv
+      ) VALUES ${buildSearchPreviewPassageValueRows({
+        generation: previewGeneration,
+        leadingValues: [sql`${contact.id}`, sql`${contact.organizationId}`],
+        passages: previewPassages,
+        regconfig: sql`'simple'`,
+        useUnaccent: true,
+      })}
+    `);
+    await tx.execute(sql`
+      UPDATE contact_search_documents
+      SET preview_generation = ${previewGeneration}::uuid
+      WHERE contact_id = ${contact.id}
+    `);
+  });
 };
 
 export const upsertWorkspaceSearchDocument = async (
@@ -1454,32 +1486,59 @@ export const upsertWorkspaceSearchDocument = async (
       client?.updatedAt,
       ...workspace.workspaceContacts.map(({ contact }) => contact?.updatedAt),
     ]) ?? workspace.lastActivityAt;
+  const previewGeneration = randomUUID();
+  const previewPassages = buildSearchPreviewPassages(
+    workspace.name,
+    searchableText,
+  );
 
-  await rootDb.execute(sql`
-    INSERT INTO workspace_search_documents (
-      workspace_id, organization_id,
-      title, searchable_text, updated_at, tsv
-    ) VALUES (
-      ${workspace.id},
-      ${workspace.organizationId},
-      ${workspace.name},
-      ${searchableText},
-      ${updatedAt},
-      to_tsvector(
-        'simple',
-        unaccent(arabic_normalize(
-          coalesce(${workspace.name}, '') || ' ' ||
-          coalesce(${searchableText}, '')
-        ))
+  await rootDb.transaction(async (tx) => {
+    await tx.execute(sql`
+      INSERT INTO workspace_search_documents (
+        workspace_id, organization_id,
+        title, searchable_text, updated_at, tsv
+      ) VALUES (
+        ${workspace.id},
+        ${workspace.organizationId},
+        ${workspace.name},
+        ${searchableText},
+        ${updatedAt},
+        to_tsvector(
+          'simple',
+          unaccent(arabic_normalize(
+            coalesce(${workspace.name}, '') || ' ' ||
+            coalesce(${searchableText}, '')
+          ))
+        )
       )
-    )
-    ON CONFLICT (workspace_id) DO UPDATE SET
-      organization_id = EXCLUDED.organization_id,
-      title = EXCLUDED.title,
-      searchable_text = EXCLUDED.searchable_text,
-      updated_at = EXCLUDED.updated_at,
-      tsv = EXCLUDED.tsv
-  `);
+      ON CONFLICT (workspace_id) DO UPDATE SET
+        organization_id = EXCLUDED.organization_id,
+        title = EXCLUDED.title,
+        searchable_text = EXCLUDED.searchable_text,
+        updated_at = EXCLUDED.updated_at,
+        tsv = EXCLUDED.tsv
+    `);
+    await tx.execute(sql`
+      DELETE FROM workspace_search_document_preview_passages
+      WHERE workspace_id = ${workspace.id}
+    `);
+    await tx.execute(sql`
+      INSERT INTO workspace_search_document_preview_passages (
+        workspace_id, organization_id, generation, ordinal, content, tsv
+      ) VALUES ${buildSearchPreviewPassageValueRows({
+        generation: previewGeneration,
+        leadingValues: [sql`${workspace.id}`, sql`${workspace.organizationId}`],
+        passages: previewPassages,
+        regconfig: sql`'simple'`,
+        useUnaccent: true,
+      })}
+    `);
+    await tx.execute(sql`
+      UPDATE workspace_search_documents
+      SET preview_generation = ${previewGeneration}::uuid
+      WHERE workspace_id = ${workspace.id}
+    `);
+  });
 };
 
 type SearchActivityDatabase = {

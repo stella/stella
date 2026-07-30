@@ -111,8 +111,8 @@ const sameSchedule = (
 export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
   await ensureOneShotSchedulerJob({
     description:
-      "Repair legacy entity search timestamps to their semantic update time",
-    id: "search.repairSemanticTimestamps.v1",
+      "Repair entity search timestamps and persisted preview passages",
+    id: "search.repairSemanticTimestamps.v2",
     schedule: {
       type: "interval",
       everyMs: 60_000,

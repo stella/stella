@@ -17,9 +17,8 @@ const resultId = "00000000-0000-4000-8000-000000000004";
 const SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT = 50_000;
 const SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT = 1000;
 const SEARCH_PREVIEW_BODY_CHARACTER_LIMIT = 48_999;
-const SEARCH_PREVIEW_BODY_SAMPLE_COUNT = 5;
-const SEARCH_PREVIEW_BODY_SAMPLE_DIVISOR = SEARCH_PREVIEW_BODY_SAMPLE_COUNT - 1;
 const SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT = 16_000;
+const SEARCH_PREVIEW_NORMALIZED_SOURCE_CHARACTER_LIMIT = 100_000;
 
 const compilePreview = (
   type: GlobalSearchResultType,
@@ -39,40 +38,33 @@ const compilePreview = (
 };
 
 describe("search preview authorization scope", () => {
-  test("bounds source and passage-location work independently of body length", () => {
+  test("bounds selected source and normalization independently of body length", () => {
     const compiled = compilePreview("document");
     expect(compiled.params).toContain(SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT);
     expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHARACTER_LIMIT);
-    expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_SAMPLE_DIVISOR);
     expect(compiled.params).toContain(SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT);
-    expect(compiled.sql).toContain("CASE");
+    expect(compiled.params).toContain(
+      SEARCH_PREVIEW_NORMALIZED_SOURCE_CHARACTER_LIMIT,
+    );
     expect(compiled.sql).not.toContain("generate_series");
-    expect(compiled.sql).toContain("char_length(sd.searchable_text)");
-    expect(compiled.sql).toContain("greatest");
-    expect(compiled.sql).toContain("body_metrics AS MATERIALIZED");
+    expect(compiled.sql).not.toContain("char_length(sd.searchable_text)");
+    expect(compiled.sql).not.toContain("to_tsvector");
+    expect(compiled.sql).toContain("LEFT JOIN LATERAL");
+    expect(compiled.sql).toContain("search_document_preview_passages passage");
+    expect(compiled.sql).toContain("passage.tsv @@");
+    expect(compiled.sql).toContain(
+      "passage.generation = sd.preview_generation",
+    );
     expect(compiled.sql).toContain("VALUES");
-    expect(compiled.sql).toContain("samples(sample_ordinal)");
-    expect(compiled.sql).toContain("to_tsvector");
     expect(compiled.sql).toContain("|| ' ' ||");
-    for (
-      let ordinal = 0;
-      ordinal < SEARCH_PREVIEW_BODY_SAMPLE_COUNT;
-      ordinal += 1
-    ) {
-      expect(compiled.params).toContain(ordinal);
-    }
     expect(
       SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT +
         1 +
         SEARCH_PREVIEW_BODY_CHARACTER_LIMIT,
     ).toBe(SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT);
-    expect(
-      SEARCH_PREVIEW_BODY_SAMPLE_COUNT * SEARCH_PREVIEW_SOURCE_CHARACTER_LIMIT,
-    ).toBe(250_000);
-    expect(compiled.sql.match(/samples\.sample_ordinal/gu)?.length).toBe(1);
   });
 
-  test("uses the same fixed-cardinality locator for every searchable projection", () => {
+  test("uses persisted bounded passages for every searchable projection", () => {
     const resultTypes = [
       "matter",
       "contact",
@@ -88,15 +80,12 @@ describe("search preview authorization scope", () => {
     for (const type of resultTypes) {
       const compiled = compilePreview(type);
       expect(compiled.sql).not.toContain("generate_series");
-      expect(compiled.sql).toContain("body_metrics AS MATERIALIZED");
-      expect(
-        compiled.params.filter(
-          (parameter) =>
-            typeof parameter === "number" &&
-            parameter >= 0 &&
-            parameter < SEARCH_PREVIEW_BODY_SAMPLE_COUNT,
-        ).length,
-      ).toBeGreaterThanOrEqual(SEARCH_PREVIEW_BODY_SAMPLE_COUNT);
+      expect(compiled.sql).not.toContain("char_length(");
+      expect(compiled.sql).not.toContain("to_tsvector");
+      expect(compiled.sql).toContain("_preview_passages passage");
+      expect(compiled.sql).toContain("passage.tsv @@");
+      expect(compiled.sql).toContain("passage.generation =");
+      expect(compiled.sql).toContain("passage.ordinal = 0");
     }
   });
 
@@ -110,7 +99,18 @@ describe("search preview authorization scope", () => {
     expect(compiled.sql).toContain(
       "unaccent(arabic_normalize(preview_source.content))",
     );
+    expect(compiled.sql).toContain(
+      "ts_headline(\n            coalesce(sd.language, 'simple')::regconfig,\n            normalized_preview_source.content",
+    );
     expect(compiled.sql).toContain("'sourceContent'");
+    expect(compiled.sql).toContain(
+      "'normalizedSourceContent',\n        normalized_preview_source.content",
+    );
+    expect(
+      compiled.sql.match(
+        /unaccent\(arabic_normalize\(preview_source\.content\)\)/gu,
+      )?.length,
+    ).toBe(1);
     expect(compiled.sql).toMatch(/'useUnaccent',\s+true/u);
     expect(compiled.params).not.toContain(undefined);
     expect(compiled.sql).not.toContain("public.stella_unaccent");
@@ -136,6 +136,9 @@ describe("search preview authorization scope", () => {
     expect(compiled.sql).not.toContain("ts_headline");
     expect(compiled.sql).not.toContain("@@");
     expect(compiled.sql).not.toContain("generate_series");
+    expect(compiled.sql).not.toContain("_preview_passages");
+    expect(compiled.sql).toContain("'normalizedSourceContent',");
+    expect(compiled.sql).toMatch(/'normalizedSourceContent',\s+NULL/u);
     expect(compiled.params).toContain(SEARCH_PREVIEW_TITLE_CHARACTER_LIMIT);
     expect(compiled.params).toContain(SEARCH_PREVIEW_BODY_CHARACTER_LIMIT);
     expect(compiled.params).toContain(SEARCH_PREVIEW_RESPONSE_CHARACTER_LIMIT);

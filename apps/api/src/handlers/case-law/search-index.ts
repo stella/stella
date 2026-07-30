@@ -1,8 +1,10 @@
-import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gt, notExists, or, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
+  caseLawSearchDocumentPreviewPassages,
   caseLawSearchDocuments,
   caseLawSources,
 } from "@/api/db/schema";
@@ -13,6 +15,10 @@ import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution"
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import {
+  buildSearchPreviewPassages,
+  buildSearchPreviewPassageValueRows,
+} from "@/api/lib/search/preview-passages";
 
 import type { DecisionSection } from "./types";
 
@@ -86,6 +92,8 @@ export const indexDecision = async (
     : sql`arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`;
 
   const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
+  const previewGeneration = randomUUID();
+  const previewPassages = buildSearchPreviewPassages(title, searchableText);
 
   await scopedDb(async (tx) => {
     // Raise statement timeout for the tsvector upsert.
@@ -114,6 +122,26 @@ export const indexDecision = async (
       updated_at = EXCLUDED.updated_at,
       tsv = EXCLUDED.tsv
   `);
+    await tx.execute(sql`
+      DELETE FROM case_law_search_document_preview_passages
+      WHERE decision_id = ${decision.id}
+    `);
+    await tx.execute(sql`
+      INSERT INTO case_law_search_document_preview_passages (
+        decision_id, generation, ordinal, content, tsv
+      ) VALUES ${buildSearchPreviewPassageValueRows({
+        generation: previewGeneration,
+        leadingValues: [sql`${decision.id}`],
+        passages: previewPassages,
+        regconfig: sql`${fts.regconfig}`,
+        useUnaccent: fts.useUnaccent,
+      })}
+    `);
+    await tx.execute(sql`
+      UPDATE case_law_search_documents
+      SET preview_generation = ${previewGeneration}::uuid
+      WHERE decision_id = ${decision.id}
+    `);
   });
 };
 
@@ -195,7 +223,26 @@ export const backfillSearchIndex = async (
       .where(
         and(
           redistributableCaseLawSource,
-          gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),
+          or(
+            gt(caseLawDecisions.updatedAt, caseLawSearchDocuments.updatedAt),
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(caseLawSearchDocumentPreviewPassages)
+                .where(
+                  and(
+                    eq(
+                      caseLawSearchDocumentPreviewPassages.decisionId,
+                      caseLawDecisions.id,
+                    ),
+                    eq(
+                      caseLawSearchDocumentPreviewPassages.generation,
+                      caseLawSearchDocuments.previewGeneration,
+                    ),
+                  ),
+                ),
+            ),
+          ),
         ),
       )
       .orderBy(asc(caseLawDecisions.createdAt))
