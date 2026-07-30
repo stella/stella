@@ -8,10 +8,10 @@
  *    this exists for: a provider makes reasoning mandatory on a model
  *    ("none" disappears from the published values), and a request
  *    built from the stale declaration starts 4xx/5xx-ing.
- *  - Temperature support (`MODEL_TEMPERATURE_SUPPORT`): the declared
- *    boolean must match upstream `temperature`. Sampling-rejecting
- *    models (GPT-5 family, newest Claude) 400 on a `temperature`
- *    override.
+ *  - Temperature policy (`MODEL_TEMPERATURE_POLICIES`): `"emit"` is
+ *    allowed only while upstream positively reports support. `"omit"`
+ *    is always safe because providers may accept but ignore a deprecated
+ *    parameter before eventually rejecting it.
  *
  * Both invariants are CI-enforced along with coverage: every
  * checkable offered model must carry entries in both maps. Models
@@ -21,15 +21,62 @@
  * Extracted from the nightly script so the drift logic is
  * unit-testable; every AI feature's request construction depends on
  * these declarations via `resolveReasoningEffort` and
- * `supportsTemperature`.
+ * `shouldEmitTemperature`.
  */
 
-import type { ReasoningEffort } from "@stll/ai-catalog";
+import { panic } from "better-result";
+
+import type { ReasoningEffort, TemperaturePolicy } from "@stll/ai-catalog";
 
 import type { CatalogEntry } from "./model-catalog-rates";
 
+const GEMINI_TEMPERATURE_OMISSION_CUTOFF = "2026-07-21";
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+
+type ResolveTemperaturePolicyOptions = {
+  modelId: string;
+  provider: string;
+  releaseDate: string | null;
+  upstreamSupportsTemperature: boolean;
+};
+
+/**
+ * Google deprecated sampling parameters for Gemini 3.6 Flash,
+ * Gemini 3.5 Flash-Lite, and future Gemini releases. models.dev still
+ * reports those parameters as accepted while Google ignores them, so the
+ * request policy must be stricter than the upstream acceptance bit.
+ *
+ * https://ai.google.dev/gemini-api/docs/latest-model
+ */
+export const resolveTemperaturePolicy = ({
+  modelId,
+  provider,
+  releaseDate,
+  upstreamSupportsTemperature,
+}: ResolveTemperaturePolicyOptions): TemperaturePolicy => {
+  if (!upstreamSupportsTemperature) {
+    return "omit";
+  }
+
+  const isGoogleModel =
+    provider === "google" ||
+    (provider === "openrouter" && modelId.startsWith("google/gemini-"));
+  if (!isGoogleModel) {
+    return "emit";
+  }
+  if (releaseDate === null || !ISO_DATE_PATTERN.test(releaseDate)) {
+    return panic(
+      `${provider}/${modelId}: Google model lacks a valid release_date; ` +
+        "cannot apply the reviewed temperature policy cutoff",
+    );
+  }
+  return releaseDate >= GEMINI_TEMPERATURE_OMISSION_CUTOFF ? "omit" : "emit";
+};
+
 /** Upstream capability metadata for one model, from models.dev. */
 export type UpstreamCapabilities = {
+  /** ISO release date used by reviewed provider policy cutovers. */
+  releaseDate: string | null;
   /** The model reasons at all (models.dev `reasoning`). */
   reasoning: boolean;
   /**
@@ -87,6 +134,10 @@ export const parseUpstreamCapabilities = (
     effortValues = ["none", ...effortValues];
   }
   return {
+    releaseDate:
+      typeof modelVal["release_date"] === "string"
+        ? modelVal["release_date"]
+        : null,
     reasoning: modelVal["reasoning"],
     effortValues,
     temperature:
@@ -118,7 +169,7 @@ export type ValidateCapabilitiesOptions = {
   /** `${modelsDevProvider}:${modelId}` → upstream capability metadata. */
   upstream: ReadonlyMap<string, UpstreamCapabilities>;
   declaredEfforts: Readonly<Record<string, readonly ReasoningEffort[] | null>>;
-  declaredTemperature: Readonly<Record<string, boolean>>;
+  declaredTemperaturePolicies: Readonly<Record<string, TemperaturePolicy>>;
   /**
    * Model ids declared via `CAPABILITY_OVERRIDES` because the upstream
    * source does not cover them; skipped silently instead of being
@@ -135,7 +186,7 @@ export const validateCapabilities = ({
   checkableProviders,
   upstream,
   declaredEfforts,
-  declaredTemperature,
+  declaredTemperaturePolicies,
   overriddenIds,
 }: ValidateCapabilitiesOptions): CapabilityCheckResult => {
   const failures: CapabilityFailure[] = [];
@@ -158,12 +209,12 @@ export const validateCapabilities = ({
       });
       continue;
     }
-    const temperatureSupport = declaredTemperature[entry.modelId];
-    if (temperatureSupport === undefined) {
+    const temperaturePolicy = declaredTemperaturePolicies[entry.modelId];
+    if (temperaturePolicy === undefined) {
       failures.push({
         entry,
-        label: "NO TEMPERATURE CAPABILITY",
-        detail: "offered model has no MODEL_TEMPERATURE_SUPPORT entry",
+        label: "NO TEMPERATURE POLICY",
+        detail: "offered model has no MODEL_TEMPERATURE_POLICIES entry",
       });
       continue;
     }
@@ -192,18 +243,20 @@ export const validateCapabilities = ({
       });
     }
 
-    if (
-      upstreamCapabilities.temperature !== null &&
-      upstreamCapabilities.temperature !== temperatureSupport
-    ) {
+    const expectedTemperaturePolicy = resolveTemperaturePolicy({
+      modelId: entry.modelId,
+      provider: entry.provider,
+      releaseDate: upstreamCapabilities.releaseDate,
+      upstreamSupportsTemperature: upstreamCapabilities.temperature === true,
+    });
+    if (temperaturePolicy === "emit" && expectedTemperaturePolicy === "omit") {
       failures.push({
         entry,
-        label: "TEMPERATURE DRIFT",
+        label: "UNSAFE TEMPERATURE POLICY",
         detail:
-          `declared temperature support ${String(temperatureSupport)} but ` +
-          `upstream publishes ${String(upstreamCapabilities.temperature)}; ` +
-          "a stale declaration sends (or withholds) a sampling override " +
-          "the model rejects (or accepts)",
+          "declared temperature policy emit but the reviewed provider policy " +
+          "requires omission; a stale declaration may send a rejected, " +
+          "deprecated, or ignored sampling override",
       });
     }
   }

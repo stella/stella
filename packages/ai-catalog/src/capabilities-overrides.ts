@@ -10,7 +10,7 @@ import type { OfferedBYOKModelId, ReasoningEffort } from "./index";
  */
 export type CapabilityOverride = {
   reasoningEfforts: readonly ReasoningEffort[] | null;
-  temperature: boolean;
+  temperatureSupported: boolean;
   /** Why the upstream source cannot answer for this model. Dated. */
   reason: string;
 };
@@ -20,21 +20,21 @@ export const CAPABILITY_OVERRIDES: Partial<
 > = {
   "us.amazon.nova-pro-v1:0": {
     reasoningEfforts: null,
-    temperature: true,
+    temperatureSupported: true,
     reason:
       "2026-07-20: absent from the models.dev amazon-bedrock catalog; " +
       "Bedrock Converse accepts temperature and Nova has no reasoning dial",
   },
   "us.amazon.nova-lite-v1:0": {
     reasoningEfforts: null,
-    temperature: true,
+    temperatureSupported: true,
     reason:
       "2026-07-20: absent from the models.dev amazon-bedrock catalog; " +
       "Bedrock Converse accepts temperature and Nova has no reasoning dial",
   },
   "us.amazon.nova-micro-v1:0": {
     reasoningEfforts: null,
-    temperature: true,
+    temperatureSupported: true,
     reason:
       "2026-07-20: absent from the models.dev amazon-bedrock catalog; " +
       "Bedrock Converse accepts temperature and Nova has no reasoning dial",

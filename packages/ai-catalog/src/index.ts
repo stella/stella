@@ -27,7 +27,7 @@ import * as v from "valibot";
 
 import {
   MODEL_REASONING_EFFORTS,
-  MODEL_TEMPERATURE_SUPPORT,
+  MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
 
 /**
@@ -42,6 +42,10 @@ import {
 export const MODEL_ROLES = ["fast", "chat", "reasoning", "pdf"] as const;
 
 export type ModelRole = (typeof MODEL_ROLES)[number];
+
+export const TEMPERATURE_POLICIES = ["emit", "omit"] as const;
+
+export type TemperaturePolicy = (typeof TEMPERATURE_POLICIES)[number];
 
 export const AI_PROVIDERS = [
   "google",
@@ -114,15 +118,15 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
 export const BYOK_DEFAULT_MODELS = {
   google: {
     fast: "gemini-3.1-flash-lite",
-    chat: "gemini-3.5-flash",
+    chat: "gemini-3.6-flash",
     reasoning: "gemini-3.1-pro-preview",
-    pdf: "gemini-3.5-flash",
+    pdf: "gemini-3.6-flash",
   },
   openrouter: {
     fast: "google/gemini-3.1-flash-lite",
-    chat: "google/gemini-3.5-flash",
+    chat: "google/gemini-3.6-flash",
     reasoning: "google/gemini-3.1-pro-preview",
-    pdf: "google/gemini-3.5-flash",
+    pdf: "google/gemini-3.6-flash",
   },
   openai: {
     fast: "gpt-5.4-nano",
@@ -539,7 +543,7 @@ export type ResolvedReasoningEffort = v.InferOutput<
 // gen:capabilities`).
 export {
   MODEL_REASONING_EFFORTS,
-  MODEL_TEMPERATURE_SUPPORT,
+  MODEL_TEMPERATURE_POLICIES,
 } from "./capabilities.gen";
 
 type OfferedFirstPartyModelId =
@@ -560,17 +564,20 @@ const MODEL_CATALOG_ID_ALIAS_TARGET_BY_ID: Readonly<Record<string, string>> =
 export const normalizeModelCatalogId = (modelId: string): string =>
   MODEL_CATALOG_ID_ALIAS_TARGET_BY_ID[modelId] ?? modelId;
 
-const MODEL_TEMPERATURE_SUPPORT_BY_ID: Readonly<Record<string, boolean>> =
-  MODEL_TEMPERATURE_SUPPORT;
+const MODEL_TEMPERATURE_POLICY_BY_ID: Readonly<
+  Record<string, TemperaturePolicy>
+> = MODEL_TEMPERATURE_POLICIES;
 
 /**
- * Whether a `temperature` override may be sent to this model.
- * Unknown ids resolve to `false` (send nothing; provider default).
- * Callers must never index `MODEL_TEMPERATURE_SUPPORT` directly with
+ * Whether stella should emit a `temperature` override for this model.
+ * This is deliberately stricter than provider acceptance: deprecated
+ * parameters that are accepted but ignored resolve to `false`. Unknown ids
+ * also resolve to `false` (send nothing; provider default). Callers must
+ * never index `MODEL_TEMPERATURE_POLICIES` directly with
  * a runtime string.
  */
-export const supportsTemperature = (modelId: string): boolean =>
-  MODEL_TEMPERATURE_SUPPORT_BY_ID[normalizeModelCatalogId(modelId)] ?? false;
+export const shouldEmitTemperature = (modelId: string): boolean =>
+  MODEL_TEMPERATURE_POLICY_BY_ID[normalizeModelCatalogId(modelId)] === "emit";
 
 const MODEL_REASONING_EFFORTS_BY_ID: Readonly<
   Record<string, readonly ReasoningEffort[] | null>

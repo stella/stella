@@ -24,7 +24,7 @@
  *     OpenRouter's routing API; future non-first-party providers can
  *     fall back to the full upstream model set.
  *  4. Request capabilities — the per-model `MODEL_REASONING_EFFORTS`
- *     and `MODEL_TEMPERATURE_SUPPORT` declarations are compared
+ *     and `MODEL_TEMPERATURE_POLICIES` declarations are compared
  *     against models.dev `reasoning_options` and `temperature`
  *     (first-party and openrouter catalogs), so a model that starts
  *     requiring reasoning, changes effort tiers, or flips temperature
@@ -45,7 +45,7 @@ import {
   FIRST_PARTY_MODEL_PROVIDERS,
   MODEL_RATES,
   MODEL_REASONING_EFFORTS,
-  MODEL_TEMPERATURE_SUPPORT,
+  MODEL_TEMPERATURE_POLICIES,
 } from "@stll/ai-catalog";
 import type { FirstPartyModelProvider } from "@stll/ai-catalog";
 
@@ -512,7 +512,7 @@ const main = async (): Promise<void> => {
       checkableProviders: CAPABILITY_CHECK_PROVIDERS,
       upstream: upstream.capabilityMeta,
       declaredEfforts: MODEL_REASONING_EFFORTS,
-      declaredTemperature: MODEL_TEMPERATURE_SUPPORT,
+      declaredTemperaturePolicies: MODEL_TEMPERATURE_POLICIES,
       overriddenIds: new Set(Object.keys(CAPABILITY_OVERRIDES)),
     });
     for (const failure of capabilityCheck.failures) {

@@ -2,12 +2,15 @@
 // Do not edit by hand: regenerate with
 // `bun --filter @stll/ai-catalog gen:capabilities`.
 //
-// Source: models.dev per-model `reasoning_options` and `temperature`
-// (first-party, openrouter, and amazon-bedrock catalogs), plus dated
-// entries from capabilities-overrides.ts for models the source does
-// not cover. The nightly `model-catalog-upstream` check fails CI when
-// upstream drifts from this file.
-import type { OfferedBYOKModelId, ReasoningEffort } from "./index";
+// Source: models.dev per-model `reasoning_options`, `temperature`, and
+// release dates (first-party, openrouter, and amazon-bedrock catalogs), plus
+// reviewed provider policies and dated entries from capabilities-overrides.ts.
+// The nightly `model-catalog-upstream` check fails CI on unsafe drift.
+import type {
+  OfferedBYOKModelId,
+  ReasoningEffort,
+  TemperaturePolicy,
+} from "./index";
 
 /**
  * Reasoning-effort values each offered model accepts, `null` when the
@@ -69,53 +72,53 @@ export const MODEL_REASONING_EFFORTS = {
 >;
 
 /**
- * Whether each offered model accepts a `temperature` sampling
- * override; models declared `false` reject it with a 400. Consumers
- * must go through `supportsTemperature`.
+ * Whether stella should emit a `temperature` sampling override.
+ * `"omit"` covers rejected, deprecated, and accepted-but-ignored
+ * parameters. Consumers must go through `shouldEmitTemperature`.
  */
-export const MODEL_TEMPERATURE_SUPPORT = {
-  "gemini-3.6-flash": true,
-  "gemini-3.5-flash-lite": true,
-  "gemini-3.1-pro-preview": true,
-  "gemini-3.5-flash": true,
-  "gemini-3.1-flash-lite": true,
-  "google/gemini-3.6-flash": true,
-  "google/gemini-3.5-flash-lite": true,
-  "google/gemini-3.1-pro-preview": true,
-  "google/gemini-3.5-flash": true,
-  "google/gemini-3.1-flash-lite": true,
-  "anthropic/claude-sonnet-5": false,
-  "anthropic/claude-opus-5": true,
-  "anthropic/claude-opus-4.8": true,
-  "anthropic/claude-sonnet-4.6": true,
-  "openai/gpt-5.5": false,
-  "openai/gpt-5.4-mini": false,
-  "gpt-5.6": false,
-  "gpt-5.5": false,
-  "gpt-5.4": false,
-  "gpt-5.4-mini": false,
-  "gpt-5.4-nano": false,
-  "gpt-5.2": false,
-  "claude-sonnet-5": false,
-  "claude-fable-5": false,
-  "claude-opus-5": false,
-  "claude-opus-4-8": false,
-  "claude-opus-4-7": false,
-  "claude-sonnet-4-6": true,
-  "claude-opus-4-6": true,
-  "claude-haiku-4-5-20251001": true,
-  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": true,
-  "us.anthropic.claude-haiku-4-5-20251001-v1:0": true,
-  "us.amazon.nova-pro-v1:0": true,
-  "us.amazon.nova-lite-v1:0": true,
-  "us.amazon.nova-micro-v1:0": true,
-  "openai.gpt-oss-120b-1:0": true,
-  "openai.gpt-oss-20b-1:0": true,
-  "us.deepseek.r1-v1:0": true,
-  "mistral-large-latest": true,
-  "mistral-medium-latest": true,
-  "mistral-small-latest": true,
-  "magistral-medium-latest": true,
-  "magistral-small": true,
-  "pixtral-large-latest": true,
-} as const satisfies Record<OfferedBYOKModelId, boolean>;
+export const MODEL_TEMPERATURE_POLICIES = {
+  "gemini-3.6-flash": "omit",
+  "gemini-3.5-flash-lite": "omit",
+  "gemini-3.1-pro-preview": "emit",
+  "gemini-3.5-flash": "emit",
+  "gemini-3.1-flash-lite": "emit",
+  "google/gemini-3.6-flash": "omit",
+  "google/gemini-3.5-flash-lite": "omit",
+  "google/gemini-3.1-pro-preview": "emit",
+  "google/gemini-3.5-flash": "emit",
+  "google/gemini-3.1-flash-lite": "emit",
+  "anthropic/claude-sonnet-5": "omit",
+  "anthropic/claude-opus-5": "emit",
+  "anthropic/claude-opus-4.8": "emit",
+  "anthropic/claude-sonnet-4.6": "emit",
+  "openai/gpt-5.5": "omit",
+  "openai/gpt-5.4-mini": "omit",
+  "gpt-5.6": "omit",
+  "gpt-5.5": "omit",
+  "gpt-5.4": "omit",
+  "gpt-5.4-mini": "omit",
+  "gpt-5.4-nano": "omit",
+  "gpt-5.2": "omit",
+  "claude-sonnet-5": "omit",
+  "claude-fable-5": "omit",
+  "claude-opus-5": "omit",
+  "claude-opus-4-8": "omit",
+  "claude-opus-4-7": "omit",
+  "claude-sonnet-4-6": "emit",
+  "claude-opus-4-6": "emit",
+  "claude-haiku-4-5-20251001": "emit",
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": "emit",
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0": "emit",
+  "us.amazon.nova-pro-v1:0": "emit",
+  "us.amazon.nova-lite-v1:0": "emit",
+  "us.amazon.nova-micro-v1:0": "emit",
+  "openai.gpt-oss-120b-1:0": "emit",
+  "openai.gpt-oss-20b-1:0": "emit",
+  "us.deepseek.r1-v1:0": "emit",
+  "mistral-large-latest": "emit",
+  "mistral-medium-latest": "emit",
+  "mistral-small-latest": "emit",
+  "magistral-medium-latest": "emit",
+  "magistral-small": "emit",
+  "pixtral-large-latest": "emit",
+} as const satisfies Record<OfferedBYOKModelId, TemperaturePolicy>;
