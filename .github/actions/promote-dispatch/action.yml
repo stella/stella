@@ -1,0 +1,152 @@
+name: Dispatch and watch promote-release
+description: >
+  Dispatch stella-infra's promote-release.yml and block until the run it
+  created finishes. A dispatch that is accepted but later fails must fail the
+  caller: without the watch, the deploy job goes green on "the request was
+  accepted" and the failure only surfaces later as a post-deploy smoke that
+  cannot say what broke.
+
+inputs:
+  token:
+    description: App token with actions:write on the infra repository
+    required: true
+  infra-repo:
+    description: owner/name of the repository hosting the promote workflow
+    required: true
+  workflow-file:
+    description: >
+      Filename of the promote workflow in the infra repository. Overriding it
+      only works for a workflow whose `run-name:` matches the template this
+      action correlates on; see expected_title below.
+    required: false
+    default: promote-release.yml
+  release-ref:
+    description: Release tag (v1.2.3) or synthetic staging ref (main-<short-sha>)
+    required: true
+  target-environment:
+    description: Environment to promote into (staging or production)
+    required: true
+  run-migrations:
+    description: Run database migrations as part of the promotion
+    required: false
+    default: "true"
+  frontend:
+    description: Build and publish the frontend as part of the promotion
+    required: false
+    default: "true"
+  image-digest:
+    description: >
+      Image digest to deploy (sha256:...). Required for synthetic main-<sha>
+      refs, which have no GitHub Release manifest to resolve it from.
+    required: false
+    default: ""
+  git-sha:
+    description: >
+      Full 40-char commit SHA the synthetic ref points at. Only valid with
+      main-<sha> refs; for tagged releases the tag is the checkout target.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Dispatch and watch promote-release.yml
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        INFRA_REPO: ${{ inputs.infra-repo }}
+        WORKFLOW_FILE: ${{ inputs.workflow-file }}
+        RELEASE_REF: ${{ inputs.release-ref }}
+        TARGET_ENV: ${{ inputs.target-environment }}
+        RUN_MIGRATIONS: ${{ inputs.run-migrations }}
+        FRONTEND: ${{ inputs.frontend }}
+        IMAGE_DIGEST: ${{ inputs.image-digest }}
+        GIT_SHA: ${{ inputs.git-sha }}
+      run: |
+        set -euo pipefail
+
+        dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        # Must match the `run-name:` template in
+        # stella-infra/.github/workflows/promote-release.yml. That template is
+        # load-bearing for correlation, not decoration: changing either side
+        # alone leaves the dispatch unmatched and this step failing.
+        expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
+
+        dispatch_args=(
+          -f "ref=main"
+          -f "inputs[release_ref]=${RELEASE_REF}"
+          -f "inputs[target_environment]=${TARGET_ENV}"
+          -f "inputs[run_migrations]=${RUN_MIGRATIONS}"
+          -f "inputs[frontend]=${FRONTEND}"
+        )
+        # Only sent when set: promote-release.yml rejects git_sha on tagged
+        # releases, where a populated value would silently swap the checked-out
+        # source for a different commit.
+        if [[ -n "$IMAGE_DIGEST" ]]; then
+          dispatch_args+=(-f "inputs[image_digest]=${IMAGE_DIGEST}")
+        fi
+        if [[ -n "$GIT_SHA" ]]; then
+          dispatch_args+=(-f "inputs[git_sha]=${GIT_SHA}")
+        fi
+
+        # Call the dispatches endpoint directly. `gh workflow run` first looks
+        # up the workflow by filename against the repo's default branch; with
+        # the narrowly-scoped App token (permission-actions: write only, no
+        # contents/metadata) those implicit lookups can fail silently and kill
+        # the step in well under a second with no output. Any failure here
+        # surfaces as a real HTTP error in the log.
+        echo "Dispatching ${WORKFLOW_FILE} on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
+        gh api --method POST \
+          "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches" \
+          "${dispatch_args[@]}"
+
+        # The dispatches endpoint returns 204 with no body, so the run id has
+        # to be recovered by listing. Match on exact display_title so
+        # concurrent dispatches cannot be confused and prefix-overlapping refs
+        # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10) never collide.
+        echo "Dispatch accepted. Polling for the new run..."
+        run_id=""
+        for attempt in {1..30}; do
+          run_id="$(
+            gh api \
+              "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=10" \
+              --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
+              | head -n 1
+          )"
+          if [[ -n "$run_id" ]]; then
+            echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
+            break
+          fi
+          sleep 2
+        done
+
+        if [[ -z "$run_id" ]]; then
+          echo "::error::Dispatched a promote run but never observed it in the workflow's run list." >&2
+          exit 1
+        fi
+
+        echo "Watching run ${run_id}..."
+        if gh run watch "$run_id" --repo "$INFRA_REPO" --compact --exit-status; then
+          exit 0
+        fi
+
+        run_state="$(
+          gh api "/repos/${INFRA_REPO}/actions/runs/${run_id}" \
+            --jq '[.conclusion, .html_url] | @tsv'
+        )"
+        conclusion="$(cut -f1 <<<"$run_state")"
+        run_url="$(cut -f2 <<<"$run_state")"
+
+        # A cancelled promote stays fatal. When a newer push superseded this
+        # one, the caller is being torn down by its own concurrency group
+        # anyway, so nobody reads this result. When a human cancelled it, the
+        # deploy genuinely did not land, and passing here would hand the
+        # post-deploy smoke a commit that will never arrive: it would then
+        # block for its full readiness window and report the wrong thing.
+        if [[ "$conclusion" == "cancelled" ]]; then
+          echo "::error::Promote run was cancelled (superseded by a newer push, or cancelled manually): ${run_url}" >&2
+          exit 1
+        fi
+
+        echo "::error::Promote run finished with conclusion '${conclusion}': ${run_url}" >&2
+        exit 1

@@ -532,6 +532,14 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Checked out before the promote because the dispatch runs from a local
+      # composite action, and again supplies the verification script below.
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          persist-credentials: false
+
       - name: Mint App token for the infra repo
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -542,73 +550,13 @@ jobs:
           repositories: stella-infra
           permission-actions: write
 
-      - name: Dispatch and watch promote-release.yml
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-          TARGET_ENV: production
-          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
-        run: |
-          set -euo pipefail
-          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          # Must match the `run-name:` template in
-          # stella-infra/.github/workflows/promote-release.yml
-          expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
-
-          # Use the dispatches REST endpoint directly. `gh workflow
-          # run` first looks up the workflow by filename and the
-          # repo's default branch; with the narrowly-scoped App
-          # token (permission-actions: write only, no contents/
-          # metadata) those implicit lookups can fail silently and
-          # kill the step in well under a second with no output.
-          # Calling /dispatches directly uses exactly the
-          # actions:write we have and any failure surfaces as a
-          # real HTTP error in the log.
-          echo "Dispatching promote-release.yml on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
-          gh api --method POST \
-            "/repos/${INFRA_REPO}/actions/workflows/promote-release.yml/dispatches" \
-            -f "ref=main" \
-            -f "inputs[release_ref]=${RELEASE_REF}" \
-            -f "inputs[target_environment]=${TARGET_ENV}" \
-            -f "inputs[run_migrations]=true" \
-            -f "inputs[frontend]=true"
-
-          echo "Dispatch accepted. Polling for the new run..."
-          run_id=""
-          for attempt in {1..30}; do
-            # Match by exact display_title so concurrent dispatches
-            # cannot be confused, and prefix-overlapping refs
-            # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10)
-            # never collide.
-            run_id="$(
-              gh api \
-                "/repos/${INFRA_REPO}/actions/workflows/promote-release.yml/runs?event=workflow_dispatch&per_page=10" \
-                --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
-                | head -n 1
-            )"
-            if [[ -n "$run_id" ]]; then
-              echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
-              break
-            fi
-            sleep 2
-          done
-
-          if [[ -z "$run_id" ]]; then
-            echo "::error::Dispatched a promote run but never observed it in the workflow's run list." >&2
-            exit 1
-          fi
-
-          echo "Watching run ${run_id}..."
-          gh run watch "$run_id" \
-            --repo "$INFRA_REPO" \
-            --compact \
-            --exit-status
-
-      - name: Checkout release verification script
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Promote to production
+        uses: ./.github/actions/promote-dispatch
         with:
-          ref: ${{ needs.resolve.outputs.release_sha }}
-          persist-credentials: false
+          token: ${{ steps.app-token.outputs.token }}
+          infra-repo: ${{ github.repository_owner }}/stella-infra
+          release-ref: ${{ needs.resolve.outputs.release_ref }}
+          target-environment: production
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -634,6 +582,14 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The dispatch runs from a local composite action, so the workspace has
+      # to hold this release's source before it can be resolved.
+      - name: Checkout release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          persist-credentials: false
+
       - name: Mint App token for the infra repo
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -644,53 +600,10 @@ jobs:
           repositories: stella-infra
           permission-actions: write
 
-      - name: Dispatch and watch promote-release.yml (staging)
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-          TARGET_ENV: staging
-          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
-        run: |
-          set -euo pipefail
-          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          # Must match the `run-name:` template in
-          # stella-infra/.github/workflows/promote-release.yml
-          expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
-
-          # See the production variant above for why we call the
-          # dispatches endpoint directly instead of `gh workflow run`.
-          echo "Dispatching promote-release.yml on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
-          gh api --method POST \
-            "/repos/${INFRA_REPO}/actions/workflows/promote-release.yml/dispatches" \
-            -f "ref=main" \
-            -f "inputs[release_ref]=${RELEASE_REF}" \
-            -f "inputs[target_environment]=${TARGET_ENV}" \
-            -f "inputs[run_migrations]=true" \
-            -f "inputs[frontend]=true"
-
-          echo "Dispatch accepted. Polling for the new run..."
-          run_id=""
-          for attempt in {1..30}; do
-            run_id="$(
-              gh api \
-                "/repos/${INFRA_REPO}/actions/workflows/promote-release.yml/runs?event=workflow_dispatch&per_page=10" \
-                --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
-                | head -n 1
-            )"
-            if [[ -n "$run_id" ]]; then
-              echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
-              break
-            fi
-            sleep 2
-          done
-
-          if [[ -z "$run_id" ]]; then
-            echo "::error::Dispatched a promote run but never observed it in the workflow's run list." >&2
-            exit 1
-          fi
-
-          echo "Watching run ${run_id}..."
-          gh run watch "$run_id" \
-            --repo "$INFRA_REPO" \
-            --compact \
-            --exit-status
+      - name: Promote to staging
+        uses: ./.github/actions/promote-dispatch
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          infra-repo: ${{ github.repository_owner }}/stella-infra
+          release-ref: ${{ needs.resolve.outputs.release_ref }}
+          target-environment: staging

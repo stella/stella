@@ -96,29 +96,30 @@ jobs:
           repositories: ${{ vars.STAGING_DEPLOY_REPOSITORY }}
           permission-actions: write
 
-      - name: Request staging deployment
+      - name: Check staging deployment target is configured
         env:
-          GH_TOKEN: ${{ steps.deployment-token.outputs.token }}
           DEPLOY_REPOSITORY: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
           DEPLOY_WORKFLOW: ${{ vars.STAGING_DEPLOY_WORKFLOW }}
-          RELEASE_REF: ${{ steps.ref.outputs.release_ref }}
-          GIT_SHA: ${{ github.sha }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           if [[ -z "${DEPLOY_REPOSITORY#*/}" || -z "$DEPLOY_WORKFLOW" ]]; then
             echo "::error::Staging deployment target is not configured." >&2
             exit 1
           fi
 
-          gh api --method POST \
-            "/repos/${DEPLOY_REPOSITORY}/actions/workflows/${DEPLOY_WORKFLOW}/dispatches" \
-            -f "ref=main" \
-            -f "inputs[release_ref]=${RELEASE_REF}" \
-            -f "inputs[target_environment]=staging" \
-            -f "inputs[image_digest]=${IMAGE_DIGEST}" \
-            -f "inputs[git_sha]=${GIT_SHA}" \
-            -f "inputs[run_migrations]=true" \
-            -f "inputs[frontend]=true"
+      # Watches the dispatched run to completion: a promote that fails after
+      # the dispatch is accepted must fail this job, so verify-staging is
+      # skipped by `needs` instead of blocking on a commit that will never
+      # be served.
+      - name: Deploy to staging
+        uses: ./.github/actions/promote-dispatch
+        with:
+          token: ${{ steps.deployment-token.outputs.token }}
+          infra-repo: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          workflow-file: ${{ vars.STAGING_DEPLOY_WORKFLOW }}
+          release-ref: ${{ steps.ref.outputs.release_ref }}
+          target-environment: staging
+          image-digest: ${{ steps.build.outputs.digest }}
+          git-sha: ${{ github.sha }}
 
   # Post-deploy verification: authenticate via the secret-guarded
   # /smoke/session endpoint and click through the deployed app so a
