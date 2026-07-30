@@ -193,7 +193,8 @@ describe("security canary alert deduplicator", () => {
       claimed = true;
       return [1, 300_000];
     });
-    const createRedis = () => ({ send });
+    const connect = mock(async () => undefined);
+    const createRedis = () => ({ connect, send });
     const claimFromReplicaA = createSecurityCanaryAlertDeduplicator({
       createRedis,
     });
@@ -208,6 +209,7 @@ describe("security canary alert deduplicator", () => {
     expect(await claimFromReplicaA()).toEqual({ status: "suppress" });
     expect(await claimFromReplicaB()).toEqual({ status: "suppress" });
     expect(await claimFromReplicaB()).toEqual({ status: "suppress" });
+    expect(connect).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenCalledWith("EVAL", [
       expect.stringContaining('redis.call("PTTL", KEYS[1])'),
@@ -223,7 +225,7 @@ describe("security canary alert deduplicator", () => {
       send.mock.calls.length === 1 ? [0, 1000] : [1, 300_000],
     );
     const claimAlert = createSecurityCanaryAlertDeduplicator({
-      createRedis: () => ({ send }),
+      createRedis: () => ({ connect: async () => undefined, send }),
       now: () => now,
     });
 
@@ -249,7 +251,7 @@ describe("security canary alert deduplicator", () => {
         }),
     );
     const claimAlert = createSecurityCanaryAlertDeduplicator({
-      createRedis: () => ({ send }),
+      createRedis: () => ({ connect: async () => undefined, send }),
     });
 
     const firstClaim = claimAlert();
@@ -267,6 +269,7 @@ describe("security canary alert deduplicator", () => {
     const redisError = new Error("Redis unavailable");
     const claimAlert = createSecurityCanaryAlertDeduplicator({
       createRedis: () => ({
+        connect: async () => undefined,
         send: async () => {
           throw redisError;
         },
@@ -287,7 +290,7 @@ describe("security canary alert deduplicator", () => {
       throw redisError;
     });
     const claimAlert = createSecurityCanaryAlertDeduplicator({
-      createRedis: () => ({ send }),
+      createRedis: () => ({ connect: async () => undefined, send }),
       now: () => now,
     });
 
@@ -321,5 +324,25 @@ describe("security canary alert deduplicator", () => {
       reason: "deduplication_unavailable",
       error: redisError,
     });
+  });
+
+  test("fails toward alert visibility when Redis cannot connect", async () => {
+    const redisError = new Error("Redis connection unavailable");
+    const send = mock(async () => [1, 300_000]);
+    const claimAlert = createSecurityCanaryAlertDeduplicator({
+      createRedis: () => ({
+        connect: async () => {
+          throw redisError;
+        },
+        send,
+      }),
+    });
+
+    expect(await claimAlert()).toEqual({
+      status: "emit",
+      reason: "deduplication_unavailable",
+      error: redisError,
+    });
+    expect(send).not.toHaveBeenCalled();
   });
 });
