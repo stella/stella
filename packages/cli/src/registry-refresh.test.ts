@@ -59,6 +59,21 @@ const countLeavesOfKind = (
   return count;
 };
 
+const curatedLeavesForTool = (
+  node: RouteNode,
+  toolName: string,
+): Extract<RouteNode, { kind: "leaf" }>["spec"][] => {
+  if (node.kind === "leaf") {
+    return node.spec.toolName === toolName ? [node.spec] : [];
+  }
+  if (node.kind !== "route") {
+    return [];
+  }
+  return Object.values(node.children).flatMap((child) =>
+    curatedLeavesForTool(child, toolName),
+  );
+};
+
 const toolsBody = (names: readonly string[]): string =>
   JSON.stringify({
     result: {
@@ -154,6 +169,34 @@ describe("resolveCommandTree (S5.3)", () => {
       countLeavesOfKind(generatedRouteMap, "capability-leaf"),
     );
     expect(capabilityLeaves).toBeGreaterThan(200);
+  });
+
+  test("a scoped refresh retains baked compound commands for local preflight", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      // Models a default read/search token: tools that require neither grant
+      // are absent from the server's authorization-projected listing.
+      listings: [listing("list_matters")],
+      delta: {
+        added: [],
+        removed: ["save_filled_template"],
+        changed: [],
+      },
+    });
+
+    const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
+    const retained = curatedLeavesForTool(tree, "save_filled_template");
+
+    expect(retained).toHaveLength(2);
+    expect(
+      retained.map(({ additionalScopes, scope }) => ({
+        additionalScopes,
+        scope,
+      })),
+    ).toEqual([
+      { additionalScopes: ["templates"], scope: "documents_write" },
+      { additionalScopes: ["templates"], scope: "documents_write" },
+    ]);
   });
 
   test("provenance pin: a cache for a different origin is ignored (rule 5)", async () => {

@@ -18,6 +18,7 @@ const enqueueImageThumbnailMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
+const broadcastMock = mock();
 
 void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({
@@ -38,6 +39,8 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
   initFileDerivativeWorker: mock(() => undefined),
 }));
 
+void mock.module("@/api/lib/sse", () => ({ broadcast: broadcastMock }));
+
 const { createEntityFromBuffer } = await import("./create-from-buffer");
 
 const organizationId = toSafeId<"organization">(
@@ -55,6 +58,7 @@ describe("createEntityFromBuffer", () => {
     s3WriteMock.mockClear();
     s3DeleteMock.mockClear();
     processExtractionMock.mockClear();
+    broadcastMock.mockClear();
   });
 
   test("rejects oversized documents before database or object-storage work", async () => {
@@ -180,6 +184,10 @@ describe("createEntityFromBuffer", () => {
     expect(insertedEntity).toEqual(
       expect.objectContaining({ parentId, workspaceId }),
     );
+    expect(broadcastMock).toHaveBeenCalledWith(workspaceId, {
+      type: "invalidate-query",
+      data: ["entities", workspaceId],
+    });
   });
 
   test("locks and rechecks the parent in the insert transaction", async () => {
@@ -291,6 +299,7 @@ describe("createEntityFromBuffer", () => {
     }
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
     expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(broadcastMock).not.toHaveBeenCalled();
   });
 });
 

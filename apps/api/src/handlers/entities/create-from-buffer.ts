@@ -27,6 +27,7 @@ import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
+import { broadcast } from "@/api/lib/sse";
 
 type CreateEntityFromBufferInput = {
   scopedDb: ScopedDb;
@@ -289,6 +290,11 @@ export const createEntityFromBuffer = async ({
     userId,
     workspaceId,
   }).catch(captureError);
+
+  broadcast(workspaceId, {
+    type: "invalidate-query",
+    data: ["entities", workspaceId],
+  });
 
   return Result.ok({ entityId, fieldId, fileName });
 };

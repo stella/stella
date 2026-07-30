@@ -83,6 +83,32 @@ const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
   return listings;
 };
 
+/**
+ * A scoped `tools/list` response is an authorization projection, not proof that
+ * a baked tool was removed from the server. Keep every baked compound tool in
+ * the runtime tree so its local all-scopes preflight remains reachable even
+ * when the current token lacks the primary grant. Single-scope tools continue
+ * to follow the live projection, and unknown live tools are preserved.
+ */
+const retainBakedCompoundListings = ({
+  fetched,
+  baked,
+}: {
+  fetched: readonly RegistryToolListing[];
+  baked: readonly RegistryToolListing[];
+}): readonly RegistryToolListing[] => {
+  const names = new Set(fetched.map((listing) => listing.name));
+  const retained = baked.filter((listing) => {
+    const additionalScopes = TOOL_ANNOTATIONS[listing.name]?.additionalScopes;
+    return (
+      !names.has(listing.name) &&
+      additionalScopes !== undefined &&
+      additionalScopes.length > 0
+    );
+  });
+  return retained.length === 0 ? fetched : [...fetched, ...retained];
+};
+
 /** The one-line stderr notice for a diverged registry (spec S5.3). */
 const divergenceNotice = (file: RegistryCacheFile): string =>
   `server registry differs (+${file.delta.added.length} −${file.delta.removed.length} ~${file.delta.changed.length}); see 'stella tools list'\n`;
@@ -123,10 +149,14 @@ export const resolveCommandTree = async ({
   if (entries === null) {
     return { tree: generatedRouteMap };
   }
+  const listings = retainBakedCompoundListings({
+    fetched: file.listings,
+    baked: await loadBakedListings(),
+  });
   const built = Result.try(
     () =>
       buildCliRouteTree({
-        listings: file.listings,
+        listings,
         annotations: TOOL_ANNOTATIONS,
         entries,
       }).tree,

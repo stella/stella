@@ -123,9 +123,9 @@ export const listGatewayMcpToolDefinitions = async ({
 }): Promise<McpToolDefinition[]> => {
   // Visibility is keyed to the primary scope only. Compound tools must remain
   // discoverable when an additional grant is missing so MCP clients can call
-  // them and receive the complete OAuth recovery hint. The CLI also rebuilds
-  // its command tree from this listing; hiding a compound tool here would make
-  // its local multi-scope preflight unreachable after a registry refresh.
+  // them and receive the complete OAuth recovery hint. The CLI independently
+  // retains baked compound commands across scoped registry refreshes, keeping
+  // its local all-scopes preflight reachable when the primary grant is absent.
   const staticDefinitions = listStaticMcpToolDefinitions(mode).filter(
     (definition) =>
       hasGrantedScope(scopes, definition.scope) &&
