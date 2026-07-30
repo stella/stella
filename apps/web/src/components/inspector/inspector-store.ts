@@ -478,6 +478,12 @@ type Actions = {
    * Called from the protected layout when the active route changes.
    */
   closeTabsForRoute: (routeId: string) => void;
+  /**
+   * Drop file and task tabs whose backing entities were deleted.
+   * Keeps the current tab when it survives; otherwise activates the
+   * nearest remaining tab.
+   */
+  closeTabsForEntities: (entityIds: string[]) => void;
   closeTab: (id: string, options?: CloseTabOptions) => void;
   /** Close every tab except the one with the given id. */
   closeOthers: (id: string) => void;
@@ -1562,6 +1568,39 @@ export const useInspectorStore = create<State & Actions>()(
         }
         if (state.activeId !== null && removed.has(state.activeId)) {
           state.activeId = state.tabs.at(0)?.id ?? null;
+        }
+      }),
+
+    closeTabsForEntities: (entityIds) =>
+      set((state) => {
+        const deletedEntityIds = new Set(entityIds);
+        const isDeletedEntityTab = (tab: InspectorTab) =>
+          (tab.type === "pdf" && deletedEntityIds.has(tab.entityId)) ||
+          (tab.type === "task" && deletedEntityIds.has(tab.id));
+
+        const activeIndex = state.tabs.findIndex(
+          (tab) => tab.id === state.activeId,
+        );
+        const activeTab = state.tabs[activeIndex];
+        const nextActiveId =
+          activeTab !== undefined && isDeletedEntityTab(activeTab)
+            ? (state.tabs
+                .slice(activeIndex + 1)
+                .find((tab) => !isDeletedEntityTab(tab))?.id ??
+              state.tabs
+                .slice(0, activeIndex)
+                .findLast((tab) => !isDeletedEntityTab(tab))?.id ??
+              null)
+            : state.activeId;
+
+        state.tabs = state.tabs.filter((tab) => !isDeletedEntityTab(tab));
+        state.activeId = nextActiveId;
+
+        if (
+          state.reviveSuggestion !== null &&
+          isDeletedEntityTab(state.reviveSuggestion)
+        ) {
+          state.reviveSuggestion = null;
         }
       }),
 

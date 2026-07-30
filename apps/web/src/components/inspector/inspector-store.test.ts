@@ -653,6 +653,108 @@ describe("revive suggestion", () => {
   });
 });
 
+describe("closeTabsForEntities", () => {
+  test("clears the inspector when its only file is deleted", () => {
+    useInspectorStore.getState().openFile({
+      id: "field-1",
+      entityId: "entity-1",
+      label: "Contract.pdf",
+      fileName: "Contract.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      workspaceId: "workspace-1",
+    });
+
+    useInspectorStore.getState().closeTabsForEntities(["entity-1"]);
+
+    expect(useInspectorStore.getState().tabs).toEqual([]);
+    expect(useInspectorStore.getState().activeId).toBeNull();
+  });
+
+  test("activates the nearest surviving tab after deleting the active file", () => {
+    useInspectorStore.getState().openFile({
+      id: "field-before",
+      entityId: "entity-before",
+      label: "Before.pdf",
+      fileName: "Before.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      workspaceId: "workspace-1",
+    });
+    useInspectorStore.getState().openFile({
+      id: "field-1",
+      entityId: "entity-1",
+      label: "Contract.pdf",
+      fileName: "Contract.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      workspaceId: "workspace-1",
+    });
+    useInspectorStore.getState().openChat({
+      id: toChatThreadId("thread-after"),
+    });
+    useInspectorStore.getState().openChat({
+      id: toChatThreadId("thread-last"),
+    });
+    useInspectorStore.getState().setActive("field-1");
+
+    useInspectorStore
+      .getState()
+      .closeTabsForEntities(["entity-before", "entity-1"]);
+
+    expect(useInspectorStore.getState().tabs.map((tab) => tab.id)).toEqual([
+      "thread-after",
+      "thread-last",
+    ]);
+    expect(useInspectorStore.getState().activeId).toBe("thread-after");
+  });
+
+  test("closes every deleted entity tab and clears a stale revive suggestion", () => {
+    openFullscreenFileTab();
+    useInspectorStore.getState().closeTab("field-1", { suggestRevive: true });
+    useInspectorStore.getState().openTask({
+      taskId: "entity-2",
+      workspaceId: "workspace-1",
+    });
+    useInspectorStore.getState().openFile({
+      id: "field-3",
+      entityId: "entity-3",
+      label: "Keep.pdf",
+      fileName: "Keep.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      workspaceId: "workspace-1",
+    });
+
+    useInspectorStore.getState().closeTabsForEntities(["entity-1", "entity-2"]);
+
+    expect(useInspectorStore.getState().tabs.map((tab) => tab.id)).toEqual([
+      "field-3",
+    ]);
+    expect(useInspectorStore.getState().activeId).toBe("field-3");
+    expect(useInspectorStore.getState().reviveSuggestion).toBeNull();
+  });
+
+  test("preserves the active tab when another entity is deleted", () => {
+    useInspectorStore.getState().openFile({
+      id: "field-1",
+      entityId: "entity-1",
+      label: "Delete.pdf",
+      fileName: "Delete.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      workspaceId: "workspace-1",
+    });
+    useInspectorStore.getState().openChat({
+      id: toChatThreadId("thread-keep"),
+    });
+
+    useInspectorStore.getState().closeTabsForEntities(["entity-1"]);
+
+    expect(useInspectorStore.getState().activeId).toBe("thread-keep");
+  });
+});
+
 describe("Inspector tab broadcast", () => {
   test("publishes tab set metadata without sharing local active state", () => {
     installFakeBroadcastChannel();
