@@ -26,8 +26,8 @@ const main = async (): Promise<void> => {
   let processedOrganizations = 0;
 
   for (;;) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: the next organization page depends on this batch's final id
     const organizationRows: Iterable<OrganizationRow> =
+      // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: the next organization page depends on this batch's final id
       await rootDb.execute<OrganizationRow>(sql`
         SELECT id
         FROM organization
