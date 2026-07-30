@@ -388,6 +388,22 @@
           },
           "heading": "Samad võimalused MCP kaudu"
         }
+      },
+      "setup": {
+        "clients": {
+          "0": {
+            "body": "Lisa server ühe käsuga:"
+          },
+          "1": {
+            "body": "Lisa jaotises Settings → Connectors kohandatud konnektor koos otspunkti aadressiga."
+          },
+          "2": {
+            "body": "Lisa server faili ~/.cursor/mcp.json:"
+          }
+        },
+        "heading": "Ühenda tehisintellekti agent",
+        "intro": "Suuna mis tahes MCP-ga ühilduv klient allolevale aadressile või oma serveri /mcp teele, kui majutad rakendust stella ise. Esimene ühendus avab sisselogimise brauseris ja agent saab ainult need õigused, mille sa heaks kiidad.",
+        "outro": "Iga klient, kes oskab Streamable HTTP-d koos OAuth 2.1-ga, ühendub samamoodi. Eelistad terminali? Paigalda CLI ja logi sisse:"
       }
     },
     "editor": {

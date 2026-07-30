@@ -388,6 +388,22 @@
           },
           "heading": "The same capabilities through MCP"
         }
+      },
+      "setup": {
+        "clients": {
+          "0": {
+            "body": "Add the server with one command:"
+          },
+          "1": {
+            "body": "In Settings → Connectors, add a custom connector with the endpoint address."
+          },
+          "2": {
+            "body": "Add the server to ~/.cursor/mcp.json:"
+          }
+        },
+        "heading": "Connect an AI agent",
+        "intro": "Point any MCP-compatible client at the endpoint below, or at your own server's /mcp path when self-hosting. The first connection opens a browser sign-in, and the agent holds only the scopes you approve.",
+        "outro": "Any client that speaks Streamable HTTP with OAuth 2.1 connects the same way. Prefer the terminal? Install the CLI and sign in:"
       }
     },
     "editor": {

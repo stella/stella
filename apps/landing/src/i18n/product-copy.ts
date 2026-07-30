@@ -28,3 +28,16 @@ export const getProductCopy = (locale: Locale, slug: ProductSlug) => {
     })),
   };
 };
+
+// Setup prose exists only under the CLI & MCP page, so the generated catalog
+// type carries it on that slug alone; a dedicated accessor keeps the shared
+// resolver's slug-generic indexing intact.
+export const getCliMcpSetupCopy = (locale: Locale) => {
+  const setup = catalogs[locale].products["cli-mcp"].setup;
+  return {
+    clientBodies: listValues(setup.clients).map((client) => client.body),
+    heading: setup.heading,
+    intro: setup.intro,
+    outro: setup.outro,
+  };
+};

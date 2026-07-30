@@ -388,6 +388,22 @@
           },
           "heading": "Te same możliwości przez MCP"
         }
+      },
+      "setup": {
+        "clients": {
+          "0": {
+            "body": "Dodaj serwer jednym poleceniem:"
+          },
+          "1": {
+            "body": "W Settings → Connectors dodaj własny konektor z adresem endpointu."
+          },
+          "2": {
+            "body": "Dodaj serwer do ~/.cursor/mcp.json:"
+          }
+        },
+        "heading": "Podłącz agenta AI",
+        "intro": "Skieruj dowolnego klienta zgodnego z MCP na poniższy adres, a przy self-hostingu na ścieżkę /mcp Twojego serwera. Pierwsze połączenie otwiera logowanie w przeglądarce, a agent AI dostaje tylko te uprawnienia, które zatwierdzisz.",
+        "outro": "Tak samo połączy się każdy klient obsługujący Streamable HTTP z OAuth 2.1. Wolisz terminal? Zainstaluj CLI i zaloguj się:"
       }
     },
     "editor": {

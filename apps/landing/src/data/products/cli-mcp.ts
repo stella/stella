@@ -61,11 +61,6 @@ export const cliMcp: Product = {
         "Read documents, list matters, and inspect templates without switching context",
         "Use paginated, structured results in scripts and automated workflows",
       ],
-      media: {
-        type: "preview",
-        key: "cli-mcp",
-      },
-      frameVariant: "wash",
     },
     {
       heading: "The same capabilities through MCP",
@@ -74,11 +69,6 @@ export const cliMcp: Product = {
         "Keep the capability catalogue and CLI commands generated from one registry",
         "Connect compatible AI agents without copying legal data into another workspace",
       ],
-      media: {
-        type: "preview",
-        key: "cli-mcp-template",
-      },
-      frameVariant: "bloom",
     },
   ],
   faqs: [
@@ -98,6 +88,33 @@ export const cliMcp: Product = {
         "No. The server checks authentication scopes and stella permissions before a capability runs.",
     },
   ],
+  setup: {
+    heading: "Connect an AI agent",
+    intro:
+      "Point any MCP-compatible client at the endpoint below, or at your own server's /mcp path when self-hosting. The first connection opens a browser sign-in, and the agent holds only the scopes you approve.",
+    endpoint: "https://api.stll.app/mcp",
+    clients: [
+      {
+        name: "Claude Code",
+        body: "Add the server with one command:",
+        snippet:
+          "claude mcp add --transport http stella https://api.stll.app/mcp",
+      },
+      {
+        name: "Claude",
+        body: "In Settings → Connectors, add a custom connector with the endpoint address.",
+      },
+      {
+        name: "Cursor",
+        body: "Add the server to ~/.cursor/mcp.json:",
+        snippet:
+          '{\n  "mcpServers": {\n    "stella": { "url": "https://api.stll.app/mcp" }\n  }\n}',
+      },
+    ],
+    outro:
+      "Any client that speaks Streamable HTTP with OAuth 2.1 connects the same way. Prefer the terminal? Install the CLI and sign in:",
+    outroSnippet: "npm i -g @stll/cli\nstella auth login",
+  },
   adjacent: [
     {
       to: "product",

@@ -134,6 +134,20 @@ export type ProductEvidence =
   | { type: "capability"; id: string }
   | { type: "source"; path: string; contains: readonly string[] };
 
+/**
+ * Agent-connection instructions. Prose (heading, intro, bodies, outro) renders
+ * from the catalog like every other product string; client names are
+ * brand-constant literals and snippets are code, so both live only here.
+ */
+export type ProductSetup = {
+  heading: string;
+  intro: string;
+  endpoint: string;
+  clients: readonly { name: string; body: string; snippet?: string }[];
+  outro: string;
+  outroSnippet: string;
+};
+
 export type Product = {
   slug: ProductSlug;
   eyebrow: string;
@@ -161,6 +175,7 @@ export type Product = {
   capabilities: readonly ProductCapability[];
   sections: readonly ProductSection[];
   faqs: readonly ProductFaq[];
+  setup?: ProductSetup;
   adjacent: readonly ProductLink[];
   evidence: readonly ProductEvidence[];
   cta: { heading: string; href: string; label: ProductCtaLabel };

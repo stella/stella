@@ -73,6 +73,18 @@ for (const product of products) {
         bullets: numbered(section.bullets, (bullet) => bullet),
         heading: section.heading,
       })),
+      // Setup prose is catalog-rendered like the rest; client names and code
+      // snippets are not (brand literals and code stay in the registry).
+      ...(product.setup && {
+        setup: {
+          clients: numbered(product.setup.clients, (client) => ({
+            body: client.body,
+          })),
+          heading: product.setup.heading,
+          intro: product.setup.intro,
+          outro: product.setup.outro,
+        },
+      }),
     });
   });
 }

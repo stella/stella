@@ -388,6 +388,22 @@
           },
           "heading": "Ugyanazok a képességek MCP-n keresztül"
         }
+      },
+      "setup": {
+        "clients": {
+          "0": {
+            "body": "A szervert egyetlen paranccsal hozzáadhatja:"
+          },
+          "1": {
+            "body": "A Settings → Connectors alatt adjon hozzá egyéni konnektort a végpont címével."
+          },
+          "2": {
+            "body": "Vegye fel a szervert a ~/.cursor/mcp.json fájlba:"
+          }
+        },
+        "heading": "AI-ügynök csatlakoztatása",
+        "intro": "Irányítson bármilyen MCP-kompatibilis klienst az alábbi címre, saját üzemeltetés esetén pedig a saját szerverének /mcp útvonalára. Az első kapcsolódás böngészős bejelentkezést nyit, és az AI-ügynök csak azokat a jogosultságokat kapja meg, amelyeket Ön jóváhagy.",
+        "outro": "Minden kliens, amely ismeri a Streamable HTTP-t OAuth 2.1-gyel, ugyanígy kapcsolódik. Inkább terminált használna? Telepítse a CLI-t, és jelentkezzen be:"
       }
     },
     "editor": {

@@ -388,6 +388,22 @@
           },
           "heading": "Dieselben Capabilities über MCP"
         }
+      },
+      "setup": {
+        "clients": {
+          "0": {
+            "body": "Fügen Sie den Server mit einem Befehl hinzu:"
+          },
+          "1": {
+            "body": "Fügen Sie unter Settings → Connectors einen eigenen Connector mit der Endpunkt-Adresse hinzu."
+          },
+          "2": {
+            "body": "Tragen Sie den Server in ~/.cursor/mcp.json ein:"
+          }
+        },
+        "heading": "Einen KI-Agenten verbinden",
+        "intro": "Richten Sie einen beliebigen MCP-kompatiblen Client auf den unten stehenden Endpunkt; beim Selbsthosten auf den /mcp-Pfad Ihres eigenen Servers. Die erste Verbindung öffnet eine Anmeldung im Browser, und der KI-Agent erhält nur die Berechtigungen, die Sie freigeben.",
+        "outro": "Jeder Client, der Streamable HTTP mit OAuth 2.1 beherrscht, verbindet sich auf demselben Weg. Lieber im Terminal? Installieren Sie die CLI und melden Sie sich an:"
       }
     },
     "editor": {

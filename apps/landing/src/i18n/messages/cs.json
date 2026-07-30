@@ -388,6 +388,22 @@
           },
           "heading": "Tytéž schopnosti přes MCP"
         }
+      },
+      "setup": {
+        "clients": {
+          "0": {
+            "body": "Server přidáte jedním příkazem:"
+          },
+          "1": {
+            "body": "V Settings → Connectors přidejte vlastní konektor s adresou endpointu."
+          },
+          "2": {
+            "body": "Přidejte server do ~/.cursor/mcp.json:"
+          }
+        },
+        "heading": "Připojte AI agenta",
+        "intro": "Nasměrujte libovolného klienta kompatibilního s MCP na adresu níže; při self-hostingu na cestu /mcp vašeho serveru. První připojení otevře přihlášení v prohlížeči a agent má jen ta oprávnění, která schválíte.",
+        "outro": "Stejně se připojí každý klient, který umí Streamable HTTP s OAuth 2.1. Dáváte přednost terminálu? Nainstalujte CLI a přihlaste se:"
       }
     },
     "editor": {

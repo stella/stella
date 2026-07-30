@@ -388,6 +388,22 @@
           },
           "heading": "Tie patys gebėjimai per MCP"
         }
+      },
+      "setup": {
+        "clients": {
+          "0": {
+            "body": "Serverį pridėsite viena komanda:"
+          },
+          "1": {
+            "body": "Skiltyje Settings → Connectors pridėkite savo jungtį su pirmiau nurodytu adresu."
+          },
+          "2": {
+            "body": "Pridėkite serverį į ~/.cursor/mcp.json:"
+          }
+        },
+        "heading": "Prijunkite DI agentą",
+        "intro": "Nukreipkite bet kurį su MCP suderinamą klientą į toliau nurodytą adresą arba, jei diegiate savame serveryje, į savo serverio /mcp kelią. Pirmasis prisijungimas atveria prisijungimą naršyklėje, o DI agentas gauna tik tuos leidimus, kuriuos patvirtinate.",
+        "outro": "Taip pat prisijungia bet kuris klientas, palaikantis Streamable HTTP su OAuth 2.1. Mieliau dirbate terminale? Įdiekite CLI ir prisijunkite:"
       }
     },
     "editor": {

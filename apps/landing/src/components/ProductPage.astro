@@ -8,7 +8,7 @@ import LandingFooter from "./LandingFooter.astro";
 import { resolveProductLink } from "../data/products/links";
 import type { Product } from "../data/products/types";
 import { defaultLocale, isLocale, locales } from "../i18n/config";
-import { getProductCopy } from "../i18n/product-copy";
+import { getCliMcpSetupCopy, getProductCopy } from "../i18n/product-copy";
 import { getTranslations, localizePath } from "../i18n/utils";
 
 // One template renders any product in any locale: /product/<slug> and
@@ -37,6 +37,32 @@ const sections = copy.sections.map((section, index) => ({
   heading: section.heading,
   media: product.sections.at(index)?.media,
 }));
+
+// Agent-connection instructions: prose from the catalog, endpoint and code
+// snippets from the registry (code is not translated), paired by position
+// like the sections above.
+const setupData = product.setup;
+const setup = setupData
+  ? (() => {
+      const setupCopy = getCliMcpSetupCopy(locale);
+      return {
+        clients: setupData.clients.map((client, index) => ({
+          body:
+            setupCopy.clientBodies.at(index) ??
+            panic(
+              `products.${product.slug}.setup.clients.${index}.body is missing`,
+            ),
+          name: client.name,
+          snippet: client.snippet,
+        })),
+        endpoint: setupData.endpoint,
+        heading: setupCopy.heading,
+        intro: setupCopy.intro,
+        outro: setupCopy.outro,
+        outroSnippet: setupData.outroSnippet,
+      };
+    })()
+  : null;
 
 const adjacent = product.adjacent.map((link, index) => {
   const destination = resolveProductLink(link, locale);
@@ -296,6 +322,65 @@ const faqJsonLd = {
         ))
       }
 
+      {/* ——— Agent setup ——— */}
+      {
+        setup && (
+          <section class="px-6 py-8 lg:py-10">
+            <div
+              class="mx-auto max-w-3xl border-t pt-8"
+              style="border-color: var(--border)"
+            >
+              <h2 class="font-display text-2xl font-medium tracking-tight sm:text-3xl">
+                {setup.heading}
+              </h2>
+              <p
+                class="mt-4 text-sm leading-[1.7]"
+                style="color: var(--muted-foreground)"
+              >
+                {setup.intro}
+              </p>
+              <pre
+                dir="ltr"
+                class="product-setup-snippet mt-4"
+              ><code>{setup.endpoint}</code></pre>
+              <div class="mt-8 space-y-7">
+                {setup.clients.map((client) => (
+                  <div>
+                    <h3 class="font-display text-base font-medium">
+                      {client.name}
+                    </h3>
+                    <p
+                      class="mt-1.5 text-sm leading-[1.7]"
+                      style="color: var(--muted-foreground)"
+                    >
+                      {client.body}
+                    </p>
+                    {client.snippet && (
+                      <pre
+                        dir="ltr"
+                        class="product-setup-snippet mt-3"
+                      ><code>{client.snippet}</code></pre>
+                    )}
+                  </div>
+                ))}
+                <div>
+                  <p
+                    class="text-sm leading-[1.7]"
+                    style="color: var(--muted-foreground)"
+                  >
+                    {setup.outro}
+                  </p>
+                  <pre
+                    dir="ltr"
+                    class="product-setup-snippet mt-3"
+                  ><code>{setup.outroSnippet}</code></pre>
+                </div>
+              </div>
+            </div>
+          </section>
+        )
+      }
+
       {product.slug === "cli-mcp" && <McpProofSection />}
 
       {/* ——— FAQ ——— */}
@@ -395,6 +480,18 @@ const faqJsonLd = {
   </div>
 
   <style>
+    .product-setup-snippet {
+      background: color-mix(in srgb, var(--muted) 55%, transparent);
+      border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+      border-radius: 0.75rem;
+      font-family: var(--font-mono, ui-monospace, monospace);
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      overflow-x: auto;
+      padding: 0.75rem 1rem;
+      white-space: pre;
+    }
+
     .quick-answer {
       background: color-mix(in srgb, var(--card) 80%, transparent);
       border-color: color-mix(in srgb, var(--border) 90%, transparent);
