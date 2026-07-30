@@ -45,8 +45,6 @@ describe("archiveWorkspaceHandler", () => {
     );
 
     expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.status).toBe(409);
-    }
+    expect(result).toMatchObject({ error: { status: 409 } });
   });
 });
