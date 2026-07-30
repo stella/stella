@@ -708,9 +708,69 @@ const parseThemeFilter = (): CaptureTheme | undefined => {
   return theme;
 };
 
+// The captures assert on fixture values the mock model produces (the template
+// scene's drafted Customer Name, the agent scene's reply); a stack wired to a
+// live provider answers differently and slowly, so a scene fails on a paint
+// budget with no hint that the model is the reason. Read the file the dev
+// runner hands its children (dev-runner strips inherited keys the file
+// defines, so the file is authoritative) and refuse to record without it.
+const assertMockAiEnabled = async () => {
+  const envPath = path.join(REPO_ROOT, "apps/api/.env");
+  if (!existsSync(envPath)) {
+    return;
+  }
+  const value = (await readFile(envPath, "utf-8"))
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("USE_MOCK_AI="))
+    ?.slice("USE_MOCK_AI=".length)
+    .replaceAll('"', "")
+    .trim();
+  if (value === "true") {
+    return;
+  }
+  throw new Error(
+    `apps/api/.env has USE_MOCK_AI=${value ?? "(unset)"}; the captures film ` +
+      "the mock model's fixture values (apps/api/src/dev/register-mock-ai.ts), " +
+      "so a live provider makes scenes nondeterministic and slow. Set " +
+      'USE_MOCK_AI="true" and restart the stack before recording.',
+  );
+};
+
+// Vite dev compiles a route's module graph on first request, and that route's
+// first data fetch is uncached, so an opening take on a cold route routinely
+// misses a scene's paint budget while nothing is wrong with the build. One
+// warm pass over every distinct scene route pays that cost before any footage
+// is recorded, and it films nothing, so a slow warm hit costs only time.
+const warmSceneRoutes = async ({
+  browser,
+  cookies,
+  views,
+}: {
+  browser: Browser;
+  cookies: Awaited<ReturnType<typeof authenticate>>;
+  views: MarketingViewRoutes;
+}) => {
+  const context = await browser.newContext({
+    baseURL: WEB_URL,
+    viewport: NAV_VIEWPORT,
+  });
+  await context.addCookies(cookies);
+  const page = await context.newPage();
+  configurePage(page);
+  for (const route of new Set(captures.map((capture) => capture.path(views)))) {
+    // eslint-disable-next-line no-await-in-loop -- one page walks the routes in turn; the point is to compile and fetch each before recording starts
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+    // eslint-disable-next-line no-await-in-loop -- lets the route's own queries settle, which is the cost being paid up front
+    await page.waitForLoadState("networkidle").catch(() => undefined);
+  }
+  await context.close();
+};
+
 const main = async () => {
   const captureFilter = parseCaptureFilter();
   const themeFilter = parseThemeFilter();
+  await assertMockAiEnabled();
 
   await mkdir(MEDIA_DIR, { recursive: true });
   await rm(RAW_VIDEO_DIR, { force: true, recursive: true });
@@ -731,6 +791,7 @@ const main = async () => {
   });
   cookies = await selectMarketingOrganization(browser, cookies);
   const views = await resolveMarketingViewRoutes(browser, cookies);
+  await warmSceneRoutes({ browser, cookies, views });
 
   for (const theme of ["light", "dark"] as const) {
     if (themeFilter && theme !== themeFilter) {
@@ -740,8 +801,29 @@ const main = async () => {
       if (captureFilter && !captureFilter.has(capture.captureId)) {
         continue;
       }
+      // One retry per take. Every readiness wait here is a real assertion, so
+      // a retry cannot ship a bad frame; what it absorbs is the marginal
+      // first hit (a route the warm pass compiled but whose data was still
+      // settling), which would otherwise throw away an entire 28-file run.
+      // The retry is announced so a scene that always needs it stays visible
+      // instead of hiding behind a green run.
       // eslint-disable-next-line no-await-in-loop -- recordings are captured one scene at a time; a shared browser cannot record overlapping scenes
-      await recordCapture({ browser, capture, cookies, theme, views });
+      await recordCapture({ browser, capture, cookies, theme, views }).catch(
+        async (error: unknown) => {
+          process.stdout.write(
+            `retrying ${capture.captureId} (${theme}) after: ${
+              error instanceof Error ? error.message.split("\n")[0] : "unknown"
+            }\n`,
+          );
+          return await recordCapture({
+            browser,
+            capture,
+            cookies,
+            theme,
+            views,
+          });
+        },
+      );
       recordedEntries.push({
         captureId: capture.captureId,
         theme,
