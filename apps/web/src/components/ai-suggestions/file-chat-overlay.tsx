@@ -2129,6 +2129,12 @@ const FileChatOverlayInner = ({
           dock={
             <ChatComposerDock
               data={data}
+              models={{
+                activeOrganizationId,
+                threadRef,
+                selectedModel: data.model,
+                selectModel: modelSelection.selectModel,
+              }}
               onNewThread={hasMessages ? startNewThread : null}
               leadingContext={
                 // The matter control is a real picker on every surface, so

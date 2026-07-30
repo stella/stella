@@ -55,7 +55,7 @@ const MODE_ICON = {
 } as const satisfies Record<ChatModelMode, LucideIcon>;
 
 type ChatModelModeSelectorProps = {
-  disabled: boolean;
+  disabled?: boolean;
   models: ComposerModelsMenuProps;
 };
 
@@ -65,7 +65,7 @@ type ChatModelModeSelectorProps = {
  * configuration changes, while pinned exact models retain their identity.
  */
 export const ChatModelModeSelector = ({
-  disabled,
+  disabled = false,
   models,
 }: ChatModelModeSelectorProps) => {
   const t = useTranslations();

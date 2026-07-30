@@ -8,6 +8,8 @@ import { Button } from "@stll/ui/components/button";
 import type { ChatComposerDockData } from "@/components/chat/chat-composer-dock-controls";
 import { resolveChatComposerDockControls } from "@/components/chat/chat-composer-dock-controls";
 import { ChatContextMeter } from "@/components/chat/chat-context-meter";
+import { ChatModelModeSelector } from "@/components/chat/chat-model-mode-selector";
+import type { ComposerModelsMenuProps } from "@/components/chat/composer-plus-menu";
 import { ComposerStatusRow } from "@/components/chat/composer-status-row";
 import Tooltip from "@/components/tooltip";
 import { ChatAnonymizedToggle } from "@/features/chat/components/chat-anonymized-toggle";
@@ -46,6 +48,8 @@ type ChatComposerDockProps = {
    * controls so callers never reopen a free-form status row.
    */
   endExtras?: ReactNode | undefined;
+  /** Model picker rendered beside the context percentage. */
+  models?: ComposerModelsMenuProps | undefined;
   /** Row positioning override, forwarded to `ComposerStatusRow`. */
   className?: string | undefined;
 };
@@ -53,7 +57,7 @@ type ChatComposerDockProps = {
 // The one organism that assembles a chat surface's status row. It
 // derives the standard controls from the thread session itself and
 // renders them through `ComposerStatusRow` in the canonical order
-// (context -> globe -> shield -> extras -> new chat -> meter), so every
+// (context -> globe -> shield -> extras -> new chat -> model -> meter), so every
 // surface gets the full set by construction and cannot omit one.
 //
 // Anonymize source: the shield reads and writes the shared per-thread
@@ -67,6 +71,7 @@ export const ChatComposerDock = ({
   onNewThread,
   leadingContext,
   endExtras,
+  models,
   className,
 }: ChatComposerDockProps) => {
   const t = useTranslations();
@@ -95,6 +100,7 @@ export const ChatComposerDock = ({
               }
             />
           )}
+          {models && <ChatModelModeSelector models={models} />}
           {/* The meter renders on every surface: it shows an empty 0% ring
               for a brand-new thread (context null) and fills in once an
               estimate lands. */}
