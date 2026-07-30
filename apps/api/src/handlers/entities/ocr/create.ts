@@ -13,6 +13,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
+import { isDocumentOcrProviderConfigured } from "@/api/lib/document-processing-provider";
 import {
   persistManualOcrRun,
   type ManualOcrSource,
@@ -57,6 +58,7 @@ type RequestManualOcrProps = {
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   persistRun?: typeof persistManualOcrRun;
+  providerAvailable?: () => boolean;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -156,11 +158,21 @@ export const requestManualOcrHandler = async function* ({
   fieldId,
   organizationId,
   persistRun = persistManualOcrRun,
+  providerAvailable = isDocumentOcrProviderConfigured,
   recordAuditEvent,
   safeDb,
   userId,
   workspaceId,
 }: RequestManualOcrProps): SafeHandlerGenerator<ManualOcrResponse> {
+  if (!providerAvailable()) {
+    return Result.err(
+      new HandlerError({
+        status: 503,
+        message: "Document processing is not configured",
+      }),
+    );
+  }
+
   const source = yield* Result.await(
     findManualOcrSource({ entityId, fieldId, safeDb, workspaceId }),
   );

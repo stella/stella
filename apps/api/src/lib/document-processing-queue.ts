@@ -4,11 +4,11 @@ import {
   and,
   asc,
   eq,
+  gt,
   inArray,
   isNull,
   lt,
   lte,
-  ne,
   notExists,
   or,
   sql,
@@ -28,7 +28,7 @@ import {
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { detached } from "@/api/lib/detached";
 import {
@@ -43,7 +43,10 @@ import {
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey } from "@/api/lib/file-key";
 import { logger } from "@/api/lib/observability/logger";
-import { createBullMqConnection } from "@/api/lib/redis-client";
+import {
+  createBullMqConnection,
+  createRedisClient,
+} from "@/api/lib/redis-client";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { broadcast } from "@/api/lib/sse";
@@ -58,6 +61,7 @@ const ENQUEUE_FAILURE_RETRY_MS = 30_000;
 const WORKER_LEASE_TIMEOUT_MS = 40 * 60 * 1000;
 const WORKER_LEASE_HEARTBEAT_MS = 5 * 60 * 1000;
 const REPAIR_SETTLE_DELAY_MS = 5 * 60 * 1000;
+const REPAIR_SCAN_CURSOR_KEY = "document-processing:repair-scan-cursor:v1";
 const AUTOMATIC_OCR_MAX_ATTEMPTS = 5;
 const AUTOMATIC_OCR_RETRY_BASE_DELAY_MS = 30_000;
 const AUTOMATIC_OCR_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
@@ -292,35 +296,6 @@ const persistOcrProjection = async ({
   textLength: number;
 }): Promise<boolean> =>
   await rootDb.transaction(async (tx) => {
-    const ownedClaims = await tx
-      .update(documentProcessingRuns)
-      .set({ claimedAt: new Date(), updatedAt: new Date() })
-      .where(
-        and(
-          eq(documentProcessingRuns.id, run.id),
-          eq(documentProcessingRuns.status, "running"),
-          eq(documentProcessingRuns.claimedBy, claimToken),
-        ),
-      )
-      .returning({ id: documentProcessingRuns.id });
-    if (!ownedClaims.at(0)) {
-      return false;
-    }
-
-    // Lock the workspace before persisting. Archive/delete takes the same
-    // lock before sealing a workspace, so an inactive workspace is a durable
-    // cancellation rather than a stale-source outcome.
-    const workspaceRows = await tx
-      .select({ status: workspaces.status })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.id, run.workspaceId),
-          eq(workspaces.organizationId, run.organizationId),
-        ),
-      )
-      .limit(1)
-      .for("update");
     const lockedRows = await tx
       .select({
         content: fields.content,
@@ -353,6 +328,35 @@ const persistOcrProjection = async ({
       )
       .limit(1)
       .for("update");
+    // Keep every OCR path on entity -> workspace -> run. Version replacement,
+    // workspace sealing, manual requests, and projection persistence can then
+    // contend without forming a lock cycle.
+    const workspaceRows = await tx
+      .select({ status: workspaces.status })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, run.workspaceId),
+          eq(workspaces.organizationId, run.organizationId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    const ownedClaims = await tx
+      .update(documentProcessingRuns)
+      .set({ claimedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(documentProcessingRuns.id, run.id),
+          eq(documentProcessingRuns.status, "running"),
+          eq(documentProcessingRuns.claimedBy, claimToken),
+        ),
+      )
+      .returning({ id: documentProcessingRuns.id });
+    if (!ownedClaims.at(0)) {
+      return false;
+    }
+
     const source = lockedRows.at(0) ?? null;
     const sourceState = classifyOcrProjectionSource({
       run,
@@ -773,7 +777,7 @@ const earlierFileFields = alias(
 );
 
 type AutomaticOcrCandidate = {
-  content: FieldContent;
+  content: Extract<FieldContent, { type: "file" }>;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
@@ -781,51 +785,205 @@ type AutomaticOcrCandidate = {
   workspaceId: SafeId<"workspace">;
 };
 
-const reviveRepairableOcrRun = async (
+let reconciliationRedisClient: ReturnType<typeof createRedisClient> | null =
+  null;
+
+const getReconciliationRedis = () => {
+  reconciliationRedisClient ??= createRedisClient();
+  return reconciliationRedisClient;
+};
+
+const readRepairScanCursor = async (): Promise<SafeId<"field"> | null> => {
+  const cursor = await getReconciliationRedis().get(REPAIR_SCAN_CURSOR_KEY);
+  return cursor === null ? null : toSafeId<"field">(cursor);
+};
+
+const writeRepairScanCursor = async (
+  cursor: SafeId<"field"> | null,
+): Promise<void> => {
+  if (cursor === null) {
+    await getReconciliationRedis().del(REPAIR_SCAN_CURSOR_KEY);
+    return;
+  }
+  await getReconciliationRedis().set(REPAIR_SCAN_CURSOR_KEY, cursor);
+};
+
+const isSameAutomaticOcrSource = (
   candidate: AutomaticOcrCandidate,
-): Promise<SafeId<"documentProcessingRun"> | null> => {
-  if (!isAutomaticOcrRepairCandidate(candidate.content)) {
-    return null;
+  field: {
+    content: FieldContent;
+    entityVersionId: SafeId<"entityVersion">;
+    id: SafeId<"field">;
+    workspaceId: SafeId<"workspace">;
+  },
+): boolean =>
+  isAutomaticOcrRepairCandidate(field.content) &&
+  field.id === candidate.fieldId &&
+  field.workspaceId === candidate.workspaceId &&
+  field.entityVersionId === candidate.entityVersionId &&
+  field.content.id === candidate.content.id &&
+  field.content.sha256Hex === candidate.content.sha256Hex;
+
+const persistRepairableOcrRuns = async (
+  candidates: AutomaticOcrCandidate[],
+): Promise<SafeId<"documentProcessingRun">[]> => {
+  if (candidates.length === 0) {
+    return [];
   }
 
-  const revived = await rootDb
-    .update(documentProcessingRuns)
-    .set({
-      errorAt: null,
-      errorCode: null,
-      finishedAt: null,
-      nextAttemptAt: null,
-      requestedBy: null,
-      requestSource: "repair",
-      status: "queued",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(documentProcessingRuns.organizationId, candidate.organizationId),
-        eq(documentProcessingRuns.workspaceId, candidate.workspaceId),
-        eq(documentProcessingRuns.entityId, candidate.entityId),
-        eq(documentProcessingRuns.entityVersionId, candidate.entityVersionId),
-        eq(documentProcessingRuns.fieldId, candidate.fieldId),
-        eq(documentProcessingRuns.sourceFileId, candidate.content.id),
-        eq(documentProcessingRuns.sourceSha256Hex, candidate.content.sha256Hex),
-        eq(documentProcessingRuns.kind, "ocr"),
-        eq(documentProcessingRuns.processorVersion, 1),
-        or(
-          eq(documentProcessingRuns.status, "succeeded"),
-          and(
-            inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
-            eq(documentProcessingRuns.status, "cancelled"),
-            inArray(
-              documentProcessingRuns.errorCode,
-              REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES,
-            ),
+  return await rootDb.transaction(async (tx) => {
+    const lockedEntities = await tx
+      .select({
+        currentVersionId: entities.currentVersionId,
+        id: entities.id,
+        readOnly: entities.readOnly,
+        workspaceId: entities.workspaceId,
+      })
+      .from(entities)
+      .where(
+        and(
+          inArray(
+            entities.id,
+            candidates.map(({ entityId }) => entityId),
+          ),
+          inArray(
+            entities.workspaceId,
+            candidates.map(({ workspaceId }) => workspaceId),
           ),
         ),
+      )
+      .orderBy(asc(entities.id))
+      .for("update");
+    const lockedEntityById = new Map(
+      lockedEntities.map((entity) => [entity.id, entity]),
+    );
+    const currentFields = await tx
+      .select({
+        content: fields.content,
+        entityVersionId: fields.entityVersionId,
+        id: fields.id,
+        workspaceId: fields.workspaceId,
+      })
+      .from(fields)
+      .where(
+        and(
+          inArray(
+            fields.id,
+            candidates.map(({ fieldId }) => fieldId),
+          ),
+          inArray(
+            fields.workspaceId,
+            candidates.map(({ workspaceId }) => workspaceId),
+          ),
+        ),
+      );
+    const currentFieldById = new Map(
+      currentFields.map((field) => [field.id, field]),
+    );
+    const currentCandidates = candidates.filter((candidate) => {
+      const entity = lockedEntityById.get(candidate.entityId);
+      const field = currentFieldById.get(candidate.fieldId);
+      return (
+        entity?.currentVersionId === candidate.entityVersionId &&
+        entity.workspaceId === candidate.workspaceId &&
+        !entity.readOnly &&
+        field !== undefined &&
+        isSameAutomaticOcrSource(candidate, field)
+      );
+    });
+    if (currentCandidates.length === 0) {
+      return [];
+    }
+
+    const projectionScope = or(
+      ...currentCandidates.map((candidate) =>
+        and(
+          eq(extractedContent.organizationId, candidate.organizationId),
+          eq(extractedContent.workspaceId, candidate.workspaceId),
+          eq(extractedContent.entityId, candidate.entityId),
+          eq(extractedContent.sourceEntityVersionId, candidate.entityVersionId),
+          eq(extractedContent.sourceFieldId, candidate.fieldId),
+          eq(extractedContent.sourceFileId, candidate.content.id),
+          eq(extractedContent.sourceSha256Hex, candidate.content.sha256Hex),
+        ),
       ),
-    )
-    .returning({ id: documentProcessingRuns.id });
-  return revived.at(0)?.id ?? null;
+    );
+    const projectedRows = projectionScope
+      ? await tx
+          .select({ entityId: extractedContent.entityId })
+          .from(extractedContent)
+          .where(projectionScope)
+      : [];
+    const projectedEntityIds = new Set(
+      projectedRows.map(({ entityId }) => entityId),
+    );
+    const values = currentCandidates
+      .filter(({ entityId }) => !projectedEntityIds.has(entityId))
+      .map(
+        (candidate) =>
+          ({
+            id: createSafeId<"documentProcessingRun">(),
+            entityId: candidate.entityId,
+            entityVersionId: candidate.entityVersionId,
+            fieldId: candidate.fieldId,
+            kind: "ocr",
+            organizationId: candidate.organizationId,
+            processorVersion: 1,
+            requestedBy: null,
+            requestSource: "repair",
+            sourceFileId: candidate.content.id,
+            sourceSha256Hex: candidate.content.sha256Hex,
+            workspaceId: candidate.workspaceId,
+          }) satisfies typeof documentProcessingRuns.$inferInsert,
+      );
+    if (values.length === 0) {
+      return [];
+    }
+
+    const repairableConflict = or(
+      eq(documentProcessingRuns.status, "succeeded"),
+      and(
+        inArray(documentProcessingRuns.requestSource, ["upload", "repair"]),
+        eq(documentProcessingRuns.status, "cancelled"),
+        inArray(
+          documentProcessingRuns.errorCode,
+          REVERSIBLE_AUTOMATIC_OCR_CANCELLATION_CODES,
+        ),
+      ),
+    );
+    if (!repairableConflict) {
+      return [];
+    }
+
+    const queuedAt = new Date();
+    const queued = await tx
+      .insert(documentProcessingRuns)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [
+          documentProcessingRuns.organizationId,
+          documentProcessingRuns.kind,
+          documentProcessingRuns.entityVersionId,
+          documentProcessingRuns.fieldId,
+          documentProcessingRuns.sourceFileId,
+          documentProcessingRuns.sourceSha256Hex,
+          documentProcessingRuns.processorVersion,
+        ],
+        set: {
+          errorAt: null,
+          errorCode: null,
+          finishedAt: null,
+          nextAttemptAt: null,
+          requestedBy: null,
+          requestSource: "repair",
+          status: "queued",
+          updatedAt: queuedAt,
+        },
+        setWhere: repairableConflict,
+      })
+      .returning({ id: documentProcessingRuns.id });
+    return queued.map(({ id }) => id);
+  });
 };
 
 type EnqueueAttemptResult =
@@ -857,6 +1015,7 @@ const tryEnqueueDocumentProcessingRun = async (
 
 const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
   const settledBefore = new Date(Date.now() - REPAIR_SETTLE_DELAY_MS);
+  const cursor = await readRepairScanCursor();
   const candidates = await rootDb
     .select({
       content: fields.content,
@@ -892,27 +1051,9 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
         eq(organizationSettings.documentProcessingMode, "searchable-text"),
       ),
     )
-    .leftJoin(
-      extractedContent,
-      and(
-        eq(extractedContent.entityId, entities.id),
-        eq(extractedContent.organizationId, workspaces.organizationId),
-        eq(extractedContent.workspaceId, fields.workspaceId),
-        eq(extractedContent.sourceEntityVersionId, entityVersions.id),
-        eq(extractedContent.sourceFieldId, fields.id),
-        eq(
-          extractedContent.sourceFileId,
-          sql`(${fields.content}->>'id')::uuid`,
-        ),
-        eq(
-          extractedContent.sourceSha256Hex,
-          sql`${fields.content}->>'sha256Hex'`,
-        ),
-      ),
-    )
     .where(
       and(
-        isNull(extractedContent.entityId),
+        cursor === null ? undefined : gt(fields.id, cursor),
         lt(entityVersions.createdAt, settledBefore),
         eq(workspaces.status, "active"),
         sql`${fields.content}->>'type' = 'file'
@@ -931,113 +1072,31 @@ const recoverMissingAutomaticOcrRuns = async (): Promise<number> => {
               ),
             ),
         ),
-        notExists(
-          rootDb
-            .select({ id: documentProcessingRuns.id })
-            .from(documentProcessingRuns)
-            .where(
-              and(
-                eq(
-                  documentProcessingRuns.organizationId,
-                  workspaces.organizationId,
-                ),
-                eq(documentProcessingRuns.kind, "ocr"),
-                eq(documentProcessingRuns.entityVersionId, entityVersions.id),
-                eq(documentProcessingRuns.fieldId, fields.id),
-                eq(
-                  documentProcessingRuns.sourceFileId,
-                  sql`(${fields.content}->>'id')::uuid`,
-                ),
-                eq(
-                  documentProcessingRuns.sourceSha256Hex,
-                  sql`${fields.content}->>'sha256Hex'`,
-                ),
-                eq(documentProcessingRuns.processorVersion, 1),
-                or(
-                  inArray(documentProcessingRuns.status, [
-                    "queued",
-                    "running",
-                    "failed",
-                  ]),
-                  and(
-                    eq(documentProcessingRuns.status, "cancelled"),
-                    isNull(documentProcessingRuns.errorCode),
-                  ),
-                  and(
-                    eq(documentProcessingRuns.status, "cancelled"),
-                    eq(documentProcessingRuns.requestSource, "manual"),
-                  ),
-                  and(
-                    eq(documentProcessingRuns.status, "cancelled"),
-                    ne(documentProcessingRuns.errorCode, "policy_disabled"),
-                    ne(
-                      documentProcessingRuns.errorCode,
-                      "workspace_unavailable",
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ),
       ),
     )
-    .orderBy(
-      asc(fields.workspaceId),
-      asc(fields.entityVersionId),
-      asc(fields.id),
-    )
+    .orderBy(asc(fields.id))
     .limit(RECONCILE_BATCH_SIZE);
 
-  const values: (typeof documentProcessingRuns.$inferInsert)[] = [];
-  for (const candidate of candidates) {
-    const content = candidate.content;
-    if (!isAutomaticOcrRepairCandidate(content)) {
-      continue;
+  if (candidates.length === 0) {
+    if (cursor !== null) {
+      await writeRepairScanCursor(null);
     }
-    values.push({
-      id: createSafeId<"documentProcessingRun">(),
-      entityId: candidate.entityId,
-      entityVersionId: candidate.entityVersionId,
-      fieldId: candidate.fieldId,
-      kind: "ocr",
-      organizationId: candidate.organizationId,
-      processorVersion: 1,
-      requestedBy: null,
-      requestSource: "repair",
-      sourceFileId: content.id,
-      sourceSha256Hex: content.sha256Hex,
-      workspaceId: candidate.workspaceId,
-    });
-  }
-  if (values.length === 0) {
     return 0;
   }
 
-  const revivedIds = await Promise.all(candidates.map(reviveRepairableOcrRun));
-
-  const inserted = await rootDb
-    .insert(documentProcessingRuns)
-    .values(values)
-    .onConflictDoNothing({
-      target: [
-        documentProcessingRuns.organizationId,
-        documentProcessingRuns.kind,
-        documentProcessingRuns.entityVersionId,
-        documentProcessingRuns.fieldId,
-        documentProcessingRuns.sourceFileId,
-        documentProcessingRuns.sourceSha256Hex,
-        documentProcessingRuns.processorVersion,
-      ],
-    })
-    .returning({ id: documentProcessingRuns.id });
-
-  const runIds = [
-    ...inserted.map(({ id }) => id),
-    ...revivedIds.filter(
-      (id): id is SafeId<"documentProcessingRun"> => id !== null,
-    ),
-  ];
+  const repairCandidates = candidates.flatMap((candidate) => {
+    if (!isAutomaticOcrRepairCandidate(candidate.content)) {
+      return [];
+    }
+    return [{ ...candidate, content: candidate.content }];
+  });
+  const runIds = await persistRepairableOcrRuns(repairCandidates);
   await Promise.all(runIds.map(tryEnqueueDocumentProcessingRun));
+  await writeRepairScanCursor(
+    candidates.length < RECONCILE_BATCH_SIZE
+      ? null
+      : (candidates.at(-1)?.fieldId ?? null),
+  );
   return runIds.length;
 };
 
@@ -1334,6 +1393,8 @@ export const initDocumentProcessingWorker = () => {
     close: async (): Promise<void> => {
       clearInterval(reconcileInterval);
       await worker.close();
+      reconciliationRedisClient?.close();
+      reconciliationRedisClient = null;
     },
   };
 };

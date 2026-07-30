@@ -53,6 +53,32 @@ const createSafeDb =
   };
 
 describe("requestManualOcrHandler", () => {
+  test("rejects before persistence when no OCR provider is configured", async () => {
+    const persistRun = mock(async () => ({
+      id: runId,
+      status: "queued" as const,
+    }));
+    const result = await Result.gen(() =>
+      requestManualOcrHandler({
+        entityId,
+        fieldId,
+        organizationId,
+        persistRun,
+        providerAvailable: () => false,
+        recordAuditEvent,
+        safeDb: createSafeDb(null),
+        userId,
+        workspaceId,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ status: 503 });
+    }
+    expect(persistRun).not.toHaveBeenCalled();
+  });
+
   test("queues a durable run for the current unencrypted PDF field", async () => {
     const enqueue = mock(async () => undefined);
     const persistRun = mock(async () => ({
@@ -66,6 +92,7 @@ describe("requestManualOcrHandler", () => {
         fieldId,
         organizationId,
         persistRun,
+        providerAvailable: () => true,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {
@@ -120,6 +147,7 @@ describe("requestManualOcrHandler", () => {
         fieldId,
         organizationId,
         persistRun,
+        providerAvailable: () => true,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {
@@ -156,13 +184,11 @@ describe("requestManualOcrHandler", () => {
       const tx = asTestRaw<Transaction>({
         select: () => {
           selectCount += 1;
-          if (selectCount === 1) {
+          if (selectCount <= 2) {
             return {
               from: () => ({
-                innerJoin: () => ({
-                  where: () => ({
-                    limit: () => ({ for: async () => [{ id: entityId }] }),
-                  }),
+                where: () => ({
+                  limit: () => ({ for: async () => [{ id: entityId }] }),
                 }),
               }),
             };
@@ -246,13 +272,11 @@ describe("requestManualOcrHandler", () => {
       const tx = asTestRaw<Transaction>({
         select: () => {
           selectCount += 1;
-          if (selectCount === 1) {
+          if (selectCount <= 2) {
             return {
               from: () => ({
-                innerJoin: () => ({
-                  where: () => ({
-                    limit: () => ({ for: async () => [{ id: entityId }] }),
-                  }),
+                where: () => ({
+                  limit: () => ({ for: async () => [{ id: entityId }] }),
                 }),
               }),
             };
@@ -332,18 +356,16 @@ describe("requestManualOcrHandler", () => {
       const tx = asTestRaw<Transaction>({
         select: () => {
           selectCount += 1;
-          if (selectCount === 1) {
+          if (selectCount <= 2) {
             return {
               from: () => ({
-                innerJoin: () => ({
-                  where: () => ({
-                    limit: () => ({ for: async () => [{ id: entityId }] }),
-                  }),
+                where: () => ({
+                  limit: () => ({ for: async () => [{ id: entityId }] }),
                 }),
               }),
             };
           }
-          if (selectCount === 2) {
+          if (selectCount === 3) {
             return {
               from: () => ({
                 where: () => ({
@@ -421,18 +443,27 @@ describe("requestManualOcrHandler", () => {
   );
 
   test("locks the source only while its workspace is active", async () => {
-    let workspaceJoin: SQL | undefined;
+    let selectCount = 0;
+    let workspaceWhere: SQL | undefined;
     const tx = asTestRaw<Transaction>({
-      select: () => ({
-        from: () => ({
-          innerJoin: (_table: unknown, condition: SQL) => {
-            workspaceJoin = condition;
-            return {
-              where: () => ({ limit: () => ({ for: async () => [] }) }),
-            };
-          },
-        }),
-      }),
+      select: () => {
+        selectCount += 1;
+        return {
+          from: () => ({
+            where: (condition: SQL) => {
+              if (selectCount === 2) {
+                workspaceWhere = condition;
+              }
+              return {
+                limit: () => ({
+                  for: async () =>
+                    selectCount === 1 ? [{ id: entityId }] : [],
+                }),
+              };
+            },
+          }),
+        };
+      },
     });
     rootTransactionMock.mockImplementationOnce(
       async (operation: (transaction: Transaction) => Promise<unknown>) =>
@@ -454,9 +485,9 @@ describe("requestManualOcrHandler", () => {
     });
 
     expect(run).toBeNull();
-    expect(workspaceJoin).toBeDefined();
-    if (workspaceJoin) {
-      const compiled = new PgDialect().sqlToQuery(workspaceJoin);
+    expect(workspaceWhere).toBeDefined();
+    if (workspaceWhere) {
+      const compiled = new PgDialect().sqlToQuery(workspaceWhere);
       expect(compiled.sql).toContain('"workspaces"."status" =');
       expect(compiled.params).toContain("active");
     }

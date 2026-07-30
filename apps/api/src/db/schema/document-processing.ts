@@ -133,6 +133,7 @@ export const documentProcessingRuns = p.pgTable(
     p
       .index("document_processing_runs_field_workspace_idx")
       .on(table.fieldId, table.workspaceId),
+    p.index("document_processing_runs_requested_by_idx").on(table.requestedBy),
     /**
      * System worker reconciliation is intentionally cross-tenant and bounded;
      * this partial index prevents its oldest-first queued scan from degrading

@@ -7,7 +7,9 @@ import { createBullMqConnection } from "@/api/lib/redis-client";
 export const DOCUMENT_PROCESSING_QUEUE_NAME = "document-processing";
 export const DOCUMENT_PROCESSING_OCR_JOB_NAME = "ocr";
 
-const DEFAULT_JOB_ATTEMPTS = 3;
+// Durable run state owns retry classification, backoff, and the attempt cap.
+// BullMQ must deliver each enqueue once so it cannot bypass that policy.
+const DEFAULT_JOB_ATTEMPTS = 1;
 
 export type DocumentProcessingJobData = {
   runId: SafeId<"documentProcessingRun">;
@@ -28,7 +30,6 @@ const getQueue = (): Queue<DocumentProcessingJobData> => {
       connection: getQueueConnection(),
       defaultJobOptions: {
         attempts: DEFAULT_JOB_ATTEMPTS,
-        backoff: { type: "exponential", delay: 30_000 },
         removeOnComplete: 1000,
         removeOnFail: 5000,
       },

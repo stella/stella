@@ -140,6 +140,9 @@ const serviceUrl = (): string => {
   return `${configured.slice(0, end)}/ocr`;
 };
 
+export const isDocumentOcrProviderConfigured = (): boolean =>
+  env.OCR_SERVICE_URL !== undefined;
+
 const parsePageText = (value: unknown): string | null => {
   if (!isRecord(value)) {
     return null;

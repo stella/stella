@@ -20,6 +20,9 @@ DROP INDEX CONCURRENTLY IF EXISTS "document_processing_runs_entity_version_idx";
 -- stella-migration-safety: reviewed destructive-change - retry cleanup only.
 DROP INDEX CONCURRENTLY IF EXISTS "document_processing_runs_field_workspace_idx";
 --> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - rebuilt concurrently below.
+DROP INDEX CONCURRENTLY IF EXISTS "document_processing_runs_requested_by_idx";
+--> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "document_processing_runs_auto_failed_retry_idx"
   ON "document_processing_runs" ("next_attempt_at", "created_at", "id")
@@ -39,6 +42,12 @@ CREATE INDEX CONCURRENTLY "document_processing_runs_entity_version_idx"
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "document_processing_runs_field_workspace_idx"
   ON "document_processing_runs" ("field_id", "workspace_id");
+--> statement-breakpoint
+-- Child-side index keeps requested-user SET NULL checks bounded as run
+-- history grows.
+-- squawk-ignore prefer-robust-stmts
+CREATE INDEX CONCURRENTLY "document_processing_runs_requested_by_idx"
+  ON "document_processing_runs" ("requested_by");
 --> statement-breakpoint
 SET statement_timeout = '5s';
 --> statement-breakpoint

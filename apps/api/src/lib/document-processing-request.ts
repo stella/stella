@@ -49,14 +49,6 @@ export const persistManualOcrRun = async ({
     const currentRows = await tx
       .select({ id: entities.id })
       .from(entities)
-      .innerJoin(
-        workspaces,
-        and(
-          eq(workspaces.id, entities.workspaceId),
-          eq(workspaces.organizationId, organizationId),
-          eq(workspaces.status, "active"),
-        ),
-      )
       .where(
         and(
           eq(entities.id, source.entityId),
@@ -68,6 +60,21 @@ export const persistManualOcrRun = async ({
       .limit(1)
       .for("update");
     if (!currentRows.at(0)) {
+      return null;
+    }
+    const workspaceRows = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+          eq(workspaces.status, "active"),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!workspaceRows.at(0)) {
       return null;
     }
 

@@ -66,6 +66,8 @@ CREATE INDEX "document_processing_runs_workspace_created_idx"
   ON "document_processing_runs" ("workspace_id", "created_at" DESC, "id");--> statement-breakpoint
 CREATE INDEX "document_processing_runs_workspace_entity_created_idx"
   ON "document_processing_runs" ("workspace_id", "entity_id", "created_at" DESC, "id");--> statement-breakpoint
+CREATE INDEX "document_processing_runs_requested_by_idx"
+  ON "document_processing_runs" ("requested_by");--> statement-breakpoint
 CREATE INDEX "document_processing_runs_queued_schedule_idx"
   ON "document_processing_runs" ("next_attempt_at", "created_at", "id")
   WHERE "status" = 'queued';--> statement-breakpoint

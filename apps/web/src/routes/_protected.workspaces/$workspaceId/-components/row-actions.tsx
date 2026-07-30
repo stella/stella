@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   ArchiveIcon,
@@ -71,6 +71,7 @@ import type {
 } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
 import { downloadFile } from "@/lib/utils";
+import { organizationSettingsOptions } from "@/queries/organization-settings";
 import {
   CellLockMenuItem,
   CellMetadataMenuSection,
@@ -108,6 +109,8 @@ import {
 export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
 };
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 type RowActionsProps = {
   entity: WorkspaceEntity;
@@ -169,6 +172,20 @@ export const RowActions = ({
   const name = getEntityName(entity);
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (context) => context.user.activeOrganizationId,
+  });
+  const ocrSourceEligible =
+    !isBulk &&
+    !isFolder &&
+    !entity.readOnly &&
+    file !== null &&
+    !file.encrypted &&
+    file.mimeType === PDF_MIME_TYPE;
+  const { data: organizationSettings } = useQuery({
+    ...organizationSettingsOptions(activeOrganizationId),
+    enabled: ocrSourceEligible,
+  });
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
@@ -635,12 +652,7 @@ export const RowActions = ({
   const canUploadVersion =
     !isBulk && !isFolder && !entity.readOnly && file !== null;
   const canRunOcr =
-    !isBulk &&
-    !isFolder &&
-    !entity.readOnly &&
-    file !== null &&
-    !file.encrypted &&
-    file.mimeType === PDF_MIME_TYPE;
+    ocrSourceEligible && organizationSettings?.documentOcrAvailable === true;
   // Extension-based filter for the OS file picker. Browser-reported MIME
   // strings vary across platforms for the same extension; matching by
   // extension is consistent across Chrome, Safari, Firefox, and Edge.
