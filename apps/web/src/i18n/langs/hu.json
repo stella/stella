@@ -2525,6 +2525,12 @@
       "auditLogsTo": "Záró dátum",
       "auditLogsUserId": "Felhasználói azonosító",
       "auditLogsUserIdPlaceholder": "Szűrés felhasználói azonosító alapján",
+      "documentProcessing": {
+        "description": "Automatikusan felismeri a szkennelt PDF-ek szövegét, hogy a tartalmuk kereshető legyen.",
+        "title": "Dokumentumszöveg-felismerés",
+        "toggleLabel": "Szöveg automatikus felismerése szkennelt PDF-ekben",
+        "updated": "A dokumentumszöveg-felismerés beállítása frissítve"
+      },
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
@@ -2539,12 +2545,6 @@
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
-      "documentProcessing": {
-        "description": "Automatikusan felismeri a szkennelt PDF-ek szövegét, hogy a tartalmuk kereshető legyen.",
-        "title": "Dokumentumszöveg-felismerés",
-        "toggleLabel": "Szöveg automatikus felismerése szkennelt PDF-ekben",
-        "updated": "A dokumentumszöveg-felismerés beállítása frissítve"
-      },
       "promptCaching": {
         "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt MI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az MI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak — csak az MI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
         "title": "Prompt gyorsítótárazás",
@@ -3204,17 +3204,17 @@
       "downloadOriginal": "Eredeti fájl",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Elérte a maximális entitásszámot",
+      "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
+      "ocrQueued": "A szövegfelismerés várólistára került",
       "rateLimited": "Sebességkorlát; folytatás {seconds, number} mp múlva",
       "renamedToAvoidConflicts": "{count, plural, one {# fájl átnevezve az ütközések elkerülése érdekében} other {# fájl átnevezve az ütközések elkerülése érdekében}}",
       "retryFailed": "{count, plural, one {# fájl} other {# fájl}} újrapróbálása",
+      "runOcr": "OCR futtatása",
       "uploadedPartially": "{failed, plural, one {# fájl} other {# fájl}} feltöltése sikertelen a {total, number} fájlból",
       "uploadedSuccessfully": "Fájlok sikeresen feltöltve",
       "uploading": "Fájlok feltöltése",
       "uploadingDescription": "Ne zárja be ezt az oldalt, amíg a fájlok feltöltése be nem fejeződik",
       "uploadingProgress": "{completed, number}/{total, number} feltöltve",
-      "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
-      "ocrQueued": "A szövegfelismerés várólistára került",
-      "runOcr": "OCR futtatása",
       "versionOrNewFile": {
         "createNewOption": "Új fájl létrehozása",
         "description": "A \"{fileName}\" fájlt egy meglévő dokumentumra ejtette.",

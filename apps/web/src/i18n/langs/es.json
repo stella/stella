@@ -2525,6 +2525,12 @@
       "auditLogsTo": "Hasta",
       "auditLogsUserId": "ID de usuario",
       "auditLogsUserIdPlaceholder": "Filtrar por ID de usuario",
+      "documentProcessing": {
+        "description": "Reconoce automáticamente texto en PDF escaneados para que se pueda buscar en su contenido.",
+        "title": "Reconocimiento de texto de documentos",
+        "toggleLabel": "Reconocer automáticamente texto en PDF escaneados",
+        "updated": "Configuración de reconocimiento de texto actualizada"
+      },
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
@@ -2539,12 +2545,6 @@
       "pendingInvitations": "Invitaciones pendientes",
       "practiceJurisdictions": "Jurisdicciones",
       "practiceJurisdictionsDescription": "Seleccione las jurisdicciones relevantes para usted.",
-      "documentProcessing": {
-        "description": "Reconoce automáticamente texto en PDF escaneados para que se pueda buscar en su contenido.",
-        "title": "Reconocimiento de texto de documentos",
-        "toggleLabel": "Reconocer automáticamente texto en PDF escaneados",
-        "updated": "Configuración de reconocimiento de texto actualizada"
-      },
       "promptCaching": {
         "description": "Cuando está activado, stella añade marcadores de caché para que las solicitudes de IA repetidas sobre el mismo documento o hilo cuesten ~10× menos y terminen más rápido. Los prompts en caché permanecen con el proveedor de IA hasta 5 minutos, limitados a tu organización. Al desactivarlo, stella deja de enviar marcadores de caché, pero los proveedores pueden seguir cacheando oportunísticamente — solo un contrato de Zero Data Retention con el proveedor desactiva por completo el cacheo del lado del servidor.",
         "title": "Caché de prompts",
@@ -3204,17 +3204,17 @@
       "downloadOriginal": "Archivo original",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Número máximo de entidades alcanzado",
+      "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
+      "ocrQueued": "Reconocimiento de texto en cola",
       "rateLimited": "Límite de velocidad; se reanuda en {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}",
       "retryFailed": "Reintentar {count, plural, one {# archivo} other {# archivos}}",
+      "runOcr": "Ejecutar OCR",
       "uploadedPartially": "{failed, plural, one {# archivo falló} other {# archivos fallaron}} de {total, number}",
       "uploadedSuccessfully": "Archivos subidos correctamente",
       "uploading": "Subiendo archivos",
       "uploadingDescription": "No cierre esta página hasta que se completen las subidas",
       "uploadingProgress": "{completed, number} de {total, number} subidos",
-      "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
-      "ocrQueued": "Reconocimiento de texto en cola",
-      "runOcr": "Ejecutar OCR",
       "versionOrNewFile": {
         "createNewOption": "Crear nuevo archivo",
         "description": "Soltaste \"{fileName}\" sobre un documento existente.",

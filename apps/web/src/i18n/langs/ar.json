@@ -2525,6 +2525,12 @@
       "auditLogsTo": "إلى تاريخ",
       "auditLogsUserId": "معرّف المستخدم",
       "auditLogsUserIdPlaceholder": "التصفية حسب معرّف المستخدم",
+      "documentProcessing": {
+        "description": "تعرّف تلقائيًا على النص في ملفات PDF الممسوحة ضوئيًا لجعل محتواها قابلًا للبحث.",
+        "title": "التعرّف على نص المستندات",
+        "toggleLabel": "التعرّف تلقائيًا على النص في ملفات PDF الممسوحة ضوئيًا",
+        "updated": "تم تحديث إعداد التعرّف على النص"
+      },
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
@@ -2539,12 +2545,6 @@
       "pendingInvitations": "الدعوات المعلَّقة",
       "practiceJurisdictions": "الولايات القضائية",
       "practiceJurisdictionsDescription": "اختر الولايات القضائية ذات الصلة بك.",
-      "documentProcessing": {
-        "description": "تعرّف تلقائيًا على النص في ملفات PDF الممسوحة ضوئيًا لجعل محتواها قابلًا للبحث.",
-        "title": "التعرّف على نص المستندات",
-        "toggleLabel": "التعرّف تلقائيًا على النص في ملفات PDF الممسوحة ضوئيًا",
-        "updated": "تم تحديث إعداد التعرّف على النص"
-      },
       "promptCaching": {
         "description": "عند التفعيل، تضيف stella علامات تخزين مؤقت بحيث تكلّف طلبات الذكاء الاصطناعي المتكررة على المستند أو السلسلة نفسها أقل بنحو 10 أضعاف وتنتهي أسرع. تبقى المطالبات المخزَّنة مؤقتًا لدى مزوّد الذكاء الاصطناعي لمدة تصل إلى 5 دقائق، ضمن نطاق مؤسستك. يؤدي التعطيل إلى إيقاف stella عن إرسال علامات التخزين المؤقت، لكن قد يستمر المزوّدون في التخزين المؤقت انتهازيًا — فقط عقد عدم الاحتفاظ بالبيانات (Zero Data Retention) مع المزوّد يعطّل التخزين المؤقت على جانب الخادم بالكامل.",
         "title": "التخزين المؤقت للمطالبات",
@@ -3204,17 +3204,17 @@
       "downloadOriginal": "الملف الأصلي",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",
+      "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
+      "ocrQueued": "تمت جدولة التعرّف على النص",
       "rateLimited": "تم تقييد المعدل؛ الاستئناف خلال {seconds, number} ثانية",
       "renamedToAvoidConflicts": "{count, plural, zero {لم تتم إعادة تسمية أي ملف لتجنب التعارضات} one {تمت إعادة تسمية ملف واحد لتجنب التعارضات} two {تمت إعادة تسمية ملفين لتجنب التعارضات} few {تمت إعادة تسمية # ملفات لتجنب التعارضات} many {تمت إعادة تسمية # ملفًا لتجنب التعارضات} other {تمت إعادة تسمية # ملف لتجنب التعارضات}}",
       "retryFailed": "إعادة محاولة {count, plural, zero {لا ملفات} one {ملف واحد} two {ملفين} few {# ملفات} many {# ملفًا} other {# ملف}}",
+      "runOcr": "تشغيل التعرّف الضوئي على الحروف",
       "uploadedPartially": "فشل {failed, plural, zero {لا ملفات} one {ملف واحد} two {ملفين} few {# ملفات} many {# ملفًا} other {# ملف}} من أصل {total, number}",
       "uploadedSuccessfully": "تم رفع الملفات بنجاح",
       "uploading": "جارٍ رفع الملفات",
       "uploadingDescription": "لا تغلق هذه الصفحة حتى يتم رفع الملفات",
       "uploadingProgress": "تم رفع {completed, number} من أصل {total, number}",
-      "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
-      "ocrQueued": "تمت جدولة التعرّف على النص",
-      "runOcr": "تشغيل التعرّف الضوئي على الحروف",
       "versionOrNewFile": {
         "createNewOption": "إنشاء ملف جديد",
         "description": "لقد أفلتّ «{fileName}» فوق مستند موجود.",

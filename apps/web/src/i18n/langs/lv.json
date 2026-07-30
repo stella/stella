@@ -2525,6 +2525,12 @@
       "auditLogsTo": "Datums līdz",
       "auditLogsUserId": "Lietotāja ID",
       "auditLogsUserIdPlaceholder": "Filtrēt pēc lietotāja ID",
+      "documentProcessing": {
+        "description": "Automātiski atpazīstiet tekstu skenētos PDF, lai to saturs būtu meklējams.",
+        "title": "Dokumentu teksta atpazīšana",
+        "toggleLabel": "Automātiski atpazīt tekstu skenētos PDF",
+        "updated": "Dokumentu teksta atpazīšanas iestatījums atjaunināts"
+      },
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
@@ -2539,12 +2545,6 @@
       "pendingInvitations": "Gaidošie uzaicinājumi",
       "practiceJurisdictions": "Jurisdikcijas",
       "practiceJurisdictionsDescription": "Atlasiet jums atbilstošās jurisdikcijas.",
-      "documentProcessing": {
-        "description": "Automātiski atpazīstiet tekstu skenētos PDF, lai to saturs būtu meklējams.",
-        "title": "Dokumentu teksta atpazīšana",
-        "toggleLabel": "Automātiski atpazīt tekstu skenētos PDF",
-        "updated": "Dokumentu teksta atpazīšanas iestatījums atjaunināts"
-      },
       "promptCaching": {
         "description": "Ja ieslēgts, stella pievieno kešatmiņas iezīmes, lai atkārtoti MI pieprasījumi par to pašu dokumentu vai sarunu izmaksātu ~10× lētāk un beigtos ātrāk. Kešotie pieprasījumi paliek pie MI pakalpojumu sniedzēja līdz 5 minūtēm un ir ierobežoti uz jūsu organizāciju. Izslēdzot stella vairs nesūta kešatmiņas iezīmes, taču pakalpojumu sniedzēji joprojām var kešot oportūnistiski — tikai Zero Data Retention līgums ar pakalpojumu sniedzēju pilnībā izslēdz servera puses kešošanu.",
         "title": "Uzvedņu kešošana",
@@ -3204,17 +3204,17 @@
       "downloadOriginal": "Oriģinālais fails",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
+      "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
+      "ocrQueued": "Teksta atpazīšana ievietota rindā",
       "rateLimited": "Ātruma ierobežojums; atsākšana pēc {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
       "retryFailed": "Mēģināt vēlreiz {count, plural, zero {# failu} one {# failu} other {# failus}}",
+      "runOcr": "Palaist OCR",
       "uploadedPartially": "{failed, plural, zero {# failu neizdevās augšupielādēt} one {# fails neizdevās augšupielādēt} other {# faili neizdevās augšupielādēt}} no {total, number}",
       "uploadedSuccessfully": "Faili veiksmīgi augšupielādēti",
       "uploading": "Augšupielādē failus",
       "uploadingDescription": "Neaizveriet šo lapu, kamēr faili nav augšupielādēti",
       "uploadingProgress": "{completed, number} no {total, number} augšupielādēti",
-      "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
-      "ocrQueued": "Teksta atpazīšana ievietota rindā",
-      "runOcr": "Palaist OCR",
       "versionOrNewFile": {
         "createNewOption": "Izveidot jaunu failu",
         "description": "Jūs nometāt \"{fileName}\" uz esoša dokumenta.",

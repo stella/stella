@@ -2525,6 +2525,12 @@
       "auditLogsTo": "To date",
       "auditLogsUserId": "User ID",
       "auditLogsUserIdPlaceholder": "Filter by user ID",
+      "documentProcessing": {
+        "description": "Automatically recognize text in scanned PDFs so their contents can be searched.",
+        "title": "Document text recognition",
+        "toggleLabel": "Automatically recognize text in scanned PDFs",
+        "updated": "Document text recognition setting updated"
+      },
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
@@ -2539,12 +2545,6 @@
       "pendingInvitations": "Pending invitations",
       "practiceJurisdictions": "Jurisdictions",
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.",
-      "documentProcessing": {
-        "description": "Automatically recognize text in scanned PDFs so their contents can be searched.",
-        "title": "Document text recognition",
-        "toggleLabel": "Automatically recognize text in scanned PDFs",
-        "updated": "Document text recognition setting updated"
-      },
       "promptCaching": {
         "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically — only a Zero Data Retention contract with the provider fully disables server-side caching.",
         "title": "Prompt caching",
@@ -3204,17 +3204,17 @@
       "downloadOriginal": "Original file",
       "downloadPdf": "PDF",
       "maxEntitiesReached": "Max entities count reached",
+      "ocrQueueFailed": "Couldn't queue text recognition",
+      "ocrQueued": "Text recognition queued",
       "rateLimited": "Rate limited; resuming in {seconds, number}s",
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}",
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}",
+      "runOcr": "Run OCR",
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}",
       "uploadedSuccessfully": "Files uploaded successfully",
       "uploading": "Uploading files",
       "uploadingDescription": "Don't close this page until the files are uploaded",
       "uploadingProgress": "{completed, number} of {total, number} uploaded",
-      "ocrQueueFailed": "Couldn't queue text recognition",
-      "ocrQueued": "Text recognition queued",
-      "runOcr": "Run OCR",
       "versionOrNewFile": {
         "createNewOption": "Create new file",
         "description": "You dropped \"{fileName}\" onto an existing document.",
