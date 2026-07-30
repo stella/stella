@@ -14,8 +14,6 @@ import { useTranslations } from "use-intl";
 
 import {
   Menu,
-  MenuGroup,
-  MenuGroupLabel,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -138,13 +136,13 @@ export const ChatModelModeSelector = ({
       <MenuPopup align="start" className="w-72" side="top" sideOffset={6}>
         {pinnedOption && pinnedLabel && PinnedIcon && (
           <>
-            <MenuGroup>
-              <MenuGroupLabel>{t("navigation.pinned")}</MenuGroupLabel>
-              <MenuItem onClick={() => selectValue(pinnedOption.value)}>
-                <PinnedIcon />
-                <span className="min-w-0 truncate">{pinnedLabel}</span>
-              </MenuItem>
-            </MenuGroup>
+            <p className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
+              {t("navigation.pinned")}
+            </p>
+            <MenuItem onClick={() => selectValue(pinnedOption.value)}>
+              <PinnedIcon />
+              <span className="min-w-0 truncate">{pinnedLabel}</span>
+            </MenuItem>
             <MenuSeparator />
           </>
         )}
