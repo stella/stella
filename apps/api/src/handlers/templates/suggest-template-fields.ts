@@ -166,9 +166,14 @@ export const suggestTemplateFieldsOrEmpty = async (
   }
 };
 
+// `instanceof` on the generic class narrows to `HandlerError<any>`; the
+// predicate restores the default parameter.
+const isHandlerError = (error: unknown): error is HandlerError =>
+  error instanceof HandlerError;
+
 /** A typed failure keeps its status and message; everything else is a 500. */
 export const toSuggestFieldsError = (cause: unknown): HandlerError => {
-  if (cause instanceof HandlerError) {
+  if (isHandlerError(cause)) {
     return cause;
   }
   return new HandlerError({
