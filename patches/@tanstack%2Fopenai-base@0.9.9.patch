@@ -165,7 +165,7 @@ index 89f5ed36472e180766a82e1d53e60ce6a8539abe..bcdb20c6cbd05459b39f9694a9d5f763
 +        return {
 +          type: "input_file",
 +          file_data: documentFileData,
-+          ...filename === void 0 ? {} : { filename }
++          filename: filename ?? "document.pdf"
 +        };
 +      }
        case "video":
