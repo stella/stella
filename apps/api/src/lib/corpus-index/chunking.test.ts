@@ -447,3 +447,39 @@ describe("chunkDocument fallbacks", () => {
     ]);
   });
 });
+
+describe("structural budget", () => {
+  test("a block count past the ceiling throws instead of walking", () => {
+    const block = paragraph(0, "body text");
+    const blocks = Array.from({ length: 400_001 }, () => block);
+    expect(() =>
+      chunkDocument({ ast: astOf(blocks), fallbackText: "" }),
+    ).toThrow(/ceiling/u);
+  });
+
+  test("fallback text past the ceiling throws instead of splitting", () => {
+    expect(() =>
+      chunkDocument({ ast: null, fallbackText: "x".repeat(30_000_001) }),
+    ).toThrow(/ceiling/u);
+  });
+
+  test("heading ancestry is clamped to the deepest entries", () => {
+    // Persisted junk can carry any numeric level; ever-ascending levels grow
+    // the ancestry stack without bound, which is what made path
+    // materialization quadratic. The clamp keeps the deepest entries.
+    const ascending = Array.from({ length: 100 }, (_, index) => {
+      const base = heading(index, 1, `H${index}`);
+      // SAFETY: constructs the malformed persisted shape under test — a
+      // numeric heading level outside the parser's 1|2|3 union.
+      return { ...base, level: index + 1 } as Block;
+    });
+    const chunks = chunkDocument({
+      ast: astOf([...ascending, paragraph(100, "body under deep headings")]),
+      fallbackText: "",
+    });
+    const last = chunks.at(-1);
+    expect(last?.headingPath.length).toBe(64);
+    expect(last?.headingPath.at(-1)).toBe("H99");
+    expect(last?.headingPath.at(0)).toBe("H36");
+  });
+});

@@ -6,7 +6,10 @@ import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { captureError } from "@/api/lib/analytics/capture";
-import { zstdCompress, zstdDecompressToString } from "@/api/lib/compression";
+import {
+  zstdCompressAsync,
+  zstdDecompressToStringBounded,
+} from "@/api/lib/compression";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getCorpusS3 } from "@/api/lib/s3";
@@ -23,6 +26,8 @@ import { withTimeout } from "@/api/lib/with-timeout";
 const CONTENT_TYPE = "application/zstd";
 
 const CORPUS_IO_TIMEOUT_MS = LIMITS.corpusObjectIoTimeoutMs;
+
+const PAYLOAD_MAX_BYTES = LIMITS.corpusPayloadMaxDecompressedBytes;
 
 /**
  * The single bounded boundary for every corpus object read/write/delete.
@@ -156,7 +161,7 @@ export const writeCorpusDocument = async ({
     boundedCorpusIo(
       "corpus-write-text",
       async () =>
-        await s3.write(keys.textKey, zstdCompress(text ?? ""), {
+        await s3.write(keys.textKey, await zstdCompressAsync(text ?? ""), {
           type: CONTENT_TYPE,
         }),
     ),
@@ -165,16 +170,18 @@ export const writeCorpusDocument = async ({
       async () =>
         await s3.write(
           keys.sectionsKey,
-          zstdCompress(JSON.stringify(sections ?? null)),
+          await zstdCompressAsync(JSON.stringify(sections ?? null)),
           { type: CONTENT_TYPE },
         ),
     ),
     boundedCorpusIo(
       "corpus-write-ast",
       async () =>
-        await s3.write(keys.astKey, zstdCompress(JSON.stringify(ast ?? null)), {
-          type: CONTENT_TYPE,
-        }),
+        await s3.write(
+          keys.astKey,
+          await zstdCompressAsync(JSON.stringify(ast ?? null)),
+          { type: CONTENT_TYPE },
+        ),
     ),
   ]);
 
@@ -200,7 +207,7 @@ export const readCorpusText = async (
     read ?? (async () => await getCorpusS3().file(key).bytes()),
     timeoutMs,
   );
-  return zstdDecompressToString(bytes);
+  return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
 };
 
 export const readCorpusSections = async (
@@ -212,7 +219,7 @@ export const readCorpusSections = async (
   );
   // eslint-disable-next-line typescript/no-unsafe-assignment -- decompressed corpus JSON written by this module
   const parsed: DecisionSection[] | null = JSON.parse(
-    zstdDecompressToString(bytes),
+    await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
   );
   return parsed;
 };
@@ -226,7 +233,7 @@ export const readCorpusAst = async (
   );
   // eslint-disable-next-line typescript/no-unsafe-assignment -- decompressed corpus JSON written by this module
   const parsed: DocumentAst | EmptyAst | null = JSON.parse(
-    zstdDecompressToString(bytes),
+    await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
   );
   return parsed;
 };

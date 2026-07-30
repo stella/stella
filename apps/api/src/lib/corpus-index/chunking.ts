@@ -1,3 +1,5 @@
+import { TaggedError } from "better-result";
+
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 /**
@@ -67,6 +69,41 @@ const CHUNK_MIN_CHARS = 250 * CHARS_PER_TOKEN;
 
 /** Block separator. Also what the fallback splits paragraphs on. */
 const BLOCK_SEPARATOR = "\n\n";
+
+/**
+ * Structural ceilings for one document's chunking work.
+ *
+ * The chunker runs synchronously on the ingestion daemon's event loop, so
+ * its cost per document must be bounded up front: one pathological document
+ * that chunks for minutes starves every sibling loop, trips the daemon's
+ * own starvation watchdog, and turns into a restart loop because the same
+ * row is re-picked on every start. A document past either ceiling throws
+ * `ChunkBudgetError` instead, which the indexer's per-row isolation records
+ * as a failed index job — the poison document is named in the audit trail
+ * and skipped, and its batch-mates still commit.
+ *
+ * The ceilings are far above any legitimate decision or statute: the
+ * longest real judgments run to a few hundred thousand characters and a
+ * few thousand blocks.
+ */
+const MAX_CHUNK_INPUT_CHARS = 30_000_000;
+const MAX_CHUNK_BLOCKS = 400_000;
+
+/**
+ * Heading ancestry deeper than this is a malformed AST (real documents
+ * nest a handful of levels). The stack is clamped rather than thrown on:
+ * ancestry is a search label, so dropping the shallowest entries degrades
+ * a path nobody could read anyway, while a throw would fail a document
+ * whose text is perfectly indexable. The clamp also bounds the per-block
+ * cost of materializing the path, which is what makes an ever-growing
+ * stack quadratic.
+ */
+const MAX_HEADING_DEPTH = 64;
+
+/** A document exceeded the chunker's structural ceilings. */
+export class ChunkBudgetError extends TaggedError("ChunkBudgetError")<{
+  message: string;
+}>() {}
 
 const PARAGRAPH_BREAK = /\n[ \t]*\n/u;
 
@@ -194,6 +231,9 @@ const createHeadingStack = () => {
       stack.pop();
     }
     stack.push({ level, text });
+    if (stack.length > MAX_HEADING_DEPTH) {
+      stack.splice(0, stack.length - MAX_HEADING_DEPTH);
+    }
   };
 
   const path = (): string[] => stack.map((entry) => entry.text);
@@ -241,6 +281,11 @@ const isChunkableBlock = (block: unknown): boolean => {
 };
 
 const chunkBlocks = (blocks: readonly Block[]): CorpusChunk[] => {
+  if (blocks.length > MAX_CHUNK_BLOCKS) {
+    throw new ChunkBudgetError({
+      message: `Document has ${blocks.length} blocks; ceiling is ${MAX_CHUNK_BLOCKS}`,
+    });
+  }
   const accumulator = createChunkAccumulator();
   const headings = createHeadingStack();
 
@@ -271,6 +316,11 @@ const chunkBlocks = (blocks: readonly Block[]): CorpusChunk[] => {
  * rather than pointing somewhere approximate.
  */
 const chunkPlainText = (text: string): CorpusChunk[] => {
+  if (text.length > MAX_CHUNK_INPUT_CHARS) {
+    throw new ChunkBudgetError({
+      message: `Fallback text is ${text.length} chars; ceiling is ${MAX_CHUNK_INPUT_CHARS}`,
+    });
+  }
   const accumulator = createChunkAccumulator();
   for (const paragraph of text.split(PARAGRAPH_BREAK)) {
     if (isBlank(paragraph)) {
@@ -309,6 +359,13 @@ export const chunkDocument = ({
   ast,
   fallbackText,
 }: ChunkDocumentInput): CorpusChunk[] => {
+  // The ceiling applies before the conformance scan: `every` is linear too,
+  // so a many-million-block junk array must be rejected before any walk.
+  if (ast !== null && ast.blocks.length > MAX_CHUNK_BLOCKS) {
+    throw new ChunkBudgetError({
+      message: `Document has ${ast.blocks.length} blocks; ceiling is ${MAX_CHUNK_BLOCKS}`,
+    });
+  }
   // A single non-conforming block condemns the whole AST rather than being
   // skipped: the canonical text is complete, so degrading to it keeps every
   // word, while dropping bad blocks would silently lose whatever they held.
