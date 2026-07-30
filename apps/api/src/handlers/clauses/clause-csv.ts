@@ -8,12 +8,11 @@ export const deriveClauseSlug = (
   title: string,
   clauseId: SafeId<"clause">,
   providedSlug: string,
-): string => 
+): string =>
   slugifyAscii(providedSlug || title, {
     fallback: `clause-${clauseId}`,
     maxLength: 56,
-  })
-;
+  });
 
 export const serializeClauseTags = (tags: readonly string[]): string =>
   tags
