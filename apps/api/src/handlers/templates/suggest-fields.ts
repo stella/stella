@@ -1,11 +1,13 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
+import {
+  suggestTemplateFields,
+  toSuggestFieldsError,
+} from "@/api/handlers/templates/suggest-template-fields";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const suggestFieldsBodySchema = t.Object({
   // The text the editor chose to send: the whole document or just the current
@@ -70,11 +72,7 @@ const suggestFields = createSafeRootHandler(
           }),
         catch: (cause) => {
           aiAnalytics.captureError(cause);
-          return new HandlerError({
-            status: 500,
-            message: "Failed to suggest template fields",
-            cause,
-          });
+          return toSuggestFieldsError(cause);
         },
       }),
     );

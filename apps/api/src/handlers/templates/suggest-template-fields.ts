@@ -23,6 +23,7 @@ import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FieldSuggestion } from "@/api/lib/docx/apply-field-suggestions";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const SUGGEST_TIMEOUT_MS = 45_000;
@@ -163,4 +164,21 @@ export const suggestTemplateFieldsOrEmpty = async (
     args.aiAnalytics.captureError(error);
     return [];
   }
+};
+
+// `instanceof` on the generic class narrows to `HandlerError<any>`; the
+// predicate restores the default parameter.
+const isHandlerError = (error: unknown): error is HandlerError =>
+  error instanceof HandlerError;
+
+/** A typed failure keeps its status and message; everything else is a 500. */
+export const toSuggestFieldsError = (cause: unknown): HandlerError => {
+  if (isHandlerError(cause)) {
+    return cause;
+  }
+  return new HandlerError({
+    status: 500,
+    message: "Failed to suggest template fields",
+    cause,
+  });
 };
