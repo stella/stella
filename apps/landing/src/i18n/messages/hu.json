@@ -5,11 +5,12 @@
     "toggle": "Téma váltása"
   },
   "askAi": {
-    "copied": "Másolva",
     "copy": "Prompt másolása",
     "label": "Kérdezze az AI-t a stella alkalmazásról"
   },
   "common": {
+    "copied": "Másolva",
+    "copy": "Másolás",
     "getCli": "Töltse le a CLI-t",
     "startFree": "Kezdje el ingyen"
   },
@@ -112,7 +113,7 @@
         "title": "Készítse elő az anyagot az AI számára az azonosító adatok felfedése nélkül."
       },
       "cli-mcp": {
-        "blurb": "Keressen, olvasson és dolgozzon a stella alkalmazással a parancssorból vagy bármely MCP-kompatibilis kliensből. Mindkét felület ugyanazt a képességnyilvántartást, ugyanazokat a jogosultságokat és ugyanazokat a munkaterületi adatokat használja, mint a webalkalmazás.",
+        "blurb": "Keressen, olvasson és dolgozzon a stella alkalmazással a parancssorból vagy bármely MCP-kompatibilis kliensből. Mindkét felület ugyanazt a képességnyilvántartást, ugyanazokat a jogosultságokat és ugyanazokat a munkaterületi adatokat használja.",
         "eyebrow": "CLI & MCP",
         "title": "Egyetlen munkaterület, minden eszközből."
       },

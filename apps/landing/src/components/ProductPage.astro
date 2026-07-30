@@ -5,6 +5,7 @@ import Base from "../layouts/Base.astro";
 import ProductMediaFrame from "./ProductMediaFrame.astro";
 import McpProofSection from "./McpProofSection.astro";
 import LandingFooter from "./LandingFooter.astro";
+import SetupSnippet from "./SetupSnippet.astro";
 import { resolveProductLink } from "../data/products/links";
 import type { Product } from "../data/products/types";
 import { defaultLocale, isLocale, locales } from "../i18n/config";
@@ -41,6 +42,8 @@ const sections = copy.sections.map((section, index) => ({
 // Agent-connection instructions: prose from the catalog, endpoint and code
 // snippets from the registry (code is not translated), paired by position
 // like the sections above.
+const copyLabel = t("common.copy");
+const copiedLabel = t("common.copied");
 const setupData = product.setup;
 const setup = setupData
   ? (() => {
@@ -339,10 +342,12 @@ const faqJsonLd = {
               >
                 {setup.intro}
               </p>
-              <pre
-                dir="ltr"
-                class="product-setup-snippet mt-4"
-              ><code>{setup.endpoint}</code></pre>
+              <SetupSnippet
+                class="mt-4"
+                copiedLabel={copiedLabel}
+                copyLabel={copyLabel}
+                text={setup.endpoint}
+              />
               <div class="mt-8 space-y-7">
                 {setup.clients.map((client) => (
                   <div>
@@ -356,10 +361,12 @@ const faqJsonLd = {
                       {client.body}
                     </p>
                     {client.snippet && (
-                      <pre
-                        dir="ltr"
-                        class="product-setup-snippet mt-3"
-                      ><code>{client.snippet}</code></pre>
+                      <SetupSnippet
+                        class="mt-3"
+                        copiedLabel={copiedLabel}
+                        copyLabel={copyLabel}
+                        text={client.snippet}
+                      />
                     )}
                   </div>
                 ))}
@@ -370,10 +377,12 @@ const faqJsonLd = {
                   >
                     {setup.outro}
                   </p>
-                  <pre
-                    dir="ltr"
-                    class="product-setup-snippet mt-3"
-                  ><code>{setup.outroSnippet}</code></pre>
+                  <SetupSnippet
+                    class="mt-3"
+                    copiedLabel={copiedLabel}
+                    copyLabel={copyLabel}
+                    text={setup.outroSnippet}
+                  />
                 </div>
               </div>
             </div>
@@ -480,18 +489,6 @@ const faqJsonLd = {
   </div>
 
   <style>
-    .product-setup-snippet {
-      background: color-mix(in srgb, var(--muted) 55%, transparent);
-      border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
-      border-radius: 0.75rem;
-      font-family: var(--font-mono, ui-monospace, monospace);
-      font-size: 0.8125rem;
-      line-height: 1.6;
-      overflow-x: auto;
-      padding: 0.75rem 1rem;
-      white-space: pre;
-    }
-
     .quick-answer {
       background: color-mix(in srgb, var(--card) 80%, transparent);
       border-color: color-mix(in srgb, var(--border) 90%, transparent);

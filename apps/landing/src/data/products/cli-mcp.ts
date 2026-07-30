@@ -5,7 +5,7 @@ export const cliMcp: Product = {
   eyebrow: "CLI & MCP",
   title: "One workspace, from every tool.",
   summary:
-    "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capability registry, permissions, and workspace data as the web app.",
+    "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capability registry, permissions, and workspace data.",
   metaTitle: "MCP server and CLI for your legal workspace | stella",
   metaDescription:
     "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capabilities, permissions, and data.",

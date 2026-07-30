@@ -5,11 +5,12 @@
     "toggle": "Design wechseln"
   },
   "askAi": {
-    "copied": "Kopiert",
     "copy": "Prompt kopieren",
     "label": "Eine KI zu stella befragen"
   },
   "common": {
+    "copied": "Kopiert",
+    "copy": "Kopieren",
     "getCli": "CLI herunterladen",
     "startFree": "Kostenlos loslegen"
   },
@@ -112,7 +113,7 @@
         "title": "Material für KI vorbereiten, ohne identifizierende Angaben preiszugeben."
       },
       "cli-mcp": {
-        "blurb": "Suchen, lesen und arbeiten Sie mit stella über die Kommandozeile oder jeden MCP-kompatiblen Client. Beide Oberflächen teilen dieselbe Capability-Registry, dieselben Berechtigungen und dieselben Arbeitsbereichsdaten wie die Web-App.",
+        "blurb": "Suchen, lesen und arbeiten Sie mit stella über die Kommandozeile oder jeden MCP-kompatiblen Client. Beide Oberflächen teilen dieselbe Capability-Registry, dieselben Berechtigungen und dieselben Arbeitsbereichsdaten.",
         "eyebrow": "CLI & MCP",
         "title": "Ein Arbeitsbereich, aus jedem Werkzeug."
       },

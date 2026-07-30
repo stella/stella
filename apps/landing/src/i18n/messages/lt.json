@@ -5,11 +5,12 @@
     "toggle": "Keisti temą"
   },
   "askAi": {
-    "copied": "Nukopijuota",
     "copy": "Kopijuoti užklausą",
     "label": "Klauskite DI apie programą stella"
   },
   "common": {
+    "copied": "Nukopijuota",
+    "copy": "Kopijuoti",
     "getCli": "Atsisiųskite CLI",
     "startFree": "Pradėkite nemokamai"
   },
@@ -112,7 +113,7 @@
         "title": "Paruoškite medžiagą DI neatskleisdami identifikuojančių duomenų."
       },
       "cli-mcp": {
-        "blurb": "Ieškokite, skaitykite ir dirbkite su programa stella iš komandinės eilutės arba iš bet kurio su MCP suderinamo kliento. Abu paviršiai naudoja tą patį gebėjimų registrą, tas pačias teises ir tuos pačius darbo srities duomenis kaip ir žiniatinklio programa.",
+        "blurb": "Ieškokite, skaitykite ir dirbkite su programa stella iš komandinės eilutės arba iš bet kurio su MCP suderinamo kliento. Abu paviršiai naudoja tą patį gebėjimų registrą, tas pačias teises ir tuos pačius darbo srities duomenis.",
         "eyebrow": "CLI & MCP",
         "title": "Viena darbo sritis, iš kiekvieno įrankio."
       },

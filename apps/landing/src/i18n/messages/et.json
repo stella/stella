@@ -5,11 +5,12 @@
     "toggle": "Vaheta teemat"
   },
   "askAi": {
-    "copied": "Kopeeritud",
     "copy": "Kopeeri viip",
     "label": "Küsi tehisintellektilt stella kohta"
   },
   "common": {
+    "copied": "Kopeeritud",
+    "copy": "Kopeeri",
     "getCli": "Laadi CLI alla",
     "startFree": "Alusta tasuta"
   },
@@ -112,7 +113,7 @@
         "title": "Valmista materjal tehisintellekti jaoks ette, tuvastavaid andmeid paljastamata."
       },
       "cli-mcp": {
-        "blurb": "Otsi, loe ja tööta rakendusega stella käsurealt või ükskõik millisest MCP-ga ühilduvast kliendist. Mõlemad pinnad jagavad sama võimekusregistrit, samu õigusi ja samu tööruumi andmeid mis veebirakendus.",
+        "blurb": "Otsi, loe ja tööta rakendusega stella käsurealt või ükskõik millisest MCP-ga ühilduvast kliendist. Mõlemad pinnad jagavad sama võimekusregistrit, samu õigusi ja samu tööruumi andmeid.",
         "eyebrow": "CLI & MCP",
         "title": "Üks tööruum, igast tööriistast."
       },

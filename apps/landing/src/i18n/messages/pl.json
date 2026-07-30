@@ -5,11 +5,12 @@
     "toggle": "Zmień motyw"
   },
   "askAi": {
-    "copied": "Skopiowano",
     "copy": "Kopiuj prompt",
     "label": "Zapytaj AI o aplikację stella"
   },
   "common": {
+    "copied": "Skopiowano",
+    "copy": "Kopiuj",
     "getCli": "Pobierz CLI",
     "startFree": "Zacznij za darmo"
   },
@@ -112,7 +113,7 @@
         "title": "Przygotuj materiały dla AI bez ujawniania danych identyfikujących."
       },
       "cli-mcp": {
-        "blurb": "Szukaj, czytaj i pracuj z aplikacją stella z wiersza poleceń albo z dowolnego klienta zgodnego z MCP. Oba interfejsy korzystają z tego samego rejestru możliwości, uprawnień i danych obszaru roboczego co aplikacja webowa.",
+        "blurb": "Szukaj, czytaj i pracuj z aplikacją stella z wiersza poleceń albo z dowolnego klienta zgodnego z MCP. Oba interfejsy korzystają z tego samego rejestru możliwości, uprawnień i danych obszaru roboczego.",
         "eyebrow": "CLI & MCP",
         "title": "Jeden obszar roboczy, z każdego narzędzia."
       },

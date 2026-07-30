@@ -5,11 +5,12 @@
     "toggle": "Mainīt motīvu"
   },
   "askAi": {
-    "copied": "Nokopēts",
     "copy": "Kopēt uzvedni",
     "label": "Jautāt AI par lietotni stella"
   },
   "common": {
+    "copied": "Nokopēts",
+    "copy": "Kopēt",
     "getCli": "Iegūt CLI",
     "startFree": "Sākt bez maksas"
   },
@@ -112,7 +113,7 @@
         "title": "Sagatavojiet materiālu AI, neatklājot identificējošu informāciju."
       },
       "cli-mcp": {
-        "blurb": "Meklējiet, lasiet un strādājiet ar lietotni stella no komandrindas vai no jebkura ar MCP saderīga klienta. Abas saskarnes izmanto to pašu iespēju reģistru, tās pašas atļaujas un tos pašus darbvietas datus, ko tīmekļa lietotne.",
+        "blurb": "Meklējiet, lasiet un strādājiet ar lietotni stella no komandrindas vai no jebkura ar MCP saderīga klienta. Abas saskarnes izmanto to pašu iespēju reģistru, tās pašas atļaujas un tos pašus darbvietas datus.",
         "eyebrow": "CLI & MCP",
         "title": "Viena darbvieta, no ikviena rīka."
       },

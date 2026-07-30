@@ -5,11 +5,12 @@
     "toggle": "Cambiar tema"
   },
   "askAi": {
-    "copied": "Copiado",
     "copy": "Copiar instrucción",
     "label": "Pregunta a la IA sobre stella"
   },
   "common": {
+    "copied": "Copiado",
+    "copy": "Copiar",
     "getCli": "Obtener la CLI",
     "startFree": "Empezar gratis"
   },
@@ -112,7 +113,7 @@
         "title": "Prepara el material para la IA sin exponer datos identificativos."
       },
       "cli-mcp": {
-        "blurb": "Busca, lee y trabaja con stella desde la línea de comandos o desde cualquier cliente compatible con MCP. Ambas superficies comparten el mismo registro de capacidades, los mismos permisos y los mismos datos del espacio de trabajo que la aplicación web.",
+        "blurb": "Busca, lee y trabaja con stella desde la línea de comandos o desde cualquier cliente compatible con MCP. Ambas superficies comparten el mismo registro de capacidades, los mismos permisos y los mismos datos del espacio de trabajo.",
         "eyebrow": "CLI & MCP",
         "title": "Un espacio de trabajo, desde cualquier herramienta."
       },

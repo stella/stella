@@ -5,11 +5,12 @@
     "toggle": "Přepnout vzhled"
   },
   "askAi": {
-    "copied": "Zkopírováno",
     "copy": "Kopírovat prompt",
     "label": "Zeptejte se AI na aplikaci stella"
   },
   "common": {
+    "copied": "Zkopírováno",
+    "copy": "Kopírovat",
     "getCli": "Získat CLI",
     "startFree": "Začít zdarma"
   },
@@ -112,7 +113,7 @@
         "title": "Připravte podklady pro AI bez odhalení identifikačních údajů."
       },
       "cli-mcp": {
-        "blurb": "Vyhledávejte, čtěte a pracujte s aplikací stella z příkazové řádky nebo z libovolného klienta kompatibilního s MCP. Obě rozhraní sdílejí stejný registr schopností, oprávnění i data pracovního prostoru jako webová aplikace.",
+        "blurb": "Vyhledávejte, čtěte a pracujte s aplikací stella z příkazové řádky nebo z libovolného klienta kompatibilního s MCP. Obě rozhraní sdílejí stejný registr schopností, oprávnění i data pracovního prostoru.",
         "eyebrow": "CLI & MCP",
         "title": "Jeden pracovní prostor, z každého nástroje."
       },

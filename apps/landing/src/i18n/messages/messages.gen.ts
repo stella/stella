@@ -8,11 +8,12 @@ type Messages = {
     "toggle": "Toggle theme";
   };
   "askAi": {
-    "copied": "Copied";
     "copy": "Copy prompt";
     "label": "Ask AI about stella";
   };
   "common": {
+    "copied": "Copied";
+    "copy": "Copy";
     "getCli": "Get the CLI";
     "startFree": "Start free";
   };
@@ -115,7 +116,7 @@ type Messages = {
         "title": "Prepare material for AI without exposing identifying details.";
       };
       "cli-mcp": {
-        "blurb": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capability registry, permissions, and workspace data as the web app.";
+        "blurb": "Search, read, and work with stella from the command line or any MCP-compatible client. Both surfaces share the same capability registry, permissions, and workspace data.";
         "eyebrow": "CLI & MCP";
         "title": "One workspace, from every tool.";
       };
