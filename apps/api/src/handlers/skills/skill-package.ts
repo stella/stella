@@ -114,27 +114,27 @@ export type GithubTreeItem = {
   type: string;
 };
 
-type GithubRequestBudget = {
+type SkillSourceRequestBudget = {
   deadlineAt: number;
   remainingRequests?: number;
   timeoutMessage?: string;
 };
 
 export type SkillPackageFetchContext = {
-  githubRequestBudget?: GithubRequestBudget;
+  requestBudget?: SkillSourceRequestBudget;
   githubTrees: Map<string, Promise<GithubTreeItem[]>>;
 };
 
 export const createSkillPackageFetchContext = (limits?: {
   deadlineAt: number;
-  maxGithubRequests: number;
+  maxRequests: number;
 }): SkillPackageFetchContext => ({
   ...(limits
     ? {
-        githubRequestBudget: {
+        requestBudget: {
           deadlineAt: limits.deadlineAt,
-          remainingRequests: limits.maxGithubRequests,
-          timeoutMessage: "GitHub skill import timed out",
+          remainingRequests: limits.maxRequests,
+          timeoutMessage: "Skill import timed out",
         },
       }
     : {}),
@@ -189,7 +189,7 @@ export const fetchSkillPackageFromUrl = async (
     try: async () => {
       const githubPath = await parseGithubSkillPath(
         rawUrl,
-        context.githubRequestBudget,
+        context.requestBudget,
       );
       if (githubPath) {
         return await fetchGithubSkillPackage(
@@ -200,7 +200,11 @@ export const fetchSkillPackageFromUrl = async (
       }
 
       const url = new URL(rawUrl);
-      const response = await fetchSafeBytes(url);
+      const response = await fetchSafeBytes(
+        url,
+        FILE_SIZE_LIMIT_BYTES.skillPack,
+        context.requestBudget,
+      );
       const contentType = response.headers.get("content-type") ?? "";
       const parsed = isZipSkillSource({
         buffer: response.body,
@@ -541,10 +545,7 @@ const fetchGithubSkillFiles = async (
   const files: SkillFile[] = [];
   let totalFileBytes = 0;
   let resourceCount = 0;
-  const commitSha = await resolveGithubCommitSha(
-    target,
-    context.githubRequestBudget,
-  );
+  const commitSha = await resolveGithubCommitSha(target, context.requestBudget);
   const tree = await fetchGithubTreeOnce({
     commitSha,
     context,
@@ -595,7 +596,7 @@ const fetchGithubSkillFiles = async (
         repo: target.repo,
       }),
       GITHUB_SKILL_FILE_MAX_BYTES,
-      context.githubRequestBudget,
+      context.requestBudget,
     );
     totalFileBytes += raw.body.byteLength;
     assertGithubTotalFileBytes(totalFileBytes);
@@ -627,9 +628,7 @@ const fetchGithubTreeOnce = async ({
     context,
     load: async () =>
       await fetchGithubTree({
-        ...(context.githubRequestBudget
-          ? { budget: context.githubRequestBudget }
-          : {}),
+        ...(context.requestBudget ? { budget: context.requestBudget } : {}),
         commitSha,
         owner,
         repo,
@@ -891,9 +890,9 @@ const hashSkillPackage = ({
 const fetchSafeBytes = async (
   url: URL,
   maxBytes = FILE_SIZE_LIMIT_BYTES.skillPack,
-  budget?: GithubRequestBudget,
+  budget?: SkillSourceRequestBudget,
 ) => {
-  consumeGithubRequestBudget(budget);
+  consumeSkillSourceRequestBudget(budget);
   const response = await safeOutboundFetchBytes({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes,
@@ -916,8 +915,8 @@ const fetchSafeBytes = async (
   return response.value;
 };
 
-const consumeGithubRequestBudget = (
-  budget: GithubRequestBudget | undefined,
+const consumeSkillSourceRequestBudget = (
+  budget: SkillSourceRequestBudget | undefined,
 ): void => {
   if (budget?.remainingRequests === undefined) {
     return;
@@ -925,14 +924,14 @@ const consumeGithubRequestBudget = (
   if (budget.remainingRequests <= 0) {
     throw new HandlerError({
       status: 400,
-      message: "GitHub skill import exceeded its outbound request limit",
+      message: "Skill import exceeded its outbound request limit",
     });
   }
   budget.remainingRequests -= 1;
 };
 
 const githubRequestTimeoutMs = (
-  budget: GithubRequestBudget | undefined,
+  budget: SkillSourceRequestBudget | undefined,
 ): number => {
   if (!budget) {
     return GITHUB_API_TIMEOUT_MS;
@@ -949,7 +948,7 @@ const githubRequestTimeoutMs = (
 
 const githubRefExists = async (
   { owner, ref, repo }: Parameters<GithubRefExists>[0],
-  budget?: GithubRequestBudget,
+  budget?: SkillSourceRequestBudget,
 ): Promise<boolean> =>
   (await githubRefKindExists({ budget, kind: "heads", owner, ref, repo })) ||
   (await githubRefKindExists({ budget, kind: "tags", owner, ref, repo }));
@@ -961,13 +960,13 @@ const githubRefKindExists = async ({
   ref,
   repo,
 }: {
-  budget: GithubRequestBudget | undefined;
+  budget: SkillSourceRequestBudget | undefined;
   kind: GithubRefKind;
   owner: string;
   ref: string;
   repo: string;
 }): Promise<boolean> => {
-  consumeGithubRequestBudget(budget);
+  consumeSkillSourceRequestBudget(budget);
   const response = await safeOutboundFetchBytes({
     headers: GITHUB_FETCH_HEADERS,
     maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
@@ -1072,7 +1071,7 @@ export const redactSkillSourceUrlForStorage = (rawUrl: string): string => {
 
 const parseGithubSkillPath = async (
   rawUrl: string,
-  budget?: GithubRequestBudget,
+  budget?: SkillSourceRequestBudget,
 ): Promise<GithubSkillPath | null> => {
   let url: URL;
   try {
@@ -1125,7 +1124,7 @@ const parseGithubSkillPath = async (
 
 const parseGithubDiscoveryPath = async (
   rawUrl: string,
-  budget: GithubRequestBudget,
+  budget: SkillSourceRequestBudget,
 ): Promise<GithubSkillPath | null> => {
   let url: URL;
   try {
@@ -1187,7 +1186,7 @@ const parseGithubDiscoveryPath = async (
 
 const discoverGithubSkillPackages = async (
   target: GithubSkillPath,
-  budget: GithubRequestBudget,
+  budget: SkillSourceRequestBudget,
 ): Promise<SkillPackageDiscovery> => {
   const commitSha = await resolveGithubCommitSha(target, budget);
   const tree = await fetchGithubTree({ ...target, budget, commitSha });
@@ -1373,7 +1372,7 @@ const resolveGithubDefaultBranch = async ({
   owner,
   repo,
 }: {
-  budget?: GithubRequestBudget;
+  budget?: SkillSourceRequestBudget;
   owner: string;
   repo: string;
 }): Promise<string> => {
@@ -1398,7 +1397,7 @@ const resolveGithubDefaultBranch = async ({
 
 const resolveGithubCommitSha = async (
   target: GithubSkillPath,
-  budget?: GithubRequestBudget,
+  budget?: SkillSourceRequestBudget,
 ): Promise<string> => {
   if (GITHUB_COMMIT_SHA_PATTERN.test(target.ref)) {
     return target.ref.toLowerCase();
@@ -1429,7 +1428,7 @@ const fetchGithubTree = async ({
   owner,
   repo,
 }: {
-  budget?: GithubRequestBudget;
+  budget?: SkillSourceRequestBudget;
   commitSha: string;
   owner: string;
   repo: string;
@@ -1479,7 +1478,7 @@ const fetchGithubSkillSource = async ({
   path,
   repo,
 }: {
-  budget?: GithubRequestBudget;
+  budget?: SkillSourceRequestBudget;
   commitSha: string;
   owner: string;
   path: string;

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
@@ -17,12 +17,16 @@ const MAX_SKILL_IMPORTS = 20;
 // Bound the whole batch, not each raw file independently. The request cap
 // accommodates typical multi-skill repositories while preventing a maximal
 // 20-skill selection from issuing more than a small fixed number of requests.
-const GITHUB_IMPORT_TIMEOUT_MS = 30_000;
-const GITHUB_IMPORT_MAX_REQUESTS = 128;
+const SKILL_IMPORT_TIMEOUT_MS = 30_000;
+const SKILL_IMPORT_MAX_REQUESTS = 128;
 const CONTENT_HASH_PATTERN = "^[a-f0-9]{64}$";
 const GITHUB_COMMIT_SHA_PATTERN = "^[a-f0-9]{40}$";
+const importSkillScopeValues = [
+  "team",
+  "private",
+] as const satisfies typeof AGENT_SKILL_SCOPES;
 
-const importSkillsBodySchema = t.Object({
+export const importSkillsBodySchema = t.Object({
   items: t.Array(
     t.Object({
       integrity: t.Union([
@@ -44,7 +48,10 @@ const importSkillsBodySchema = t.Object({
       maxItems: MAX_SKILL_IMPORTS,
     },
   ),
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
+  scope: t.Union([
+    t.Literal(importSkillScopeValues[0]),
+    t.Literal(importSkillScopeValues[1]),
+  ]),
 });
 
 const config = {
@@ -78,8 +85,8 @@ const importSkillsFromUrls = createSafeRootHandler(
     const failed = [...deduplicated.failed];
     const { items } = deduplicated;
     const fetchContext = createSkillPackageFetchContext({
-      deadlineAt: Date.now() + GITHUB_IMPORT_TIMEOUT_MS,
-      maxGithubRequests: GITHUB_IMPORT_MAX_REQUESTS,
+      deadlineAt: Date.now() + SKILL_IMPORT_TIMEOUT_MS,
+      maxRequests: SKILL_IMPORT_MAX_REQUESTS,
     });
     const importAt = async (index: number): Promise<void> => {
       const item = items.at(index);

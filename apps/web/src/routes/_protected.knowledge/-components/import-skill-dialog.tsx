@@ -26,6 +26,7 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -65,6 +66,7 @@ const ImportSkillDialogBody = ({
   onImported,
   onOpenChange,
 }: ImportSkillDialogProps) => {
+  const format = useFormatter();
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
   const [url, setUrl] = useState("");
@@ -144,8 +146,8 @@ const ImportSkillDialogBody = ({
       setSelected(failedUrls);
       stellaToast.add({
         title: tSkills("importPartial", {
-          failed: String(result.failed.length),
-          installed: String(result.installed.length),
+          failed: format.number(result.failed.length),
+          installed: format.number(result.installed.length),
         }),
         description: t("common.unexpectedError"),
         type: "warning",
@@ -278,7 +280,7 @@ const ImportSkillDialogBody = ({
             {discovery.skills.length > MAX_SELECTED_SKILLS && (
               <p className="text-muted-foreground text-xs">
                 {tSkills("selectionLimit", {
-                  count: String(MAX_SELECTED_SKILLS),
+                  count: format.number(MAX_SELECTED_SKILLS),
                 })}
               </p>
             )}
@@ -397,7 +399,7 @@ const ImportSkillDialogBody = ({
             {importSkills.isPending && (
               <LoaderIcon className="size-4 animate-spin" />
             )}
-            {tSkills("importSelected", { count: String(selected.size) })}
+            {tSkills("importSelected", { count: format.number(selected.size) })}
           </Button>
         )}
       </DialogFooter>

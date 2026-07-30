@@ -107,7 +107,7 @@ describe("GitHub skill package discovery", () => {
       `https://github.com/example/skills/tree/${COMMIT_SHA}`,
       createSkillPackageFetchContext({
         deadlineAt: Date.now() + 30_000,
-        maxGithubRequests: 1,
+        maxRequests: 1,
       }),
     );
 
@@ -116,7 +116,7 @@ describe("GitHub skill package discovery", () => {
       throw new Error("Expected the request budget to reject the import");
     }
     expect(result.error.message).toBe(
-      "GitHub skill import exceeded its outbound request limit",
+      "Skill import exceeded its outbound request limit",
     );
     expect(outboundRequestCount).toBe(1);
   });
@@ -127,7 +127,7 @@ describe("GitHub skill package discovery", () => {
       `https://github.com/example/skills/tree/${COMMIT_SHA}`,
       createSkillPackageFetchContext({
         deadlineAt: Date.now() - 1,
-        maxGithubRequests: 10,
+        maxRequests: 10,
       }),
     );
 
@@ -135,7 +135,25 @@ describe("GitHub skill package discovery", () => {
     if (Result.isOk(result)) {
       throw new Error("Expected the expired deadline to reject the import");
     }
-    expect(result.error.message).toBe("GitHub skill import timed out");
+    expect(result.error.message).toBe("Skill import timed out");
+    expect(outboundRequestCount).toBe(0);
+  });
+
+  test("applies the batch deadline to non-GitHub sources", async () => {
+    outboundRequestCount = 0;
+    const result = await fetchSkillPackageFromUrl(
+      "https://example.com/SKILL.md",
+      createSkillPackageFetchContext({
+        deadlineAt: Date.now() - 1,
+        maxRequests: 10,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected the expired deadline to reject the import");
+    }
+    expect(result.error.message).toBe("Skill import timed out");
     expect(outboundRequestCount).toBe(0);
   });
 });
