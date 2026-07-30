@@ -467,16 +467,42 @@ describe("structural budget", () => {
     // Persisted junk can carry any numeric level; ever-ascending levels grow
     // the ancestry stack without bound, which is what made path
     // materialization quadratic. The clamp keeps the deepest entries.
-    const ascending = Array.from({ length: 100 }, (_, index) => {
-      const base = heading(index, 1, `H${index}`);
-      // SAFETY: constructs the malformed persisted shape under test — a
-      // numeric heading level outside the parser's 1|2|3 union.
-      return { ...base, level: index + 1 } as Block;
-    });
-    const chunks = chunkDocument({
-      ast: astOf([...ascending, paragraph(100, "body under deep headings")]),
-      fallbackText: "",
-    });
+    // Parsed through the production guard rather than cast, so the test
+    // proves the real path: `isDocumentAst` validates the envelope only, and
+    // any numeric level reaches the chunker.
+    const ast = parseDocumentAst(
+      JSON.stringify({
+        version: 1,
+        source: { system: "t", documentId: "d", webUrl: "", printUrl: "" },
+        metadata: {
+          caseNumber: null,
+          ecli: null,
+          court: null,
+          decisionDate: null,
+          decisionType: null,
+          keywords: [],
+          statutes: [],
+        },
+        blocks: [
+          ...Array.from({ length: 100 }, (_, index) => ({
+            id: `h${index}`,
+            anchorId: `h${index}-anchor`,
+            type: "heading",
+            level: index + 1,
+            inlines: [],
+            plainText: `H${index}`,
+          })),
+          {
+            id: "p100",
+            anchorId: "p100-anchor",
+            type: "paragraph",
+            inlines: [],
+            plainText: "body under deep headings",
+          },
+        ],
+      }),
+    );
+    const chunks = chunkDocument({ ast, fallbackText: "" });
     const last = chunks.at(-1);
     expect(last?.headingPath.length).toBe(64);
     expect(last?.headingPath.at(-1)).toBe("H99");
