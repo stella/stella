@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Aktiv weiterentwickelt",
     "selfHost": "Selbst hosten",
-    "subtitle": "Der juristische Open-Source-Arbeitsbereich: Akten, Dokumente, Prüfung und ein Agent, der mit Quellenangaben antwortet.",
+    "subtitle": "Der juristische <gh>Open-Source</gh>-Arbeitsbereich: Akten, Dokumente, Prüfung und ein KI-Agent, der mit Quellenangaben antwortet.",
     "title": "Setzen Sie KI in jeder Akte ein."
   },
   "home": {

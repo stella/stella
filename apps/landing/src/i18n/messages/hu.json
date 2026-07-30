@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Aktív fejlesztés alatt",
     "selfHost": "Saját üzemeltetés",
-    "subtitle": "A nyílt forráskódú jogi munkaterület: ügyek, dokumentumok, ellenőrzés és egy ügynök, amely forráshivatkozásokkal válaszol.",
+    "subtitle": "A <gh>nyílt forráskódú</gh> jogi munkaterület: ügyek, dokumentumok, ellenőrzés és egy AI-ügynök, amely forráshivatkozásokkal válaszol.",
     "title": "Állítsa munkába az AI-t minden ügyben."
   },
   "home": {

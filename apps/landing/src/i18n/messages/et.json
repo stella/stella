@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Aktiivses arenduses",
     "selfHost": "Majuta ise",
-    "subtitle": "Avatud lähtekoodiga õigustööruum: toimikud, dokumendid, ülevaatus ja agent, kes vastab allikaviidetega.",
+    "subtitle": "<gh>Avatud lähtekoodiga</gh> õigustööruum: toimikud, dokumendid, ülevaatus ja tehisintellekti agent, kes vastab allikaviidetega.",
     "title": "Pane tehisintellekt igas toimikus tööle."
   },
   "home": {

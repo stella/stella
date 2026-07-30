@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Aktyviai tobulinama",
     "selfHost": "Talpinkite patys",
-    "subtitle": "Atvirojo kodo teisinė darbo sritis: bylos, dokumentai, peržiūra ir agentas, kuris atsako nurodydamas šaltinius.",
+    "subtitle": "<gh>Atvirojo kodo</gh> teisinė darbo sritis: bylos, dokumentai, peržiūra ir DI agentas, kuris atsako nurodydamas šaltinius.",
     "title": "Pasitelkite DI kiekvienoje byloje."
   },
   "home": {

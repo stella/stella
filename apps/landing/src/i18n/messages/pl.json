@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Aktywnie rozwijany",
     "selfHost": "Hostuj samodzielnie",
-    "subtitle": "Prawniczy obszar roboczy open source: sprawy, dokumenty, przegląd i agent, który odpowiada ze wskazaniem źródeł.",
+    "subtitle": "Prawniczy obszar roboczy <gh>open source</gh>: sprawy, dokumenty, przegląd i agent AI, który odpowiada ze wskazaniem źródeł.",
     "title": "Zaprzęgnij AI do każdej sprawy."
   },
   "home": {

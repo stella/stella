@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Aktīvi tiek attīstīts",
     "selfHost": "Mitināt pašiem",
-    "subtitle": "Atvērtā pirmkoda juridiskā darbvieta: lietas, dokumenti, pārskatīšana un aģents, kas atbild, norādot avotus.",
+    "subtitle": "<gh>Atvērtā pirmkoda</gh> juridiskā darbvieta: lietas, dokumenti, pārskatīšana un AI aģents, kas atbild, norādot avotus.",
     "title": "Lieciet AI strādāt katrā lietā."
   },
   "home": {

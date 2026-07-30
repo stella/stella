@@ -67,7 +67,7 @@ type Messages = {
   "hero": {
     "badge": "Actively developed";
     "selfHost": "Self-host";
-    "subtitle": "The open-source legal workspace: matters, documents, review, and an agent that answers with citations.";
+    "subtitle": "The <gh>open-source</gh> legal workspace: matters, documents, review, and an AI agent that answers with citations.";
     "title": "Put AI to work on every matter.";
   };
   "home": {

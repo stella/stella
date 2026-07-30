@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Em desenvolvimento ativo",
     "selfHost": "Auto-hospedar",
-    "subtitle": "O espaço de trabalho jurídico de código aberto: casos, documentos, revisão e um agente que responde com citações.",
+    "subtitle": "O espaço de trabalho jurídico de <gh>código aberto</gh>: casos, documentos, revisão e um agente de IA que responde com citações.",
     "title": "Coloque a IA para trabalhar em cada caso."
   },
   "home": {

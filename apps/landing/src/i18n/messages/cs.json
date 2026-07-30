@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Aktivně vyvíjeno",
     "selfHost": "Vlastní hosting",
-    "subtitle": "Open source právní pracovní prostor: spisy, dokumenty, revize a agent, který odpovídá s citacemi.",
+    "subtitle": "<gh>Open source</gh> právní pracovní prostor: spisy, dokumenty, revize a AI agent, který odpovídá s citacemi.",
     "title": "Zapojte AI do každého spisu."
   },
   "home": {

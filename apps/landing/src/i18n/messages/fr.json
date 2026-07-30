@@ -64,7 +64,7 @@
   "hero": {
     "badge": "Développement actif",
     "selfHost": "Auto-hébergement",
-    "subtitle": "La plateforme juridique open source : dossiers, documents, revue et un agent qui répond en citant ses sources.",
+    "subtitle": "La plateforme juridique <gh>open source</gh> : dossiers, documents, revue et un agent IA qui répond en citant ses sources.",
     "title": "Mettez l’IA au service de chaque dossier."
   },
   "home": {

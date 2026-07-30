@@ -15,8 +15,8 @@
     },
     "hero.subtitle": {
       "cs": {
-        "source": "The open-source legal workspace: matters, documents, review, and an agent that answers with citations.",
-        "target": "Open source právní pracovní prostor: spisy, dokumenty, revize a agent, který odpovídá s citacemi."
+        "source": "The <gh>open-source</gh> legal workspace: matters, documents, review, and an AI agent that answers with citations.",
+        "target": "<gh>Open source</gh> právní pracovní prostor: spisy, dokumenty, revize a AI agent, který odpovídá s citacemi."
       }
     },
     "meta.homeDescription": {

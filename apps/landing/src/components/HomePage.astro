@@ -31,6 +31,20 @@ const releaseDateFormatter = new Intl.DateTimeFormat(locale, {
 const appUrl = "https://my.stll.app";
 const selfHostingDocsUrl =
   "https://github.com/stella/stella/blob/main/docs/self-hosting.md";
+const githubUrl = "https://github.com/stella/stella";
+
+// The subtitle carries a <gh>…</gh> marker pair around each locale's
+// open-source phrase; the marked span renders as a link to the repository.
+// Every catalog must carry exactly one pair — fail loudly rather than
+// rendering a marker to visitors.
+const subtitleRaw = t("hero.subtitle");
+const subtitleMatch = /^(.*)<gh>(.+?)<\/gh>(.*)$/su.exec(subtitleRaw);
+if (!subtitleMatch) {
+  throw new Error(
+    "hero.subtitle must wrap the open-source phrase in <gh>…</gh> markers",
+  );
+}
+const [, subtitleBefore, subtitleLinked, subtitleAfter] = subtitleMatch;
 ---
 
 <Base
@@ -135,7 +149,13 @@ const selfHostingDocsUrl =
             style="color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground))"
             class="mt-6 max-w-2xl text-balance text-center text-lg leading-[1.55] sm:text-xl"
           >
-            {t("hero.subtitle")}
+            {subtitleBefore}<a
+              href={githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="underline underline-offset-4 transition-opacity hover:opacity-70"
+              >{subtitleLinked}</a
+            >{subtitleAfter}
           </p>
           <div
             data-reveal
