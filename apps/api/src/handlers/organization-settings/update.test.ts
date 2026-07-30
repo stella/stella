@@ -32,9 +32,7 @@ describe("updateOrganizationSettingsHandler", () => {
         }),
       }),
     });
-    const safeDb: SafeDb = async (operation) => {
-      return Result.ok(await operation(tx));
-    };
+    const safeDb: SafeDb = async (operation) => Result.ok(await operation(tx));
     const recordAuditEvent: AuditRecorder = async (_tx, event) => {
       auditEvent = event;
     };

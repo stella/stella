@@ -66,18 +66,21 @@ describe("isSupportedOcrPageCount", () => {
 
 describe("readBoundedOcrJson", () => {
   test("parses a response within the byte boundary", async () => {
-    await expect(
-      readBoundedOcrJson(new Response('{"ok":true}'), 32),
-    ).resolves.toEqual({ ok: true });
+    const parsed = await readBoundedOcrJson(new Response('{"ok":true}'), 32);
+
+    expect(parsed).toEqual({ ok: true });
   });
 
   test("rejects a response whose declared size exceeds the boundary", async () => {
-    await expect(
-      readBoundedOcrJson(
-        new Response("abcd", { headers: { "content-length": "4" } }),
-        3,
-      ),
-    ).rejects.toMatchObject({ code: "response_too_large" });
+    const rejection: unknown = await readBoundedOcrJson(
+      new Response("abcd", { headers: { "content-length": "4" } }),
+      3,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({ code: "response_too_large" });
   });
 
   test("rejects a chunked response that crosses the boundary", async () => {
@@ -90,8 +93,14 @@ describe("readBoundedOcrJson", () => {
       },
     });
 
-    await expect(
-      readBoundedOcrJson(new Response(body), 3),
-    ).rejects.toMatchObject({ code: "response_too_large" });
+    const rejection: unknown = await readBoundedOcrJson(
+      new Response(body),
+      3,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({ code: "response_too_large" });
   });
 });

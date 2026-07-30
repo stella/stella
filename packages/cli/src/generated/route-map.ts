@@ -1266,6 +1266,12 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Toggle AI prompt caching for the organization (update_org_settings)",
                 },
+                document_processing_mode: {
+                  type: "string",
+                  enum: ["off", "searchable-text"],
+                  description:
+                    "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
+                },
                 confirm: {
                   type: "boolean",
                   description:
@@ -1343,6 +1349,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "boolean",
                   description:
                     "Toggle AI prompt caching for the organization (update_org_settings)",
+                },
+                document_processing_mode: {
+                  type: "string",
+                  enum: ["off", "searchable-text"],
+                  description:
+                    "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
                 },
                 confirm: {
                   type: "boolean",
@@ -1433,6 +1445,12 @@ export const generatedRouteMap: RouteNode = {
                   type: "boolean",
                   description:
                     "Toggle AI prompt caching for the organization (update_org_settings)",
+                },
+                document_processing_mode: {
+                  type: "string",
+                  enum: ["off", "searchable-text"],
+                  description:
+                    "Set automatic PDF searchable-text extraction for the organization (update_org_settings)",
                 },
                 confirm: {
                   type: "boolean",

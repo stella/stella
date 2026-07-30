@@ -184,9 +184,8 @@ describe("requestManualOcrHandler", () => {
       }),
     });
     rootTransactionMock.mockImplementationOnce(
-      async (operation: (transaction: Transaction) => Promise<unknown>) => {
-        return await operation(tx);
-      },
+      async (operation: (transaction: Transaction) => Promise<unknown>) =>
+        await operation(tx),
     );
 
     const run = await persistManualOcrRun({

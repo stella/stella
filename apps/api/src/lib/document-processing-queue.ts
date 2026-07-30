@@ -622,15 +622,6 @@ const earlierFileFields = alias(
   "document_processing_earlier_file_fields",
 );
 
-type MissingAutomaticOcrCandidate = {
-  content: FieldContent;
-  entityId: SafeId<"entity">;
-  entityVersionId: SafeId<"entityVersion">;
-  fieldId: SafeId<"field">;
-  organizationId: SafeId<"organization">;
-  workspaceId: SafeId<"workspace">;
-};
-
 type EnqueueAttemptResult =
   | {
       status: "enqueued";
