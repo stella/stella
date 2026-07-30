@@ -660,6 +660,12 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_version";
       entityId: SafeId<"entity">;
+      /**
+       * Final object id reserved by trusted server-side writers. Persisting it
+       * before S3 publication lets the bounded reconciler derive and remove a
+       * final-key object left behind by a hard process death.
+       */
+      reservedFileId?: string;
     }
   | {
       type: "agent_skill";

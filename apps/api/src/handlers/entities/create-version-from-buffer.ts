@@ -1,7 +1,10 @@
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { pendingUploads } from "@/api/db/schema";
+import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { computeVersionDiffStats } from "@/api/handlers/entities/compute-version-diff";
 import { writeFileVersion } from "@/api/handlers/entities/write-file-version";
 import type { WriteFileVersionResult } from "@/api/handlers/entities/write-file-version";
@@ -22,6 +25,22 @@ import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { broadcast } from "@/api/lib/sse";
+
+const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
+const BUFFER_INTENT_STALE_MS = 60 * 1000;
+const BUFFER_INTENT_RECONCILE_LIMIT = 25;
+
+type RecoverableVersionIntent = Extract<
+  PendingUploadPurposeData,
+  { type: "entity_version" }
+> & { reservedFileId: string };
+
+const isRecoverableVersionIntent = (
+  value: PendingUploadPurposeData,
+): value is RecoverableVersionIntent =>
+  value.type === "entity_version" &&
+  typeof value.reservedFileId === "string" &&
+  value.reservedFileId.length > 0;
 
 class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
   code:
@@ -77,6 +96,223 @@ const ENTITY_VERSION_TARGET_MESSAGES = {
 const messageForStatus = (status: EntityVersionTargetErrorCode): string =>
   ENTITY_VERSION_TARGET_MESSAGES[status];
 
+type BufferVersionIntent = {
+  claimRequestId: string;
+  id: SafeId<"pendingUpload">;
+};
+
+/**
+ * Claim and remove a bounded batch of final-key objects whose durable intent
+ * proves that no version transaction committed. The intent row is finalized
+ * in the same transaction as the version, so a committed reference can never
+ * satisfy this stale-scanning predicate.
+ */
+const reconcileStaleBufferVersionIntents = async ({
+  safeDb,
+  organizationId,
+  workspaceId,
+}: Pick<
+  CreateEntityVersionFromBufferInput,
+  "safeDb" | "organizationId" | "workspaceId"
+>): Promise<void> => {
+  const reconcileClaimId = Bun.randomUUIDv7().slice(0, 64);
+  const timeoutSeconds = Math.floor(BUFFER_INTENT_STALE_MS / 1000);
+  const claimedResult = await safeDb(async (tx) => {
+    const staleRows = await tx
+      .select({
+        declaredMime: pendingUploads.declaredMime,
+        id: pendingUploads.id,
+        purposeData: pendingUploads.purposeData,
+      })
+      .from(pendingUploads)
+      .where(
+        sql`${pendingUploads.organizationId} = ${organizationId}
+          AND ${pendingUploads.workspaceId} = ${workspaceId}
+          AND ${pendingUploads.purpose} = 'entity_version'
+          AND ${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL
+          AND ${pendingUploads.status} = 'scanning'
+          AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSeconds} * interval '1 second'`,
+      )
+      .limit(BUFFER_INTENT_RECONCILE_LIMIT)
+      .for("update", { skipLocked: true });
+
+    if (staleRows.length === 0) {
+      return [];
+    }
+
+    const ids = staleRows.map((row) => row.id);
+    // audit: skip — crash-recovery claim bookkeeping; no durable entity changes.
+    await tx
+      .update(pendingUploads)
+      .set({
+        claimedAt: new Date(),
+        claimedByRequestId: reconcileClaimId,
+      })
+      .where(
+        and(
+          inArray(pendingUploads.id, ids),
+          eq(pendingUploads.status, "scanning"),
+        ),
+      );
+    return staleRows;
+  });
+  if (Result.isError(claimedResult)) {
+    throw claimedResult.error;
+  }
+
+  const cleanupResults = await Promise.all(
+    claimedResult.value.map(async (row) => {
+      if (!isRecoverableVersionIntent(row.purposeData)) {
+        return null;
+      }
+      const staleObjectKey = createFileKey({
+        organizationId,
+        workspaceId,
+        fileId: row.purposeData.reservedFileId,
+        mimeType: row.declaredMime,
+      });
+      const cleanup = await Result.tryPromise({
+        try: async () => await getS3().delete(staleObjectKey),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(cleanup)) {
+        captureError(cleanup.error, {
+          objectKey: staleObjectKey,
+          pendingUploadId: row.id,
+          stage: "buffer-version-intent-reconcile",
+        });
+        return null;
+      }
+      return row.id;
+    }),
+  );
+  const cleanedIds = cleanupResults.filter(
+    (id): id is SafeId<"pendingUpload"> => id !== null,
+  );
+
+  if (cleanedIds.length === 0) {
+    return;
+  }
+  const finalizedCleanup = await safeDb(async (tx) => {
+    // audit: skip — terminal crash-recovery bookkeeping after object cleanup.
+    await tx
+      .update(pendingUploads)
+      .set({
+        finalizedAt: new Date(),
+        rejectReason: "Reconciled abandoned server-generated version bytes",
+        status: "rejected",
+      })
+      .where(
+        and(
+          inArray(pendingUploads.id, cleanedIds),
+          eq(pendingUploads.status, "scanning"),
+          eq(pendingUploads.claimedByRequestId, reconcileClaimId),
+        ),
+      );
+  });
+  if (Result.isError(finalizedCleanup)) {
+    captureError(finalizedCleanup.error, {
+      pendingUploadIds: cleanedIds.join(","),
+      stage: "buffer-version-intent-reconcile-finalize",
+    });
+  }
+};
+
+const reserveBufferVersionIntent = async ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  entityId,
+  userId,
+  fileId,
+  fileName,
+  mimeType,
+  sizeBytes,
+  sha256Hex,
+}: Pick<
+  CreateEntityVersionFromBufferInput,
+  "safeDb" | "organizationId" | "workspaceId" | "entityId" | "userId"
+> & {
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  sha256Hex: string;
+}): Promise<BufferVersionIntent> => {
+  const id = createSafeId<"pendingUpload">();
+  const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
+  const now = new Date();
+  const reserved = await safeDb(async (tx) => {
+    // audit: skip — crash-recovery intent; the version transaction records the
+    // durable entity and version events.
+    const rows = await tx
+      .insert(pendingUploads)
+      .values({
+        id,
+        organizationId,
+        workspaceId,
+        userId,
+        purpose: "entity_version",
+        purposeData: {
+          type: "entity_version",
+          entityId,
+          reservedFileId: fileId,
+        },
+        declaredName: fileName,
+        declaredMime: mimeType,
+        declaredSize: sizeBytes,
+        declaredSha256: sha256Hex,
+        status: "scanning",
+        claimedAt: now,
+        claimedByRequestId: claimRequestId,
+        expiresAt: new Date(now.getTime() + BUFFER_INTENT_TTL_MS),
+        createdAt: now,
+      })
+      .returning({ id: pendingUploads.id });
+    return (
+      rows.at(0)?.id ?? panic("Buffer version intent insert returned no row")
+    );
+  });
+  if (Result.isError(reserved)) {
+    throw reserved.error;
+  }
+  return { id: reserved.value, claimRequestId };
+};
+
+const abandonBufferVersionIntent = async ({
+  safeDb,
+  intent,
+  reason,
+}: {
+  safeDb: SafeDb;
+  intent: BufferVersionIntent;
+  reason: string;
+}): Promise<void> => {
+  const abandoned = await safeDb(async (tx) => {
+    // audit: skip — failed intent bookkeeping; no durable version was created.
+    await tx
+      .update(pendingUploads)
+      .set({
+        finalizedAt: new Date(),
+        rejectReason: reason,
+        status: "rejected",
+      })
+      .where(
+        and(
+          eq(pendingUploads.id, intent.id),
+          eq(pendingUploads.status, "scanning"),
+          eq(pendingUploads.claimedByRequestId, intent.claimRequestId),
+        ),
+      );
+  });
+  if (Result.isError(abandoned)) {
+    captureError(abandoned.error, {
+      pendingUploadId: intent.id,
+      stage: "buffer-version-intent-abandon",
+    });
+  }
+};
+
 /** Persist trusted server-generated bytes as a new version of an entity. */
 export const createEntityVersionFromBuffer = async ({
   safeDb,
@@ -114,6 +350,28 @@ export const createEntityVersionFromBuffer = async ({
     mimeType,
   });
 
+  // Reconcile older crash leftovers before publishing another final object,
+  // then durably reserve this exact file id. A hard death after the S3 write
+  // can therefore be distinguished from a committed version and cleaned by a
+  // later bounded reconciliation pass.
+  await reconcileStaleBufferVersionIntents({
+    safeDb,
+    organizationId,
+    workspaceId,
+  });
+  const intent = await reserveBufferVersionIntent({
+    safeDb,
+    organizationId,
+    workspaceId,
+    entityId,
+    userId,
+    fileId,
+    fileName,
+    mimeType,
+    sizeBytes: bytes.byteLength,
+    sha256Hex,
+  });
+
   const cleanupObject = async (): Promise<void> => {
     await getS3()
       .delete(objectKey)
@@ -129,15 +387,20 @@ export const createEntityVersionFromBuffer = async ({
     // have accepted the complete object even though the client saw an error.
     // Best-effort deletion prevents an unreferenced final-key object.
     await cleanupObject();
+    await abandonBufferVersionIntent({
+      safeDb,
+      intent,
+      reason: "Server-generated version object write failed",
+    });
     throw error;
   }
 
   // `safeDb` cannot distinguish a callback failure (which necessarily rolls
   // back) from a lost COMMIT acknowledgement (which may already be durable).
-  // Track whether our callback returned so cleanup can occur only while a
-  // committed row is structurally impossible. Preserving a possible orphan is
-  // safer than deleting bytes a committed version may reference.
-  const transactionState = { callbackCompleted: false };
+  // The intent is finalized atomically with the version. Track whether that
+  // durable reference was prepared so ambiguous acknowledgements preserve the
+  // object; a rolled-back intent remains recoverable by the bounded janitor.
+  const transactionState = { durableReferencePrepared: false };
   const writeResult = await safeDb(async (tx) => {
     const versionWriteResult = await writeFileVersion({
       tx,
@@ -154,16 +417,52 @@ export const createEntityVersionFromBuffer = async ({
       sha256Hex,
       source,
       scanWarnings,
-      ...(afterWrite !== undefined && {
-        afterWrite: async (result) => await afterWrite(tx, result),
-      }),
+      afterWrite: async (result) => {
+        const finalizedResult = {
+          type: "entity_version" as const,
+          entityId,
+          entityVersionId,
+          versionNumber: result.versionNumber,
+          fileId,
+          fileName,
+        };
+        // audit: skip — intent bookkeeping is atomic with the audited entity
+        // and version mutations performed by writeFileVersion.
+        const rows = await tx
+          .update(pendingUploads)
+          .set({
+            status: "finalized",
+            finalizedResult,
+            finalizedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(pendingUploads.id, intent.id),
+              eq(pendingUploads.status, "scanning"),
+              eq(pendingUploads.claimedByRequestId, intent.claimRequestId),
+            ),
+          )
+          .returning({ id: pendingUploads.id });
+        if (!rows.at(0)) {
+          panic("Buffer version intent finalize returned no row");
+        }
+        if (afterWrite !== undefined) {
+          await afterWrite(tx, result);
+        }
+      },
     });
-    transactionState.callbackCompleted = true;
+    transactionState.durableReferencePrepared =
+      versionWriteResult.status === "ok";
     return versionWriteResult;
   });
   if (Result.isError(writeResult)) {
-    if (!transactionState.callbackCompleted) {
+    if (!transactionState.durableReferencePrepared) {
       await cleanupObject();
+      await abandonBufferVersionIntent({
+        safeDb,
+        intent,
+        reason: "Server-generated version transaction failed",
+      });
     }
     throw writeResult.error;
   }
@@ -171,6 +470,11 @@ export const createEntityVersionFromBuffer = async ({
 
   if (written.status !== "ok") {
     await cleanupObject();
+    await abandonBufferVersionIntent({
+      safeDb,
+      intent,
+      reason: `Server-generated version rejected: ${written.status}`,
+    });
     return Result.err(
       new EntityVersionTargetError({
         code: written.status,

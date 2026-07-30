@@ -157,13 +157,13 @@ describe("getSignedOauthQuery", () => {
     );
   });
 
-  test("prefers the explicit hash bridge when both transports are present", () => {
+  test("prefers the signed search continuation over an untrusted hash bridge", () => {
     expect(
       getSignedOauthQuery({
         hash: getOauthHashFragment(bridgedQuery),
         search: `?${directQuery}`,
       }),
-    ).toBe(bridgedQuery);
+    ).toBe(directQuery);
   });
 
   test("rejects unsigned search and hash values", () => {

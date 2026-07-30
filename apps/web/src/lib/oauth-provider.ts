@@ -41,13 +41,12 @@ export const getSignedOauthQuery = ({
   hash: string;
   search: string;
 }): string | null => {
-  const bridgedQuery = getSignedOauthQueryFromHash(hash);
-  if (bridgedQuery !== null) {
-    return bridgedQuery;
+  const query = search.startsWith("?") ? search.slice(1) : search;
+  if (hasSignedOauthQuery(query)) {
+    return query;
   }
 
-  const query = search.startsWith("?") ? search.slice(1) : search;
-  return hasSignedOauthQuery(query) ? query : null;
+  return getSignedOauthQueryFromHash(hash);
 };
 
 export const getOauthHashFragment = (query: string): string => {
