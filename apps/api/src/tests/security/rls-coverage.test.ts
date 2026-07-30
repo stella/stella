@@ -210,6 +210,10 @@ describe("policy coverage", () => {
       // AND the correct session variable
       for (const pol of tablePolicies) {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
+        if (!pol.permissive) {
+          expect(expr).toBe("false");
+          continue;
+        }
         expect(expr).toContain("workspace_id");
         expect(expr).toContain(SETTING_WORKSPACE_IDS);
         expect(expr).toContain(WORKSPACE_ACCESS_VIEW_NAME);
@@ -246,6 +250,10 @@ describe("policy coverage", () => {
       // AND the correct session variable
       for (const pol of tablePolicies) {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
+        if (!pol.permissive) {
+          expect(expr).toBe("false");
+          continue;
+        }
         expect(expr).toContain("organization_id");
         expect(expr).toContain(SETTING_ORGANIZATION_ID);
       }
