@@ -66,7 +66,7 @@ export const fieldFileOptions = ({
   workspaceId,
   entityId,
   fieldId,
-  enabled,
+  enabled = true,
 }: EntityVersionsKey & { fieldId: string; enabled?: boolean }) =>
   queryOptions({
     queryKey: [
