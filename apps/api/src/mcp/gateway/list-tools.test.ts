@@ -88,12 +88,17 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
   });
 });
 
-describe("listGatewayMcpToolDefinitions compound scope filtering", () => {
-  test("advertises save_filled_template only when both grants are present", async () => {
+describe("listGatewayMcpToolDefinitions compound scope discovery", () => {
+  test("keeps compound tools discoverable when an additional grant is missing", async () => {
     const withoutTemplateConsent = await listGatewayMcpToolDefinitions({
       context: contextWith(undefined),
       mode: "default",
       scopes: ["stella:documents_write"],
+    });
+    const withoutPrimaryConsent = await listGatewayMcpToolDefinitions({
+      context: contextWith(undefined),
+      mode: "default",
+      scopes: ["stella:templates"],
     });
     const withBothConsents = await listGatewayMcpToolDefinitions({
       context: contextWith(undefined),
@@ -103,6 +108,11 @@ describe("listGatewayMcpToolDefinitions compound scope filtering", () => {
 
     expect(
       withoutTemplateConsent.some(
+        (definition) => definition.name === "save_filled_template",
+      ),
+    ).toBe(true);
+    expect(
+      withoutPrimaryConsent.some(
         (definition) => definition.name === "save_filled_template",
       ),
     ).toBe(false);
