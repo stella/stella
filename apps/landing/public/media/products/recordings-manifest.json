@@ -8,14 +8,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.chat",
         "apps/web/src/components/chat",
         "apps/web/src/components/ai-elements"
@@ -29,14 +33,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.chat",
         "apps/web/src/components/chat",
         "apps/web/src/components/ai-elements"
@@ -50,14 +58,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.chat",
         "apps/web/src/components/chat",
         "apps/web/src/components/ai-elements"
@@ -71,14 +83,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.chat",
         "apps/web/src/components/chat",
         "apps/web/src/components/ai-elements"
@@ -92,14 +108,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.knowledge"
       ]
     },
@@ -111,14 +131,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.knowledge"
       ]
     },
@@ -130,14 +154,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.knowledge"
       ]
     },
@@ -149,14 +177,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.knowledge"
       ]
     },
@@ -168,14 +200,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -187,14 +223,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -206,14 +246,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -225,14 +269,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -244,14 +292,18 @@
         "width": 900
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -263,14 +315,18 @@
         "width": 900
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -282,14 +338,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -301,14 +361,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -320,14 +384,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/components/inspector",
         "apps/web/src/routes/_protected.tsx"
@@ -341,14 +409,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/components/inspector",
         "apps/web/src/routes/_protected.tsx"
@@ -362,14 +434,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -381,14 +457,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -400,14 +480,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "2ccb893dbc191e598014a21adb21e2181f36c11e",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/routes/_protected.knowledge",
         "apps/api/scripts/seed-templates.ts",
@@ -422,14 +506,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "2ccb893dbc191e598014a21adb21e2181f36c11e",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/routes/_protected.knowledge",
         "apps/api/scripts/seed-templates.ts",
@@ -444,14 +532,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.knowledge",
         "apps/api/scripts/seed-templates.ts"
       ]
@@ -464,14 +556,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.knowledge",
         "apps/api/scripts/seed-templates.ts"
       ]
@@ -484,14 +580,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -503,14 +603,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -522,14 +626,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     },
@@ -541,14 +649,18 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "6e922cf0ee5df4fae3bc5adf8c155d5b7255afbb",
+      "recordedAtCommit": "e547129f3af8a68c6afb82d1aa7b64c36572f327",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
         "apps/api/scripts/seed-dev.ts",
+        "apps/api/scripts/seed-test-user.ts",
         "apps/web/src/components/app-sidebar.tsx",
         "apps/web/src/components/app-sidebar.logic.ts",
         "apps/web/src/components/breadcrumbs",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/fonts.css",
+        "packages/ui/src/styles/globals.css",
         "apps/web/src/routes/_protected.workspaces/$workspaceId"
       ]
     }
