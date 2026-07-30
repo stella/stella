@@ -1357,14 +1357,18 @@ const discoverGithubSkillPackages = async (
       : [target.selectedSkillPath];
   const entries = await mapWithConcurrency({
     transform: async (skillPath): Promise<DiscoveredSkillPackage | null> => {
+      const sourceBytes = await fetchGithubSkillSourceBytes({
+        budget,
+        commitSha,
+        owner: target.owner,
+        path: skillPath,
+        repo: target.repo,
+      });
+      if (sourceBytes === null) {
+        return null;
+      }
       try {
-        const source = await fetchGithubSkillSource({
-          budget,
-          commitSha,
-          owner: target.owner,
-          path: skillPath,
-          repo: target.repo,
-        });
+        const source = decodeUtf8(sourceBytes);
         const parsed = parseMarkdownSkillPackage(source);
         const skillDir =
           skillPath === SKILL_FILE_NAME
@@ -1635,7 +1639,7 @@ const fetchGithubTree = async ({
   return parsed;
 };
 
-const fetchGithubSkillSource = async ({
+const fetchGithubSkillSourceBytes = async ({
   budget,
   commitSha,
   owner,
@@ -1647,13 +1651,34 @@ const fetchGithubSkillSource = async ({
   owner: string;
   path: string;
   repo: string;
-}): Promise<string> => {
-  const response = await fetchSafeBytes(
-    githubRawUrl({ owner, path, ref: commitSha, repo }),
-    GITHUB_SKILL_FILE_MAX_BYTES,
-    budget,
-  );
-  return decodeUtf8(response.body);
+}): Promise<ArrayBuffer | null> => {
+  consumeSkillSourceRequestBudget(budget);
+  const response = await safeOutboundFetchBytes({
+    headers: GITHUB_FETCH_HEADERS,
+    maxBytes: GITHUB_SKILL_FILE_MAX_BYTES,
+    timeoutMs: githubRequestTimeoutMs(budget),
+    url: githubRawUrl({ owner, path, ref: commitSha, repo }),
+  });
+  if (Result.isError(response)) {
+    if (response.error.message === "Response body exceeded size limit") {
+      return null;
+    }
+    throw new HandlerError({
+      status: 400,
+      message: response.error.message,
+      cause: response.error,
+    });
+  }
+  if (!response.value.ok) {
+    if (response.value.status === 404) {
+      return null;
+    }
+    throw new HandlerError({
+      status: 400,
+      message: `Skill source returned HTTP ${response.value.status}`,
+    });
+  }
+  return response.value.body;
 };
 
 const githubPinnedSkillUrl = ({

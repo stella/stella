@@ -12,19 +12,34 @@ const COMMIT_SHA = "a".repeat(40);
 const SMALL_TREE_SHA = "b".repeat(40);
 const SCRIPTS_TREE_SHA = "c".repeat(40);
 let outboundRequestCount = 0;
+let invalidSkillScenario: "forbidden" | "missing" | "server-error" | "timeout" =
+  "missing";
 let treeScenario: "default" | "scoped-folder" | "selected-skill" = "default";
 let requestedTreeUrls: string[] = [];
 
-const response = (body: unknown): Result<SafeOutboundFetchResponse, never> => {
+const response = (
+  body: unknown,
+  status = 200,
+): Result<SafeOutboundFetchResponse, never> => {
   const bytes = new TextEncoder().encode(
     typeof body === "string" ? body : JSON.stringify(body),
   );
   return Result.ok({
     body: bytes.buffer,
     headers: new Headers(),
-    ok: true,
-    status: 200,
+    ok: status >= 200 && status < 300,
+    status,
   });
+};
+
+const invalidSkillStatus = (): number => {
+  if (invalidSkillScenario === "forbidden") {
+    return 403;
+  }
+  if (invalidSkillScenario === "server-error") {
+    return 503;
+  }
+  return 404;
 };
 
 void mock.module("@/api/lib/safe-outbound-fetch", () => ({
@@ -33,9 +48,12 @@ void mock.module("@/api/lib/safe-outbound-fetch", () => ({
     outboundRequestCount += 1;
     if (url.hostname === "raw.githubusercontent.com") {
       if (url.pathname.endsWith("/invalid/SKILL.md")) {
-        return Result.err(
-          new SafeOutboundFetchError({ message: "Request timed out" }),
-        );
+        if (invalidSkillScenario === "timeout") {
+          return Result.err(
+            new SafeOutboundFetchError({ message: "Request timed out" }),
+          );
+        }
+        return response("", invalidSkillStatus());
       }
       if (url.pathname.endsWith(`/${COMMIT_SHA}/SKILL.md`)) {
         return response(`---
@@ -127,11 +145,12 @@ const {
 
 describe("GitHub skill package discovery", () => {
   beforeEach(() => {
+    invalidSkillScenario = "missing";
     treeScenario = "default";
     requestedTreeUrls = [];
   });
 
-  test("keeps valid siblings when one skill source cannot be fetched", async () => {
+  test("keeps valid siblings when one skill source is missing", async () => {
     const result = await discoverSkillPackagesFromUrl(
       "https://github.com/example/skills",
     );
@@ -145,6 +164,26 @@ describe("GitHub skill package discovery", () => {
       "root-skill",
       "valid-skill",
     ]);
+  });
+
+  test("propagates retryable source failures after tree discovery", async () => {
+    for (const [scenario, message] of [
+      ["timeout", "Request timed out"],
+      ["forbidden", "Skill source returned HTTP 403"],
+      ["server-error", "Skill source returned HTTP 503"],
+    ] as const) {
+      invalidSkillScenario = scenario;
+      // oxlint-disable-next-line no-await-in-loop -- each scenario must exercise a complete discovery request
+      const result = await discoverSkillPackagesFromUrl(
+        "https://github.com/example/skills",
+      );
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isOk(result)) {
+        throw new Error("Expected retryable source failure to propagate");
+      }
+      expect(result.error.message).toBe(message);
+    }
   });
 
   test("keeps direct root SKILL.md discovery scoped to that file", async () => {
