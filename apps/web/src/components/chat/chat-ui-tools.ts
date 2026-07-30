@@ -827,6 +827,7 @@ export type DocumentDeletionToolCallEffects = {
 };
 
 export type DocumentDeletionMessage = {
+  id: string;
   role: string;
   parts: readonly unknown[];
 };
