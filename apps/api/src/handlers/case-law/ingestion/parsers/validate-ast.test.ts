@@ -521,8 +521,10 @@ describe("validationSignal", () => {
 /**
  * The ancestor-dedup must not re-stringify whole subtrees per content
  * element — that is quadratic on flat many-paragraph documents. The bound
- * below is ~40x the memoized cost and far under the quadratic cost, so it
- * fails the regression without flaking on slow CI.
+ * is deliberately loose: memoized, this document validates in well under a
+ * second, while the quadratic form costs minutes at this size. Anything in
+ * between is machine noise, so a wide bound separates the two behaviours
+ * without flaking when the suite runs in parallel.
  */
 describe("validateAst scaling", () => {
   test("a flat many-paragraph document validates in linear-ish time", () => {
@@ -547,6 +549,6 @@ describe("validateAst scaling", () => {
     expect(result.issues.filter((issue) => issue.severity === "error")).toEqual(
       [],
     );
-    expect(elapsed).toBeLessThan(3000);
+    expect(elapsed).toBeLessThan(20_000);
   });
 });
